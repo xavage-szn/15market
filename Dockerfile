@@ -26,5 +26,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE 8080
 
 # Start script to run both
-RUN chmod +x keeper/start-keepers.sh
-CMD ["./keeper/start-keepers.sh"]
+RUN chmod +x ./start-keepers.sh
+CMD ["./start-keepers.sh"]
