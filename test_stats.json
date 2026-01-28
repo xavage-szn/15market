@@ -1,0 +1,7 @@
+{
+    "arc": {
+        "balance": 123.45,
+        "totalVolume": 1000,
+        "wallets": 10
+    }
+}

@@ -1,0 +1,19 @@
+{
+    "name": "solana-keeper",
+    "version": "1.0.0",
+    "description": "Streamlined Solana Keeper for 15Market",
+    "main": "src/index.js",
+    "scripts": {
+        "start": "node src/index.js",
+        "test:arbiter": "node scripts/test_arbiter.js",
+        "test:logic": "node scripts/test_logic.js",
+        "test:integration": "node scripts/test_integration.js"
+    },
+    "dependencies": {
+        "@coral-xyz/anchor": "^0.30.1",
+        "@solana/web3.js": "^1.91.8",
+        "bs58": "^5.0.0",
+        "dotenv": "^16.4.5",
+        "node-fetch": "^2.7.0"
+    }
+}

@@ -1,0 +1,15 @@
+{
+    "name": "15market-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "start": "concurrently -n \"KEEPER,ARC,ADMIN,UI\" -c \"blue,magenta,green,cyan\" \"npm run start:keeper\" \"npm run start:arc\" \"npm run start:admin\" \"npm run start:ui\"",
+        "start:keeper": "cd keeper && npm start",
+        "start:arc": "cd arc_keeper && npm start",
+        "start:admin": "cd 15market-admin && npm run dev",
+        "start:ui": "cd 15market-ui && npm run dev"
+    },
+    "devDependencies": {
+        "concurrently": "^9.1.2"
+    }
+}
