@@ -186,7 +186,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                 seriesRef.current = null;
             }
         };
-    }, [theme, network, fetchKlines, bgColor, textColor, gridColor, upColor, downColor, timeframe]);
+    }, [theme, network, fetchKlines, bgColor, textColor, gridColor, upColor, downColor, timeframe, symbol]);
 
 
     // 1s Data Compounding Logic
@@ -253,7 +253,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     const selectToken = (t) => {
         console.log("🎯 Chart Selecting Token:", t.symbol);
         localStorage.setItem('15market_active_token_id', t.id);
-        window.dispatchEvent(new Event('storage')); // Trigger sync across components
+
+        // Trigger storage event for same-window detection (immediate update)
+        window.dispatchEvent(new Event('storage'));
+
         setIsSelectorOpen(false);
     };
 

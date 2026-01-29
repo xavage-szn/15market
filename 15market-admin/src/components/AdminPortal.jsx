@@ -125,6 +125,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     const [currentUser, setCurrentUser] = useState(null);
 
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const [metrics, setMetrics] = useState({
         totalWallets: '...',
@@ -1658,8 +1659,17 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 )}
             </AnimatePresence>
 
+            {/* Mobile Menu Toggle */}
+            <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="lg:hidden fixed top-4 left-4 z-[250] p-3 bg-[#0D0D0D] border border-white/10 rounded-xl backdrop-blur-xl"
+            >
+                {isMobileMenuOpen ? <X size={20} className="text-white" /> : <MoreVertical size={20} className="text-white" />}
+            </button>
+
             {/* Sidebar */}
-            <div className="w-72 bg-[#0D0D0D] border-r border-white/5 flex flex-col p-6">
+            <div className={`w-72 bg-[#0D0D0D] border-r border-white/5 flex flex-col p-6 transition-transform duration-300 lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+                } fixed lg:relative inset-y-0 left-0 z-[240]`}>
                 <div className="flex items-center justify-center mb-10 px-2">
                     <img src="/logo.png" alt="logo" className="h-24 w-auto drop-shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
                 </div>
@@ -1783,13 +1793,21 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 </div>
             </div>
 
+            {/* Mobile Menu Overlay */}
+            {isMobileMenuOpen && (
+                <div
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[230]"
+                />
+            )}
+
             {/* Main Content */}
-            <div className="flex-1 flex flex-col h-screen overflow-hidden">
+            <div className="flex-1 flex flex-col h-screen overflow-hidden ml-0 lg:ml-0">
                 <div className="z-50 border-b border-white/5">
                     <GlobalTradeScroller wallet={DISCONNECTED_WALLET} connection={connection} currentNetwork={adminNetwork} />
                 </div>
 
-                <div className="flex-1 overflow-y-auto bg-[#050505] p-10 custom-scrollbar relative">
+                <div className="flex-1 overflow-y-auto bg-[#050505] p-4 lg:p-10 custom-scrollbar relative">
                     <div className="max-w-6xl mx-auto">
                         {/* SYSTEM EMERGENCY ALERTS */}
                         <AnimatePresence>

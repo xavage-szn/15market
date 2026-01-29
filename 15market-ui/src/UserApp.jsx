@@ -385,8 +385,19 @@ export default function UserApp() {
       }
     };
 
-    const poller = setInterval(syncMarket, 2000); // 2s polling for remote updates
-    return () => clearInterval(poller);
+    // Initial sync on mount
+    syncMarket();
+
+    // Listen for storage events (triggered by CustomChart when user selects asset)
+    window.addEventListener('storage', syncMarket);
+
+    // Polling fallback for remote updates (increased from 2s to 5s)
+    const poller = setInterval(syncMarket, 5000);
+
+    return () => {
+      window.removeEventListener('storage', syncMarket);
+      clearInterval(poller);
+    };
   }, [activeMarket.id]);
 
   const fetchCampaigns = useCallback(async () => {
@@ -1785,7 +1796,7 @@ export default function UserApp() {
         {/* We will merge the Chart and Terminal into a cohesive mobile flow */}
         <div className="col-span-2 lg:col-span-12 flex flex-col gap-3">
           {/* Chart Container */}
-          <div className="w-full h-[32vh] lg:h-[500px] rounded-[24px] lg:rounded-[32px] relative z-20 shadow-[0_0_20px_var(--primary-glow-subtle)] transition-colors duration-300"
+          <div className="w-full h-[30vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-10 shadow-[0_0_20px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3"
             style={{ backgroundColor: theme === 'light' ? '#ffffff' : '#0d0d0d' }}>
             <CustomChart symbol={activeMarket.binance || 'SOLUSDT'} network={network} theme={theme} currentPrice={price} />
           </div>
