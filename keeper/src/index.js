@@ -362,7 +362,13 @@ const server = http.createServer(async (req, res) => {
             const fetch = require('node-fetch');
             const auth = Buffer.from(`${process.env.X_CLIENT_ID}:${process.env.X_CLIENT_SECRET}`).toString('base64');
 
+            // Standardize redirect_uri to match EXACTLY what is in the Twitter Portal
+            // Use the host from headers if available, otherwise fallback to API domain
+            const host = req.headers.host || 'api.15market.online';
+            const redirectUri = `https://${host}/auth/twitter/callback`;
+
             console.log(`[X_AUTH] 🔐 Exchanging authorization code for access token...`);
+            console.log(`[X_AUTH] 📍 Using Redirect URI: ${redirectUri}`);
 
             const tokenResponse = await fetch('https://api.twitter.com/2/oauth2/token', {
                 method: 'POST',
@@ -373,8 +379,7 @@ const server = http.createServer(async (req, res) => {
                 body: new URLSearchParams({
                     code,
                     grant_type: 'authorization_code',
-                    client_id: process.env.X_CLIENT_ID,
-                    redirect_uri: `https://${req.headers.host}/auth/twitter/callback`,
+                    redirect_uri: redirectUri,
                     code_verifier: 'challenge'
                 })
             });
