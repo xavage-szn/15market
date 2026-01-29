@@ -374,7 +374,7 @@ const server = http.createServer(async (req, res) => {
                     code,
                     grant_type: 'authorization_code',
                     client_id: process.env.X_CLIENT_ID,
-                    redirect_uri: `http://${req.headers.host}/auth/twitter/callback`,
+                    redirect_uri: `https://${req.headers.host}/auth/twitter/callback`,
                     code_verifier: 'challenge'
                 })
             });
