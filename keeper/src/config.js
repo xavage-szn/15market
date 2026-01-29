@@ -80,5 +80,9 @@ module.exports = {
     connection,
     readConnection,
     program,
-    PublicKey
+    PublicKey,
+    // Arc / EVM Config
+    ARC_RPC: process.env.ARC_RPC || "https://rpc.testnet.arc.network",
+    ARC_PK: process.env.PRIVATE_KEY,
+    ARC_CONTRACT: process.env.VITE_ARC_CONTRACT_ADDRESS || "0x041e80256b3C72a0e16d78753F28f14A40d78c08"
 };

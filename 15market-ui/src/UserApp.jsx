@@ -133,6 +133,24 @@ export default function UserApp() {
 
   const authenticated = isConnected;
 
+  // Solana Balance Polling
+  useEffect(() => {
+    if (!isConnected || network !== 'solana' || !address) return;
+
+    const fetchSolBalance = async () => {
+      try {
+        const bal = await connection.getBalance(new PublicKey(address));
+        setBalance(bal / LAMPORTS_PER_SOL);
+      } catch (e) {
+        console.error("Solana balance fetch error:", e);
+      }
+    };
+
+    fetchSolBalance();
+    const intv = setInterval(fetchSolBalance, 10000);
+    return () => clearInterval(intv);
+  }, [isConnected, network, address]);
+
   const wallet = useMemo(() => {
     if (!isConnected || !address) return { connected: false };
 

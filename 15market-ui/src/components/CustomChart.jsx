@@ -232,7 +232,14 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     };
 
     return (
-        <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: bgColor, borderRadius: 'inherit' }}>
+        <div style={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            backgroundColor: isDark ? '#0d0d0d' : '#ffffff', // Use fixed bg to prevent "invisibility"
+            borderRadius: 'inherit',
+            minHeight: '280px' // Ensure a minimum height
+        }}>
             {/* Watermark behind chart - Colored Glow */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <img

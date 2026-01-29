@@ -4,6 +4,7 @@ const path = require('path');
 const { program, readConnection, connection, PublicKey } = require("./config");
 const { getConsensusPrice } = require("./arbiter");
 const { settleBet } = require("./settler");
+const { settleArcBet } = require("./arcSettler");
 const bs58 = require("bs58");
 
 // Look back 3 days to catch any stuck bets during restarts
@@ -94,8 +95,9 @@ const server = http.createServer(async (req, res) => {
     const allowedOrigins = [
         'https://15market.online',
         'https://admin.15market.online',
-        '',
-        'http://localhost:5173'
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:3001'
     ];
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
@@ -468,10 +470,11 @@ const server = http.createServer(async (req, res) => {
                             direction: direction,
                             duration: duration,
                             symbol: symbol || 'SOL',
-                            expiry: expiry
+                            expiry: expiry,
+                            network: 'solana'
                         };
                         trackedBets.set(pdaStr, betData);
-                        console.log(`[PING] 🚀 Auto-tracking bet: ${pdaStr.slice(0, 8)} (via Ping)`);
+                        console.log(`[PING] 🚀 Auto-tracking Solana bet: ${pdaStr.slice(0, 8)} (via Ping)`);
 
                         // Add to unified history (Live)
                         state.totalTrades = (state.totalTrades || 0) + 1;
@@ -493,6 +496,41 @@ const server = http.createServer(async (req, res) => {
                     }
                 } catch (e) {
                     console.error("[PING] ❌ Failed to derive PDA from ping data:", e.message);
+                }
+            } else if (network === 'arc' && address && id) {
+                const arcId = `arc_${id}`;
+                if (!trackedBets.has(arcId)) {
+                    const betData = {
+                        id: id.toString(), // The numeric ID for the contract
+                        owner: address,
+                        amount: amount,
+                        entryPrice: entryPrice,
+                        direction: direction,
+                        duration: duration,
+                        symbol: symbol || 'SOL',
+                        expiry: expiry,
+                        network: 'arc'
+                    };
+                    trackedBets.set(arcId, betData);
+                    console.log(`[PING] 🚀 Auto-tracking Arc bet: ${id} (via Ping)`);
+
+                    // Add to unified history (Live)
+                    state.totalTrades = (state.totalTrades || 0) + 1;
+                    if (!state.history) state.history = [];
+                    state.history.unshift({
+                        id: id.toString(),
+                        owner: address,
+                        amount: amount,
+                        currency: "USDC",
+                        direction: direction === 1 ? "UP" : "DOWN",
+                        entryPrice: entryPrice,
+                        timestamp: Date.now(),
+                        status: "ACTIVE",
+                        network: 'arc',
+                        user: state.userProfiles[address]?.username || address.slice(0, 4) + '...' + address.slice(-4)
+                    });
+                    if (state.history.length > 200) state.history.pop();
+                    saveState();
                 }
             }
 
@@ -860,10 +898,19 @@ async function runKeeper() {
                             return;
                         }
 
-                        const res = await settleBet(bet.id, bet, price);
+                        let res;
+                        if (bet.network === 'arc') {
+                            res = await settleArcBet(bet.id, bet, price);
+                        } else {
+                            res = await settleBet(bet.id, bet, price);
+                        }
+
                         if (res.success) {
-                            console.log(`✅ [SETTLED] ${bet.id.slice(0, 8)} | Price: ${price} | Won: ${res.userWon}`);
-                            trackedBets.delete(bet.id);
+                            console.log(`✅ [SETTLED] ${bet.network || 'solana'} | ${bet.id.slice(0, 8)} | Price: ${price} | Won: ${res.userWon !== undefined ? res.userWon : '?'}`);
+
+                            // Remove from tracking using the map key
+                            const mapKey = bet.network === 'arc' ? `arc_${bet.id}` : bet.id;
+                            trackedBets.delete(mapKey);
 
                             // FORCE IMMEDIATE BALANCE REFRESH after settlement
                             try {
