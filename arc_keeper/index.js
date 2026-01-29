@@ -25,7 +25,7 @@ async function callWithRetry(fn, label = "RPC", retries = 5, delay = 2000) {
 }
 
 // Configuration
-const ARC_RPC = process.env.ARC_RPC || "https://rpc.quicknode.testnet.arc.network";
+const ARC_RPC = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS || "0x041e80256b3C72a0e16d78753F28f14A40d78c08";
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const MIN_BET_ID = Number(process.env.MIN_BET_ID || 0);
