@@ -4,6 +4,13 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
+console.log("🔍 [ENV_CHECK] Scanning environment variables...");
+console.log("📍 NETWORK:", process.env.NETWORK || "❌ MISSING");
+console.log("📍 PROGRAM_ID:", process.env.PROGRAM_ID || "❌ MISSING");
+console.log("📍 SOLANA_KEYPAIR_JSON:", process.env.SOLANA_KEYPAIR_JSON ? "✅ FOUND (HIDDEN)" : "❌ MISSING");
+console.log("📍 ARC_RPC:", process.env.ARC_RPC || "❌ MISSING");
+console.log("📍 PRIVATE_KEY:", process.env.PRIVATE_KEY ? "✅ FOUND (HIDDEN)" : "❌ MISSING");
+
 // Load environment variables
 const NETWORK = process.env.NETWORK;
 const READ_RPC = process.env.READ_RPC || NETWORK;
