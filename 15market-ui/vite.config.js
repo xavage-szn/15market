@@ -17,6 +17,9 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
+      },
       manifest: {
         name: '15Market Systems',
         short_name: '15Market',
