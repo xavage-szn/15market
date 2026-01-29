@@ -21,7 +21,8 @@ ENV VITE_ADMIN_TOKEN=$VITE_ADMIN_TOKEN
 ENV VITE_KEEPER_URL=$VITE_KEEPER_URL
 ENV VITE_REOWN_PROJECT_ID=$VITE_REOWN_PROJECT_ID
 
-RUN npm run build
+ENV CI=true
+RUN npm run build -- --logLevel info
 
 # Production stage
 FROM nginx:alpine

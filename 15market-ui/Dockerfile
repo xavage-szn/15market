@@ -21,7 +21,8 @@ ENV VITE_REOWN_PROJECT_ID=$VITE_REOWN_PROJECT_ID
 ENV VITE_KEEPER_URL=$VITE_KEEPER_URL
 ENV VITE_ARC_USDC_ADDRESS=$VITE_ARC_USDC_ADDRESS
 
-RUN npm run build
+ENV CI=true
+RUN npm run build -- --logLevel info
 
 # Production stage
 FROM nginx:alpine
