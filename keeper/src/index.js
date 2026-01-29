@@ -115,11 +115,6 @@ const server = http.createServer(async (req, res) => {
     // Frontend URL for OAuth redirects
     const FRONTEND_URL = process.env.FRONTEND_URL || 'https://15market.online';
 
-    if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
-
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const pathName = url.pathname;
-
     // Log incoming requests for debugging
     if (pathName !== '/logs') {
         console.log(`[REQ] ${req.method} ${pathName}`);
@@ -428,7 +423,8 @@ const server = http.createServer(async (req, res) => {
                 }
 
                 // Redirect back to frontend with the handle and image
-                const redirectTo = `/?/?x_handle=${username}${profileImageUrl ? `&x_image=${encodeURIComponent(profileImageUrl)}` : ''}`;
+                const redirectTo = `${FRONTEND_URL}/?x_handle=${username}${profileImageUrl ? `&x_image=${encodeURIComponent(profileImageUrl)}` : ''}`;
+                console.log(`[X_AUTH] 🔄 Redirecting to: ${redirectTo}`);
                 res.writeHead(302, { 'Location': redirectTo });
                 res.end();
             } else {
