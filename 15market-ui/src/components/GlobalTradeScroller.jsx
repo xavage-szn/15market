@@ -26,6 +26,8 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
 
     const truncate = (str) => str ? `${str.slice(0, 4)}...${str.slice(-4)}` : "";
 
+    const [isConnected, setIsConnected] = useState(true);
+
     const fetchGlobalData = async () => {
         try {
             // 1. Fetch Total Trade Count for IDX
@@ -36,24 +38,35 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                     if (stats.totalTrades !== undefined) {
                         localStorage.setItem("15market_total_trades", stats.totalTrades.toString());
                     }
+                    setIsConnected(true);
+                } else {
+                    setIsConnected(false);
                 }
-            } catch (e) { console.error("Stats Fetch Error:", e); }
+            } catch (e) {
+                console.error("Stats Fetch Error:", e);
+                setIsConnected(false);
+            }
 
             // 2. Fetch Unified History
             const historyRes = await fetch(`${KEEPER_URL}/history`);
             if (!historyRes.ok) throw new Error("History fetch failed");
 
             const historyData = await historyRes.json();
-            if (!Array.isArray(historyData)) return;
+            if (!Array.isArray(historyData)) {
+                console.warn("[SCROLLER] History data is not an array:", historyData);
+                return;
+            }
 
             setHistory(historyData);
-            console.log(`[SCROLLER] Updated history with ${historyData.length} trades`);
+            if (historyData.length > 0) {
+                console.log(`[SCROLLER] Updated history with ${historyData.length} trades`);
+            }
             localStorage.setItem("15market_global_history_v2", JSON.stringify(historyData));
 
             // 3. Update Profiles for the history items
             let updatedProfiles = { ...profiles };
             const ownersToFetch = Array.from(new Set(historyData.map(item => item.owner)))
-                .filter(owner => !updatedProfiles[owner]);
+                .filter(owner => owner && !updatedProfiles[owner]);
 
             if (ownersToFetch.length > 0) {
                 // Process in small parallel chunks
@@ -161,10 +174,21 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--primary-color)]"></span>
                     </div>
                     <div className="flex flex-col">
-                        <small className={`text-[9px] font-black uppercase tracking-[0.2em] ${theme === 'light' ? 'text-black' : 'text-white'}`}>Market Live</small>
+                        <small className={`text-[9px] font-black uppercase tracking-[0.2em] ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                            {isConnected ? 'Market Live' : 'Sync Error'}
+                        </small>
                     </div>
                 </div>
             </div>
+
+            {/* CONNECTION FAULT OVERLAY */}
+            {!isConnected && (
+                <div className="absolute inset-0 bg-red-600/10 backdrop-blur-[2px] z-50 flex items-center justify-center pointer-events-none">
+                    <span className="text-[10px] font-black text-red-500 uppercase tracking-[0.3em] animate-pulse">
+                        Keeper Node Offline - Reconnecting...
+                    </span>
+                </div>
+            )}
 
             {/* Center: Scrolling Content */}
             <div className="flex-1 h-full flex items-center relative overflow-hidden">

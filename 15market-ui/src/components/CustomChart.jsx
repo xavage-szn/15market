@@ -36,33 +36,37 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     const fetchKlines = useCallback(async (tf) => {
         try {
             const apiInterval = getApiInterval(tf);
-            // Using the existing MEXC proxy
-            const res = await fetch(`/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${tf === '1s' ? 100 : 1000}`);
+            const limit = tf === '1s' ? 500 : 1000;
+            const res = await fetch(`/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${limit}`);
+            if (!res.ok) throw new Error("MEXC API Failure");
             const data = await res.json();
 
-            // MEXC returns: [time, open, high, low, close, volume, ...]
+            if (!Array.isArray(data)) return [];
+
             const candles = data.map(d => ({
-                time: d[0] / 1000,
+                time: Math.floor(d[0] / 1000),
                 open: parseFloat(d[1]),
                 high: parseFloat(d[2]),
                 low: parseFloat(d[3]),
                 close: parseFloat(d[4]),
             }));
 
-            // Sort & Unique
             candles.sort((a, b) => a.time - b.time);
+
+            // For 1s view, if we only have 1m candles, they will be very "sparse".
+            // However, lightweight-charts will handle them as long as the timescale is correct.
+            // The key is to ensure we don't have overlapping timestamps.
             const uniqueCandles = [];
-            const times = new Set();
+            const seen = new Set();
             for (const c of candles) {
-                if (!times.has(c.time)) {
-                    times.add(c.time);
+                if (!seen.has(c.time)) {
+                    seen.add(c.time);
                     uniqueCandles.push(c);
                 }
             }
-
             return uniqueCandles;
         } catch (e) {
-            console.error("Failed to fetch klines", e);
+            console.error("Failed to fetch klines:", e);
             return [];
         }
     }, [symbol]);
@@ -223,9 +227,31 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     }, [currentPrice, timeframe]);
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-    const tokens = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
+    const [tokens, setTokens] = useState(() => {
+        const saved = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
+        return saved.length > 0 ? saved : [
+            { id: 'sol', symbol: 'SOL', name: 'Solana' },
+            { id: 'btc', symbol: 'BTC', name: 'Bitcoin' },
+            { id: 'eth', symbol: 'ETH', name: 'Ethereum' },
+            { id: 'jup', symbol: 'JUP', name: 'Jupiter' }
+        ];
+    });
+
+    useEffect(() => {
+        const syncTokens = () => {
+            const saved = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
+            if (saved.length > 0) setTokens(saved);
+        };
+        window.addEventListener('storage', syncTokens);
+        const intv = setInterval(syncTokens, 3000); // Polling fallback
+        return () => {
+            window.removeEventListener('storage', syncTokens);
+            clearInterval(intv);
+        };
+    }, []);
 
     const selectToken = (t) => {
+        console.log("🎯 Chart Selecting Token:", t.symbol);
         localStorage.setItem('15market_active_token_id', t.id);
         window.dispatchEvent(new Event('storage')); // Trigger sync across components
         setIsSelectorOpen(false);
