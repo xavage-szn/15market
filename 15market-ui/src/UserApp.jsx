@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import CustomChart from "./components/CustomChart";
 import { useAppKitAccount, useAppKitProvider, useAppKitNetwork, useDisconnect } from "@reown/appkit/react";
 import { defaultConnection as connection } from "./api/program";
+import { hasPendingWalletRequests, clearWalletStorage } from "./utils/walletCleanup";
 import { useWriteContract, useAccount, useSwitchChain, useWatchContractEvent, useBalance, useSendTransaction, useSignMessage } from "wagmi";
 import { parseEther, parseUnits } from "viem";
 import { ethers } from "ethers";
@@ -256,6 +257,18 @@ export default function UserApp() {
 
     setNetwork(newNetwork);
   };
+
+  // Clear stale wallet states on app mount
+  useEffect(() => {
+    const checkAndCleanup = async () => {
+      if (hasPendingWalletRequests()) {
+        console.log("⚠️ Detected stale wallet connection requests, cleaning up...");
+        await clearWalletStorage();
+        notify("Cleared stale wallet connection", "info");
+      }
+    };
+    checkAndCleanup();
+  }, []); // Run once on mount
 
   // Auto-Switch UI Network based on Wallet
   // useEffect(() => {

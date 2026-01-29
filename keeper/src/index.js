@@ -94,7 +94,7 @@ const server = http.createServer(async (req, res) => {
     const allowedOrigins = [
         'https://15market.online',
         'https://admin.15market.online',
-        'http://localhost:3000',
+        '',
         'http://localhost:5173'
     ];
     const origin = req.headers.origin;
@@ -106,6 +106,14 @@ const server = http.createServer(async (req, res) => {
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
+
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const pathName = url.pathname;
+
+    // Frontend URL for OAuth redirects
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'https://15market.online';
 
     if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
@@ -420,7 +428,7 @@ const server = http.createServer(async (req, res) => {
                 }
 
                 // Redirect back to frontend with the handle and image
-                const redirectTo = `http://localhost:3000/?x_handle=${username}${profileImageUrl ? `&x_image=${encodeURIComponent(profileImageUrl)}` : ''}`;
+                const redirectTo = `/?/?x_handle=${username}${profileImageUrl ? `&x_image=${encodeURIComponent(profileImageUrl)}` : ''}`;
                 res.writeHead(302, { 'Location': redirectTo });
                 res.end();
             } else {

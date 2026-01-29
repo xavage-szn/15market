@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, LogOut, Copy, RefreshCcw, AlertTriangle } from 'lucide-react';
 import { useAppKit, useAppKitAccount, useDisconnect } from '@reown/appkit/react';
 import { useAccount, useSwitchChain } from 'wagmi';
+import { fullWalletReset, clearWalletStorage, disconnectSolanaWallets } from '../utils/walletCleanup';
 
 export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) => {
     const { address, isConnected } = useAppKitAccount();
@@ -66,9 +67,17 @@ export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) 
         setIsOpen(false);
         setIsSwitching(true);
         try {
+            // 1. Disconnect via AppKit
             await disconnect();
+
+            // 2. Perform full wallet cleanup
+            await fullWalletReset();
+
+            console.log("✅ Wallet fully disconnected and cleaned up");
         } catch (e) {
             console.error("Disconnect error:", e);
+            // Even if disconnect fails, try to clean up
+            await clearWalletStorage();
         } finally {
             setIsSwitching(false);
         }
@@ -93,26 +102,25 @@ export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) 
                     await disconnect();
                 } catch (e) { console.warn("AppKit disconnect warn:", e); }
 
-                // Extra safety: Attempt to clear Solana adapters manually if needed
-                if (newChainId === 'solana') {
-                    if (window.solana?.disconnect) window.solana.disconnect().catch(() => { });
-                    if (window.solflare?.disconnect) window.solflare.disconnect().catch(() => { });
-                }
+                // 2. Perform full wallet cleanup to clear all stale states
+                await fullWalletReset();
             }
 
-            // 2. Update Local State & Notify Parent
+            // 3. Update Local State & Notify Parent
             setSelectedChain(newChainId);
             localStorage.setItem("15market_network", newChainId);
             onNetworkChange(newChainId);
 
-            // 3. Prompt New Connection after short delay
+            // 4. Prompt New Connection after delay to ensure cleanup completes
             setTimeout(() => {
                 setIsSwitching(false);
                 open();
-            }, 800);
+            }, 1000); // Increased delay to ensure cleanup completes
 
         } catch (error) {
             console.error("Network switch failed:", error);
+            // Try to clean up even if disconnect fails
+            await clearWalletStorage();
             setIsSwitching(false);
         }
     };
