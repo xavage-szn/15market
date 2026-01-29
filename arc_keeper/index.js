@@ -82,14 +82,20 @@ async function main() {
 
     let activeBets = new Map();
     let pendingWinningBets = new Map(); // Queue for winning bets awaiting funds
+    let INITIAL_NEXT_BET_ID = 0; // Recorded at startup to ignore legacy bets
     let cachedArcMetrics = { totalVolume: 0, walletCount: 0 }; // Global scope for signal sharing
     let totalPlatformVolume = 0; // Cumulative Volume from Startup Scan
     let lastCheckedBlock;
     while (true) {
         try {
             console.log("⏳ Connecting to Arc RPC...");
-            lastCheckedBlock = await callWithRetry(() => provider.getBlockNumber(), "CONNECT", 5, 2000);
-            console.log(`✅ Connected to Arc Network. Current Block: ${lastCheckedBlock}`);
+            const [blockNum, nextId] = await Promise.all([
+                callWithRetry(() => provider.getBlockNumber(), "CONNECT", 5, 2000),
+                callWithRetry(() => contract.nextBetId(), "INIT_ID", 5, 2000)
+            ]);
+            lastCheckedBlock = blockNum;
+            INITIAL_NEXT_BET_ID = Number(nextId);
+            console.log(`✅ Connected. Current Block: ${lastCheckedBlock} | Starting from Bet ID: ${INITIAL_NEXT_BET_ID}`);
             break;
         } catch (e) {
             console.error(`❌ Connection failed: ${e.message}. Retrying in 5s...`);
@@ -158,8 +164,13 @@ async function main() {
         try {
             const nextBetId = await callWithRetry(() => contract.nextBetId(), "DISCOVER_ID");
             const totalBets = Number(nextBetId);
-            const startCheck = Math.max(MIN_BET_ID, totalBets - 100);
-            console.log(`🔍 [ARC_DISCOVERY] Checking bets from ${startCheck} to ${totalBets}...`);
+            // ONLY check bets starting from when the keeper started
+            const startCheck = INITIAL_NEXT_BET_ID;
+            if (startCheck >= totalBets) {
+                if (Math.random() < 0.05) console.log(`🔍 [ARC_DISCOVERY] No new bets to check (Current ID: ${totalBets})`);
+                return;
+            }
+            console.log(`🔍 [ARC_DISCOVERY] Checking NEW bets from ${startCheck} to ${totalBets}...`);
             let count = 0;
             for (let i = startCheck; i < totalBets; i++) {
                 const bet = await callWithRetry(() => contract.bets(i), `BET_READ_${i}`, 3, 1000);
@@ -216,15 +227,10 @@ async function main() {
             for (const event of events) {
                 const [id, user, amount, direction, entryPrice, duration, timestamp, marketId] = event.args;
                 const betId = id.toString();
-                const betTime = Number(timestamp);
+                const betIdNum = Number(id);
 
-                if (betTime < KEEPER_START_TIME) {
-                    if (!activeBets.has(betId)) {
-                        console.warn(`⚠️ [DISPUTE] Legacy event detected: ${betId} - Ignoring`);
-                        activeBets.set(betId, { id, settled: true, dispute: true });
-                    }
-                    continue;
-                }
+                // IGNORE everything before keeper startup
+                if (betIdNum < INITIAL_NEXT_BET_ID) continue;
 
                 if (!activeBets.has(betId)) {
                     activeBets.set(betId, {
@@ -334,7 +340,7 @@ async function main() {
         }
     }
 
-    performStartupVolumeScan().catch(e => console.error("Startup volume scan error:", e));
+    // Discovery and initial metrics
     await discoverUnsettledBets();
     await logActiveExposure();
 
