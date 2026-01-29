@@ -1790,13 +1790,11 @@ export default function UserApp() {
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
 
-      <div className="w-full max-w-7xl grid grid-cols-2 lg:grid-cols-12 gap-2 lg:gap-6 mb-14">
-        {/* Chart Column (Full width on mobile, Col-span-12 on Desktop if we want, but here it was above terminal. Let's stack them nicely) */}
-
-        {/* We will merge the Chart and Terminal into a cohesive mobile flow */}
-        <div className="col-span-2 lg:col-span-12 flex flex-col gap-3">
+      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-6 mb-14 relative z-0">
+        {/* Chart Column */}
+        <div className="lg:col-span-12 flex flex-col gap-3">
           {/* Chart Container */}
-          <div className="w-full h-[30vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-10 shadow-[0_0_20px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3"
+          <div className="w-full h-[30vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-0 shadow-[0_0_20px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3"
             style={{ backgroundColor: theme === 'light' ? '#ffffff' : '#0d0d0d' }}>
             <CustomChart symbol={activeMarket.binance || 'SOLUSDT'} network={network} theme={theme} currentPrice={price} />
           </div>

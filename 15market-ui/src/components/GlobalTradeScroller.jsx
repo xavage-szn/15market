@@ -153,9 +153,18 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
 
     const repeatedHistory = useMemo(() => {
         if (!history || history.length === 0) return [];
-        let list = [...history];
+
+        const totalTrades = parseInt(localStorage.getItem("15market_total_trades") || history.length);
+
+        // Enrich history with absolute indices
+        const indexedHistory = history.map((item, idx) => ({
+            ...item,
+            absIndex: totalTrades - idx
+        }));
+
+        let list = [...indexedHistory];
         while (list.length < 40) { // Ensure enough items to fill any screen twice
-            list = [...list, ...history];
+            list = [...list, ...indexedHistory];
         }
         return [...list, ...list]; // Double for seamless loop
     }, [history]);
@@ -258,7 +267,7 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                                                     {event.network?.toUpperCase() || 'SOL'}
                                                 </span>
                                                 <span className={`text-[8px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-black/30' : 'text-white/20'}`}>
-                                                    TRD #{history.length - (i % history.length)}
+                                                    TRD #{event.absIndex || (history.length - (i % history.length))}
                                                 </span>
                                             </div>
                                             <span className={`text-[10px] lg:text-xs font-black truncate max-w-[80px] lg:max-w-[100px] ${theme === 'light' ? 'text-black' : 'text-white'}`}>

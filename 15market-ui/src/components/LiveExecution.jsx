@@ -26,7 +26,7 @@ const LiveExecutionComponent = ({
     };
 
     return (
-        <div className="lg:col-span-5 flex flex-col gap-1 lg:gap-4 relative min-h-[250px] lg:min-h-[400px]">
+        <div className="col-span-1 lg:col-span-5 flex flex-col gap-1 lg:gap-4 relative min-h-[250px] lg:min-h-[400px]">
             <div className="flex items-center justify-between px-1 lg:px-2">
                 <h4 className={`text-[9px] lg:text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? '!text-black/50' : 'text-white/40'}`}>
                     <span className="hidden lg:inline">Live Engines</span>

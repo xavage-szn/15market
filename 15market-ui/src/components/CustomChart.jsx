@@ -37,11 +37,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
         try {
             const apiInterval = getApiInterval(tf);
             const limit = tf === '1s' ? 500 : 1000;
+            console.log(`[CHART] Fetching ${limit} klines (Interval: ${apiInterval}) for ${tf} view...`);
+
             const res = await fetch(`/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${limit}`);
-            if (!res.ok) throw new Error("MEXC API Failure");
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`MEXC API Failure: ${res.status} ${errText}`);
+            }
             const data = await res.json();
 
-            if (!Array.isArray(data)) return [];
+            if (!Array.isArray(data)) {
+                console.warn("[CHART] Invalid data format from API:", data);
+                return [];
+            }
 
             const candles = data.map(d => ({
                 time: Math.floor(d[0] / 1000),
@@ -53,9 +61,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
 
             candles.sort((a, b) => a.time - b.time);
 
-            // For 1s view, if we only have 1m candles, they will be very "sparse".
-            // However, lightweight-charts will handle them as long as the timescale is correct.
-            // The key is to ensure we don't have overlapping timestamps.
+            // Filter duplicates
             const uniqueCandles = [];
             const seen = new Set();
             for (const c of candles) {
@@ -64,9 +70,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                     uniqueCandles.push(c);
                 }
             }
+
+            console.log(`[CHART] Successfully loaded ${uniqueCandles.length} historical candles.`);
             return uniqueCandles;
         } catch (e) {
-            console.error("Failed to fetch klines:", e);
+            console.error("[CHART] Failed to fetch klines:", e);
             return [];
         }
     }, [symbol]);
@@ -138,7 +146,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                 // Check if series is still valid (not disposed)
                 try {
                     candlestickSeries.setData(data);
-                    chart.timeScale().fitContent();
+
+                    // Small delay to ensure chart geometry is calculated before fitting
+                    setTimeout(() => {
+                        if (chartRef.current) {
+                            chartRef.current.timeScale().fitContent();
+                        }
+                    }, 100);
 
                     // Initialize 1s candle if needed
                     if (timeframe === '1s' && data.length > 0) {
@@ -197,6 +211,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
         const price = parseFloat(currentPrice);
 
         if (!current1sCandle.current) {
+            // First live tick - start the candle
             current1sCandle.current = {
                 time: now,
                 open: price,
@@ -208,15 +223,21 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             return;
         }
 
+        // Check if we need to start a NEW 1-second candle
         if (now > current1sCandle.current.time) {
+            // Push final state of previous candle before starting new one
+            seriesRef.current.update(current1sCandle.current);
+
+            // Start new candle
             current1sCandle.current = {
                 time: now,
-                open: current1sCandle.current.close, // Open at prev close
-                high: price,
-                low: price,
+                open: current1sCandle.current.close, // Smooth transition
+                high: Math.max(current1sCandle.current.close, price),
+                low: Math.min(current1sCandle.current.close, price),
                 close: price
             };
         } else {
+            // Update current candle
             current1sCandle.current.high = Math.max(current1sCandle.current.high, price);
             current1sCandle.current.low = Math.min(current1sCandle.current.low, price);
             current1sCandle.current.close = price;

@@ -39,7 +39,7 @@ const TradeTerminalComponent = ({
     const isWrongNetwork = isArc && chainId !== 5042002;
     const isLight = theme === 'light';
     return (
-        <div className={`lg:col-span-7 col-span-1 p-1.5 lg:p-6 rounded-[24px] lg:rounded-[32px] border relative overflow-hidden transition-colors duration-300 ${isLight ? '!bg-white border-black/5 !shadow-[0_30px_60px_-10px_rgba(0,0,0,0.4)]' : 'bg-[#050505] border-white/10'}`}>
+        <div className={`col-span-1 lg:col-span-7 p-1.5 lg:p-6 rounded-[24px] lg:rounded-[32px] border relative overflow-hidden transition-colors duration-300 ${isLight ? '!bg-white border-black/5 !shadow-[0_30px_60px_-10px_rgba(0,0,0,0.4)]' : 'bg-[#050505] border-white/10'}`}>
 
             {/* Header: Title + Controls */}
             <div className="flex items-center justify-between mb-3 lg:mb-6">
