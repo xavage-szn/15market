@@ -38,11 +38,14 @@ if (process.env.SOLANA_KEYPAIR_JSON) {
         if (raw.charAt(raw.length - 1) !== ']') raw = raw + ']';
 
         const secretKey = JSON.parse(raw);
+        console.log(`💡 DEBUG: Array length: ${secretKey.length} (Expected: 64)`);
+
         keypair = Keypair.fromSecretKey(new Uint8Array(secretKey));
         console.log("✅ Loaded Solana keypair (Sanitized & Wrapped)");
     } catch (e) {
         console.error("❌ Failed to parse SOLANA_KEYPAIR_JSON:", e.message);
-        console.log("💡 DEBUG: Raw value start:", process.env.SOLANA_KEYPAIR_JSON.substring(0, 10));
+        console.log("💡 DEBUG: Raw value start:", process.env.SOLANA_KEYPAIR_JSON.substring(0, 15));
+        console.log("💡 DEBUG: Raw value end:", process.env.SOLANA_KEYPAIR_JSON.substring(process.env.SOLANA_KEYPAIR_JSON.length - 15));
     }
 }
 
