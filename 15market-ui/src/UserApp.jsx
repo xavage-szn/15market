@@ -1704,14 +1704,11 @@ export default function UserApp() {
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
 
-          {/* Notifications Placeholder Mobile */}
-          <div className="relative">
-            <button className={`p-2 rounded-xl border backdrop-blur-md ${theme === 'light' ? 'bg-black/[0.03] border-black/5' : 'bg-white/[0.03] border-white/5'}`}>
-              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#3CB371] border-2 border-[#050505] flex items-center justify-center">
-                <span className="text-[7px] font-black text-white">2</span>
-              </div>
-              <svg className={`w-4 h-4 ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-            </button>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-[#3CB371]/10 border border-[#3CB371]/20">
+            <div className="w-4 h-4 rounded-full bg-[#3CB371] flex items-center justify-center">
+              <span className="text-[8px] font-black text-white">2</span>
+            </div>
+            <ChevronRight size={10} className="text-[#3CB371] rotate-90" />
           </div>
 
           <button onClick={() => setView("dashboard")} className={`p-2 rounded-xl border backdrop-blur-md ${theme === 'light' ? 'bg-black/[0.03] border-black/5' : 'bg-white/[0.03] border-white/5'}`}>
