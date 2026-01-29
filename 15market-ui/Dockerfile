@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 COPY . .
 
