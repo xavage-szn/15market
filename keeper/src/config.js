@@ -33,9 +33,13 @@ if (process.env.SOLANA_KEYPAIR_JSON) {
         if (raw.startsWith("'") && raw.endsWith("'")) raw = raw.slice(1, -1);
         raw = raw.replace(/\\/g, ''); // Remove backslashes if escaped
 
+        // Auto-Bracket: If it's just a comma-separated list of numbers, wrap in []
+        if (raw.charAt(0) !== '[') raw = '[' + raw;
+        if (raw.charAt(raw.length - 1) !== ']') raw = raw + ']';
+
         const secretKey = JSON.parse(raw);
         keypair = Keypair.fromSecretKey(new Uint8Array(secretKey));
-        console.log("✅ Loaded Solana keypair (Sanitized from Env)");
+        console.log("✅ Loaded Solana keypair (Sanitized & Wrapped)");
     } catch (e) {
         console.error("❌ Failed to parse SOLANA_KEYPAIR_JSON:", e.message);
         console.log("💡 DEBUG: Raw value start:", process.env.SOLANA_KEYPAIR_JSON.substring(0, 10));
