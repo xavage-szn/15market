@@ -100,14 +100,18 @@ const server = http.createServer(async (req, res) => {
         'http://localhost:3001'
     ];
     const origin = req.headers.origin;
+
+    // Be more permissive if origin matches admin or if it's missing (fallback to admin for API requests)
     if (allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     } else {
-        // In production, we should be strict, but for now we'll allow the main domain as fallback if origin is missing
-        res.setHeader('Access-Control-Allow-Origin', 'https://15market.online');
+        // Fallback: allow the admin domain if origin is restricted or missing
+        res.setHeader('Access-Control-Allow-Origin', 'https://admin.15market.online');
     }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
 
     if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 

@@ -3,8 +3,8 @@ const { ARC_RPC, ARC_PK, ARC_CONTRACT } = require("./config");
 const fs = require("fs");
 const path = require("path");
 
-// Load ABI from frontend (shared)
-const abiPath = path.resolve(__dirname, "../../15market-ui/src/abi/ArcPrediction.json");
+// Load ABI from local folder (ensures safety in production deployments)
+const abiPath = path.resolve(__dirname, "./abi/ArcPrediction.json");
 const abiRaw = JSON.parse(fs.readFileSync(abiPath, "utf8"));
 const ABI = abiRaw.abi;
 
