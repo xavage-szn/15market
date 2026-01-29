@@ -126,8 +126,10 @@ async function main() {
                         ]);
 
                         results.forEach(b => {
-                            if (b && b.amount) {
-                                volume += parseFloat(ethers.formatEther(b.amount));
+                            if (b && b.amount != null) {
+                                try {
+                                    volume += parseFloat(ethers.formatEther(b.amount));
+                                } catch (e) { }
                             }
                         });
                         batchCount++;
@@ -161,9 +163,9 @@ async function main() {
             let count = 0;
             for (let i = startCheck; i < totalBets; i++) {
                 const bet = await callWithRetry(() => contract.bets(i), `BET_READ_${i}`, 3, 1000);
-                if (!bet.settled) {
+                if (bet && bet.id != null && !bet.settled) {
                     const betId = bet.id.toString();
-                    const betTime = Number(bet.timestamp);
+                    const betTime = Number(bet.timestamp || 0);
 
                     if (betTime < KEEPER_START_TIME) {
                         // Legacy bet - report as DISPUTE
@@ -186,9 +188,9 @@ async function main() {
 
                     if (!activeBets.has(betId)) {
                         activeBets.set(betId, {
-                            id: bet.id, user: bet.user, amount: bet.amount, direction: bet.direction,
+                            id: bet.id, user: bet.user, amount: bet.amount || 0n, direction: bet.direction,
                             entryPrice: bet.entryPrice, duration: bet.duration, timestamp: bet.timestamp,
-                            marketId: bet.marketId, expiry: Number(bet.timestamp) + Number(bet.duration)
+                            marketId: bet.marketId, expiry: Number(bet.timestamp || 0) + Number(bet.duration || 0)
                         });
                         console.log(`📥 Recovered active bet [ID: ${betId}] Asset: ${ASSET_MAP[bet.marketId]}`);
                         console.log(`✨ [BET_DATA] ID:${betId} | AMT:${ethers.formatEther(bet.amount)} | EXP:${Number(bet.timestamp) + Number(bet.duration)} | NET:arc`);
@@ -261,18 +263,21 @@ async function main() {
             const shouldLogDetails = force || global.logCycle % 20 === 0;
 
             for (const bet of activeBets.values()) {
+                if (!bet || bet.amount == null) continue;
                 if (adjustedNow < bet.expiry) {
                     activeStake += BigInt(bet.amount);
                     activeCount++;
                 }
-                total += Number(ethers.formatEther(bet.amount));
+                try {
+                    total += Number(ethers.formatEther(bet.amount));
+                } catch (e) { }
                 count++;
 
                 if (shouldLogDetails) {
                     console.log(`✨ [BET_DATA] ID:${bet.id} | AMT:${ethers.formatEther(bet.amount)} | EXP:${bet.expiry} | NET:arc`);
                 }
             }
-            const stakeEth = ethers.formatEther(activeStake);
+            const stakeEth = activeStake != null ? ethers.formatEther(activeStake) : "0";
             if (shouldLogDetails) {
                 console.log(`📡 [SYNC] Arc Active: ${activeCount} Bets | Stake: ${stakeEth} USDC | Vol: ${totalPlatformVolume.toFixed(2)}`);
 
@@ -283,11 +288,17 @@ async function main() {
 
                     try {
                         const [contractBal, walletBal] = await Promise.all([
-                            callWithRetry(() => provider.getBalance(CONTRACT_ADDRESS), "METRIC_BAL_CONTRACT", 2, 500).catch(e => { throw new Error(`Contract RPC: ${e.message}`); }),
-                            callWithRetry(() => provider.getBalance(wallet.address), "METRIC_BAL_KEEPER", 2, 500).catch(e => { throw new Error(`Wallet RPC: ${e.message}`); })
+                            callWithRetry(() => provider.getBalance(CONTRACT_ADDRESS), "METRIC_BAL_CONTRACT", 2, 500).catch(e => {
+                                console.warn(`METRIC_BAL_CONTRACT failed: ${e.message}`);
+                                return 0n;
+                            }),
+                            callWithRetry(() => provider.getBalance(wallet.address), "METRIC_BAL_KEEPER", 2, 500).catch(e => {
+                                console.warn(`METRIC_BAL_KEEPER failed: ${e.message}`);
+                                return 0n;
+                            })
                         ]);
-                        contractEth = ethers.formatEther(contractBal);
-                        walletEth = ethers.formatEther(walletBal);
+                        contractEth = ethers.formatEther(contractBal || 0n);
+                        walletEth = ethers.formatEther(walletBal || 0n);
                     } catch (rpcErr) {
                         console.warn(`⏳ [RPC_LAG] Could not fetch balances: ${rpcErr.message}`);
                     }
