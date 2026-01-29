@@ -27,11 +27,18 @@ const START_TIME = Math.floor(Date.now() / 1000) - 86400; // Settle bets from la
 let keypair;
 if (process.env.SOLANA_KEYPAIR_JSON) {
     try {
-        const secretKey = JSON.parse(process.env.SOLANA_KEYPAIR_JSON);
+        // Sanitization: Remove extra quotes, spaces, or backslashes added by env loaders
+        let raw = process.env.SOLANA_KEYPAIR_JSON.trim();
+        if (raw.startsWith('"') && raw.endsWith('"')) raw = raw.slice(1, -1);
+        if (raw.startsWith("'") && raw.endsWith("'")) raw = raw.slice(1, -1);
+        raw = raw.replace(/\\/g, ''); // Remove backslashes if escaped
+
+        const secretKey = JSON.parse(raw);
         keypair = Keypair.fromSecretKey(new Uint8Array(secretKey));
-        console.log("✅ Loaded Solana keypair from environment variable");
+        console.log("✅ Loaded Solana keypair (Sanitized from Env)");
     } catch (e) {
         console.error("❌ Failed to parse SOLANA_KEYPAIR_JSON:", e.message);
+        console.log("💡 DEBUG: Raw value start:", process.env.SOLANA_KEYPAIR_JSON.substring(0, 10));
     }
 }
 
