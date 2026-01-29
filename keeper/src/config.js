@@ -7,7 +7,13 @@ require("dotenv").config();
 // Load environment variables
 const NETWORK = process.env.NETWORK;
 const READ_RPC = process.env.READ_RPC || NETWORK;
-const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID);
+
+if (!process.env.PROGRAM_ID) {
+    console.error("❌ ERROR: PROGRAM_ID environment variable is missing!");
+    process.exit(1);
+}
+
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID.trim());
 const START_TIME = Math.floor(Date.now() / 1000) - 86400; // Settle bets from last 24h to ensure no loss on restart
 
 // Load Keypair
