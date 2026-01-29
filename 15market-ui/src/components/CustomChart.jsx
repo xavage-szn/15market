@@ -12,6 +12,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     // Real-time 1s candle construction
     const current1sCandle = useRef(null);
     const lastTickTime = useRef(Math.floor(Date.now() / 1000));
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const isFirstLoad = useRef(true);
 
     // Color definitions based on theme
     const isDark = theme !== 'light';
@@ -36,7 +39,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     const fetchKlines = useCallback(async (tf) => {
         try {
             const apiInterval = getApiInterval(tf);
-            const limit = tf === '1s' ? 500 : 1000;
+            const limit = 1000; // Maximize history for scrolling
             console.log(`[CHART] Fetching ${limit} klines (Interval: ${apiInterval}) for ${tf} view...`);
 
             const res = await fetch(`/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${limit}`);
@@ -107,10 +110,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             timeScale: {
                 borderColor: gridColor,
                 timeVisible: true,
-                secondsVisible: false, // Show seconds if 1s?
+                secondsVisible: timeframe === '1s',
+                shiftVisibleRangeOnNewBar: true,
+                handleScroll: true,
+                handleScale: true,
                 tickMarkFormatter: (time, tickMarkType, locale) => {
+                    const date = new Date(time * 1000);
                     if (timeframe === '1s') {
-                        const date = new Date(time * 1000);
                         return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     }
                     return null;
@@ -121,13 +127,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             },
         });
 
-        if (timeframe === '1s') {
-            chart.timeScale().applyOptions({
-                timeVisible: true,
-                secondsVisible: true,
-                barSpacing: 10,
-            });
-        }
+        chart.timeScale().applyOptions({
+            barSpacing: timeframe === '1s' ? 12 : 6,
+            minBarSpacing: 0.5,
+        });
 
         const candlestickSeries = chart.addSeries(CandlestickSeries, {
             upColor: upColor,
@@ -141,18 +144,23 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
         chartRef.current = chart;
 
         // Initial Fetch
+        setIsLoading(true);
+        setError(null);
+
         fetchKlines(timeframe).then(data => {
             if (data && data.length > 0 && seriesRef.current) {
-                // Check if series is still valid (not disposed)
                 try {
-                    candlestickSeries.setData(data);
+                    seriesRef.current.setData(data);
 
-                    // Small delay to ensure chart geometry is calculated before fitting
-                    setTimeout(() => {
-                        if (chartRef.current) {
-                            chartRef.current.timeScale().fitContent();
-                        }
-                    }, 100);
+                    // Only fit content on the first load of the asset to preserve user scrolling thereafter
+                    if (isFirstLoad.current) {
+                        setTimeout(() => {
+                            if (chartRef.current) {
+                                chartRef.current.timeScale().fitContent();
+                                isFirstLoad.current = false;
+                            }
+                        }, 200);
+                    }
 
                     // Initialize 1s candle if needed
                     if (timeframe === '1s' && data.length > 0) {
@@ -160,9 +168,16 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                         current1sCandle.current = { ...last, time: Math.floor(Date.now() / 1000) };
                     }
                 } catch (err) {
-                    console.warn("Chart series update failed (disposed?)", err);
+                    console.warn("Chart series update failed", err);
                 }
+            } else if (!data || data.length === 0) {
+                setError("No historical data available");
             }
+            setIsLoading(false);
+        }).catch(err => {
+            console.error("KLINES FETCH ERROR:", err);
+            setError("Failed to load chart data");
+            setIsLoading(false);
         });
 
         const handleResize = () => {
@@ -349,14 +364,14 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                 </div>
 
                 {/* Timeframe Selector */}
-                <div className="flex items-center bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden">
+                <div className="flex items-center bg-black/40 backdrop-blur-2xl border border-white/5 rounded-xl overflow-hidden p-0.5">
                     {['1s', '1m', '5m', '1h'].map(tf => (
                         <button
                             key={tf}
                             onClick={() => setTimeframe(tf)}
-                            className={`px-2.5 lg:px-4 py-1.5 lg:py-2 text-[9px] lg:text-[10px] font-black uppercase tracking-tighter transition-all ${timeframe === tf
-                                ? (network === 'arc' ? 'bg-blue-600 text-white shadow-inner' : 'bg-[#3CB371] text-white shadow-inner')
-                                : 'text-white/40 hover:text-white/80 hover:bg-white/5'
+                            className={`px-3 lg:px-5 py-1.5 lg:py-2 text-[9px] lg:text-[10px] font-black uppercase tracking-widest transition-all rounded-lg ${timeframe === tf
+                                ? 'bg-[#3CB371] text-white shadow-[0_0_15px_rgba(60,179,113,0.3)]'
+                                : 'text-white/30 hover:text-white/60 hover:bg-white/5'
                                 }`}
                         >
                             {tf}
@@ -364,6 +379,27 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                     ))}
                 </div>
             </div>
+
+            {/* Loading / Error Overlays */}
+            {(isLoading || error) && (
+                <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-[inherit]">
+                    {isLoading ? (
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-10 h-10 border-4 border-t-[var(--primary-color)] border-white/10 rounded-full animate-spin shadow-[0_0_20px_rgba(60,179,113,0.3)]" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 animate-pulse">Syncing Marketplace...</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center gap-4 px-8 text-center">
+                            <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500 text-2xl shadow-[0_0_20px_rgba(239,68,68,0.2)]">⚠️</div>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-sm font-black text-white uppercase tracking-tight">{error}</span>
+                                <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{symbol} MEXC Feed Interrupted</span>
+                            </div>
+                            <button onClick={() => setTimeframe(t => t)} className="mt-2 px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95">Retry Sync</button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Backdrop for selector */}
             {isSelectorOpen && (

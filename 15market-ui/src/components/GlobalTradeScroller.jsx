@@ -178,13 +178,13 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
             <div className={`absolute left-0 top-0 bottom-0 px-3 lg:px-6 z-30 flex items-center border-r transition-all duration-300 ${theme === 'light' ? 'bg-[#f8fafc]' : 'bg-[#050505]'
                 } ${currentNetwork === 'arc' ? 'border-blue-500/30' : 'border-[#3CB371]/30'}`}>
                 <div className="flex items-center gap-3">
-                    <div className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--primary-color)] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--primary-color)]"></span>
-                    </div>
-                    <div className="flex flex-col">
-                        <small className={`text-[9px] font-black uppercase tracking-[0.2em] ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                            {isConnected ? 'Market Live' : 'Sync Error'}
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#3CB371]/10 border border-[#3CB371]/20">
+                        <div className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3CB371]"></span>
+                        </div>
+                        <small className="text-[8px] font-black uppercase tracking-[0.15em] text-[#3CB371]">
+                            Market Live
                         </small>
                     </div>
                 </div>

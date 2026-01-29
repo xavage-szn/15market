@@ -375,13 +375,20 @@ export default function UserApp() {
       }
 
       const listed = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
-      const activeId = localStorage.getItem('15market_active_token_id') || 'btc';
+      const activeId = localStorage.getItem('15market_active_token_id') || 'sol'; // Default to SOL as per request
       const market = listed.find(t => t.id === activeId);
 
-      if (market && market.id !== activeMarket.id) {
-        console.log(`🎯 Switching UI to market: ${market.symbol}`);
-        setActiveMarket(market);
-        setTimeout(() => fetchCurrentPrice(), 50);
+      if (market) {
+        // Safety: Ensure binance symbol exists for chart
+        if (!market.binance) {
+          market.binance = `${market.symbol}USDT`;
+        }
+
+        if (market.id !== activeMarket.id) {
+          console.log(`🎯 Switching UI to market: ${market.symbol}`);
+          setActiveMarket(market);
+          setTimeout(() => fetchCurrentPrice(), 50);
+        }
       }
     };
 
@@ -1657,7 +1664,7 @@ export default function UserApp() {
 
       <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
         <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="logo" className={`h-20 lg:h-32 w-auto drop-shadow-[0_0_35px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+          <img src="/logo.png" alt="logo" className={`h-10 lg:h-14 w-auto drop-shadow-[0_0_35px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
         </div>
 
         {/* Desktop Nav */}
@@ -1667,30 +1674,48 @@ export default function UserApp() {
 
 
         {/* Desktop Controls */}
-        <div className="hidden lg:flex items-center gap-4">
+        <div className="hidden lg:flex items-center gap-3">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
-          <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
-          <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all"
+
+          {/* Notifications Placeholder */}
+          <div className="relative group">
+            <button className={`p-2.5 rounded-xl border backdrop-blur-md transition-all ${theme === 'light' ? 'bg-black/[0.03] border-black/5 hover:bg-black/[0.08]' : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.08]'}`}>
+              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#3CB371] border-2 border-[#050505] flex items-center justify-center">
+                <span className="text-[8px] font-black text-white">2</span>
+              </div>
+              <svg className={`w-5 h-5 ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+          </div>
+
+          <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
             style={{
-              backgroundColor: theme === 'light' ? (network === 'solana' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(59, 130, 246, 0.08)') : (network === 'solana' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(59, 130, 246, 0.15)'),
-              borderColor: theme === 'light' ? (network === 'solana' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(59, 130, 246, 0.2)') : (network === 'solana' ? 'rgba(60, 179, 113, 0.3)' : 'rgba(59, 130, 246, 0.3)'),
+              backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+              borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
             }}>
-            <User size={20} className={theme === 'light' ? 'text-black' : 'text-white'} />
+            <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
           </button>
+
+          <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
         </div>
 
         {/* Mobile Controls */}
         <div className="flex lg:hidden items-center gap-2">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
-          <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
-          <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all"
-            style={{
-              backgroundColor: theme === 'light' ? (network === 'solana' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(59, 130, 246, 0.08)') : (network === 'solana' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(59, 130, 246, 0.15)'),
-              borderColor: theme === 'light' ? (network === 'solana' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(59, 130, 246, 0.2)') : (network === 'solana' ? 'rgba(60, 179, 113, 0.3)' : 'rgba(59, 130, 246, 0.3)'),
-            }}>
-            <User size={20} className={theme === 'light' ? 'text-black' : 'text-white'} />
+
+          {/* Notifications Placeholder Mobile */}
+          <div className="relative">
+            <button className={`p-2 rounded-xl border backdrop-blur-md ${theme === 'light' ? 'bg-black/[0.03] border-black/5' : 'bg-white/[0.03] border-white/5'}`}>
+              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#3CB371] border-2 border-[#050505] flex items-center justify-center">
+                <span className="text-[7px] font-black text-white">2</span>
+              </div>
+              <svg className={`w-4 h-4 ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+          </div>
+
+          <button onClick={() => setView("dashboard")} className={`p-2 rounded-xl border backdrop-blur-md ${theme === 'light' ? 'bg-black/[0.03] border-black/5' : 'bg-white/[0.03] border-white/5'}`}>
+            <User size={18} className={theme === 'light' ? 'text-black/60' : 'text-white/60'} />
           </button>
         </div>
       </header>
@@ -1790,9 +1815,9 @@ export default function UserApp() {
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
 
-      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-6 mb-14 relative z-0">
+      <div className="w-full max-w-7xl grid grid-cols-2 lg:grid-cols-12 gap-2 lg:gap-6 mb-14 relative z-0">
         {/* Chart Column */}
-        <div className="lg:col-span-12 flex flex-col gap-3">
+        <div className="col-span-2 lg:col-span-12 flex flex-col gap-3">
           {/* Chart Container */}
           <div className="w-full h-[30vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-0 shadow-[0_0_20px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3"
             style={{ backgroundColor: theme === 'light' ? '#ffffff' : '#0d0d0d' }}>
