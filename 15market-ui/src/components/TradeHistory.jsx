@@ -45,7 +45,7 @@ const TradeHistoryComponent = ({
 
     return (
         <div className="w-full max-w-4xl mt-6 lg:mt-10 mb-20 text-left" >
-            <div className={`p-3.5 lg:p-6 rounded-2xl border transition-all duration-300 ${isLight ? '!bg-white border-black/5 !shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)]' : 'bg-[#111] border-white/10 shadow-xl'}`}>
+            <div className={`p-3.5 lg:p-6 rounded-2xl border transition-all duration-300 ${isLight ? 'static-panel-light !shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]' : 'bg-[#111] border-white/10 shadow-xl'}`}>
                 <div className="flex items-center justify-between mb-4 lg:mb-6 px-1">
                     <h3 className={`text-sm lg:text-xl font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
                     {/* Clear History removed as per protocol security */}
@@ -70,8 +70,8 @@ const TradeHistoryComponent = ({
                 ) : (
                     <div className="space-y-3">
                         {paginatedTrades.map((t) => (
-                            <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border gap-2 lg:gap-4 transition-all group ${isLight
-                                ? '!bg-white border-black/5 shadow-lg hover:shadow-xl hover:border-black/10'
+                            <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border-2 gap-2 lg:gap-4 transition-all group ${isLight
+                                ? 'bg-white border-black/5 shadow-md hover:shadow-lg hover:border-black/10'
                                 : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
                                 <div className="flex items-center gap-2 lg:gap-4">
                                     <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{ background: t.direction === "buy" ? `${GREEN}22` : `${CORAL}22`, color: t.direction === "buy" ? GREEN : CORAL }}>

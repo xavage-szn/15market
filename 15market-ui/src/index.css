@@ -26,16 +26,17 @@ body.theme-arc {
   background-color: #0d0d0d !important;
 }
 
-/* LIGHT MODE - Solid Background */
+/* LIGHT MODE - Softer Diluted Background */
 html.light,
 body.light {
-  background-color: #f9fafb !important;
+  background-color: #f8fafc !important;
+  /* Slate 50 (Very soft gray) */
 }
 
 /* ARC NETWORK - LIGHT MODE */
 html.light.theme-arc,
 body.light.theme-arc {
-  background-color: #f9fafb !important;
+  background-color: #f8fafc !important;
 }
 
 #root {
@@ -139,7 +140,7 @@ body.light.theme-arc {
 }
 
 .light {
-  --primary-bg-modal: rgba(255, 255, 255, 0.95);
+  --primary-bg-modal: rgba(248, 250, 252, 0.98);
 }
 
 .light:not(.theme-arc) {
@@ -364,9 +365,9 @@ body.light.theme-arc {
 
 .static-panel-light {
   background: #ffffff !important;
-  border: 1px solid rgba(0, 0, 0, 0.05) !important;
-  box-shadow: none !important;
-  transition: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05) !important;
+  transition: all 0.2s ease !important;
   transform: none !important;
 }
 

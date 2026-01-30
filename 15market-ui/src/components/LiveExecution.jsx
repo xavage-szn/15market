@@ -51,13 +51,13 @@ const LiveExecutionComponent = ({
                             <div
                                 key={trade.id}
                                 className={`rounded-2xl p-5 flex flex-col relative transition-all duration-300 ${isFinal ? 'opacity-40' : ''} ${isLight
-                                    ? 'bg-white border border-black/5'
+                                    ? 'bg-white border-2 border-black/5 shadow-md'
                                     : 'bg-[#0a0a0a] border border-white/5'}`}
                             >
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-2">
                                         <div className={`w-2 h-2 rounded-full ${isFinal ? (isLight ? 'bg-black/10' : 'bg-white/10') : 'bg-[#3CB371] animate-pulse'}`} />
-                                        <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>
+                                        <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/50' : 'text-white/40'}`}>
                                             {isFinal ? trade.status : isResolving ? "Resolving..." : "Monitoring"}
                                         </span>
                                     </div>
@@ -147,7 +147,7 @@ const LiveExecutionComponent = ({
                         );
                     })
                 ) : (
-                    <div className={`flex-1 rounded-[24px] border flex flex-col items-center justify-center p-12 text-center ${isLight ? 'bg-white border-black/5 shadow-inner' : 'border-white/5 bg-black/20 opacity-40'}`}>
+                    <div className={`flex-1 rounded-[24px] border-2 flex flex-col items-center justify-center p-12 text-center ${isLight ? 'bg-white border-black/5 shadow-sm' : 'border-white/5 bg-black/20 opacity-40'}`}>
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
                             <img src="/logo.png" alt="15market" className={`h-6 w-auto ${isLight ? 'invert opacity-20' : 'grayscale'}`} />
                         </div>

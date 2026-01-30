@@ -178,12 +178,12 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
             <div className={`absolute left-0 top-0 bottom-0 px-3 lg:px-6 z-30 flex items-center border-r transition-all duration-300 ${theme === 'light' ? 'bg-[#f8fafc]' : 'bg-[#050505]'
                 } ${currentNetwork === 'arc' ? 'border-blue-500/30' : 'border-[#3CB371]/30'}`}>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#3CB371]/10 border border-[#3CB371]/20">
+                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full border-2 ${theme === 'light' ? 'bg-[#3CB371]/10 border-[#3CB371]/40' : 'bg-[#3CB371]/10 border-[#3CB371]/20'}`}>
                         <div className="relative flex h-1.5 w-1.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3CB371]"></span>
                         </div>
-                        <small className="text-[8px] font-black uppercase tracking-[0.15em] text-[#3CB371]">
+                        <small className={`text-[8px] font-black uppercase tracking-[0.15em] ${theme === 'light' ? 'text-[#059669]' : 'text-[#3CB371]'}`}>
                             Market Live
                         </small>
                     </div>
@@ -245,10 +245,10 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                         >
                             {repeatedHistory.map((event, i) => (
                                 <div key={`${event.id}-${i}`} className="flex items-center mx-4 lg:mx-8">
-                                    <div className={`flex items-center gap-3 lg:gap-4 px-3 py-1 lg:px-4 lg:py-1.5 rounded-xl border transition-all duration-300 hover:scale-[1.02] ${event.direction === "UP"
-                                        ? (theme === 'light' ? 'border-[#3CB371]/60 shadow-[0_0_20px_rgba(60,179,113,0.4)] bg-[#3CB371]/5' : 'border-[#3CB371]/60 shadow-[0_0_25px_rgba(60,179,113,0.3)] bg-[#3CB371]/5')
-                                        : (theme === 'light' ? 'border-[#FF8C00]/60 shadow-[0_0_20px_rgba(255,140,0,0.4)] bg-[#FF8C00]/5' : 'border-[#FF8C00]/60 shadow-[0_0_25px_rgba(255,140,0,0.3)] bg-[#FF8C00]/5')
-                                        } ${theme === 'light' ? 'static-panel-light' : 'static-panel'}`}>
+                                    <div className={`flex items-center gap-3 lg:gap-4 px-3 py-1 lg:px-4 lg:py-1.5 rounded-xl border-2 transition-all duration-300 hover:scale-[1.02] ${event.direction === "UP"
+                                        ? (theme === 'light' ? 'border-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.2)] bg-white' : 'border-[#3CB371]/60 shadow-[0_0_25px_rgba(60,179,113,0.3)] bg-[#3CB371]/5')
+                                        : (theme === 'light' ? 'border-[#FF8C00] shadow-[0_0_15px_rgba(255,140,0,0.2)] bg-white' : 'border-[#FF8C00]/60 shadow-[0_0_25px_rgba(255,140,0,0.3)] bg-[#FF8C00]/5')
+                                        } ${theme === 'light' ? '' : 'static-panel'}`}>
                                         {/* Profile Photo */}
                                         <div className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                                             {profiles[event.owner]?.xProfileImage ? (
