@@ -67,7 +67,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
             </div>
 
             {/* Navigation */}
-            <nav className="fixed top-0 inset-x-0 z-[100] flex items-center justify-between px-6 md:px-12 py-4 bg-black/90 border-b border-white/5 backdrop-blur-sm shadow-none">
+            <nav className="fixed top-0 inset-x-0 z-[100] flex items-center justify-between px-6 md:px-12 py-4 bg-transparent backdrop-blur-sm shadow-none">
                 <div className="flex items-center">
                     <img
                         src="/logo.png"
@@ -115,7 +115,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                     <motion.h1
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-5xl md:text-8xl font-black tracking-tighter leading-[0.9] text-white mb-8"
+                        className="text-4xl md:text-7xl font-black tracking-tighter leading-[0.9] text-white mb-6 px-4"
                     >
                         THE PRECISION <br />
                         <span className="text-white drop-shadow-[0_0_50px_rgba(60,179,113,0.2)]">MARKET.</span>
@@ -124,7 +124,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-lg md:text-xl text-white/40 max-w-2xl mx-auto mb-12 leading-relaxed"
+                        className="text-base md:text-lg text-white/40 max-w-xl mx-auto mb-10 leading-relaxed px-6"
                     >
                         Decide the direction of an asset in a 15 seconds or lesser time window.
                         <span
@@ -145,7 +145,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                             />
 
                             {/* Connect Button */}
-                            <div className="relative scale-125">
+                            <div className="relative scale-110">
                                 <UnifiedWalletButton
                                     currentNetwork={currentNetwork}
                                     onNetworkChange={handleChainChange}
@@ -167,46 +167,50 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
 
                 {/* VISUAL COMPONENT */}
                 <motion.div
-                    initial={{ opacity: 0, y: 100 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-24 w-full max-w-6xl relative"
+                    initial={{ opacity: 0, y: 80, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                    className="mt-16 w-full max-w-5xl relative perspective-1000"
                 >
-                    <div className="relative bg-[#0A0A0A] border border-white/10 rounded-[32px] shadow-2xl overflow-hidden aspect-[16/9]">
-                        <div className="absolute top-0 inset-x-0 h-10 bg-white/[0.03] border-b border-white/5 flex items-center px-6 justify-between z-20">
-                            <div className="flex gap-2">
-                                <div className="w-3 h-3 rounded-full bg-[#FF5F56]"></div>
-                                <div className="w-3 h-3 rounded-full bg-[#FFBD2E]"></div>
-                                <div className="w-3 h-3 rounded-full bg-[#27C93F]"></div>
-                            </div>
-                            <div className="text-[10px] font-mono text-white/30">user@15market-terminal:~/predict</div>
-                        </div>
-                        <DesktopDemo />
-                    </div>
+                    <div className="relative group overflow-hidden rounded-[32px]">
+                        {/* 3D Mockup Image */}
+                        <img
+                            src="/mockup.png"
+                            alt="15market App Mockup"
+                            className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-105"
+                            style={{
+                                filter: `drop-shadow(0 20px 40px ${currentTheme.primary}20)`
+                            }}
+                        />
 
-                    {/* Helper Text */}
-                    <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                        className="text-xs text-white/30 uppercase tracking-[0.2em] font-bold"
-                    >
-                        Choose Network • Connect Wallet • Start Trading
-                    </motion.p>
+                        {/* Overlay Glow */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"></div>
+                    </div>
                 </motion.div>
+
+                {/* Helper Text */}
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-xs text-white/30 uppercase tracking-[0.2em] font-bold mt-8"
+                >
+                    Choose Network • Connect Wallet • Start Trading
+                </motion.p>
             </section>
 
             {/* Features */}
-            <section className="py-32 border-t border-white/5 relative z-10 bg-black">
+            <section className="py-24 relative z-10 bg-transparent">
                 <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <FeatureBox icon={<Clock />} title="15 Seconds" desc="Lightning-fast rounds. Enter and exit positions in just 15 seconds." />
-                    <FeatureBox icon={<Shield />} title="No Manipulation" desc="ZERO artificial spread. Pure market forces determining your outcome." />
-                    <FeatureBox icon={<Activity />} title="Pure Pyth Feed" desc="Direct on-chain integration with Pyth Network for high-fidelity data." />
-                    <FeatureBox icon={<Zap />} title="Fast Settlement" desc="Automated smart contract payouts immediately upon completion." />
+                    <FeatureBox icon={<Clock size={20} />} title="15 Seconds" desc="Lightning-fast rounds. Enter and exit positions in just 15 seconds." />
+                    <FeatureBox icon={<Shield size={20} />} title="No Manipulation" desc="ZERO artificial spread. Pure market forces determining your outcome." />
+                    <FeatureBox icon={<Activity size={20} />} title="Pure Pyth Feed" desc="Direct on-chain integration with Pyth Network for high-fidelity data." />
+                    <FeatureBox icon={<Zap size={20} />} title="Fast Settlement" desc="Automated smart contract payouts immediately upon completion." />
                 </div>
             </section>
 
-            <footer className="py-12 border-t border-white/5 flex flex-col items-center gap-6 bg-[#050505]">
-                <img src="/logo.png" className="h-20 w-auto opacity-80" alt="15Market" />
+            <footer className="py-12 flex flex-col items-center gap-6 bg-transparent">
+                <img src="/logo.png" className="h-14 w-auto opacity-80" alt="15Market" />
                 <p className="text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: `${currentTheme.primary}99` }}>Built by 15Solutions</p>
             </footer>
         </div>
@@ -218,7 +222,7 @@ const FeatureBox = ({ icon, title, desc }) => {
 
     return (
         <div
-            className="p-10 rounded-[40px] bg-white/[0.02] border border-white/5 transition-colors duration-500 group"
+            className="p-8 rounded-[32px] bg-white/[0.02] border border-white/5 transition-colors duration-500 group"
             style={{
                 '--hover-border': `${currentColor}30`
             }}
@@ -226,7 +230,7 @@ const FeatureBox = ({ icon, title, desc }) => {
             onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}
         >
             <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-all duration-300"
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-5 transition-all duration-300"
                 style={{
                     backgroundColor: `${currentColor}10`,
                     color: currentColor
@@ -234,32 +238,8 @@ const FeatureBox = ({ icon, title, desc }) => {
             >
                 {icon}
             </div>
-            <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
-            <p className="text-sm text-white/40 leading-relaxed">{desc}</p>
-        </div>
-    );
-};
-
-const DesktopDemo = () => {
-    const [price, setPrice] = useState(145.24);
-    const currentColor = getComputedStyle(document.documentElement).getPropertyValue('--theme-primary') || '#3CB371';
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setPrice(p => p + (Math.random() - 0.5) * 0.1);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    return (
-        <div className="w-full h-full p-12 flex flex-col items-center justify-center bg-black/40">
-            <div
-                className="text-6xl font-black tabular-nums mb-4 transition-colors duration-500"
-                style={{ color: currentColor }}
-            >
-                ${price.toFixed(2)}
-            </div>
-            <div className="text-white/20 uppercase tracking-[0.5em] text-xs font-bold">Live Precision Feed</div>
+            <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
+            <p className="text-xs text-white/40 leading-relaxed">{desc}</p>
         </div>
     );
 };

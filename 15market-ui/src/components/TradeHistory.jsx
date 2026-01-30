@@ -44,10 +44,10 @@ const TradeHistoryComponent = ({
     const paginatedTrades = filteredTrades.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
     return (
-        <div className="w-full max-w-4xl mt-10 mb-20 text-left" >
-            <div className={`p-6 rounded-2xl border transition-all duration-300 ${isLight ? '!bg-white border-black/5 !shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)]' : 'bg-[#111] border-white/10 shadow-xl'}`}>
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className={`text-xl font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
+        <div className="w-full max-w-4xl mt-6 lg:mt-10 mb-20 text-left" >
+            <div className={`p-3.5 lg:p-6 rounded-2xl border transition-all duration-300 ${isLight ? '!bg-white border-black/5 !shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)]' : 'bg-[#111] border-white/10 shadow-xl'}`}>
+                <div className="flex items-center justify-between mb-4 lg:mb-6 px-1">
+                    <h3 className={`text-sm lg:text-xl font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
                     {/* Clear History removed as per protocol security */}
                 </div>
 
@@ -70,35 +70,35 @@ const TradeHistoryComponent = ({
                 ) : (
                     <div className="space-y-3">
                         {paginatedTrades.map((t) => (
-                            <div key={t.id} className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border gap-4 transition-all group ${isLight
+                            <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border gap-2 lg:gap-4 transition-all group ${isLight
                                 ? '!bg-white border-black/5 shadow-lg hover:shadow-xl hover:border-black/10'
                                 : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
-                                <div className="flex items-center gap-4">
-                                    <div className="font-bold px-3 py-1 rounded-md text-sm" style={{ background: t.direction === "buy" ? `${GREEN}22` : `${CORAL}22`, color: t.direction === "buy" ? GREEN : CORAL }}>
+                                <div className="flex items-center gap-2 lg:gap-4">
+                                    <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{ background: t.direction === "buy" ? `${GREEN}22` : `${CORAL}22`, color: t.direction === "buy" ? GREEN : CORAL }}>
                                         {t.direction.toUpperCase()}
                                     </div>
-                                    <div className={`text-sm font-bold ${isLight ? 'text-black/90' : 'text-white/90'}`}>{t.amount} {t.network === 'arc' ? 'USDC' : 'SOL'}</div>
+                                    <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-black/90' : 'text-white/90'}`}>{t.amount} {t.network === 'arc' ? 'USDC' : 'SOL'}</div>
                                 </div>
 
-                                <div className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm flex flex-col`}>
+                                <div className={`${isLight ? 'text-black/40' : 'text-white/40'} text-[9px] lg:text-sm hidden sm:flex flex-col`}>
                                     <span>Entry: ${t.entryPrice}</span>
-                                    {t.exitPrice > 0 && <span className="text-xs opacity-60">Exit: ${t.exitPrice}</span>}
+                                    {t.exitPrice > 0 && <span className="text-[8px] lg:text-xs opacity-60">Exit: ${t.exitPrice}</span>}
                                 </div>
 
-                                <div className="flex items-center justify-between w-full sm:w-auto gap-6 sm:justify-start">
-                                    <div className={`text-xs font-mono ${isLight ? 'text-black/30' : 'text-white/20'}`}>{t.timestamp}</div>
+                                <div className="flex items-center gap-2 lg:gap-6">
+                                    <div className={`text-[8px] font-mono hidden lg:block ${isLight ? 'text-black/30' : 'text-white/20'}`}>{t.timestamp}</div>
 
                                     <a
                                         href={t.network === 'arc' ? `https://testnet.arcscan.app/tx/${t.tx}` : `https://explorer.solana.com/tx/${t.tx}?cluster=devnet`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`text-sm font-black px-4 py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
+                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
                                             t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
                                                 (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                             }`}
                                     >
                                         {t.status}
-                                        <span className="text-[10px] opacity-40 group-hover:opacity-100 transition-opacity">↗</span>
+                                        <span className="text-[8px] lg:text-[10px] opacity-40 group-hover:opacity-100 transition-opacity">↗</span>
                                     </a>
 
                                     {t.status !== "PENDING" && (
@@ -108,10 +108,11 @@ const TradeHistoryComponent = ({
                                                 setSelectedPnLTrade(t);
                                                 setIsPnLOpen(true);
                                             }}
-                                            className={`p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#3CB371]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#3CB371]'}`}
+                                            className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#3CB371]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#3CB371]'}`}
                                             title="Share PnL"
                                         >
-                                            <Share2 size={16} />
+                                            <Share2 size={12} className="lg:hidden" />
+                                            <Share2 size={16} className="hidden lg:block" />
                                         </button>
                                     )}
                                 </div>
