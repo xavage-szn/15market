@@ -265,53 +265,41 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     }, [theme, network, fetchKlines, bgColor, textColor, gridColor, upColor, downColor, timeframe, symbol]);
 
 
-    // 1s Data Compounding Logic
+    // Live Price Update Logic (Syncs chart with TradeTerminal)
     useEffect(() => {
-        if (timeframe !== '1s' || !currentPrice || !seriesRef.current) return;
+        if (!currentPrice || !seriesRef.current) return;
 
         const now = Math.floor(Date.now() / 1000);
         const price = parseFloat(currentPrice);
 
-        if (!current1sCandle.current) {
-            // First live tick - start the candle
-            current1sCandle.current = {
-                time: now,
-                open: price,
-                high: price,
-                low: price,
-                close: price
-            };
+        // Update the series with the latest tick
+        // For 1s timeframe, we do detailed candle construction
+        if (timeframe === '1s') {
+            if (!current1sCandle.current) {
+                current1sCandle.current = { time: now, open: price, high: price, low: price, close: price };
+            } else if (now > current1sCandle.current.time) {
+                seriesRef.current.update(current1sCandle.current);
+                current1sCandle.current = { time: now, open: current1sCandle.current.close, high: price, low: price, close: price };
+            } else {
+                current1sCandle.current.high = Math.max(current1sCandle.current.high, price);
+                current1sCandle.current.low = Math.min(current1sCandle.current.low, price);
+                current1sCandle.current.close = price;
+            }
             seriesRef.current.update(current1sCandle.current);
-            return;
-        }
-
-        // Check if we need to start a NEW 1-second candle
-        if (now > current1sCandle.current.time) {
-            // Push final state of previous candle before starting new one
-            seriesRef.current.update(current1sCandle.current);
-
-            // Start new candle
-            current1sCandle.current = {
-                time: now,
-                open: current1sCandle.current.close, // Smooth transition
-                high: Math.max(current1sCandle.current.close, price),
-                low: Math.min(current1sCandle.current.close, price),
-                close: price
-            };
         } else {
-            // Update current candle
-            current1sCandle.current.high = Math.max(current1sCandle.current.high, price);
-            current1sCandle.current.low = Math.min(current1sCandle.current.low, price);
-            current1sCandle.current.close = price;
+            // For other timeframes, just update the latest tick to match the terminal price
+            // Lightweight charts will handle finding the correct candle by time
+            seriesRef.current.update({
+                time: Math.floor(now / 60) * 60, // Align to minute for non-1s
+                close: price
+            });
         }
 
-        seriesRef.current.update(current1sCandle.current);
-
-        // Update Volume for current 1s slice
+        // Update Volume for current tick
         volumeSeriesRef.current.update({
-            time: current1sCandle.current.time,
+            time: timeframe === '1s' ? now : Math.floor(now / 60) * 60,
             value: Math.random() * 50,
-            color: current1sCandle.current.close >= current1sCandle.current.open ? 'rgba(60, 179, 113, 0.3)' : 'rgba(239, 68, 68, 0.3)'
+            color: price >= (current1sCandle.current?.open || price) ? 'rgba(60, 179, 113, 0.4)' : 'rgba(239, 68, 68, 0.4)'
         });
 
     }, [currentPrice, timeframe]);
@@ -426,9 +414,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                             {symbol.replace('USDT', '')}/USDC <span className="text-[10px] text-white/40 lowercase">on</span> <span className="text-[#3CB371] lowercase italic">1s feed</span>
                         </h2>
                         <div className="hidden sm:flex items-center gap-3 font-mono text-[9px] lg:text-[11px] font-bold">
-                            <span className="text-white/40 uppercase">O: <span className="text-white">{(seriesRef.current?.lastValue * 0.9998 || 0).toFixed(4)}</span></span>
-                            <span className="text-white/40 uppercase">H: <span className="text-white">{(seriesRef.current?.lastValue * 1.0002 || 0).toFixed(4)}</span></span>
-                            <span className="text-white/40 uppercase">L: <span className="text-white">{(seriesRef.current?.lastValue * 0.9997 || 0).toFixed(4)}</span></span>
+                            <span className="text-white/40 uppercase">O: <span className="text-white">{(parseFloat(currentPrice) * 0.9998).toFixed(4)}</span></span>
+                            <span className="text-white/40 uppercase">H: <span className="text-white">{(parseFloat(currentPrice) * 1.0002).toFixed(4)}</span></span>
+                            <span className="text-white/40 uppercase">L: <span className="text-white">{(parseFloat(currentPrice) * 0.9997).toFixed(4)}</span></span>
                             <span className="text-white/40 uppercase">C: <span style={{ color: upColor }}>{Number(currentPrice || 0).toFixed(4)}</span></span>
                         </div>
                     </div>
