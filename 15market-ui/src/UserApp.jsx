@@ -1735,7 +1735,7 @@ export default function UserApp() {
               symbol={activeMarket.binance}
               theme={theme}
               network={network}
-              currentPrice={activeMarketPrice}
+              currentPrice={price}
             />
           </div>
         </div>
