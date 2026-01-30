@@ -246,8 +246,8 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                             {repeatedHistory.map((event, i) => (
                                 <div key={`${event.id}-${i}`} className="flex items-center mx-4 lg:mx-8">
                                     <div className={`flex items-center gap-3 lg:gap-4 px-3 py-1 lg:px-4 lg:py-1.5 rounded-xl border-2 transition-all duration-300 hover:scale-[1.02] ${event.direction === "UP"
-                                        ? (theme === 'light' ? 'border-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.2)] bg-white' : 'border-[#3CB371]/60 shadow-[0_0_25px_rgba(60,179,113,0.3)] bg-[#3CB371]/5')
-                                        : (theme === 'light' ? 'border-[#FF8C00] shadow-[0_0_15px_rgba(255,140,0,0.2)] bg-white' : 'border-[#FF8C00]/60 shadow-[0_0_25px_rgba(255,140,0,0.3)] bg-[#FF8C00]/5')
+                                        ? (theme === 'light' ? 'border-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.2)] bg-[#f8fafc]' : 'border-[#3CB371]/60 shadow-[0_0_25px_rgba(60,179,113,0.3)] bg-[#3CB371]/5')
+                                        : (theme === 'light' ? 'border-[#FF8C00] shadow-[0_0_15px_rgba(255,140,0,0.2)] bg-[#f8fafc]' : 'border-[#FF8C00]/60 shadow-[0_0_25px_rgba(255,140,0,0.3)] bg-[#FF8C00]/5')
                                         } ${theme === 'light' ? '' : 'static-panel'}`}>
                                         {/* Profile Photo */}
                                         <div className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">

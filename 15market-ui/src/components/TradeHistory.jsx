@@ -71,7 +71,7 @@ const TradeHistoryComponent = ({
                     <div className="space-y-3">
                         {paginatedTrades.map((t) => (
                             <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border-2 gap-2 lg:gap-4 transition-all group ${isLight
-                                ? 'bg-white border-black/5 shadow-md hover:shadow-lg hover:border-black/10'
+                                ? 'bg-[#f8fafc] border-black/5 shadow-md hover:shadow-lg hover:border-black/10'
                                 : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
                                 <div className="flex items-center gap-2 lg:gap-4">
                                     <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{ background: t.direction === "buy" ? `${GREEN}22` : `${CORAL}22`, color: t.direction === "buy" ? GREEN : CORAL }}>
