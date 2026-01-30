@@ -144,19 +144,24 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
     const isLight = theme === 'light';
 
     return (
-        <div className={`w-full border-y h-12 flex items-center overflow-hidden relative transition-all duration-500 rounded-xl glass-panel ${isLight
-            ? 'bg-white border-black/5 shadow-md'
-            : 'border-white/5'
-            }`}>
+        <div
+            className={`w-full h-9 flex items-center overflow-hidden relative transition-all duration-500 rounded-none lg:rounded-xl glass-panel ${isLight
+                ? 'bg-white border-black/5 shadow-md'
+                : 'border-white/5'
+                }`}
+            style={{
+                boxShadow: isLight ? 'none' : `0 0 15px #3CB37115, inset 0 0 10px #3CB37110`
+            }}
+        >
 
-            {/* Left Status Label */}
-            <div className={`absolute left-0 top-0 bottom-0 px-4 z-30 flex items-center border-r transition-all duration-300 ${isLight ? 'bg-slate-50 border-black/10' : 'bg-[#050505] border-white/10'}`}>
-                <div className="flex items-center gap-2">
+            {/* Left Status Label - Compact on mobile */}
+            <div className={`absolute left-0 top-0 bottom-0 px-2 lg:px-4 z-30 flex items-center border-r transition-all duration-300 ${isLight ? 'bg-slate-50 border-black/10' : 'bg-[#050505]/80 backdrop-blur-md border-white/10'}`}>
+                <div className="flex items-center gap-1.5 lg:gap-2">
                     <div className="relative flex h-1.5 w-1.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3CB371]"></span>
                     </div>
-                    <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/60' : 'text-white/40'}`}>
+                    <span className={`text-[7px] lg:text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap ${isLight ? 'text-black/60' : 'text-white/60'}`}>
                         Network Live
                     </span>
                 </div>
@@ -171,20 +176,20 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className={`absolute inset-0 flex items-center z-40 ${isLight ? 'bg-white/90 backdrop-blur-md' : 'bg-[#050505]'}`}
+                            className={`absolute inset-0 flex items-center z-40 ${isLight ? 'bg-white/90 backdrop-blur-md' : 'bg-[#050505]/95 backdrop-blur-md'}`}
                         >
                             <motion.div
-                                className="flex items-center gap-24 whitespace-nowrap pl-32"
+                                className="flex items-center gap-24 whitespace-nowrap pl-24 lg:pl-32"
                                 animate={{ x: ["0%", "-50%"] }}
                                 transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
                             >
                                 {[...Array(8)].map((_, i) => (
-                                    <div key={i} className="flex items-center gap-6">
-                                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${activeBroadcast.type === 'EMERGENCY' ? 'bg-red-500 text-white' : 'bg-[#3CB371] text-black'}`}>
-                                            <Radio size={12} className="animate-pulse" />
+                                    <div key={i} className="flex items-center gap-4 lg:gap-6">
+                                        <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest ${activeBroadcast.type === 'EMERGENCY' ? 'bg-red-500 text-white' : 'bg-[#3CB371] text-black'}`}>
+                                            <Radio size={10} className="animate-pulse" />
                                             {activeBroadcast.type}
                                         </div>
-                                        <span className={`text-sm font-black uppercase tracking-tight ${isLight ? 'text-black' : 'text-white'}`}>{activeBroadcast.text}</span>
+                                        <span className={`text-xs lg:text-sm font-black uppercase tracking-tight ${isLight ? 'text-black' : 'text-white'}`}>{activeBroadcast.text}</span>
                                     </div>
                                 ))}
                             </motion.div>
@@ -194,38 +199,38 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
 
                 <motion.div
                     animate={{ x: ["0%", "-50%"] }}
-                    className="flex items-center gap-8 whitespace-nowrap pl-52"
-                    transition={{ x: { duration: 300, repeat: Infinity, ease: "linear" } }}
+                    className="flex items-center gap-6 lg:gap-10 whitespace-nowrap pl-40 lg:pl-52"
+                    transition={{ x: { duration: 240, repeat: Infinity, ease: "linear" } }}
                 >
                     {repeatedHistory.map((event, i) => (
-                        <div key={`${event.id}-${i}`} className="flex items-center gap-3 px-4 py-2 rounded-2xl border border-white/[0.03] bg-white/[0.02] hover:bg-white/[0.05] transition-all group">
-                            <div className="w-6 h-6 rounded-lg overflow-hidden bg-white/5 flex items-center justify-center shrink-0">
+                        <div key={`${event.id}-${i}`} className="flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05] transition-all group">
+                            <div className="w-5 h-5 lg:w-6 lg:h-6 rounded-lg overflow-hidden bg-white/5 flex items-center justify-center shrink-0">
                                 {profiles[event.owner]?.xProfileImage ? (
                                     <img src={profiles[event.owner].xProfileImage} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className={`w-full h-full flex items-center justify-center text-[10px] font-black ${event.network === 'arc' ? 'text-blue-500' : 'text-[#3CB371]'}`}>
+                                    <div className={`w-full h-full flex items-center justify-center text-[8px] lg:text-[10px] font-black ${event.network === 'arc' ? 'text-blue-500' : 'text-[#3CB371]'}`}>
                                         {(profiles[event.owner]?.username || "A").charAt(0).toUpperCase()}
                                     </div>
                                 )}
                             </div>
 
                             <div className="flex flex-col">
-                                <span className={`text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>
+                                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>
                                     {event.network?.toUpperCase() || 'SOL'} • #{event.absIndex || '---'}
                                 </span>
-                                <span className={`text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
+                                <span className={`text-[8px] lg:text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
                                     {event.user}
                                 </span>
                             </div>
 
-                            <div className={`w-px h-6 bg-white/10 mx-1`} />
+                            <div className={`w-px h-4 lg:h-6 bg-white/10 mx-0.5 lg:mx-1`} />
 
                             <div className="flex flex-col items-end">
-                                <div className="flex items-baseline gap-1">
-                                    <span className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'}`}>{event.amount}</span>
-                                    <span className="text-[8px] font-bold opacity-40">{event.currency || 'SOL'}</span>
+                                <div className="flex items-baseline gap-0.5 lg:gap-1">
+                                    <span className={`text-[10px] lg:text-xs font-black ${isLight ? 'text-black' : 'text-white'}`}>{event.amount}</span>
+                                    <span className="text-[6px] lg:text-[8px] font-bold opacity-40">{event.currency || 'SOL'}</span>
                                 </div>
-                                <span className={`text-[9px] font-black ${event.direction === "UP" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                <span className={`text-[8px] lg:text-[9px] font-black ${event.direction === "UP" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
                                     {event.direction === "UP" ? "CALL ▲" : "PUT ▼"}
                                 </span>
                             </div>
@@ -235,7 +240,7 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
             </div>
 
             {/* Fade Out Edge */}
-            <div className={`absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l pointer-events-none z-20 ${isLight ? 'from-white to-transparent' : 'from-[#030303] to-transparent'}`} />
+            <div className={`absolute right-0 top-0 bottom-0 w-24 lg:w-32 bg-gradient-to-l pointer-events-none z-20 ${isLight ? 'from-white to-transparent' : 'from-[#030303] to-transparent'}`} />
         </div>
     );
 };

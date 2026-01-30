@@ -60,14 +60,15 @@ async function settleBet(betId, betInfo, currentPrice) {
         const computePrice = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000000 });
         const computeLimit = ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 });
 
-        const multiplier = betInfo.duration == 5 ? 698 : (betInfo.duration == 10 ? 498 : 198);
+        const durationIdx = Number(betInfo.duration);
+        const multiplier = durationIdx === 5 ? 698 : (durationIdx === 10 ? 498 : 198);
         const payout = userWon ? (BigInt(betInfo.amountLamports) * BigInt(multiplier) / 100n) : 0n;
 
         const tx = await program.methods
             .settleBet(userWon)
             .accounts({
                 bet: betPda,
-                owner: mainOwnerPubkey,
+                owner: userPubkey,
                 treasury: treasuryPda,
                 keeper: wallet.publicKey,
                 systemProgram: SystemProgram.programId,

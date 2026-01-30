@@ -56,7 +56,7 @@ const LiveExecutionComponent = ({
                         return (
                             <div
                                 key={trade.id}
-                                className={`rounded-2xl p-3 flex flex-col relative transition-all duration-300 border ${isFinal ? 'opacity-40' : ''} ${isLight
+                                className={`rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col relative transition-all duration-300 border ${isFinal ? 'opacity-40' : ''} ${isLight
                                     ? 'bg-white border-black/5 shadow-md'
                                     : 'bg-white/[0.02] border-white/5 shadow-xl'}`}
                             >
@@ -77,17 +77,16 @@ const LiveExecutionComponent = ({
                                     )}
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-2 mb-3">
-                                    <div className={`p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
+                                <div className="grid grid-cols-2 gap-1 lg:gap-2 mb-2 lg:mb-3">
+                                    <div className={`p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
                                         <div className="flex justify-between items-center mb-0.5">
-                                            <p className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/20'}`}>Entry</p>
-                                            <p className={`text-[6px] font-black ${trade.direction === "buy" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>{(trade.direction || "buy").toUpperCase()}</p>
+                                            <p className={`text-[5px] lg:text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/20'}`}>Entry</p>
                                         </div>
-                                        <p className={`text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>${trade.entryPrice}</p>
+                                        <p className={`text-[10px] lg:text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>${trade.entryPrice}</p>
                                     </div>
-                                    <div className={`p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
-                                        <p className={`text-[6px] font-black uppercase tracking-widest mb-0.5 ${isLight ? 'text-black/30' : 'text-white/20'}`}>Stake</p>
-                                        <p className={`text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{trade.amount}</p>
+                                    <div className={`p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
+                                        <p className={`text-[5px] lg:text-[6px] font-black uppercase tracking-widest mb-0.5 ${isLight ? 'text-black/30' : 'text-white/20'}`}>Stake</p>
+                                        <p className={`text-[10px] lg:text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{trade.amount}</p>
                                     </div>
                                 </div>
 
@@ -97,24 +96,24 @@ const LiveExecutionComponent = ({
                                     }`}>
                                     {!isFinal ? (
                                         <>
-                                            <div className={`text-2xl font-black mb-1 tracking-tighter tabular-nums flex items-baseline ${isLight ? 'text-black' : 'text-white'}`}>
-                                                {timeLeft}<span className={`text-[10px] ml-1 font-bold italic ${isLight ? 'text-black/20' : 'text-white/10'}`}>s</span>
+                                            <div className={`text-lg lg:text-2xl font-black mb-1 tracking-tighter tabular-nums flex items-baseline ${isLight ? 'text-black' : 'text-white'}`}>
+                                                {timeLeft}<span className={`text-[7px] lg:text-[10px] ml-0.5 font-bold italic ${isLight ? 'text-black/20' : 'text-white/10'}`}>s</span>
                                             </div>
 
-                                            <div className={`mb-2 px-3 py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                                                <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${(trade.direction === "buy" ? parseFloat(price) > parseFloat(trade.entryPrice) : parseFloat(price) < parseFloat(trade.entryPrice))
+                                            <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
+                                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${(trade.direction === "buy" ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
                                                     ? "text-[#3CB371]" : "text-[#FF7F50]"
                                                     }`}>
-                                                    {(trade.direction === "buy" ? parseFloat(price) > parseFloat(trade.entryPrice) : parseFloat(price) < parseFloat(trade.entryPrice))
-                                                        ? "WINNING" : "LOSING"
+                                                    {(trade.direction === "buy" ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
+                                                        ? "WIN" : "LOSS"
                                                     }
                                                 </span>
                                             </div>
 
-                                            <div className="flex items-center gap-1.5 opacity-60 mb-3">
-                                                <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/30'}`}>Payout:</span>
-                                                <span className={`text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3CB371' }}>
-                                                    +{(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.9 : (trade.duration <= 10 ? 4.9 : 1.98))).toFixed(3)}
+                                            <div className="flex items-center gap-1 opacity-60 mb-2 lg:mb-3">
+                                                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/30'}`}>Profit:</span>
+                                                <span className={`text-[8px] lg:text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3CB371' }}>
+                                                    +{(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98))).toFixed(2)}
                                                 </span>
                                             </div>
 
@@ -179,7 +178,7 @@ const LiveExecutionComponent = ({
                     <p className={`text-[7px] font-black tabular-nums ${isLight ? 'text-black/60' : 'text-white/60'}`}>SYNCHRONIZED</p>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

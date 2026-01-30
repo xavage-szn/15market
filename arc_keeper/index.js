@@ -6,6 +6,42 @@ const axios = require('axios');
 const aiArbiter = require('./ai_arbiter');
 const logBridge = require('./log_bridge');
 
+// ==========================================
+// 🚨 DNS FIX: Monkey Patch to resolve failing Arc RPC
+// The system DNS resolver (getaddrinfo) is failing for rpc.testnet.arc.network
+// We force it to resolve to the known working IP: 64.130.40.38
+// ==========================================
+const dns = require('dns');
+const originalLookup = dns.lookup;
+dns.lookup = (hostname, options, callback) => {
+    if (typeof options === 'function') {
+        callback = options;
+        options = {};
+    }
+    if (hostname === 'rpc.testnet.arc.network') {
+        if (options && options.all) {
+            return callback(null, [{ address: '64.130.40.38', family: 4 }]);
+        }
+        return callback(null, '64.130.40.38', 4);
+    }
+    return originalLookup(hostname, options, callback);
+};
+
+// Also patch dns.promises for newer Node/Ethers versions
+if (dns.promises && dns.promises.lookup) {
+    const originalPromiseLookup = dns.promises.lookup;
+    dns.promises.lookup = async (hostname, options) => {
+        if (hostname === 'rpc.testnet.arc.network') {
+            if (options && options.all) {
+                return [{ address: '64.130.40.38', family: 4 }];
+            }
+            return { address: '64.130.40.38', family: 4 };
+        }
+        return originalPromiseLookup(hostname, options);
+    };
+}
+// ==========================================
+
 const DEBUG_LOG_PATH = path.join(__dirname, 'debug.log');
 function logToFile(msg) {
     try { fs.appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] ${msg}\n`); } catch (e) { }
@@ -241,6 +277,25 @@ async function main() {
                     console.log(`✨ [BET_DATA] ID:${betId} | AMT:${ethers.formatEther(amount)} | EXP:${Number(timestamp) + Number(duration)} | NET:arc`);
                     logToFile(`[EVENT] New bet: ${betId} Asset: ${ASSET_MAP[marketId]}`);
                     await logActiveExposure();
+
+                    // Notify main keeper for live scroller
+                    try {
+                        await axios.post(`${KEEPER_URL}/trade-ping`, {
+                            id: betId,
+                            amount: parseFloat(ethers.formatEther(amount)),
+                            network: 'arc',
+                            address: user,
+                            expiry: Number(timestamp) + Number(duration),
+                            entryPrice: Number(entryPrice) / 100000000,
+                            direction: Number(direction),
+                            duration: Number(duration),
+                            symbol: ASSET_MAP[marketId] || 'SOL',
+                            timestamp: Number(timestamp)
+                        });
+                        console.log(`📡 [PING] Sent active bet ${betId} to main keeper`);
+                    } catch (pingErr) {
+                        console.warn(`⚠️ [PING_FAIL] Could not ping main keeper: ${pingErr.message}`);
+                    }
                 }
             }
             lastCheckedBlock = currentBlock;
@@ -434,7 +489,7 @@ async function main() {
                         const verdict = await aiArbiter.getResultVerdict(Number(bet.entryPrice) / 100000000, symbol);
                         if (verdict.price > 0) {
                             const entry = Number(bet.entryPrice) / 100000000;
-                            const isWin = bet.direction == 1 ? (verdict.price > entry) : (verdict.price < entry);
+                            const isWin = bet.direction == 1 ? (verdict.price >= entry) : (verdict.price <= entry);
 
                             let expectedPayout = 0n;
                             if (isWin) {

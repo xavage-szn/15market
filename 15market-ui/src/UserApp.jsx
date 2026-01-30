@@ -22,7 +22,7 @@ import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 
 import MessagingSystem from "./components/MessagingSystem";
-import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, ADMIN_TOKEN } from "./constants";
+import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP } from "./constants";
 import { Trophy, Calendar, CheckCircle, ChevronRight, Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X } from "lucide-react";
 
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -564,9 +564,11 @@ export default function UserApp() {
 
     // EVM Session Wallet
     const savedEvmKey = localStorage.getItem("15market_evm_session_key");
-    const arcRpc = "https://rpc.quicknode.testnet.arc.network";
-    // Using staticNetwork to avoid redundant eth_chainId calls and respect RPC rate limits
-    const provider = new ethers.JsonRpcProvider(arcRpc, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
+
+    // Robust Provider Setup with Timeout
+    const fetchReq = new ethers.FetchRequest(ARC_RPC);
+    fetchReq.timeout = 30000; // 30s timeout for slow public RPC
+    const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
     if (savedEvmKey) {
       try {
         const wallet = new ethers.Wallet(savedEvmKey, provider);
@@ -586,7 +588,9 @@ export default function UserApp() {
     try {
       const balanceWei = await evmSessionWallet.provider.getBalance(evmSessionWallet.address);
       setSessionBalance(parseFloat(ethers.formatEther(balanceWei)));
-    } catch (err) { console.error("EVM Session bal fetch failed:", err); }
+    } catch (err) {
+      console.error("EVM Session bal fetch failed:", err);
+    }
   }, [evmSessionWallet]);
 
   // Update Session Balance - REAL-TIME via account listener (Solana) + Polling (EVM)
@@ -621,8 +625,12 @@ export default function UserApp() {
       };
     } else if (network === 'arc') {
       if (!evmSessionWallet) return;
+
+      console.log("🔗 Connecting to Arc RPC:", ARC_RPC);
+
       updateEvmSessionBal();
-      const interval = setInterval(updateEvmSessionBal, 2000); // Faster polling for Arc
+      // Increase polling to 5s to avoid timeout/rate-limiting on public RPC
+      const interval = setInterval(updateEvmSessionBal, 5000);
       return () => clearInterval(interval);
     }
   }, [connection, sessionKeypair, evmSessionWallet, network, updateEvmSessionBal]);
@@ -1760,20 +1768,24 @@ export default function UserApp() {
       {/* V1 LAYOUT (Only layout now) */}
       <>
         <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
-          <div className="scale-[0.8] lg:scale-100 origin-left w-full">
+          <div className="w-full -mx-2 lg:mx-0">
             <GlobalTradeScroller wallet={wallet} connection={connection} theme={theme} currentNetwork={network} />
           </div>
         </div>
 
-        <div className="w-full max-w-7xl grid grid-cols-12 gap-3 lg:gap-6 mb-10 relative z-0">
-          {/* Chart - Full width */}
-          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border border-white/5 h-[40vh] lg:h-[500px] max-h-[500px] glass-panel`}
-            style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}>
+        <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
+          {/* Chart - Responsive - Full width */}
+          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel`}
+            style={{
+              background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+              boxShadow: `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
+              borderColor: `${GREEN}40`
+            }}>
             <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} />
           </div>
 
-          {/* Terminal - Side by side on mobile (6 cols), narrower on desktop (5 cols) */}
-          <div className="col-span-6 lg:col-span-5">
+          {/* Terminal - 50/50 split on desktop and mobile */}
+          <div className="col-span-6 lg:col-span-6 flex flex-col">
             <TradeTerminal
               activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
               sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
@@ -1787,26 +1799,15 @@ export default function UserApp() {
             />
           </div>
 
-          {/* Active Trades Sidebar - Side by side on mobile (6 cols), desktop (4 cols) */}
-          <div className="col-span-6 lg:col-span-4 glass-panel rounded-xl relative overflow-hidden flex flex-col min-h-[400px]">
-            <ActiveTradesSidebar
-              activeTrades={activeTrades}
-              price={price}
-              currentPrice={price}
-              theme={theme}
-              network={network}
-              setSelectedPnLTrade={setSelectedPnLTrade}
-              setIsPnLOpen={setIsPnLOpen}
-            />
-          </div>
-
-          {/* Live Execution - Hidden on mobile, shown on desktop */}
-          <div className="hidden lg:block lg:col-span-3">
-            <LiveExecution
-              activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-              theme={theme} currentNetwork={network}
-            />
+          {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
+          <div className="col-span-6 lg:col-span-6 flex flex-col">
+            <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
+              <LiveExecution
+                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                theme={theme} currentNetwork={network}
+              />
+            </div>
           </div>
         </div>
 

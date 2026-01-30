@@ -5,6 +5,7 @@ import { defineChain } from 'viem'
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS || "0x041e80256b3C72a0e16d78753F28f14A40d78c08";
 export const ARC_USDC_ADDRESS = import.meta.env.VITE_ARC_USDC_ADDRESS || "0x3600000000000000000000000000000000000000";
 export const ARC_RPC = import.meta.env.VITE_ARC_RPC || "https://rpc.testnet.arc.network";
+export const ARC_RPC_BACKUP = "https://testnet-rpc.arc.network";
 export const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC || "https://api.devnet.solana.com";
 export const KEEPER_URL = import.meta.env.VITE_KEEPER_URL || "https://api.15market.online";
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';

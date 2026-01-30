@@ -145,22 +145,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(state.logs));
     }
-    else if (pathName === '/protocol-stats') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            autoSignerFees: state.autoSignerFees || { solana: 0, arc: 0 },
-            escrowStats: state.escrowStats || {
-                solana: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 },
-                arc: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 }
-            },
-            totalTrades: state.totalTrades || 0
-        }));
-    }
-    else if (pathName === '/history') {
-        const solTrades = (state.history || []).filter(t => !t.network || t.network === 'solana');
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(solTrades));
-    }
+
     else if (pathName === '/arc-history') {
         const arcTrades = (state.history || []).filter(t => t.network === 'arc');
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -265,7 +250,11 @@ const server = http.createServer(async (req, res) => {
             activeCount: trackedBets.size,
             totalVolume: state.totalVolume || 0,
             totalTrades: state.totalTrades || 0,
-            autoSignerFees: state.autoSignerFees || { solana: 0, arc: 0 }
+            autoSignerFees: state.autoSignerFees || { solana: 0, arc: 0 },
+            escrowStats: state.escrowStats || {
+                solana: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 },
+                arc: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 }
+            }
         }));
     }
     else if (pathName === '/record-fee') {

@@ -53,8 +53,8 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
     const currency = trade.network === 'arc' ? 'USDC' : 'SOL';
     const multiplier = getMultiplier(trade.duration || 15);
     const totalPayout = trade.payout ? parseFloat(trade.payout) : (parseFloat(trade.amount) * multiplier);
-    const netProfit = trade.payout ? (parseFloat(trade.payout) - parseFloat(trade.amount)) : (totalPayout - parseFloat(trade.amount));
-    const profit = isWon ? `+${netProfit.toFixed(4)}` : `-${trade.amount}`;
+    // User wants '1.98x profit' to reflect the gross payout amount (+1.98) instead of net gain (+0.98)
+    const profit = isWon ? `+${totalPayout.toFixed(4)}` : `-${trade.amount}`;
 
     return (
         <AnimatePresence>

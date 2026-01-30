@@ -5,7 +5,36 @@ import { motion, AnimatePresence } from 'framer-motion';
 const GREEN_COLOR = "#3CB371";
 const RED_COLOR = "#FF4444";
 
+// Countdown Timer Component
+function TradeCountdown({ expiry, statusColor }) {
+    const [timeLeft, setTimeLeft] = useState(0);
+
+    useEffect(() => {
+        const updateTimer = () => {
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = Math.max(0, expiry - now);
+            setTimeLeft(remaining);
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+        return () => clearInterval(interval);
+    }, [expiry]);
+
+    if (timeLeft === 0) return null;
+
+    return (
+        <div className="flex items-center justify-center gap-1.5 mt-2 pt-2 border-t border-white/5">
+            <Timer size={10} className="opacity-40" />
+            <span className="text-[10px] font-mono font-black tabular-nums" style={{ color: statusColor }}>
+                {timeLeft}s
+            </span>
+        </div>
+    );
+}
+
 export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', network = 'solana', currentPrice, setSelectedPnLTrade, setIsPnLOpen }) {
+    if (!activeTrades || activeTrades.length === 0) return null;
     const isDark = theme !== 'light';
 
     return (
@@ -85,12 +114,16 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', netwo
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] font-black tracking-tight text-white">
+                                        <div className="text-right flex flex-col items-end">
+                                            <div className="text-[10px] font-black tracking-tight text-white/50">
                                                 {trade.amount} {network === 'solana' ? 'SOL' : 'USDC'}
                                             </div>
-                                            <div className="text-[8px] font-black uppercase tracking-widest" style={{ color: statusColor }}>
-                                                {isWinning ? 'WIN' : 'LOSS'}
+                                            <div className="text-[9px] font-black flex items-center gap-1" style={{ color: statusColor }}>
+                                                {isWinning ? '▲' : '▼'}
+                                                {isWinning
+                                                    ? `+${(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98))).toFixed(3)}`
+                                                    : `-${trade.amount}`
+                                                }
                                             </div>
                                         </div>
                                     </div>
@@ -122,6 +155,9 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', netwo
                                             </span>
                                         </div>
                                     </div>
+
+                                    {/* Countdown Timer */}
+                                    <TradeCountdown expiry={trade.expiry} statusColor={statusColor} />
 
                                     {/* Finality Overlay */}
                                     {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST') && (
