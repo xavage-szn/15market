@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import CustomChart from "./components/CustomChart";
+import MoralisChart from "./components/MoralisChart";
 import { useAppKitAccount, useAppKitProvider, useAppKitNetwork, useDisconnect } from "@reown/appkit/react";
 import { defaultConnection as connection } from "./api/program";
 import { hasPendingWalletRequests, clearWalletStorage } from "./utils/walletCleanup";
@@ -61,7 +61,7 @@ export default function UserApp() {
     } catch (e) { return []; }
   }); // Array of active trades
   const activeTrade = activeTrades[0] || null; // For backward compatibility in some components
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
@@ -329,15 +329,15 @@ export default function UserApp() {
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
       { id: 'sol', symbol: 'SOL', name: 'Solana', mint: 'So11111111111111111111111111111111111111112', pair: 'Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT', kraken: 'BTCUSD', gecko: 'bitcoin' },
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT', kraken: 'ETHUSD', gecko: 'ethereum' },
-      { id: 'jup', symbol: 'JUP', name: 'Jupiter', pythId: '0x0a049d6824976cfdc3c0f2ee054e7d1e92d528b8b989498877171d0e12d00996', binance: 'JUPUSDT', kraken: 'JUPUSD', gecko: 'jupiter-exchange-solana' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: 'GHm8da6zV8x69R7L6vAcTAVH7shU6fupB6itE8pXg573', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT', kraken: 'BTCUSD', gecko: 'bitcoin' },
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '716YvEi9Y3q6Sst77sH7q2X2fA7rhtq8K8fJ9f2r7f7C', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT', kraken: 'ETHUSD', gecko: 'ethereum' },
+      { id: 'jup', symbol: 'JUP', name: 'Jupiter', pair: '6U6MAtfR3sY8W7S6W3L1f2n7L5fU9J6U2S2S2S2S2S2S', pythId: '0x0a049d6824976cfdc3c0f2ee054e7d1e92d528b8b989498877171d0e12d00996', binance: 'JUPUSDT', kraken: 'JUPUSD', gecko: 'jupiter-exchange-solana' },
     ];
 
     const saved = localStorage.getItem('15market_listed_tokens');
     const listed = saved ? JSON.parse(saved) : defaultTokens;
 
-    const activeId = localStorage.getItem('15market_active_token_id') || 'btc';
+    const activeId = localStorage.getItem('15market_active_token_id') || 'sol';
     return listed.find(t => t.id === activeId) || listed[0];
   });
 
@@ -1620,21 +1620,6 @@ export default function UserApp() {
     }
   }, [wallet, wallet?.publicKey, sessionKeypair, evmSessionWallet, network, address, connection, notify, recordFee, signMessageAsync]);
 
-  if (isLoading) return (
-    <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
-      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative">
-        <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
-        <img src="/logo.png" alt="logo" className="h-48 w-auto relative z-10" />
-      </motion.div>
-      <div className="mt-12 flex flex-col items-center gap-4">
-        <div className="w-64 h-1.5 bg-white/10 rounded-full overflow-hidden relative border border-white/5">
-          <motion.div className="absolute inset-y-0 left-0 bg-[#3CB371]" initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 1.3 }} />
-        </div>
-        <p className="text-[10px] font-black uppercase text-[#3CB371]">System Initializing</p>
-      </div>
-    </div>
-  );
-
   if (!authenticated) return <LandingPage currentNetwork={network} onNetworkChange={handleNetworkSwitch} />;
 
   if (view === "dashboard") return (
@@ -1724,7 +1709,40 @@ export default function UserApp() {
         </div>
       </div>
 
-      {/* Campaign / Winner Banners */}
+      {/* Main Trading Area */}
+      <div className="w-full max-w-7xl grid grid-cols-2 lg:grid-cols-12 gap-3 lg:gap-6 mb-10 relative z-0">
+        {/* Chart Column */}
+        <div className="col-span-2 lg:col-span-12 flex flex-col gap-3">
+          {/* Chart Container */}
+          <div className="w-full h-[40vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-0 shadow-[0_0_50px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3"
+            style={{ backgroundColor: theme === 'light' ? '#ffffff' : '#0d0d0d' }}>
+            <MoralisChart pairAddress={activeMarket.pair} network={network} theme={theme} />
+          </div>
+        </div>
+
+        {/* Trading Terminal */}
+        <TradeTerminal
+          activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
+          sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+          setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+          sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+          theme={theme}
+          minStake={minStake} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+          refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+          CORAL={CORAL} GREEN={GREEN} currentNetwork={network}
+          chainId={chainId} switchChain={switchChain}
+          evmSessionWallet={evmSessionWallet} sessionKeypair={sessionKeypair}
+          hasProfile={!!userProfile}
+        />
+        <LiveExecution
+          activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+          setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+          theme={theme}
+          currentNetwork={network}
+        />
+      </div>
+
+      {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
       <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
         {winnerBanner && (
           <motion.div
@@ -1801,6 +1819,8 @@ export default function UserApp() {
         ))}
       </div>
 
+
+
       <ProfileModal
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
@@ -1811,40 +1831,6 @@ export default function UserApp() {
         userProfile={userProfile}
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
-
-      <div className="w-full max-w-7xl grid grid-cols-2 lg:grid-cols-12 gap-2 lg:gap-6 mb-14 relative z-0">
-        {/* Chart Column */}
-        <div className="col-span-2 lg:col-span-12 flex flex-col gap-3">
-          {/* Chart Container */}
-          <div className="w-full h-[30vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-0 shadow-[0_0_20px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3"
-            style={{ backgroundColor: theme === 'light' ? '#ffffff' : '#0d0d0d' }}>
-            <CustomChart symbol={activeMarket.binance || 'SOLUSDT'} network={network} theme={theme} currentPrice={price} />
-          </div>
-        </div>
-
-        {/* Trading Terminal */}
-        <TradeTerminal
-          activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
-          sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-          setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-          sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-          theme={theme}
-          minStake={minStake} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-          refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-          CORAL={CORAL} GREEN={GREEN} currentNetwork={network}
-          chainId={chainId} switchChain={switchChain}
-          evmSessionWallet={evmSessionWallet} sessionKeypair={sessionKeypair}
-          hasProfile={!!userProfile}
-        />
-        <LiveExecution
-          activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-          setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-          theme={theme}
-          currentNetwork={network}
-        />
-      </div>
-
-
 
       <TradeHistory
         wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}

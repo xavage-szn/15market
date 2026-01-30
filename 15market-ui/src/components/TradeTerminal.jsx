@@ -39,15 +39,15 @@ const TradeTerminalComponent = ({
     const isWrongNetwork = isArc && chainId !== 5042002;
     const isLight = theme === 'light';
     return (
-        <div className={`col-span-1 lg:col-span-7 p-1.5 lg:p-6 rounded-[24px] lg:rounded-[32px] border relative overflow-hidden transition-colors duration-300 ${isLight ? '!bg-white border-black/5 !shadow-[0_30px_60px_-10px_rgba(0,0,0,0.4)]' : 'bg-[#050505] border-white/10'}`}>
+        <div className={`col-span-1 lg:col-span-12 xl:col-span-7 p-2.5 lg:p-6 rounded-[24px] lg:rounded-[32px] border relative overflow-hidden transition-colors duration-300 ${isLight ? '!bg-white border-black/5 !shadow-[0_30px_60px_-10px_rgba(0,0,0,0.4)]' : 'bg-[#050505] border-white/10'}`}>
 
             {/* Header: Title + Controls */}
             <div className="flex items-center justify-between mb-3 lg:mb-6">
                 {/* Left: Title */}
                 <div>
-                    <h3 className="text-[8px] lg:text-lg font-black tracking-tight flex items-center gap-1 uppercase">
+                    <h3 className="text-[10px] lg:text-lg font-black tracking-tight flex items-center gap-1 uppercase">
                         <span>Terminal</span>
-                        <div className="w-1 h-1 lg:w-1.5 lg:h-1.5 rounded-full animate-pulse" style={{ backgroundColor: GREEN, boxShadow: `0 0 10px ${GREEN}` }} />
+                        <div className="w-1.5 h-1.5 lg:w-1.5 lg:h-1.5 rounded-full animate-pulse" style={{ backgroundColor: GREEN, boxShadow: `0 0 10px ${GREEN}` }} />
                     </h3>
                     <p className={`hidden lg:block text-[10px] font-bold tracking-widest uppercase ${isLight ? 'text-black/30' : 'text-white/20'}`}>Engine @ {activeTrade ? "Polling" : "Ready"}</p>
                 </div>
@@ -55,9 +55,9 @@ const TradeTerminalComponent = ({
                 {/* Right: Controls (Price + Auto Signer) */}
                 <div className="flex items-center gap-1 lg:gap-2 mr-3 lg:mr-0 px-0.5">
                     {/* Price Badge */}
-                    <div className={`flex flex-col items-end px-1.5 py-0.5 lg:px-4 lg:py-2 rounded-lg border transition-all ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
-                        <span className={`text-[5px] lg:text-[8px] uppercase tracking-wider font-bold opacity-50`}>Price</span>
-                        <span className="text-[7.5px] lg:text-base font-mono font-black" style={{ color: GREEN }}>${Number(price).toFixed(4)}</span>
+                    <div className={`flex flex-col items-end px-2 py-1 lg:px-4 lg:py-2 rounded-lg border transition-all ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
+                        <span className={`text-[6px] lg:text-[8px] uppercase tracking-wider font-bold opacity-50`}>Price</span>
+                        <span className="text-[9px] lg:text-base font-mono font-black" style={{ color: GREEN }}>${Number(price).toFixed(4)}</span>
                     </div>
 
                     {/* Auto Signer Toggle */}
@@ -109,7 +109,7 @@ const TradeTerminalComponent = ({
                 <div className="flex gap-2 lg:gap-3">
                     <button
                         onClick={() => setDirection("buy")}
-                        className="flex-1 py-2 lg:py-4 rounded-xl text-[10px] lg:text-sm font-black transition-all duration-300"
+                        className="flex-1 py-3 lg:py-4 rounded-xl text-[11px] lg:text-sm font-black transition-all duration-300 active:scale-95"
                         style={{
                             backgroundColor: direction === "buy" ? GREEN : (isLight ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.4)'),
                             color: isLight && direction !== "buy" ? 'rgba(0,0,0,0.6)' : 'white',
@@ -124,7 +124,7 @@ const TradeTerminalComponent = ({
                     </button>
                     <button
                         onClick={() => setDirection("sell")}
-                        className="flex-1 py-2 lg:py-4 rounded-xl text-[10px] lg:text-sm font-black transition-all duration-300"
+                        className="flex-1 py-3 lg:py-4 rounded-xl text-[11px] lg:text-sm font-black transition-all duration-300 active:scale-95"
                         style={{
                             backgroundColor: direction === "sell" ? CORAL : (isLight ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.4)'),
                             color: isLight && direction !== "sell" ? 'rgba(0,0,0,0.6)' : 'white',
@@ -158,7 +158,7 @@ const TradeTerminalComponent = ({
                                 boxShadow: duration === 15 ? `0 0 20px ${GREEN}66` : 'none'
                             }}
                         >
-                            <div className="text-xs lg:text-lg mb-0.5">15s</div>
+                            <div className="text-sm lg:text-lg mb-0.5">15s</div>
                             <div className="text-[7px] lg:text-[8px] opacity-60">1.98x</div>
                         </button>
                         <button
@@ -168,7 +168,7 @@ const TradeTerminalComponent = ({
                                 : (isLight ? "bg-black/5 border border-black/10 text-black/40 hover:bg-black/10" : "bg-black/40 border border-white/5 text-white/40 hover:bg-white/5")
                                 }`}
                         >
-                            <div className="text-xs lg:text-lg mb-0.5">10s</div>
+                            <div className="text-sm lg:text-lg mb-0.5">10s</div>
                             <div className="text-[7px] lg:text-[8px] opacity-60">4.98x</div>
                         </button>
                         <button
@@ -178,7 +178,7 @@ const TradeTerminalComponent = ({
                                 : (isLight ? "bg-black/5 border border-black/10 text-black/40 hover:bg-black/10" : "bg-black/40 border border-white/5 text-white/40 hover:bg-white/5")
                                 }`}
                         >
-                            <div className="text-xs lg:text-lg mb-0.5">5s</div>
+                            <div className="text-sm lg:text-lg mb-0.5">5s</div>
                             <div className="text-[7px] lg:text-[8px] opacity-60">6.98x</div>
                         </button>
                     </div>

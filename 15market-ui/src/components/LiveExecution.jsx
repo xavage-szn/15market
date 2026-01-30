@@ -26,11 +26,11 @@ const LiveExecutionComponent = ({
     };
 
     return (
-        <div className="col-span-1 lg:col-span-5 flex flex-col gap-1 lg:gap-4 relative min-h-[250px] lg:min-h-[400px]">
+        <div className="col-span-1 lg:col-span-12 xl:col-span-5 flex flex-col gap-1.5 lg:gap-4 relative min-h-[250px] lg:min-h-[400px]">
             <div className="flex items-center justify-between px-1 lg:px-2">
-                <h4 className={`text-[9px] lg:text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? '!text-black/50' : 'text-white/40'}`}>
+                <h4 className={`text-[10px] lg:text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? '!text-black/50' : 'text-white/40'}`}>
                     <span className="hidden lg:inline">Live Engines</span>
-                    <span className="lg:hidden">Bets</span>
+                    <span className="lg:hidden text-[10px] tracking-[0.3em]">Bets</span>
                 </h4>
                 <div className="bg-[#3CB371]/20 text-[#3CB371] px-1.5 lg:px-2 py-0.5 rounded text-[8px] lg:text-[10px] font-bold">
                     {activeTrades.length} <span className="hidden lg:inline">ACTIVE</span>
