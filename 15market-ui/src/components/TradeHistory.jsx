@@ -43,9 +43,15 @@ const TradeHistoryComponent = ({
     const totalPages = Math.ceil(filteredTrades.length / ITEMS_PER_PAGE);
     const paginatedTrades = filteredTrades.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+    const isCompact = theme === 'compact' || (window.localStorage.getItem('15market_ui_version') === 'v2');
+
     return (
-        <div className="w-full max-w-4xl mt-6 lg:mt-10 mb-20 text-left" >
-            <div className={`p-3.5 lg:p-6 rounded-2xl border transition-all duration-300 ${isLight ? 'static-panel-light !shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]' : 'bg-[#111] border-white/10 shadow-xl'}`}>
+        <div className={`w-full ${isCompact ? 'h-full' : 'max-w-4xl mt-6 lg:mt-10 mb-20'} text-left`} >
+            <div className={`
+                ${isCompact ? 'h-full flex flex-col p-3' : 'p-3.5 lg:p-6'} 
+                rounded-2xl border transition-all duration-300 
+                ${isLight ? 'static-panel-light !shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]' : (isCompact ? 'glass-panel border-white/10 shadow-xl' : 'bg-[#111] border-white/10 shadow-xl')}
+            `}>
                 <div className="flex items-center justify-between mb-4 lg:mb-6 px-1">
                     <h3 className={`text-sm lg:text-xl font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
                     {/* Clear History removed as per protocol security */}

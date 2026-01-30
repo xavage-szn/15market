@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, LogOut, Copy, RefreshCcw, AlertTriangle } from 'lucide-react';
-import { useAppKit, useAppKitAccount, useDisconnect } from '@reown/appkit/react';
+import { useAppKit, useAppKitAccount, useDisconnect, useAppKitState } from '@reown/appkit/react';
 import { useAccount, useSwitchChain } from 'wagmi';
 import { fullWalletReset, clearWalletStorage, disconnectSolanaWallets } from '../utils/walletCleanup';
 
@@ -9,6 +9,7 @@ export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) 
     const { address, isConnected } = useAppKitAccount();
     const { open } = useAppKit();
     const { disconnect } = useDisconnect();
+    const { open: isModalOpen } = useAppKitState();
 
     // Wagmi hooks for EVM network management
     const { chainId } = useAccount();
@@ -114,8 +115,8 @@ export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) 
             // 4. Prompt New Connection after delay to ensure cleanup completes
             setTimeout(() => {
                 setIsSwitching(false);
-                open();
-            }, 1000); // Increased delay to ensure cleanup completes
+                if (!isModalOpen) open();
+            }, 1000);
 
         } catch (error) {
             console.error("Network switch failed:", error);
@@ -150,7 +151,7 @@ export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) 
     if (!authenticated) {
         return (
             <button
-                onClick={() => open()}
+                onClick={() => !isModalOpen && open()}
                 className="px-4 lg:px-8 py-2.5 lg:py-3 font-black uppercase text-xs lg:text-sm tracking-widest rounded-xl transition-all active:scale-95 text-white relative overflow-hidden group"
                 style={{
                     backgroundColor: currentColor,

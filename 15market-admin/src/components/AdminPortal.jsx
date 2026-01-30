@@ -1659,18 +1659,24 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 )}
             </AnimatePresence>
 
-            {/* Mobile Menu Toggle */}
-            <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="lg:hidden fixed top-4 left-4 z-[250] p-3 bg-[#0D0D0D] border border-white/10 rounded-xl backdrop-blur-xl"
-            >
-                {isMobileMenuOpen ? <X size={20} className="text-white" /> : <MoreVertical size={20} className="text-white" />}
-            </button>
+            {/* Mobile Header / Navigation Bar */}
+            <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#0D0D0D] border-b border-white/5 z-[260] flex items-center justify-between px-4">
+                <div className="flex items-center gap-2">
+                    <img src="/logo.png" alt="logo" className="h-8 w-auto" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Citadel</span>
+                </div>
+                <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className="p-2 bg-white/5 border border-white/10 rounded-xl"
+                >
+                    {isMobileMenuOpen ? <X size={20} className="text-white" /> : <MoreVertical size={20} className="text-white" />}
+                </button>
+            </div>
 
-            {/* Sidebar */}
-            <div className={`w-72 bg-[#0D0D0D] border-r border-white/5 flex flex-col p-6 transition-transform duration-300 lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-                } fixed lg:relative inset-y-0 left-0 z-[240]`}>
-                <div className="flex items-center justify-center mb-10 px-2">
+            {/* Sidebar Drawer */}
+            <div className={`w-72 bg-[#0D0D0D] border-r border-white/5 flex flex-col p-6 transition-transform duration-300 transform lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0 shadow-[20px_0_50px_rgba(0,0,0,0.8)]' : '-translate-x-full'
+                } fixed lg:static inset-y-0 left-0 z-[300] lg:z-0`}>
+                <div className="hidden lg:flex items-center justify-center mb-10 px-2">
                     <img src="/logo.png" alt="logo" className="h-24 w-auto drop-shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
                 </div>
 
@@ -1794,21 +1800,26 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             </div>
 
             {/* Mobile Menu Overlay */}
-            {isMobileMenuOpen && (
-                <div
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[230]"
-                />
-            )}
+            <AnimatePresence>
+                {isMobileMenuOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="lg:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[290]"
+                    />
+                )}
+            </AnimatePresence>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col h-screen overflow-hidden ml-0 lg:ml-0">
-                <div className="z-50 border-b border-white/5">
+            <div className="flex-1 flex flex-col h-screen overflow-hidden pt-16 lg:pt-0">
+                <div className="z-50 border-b border-white/5 hidden lg:block">
                     <GlobalTradeScroller wallet={DISCONNECTED_WALLET} connection={connection} currentNetwork={adminNetwork} />
                 </div>
 
                 <div className="flex-1 overflow-y-auto bg-[#050505] p-4 lg:p-10 custom-scrollbar relative">
-                    <div className="max-w-6xl mx-auto">
+                    <div className="max-w-7xl mx-auto">
                         {/* SYSTEM EMERGENCY ALERTS */}
                         <AnimatePresence>
                             {(() => {
@@ -1871,38 +1882,38 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                             })()}
                         </AnimatePresence>
                         {/* Header */}
-                        <div className="flex items-center justify-between mb-10">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 lg:mb-10 gap-6">
                             <div>
-                                <h1 className="text-3xl font-black text-white uppercase tracking-tight mb-1">
+                                <h1 className="text-2xl lg:text-3xl font-black text-white uppercase tracking-tight mb-1 mt-6 lg:mt-0">
                                     {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
                                 </h1>
-                                <p className="text-sm text-white/40 font-bold uppercase tracking-widest">
+                                <p className="text-[10px] lg:text-sm text-white/40 font-bold uppercase tracking-widest">
                                     System status: <span className="text-[#3CB371]">Operational</span> • {new Date().toLocaleDateString()}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex flex-col sm:flex-row items-center gap-4">
                                 {/* Network Switch */}
-                                <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
+                                <div className="flex w-full sm:w-auto bg-black/40 p-1 rounded-xl border border-white/5">
                                     <button
                                         onClick={() => setAdminNetwork('SOLANA')}
-                                        className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${adminNetwork === 'SOLANA' ? 'bg-[#9945FF] text-white shadow-[0_0_20px_rgba(153,69,255,0.3)]' : 'text-white/20 hover:text-white'}`}
+                                        className={`flex-1 sm:px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${adminNetwork === 'SOLANA' ? 'bg-[#9945FF] text-white shadow-[0_0_20px_rgba(153,69,255,0.3)]' : 'text-white/20 hover:text-white'}`}
                                     >
                                         Solana
                                     </button>
                                     <button
                                         onClick={() => setAdminNetwork('ARC')}
-                                        className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${adminNetwork === 'ARC' ? 'bg-[#3B82F6] text-white shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'text-white/20 hover:text-white'}`}
+                                        className={`flex-1 sm:px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${adminNetwork === 'ARC' ? 'bg-[#3B82F6] text-white shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'text-white/20 hover:text-white'}`}
                                     >
                                         Arc
                                     </button>
                                 </div>
 
-                                <div className="relative">
+                                <div className="relative w-full sm:w-64">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
                                     <input
                                         type="text"
-                                        placeholder="Search hashes, wallets..."
-                                        className="bg-black/60 border border-white/5 rounded-xl pl-12 pr-4 py-3 text-sm outline-none w-64 focus:border-[#3CB371]/30"
+                                        placeholder="Search hashes..."
+                                        className="bg-black/60 border border-white/5 rounded-xl pl-12 pr-4 py-3 text-[10px] uppercase font-bold outline-none w-full focus:border-[#3CB371]/30"
                                     />
                                 </div>
                             </div>
@@ -1918,35 +1929,33 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     className="space-y-8 pb-20"
                                 >
                                     {/* Advanced Command Header */}
-                                    <div className={`flex items-center justify-between bg-[#111] border border-white/5 p-6 rounded-[32px] overflow-hidden relative transition-colors duration-500 ${adminNetwork === 'ARC' ? 'border-blue-500/10' : ''}`}>
+                                    <div className={`flex flex-col lg:flex-row lg:items-center justify-between bg-[#111] border border-white/5 p-6 rounded-[32px] overflow-hidden relative transition-colors duration-500 ${adminNetwork === 'ARC' ? 'border-blue-500/10' : ''}`}>
                                         <div className={`absolute top-0 right-0 h-full w-1/3 bg-gradient-to-l pointer-events-none ${adminNetwork === 'SOLANA' ? 'from-[#9945FF]/10' : 'from-[#3B82F6]/10'} to-transparent`} />
-                                        <div className="flex items-center gap-6">
-                                            <div className={`p-4 bg-black rounded-2xl border ${adminNetwork === 'SOLANA' ? 'border-[#9945FF]/20' : 'border-[#3B82F6]/20'}`}>
+                                        <div className="flex flex-col md:flex-row md:items-center gap-6 relative z-10 w-full">
+                                            <div className={`p-4 bg-black rounded-2xl border ${adminNetwork === 'SOLANA' ? 'border-[#9945FF]/20' : 'border-[#3B82F6]/20'} w-fit`}>
                                                 <Activity className={`animate-pulse ${adminNetwork === 'SOLANA' ? 'text-[#9945FF]' : 'text-[#3B82F6]'}`} size={32} />
                                             </div>
-                                            <div>
+                                            <div className="flex-1">
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-1" style={{ color: adminNetwork === 'SOLANA' ? '#9945FF' : '#3B82F6' }}>
                                                         NODE STATUS {lastSync && `• SYNC: ${lastSync}`}
                                                     </p>
-                                                    <h2 className="text-3xl font-black text-white">{unifiedMetrics.currentStats.wallets} <span className="text-xs font-bold text-white/40 ml-2">Active Users</span></h2>
+                                                    <h2 className="text-xl lg:text-3xl font-black text-white">{unifiedMetrics.currentStats.wallets} <span className="text-[10px] font-bold text-white/40 ml-2 uppercase tracking-widest">Active Users</span></h2>
                                                     <div className="flex items-center gap-2 mt-2">
-                                                        <p className="text-[10px] font-mono text-white/20 uppercase tracking-widest">
-                                                            Active Relay: {adminNetwork === 'SOLANA' ? 'Solana Protocol Devnet' : 'Arc Network Testnet'}
+                                                        <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest">
+                                                            Active Relay: {adminNetwork === 'SOLANA' ? 'Solana Protocol' : 'Arc Network'}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-8 px-8">
-                                                <div className="text-right">
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">PENDING</p>
-                                                        <p className="text-xl font-bold text-white">{unifiedMetrics.activeList.length} <span className="text-[10px] text-white/20">Trades</span></p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">VOLUME</p>
-                                                        <p className="text-xl font-bold font-mono" style={{ color: '#3CB371' }}>{unifiedMetrics.currentStats.volume} {unifiedMetrics.currencyUnit}</p>
-                                                    </div>
+                                            <div className="flex flex-row md:flex-col lg:flex-row gap-6 md:gap-2 lg:gap-8 mt-4 md:mt-0 pt-4 md:pt-0 border-t border-white/5 md:border-t-0">
+                                                <div className="text-left md:text-right">
+                                                    <p className="text-[8px] lg:text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">PENDING</p>
+                                                    <p className="text-lg lg:text-xl font-bold text-white leading-none">{unifiedMetrics.activeList.length} <span className="text-[10px] text-white/20">Trades</span></p>
+                                                </div>
+                                                <div className="text-left md:text-right">
+                                                    <p className="text-[8px] lg:text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">VOLUME</p>
+                                                    <p className="text-lg lg:text-xl font-bold font-mono leading-none" style={{ color: '#3CB371' }}>{unifiedMetrics.currentStats.volume} {unifiedMetrics.currencyUnit}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -2095,15 +2104,15 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     className="space-y-6"
                                 >
                                     <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
-                                        <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                                            <div className="flex items-center gap-6">
+                                        <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 lg:gap-6">
                                                 <h3 className="text-sm font-black uppercase tracking-widest text-white">Disputes Queue</h3>
-                                                <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 ml-4">
+                                                <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
                                                     {['PENDING', 'RESOLVED', 'ALL'].map(s => (
                                                         <button
                                                             key={s}
                                                             onClick={() => setDisputeFilterState(f => ({ ...f, status: s }))}
-                                                            className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${disputeFilterState.status === s ? 'bg-[#3CB371] text-white' : 'text-white/20 hover:text-white'}`}
+                                                            className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${disputeFilterState.status === s ? 'bg-[#3CB371] text-white' : 'text-white/20 hover:text-white'}`}
                                                         >
                                                             {s}
                                                         </button>
@@ -2128,83 +2137,85 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                 </motion.div>
                                             )}
                                         </div>
-                                        <table className="w-full">
-                                            <thead>
-                                                <tr className="bg-white/5">
-                                                    <th className="w-12 px-8 py-4">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="w-4 h-4 rounded border-white/10 bg-black cursor-pointer"
-                                                            onChange={(e) => {
-                                                                if (e.target.checked) {
-                                                                    setSelectedDisputeIds(filteredDisputes.map(d => d.id));
-                                                                } else {
-                                                                    setSelectedDisputeIds([]);
-                                                                }
-                                                            }}
-                                                            checked={selectedDisputeIds.length > 0 && selectedDisputeIds.length === filteredDisputes.length}
-                                                        />
-                                                    </th>
-                                                    <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Network</th>
-                                                    <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">User Address</th>
-                                                    <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Category</th>
-                                                    <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Amount</th>
-                                                    <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Status</th>
-                                                    <th className="text-right px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filteredDisputes.map((dispute) => (
-                                                    <tr
-                                                        key={dispute.id}
-                                                        className={`border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer ${selectedDisputeIds.includes(dispute.id) ? 'bg-[#3CB371]/5' : ''}`}
-                                                        onClick={() => { setSelectedDispute(dispute); setActiveCase(dispute); }}
-                                                    >
-                                                        <td className="px-8 py-6" onClick={(e) => e.stopPropagation()}>
+                                        <div className="overflow-x-auto custom-scrollbar">
+                                            <table className="w-full">
+                                                <thead>
+                                                    <tr className="bg-white/5">
+                                                        <th className="w-12 px-8 py-4">
                                                             <input
                                                                 type="checkbox"
                                                                 className="w-4 h-4 rounded border-white/10 bg-black cursor-pointer"
-                                                                checked={selectedDisputeIds.includes(dispute.id)}
                                                                 onChange={(e) => {
                                                                     if (e.target.checked) {
-                                                                        setSelectedDisputeIds(prev => [...prev, dispute.id]);
+                                                                        setSelectedDisputeIds(filteredDisputes.map(d => d.id));
                                                                     } else {
-                                                                        setSelectedDisputeIds(prev => prev.filter(id => id !== dispute.id));
+                                                                        setSelectedDisputeIds([]);
                                                                     }
                                                                 }}
+                                                                checked={selectedDisputeIds.length > 0 && selectedDisputeIds.length === filteredDisputes.length}
                                                             />
-                                                        </td>
-                                                        <td className="px-8 py-6">
-                                                            <span className="px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter bg-[#3CB371]/10 text-[#3CB371]">
-                                                                PROTOCOL
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-8 py-6 font-mono text-xs text-white">{dispute.user}</td>
-                                                        <td className="px-8 py-6 text-xs text-white/60">{dispute.category}</td>
-                                                        <td className="px-8 py-6 text-xs text-white/60 font-mono">{dispute.amount}</td>
-                                                        <td className="px-8 py-6">
-                                                            <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${dispute.status === 'PENDING' ? 'bg-[#FF8C00]/20 text-[#FF8C00]' :
-                                                                dispute.status === 'REFUNDED' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-white/10 text-white/40'
-                                                                }`}>
-                                                                {dispute.status}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-8 py-6 text-right">
-                                                            <button
-                                                                className="text-[10px] font-black uppercase tracking-widest text-[#3CB371] hover:underline"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedDispute(dispute);
-                                                                    setActiveCase(dispute);
-                                                                }}
-                                                            >
-                                                                Review Case
-                                                            </button>
-                                                        </td>
+                                                        </th>
+                                                        <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Network</th>
+                                                        <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">User Address</th>
+                                                        <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Category</th>
+                                                        <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Amount</th>
+                                                        <th className="text-left px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Status</th>
+                                                        <th className="text-right px-8 py-4 text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Action</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredDisputes.map((dispute) => (
+                                                        <tr
+                                                            key={dispute.id}
+                                                            className={`border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer ${selectedDisputeIds.includes(dispute.id) ? 'bg-[#3CB371]/5' : ''}`}
+                                                            onClick={() => { setSelectedDispute(dispute); setActiveCase(dispute); }}
+                                                        >
+                                                            <td className="px-8 py-6" onClick={(e) => e.stopPropagation()}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="w-4 h-4 rounded border-white/10 bg-black cursor-pointer"
+                                                                    checked={selectedDisputeIds.includes(dispute.id)}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) {
+                                                                            setSelectedDisputeIds(prev => [...prev, dispute.id]);
+                                                                        } else {
+                                                                            setSelectedDisputeIds(prev => prev.filter(id => id !== dispute.id));
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                            <td className="px-8 py-6">
+                                                                <span className="px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter bg-[#3CB371]/10 text-[#3CB371]">
+                                                                    PROTOCOL
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-8 py-6 font-mono text-xs text-white">{dispute.user}</td>
+                                                            <td className="px-8 py-6 text-xs text-white/60">{dispute.category}</td>
+                                                            <td className="px-8 py-6 text-xs text-white/60 font-mono">{dispute.amount}</td>
+                                                            <td className="px-8 py-6">
+                                                                <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${dispute.status === 'PENDING' ? 'bg-[#FF8C00]/20 text-[#FF8C00]' :
+                                                                    dispute.status === 'REFUNDED' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-white/10 text-white/40'
+                                                                    }`}>
+                                                                    {dispute.status}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-8 py-6 text-right">
+                                                                <button
+                                                                    className="text-[10px] font-black uppercase tracking-widest text-[#3CB371] hover:underline"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedDispute(dispute);
+                                                                        setActiveCase(dispute);
+                                                                    }}
+                                                                >
+                                                                    Review Case
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </motion.div>
                             )
@@ -2217,19 +2228,19 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         animate={{ opacity: 1, x: 0 }}
                                         className="space-y-8"
                                     >
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                                             <div className="flex flex-col">
-                                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">
+                                                <h3 className="text-xl lg:text-2xl font-black text-white uppercase tracking-tighter">
                                                     {adminNetwork === 'SOLANA' ? 'Protocol Liquidity Reserve (SOL)' : 'Arc Treasury (USDC)'}
                                                 </h3>
-                                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
+                                                <p className="text-[9px] lg:text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
                                                     {adminNetwork === 'SOLANA' ? 'Real-time Solana treasury monitoring & management portal.' : 'Automated platform reserve tracking for Arc Network.'}
                                                 </p>
                                             </div>
                                             <div className="flex gap-4">
-                                                <div className="bg-[#3CB371]/10 border border-[#3CB371]/20 px-6 py-3 rounded-2xl flex flex-col items-center">
+                                                <div className="bg-[#3CB371]/10 border border-[#3CB371]/20 px-6 py-3 rounded-2xl flex flex-col items-center flex-1 lg:flex-none">
                                                     <p className="text-[8px] font-black text-[#3CB371] uppercase tracking-widest mb-1">Global Health</p>
-                                                    <p className="text-xl font-black text-white">Optimal</p>
+                                                    <p className="text-xl font-black text-white uppercase">Optimal</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -2250,8 +2261,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                 <div className="space-y-8">
                                                     <div>
                                                         <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2">Available Balance</p>
-                                                        <p className="text-5xl font-black text-white tracking-tighter tabular-nums">
-                                                            {unifiedMetrics.displayReserve} <span className="text-xl font-bold text-white/40">{unifiedMetrics.currencyUnit}</span>
+                                                        <p className="text-3xl lg:text-5xl font-black text-white tracking-tighter tabular-nums leading-none">
+                                                            {unifiedMetrics.displayReserve} <span className="text-sm lg:text-xl font-bold text-white/40">{unifiedMetrics.currencyUnit}</span>
                                                         </p>
                                                     </div>
 
@@ -2311,25 +2322,25 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         </div>
 
                                         {/* Action Alert */}
-                                        <div className="bg-[#1A1010] border border-red-500/20 p-8 rounded-[40px] flex items-center justify-between">
+                                        <div className="bg-[#1A1010] border border-red-500/20 p-6 lg:p-8 rounded-[40px] flex flex-col md:flex-row items-center justify-between gap-6">
                                             <div className="flex items-center gap-6">
-                                                <div className="p-4 bg-red-500/20 rounded-2xl border border-red-500/30">
+                                                <div className="p-4 bg-red-500/20 rounded-2xl border border-red-500/30 w-fit">
                                                     <ShieldAlert className="text-red-500" size={32} />
                                                 </div>
                                                 <div>
                                                     <h5 className="text-sm font-black text-white uppercase tracking-tight">Emergency Protocol Notice</h5>
                                                     <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
-                                                        Treasury withdrawal triggers a platform-wide verification. High-speed manual extraction is only available to Root Authorities.
+                                                        Treasury withdrawal triggers a platform-wide verification.
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-4">
+                                            <div className="flex gap-4 w-full md:w-auto">
                                                 <button
                                                     onClick={() => {
                                                         setTreasuryAction('WITHDRAW');
                                                         setActiveTab('vault');
                                                     }}
-                                                    className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg"
+                                                    className="w-full md:px-8 py-4 bg-red-600 hover:bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg"
                                                 >
                                                     Emergency Drain
                                                 </button>
@@ -2503,29 +2514,29 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         className="space-y-8"
                                     >
                                         {/* Section Header */}
-                                        <div className="flex flex-col">
-                                            <h3 className="text-xl font-black text-white uppercase tracking-tighter">Market Provisioning</h3>
+                                        <div className="flex flex-col mb-4 lg:mb-8">
+                                            <h3 className="text-lg lg:text-xl font-black text-white uppercase tracking-tighter">Market Provisioning</h3>
                                             <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Configure & deploy tradable pairs with live liquidity feeds.</p>
                                         </div>
 
                                         {/* Suggestions Row */}
-                                        <div className="bg-[#0D0D0D] border border-white/5 p-6 rounded-[32px]">
+                                        <div className="bg-[#0D0D0D] border border-white/5 p-6 rounded-[32px] overflow-hidden">
                                             <h4 className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Verified Bluechips</h4>
-                                            <div className="flex flex-wrap gap-3">
+                                            <div className="flex flex-wrap gap-2 lg:gap-3">
                                                 {VERIFIED_SUGGESTIONS.map(token => {
                                                     const isListed = listedTokens.some(t => t.id === token.id);
                                                     return (
                                                         <button
                                                             key={token.id}
                                                             onClick={() => !isListed && handleListToken(token)}
-                                                            className={`px-5 py-3 rounded-2xl flex items-center gap-3 border transition-all ${isListed
+                                                            className={`px-3 lg:px-5 py-2 lg:py-3 rounded-xl lg:rounded-2xl flex items-center gap-2 lg:gap-3 border transition-all ${isListed
                                                                 ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'
                                                                 : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:border-white/10'}`}
                                                         >
-                                                            <span className="text-xs font-black uppercase">{token.symbol}</span>
-                                                            <div className="h-4 w-[1px] bg-white/10" />
-                                                            <span className="text-[10px] font-bold opacity-60">{token.name}</span>
-                                                            {!isListed && <PlusCircle size={14} className="ml-1 opacity-40" />}
+                                                            <span className="text-[10px] lg:text-xs font-black uppercase">{token.symbol}</span>
+                                                            <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
+                                                            <span className="text-[9px] lg:text-[10px] font-bold opacity-60 hidden sm:block">{token.name}</span>
+                                                            {!isListed && <PlusCircle size={12} className="ml-1 opacity-40 shrink-0" />}
                                                         </button>
                                                     );
                                                 })}
@@ -2605,13 +2616,13 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
                                             {/* Active Tokens Table */}
                                             <div className="lg:col-span-8 bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden">
-                                                <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                                <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                     <h3 className="text-sm font-black uppercase tracking-widest text-white">Active Deployments</h3>
-                                                    <div className="px-4 py-1.5 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-lg text-[9px] font-black text-[#3CB371] uppercase tracking-widest">
+                                                    <div className="w-fit px-4 py-1.5 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-lg text-[9px] font-black text-[#3CB371] uppercase tracking-widest">
                                                         {listedTokens.length} Markets Ready
                                                     </div>
                                                 </div>
-                                                <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
+                                                <div className="max-h-[600px] overflow-x-auto custom-scrollbar">
                                                     <table className="w-full">
                                                         <thead className="bg-[#050505]">
                                                             <tr>
@@ -2713,12 +2724,12 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         className="space-y-6"
                                     >
                                         <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
-                                            <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                            <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                 <div className="flex flex-col">
                                                     <h3 className="text-sm font-black uppercase tracking-widest text-white">Network User Directory</h3>
                                                     <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Verified identities & social links</p>
                                                 </div>
-                                                <div className="flex items-center gap-4 text-[10px] font-black text-[#3CB371] uppercase">
+                                                <div className="flex items-center gap-4 text-[9px] lg:text-[10px] font-black text-[#3CB371] uppercase w-fit">
                                                     <div className="h-2 w-2 rounded-full bg-[#3CB371] animate-pulse" />
                                                     {userProfiles.length} Total Profiles
                                                 </div>
@@ -2793,14 +2804,14 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         exit={{ opacity: 0, x: -20 }}
                                         className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden"
                                     >
-                                        <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                        <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="flex flex-col">
                                                 <h3 className="text-sm font-black uppercase tracking-widest text-white">Authorized Staff</h3>
                                                 <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Manage infrastructure access & roles</p>
                                             </div>
                                             <button
                                                 onClick={() => setIsStaffModalOpen(true)}
-                                                className="flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
+                                                className="w-fit flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
                                             >
                                                 <PlusCircle size={14} />
                                                 Assign New Role
@@ -2855,12 +2866,12 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                 <Trophy size={160} />
                                             </div>
                                             <div className="flex flex-col gap-6 relative z-10">
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className="p-3 bg-yellow-500/20 rounded-2xl border border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.2)]">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+                                                    <div className="p-3 bg-yellow-500/20 rounded-2xl border border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.2)] w-fit">
                                                         <Trophy className="text-yellow-500" size={24} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-xl font-black text-white uppercase tracking-tight">Initialize New Campaign</h3>
+                                                        <h3 className="text-lg lg:text-xl font-black text-white uppercase tracking-tight">Initialize New Campaign</h3>
                                                         <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Competitions for leaderboards & prizes</p>
                                                     </div>
                                                 </div>
@@ -2945,20 +2956,20 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
                                         {/* History/Active Campaigns */}
                                         <div className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
-                                            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                                            <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between bg-white/[0.02] gap-4">
                                                 <div className="flex items-center gap-4">
                                                     <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
                                                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Competition Registry</h3>
                                                 </div>
-                                                <div className="px-4 py-1.5 bg-white/5 rounded-lg text-[9px] font-black text-white/40 uppercase tracking-widest border border-white/10">
+                                                <div className="w-fit px-4 py-1.5 bg-white/5 rounded-lg text-[9px] font-black text-white/40 uppercase tracking-widest border border-white/10">
                                                     {campaigns.length} Active Records
                                                 </div>
                                             </div>
                                             <div className="divide-y divide-white/[0.02]">
                                                 {campaigns.map(camp => (
-                                                    <div key={camp.id} className="p-8 group hover:bg-white/[0.01] transition-all">
+                                                    <div key={camp.id} className="p-6 lg:p-8 group hover:bg-white/[0.01] transition-all">
                                                         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
-                                                            <div className="flex gap-6">
+                                                            <div className="flex flex-col sm:flex-row gap-6">
                                                                 <div className={`p-5 rounded-2xl border shrink-0 h-fit ${Date.now() < camp.endTime && Date.now() > camp.startTime ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/10 text-white/20'}`}>
                                                                     <Calendar size={28} />
                                                                 </div>
@@ -3172,14 +3183,14 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         className="space-y-6"
                                     >
                                         <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
-                                            <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                            <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                 <div className="flex flex-col">
                                                     <h3 className="text-sm font-black uppercase tracking-widest text-white">Broadcast History</h3>
                                                     <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Global platform alerts & override status</p>
                                                 </div>
                                                 <button
                                                     onClick={() => setIsBroadcastModalOpen(true)}
-                                                    className="flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
+                                                    className="w-fit flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
                                                 >
                                                     <Megaphone size={14} />
                                                     New Memo
@@ -3232,19 +3243,19 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         animate={{ opacity: 1, scale: 1 }}
                                         className="h-[70vh] flex flex-col bg-black/80 border border-white/5 rounded-[32px] overflow-hidden backdrop-blur-3xl shadow-2xl"
                                     >
-                                        <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                                        <div className="p-6 lg:p-8 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-black rounded-xl border border-[#3CB371]/30 flex items-center justify-center">
+                                                <div className="w-10 h-10 bg-black rounded-xl border border-[#3CB371]/30 flex items-center justify-center shrink-0">
                                                     <TerminalIcon className="text-[#3CB371]" size={20} />
                                                 </div>
                                                 <div>
-                                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">PROTOCOL_KEEPER_TERMINAL</h3>
-                                                    <p className="text-[10px] text-[#3CB371] font-bold uppercase tracking-[0.2em]">Live Stream Active • 3001/TCP</p>
+                                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">PROTOCOL_TERMINAL</h3>
+                                                    <p className="text-[10px] text-[#3CB371] font-bold uppercase tracking-[0.2em]">Live Stream Active</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-4 w-fit">
                                                 <div className="h-2 w-2 rounded-full bg-[#3CB371] animate-ping" />
-                                                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Connected to local node</span>
+                                                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Node Connected</span>
                                             </div>
                                         </div>
 
@@ -3293,7 +3304,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         animate={{ opacity: 1, y: 0 }}
                                         className="space-y-8"
                                     >
-                                        <div className="flex flex-col">
+                                        <div className="flex flex-col mb-4 lg:mb-8">
                                             <h3 className="text-xl font-black text-white uppercase tracking-tighter">System Configuration</h3>
                                             <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Fine-tune protocol parameters and platform governance.</p>
                                         </div>
@@ -3403,7 +3414,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
                                             {/* Technical Stack */}
                                             <div className="lg:col-span-2 bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] space-y-8">
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                                                     <div className="flex items-center gap-4">
                                                         <div className="p-3 bg-purple-500/10 rounded-2xl">
                                                             <Cpu size={24} className="text-purple-500" />
@@ -3415,10 +3426,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                     </div>
                                                     <button
                                                         onClick={handleSaveSettings}
-                                                        className="flex items-center gap-2 px-6 py-3 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-[0_10px_20px_rgba(60,179,113,0.3)]"
+                                                        className="w-fit flex items-center gap-2 px-6 py-3 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-[0_10px_20px_rgba(60,179,113,0.3)]"
                                                     >
                                                         <Save size={14} />
-                                                        Apply Cluster Config
+                                                        Apply Config
                                                     </button>
                                                 </div>
 
@@ -3503,11 +3514,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 {activeCase && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-end p-10"
+                        className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-end p-0 sm:p-10"
                     >
                         <motion.div
                             initial={{ x: 300 }} animate={{ x: 0 }} exit={{ x: 300 }}
-                            className="w-full max-w-xl bg-[#0D0D0D] h-full ml-auto rounded-[48px] border-l border-white/10 flex flex-col p-10 overflow-hidden"
+                            className="w-full max-w-xl bg-[#0D0D0D] h-full ml-auto rounded-none sm:rounded-[48px] border-l border-white/10 flex flex-col p-6 sm:p-10 overflow-hidden"
                         >
                             <div className="flex justify-between items-start mb-10">
                                 <div>
@@ -3629,11 +3640,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 {isTreasuryModalOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6"
+                        className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6"
                     >
                         <motion.div
                             initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[40px] p-10 relative"
+                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 relative"
                         >
                             <button onClick={() => setIsTreasuryModalOpen(false)} className="absolute top-8 right-8 text-white/20 hover:text-white"><X size={24} /></button>
                             <div className="flex flex-col items-center mb-10">
@@ -3681,11 +3692,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 {isBroadcastModalOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6"
+                        className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6"
                     >
                         <motion.div
                             initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[40px] p-10 relative"
+                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 relative"
                         >
                             <button onClick={() => setIsBroadcastModalOpen(false)} className="absolute top-8 right-8 text-white/20 hover:text-white"><X size={24} /></button>
                             <div className="flex flex-col items-center mb-10">
@@ -3748,11 +3759,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 {isStaffModalOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6"
+                        className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6"
                     >
                         <motion.div
                             initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[40px] p-10 relative"
+                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 relative"
                         >
                             <button onClick={() => setIsStaffModalOpen(false)} className="absolute top-8 right-8 text-white/20 hover:text-white"><X size={24} /></button>
                             <div className="flex flex-col items-center mb-10">

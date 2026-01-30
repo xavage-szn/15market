@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
 import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock, ChevronDown } from 'lucide-react';
 
-export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', network = 'solana', currentPrice }) {
+import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, ADMIN_TOKEN } from "../constants";
+
+export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', network = 'solana', currentPrice, activeMarket, uiVersion }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const seriesRef = useRef(null);
@@ -328,12 +330,21 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
         };
     }, []);
 
-    const selectToken = (t) => {
+    const selectToken = async (t) => {
         console.log("🎯 Chart Selecting Token:", t.symbol);
         localStorage.setItem('15market_active_token_id', t.id);
 
         // Trigger storage event for same-window detection (immediate update)
         window.dispatchEvent(new Event('storage'));
+
+        // Push to Live Server
+        try {
+            await fetch(`${KEEPER_URL}/active-market`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activeId: t.id })
+            });
+        } catch (err) { console.error("Live market sync failed from chart:", err); }
 
         setIsSelectorOpen(false);
     };
@@ -431,13 +442,31 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                 </div>
             </div>
 
-            {/* Backdrop for selector */}
-            {isSelectorOpen && (
-                <div
-                    className="fixed inset-0 z-20 pointer-events-auto"
-                    onClick={() => setIsSelectorOpen(false)}
-                />
+            {/* V1 Asset Switcher Overlay */}
+            {uiVersion === 'v1' && (
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl p-0.5 shadow-2xl">
+                    {tokens.map((token) => (
+                        <button
+                            key={token.id}
+                            onClick={() => selectToken(token)}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket?.id === token.id ? 'bg-[#3CB371] border-[#3CB371] text-white shadow-[0_0_15px_rgba(60,179,113,0.3)]' : 'bg-black/20 border-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
+                        >
+                            {token.symbol}
+                        </button>
+                    ))}
+                </div>
             )}
-        </div>
+
+            {/* Backdrop for selector */}
+
+            {
+                isSelectorOpen && (
+                    <div
+                        className="fixed inset-0 z-20 pointer-events-auto"
+                        onClick={() => setIsSelectorOpen(false)}
+                    />
+                )
+            }
+        </div >
     );
 }
