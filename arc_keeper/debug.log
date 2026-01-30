@@ -47,3 +47,4 @@
 [2026-01-28T19:57:45.675Z] [ARC_DISCOVERY] Found 0 unsettled bets.
 [2026-01-28T19:59:55.917Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
 [2026-01-28T20:01:18.604Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T01:41:56.072Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
