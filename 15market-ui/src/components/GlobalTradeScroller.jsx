@@ -171,11 +171,11 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
 
     return (
         <div className={`w-full border-y h-10 flex items-center overflow-hidden relative transition-all duration-500 ${theme === 'light'
-            ? 'static-panel-light !border-black/5'
+            ? 'bg-transparent border-black/10 shadow-[0_4px_12px_rgba(0,0,0,0.08)]'
             : 'static-panel !border-white/5'
             }`}>
             {/* Left Side: Logo & IDX */}
-            <div className={`absolute left-0 top-0 bottom-0 px-3 lg:px-6 z-30 flex items-center border-r transition-all duration-300 ${theme === 'light' ? 'bg-[#e2e8f0]/80 backdrop-blur-md' : 'bg-[#050505]'
+            <div className={`absolute left-0 top-0 bottom-0 px-3 lg:px-6 z-30 flex items-center border-r transition-all duration-300 ${theme === 'light' ? 'bg-slate-200/40 backdrop-blur-md' : 'bg-[#050505]'
                 } ${currentNetwork === 'arc' ? 'border-blue-500/30' : 'border-[#3CB371]/30'}`}>
                 <div className="flex items-center gap-3">
                     <div className={`flex items-center gap-2 px-3 py-1 rounded-full border-2 ${theme === 'light' ? 'bg-[#3CB371]/10 border-[#3CB371]/40' : 'bg-[#3CB371]/10 border-[#3CB371]/20'}`}>
@@ -209,7 +209,7 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 1 }}
-                            className={`absolute inset-0 flex items-center z-40 ${theme === 'light' ? '!bg-white' : 'bg-[#050505]'}`}
+                            className={`absolute inset-0 flex items-center z-40 ${theme === 'light' ? '!bg-[#e2e8f0]/90 backdrop-blur-md' : 'bg-[#050505]'}`}
                         >
                             <motion.div
                                 className="flex items-center gap-24 whitespace-nowrap pl-32 lg:pl-52"
@@ -312,7 +312,7 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
             </div>
 
             {/* Right Gradient */}
-            <div className={`absolute right-0 top-0 bottom-0 w-48 bg-gradient-to-l z-20 pointer-events-none ${theme === 'light' ? 'from-white to-transparent' : 'from-[#050505] to-transparent'}`} />
+            <div className={`absolute right-0 top-0 bottom-0 w-48 bg-gradient-to-l z-20 pointer-events-none ${theme === 'light' ? 'from-[#cbd5e1] to-transparent' : 'from-[#050505] to-transparent'}`} />
         </div >
     );
 };
