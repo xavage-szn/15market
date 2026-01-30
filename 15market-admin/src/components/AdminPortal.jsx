@@ -1258,7 +1258,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
             try {
                 const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout
+                const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
                 const res = await fetch(`${KEEPER_URL}/logs`, { signal: controller.signal });
                 clearTimeout(timeout);

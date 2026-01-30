@@ -101,12 +101,12 @@ const server = http.createServer(async (req, res) => {
     ];
     const origin = req.headers.origin;
 
-    // Be more permissive if origin matches admin or if it's missing (fallback to admin for API requests)
-    if (allowedOrigins.includes(origin)) {
+    // Simplified but robust CORS for production subdomains
+    if (origin && (origin.endsWith('.15market.online') || origin === 'https://15market.online' || allowedOrigins.includes(origin))) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     } else {
-        // Fallback: allow the admin domain if origin is restricted or missing
-        res.setHeader('Access-Control-Allow-Origin', 'https://admin.15market.online');
+        // Fallback for direct browser access or localhost
+        res.setHeader('Access-Control-Allow-Origin', origin || '*');
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
