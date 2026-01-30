@@ -67,7 +67,7 @@ async function settleBet(betId, betInfo, currentPrice) {
             .settleBet(userWon)
             .accounts({
                 bet: betPda,
-                owner: userPubkey,
+                owner: mainOwnerPubkey,
                 treasury: treasuryPda,
                 keeper: wallet.publicKey,
                 systemProgram: SystemProgram.programId,

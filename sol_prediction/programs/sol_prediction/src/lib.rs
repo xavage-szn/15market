@@ -111,8 +111,8 @@ pub mod sol_prediction {
             
             require!(treasury_info.lamports() >= payout, ErrorCode::InsufficientTreasury);
 
-            // Safety: Ensure payout recipient matches the bet owner (could be burner or main)
-            require!(ctx.accounts.owner.key() == bet.owner, ErrorCode::Unauthorized);
+            // Safety: Ensure payout recipient matches the main owner
+            require!(ctx.accounts.owner.key() == bet.main_owner, ErrorCode::Unauthorized);
 
             // Manual lamport transfer from PDA to recipient
             // This is required because system_program::transfer cannot be used from program-owned PDAs

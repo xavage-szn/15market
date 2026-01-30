@@ -1752,6 +1752,18 @@ export default function UserApp() {
           <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
 
           <button
+            onClick={() => {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            }}
+            className="p-2 rounded-xl border border-white/10 bg-white/5 text-white/40 hover:text-[#FF4444] transition-all"
+            title="Disconnect"
+          >
+            <LogOut size={16} />
+          </button>
+
+          <button
             onClick={() => setUiVersion(prev => prev === 'v1' ? 'v2' : 'v1')}
             className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-[9px] font-black text-white/40 hover:text-white transition-all uppercase tracking-widest"
           >
@@ -1860,16 +1872,15 @@ export default function UserApp() {
                 <div className="col-span-12 lg:col-span-9 flex flex-col gap-2 h-auto lg:h-full min-h-0 lg:min-h-0">
 
                   {/* MOBILE ASSET SELECTOR (V2) */}
-                  <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 pb-2">
-                    {JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]').map((token) => (
+                  <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 pb-2 mb-2">
+                    {state.listings.map((token) => (
                       <button
                         key={token.id}
-                        onClick={async () => {
-                          localStorage.setItem('15market_active_token_id', token.id);
+                        onClick={() => {
                           setActiveMarket(token);
-                          window.dispatchEvent(new Event('storage'));
+                          localStorage.setItem('15market_active_token_id', token.id);
                         }}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket.id === token.id ? 'bg-[#3CB371] border-[#3CB371] text-white' : 'bg-white/5 border-white/5 text-white/40'}`}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket.id === token.id ? 'bg-[#3CB371] border-transparent text-white' : 'bg-white/5 border-white/10 text-white/40'}`}
                       >
                         {token.symbol}
                       </button>
