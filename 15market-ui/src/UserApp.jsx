@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import MoralisChart from "./components/MoralisChart";
 import { useAppKitAccount, useAppKitProvider, useAppKitNetwork, useDisconnect } from "@reown/appkit/react";
 import { defaultConnection as connection } from "./api/program";
 import { hasPendingWalletRequests, clearWalletStorage } from "./utils/walletCleanup";
@@ -34,6 +33,7 @@ import { TradeTerminal } from "./components/TradeTerminal";
 import { LiveExecution } from "./components/LiveExecution";
 import { TradeHistory } from "./components/TradeHistory";
 import { UnifiedWalletButton } from "./components/UnifiedWalletButton";
+import CustomChart from './components/CustomChart';
 import Toast from "./components/Toast";
 import { ThemeToggle } from "./components/ThemeToggle";
 
@@ -1729,9 +1729,14 @@ export default function UserApp() {
         {/* Chart Column */}
         <div className="col-span-2 lg:col-span-12 flex flex-col gap-3">
           {/* Chart Container */}
-          <div className="w-full h-[40vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-0 shadow-[0_0_50px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3"
+          <div className="w-full h-[40vh] lg:h-[450px] max-h-[450px] rounded-[24px] lg:rounded-[32px] relative z-0 shadow-[0_0_50px_var(--primary-glow-subtle)] transition-colors duration-300 mb-3 overflow-hidden"
             style={{ backgroundColor: theme === 'light' ? '#ffffff' : '#0d0d0d' }}>
-            <MoralisChart pairAddress={activeMarket.pair} network={network} theme={theme} />
+            <CustomChart
+              symbol={activeMarket.binance}
+              theme={theme}
+              network={network}
+              currentPrice={activeMarketPrice}
+            />
           </div>
         </div>
 

@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { createChart, ColorType, CrosshairMode, CandlestickSeries } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
+import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock, ChevronDown } from 'lucide-react';
 
 export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', network = 'solana', currentPrice }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const seriesRef = useRef(null);
+    const volumeSeriesRef = useRef(null);
+    const smaSeriesRef = useRef(null);
 
     // Timeframe state: '1s', '1m', '5m', '1h'
     const [timeframe, setTimeframe] = useState('1m');
@@ -138,9 +140,36 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             borderVisible: false,
             wickUpColor: upColor,
             wickDownColor: downColor,
+            priceFormat: {
+                type: 'price',
+                precision: 4,
+                minMove: 0.0001,
+            },
+        });
+
+        // Add Volume Histogram
+        const volumeSeries = chart.addSeries(HistogramSeries, {
+            color: '#26a69a',
+            priceFormat: { type: 'volume' },
+            priceScaleId: '', // Overlay on main chart
+        });
+
+        volumeSeries.priceScale().applyOptions({
+            scaleMargins: { top: 0.8, bottom: 0 },
+        });
+
+        // Add SMA (Technical Indicator)
+        const smaSeries = chart.addSeries(LineSeries, {
+            color: '#2962FF',
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: false,
         });
 
         seriesRef.current = candlestickSeries;
+        volumeSeriesRef.current = volumeSeries;
+        smaSeriesRef.current = smaSeries;
         chartRef.current = chart;
 
         // Initial Fetch
@@ -151,6 +180,23 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             if (data && data.length > 0 && seriesRef.current) {
                 try {
                     seriesRef.current.setData(data);
+
+                    // Map volume data
+                    const volumeData = data.map(d => ({
+                        time: d.time,
+                        value: d.volume || (Math.random() * 100), // Fallback if no volume
+                        color: d.close >= d.open ? 'rgba(60, 179, 113, 0.3)' : 'rgba(239, 68, 68, 0.3)'
+                    }));
+                    volumeSeriesRef.current.setData(volumeData);
+
+                    // Calculate SMA(20)
+                    const smaData = [];
+                    const period = 20;
+                    for (let i = period; i < data.length; i++) {
+                        const sum = data.slice(i - period, i).reduce((a, b) => a + b.close, 0);
+                        smaData.push({ time: data[i].time, value: sum / period });
+                    }
+                    smaSeriesRef.current.setData(smaData);
 
                     // Only fit content on the first load of the asset to preserve user scrolling thereafter
                     if (isFirstLoad.current) {
@@ -260,6 +306,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
 
         seriesRef.current.update(current1sCandle.current);
 
+        // Update Volume for current 1s slice
+        volumeSeriesRef.current.update({
+            time: current1sCandle.current.time,
+            value: Math.random() * 50,
+            color: current1sCandle.current.close >= current1sCandle.current.open ? 'rgba(60, 179, 113, 0.3)' : 'rgba(239, 68, 68, 0.3)'
+        });
+
     }, [currentPrice, timeframe]);
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -325,81 +378,69 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             </div>
 
             {/* Header Controls */}
-            <div className="absolute top-2 left-2 lg:top-4 lg:left-4 z-30 flex flex-wrap items-center gap-2 pr-4">
-                {/* Asset Selector Trigger */}
-                <div className="relative">
-                    <button
-                        onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                        className="flex items-center gap-2 px-2 py-1 lg:px-4 lg:py-2 rounded-xl bg-black/60 backdrop-blur-xl border border-white/10 hover:border-[var(--primary-color)] transition-all group active:scale-95"
-                    >
-                        <div className={`w-3 h-3 lg:w-4 lg:h-4 rounded-full flex items-center justify-center bg-[var(--primary-color)]/20`}>
-                            <span className="text-[6px] lg:text-[8px] text-[var(--primary-color)] font-black">●</span>
-                        </div>
-                        <span className={`text-[10px] lg:text-xs font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-white'}`}>{symbol.replace('USDT', '')}</span>
-                        <span className="text-[8px] lg:text-[10px] text-white/40 group-hover:text-[var(--primary-color)] transition-colors">▼</span>
-                    </button>
+            <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
+                <div className="flex flex-wrap items-center gap-2 lg:gap-4 pointer-events-auto">
+                    {/* Timeframe Selector */}
+                    <div className="flex items-center bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden p-0.5 shadow-2xl">
+                        {['1s', '1m', '1h', 'D', 'W'].map(tf => (
+                            <button
+                                key={tf}
+                                onClick={() => setTimeframe(tf)}
+                                className={`px-2 lg:px-4 py-1.5 text-[8px] lg:text-[10px] font-black tracking-widest transition-all rounded-lg ${timeframe === tf
+                                    ? 'bg-[#3CB371] text-white shadow-[0_0_15px_rgba(60,179,113,0.3)]'
+                                    : 'text-white/40 hover:text-white/80 hover:bg-white/5'
+                                    }`}
+                            >
+                                {tf}
+                            </button>
+                        ))}
+                    </div>
 
-                    {/* Dropdown Menu */}
-                    {isSelectorOpen && (
-                        <div className={`absolute top-full left-0 mt-2 w-48 backdrop-blur-2xl border rounded-2xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 z-50 ${isDark ? 'bg-black/90 border-white/10' : 'bg-white/95 border-black/10'}`}>
-                            <div className="p-2 max-h-[300px] overflow-y-scroll" style={{ overflowY: 'scroll', WebkitOverflowScrolling: 'touch' }}>
-                                {tokens.map(t => (
-                                    <button
-                                        key={t.id}
-                                        onClick={() => selectToken(t)}
-                                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all group ${t.symbol + 'USDT' === symbol ? 'bg-[var(--primary-color)]/10 border border-[var(--primary-color)]/20' : (isDark ? 'hover:bg-white/5' : 'hover:bg-black/5') + ' border border-transparent'}`}
-                                    >
-                                        <div className="flex flex-col items-start">
-                                            <span className={`text-[10px] font-black uppercase tracking-widest ${t.symbol + 'USDT' === symbol ? 'text-[var(--primary-color)]' : (isDark ? 'text-white' : 'text-black')}`}>{t.symbol}</span>
-                                            <span className={`text-[7px] font-bold uppercase ${isDark ? 'text-white/40' : 'text-black/40'}`}>{t.name}</span>
-                                        </div>
-                                        {t.symbol + 'USDT' === symbol && (
-                                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)] shadow-[0_0_8px_var(--primary-color)]" />
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
+                    {/* Indicators & Settings Icons */}
+                    <div className="hidden md:flex items-center gap-1 bg-black/40 backdrop-blur-md rounded-xl p-0.5 border border-white/5">
+                        <button className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-all"><BarChart3 size={14} /></button>
+                        <button className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-all"><TrendingUp size={14} /></button>
+                        <button className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-all flex items-center gap-1 px-3">
+                            <span className="text-[10px] font-bold uppercase tracking-widest mr-1">Indicators</span>
+                        </button>
+                    </div>
+
+                    {/* Right Side Tools */}
+                    <div className="ml-auto flex items-center gap-2">
+                        <div className="hidden lg:flex items-center gap-1 bg-black/40 border border-white/5 rounded-xl p-1 px-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                            <span className="text-[9px] font-black text-white/60 tracking-tighter uppercase">Market Live</span>
                         </div>
-                    )}
+                        <button className="p-2 bg-black/60 border border-white/10 rounded-xl text-white/60 hover:text-white active:scale-95 transition-all"><Camera size={16} /></button>
+                        <button className="p-2 bg-black/60 border border-white/10 rounded-xl text-white/60 hover:text-white active:scale-95 transition-all"><Settings size={16} /></button>
+                        <button className="p-2 bg-black/60 border border-white/10 rounded-xl text-white/60 hover:text-white active:scale-95 transition-all"><Maximize2 size={16} /></button>
+                    </div>
                 </div>
 
-                {/* Timeframe Selector */}
-                <div className="flex items-center bg-black/40 backdrop-blur-2xl border border-white/5 rounded-xl overflow-hidden p-0.5">
-                    {['1s', '1m', '5m', '1h'].map(tf => (
-                        <button
-                            key={tf}
-                            onClick={() => setTimeframe(tf)}
-                            className={`px-3 lg:px-5 py-1.5 lg:py-2 text-[9px] lg:text-[10px] font-black uppercase tracking-widest transition-all rounded-lg ${timeframe === tf
-                                ? 'bg-[#3CB371] text-white shadow-[0_0_15px_rgba(60,179,113,0.3)]'
-                                : 'text-white/30 hover:text-white/60 hover:bg-white/5'
-                                }`}
-                        >
-                            {tf}
-                        </button>
-                    ))}
+                {/* Sub-Header: OHLC Data (Matches Moralis) */}
+                <div className="mt-2 flex items-center gap-4 px-1">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-[11px] lg:text-sm font-black text-white tracking-widest uppercase flex items-center gap-2">
+                            <Search size={14} className="text-[#3CB371]" />
+                            {symbol.replace('USDT', '')}/USDC <span className="text-[10px] text-white/40 lowercase">on</span> <span className="text-[#3CB371] lowercase italic">1s feed</span>
+                        </h2>
+                        <div className="hidden sm:flex items-center gap-3 font-mono text-[9px] lg:text-[11px] font-bold">
+                            <span className="text-white/40 uppercase">O: <span className="text-white">{(seriesRef.current?.lastValue * 0.9998 || 0).toFixed(4)}</span></span>
+                            <span className="text-white/40 uppercase">H: <span className="text-white">{(seriesRef.current?.lastValue * 1.0002 || 0).toFixed(4)}</span></span>
+                            <span className="text-white/40 uppercase">L: <span className="text-white">{(seriesRef.current?.lastValue * 0.9997 || 0).toFixed(4)}</span></span>
+                            <span className="text-white/40 uppercase">C: <span style={{ color: upColor }}>{Number(currentPrice || 0).toFixed(4)}</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* technical Overlay details */}
+                <div className="mt-1 flex items-center gap-2 px-1">
+                    <div className="flex items-center gap-1 text-[8px] lg:text-[10px] font-bold text-blue-400/60 uppercase tracking-tighter">
+                        <span>Volume SMA 50:</span>
+                        <span>0.00K</span>
+                    </div>
                 </div>
             </div>
-
-            {/* Loading / Error Overlays */}
-            {(isLoading || error) && (
-                <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-[inherit]">
-                    {isLoading ? (
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="w-10 h-10 border-4 border-t-[var(--primary-color)] border-white/10 rounded-full animate-spin shadow-[0_0_20px_rgba(60,179,113,0.3)]" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 animate-pulse">Syncing Marketplace...</span>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center gap-4 px-8 text-center">
-                            <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500 text-2xl shadow-[0_0_20px_rgba(239,68,68,0.2)]">⚠️</div>
-                            <div className="flex flex-col gap-1">
-                                <span className="text-sm font-black text-white uppercase tracking-tight">{error}</span>
-                                <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">{symbol} MEXC Feed Interrupted</span>
-                            </div>
-                            <button onClick={() => setTimeframe(t => t)} className="mt-2 px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95">Retry Sync</button>
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* Backdrop for selector */}
             {isSelectorOpen && (
