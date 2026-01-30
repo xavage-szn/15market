@@ -61,7 +61,7 @@ export default function UserApp() {
     } catch (e) { return []; }
   }); // Array of active trades
   const activeTrade = activeTrades[0] || null; // For backward compatibility in some components
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
@@ -1619,6 +1619,21 @@ export default function UserApp() {
       notify(msg, "error");
     }
   }, [wallet, wallet?.publicKey, sessionKeypair, evmSessionWallet, network, address, connection, notify, recordFee, signMessageAsync]);
+
+  if (isLoading) return (
+    <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
+      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative">
+        <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
+        <img src="/logo.png" alt="logo" className="h-48 w-auto relative z-10" />
+      </motion.div>
+      <div className="mt-12 flex flex-col items-center gap-4">
+        <div className="w-64 h-1.5 bg-white/10 rounded-full overflow-hidden relative border border-white/5">
+          <motion.div className="absolute inset-y-0 left-0 bg-[#3CB371]" initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 1.3 }} />
+        </div>
+        <p className="text-[10px] font-black uppercase text-[#3CB371]">System Initializing</p>
+      </div>
+    </div>
+  );
 
   if (!authenticated) return <LandingPage currentNetwork={network} onNetworkChange={handleNetworkSwitch} />;
 
