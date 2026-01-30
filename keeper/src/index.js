@@ -311,7 +311,6 @@ const server = http.createServer(async (req, res) => {
                 }
 
                 // Add to unified history
-                state.totalTrades = (state.totalTrades || 0) + 1;
                 const newTrade = {
                     id: data.id,
                     owner: data.user,
@@ -319,8 +318,9 @@ const server = http.createServer(async (req, res) => {
                     currency: "USDC", // Arc uses USDC mainly
                     direction: (data.strike < data.final ? "UP" : "DOWN"), // Infer from result if direction isn't sent
                     entryPrice: data.strike,
-                    timestamp: data.timestamp * 1000,
+                    timestamp: data.timestamp > 2000000000 ? data.timestamp : data.timestamp * 1000,
                     status: data.won ? "WON" : "LOST",
+                    won: !!data.won,
                     network: 'arc',
                     user: state.userProfiles[data.user]?.username || data.user.slice(0, 4) + '...' + data.user.slice(-4)
                 };
@@ -331,7 +331,13 @@ const server = http.createServer(async (req, res) => {
                 }
 
                 if (!state.history) state.history = [];
-                state.history.unshift(newTrade);
+                const existingIdx = state.history.findIndex(t => t.id === newTrade.id && t.network === 'arc');
+                if (existingIdx !== -1) {
+                    state.history[existingIdx] = { ...state.history[existingIdx], ...newTrade };
+                } else {
+                    state.history.unshift(newTrade);
+                    state.totalTrades = (state.totalTrades || 0) + 1;
+                }
                 if (state.history.length > 200) state.history.pop();
 
                 saveState();
@@ -491,21 +497,23 @@ const server = http.createServer(async (req, res) => {
                         console.log(`[PING] 🚀 Auto-tracking Solana bet: ${pdaStr.slice(0, 8)} (via Ping)`);
 
                         // Add to unified history (Live)
-                        state.totalTrades = (state.totalTrades || 0) + 1;
                         if (!state.history) state.history = [];
-                        state.history.unshift({
-                            id: pdaStr,
-                            owner: address,
-                            amount: amount,
-                            currency: "SOL",
-                            direction: direction === 1 ? "UP" : "DOWN",
-                            entryPrice: entryPrice,
-                            timestamp: Date.now(),
-                            status: "ACTIVE",
-                            network: 'solana',
-                            user: state.userProfiles[address]?.username || address.slice(0, 4) + '...' + address.slice(-4)
-                        });
-                        if (state.history.length > 200) state.history.pop();
+                        if (!state.history.find(t => t.id === pdaStr && t.network === 'solana')) {
+                            state.history.unshift({
+                                id: pdaStr,
+                                owner: address,
+                                amount: amount,
+                                currency: "SOL",
+                                direction: direction === 1 ? "UP" : "DOWN",
+                                entryPrice: entryPrice,
+                                timestamp: Date.now(),
+                                status: "ACTIVE",
+                                network: 'solana',
+                                user: state.userProfiles[address]?.username || address.slice(0, 4) + '...' + address.slice(-4)
+                            });
+                            state.totalTrades = (state.totalTrades || 0) + 1;
+                            if (state.history.length > 200) state.history.pop();
+                        }
                         saveState();
                     }
                 } catch (e) {
@@ -529,21 +537,23 @@ const server = http.createServer(async (req, res) => {
                     console.log(`[PING] 🚀 Auto-tracking Arc bet: ${id} (via Ping)`);
 
                     // Add to unified history (Live)
-                    state.totalTrades = (state.totalTrades || 0) + 1;
                     if (!state.history) state.history = [];
-                    state.history.unshift({
-                        id: id.toString(),
-                        owner: address,
-                        amount: amount,
-                        currency: "USDC",
-                        direction: direction === 1 ? "UP" : "DOWN",
-                        entryPrice: entryPrice,
-                        timestamp: Date.now(),
-                        status: "ACTIVE",
-                        network: 'arc',
-                        user: state.userProfiles[address]?.username || address.slice(0, 4) + '...' + address.slice(-4)
-                    });
-                    if (state.history.length > 200) state.history.pop();
+                    if (!state.history.find(t => t.id === id.toString() && t.network === 'arc')) {
+                        state.history.unshift({
+                            id: id.toString(),
+                            owner: address,
+                            amount: amount,
+                            currency: "USDC",
+                            direction: direction === 1 ? "UP" : "DOWN",
+                            entryPrice: entryPrice,
+                            timestamp: Date.now(),
+                            status: "ACTIVE",
+                            network: 'arc',
+                            user: state.userProfiles[address]?.username || address.slice(0, 4) + '...' + address.slice(-4)
+                        });
+                        state.totalTrades = (state.totalTrades || 0) + 1;
+                        if (state.history.length > 200) state.history.pop();
+                    }
                     saveState();
                 }
             }
@@ -726,11 +736,12 @@ async function fetchProtocolHistory() {
                     amount: Number(decoded.amountLamports) / 1e9,
                     direction: Number(decoded.direction) === 1 ? "UP" : "DOWN",
                     entryPrice: Number(decoded.entryPrice) / 1e6,
-                    timestamp: decoded.timestamp.toNumber(),
+                    timestamp: decoded.timestamp.toNumber() * 1000,
                     duration: decoded.duration.toNumber(),
                     resolved: true,
                     network: 'solana',
-                    won: decoded.userWon || false
+                    won: !!decoded.userWon,
+                    status: decoded.userWon ? "WON" : "LOST"
                 };
             } catch (e) { return null; }
         }).filter(b => b !== null).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
@@ -739,11 +750,7 @@ async function fetchProtocolHistory() {
         const arcHistory = (state.history || []).filter(item => item.network === 'arc');
 
         state.history = [...solanaHistory, ...arcHistory]
-            .sort((a, b) => {
-                const timeA = a.timestamp > 2000000000 ? a.timestamp : a.timestamp * 1000;
-                const timeB = b.timestamp > 2000000000 ? b.timestamp : b.timestamp * 1000;
-                return timeB - timeA;
-            })
+            .sort((a, b) => b.timestamp - a.timestamp)
             .slice(0, 200);
 
         state.wallets = profiles.length;

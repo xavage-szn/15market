@@ -1040,21 +1040,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         fetchTradeHistory.isRunning = true;
 
         try {
-            // 1. Fetch History from Keeper (OFFLOADED FROM RPC)
+            // 1. Fetch Unified History from Keeper (OFFLOADED FROM RPC)
             const res = await fetch(`${KEEPER_URL}/history`);
             if (res.ok) {
-                const solTrades = await res.json();
-
-                // 2. Fetch Arc Settled Trades (Optional, if separate)
-                let arcTrades = [];
-                try {
-                    const arcHistoryRes = await fetch(`${KEEPER_URL}/arc-history`);
-                    if (arcHistoryRes.ok) {
-                        arcTrades = await arcHistoryRes.json();
-                    }
-                } catch (e) { }
-
-                const allTrades = [...solTrades, ...arcTrades.map(t => ({ ...t, network: 'arc' }))];
+                const allTrades = await res.json();
 
                 // Sort by timestamp (newest first)
                 allTrades.sort((a, b) => b.timestamp - a.timestamp);
@@ -2070,15 +2059,15 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                             </td>
                                                             <td className="px-8 py-5">
                                                                 <div className="flex items-center gap-2">
-                                                                    <div className={`w-1.5 h-1.5 rounded-full ${trade.won ? 'bg-[#3CB371]' : 'bg-red-500'}`} />
-                                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${trade.won ? 'text-[#3CB371]' : 'text-red-500'}`}>
-                                                                        {trade.won ? 'WON' : 'LOST'}
+                                                                    <div className={`w-1.5 h-1.5 rounded-full ${trade.status === 'ACTIVE' ? 'bg-blue-400' : (trade.won || trade.status === 'WON' ? 'bg-[#3CB371]' : 'bg-red-500')}`} />
+                                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${trade.status === 'ACTIVE' ? 'text-blue-400' : (trade.won || trade.status === 'WON' ? 'text-[#3CB371]' : 'text-red-500')}`}>
+                                                                        {trade.status === 'ACTIVE' ? 'ACTIVE' : (trade.won || trade.status === 'WON' ? 'WON' : 'LOST')}
                                                                     </span>
                                                                 </div>
                                                             </td>
                                                             <td className="px-8 py-5 text-right">
                                                                 <span className="text-[9px] font-mono text-white/40">
-                                                                    {new Date(trade.timestamp * 1000).toLocaleString()}
+                                                                    {new Date(trade.timestamp).toLocaleString()}
                                                                 </span>
                                                             </td>
                                                         </tr>
