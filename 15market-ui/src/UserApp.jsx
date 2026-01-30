@@ -1746,32 +1746,16 @@ export default function UserApp() {
 
         {/* Mobile Controls */}
         <div className="flex lg:hidden items-center gap-2">
-          <div className="flex items-center gap-1">
-            {uiVersion === 'v1' && (
-              <button
-                onClick={() => setUiVersion(prev => prev === 'v1' ? 'v2' : 'v1')}
-                className="px-2 py-1 rounded-lg border border-white/5 bg-white/5 text-[10px] font-bold text-white/60 hover:text-white hover:bg-white/10 transition-colors uppercase tracking-widest"
-              >
-                V2
-              </button>
-            )}
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          </div>
-          <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
 
           {uiVersion === 'v1' && (
-            <>
-              <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-[#3CB371]/10 border border-[#3CB371]/20">
-                <div className="w-4 h-4 rounded-full bg-[#3CB371] flex items-center justify-center">
-                  <span className="text-[8px] font-black text-white">2</span>
-                </div>
-                <ChevronRight size={10} className="text-[#3CB371] rotate-90" />
-              </div>
-
-              <button onClick={() => setView("dashboard")} className={`p-2 rounded-xl border backdrop-blur-md ${theme === 'light' ? 'bg-black/[0.03] border-black/5' : 'bg-white/[0.03] border-white/5'}`}>
-                <User size={18} className={theme === 'light' ? 'text-black/60' : 'text-white/60'} />
-              </button>
-            </>
+            <button
+              onClick={() => setUiVersion('v2')}
+              className="px-2 py-1 rounded-lg border border-white/5 bg-white/5 text-[10px] font-bold text-white/60"
+            >
+              V2
+            </button>
           )}
         </div>
       </header>
@@ -1873,9 +1857,27 @@ export default function UserApp() {
             ) : (
               <>
                 {/* LEFT COLUMN (9/12) - Chart & Terminal */}
-                <div className="col-span-12 lg:col-span-9 flex flex-col gap-2 h-auto lg:h-full min-h-[500px] lg:min-h-0">
+                <div className="col-span-12 lg:col-span-9 flex flex-col gap-2 h-auto lg:h-full min-h-0 lg:min-h-0">
+
+                  {/* MOBILE ASSET SELECTOR (V2) */}
+                  <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 pb-2">
+                    {JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]').map((token) => (
+                      <button
+                        key={token.id}
+                        onClick={async () => {
+                          localStorage.setItem('15market_active_token_id', token.id);
+                          setActiveMarket(token);
+                          window.dispatchEvent(new Event('storage'));
+                        }}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket.id === token.id ? 'bg-[#3CB371] border-[#3CB371] text-white' : 'bg-white/5 border-white/5 text-white/40'}`}
+                      >
+                        {token.symbol}
+                      </button>
+                    ))}
+                  </div>
+
                   {/* Chart Section - Compact (~40%) */}
-                  <div className="w-full flex-none lg:flex-1 glass-panel rounded-xl p-1 relative overflow-hidden group min-h-[250px] lg:min-h-0">
+                  <div className="w-full h-[300px] lg:h-auto flex-none lg:flex-1 glass-panel rounded-xl p-0.5 relative overflow-hidden group">
                     <div className={`absolute inset-0 bg-gradient-to-b ${network === 'solana' ? 'from-green-500/5' : 'from-blue-500/5'} to-transparent opacity-50`} />
                     <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} />
                   </div>

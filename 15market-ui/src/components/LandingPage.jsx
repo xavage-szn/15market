@@ -35,26 +35,25 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                 '--theme-glow': currentTheme.glow,
             }}
         >
-            {/* Global Background Glow */}
+            {/* Global Background Glow - Tightened for one screen */}
             <div className="absolute inset-0 z-0 pointer-events-none">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay"></div>
                 <div
-                    className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] blur-[150px] rounded-full transition-all duration-1000"
-                    style={{ backgroundColor: currentTheme.primary, opacity: 0.12 }}
+                    className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] blur-[120px] rounded-full transition-all duration-1000"
+                    style={{ backgroundColor: currentTheme.primary, opacity: 0.1 }}
                 />
                 <div
-                    className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] blur-[150px] rounded-full transition-all duration-1000"
-                    style={{ backgroundColor: currentTheme.primary, opacity: 0.08 }}
+                    className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] blur-[120px] rounded-full transition-all duration-1000"
+                    style={{ backgroundColor: currentTheme.primary, opacity: 0.06 }}
                 />
             </div>
 
             {/* Navigation */}
-            <nav className="relative z-[100] flex items-center justify-between px-6 md:px-12 py-4 md:py-6">
+            <nav className="relative z-[100] flex items-center justify-between px-6 py-4 md:px-12 md:py-6 shrink-0">
                 <div className="flex items-center">
                     <img
                         src="/logo.png"
                         alt="15market"
-                        className="h-12 md:h-16 w-auto transition-all duration-500"
+                        className="h-10 md:h-16 w-auto transition-all duration-500"
                         style={{ filter: `drop-shadow(0 0 20px ${currentTheme.primary}40)` }}
                     />
                 </div>
@@ -66,12 +65,12 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                 </div>
             </nav>
 
-            {/* Hero Section */}
-            <main className="flex-1 flex flex-col items-center justify-center text-center px-6 relative z-10 -mt-10 md:-mt-16">
+            {/* Hero Section - Centered strictly */}
+            <main className="flex-1 flex flex-col items-center justify-center text-center px-6 relative z-10">
                 <motion.div
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black border border-white/10 mb-6 md:mb-8 backdrop-blur-md"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 mb-6 backdrop-blur-md"
                 >
                     <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: currentTheme.primary }} />
@@ -83,7 +82,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                 </motion.div>
 
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
+                    initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="text-5xl md:text-8xl font-[1000] tracking-tighter leading-[0.85] text-white mb-6"
                 >
@@ -95,7 +94,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2 }}
-                    className="text-sm md:text-lg text-white/40 max-w-lg mx-auto mb-8 md:mb-12 leading-relaxed"
+                    className="text-sm md:text-lg text-white/40 max-w-lg mx-auto mb-8 leading-relaxed"
                 >
                     Predict the pulse of the market in 15-second windows.
                     <span className="block mt-2 font-bold tracking-tight" style={{ color: currentTheme.primary }}>
@@ -104,7 +103,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                 </motion.p>
 
                 <motion.div
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
                     className="flex flex-col items-center gap-4"
@@ -125,41 +124,24 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                             sessionStorage.clear();
                             window.location.reload();
                         }}
-                        className="mt-6 text-[9px] font-black uppercase tracking-[0.2em] text-white/20 hover:text-white/60 transition-colors"
+                        className="mt-8 text-[9px] font-black uppercase tracking-[0.2em] text-white/20 hover:text-white/60 transition-colors"
                     >
                         Trouble connecting? Reset connection
                     </button>
                 </motion.div>
             </main>
 
-            {/* Features Bar - Compact */}
-            <div className="relative z-10 px-6 pb-8 md:pb-12">
+            {/* Features Bar - Fixed at bottom for one-screen feel */}
+            <div className="relative z-10 px-6 pb-8 md:pb-12 shrink-0">
                 <div className="max-w-5xl mx-auto flex flex-wrap justify-center gap-x-8 md:gap-x-16 gap-y-4">
-                    <FeatureItem icon={<Clock size={16} />} text="15s Rounds" color={currentTheme.primary} />
-                    <FeatureItem icon={<Shield size={16} />} text="No Manipulation" color={currentTheme.primary} />
-                    <FeatureItem icon={<Activity size={16} />} text="Pyth Data" color={currentTheme.primary} />
-                    <FeatureItem icon={<Zap size={16} />} text="Instant Payout" color={currentTheme.primary} />
+                    <FeatureItem icon={<Clock size={14} />} text="15s Rounds" color={currentTheme.primary} />
+                    <FeatureItem icon={<Shield size={14} />} text="No Manipulation" color={currentTheme.primary} />
+                    <FeatureItem icon={<Activity size={14} />} text="Pyth Data" color={currentTheme.primary} />
+                    <FeatureItem icon={<Zap size={14} />} text="Instant Payout" color={currentTheme.primary} />
                 </div>
             </div>
-
-            {/* Matrix background effect */}
-            <div className="absolute inset-0 z-1 pointer-events-none opacity-20 overflow-hidden">
-                <div className="absolute top-0 left-1/4 w-[1px] h-full bg-gradient-to-b from-transparent via-white/10 to-transparent animate-scan" style={{ animationDelay: '0s' }} />
-                <div className="absolute top-0 left-2/4 w-[1px] h-full bg-gradient-to-b from-transparent via-white/10 to-transparent animate-scan" style={{ animationDelay: '1.5s' }} />
-                <div className="absolute top-0 left-3/4 w-[1px] h-full bg-gradient-to-b from-transparent via-white/10 to-transparent animate-scan" style={{ animationDelay: '3s' }} />
-            </div>
-
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                @keyframes scan {
-                    0% { transform: translateY(-100%); }
-                    100% { transform: translateY(100%); }
-                }
-                .animate-scan {
-                    animation: scan 8s linear infinite;
-                }
-            `}} />
         </div>
+        </div >
     );
 };
 

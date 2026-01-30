@@ -442,18 +442,20 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                 </div>
             </div>
 
-            {/* V1 Asset Switcher Overlay */}
+            {/* V1 Asset Switcher Overlay - Improved for Mobile */}
             {uiVersion === 'v1' && (
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl p-0.5 shadow-2xl">
-                    {tokens.map((token) => (
-                        <button
-                            key={token.id}
-                            onClick={() => selectToken(token)}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket?.id === token.id ? 'bg-[#3CB371] border-[#3CB371] text-white shadow-[0_0_15px_rgba(60,179,113,0.3)]' : 'bg-black/20 border-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
-                        >
-                            {token.symbol}
-                        </button>
-                    ))}
+                <div className="absolute bottom-2 left-0 right-0 z-30 flex justify-center px-4">
+                    <div className="flex items-center gap-1 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-1 shadow-2xl overflow-x-auto no-scrollbar max-w-full">
+                        {tokens.map((token) => (
+                            <button
+                                key={token.id}
+                                onClick={() => selectToken(token)}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket?.id === token.id ? 'bg-[#3CB371] border-[#3CB371] text-white shadow-[0_0_15px_rgba(60,179,113,0.3)]' : 'bg-black/20 border-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
+                            >
+                                {token.symbol}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 
