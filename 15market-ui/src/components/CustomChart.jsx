@@ -44,35 +44,44 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     const fetchKlines = useCallback(async (tf) => {
         try {
             const apiInterval = getApiInterval(tf);
-            const limit = 1000; // Maximize history for scrolling
-            console.log(`[CHART] Fetching ${limit} klines (Interval: ${apiInterval}) for ${tf} view...`);
+            const targetCount = 5000;
+            const chunkSize = 1000;
+            let allCandles = [];
+            let lastEndTime = null;
 
-            const res = await fetch(`/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${limit}`);
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(`MEXC API Failure: ${res.status} ${errText}`);
+            console.log(`[CHART] Fetching ~${targetCount} klines for ${tf} view...`);
+
+            for (let i = 0; i < (targetCount / chunkSize); i++) {
+                let url = `/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${chunkSize}`;
+                if (lastEndTime) url += `&endTime=${lastEndTime}`;
+
+                const res = await fetch(url);
+                if (!res.ok) break;
+
+                const data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) break;
+
+                const chunk = data.map(d => ({
+                    time: Math.floor(d[0] / 1000),
+                    open: parseFloat(d[1]),
+                    high: parseFloat(d[2]),
+                    low: parseFloat(d[3]),
+                    close: parseFloat(d[4]),
+                    volume: parseFloat(d[5] || 0)
+                }));
+
+                allCandles = [...chunk, ...allCandles];
+                lastEndTime = data[0][0] - 1; // Start before the earliest candle in this chunk
+
+                if (data.length < chunkSize) break; // No more data
             }
-            const data = await res.json();
 
-            if (!Array.isArray(data)) {
-                console.warn("[CHART] Invalid data format from API:", data);
-                return [];
-            }
-
-            const candles = data.map(d => ({
-                time: Math.floor(d[0] / 1000),
-                open: parseFloat(d[1]),
-                high: parseFloat(d[2]),
-                low: parseFloat(d[3]),
-                close: parseFloat(d[4]),
-            }));
-
-            candles.sort((a, b) => a.time - b.time);
+            allCandles.sort((a, b) => a.time - b.time);
 
             // Filter duplicates
             const uniqueCandles = [];
             const seen = new Set();
-            for (const c of candles) {
+            for (const c of allCandles) {
                 if (!seen.has(c.time)) {
                     seen.add(c.time);
                     uniqueCandles.push(c);
@@ -204,8 +213,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                     // Only fit content on the first load of the asset to preserve user scrolling thereafter
                     if (isFirstLoad.current) {
                         setTimeout(() => {
-                            if (chartRef.current) {
-                                chartRef.current.timeScale().fitContent();
+                            if (chartRef.current && data.length > 0) {
+                                const lastCandle = data[data.length - 1];
+                                const firstVisibleTime = data[Math.max(0, data.length - 150)].time;
+                                chartRef.current.timeScale().setVisibleRange({
+                                    from: firstVisibleTime,
+                                    to: lastCandle.time + (60 * 5) // Pad a bit
+                                });
                                 isFirstLoad.current = false;
                             }
                         }, 200);

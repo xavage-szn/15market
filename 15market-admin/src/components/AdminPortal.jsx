@@ -1273,6 +1273,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         console.log('✅ Keeper connection restored');
                     }
                     setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
+                } else {
+                    throw new Error(`Server returned ${res.status}`);
                 }
             } catch (e) {
                 const newFailCount = currentHealth.failCount + 1;

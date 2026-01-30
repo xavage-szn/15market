@@ -1751,14 +1751,12 @@ export default function UserApp() {
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
 
-          {uiVersion === 'v1' && (
-            <button
-              onClick={() => setUiVersion('v2')}
-              className="px-2 py-1 rounded-lg border border-white/5 bg-white/5 text-[10px] font-bold text-white/60"
-            >
-              V2
-            </button>
-          )}
+          <button
+            onClick={() => setUiVersion(prev => prev === 'v1' ? 'v2' : 'v1')}
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-[9px] font-black text-white/40 hover:text-white transition-all uppercase tracking-widest"
+          >
+            {uiVersion === 'v1' ? 'V2' : 'V1'}
+          </button>
         </div>
       </header>
 
