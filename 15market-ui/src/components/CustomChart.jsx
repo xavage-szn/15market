@@ -355,7 +355,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             position: 'relative',
             width: '100%',
             height: '100%',
-            backgroundColor: isDark ? '#0d0d0d' : '#ffffff', // Use fixed bg to prevent "invisibility"
+            backgroundColor: isDark ? '#0d0d0d' : '#f1f5f9', // Diluted light mode
             borderRadius: 'inherit',
             minHeight: '280px' // Ensure a minimum height
         }}>
