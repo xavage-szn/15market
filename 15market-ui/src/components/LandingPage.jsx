@@ -41,8 +41,8 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                     <img
                         src="/logo.png"
                         alt="15market"
-                        className="h-10 md:h-16 w-auto transition-all duration-500"
-                        style={{ filter: `drop-shadow(0 0 20px ${currentTheme.primary}40)` }}
+                        className="h-16 md:h-28 lg:h-32 w-auto transition-all duration-500"
+                        style={{ filter: `drop-shadow(0 0 30px ${currentTheme.primary}60)` }}
                     />
                 </div>
                 <div className="flex items-center gap-4">

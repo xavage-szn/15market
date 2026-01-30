@@ -9,7 +9,10 @@
 
 html,
 body {
-  background-color: #050505 !important;
+  background-color: #030303 !important;
+  background-image:
+    radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.02) 1px, transparent 0);
+  background-size: 32px 32px;
   /* Deeper black for high contrast */
   overscroll-behavior: none !important;
   font-family: 'Inter', sans-serif;
@@ -28,9 +31,9 @@ body {
   --primary-glow: rgba(60, 179, 113, 0.6);
   --primary-glow-strong: rgba(60, 179, 113, 0.8);
   --primary-glow-subtle: rgba(60, 179, 111, 0.4);
-  --glass-bg: rgba(13, 13, 13, 0.4);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.03);
+  --glass-bg: rgba(10, 10, 10, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-highlight: rgba(255, 255, 255, 0.02);
 }
 
 .theme-arc {
@@ -43,10 +46,10 @@ body {
 /* Glassmorphism Utilities */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   position: relative;
   overflow: hidden;
 }
@@ -58,12 +61,12 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 1px;
-  background: linear-gradient(90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.1) 50%,
+  bottom: 0;
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      transparent 50%,
       transparent 100%);
-  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* Neon Borders & Glows */

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
-import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock, ChevronDown, Zap } from 'lucide-react';
 
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, ADMIN_TOKEN } from "../constants";
 
@@ -340,7 +341,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
             height: '100%',
             backgroundColor: isDark ? '#0d0d0d' : '#e2e8f0', // Diffused matte background
             borderRadius: 'inherit',
-            minHeight: '280px' // Ensure a minimum height
+            minHeight: '220px' // Ensure a minimum height
         }}>
             {/* Watermark behind chart - Colored Glow */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

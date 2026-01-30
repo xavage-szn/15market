@@ -89,3 +89,19 @@
 [2026-01-30T06:49:01.015Z] [ARC_DISCOVERY_ERROR] getaddrinfo ENOTFOUND rpc.testnet.arc.network
 [2026-01-30T06:53:00.805Z] [ARC_DISCOVERY_ERROR] getaddrinfo ENOTFOUND rpc.testnet.arc.network
 [2026-01-30T06:53:47.050Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T07:25:26.293Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T07:27:36.544Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T07:36:06.669Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T08:09:25.979Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T08:18:16.575Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T08:20:25.757Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T08:32:26.016Z] [ARC_DISCOVERY_ERROR] request timeout (code=TIMEOUT, version=6.16.0)
+[2026-01-30T08:39:37.882Z] [ARC_DISCOVERY] Found 1 unsettled bets.
+[2026-01-30T08:39:50.558Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T08:40:21.375Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T08:46:01.125Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T08:47:11.396Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T08:48:00.812Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T08:50:30.693Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T08:54:16.015Z] [ARC_DISCOVERY] Found 0 unsettled bets.
+[2026-01-30T08:57:21.806Z] [ARC_DISCOVERY] Found 0 unsettled bets.

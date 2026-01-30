@@ -48,12 +48,13 @@ const TradeHistoryComponent = ({
     return (
         <div className={`w-full ${isCompact ? 'h-full' : 'max-w-4xl mt-6 lg:mt-10 mb-20'} text-left`} >
             <div className={`
-                ${isCompact ? 'h-full flex flex-col p-3' : 'p-3.5 lg:p-6'} 
-                rounded-2xl border transition-all duration-300 
-                ${isLight ? 'static-panel-light !shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]' : (isCompact ? 'glass-panel border-white/10 shadow-xl' : 'bg-[#111] border-white/10 shadow-xl')}
-            `}>
-                <div className="flex items-center justify-between mb-4 lg:mb-6 px-1">
-                    <h3 className={`text-sm lg:text-xl font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
+                ${isCompact ? 'h-full flex flex-col p-3' : 'p-4 lg:p-6'} 
+                rounded-2xl border transition-all duration-300 glass-panel
+                ${isLight ? 'static-panel-light !shadow-xl' : 'shadow-2xl'}`}
+                style={{ background: isLight ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
+            >
+                <div className="flex items-center justify-between mb-3 lg:mb-4 px-1">
+                    <h3 className={`text-xs lg:text-base font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
                     {/* Clear History removed as per protocol security */}
                 </div>
 
@@ -74,7 +75,7 @@ const TradeHistoryComponent = ({
                 ) : filteredTrades.length === 0 ? (
                     <div className={`${isLight ? 'text-black/40' : 'text-white/40'} py-10 text-center`}>No trades yet for this wallet. Reach for the stars!</div>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {paginatedTrades.map((t) => (
                             <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border-2 gap-2 lg:gap-4 transition-all group ${isLight
                                 ? 'bg-[#f8fafc] border-black/5 shadow-md hover:shadow-lg hover:border-black/10'

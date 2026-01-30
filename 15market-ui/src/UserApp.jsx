@@ -23,7 +23,7 @@ import { DashboardPage } from "./components/DashboardPage";
 
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, ADMIN_TOKEN } from "./constants";
-import { Trophy, Calendar, CheckCircle, ChevronRight, Image as ImageIcon, PartyPopper, LayoutGrid, Settings, LogOut, RefreshCw, BarChart3, Coins, Menu, X } from "lucide-react";
+import { Trophy, Calendar, CheckCircle, ChevronRight, Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X } from "lucide-react";
 
 import { OnboardingModal } from "./components/OnboardingModal";
 
@@ -622,7 +622,7 @@ export default function UserApp() {
     } else if (network === 'arc') {
       if (!evmSessionWallet) return;
       updateEvmSessionBal();
-      const interval = setInterval(updateEvmSessionBal, 5000);
+      const interval = setInterval(updateEvmSessionBal, 2000); // Faster polling for Arc
       return () => clearInterval(interval);
     }
   }, [connection, sessionKeypair, evmSessionWallet, network, updateEvmSessionBal]);
@@ -1657,9 +1657,7 @@ export default function UserApp() {
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
       <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative">
         <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
-        <span className="text-4xl font-black tracking-[0.4em] text-white relative z-10">
-          15<span className="text-[#3CB371]">M</span>
-        </span>
+        <img src="/logo.png" alt="logo" className="h-24 lg:h-32 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
       </motion.div>
       <div className="mt-12 flex flex-col items-center gap-4">
         <div className="w-64 h-1.5 bg-white/10 rounded-full overflow-hidden relative border border-white/5">
@@ -1699,7 +1697,7 @@ export default function UserApp() {
 
       <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
         <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="logo" className={`h-10 lg:h-14 w-auto drop-shadow-[0_0_35px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+          <img src="/logo.png" alt="logo" className={`h-16 lg:h-24 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
         </div>
 
         {/* Desktop Nav */}
@@ -1725,13 +1723,6 @@ export default function UserApp() {
                   <svg className={`w-5 h-5 ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                 </button>
               </div>
-
-              <button
-                onClick={() => setUiVersion(prev => prev === 'v1' ? 'v2' : 'v1')}
-                className="px-3 py-1.5 rounded-xl border border-white/5 bg-white/5 text-[10px] font-bold text-white/60 hover:text-white hover:bg-white/10 transition-colors uppercase tracking-widest"
-              >
-                Switch to V2
-              </button>
 
               <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
@@ -1762,212 +1753,72 @@ export default function UserApp() {
           >
             <LogOut size={16} />
           </button>
-
-          <button
-            onClick={() => setUiVersion(prev => prev === 'v1' ? 'v2' : 'v1')}
-            className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-[9px] font-black text-white/40 hover:text-white transition-all uppercase tracking-widest"
-          >
-            {uiVersion === 'v1' ? 'V2' : 'V1'}
-          </button>
         </div>
       </header>
 
       {/* LAYOUT SWITCHER */}
-      {uiVersion === 'v2' ? (
-        // === V2 LAYOUT (Glassmorphism + Side Sidebar) ===
-        <div className="w-full max-w-[1920px] lg:h-[calc(100vh-100px)] flex flex-col lg:flex-row gap-4 mb-1 relative z-0 lg:overflow-hidden p-2 lg:p-0">
-
-          {/* V2 SIDEBAR */}
-          <div className="hidden lg:flex w-20 flex-col items-center py-6 glass-panel rounded-2xl gap-8 border-white/5 h-full shrink-0">
-            <button
-              onClick={() => setView("trading")}
-              className={`p-3 rounded-xl transition-all group ${view === 'trading' ? 'bg-[#3CB371] text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
-              title="Trade"
-            >
-              <BarChart3 size={22} className="group-hover:scale-110 transition-transform" />
-            </button>
-
-            <button
-              onClick={() => setView("dashboard")}
-              className={`p-3 rounded-xl transition-all group ${view === 'dashboard' ? 'bg-[#3CB371] text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
-              title="Dashboard"
-            >
-              <LayoutGrid size={22} className="group-hover:scale-110 transition-transform" />
-            </button>
-
-            <button
-              onClick={() => setView("history")}
-              className={`p-3 rounded-xl transition-all group ${view === 'history' ? 'bg-[#3CB371] text-white' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
-              title="Trade History"
-            >
-              <Calendar size={22} className="group-hover:scale-110 transition-transform" />
-            </button>
-
-            <button
-              onClick={() => setUiVersion('v1')}
-              className="p-3 rounded-xl text-white/40 hover:bg-white/5 hover:text-white transition-all group"
-              title="Switch to V1"
-            >
-              <RefreshCw size={22} className="group-hover:rotate-180 transition-transform duration-500" />
-            </button>
-
-            <div className="w-8 h-[1px] bg-white/5" />
-
-            {/* Asset Selector Section */}
-            <div className="flex flex-col gap-4">
-              {JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]').map((token) => (
-                <button
-                  key={token.id}
-                  onClick={async () => {
-                    localStorage.setItem('15market_active_token_id', token.id);
-                    setActiveMarket(token);
-                    window.dispatchEvent(new Event('storage'));
-                    // Push to Live Server
-                    try {
-                      await fetch(`${KEEPER_URL}/active-market`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ activeId: token.id })
-                      });
-                    } catch (err) { console.error("Live market sync failed:", err); }
-                  }}
-                  className={`relative p-3 rounded-xl transition-all group ${activeMarket.id === token.id ? 'bg-white/10 text-white border border-white/10' : 'text-white/30 hover:text-white hover:bg-white/5'}`}
-                  title={`Trade ${token.symbol}`}
-                >
-                  <span className="text-[10px] font-black">{token.symbol.slice(0, 3)}</span>
-                  {activeMarket.id === token.id && (
-                    <motion.div layoutId="activeDot" className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-4 bg-[#3CB371] rounded-full" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-auto flex flex-col gap-6 items-center">
-              <button
-                onClick={() => disconnect()}
-                className="p-3 rounded-xl text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all group"
-                title="Disconnect Wallet"
-              >
-                <LogOut size={22} className="group-hover:-translate-x-1 transition-transform" />
-              </button>
-            </div>
+      {/* V1 LAYOUT (Only layout now) */}
+      <>
+        <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
+          <div className="scale-[0.8] lg:scale-100 origin-left w-full">
+            <GlobalTradeScroller wallet={wallet} connection={connection} theme={theme} currentNetwork={network} />
           </div>
-
-          {/* MAIN CONTENT GRID */}
-          <div className="flex-1 grid grid-cols-12 gap-2 h-full lg:overflow-hidden">
-            {view === 'history' ? (
-              <div className="col-span-12 h-full lg:overflow-y-auto">
-                <TradeHistory
-                  wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-                  tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                  GREEN={GREEN} CORAL={CORAL}
-                  sessionKeypair={sessionKeypair} evmSessionWallet={evmSessionWallet}
-                  theme={theme} currentNetwork={network}
-                />
-              </div>
-            ) : (
-              <>
-                {/* LEFT COLUMN (9/12) - Chart & Terminal */}
-                <div className="col-span-12 lg:col-span-9 flex flex-col gap-2 h-auto lg:h-full min-h-0 lg:min-h-0">
-
-                  {/* Chart Section - Professional Height (~45%) */}
-                  <div className="w-full h-[320px] lg:h-auto flex-none lg:flex-1 glass-panel rounded-xl p-0.5 relative overflow-hidden group">
-                    <div className={`absolute inset-0 bg-gradient-to-b ${network === 'solana' ? 'from-green-500/5' : 'from-blue-500/5'} to-transparent opacity-50`} />
-                    <CustomChart
-                      symbol={activeMarket.binance}
-                      theme={theme}
-                      network={network}
-                      currentPrice={price}
-                      activeMarket={activeMarket}
-                      uiVersion={uiVersion}
-                      setActiveMarket={setActiveMarket}
-                    />
-                  </div>
-
-                  {/* Terminal Section - Expanded (~60%) */}
-                  <div className="w-full flex-none lg:flex-[1.3] glass-panel rounded-xl p-1 min-h-0 lg:overflow-hidden">
-
-
-                    <TradeTerminal
-                      activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
-                      sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                      setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                      sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                      theme={theme} minStake={minStake} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                      refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                      CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
-                      evmSessionWallet={evmSessionWallet} sessionKeypair={sessionKeypair} hasProfile={!!userProfile}
-                      activeMarket={activeMarket}
-                    />
-                  </div>
-                </div>
-
-                {/* RIGHT COLUMN (3/12) - Sidebar Stack */}
-                <div className="col-span-12 lg:col-span-3 flex flex-col gap-2 h-auto lg:h-full lg:overflow-hidden">
-                  {/* Active Trades */}
-                  <div className="glass-panel rounded-xl relative overflow-hidden flex flex-col flex-none lg:flex-[0.8] min-h-[150px] lg:min-h-0">
-                    <ActiveTradesSidebar activeTrades={activeTrades} price={price} currentPrice={price} theme={theme} network={network} setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen} />
-                  </div>
-
-                  {/* Order Book */}
-                  <div className="glass-panel rounded-xl relative overflow-hidden flex flex-col flex-none lg:flex-[1.2] min-h-[250px] lg:min-h-0">
-                    <OrderBook price={price} theme={theme} network={network} symbol={activeMarket.symbol} />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
         </div>
-      ) : (
-        // === V1 LAYOUT (Classic Stacked) ===
-        <>
-          <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
-            <div className="scale-[0.8] lg:scale-100 origin-left w-full">
-              <GlobalTradeScroller wallet={wallet} connection={connection} theme={theme} currentNetwork={network} />
-            </div>
+
+        <div className="w-full max-w-7xl grid grid-cols-12 gap-3 lg:gap-6 mb-10 relative z-0">
+          {/* Chart - Full width */}
+          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border border-white/5 h-[40vh] lg:h-[500px] max-h-[500px] glass-panel`}
+            style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}>
+            <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} />
           </div>
 
-          <div className="w-full max-w-7xl grid grid-cols-2 lg:grid-cols-12 gap-3 lg:gap-6 mb-10 relative z-0">
-            <div className={`col-span-2 lg:col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-[0_0_50px_var(--primary-glow-subtle)] transition-colors duration-300 mb-2 overflow-hidden border border-white/5 h-[40vh] lg:h-[500px] max-h-[500px]`}
-              style={{ backgroundColor: theme === 'light' ? '#ffffff' : '#0d0d0d' }}>
-              <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} />
-            </div>
-
-            <div className="col-span-2 lg:col-span-8">
-              <TradeTerminal
-                activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
-                sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                theme={theme} minStake={minStake} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
-                evmSessionWallet={evmSessionWallet} sessionKeypair={sessionKeypair} hasProfile={!!userProfile}
-                activeMarket={activeMarket}
-              />
-            </div>
-
-            <div className="col-span-2 lg:col-span-4">
-              <LiveExecution
-                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                theme={theme} currentNetwork={network}
-              />
-            </div>
+          {/* Terminal - Side by side on mobile (6 cols), narrower on desktop (5 cols) */}
+          <div className="col-span-6 lg:col-span-5">
+            <TradeTerminal
+              activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
+              sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+              setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+              sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+              theme={theme} minStake={minStake} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+              refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
+              evmSessionWallet={evmSessionWallet} sessionKeypair={sessionKeypair} hasProfile={!!userProfile}
+              activeMarket={activeMarket}
+            />
           </div>
 
-          <TradeHistory
-            wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-            tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-            setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-            GREEN={GREEN} CORAL={CORAL}
-            sessionKeypair={sessionKeypair} evmSessionWallet={evmSessionWallet}
-            theme={theme} currentNetwork={network}
-          />
-        </>
-      )}
+          {/* Active Trades Sidebar - Side by side on mobile (6 cols), desktop (4 cols) */}
+          <div className="col-span-6 lg:col-span-4 glass-panel rounded-xl relative overflow-hidden flex flex-col min-h-[400px]">
+            <ActiveTradesSidebar
+              activeTrades={activeTrades}
+              price={price}
+              currentPrice={price}
+              theme={theme}
+              network={network}
+              setSelectedPnLTrade={setSelectedPnLTrade}
+              setIsPnLOpen={setIsPnLOpen}
+            />
+          </div>
+
+          {/* Live Execution - Hidden on mobile, shown on desktop */}
+          <div className="hidden lg:block lg:col-span-3">
+            <LiveExecution
+              activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+              theme={theme} currentNetwork={network}
+            />
+          </div>
+        </div>
+
+        <TradeHistory
+          wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+          tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+          setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+          GREEN={GREEN} CORAL={CORAL}
+          sessionKeypair={sessionKeypair} evmSessionWallet={evmSessionWallet}
+          theme={theme} currentNetwork={network}
+        />
+      </>
 
       {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
       <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
@@ -1975,7 +1826,8 @@ export default function UserApp() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className={`w-full ${theme === 'light' ? 'static-panel-light' : 'static-panel'} !rounded-2xl mb-6 p-4 lg:p-6 border !border-white/5 relative`}
+            className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border !border-white/5 relative`}
+            style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
           >
             <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
               <Trophy size={80} />
@@ -2002,7 +1854,7 @@ export default function UserApp() {
             key={camp.id}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className={`w-full ${theme === 'light' ? 'static-panel-light' : 'static-panel'} !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
+            className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
           >
             <div className="flex items-center gap-6">
               <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[#3CB371]">

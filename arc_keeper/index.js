@@ -503,6 +503,14 @@ async function main() {
                                 const receipt = await tx.wait();
                                 if (receipt.status === 1) {
                                     console.log(`✅ [CONFIRMED] Bet ${id} | ${isWin ? 'WIN' : 'LOSS'} | Done.`);
+
+                                    // Log payout details for debugging
+                                    if (isWin) {
+                                        const payoutEth = ethers.formatEther(expectedPayout);
+                                        console.log(`💰 [PAYOUT] User: ${bet.user} | Amount: ${payoutEth} ARC | TX: ${tx.hash}`);
+                                        console.log(`📊 [BALANCE_CHECK] User should now have +${payoutEth} ARC in their wallet`);
+                                    }
+
                                     activeBets.delete(id);
 
                                     // Report to bridge
