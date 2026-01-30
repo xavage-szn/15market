@@ -38,9 +38,12 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
             {/* Navigation */}
             <nav className="relative z-[100] flex items-center justify-between px-6 py-4 md:px-12 md:py-6 shrink-0">
                 <div className="flex items-center">
-                    <span className="text-xl md:text-2xl font-black tracking-[0.2em] text-white">
-                        15<span style={{ color: currentTheme.primary }}>MARKET</span>
-                    </span>
+                    <img
+                        src="/logo.png"
+                        alt="15market"
+                        className="h-10 md:h-16 w-auto transition-all duration-500"
+                        style={{ filter: `drop-shadow(0 0 20px ${currentTheme.primary}40)` }}
+                    />
                 </div>
                 <div className="flex items-center gap-4">
                     <UnifiedWalletButton

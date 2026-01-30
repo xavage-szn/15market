@@ -859,7 +859,7 @@ export default function UserApp() {
     };
     loop();
     return () => { active = false; };
-  }, []);
+  }, [activeMarket.id]);
 
   // Sync Loader
   useEffect(() => {
@@ -1665,7 +1665,7 @@ export default function UserApp() {
         <div className="w-64 h-1.5 bg-white/10 rounded-full overflow-hidden relative border border-white/5">
           <motion.div className="absolute inset-y-0 left-0 bg-[#3CB371]" initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 1.3 }} />
         </div>
-        <p className="text-[10px] font-black uppercase text-[#3CB371]">System Initializing</p>
+        <p className="text-[10px] font-black uppercase text-[#3CB371]">Beta Testing is Live</p>
       </div>
     </div>
   );
@@ -1871,26 +1871,18 @@ export default function UserApp() {
                 {/* LEFT COLUMN (9/12) - Chart & Terminal */}
                 <div className="col-span-12 lg:col-span-9 flex flex-col gap-2 h-auto lg:h-full min-h-0 lg:min-h-0">
 
-                  {/* MOBILE ASSET SELECTOR (V2) */}
-                  <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 pb-2 mb-2">
-                    {state.listings.map((token) => (
-                      <button
-                        key={token.id}
-                        onClick={() => {
-                          setActiveMarket(token);
-                          localStorage.setItem('15market_active_token_id', token.id);
-                        }}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket.id === token.id ? 'bg-[#3CB371] border-transparent text-white' : 'bg-white/5 border-white/10 text-white/40'}`}
-                      >
-                        {token.symbol}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Chart Section - Compact (~40%) */}
-                  <div className="w-full h-[300px] lg:h-auto flex-none lg:flex-1 glass-panel rounded-xl p-0.5 relative overflow-hidden group">
+                  {/* Chart Section - Professional Height (~45%) */}
+                  <div className="w-full h-[320px] lg:h-auto flex-none lg:flex-1 glass-panel rounded-xl p-0.5 relative overflow-hidden group">
                     <div className={`absolute inset-0 bg-gradient-to-b ${network === 'solana' ? 'from-green-500/5' : 'from-blue-500/5'} to-transparent opacity-50`} />
-                    <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} />
+                    <CustomChart
+                      symbol={activeMarket.binance}
+                      theme={theme}
+                      network={network}
+                      currentPrice={price}
+                      activeMarket={activeMarket}
+                      uiVersion={uiVersion}
+                      setActiveMarket={setActiveMarket}
+                    />
                   </div>
 
                   {/* Terminal Section - Expanded (~60%) */}

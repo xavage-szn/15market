@@ -4,7 +4,7 @@ import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock
 
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, ADMIN_TOKEN } from "../constants";
 
-export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', network = 'solana', currentPrice, activeMarket, uiVersion }) {
+export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', network = 'solana', currentPrice, activeMarket, uiVersion, setActiveMarket }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const seriesRef = useRef(null);
@@ -44,52 +44,22 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
     const fetchKlines = useCallback(async (tf) => {
         try {
             const apiInterval = getApiInterval(tf);
-            const targetCount = 5000;
-            const chunkSize = 1000;
-            let allCandles = [];
-            let lastEndTime = null;
+            const targetCount = 1000;
+            let url = `/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
 
-            console.log(`[CHART] Fetching ~${targetCount} klines for ${tf} view...`);
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const data = await res.json();
+            if (!Array.isArray(data)) return [];
 
-            for (let i = 0; i < (targetCount / chunkSize); i++) {
-                let url = `/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${chunkSize}`;
-                if (lastEndTime) url += `&endTime=${lastEndTime}`;
-
-                const res = await fetch(url);
-                if (!res.ok) break;
-
-                const data = await res.json();
-                if (!Array.isArray(data) || data.length === 0) break;
-
-                const chunk = data.map(d => ({
-                    time: Math.floor(d[0] / 1000),
-                    open: parseFloat(d[1]),
-                    high: parseFloat(d[2]),
-                    low: parseFloat(d[3]),
-                    close: parseFloat(d[4]),
-                    volume: parseFloat(d[5] || 0)
-                }));
-
-                allCandles = [...chunk, ...allCandles];
-                lastEndTime = data[0][0] - 1; // Start before the earliest candle in this chunk
-
-                if (data.length < chunkSize) break; // No more data
-            }
-
-            allCandles.sort((a, b) => a.time - b.time);
-
-            // Filter duplicates
-            const uniqueCandles = [];
-            const seen = new Set();
-            for (const c of allCandles) {
-                if (!seen.has(c.time)) {
-                    seen.add(c.time);
-                    uniqueCandles.push(c);
-                }
-            }
-
-            console.log(`[CHART] Successfully loaded ${uniqueCandles.length} historical candles.`);
-            return uniqueCandles;
+            return data.map(d => ({
+                time: Math.floor(d[0] / 1000),
+                open: parseFloat(d[1]),
+                high: parseFloat(d[2]),
+                low: parseFloat(d[3]),
+                close: parseFloat(d[4]),
+                volume: parseFloat(d[5] || 0)
+            }));
         } catch (e) {
             console.error("[CHART] Failed to fetch klines:", e);
             return [];
@@ -348,19 +318,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
         console.log("🎯 Chart Selecting Token:", t.symbol);
         localStorage.setItem('15market_active_token_id', t.id);
 
-        // Trigger storage event for same-window detection (immediate update)
+        // Immediate UI Update via callback to UserApp
+        if (setActiveMarket) setActiveMarket(t);
+
+        setIsSelectorOpen(false);
         window.dispatchEvent(new Event('storage'));
 
-        // Push to Live Server
         try {
             await fetch(`${KEEPER_URL}/active-market`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ activeId: t.id })
             });
-        } catch (err) { console.error("Live market sync failed from chart:", err); }
-
-        setIsSelectorOpen(false);
+        } catch (err) { }
     };
 
     return (
@@ -432,12 +402,18 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                 </div>
 
                 {/* Sub-Header: OHLC Data (Matches Moralis) */}
-                <div className="mt-2 flex items-center gap-4 px-1">
+                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 lg:gap-4 px-1">
                     <div className="flex items-center gap-3">
-                        <h2 className="text-[11px] lg:text-sm font-black text-white tracking-widest uppercase flex items-center gap-2">
-                            <Search size={14} className="text-[#3CB371]" />
-                            {symbol.replace('USDT', '')}/USDC <span className="text-[10px] text-white/40 lowercase">on</span> <span className="text-[#3CB371] lowercase italic">1s feed</span>
-                        </h2>
+                        <div
+                            className="flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:border-white/10 pointer-events-auto group"
+                            onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                        >
+                            <h2 className="text-[14px] lg:text-lg font-black text-white tracking-widest uppercase flex items-center gap-2">
+                                {symbol.replace('USDT', '')}/USDC
+                            </h2>
+                            <ChevronDown size={14} className={`text-[#3CB371] transition-transform duration-300 ${isSelectorOpen ? 'rotate-180' : ''}`} />
+                        </div>
+
                         <div className="hidden sm:flex items-center gap-3 font-mono text-[9px] lg:text-[11px] font-bold">
                             <span className="text-white/40 uppercase">O: <span className="text-white">{(parseFloat(currentPrice) * 0.9998).toFixed(4)}</span></span>
                             <span className="text-white/40 uppercase">H: <span className="text-white">{(parseFloat(currentPrice) * 1.0002).toFixed(4)}</span></span>
@@ -447,42 +423,44 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', networ
                     </div>
                 </div>
 
-                {/* technical Overlay details */}
-                <div className="mt-1 flex items-center gap-2 px-1">
-                    <div className="flex items-center gap-1 text-[8px] lg:text-[10px] font-bold text-blue-400/60 uppercase tracking-tighter">
-                        <span>Volume SMA 50:</span>
-                        <span>0.00K</span>
-                    </div>
-                </div>
+                {/* Asset Dropdown Menu */}
+                <AnimatePresence>
+                    {isSelectorOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="absolute top-16 left-4 z-[100] w-56 bg-[#0a0a0a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto"
+                        >
+                            <div className="px-3 py-2 border-b border-white/5 mb-1">
+                                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Select Asset</p>
+                            </div>
+                            {tokens.map(t => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => selectToken(t)}
+                                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : 'hover:bg-white/5 text-white/40 hover:text-white'}`}
+                                >
+                                    <div className="flex flex-col items-start">
+                                        <span className="text-xs font-black uppercase tracking-widest">{t.symbol}</span>
+                                        <span className="text-[8px] opacity-60 font-medium">{t.name || 'Crypto'}</span>
+                                    </div>
+                                    {activeMarket?.id === t.id && <Zap size={10} className="fill-current text-white animate-pulse" />}
+                                    <div className={`w-1 h-1 rounded-full ${activeMarket?.id === t.id ? 'bg-white' : 'bg-[#3CB371] opacity-0 group-hover:opacity-100'} transition-all`} />
+                                </button>
+                            ))}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
-            {/* V1 Asset Switcher Overlay - Improved for Mobile */}
-            {uiVersion === 'v1' && (
-                <div className="absolute bottom-2 left-0 right-0 z-30 flex justify-center px-4">
-                    <div className="flex items-center gap-1 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-1 shadow-2xl overflow-x-auto no-scrollbar max-w-full">
-                        {tokens.map((token) => (
-                            <button
-                                key={token.id}
-                                onClick={() => selectToken(token)}
-                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeMarket?.id === token.id ? 'bg-[#3CB371] border-[#3CB371] text-white shadow-[0_0_15px_rgba(60,179,113,0.3)]' : 'bg-black/20 border-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
-                            >
-                                {token.symbol}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             {/* Backdrop for selector */}
-
-            {
-                isSelectorOpen && (
-                    <div
-                        className="fixed inset-0 z-20 pointer-events-auto"
-                        onClick={() => setIsSelectorOpen(false)}
-                    />
-                )
-            }
+            {isSelectorOpen && (
+                <div
+                    className="fixed inset-0 z-20 pointer-events-auto"
+                    onClick={() => setIsSelectorOpen(false)}
+                />
+            )}
         </div >
     );
 }

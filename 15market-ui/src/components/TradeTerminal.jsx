@@ -67,16 +67,21 @@ const TradeTerminalComponent = ({
                     </button>
                 </div>
 
-                {/* Big Live Price Feed */}
-                <div className={`flex flex-col items-center justify-center py-4 rounded-2xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
-                    <span className="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-1">Live {activeMarket?.symbol || 'SOL'}/USD</span>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-3xl lg:text-4xl font-black font-mono tracking-tighter" style={{ color: GREEN }}>
-                            ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                        </span>
-                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black animate-pulse" style={{ backgroundColor: `${GREEN}33`, color: GREEN }}>
-                            LIVE
+                {/* Live Price Feed */}
+                <div className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} lg:flex-col lg:py-5 lg:rounded-2xl lg:justify-center`}>
+                    <div className="flex flex-col lg:items-center">
+                        <span className="text-[8px] lg:text-[10px] font-black opacity-30 uppercase tracking-[0.2em] lg:mb-1">Live {activeMarket?.symbol || 'SOL'}/USD</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xl lg:text-4xl font-black font-mono tracking-tighter" style={{ color: GREEN }}>
+                                ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                            </span>
+                            <div className="flex items-center gap-1 px-1 py-0.5 rounded-[4px] text-[7px] font-black animate-pulse lg:hidden" style={{ backgroundColor: `${GREEN}22`, color: GREEN }}>
+                                LIVE
+                            </div>
                         </div>
+                    </div>
+                    <div className="hidden lg:flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black animate-pulse mt-2" style={{ backgroundColor: `${GREEN}33`, color: GREEN }}>
+                        LIVE FEED ACTIVE
                     </div>
                 </div>
             </div>
