@@ -35,27 +35,12 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                 '--theme-glow': currentTheme.glow,
             }}
         >
-            {/* Global Background Glow - Tightened for one screen */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
-                <div
-                    className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] blur-[120px] rounded-full transition-all duration-1000"
-                    style={{ backgroundColor: currentTheme.primary, opacity: 0.1 }}
-                />
-                <div
-                    className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] blur-[120px] rounded-full transition-all duration-1000"
-                    style={{ backgroundColor: currentTheme.primary, opacity: 0.06 }}
-                />
-            </div>
-
             {/* Navigation */}
             <nav className="relative z-[100] flex items-center justify-between px-6 py-4 md:px-12 md:py-6 shrink-0">
                 <div className="flex items-center">
-                    <img
-                        src="/logo.png"
-                        alt="15market"
-                        className="h-10 md:h-16 w-auto transition-all duration-500"
-                        style={{ filter: `drop-shadow(0 0 20px ${currentTheme.primary}40)` }}
-                    />
+                    <span className="text-xl md:text-2xl font-black tracking-[0.2em] text-white">
+                        15<span style={{ color: currentTheme.primary }}>MARKET</span>
+                    </span>
                 </div>
                 <div className="flex items-center gap-4">
                     <UnifiedWalletButton
@@ -84,7 +69,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                 <motion.div
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="text-5xl md:text-8xl font-[1000] tracking-tighter leading-[0.85] text-white mb-6"
+                    className="text-5xl md:text-8xl font-[1000] tracking-tighter leading-[0.85] text-white mb-6 uppercase"
                 >
                     THE PRECISION <br />
                     <span style={{ textShadow: `0 0 60px ${currentTheme.primary}40` }}>MARKET.</span>
@@ -94,10 +79,10 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2 }}
-                    className="text-sm md:text-lg text-white/40 max-w-lg mx-auto mb-8 leading-relaxed"
+                    className="text-sm md:text-lg text-white/40 max-w-lg mx-auto mb-8 leading-relaxed uppercase font-black tracking-widest"
                 >
                     Predict the pulse of the market in 15-second windows.
-                    <span className="block mt-2 font-bold tracking-tight" style={{ color: currentTheme.primary }}>
+                    <span className="block mt-2 font-black tracking-tight" style={{ color: currentTheme.primary }}>
                         Direct Settlement. Zero Manipulation. Pure Speed.
                     </span>
                 </motion.p>
@@ -141,7 +126,6 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                 </div>
             </div>
         </div>
-        </div >
     );
 };
 

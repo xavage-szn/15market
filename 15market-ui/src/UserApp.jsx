@@ -1657,7 +1657,9 @@ export default function UserApp() {
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
       <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative">
         <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
-        <img src="/logo.png" alt="logo" className="h-48 w-auto relative z-10" />
+        <span className="text-4xl font-black tracking-[0.4em] text-white relative z-10">
+          15<span className="text-[#3CB371]">M</span>
+        </span>
       </motion.div>
       <div className="mt-12 flex flex-col items-center gap-4">
         <div className="w-64 h-1.5 bg-white/10 rounded-full overflow-hidden relative border border-white/5">
