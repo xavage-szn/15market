@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment variables - CRITICAL: DO NOT COMMIT
+.env
+.env.*
+*.env
+
+# Logs
+logs/
+*.log
+
+# Storage
+storage.json
+
+# Editor
+.vscode/
+.idea/

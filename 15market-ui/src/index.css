@@ -1,0 +1,107 @@
+@import "@fontsource/inter";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/inter/900.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background-color: #030303 !important;
+  background-image:
+    radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.02) 1px, transparent 0);
+  background-size: 32px 32px;
+  /* Deeper black for high contrast */
+  overscroll-behavior: none !important;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  transition: background-color 0.3s ease;
+  overflow-x: hidden;
+}
+
+/* Base Neon Glow Variables */
+:root {
+  --primary-color: #3CB371;
+  --primary-glow: rgba(60, 179, 113, 0.6);
+  --primary-glow-strong: rgba(60, 179, 113, 0.8);
+  --primary-glow-subtle: rgba(60, 179, 111, 0.4);
+  --glass-bg: rgba(10, 10, 10, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-highlight: rgba(255, 255, 255, 0.02);
+}
+
+.theme-arc {
+  --primary-color: #3B82F6;
+  --primary-glow: rgba(59, 130, 246, 0.6);
+  --primary-glow-strong: rgba(59, 130, 246, 0.8);
+  --primary-glow-subtle: rgba(59, 130, 246, 0.4);
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle inner shine for glass effects */
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      transparent 50%,
+      transparent 100%);
+  pointer-events: none;
+}
+
+/* Neon Borders & Glows */
+.neon-border {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Legacy Styles for V1 Compatibility */
+.static-panel {
+  background: #0d0d0d !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  box-shadow: none !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: #1a1a1a !important;
+}
