@@ -1262,7 +1262,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-                const res = await fetch(`${KEEPER_URL}/logs`, { signal: controller.signal });
+                const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+                const res = await fetch(`${targetUrl}/logs`, { signal: controller.signal });
                 clearTimeout(timeout);
 
                 if (res.ok) {
@@ -1292,7 +1293,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         // OPTIMIZED: Increased from 10s to 20s to prevent UI freezing
         const interval = setInterval(fetchLogs, 20000);
         return () => clearInterval(interval);
-    }, [isLoggedIn, activeTab]); // REMOVED keeperHealth to prevent infinite loop
+    }, [isLoggedIn, activeTab, adminNetwork]); // Added adminNetwork to respond to switch
 
     const nodeStats = [
         { name: 'US-East (RPC)', status: 'Optimal', latency: '22ms', load: 34 },
