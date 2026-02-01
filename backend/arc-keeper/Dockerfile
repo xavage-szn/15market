@@ -4,10 +4,10 @@ FROM node:20-slim
 WORKDIR /app
 
 # Copy shared utils (relative to backend/)
-COPY shared ./shared
+COPY backend/shared ./shared
 
 # Copy keeper code (relative to backend/)
-COPY arc-keeper ./arc-keeper
+COPY backend/arc-keeper ./arc-keeper
 
 # Install shared dependencies
 WORKDIR /app/shared
