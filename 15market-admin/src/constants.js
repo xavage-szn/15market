@@ -13,3 +13,5 @@ export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID || 'c57ca95b47569
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || "https://api.15market.online";
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
+export const KEEPER_URL_SOLANA = `${KEEPER_URL}/solana`;
+export const KEEPER_URL_ARC = `${KEEPER_URL}/arc`;

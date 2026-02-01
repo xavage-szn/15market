@@ -176,7 +176,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     useEffect(() => {
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`${KEEPER_URL}/protocol-stats`);
+                const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+                const res = await fetch(`${targetUrl}/protocol-stats`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data.autoSignerFees) {

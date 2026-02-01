@@ -46,9 +46,10 @@ const ASSET_MAP = {
 // --- STATE ---
 const STORAGE_FILE = path.resolve(__dirname, '../storage.json');
 let state = {
-    activeBets: {}, // Using object for JSON persistence instead of Map
+    activeBets: {}, // Using object for JSON persistence
     history: [],
-    stats: { totalTrades: 0, wins: 0, volume: 0 }
+    stats: { totalTrades: 0, wins: 0, volume: 0 },
+    autoSignerFees: 0
 };
 
 try {
@@ -83,6 +84,27 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() 
 app.get('/logs', (req, res) => res.json(logger.getLogs()));
 app.get('/history', (req, res) => res.json(state.history));
 app.get('/active-bets', (req, res) => res.json(Object.values(state.activeBets)));
+
+app.post('/record-fee', (req, res) => {
+    const { amount } = req.body;
+    if (typeof amount === 'number') {
+        state.autoSignerFees = (state.autoSignerFees || 0) + amount;
+        saveState();
+        console.log(`💰 [FEE_RECORDED] ${amount} USDC | Total: ${state.autoSignerFees}`);
+        res.json({ success: true, total: state.autoSignerFees });
+    } else {
+        res.status(400).json({ error: 'Invalid amount' });
+    }
+});
+
+app.get('/protocol-stats', (req, res) => {
+    res.json({
+        autoSignerFees: { arc: state.autoSignerFees || 0, solana: 0 },
+        totalTrades: state.stats.totalTrades,
+        totalVolume: state.stats.volume,
+        activeCount: Object.keys(state.activeBets).length
+    });
+});
 
 // --- KEEPER CLASS ---
 class ArcKeeper {

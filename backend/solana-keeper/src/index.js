@@ -121,7 +121,7 @@ app.get('/active-bets', (req, res) => res.json(Array.from(trackedBets.values()))
 app.get('/protocol-stats', (req, res) => res.json({
     activeCount: trackedBets.size,
     totalTrades: state.totalTrades,
-    fees: state.autoSignerFees
+    autoSignerFees: state.autoSignerFees
 }));
 
 app.post('/record-fee', (req, res) => {
@@ -130,7 +130,7 @@ app.post('/record-fee', (req, res) => {
         state.autoSignerFees.solana = (state.autoSignerFees.solana || 0) + amount;
         saveState();
         console.log(`💰 [FEE] +${amount} SOL`);
-        res.json({ success: true, fees: state.autoSignerFees });
+        res.json({ success: true, autoSignerFees: state.autoSignerFees });
     } else {
         res.status(400).json({ error: "Invalid data" });
     }

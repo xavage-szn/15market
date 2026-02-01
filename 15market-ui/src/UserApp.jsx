@@ -272,8 +272,9 @@ export default function UserApp() {
     }));
 
     // 2. Persist to Keeper Backend
+    const targetUrl = network === 'arc' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
     try {
-      await fetch(`${KEEPER_URL_SOLANA}/record-fee`, {
+      await fetch(`${targetUrl}/record-fee`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1485,7 +1486,7 @@ export default function UserApp() {
   const handleRefill = useCallback(async (amt) => {
     try {
       const amtNum = parseFloat(amt);
-      const feePercent = network === 'solana' ? 0.001 : 0.005; // 0.1% for Solana, 0.5% for Arc
+      const feePercent = 0.01; // 1% Protocol Fee for both networks as requested
       const fee = amtNum * feePercent;
       const netAmt = amtNum - fee;
 
@@ -1494,7 +1495,7 @@ export default function UserApp() {
           notify("Wallet not connected for Solana refill", "error");
           return;
         }
-        notify(`Charging 0.1% Auto-Signer Fee (${fee.toFixed(6)} SOL)...`, "info");
+        notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} SOL)...`, "info");
 
         // Add Priority Fees to Refill
         const units = ComputeBudgetProgram.setComputeUnitLimit({ units: 80000 });
@@ -1559,17 +1560,24 @@ export default function UserApp() {
           notify("Connect EVM wallet for Arc refill", "error");
           return;
         }
-        notify(`Charging 0.5% Auto-Signer Fee (${fee.toFixed(6)} USDC)...`, "success");
+        notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} USDC)...`, "success");
 
         try {
-          // On Arc, we refill full amount but record the fee (simulating fee collection)
-          // Ideally this would be two transfers but for speed we refill the requested amt
-          const hash = await sendTransactionAsync({
+          // Net to Session
+          const hashMatch = await sendTransactionAsync({
             to: evmSessionWallet.address,
-            value: parseEther(amt.toString()),
+            value: parseEther(netAmt.toFixed(18)),
             chainId: 5042002
           });
-          notify(`Refill hash: ${hash.slice(0, 10)}...`, "success");
+
+          // Fee to Treasury
+          await sendTransactionAsync({
+            to: ARC_CONTRACT_ADDRESS,
+            value: parseEther(fee.toFixed(18)),
+            chainId: 5042002
+          });
+
+          notify(`Refill Successful! Fee: ${fee.toFixed(4)} USDC`, "success");
           recordFee('arc', fee);
         } catch (evmErr) {
           const msg = evmErr.shortMessage || evmErr.message || "EVM Error";
@@ -1591,7 +1599,7 @@ export default function UserApp() {
         return;
       }
 
-      const fee = amtNum * 0.005; // 0.5% Fee
+      const fee = amtNum * 0.01; // 1% Fee
       const netAmt = amtNum - fee;
       const currency = network === 'solana' ? 'SOL' : 'USDC';
 
@@ -1611,7 +1619,7 @@ export default function UserApp() {
         // Force wallet prompt
         await wallet.signMessage(authMsg);
 
-        notify(`Charging 0.5% Auto-Signer Fee (${fee.toFixed(6)} SOL)...`, "info");
+        notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} SOL)...`, "info");
 
         // Convert to Number to check against current balance
         const currentBal = await connection.getBalance(sessionKeypair.publicKey, "confirmed");
@@ -1690,11 +1698,18 @@ export default function UserApp() {
         // Force wallet prompt
         await signMessageAsync({ message: authMsg });
 
-        notify(`Charging 0.5% Protocol Fee. Sweeping Auto-Signer balance...`, "info");
+        notify(`Charging 1% Protocol Fee (${fee.toFixed(4)} USDC)...`, "info");
 
+        // 1. Fee to Contract
+        await evmSessionWallet.sendTransaction({
+          to: ARC_CONTRACT_ADDRESS,
+          value: parseEther(fee.toFixed(18)),
+        });
+
+        // 2. Net to Main
         const tx = await evmSessionWallet.sendTransaction({
           to: address,
-          value: parseEther(amt.toString()),
+          value: parseEther(netAmt.toFixed(18)),
         });
 
         notify("Sweep broadcasted. Waiting for confirmation...", "info");
