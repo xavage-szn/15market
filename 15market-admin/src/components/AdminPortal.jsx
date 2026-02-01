@@ -180,15 +180,25 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 const res = await fetch(`${targetUrl}/protocol-stats`);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.autoSignerFees) {
-                        setAutoSignerFees(data.autoSignerFees);
-                        localStorage.setItem("15market_autosigner_fees", JSON.stringify(data.autoSignerFees));
+                    if (data.autoSignerFees !== undefined) {
+                        const rev = typeof data.autoSignerFees === 'object'
+                            ? (data.autoSignerFees[adminNetwork.toLowerCase()] || 0)
+                            : data.autoSignerFees;
+
+                        setAutoSignerFees(prev => {
+                            const newState = {
+                                ...prev,
+                                [adminNetwork.toLowerCase()]: rev
+                            };
+                            localStorage.setItem("15market_autosigner_fees", JSON.stringify(newState));
+                            return newState;
+                        });
                     }
                 }
             } catch (e) { console.warn("Admin Revenue Sync Failed:", e.message); }
         }, 10000);
         return () => clearInterval(interval);
-    }, []);
+    }, [adminNetwork]);
 
     // Real-time Arc Treasury Balance
     const [arcTreasuryBalance, setArcTreasuryBalance] = useState(0);

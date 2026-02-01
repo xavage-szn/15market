@@ -28,7 +28,7 @@ let state = {
     winnerBanner: null,
     enrollments: {},
     stats: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 },
-    autoSignerFees: { solana: 0 },
+    autoSignerFees: 0,
     userProfiles: {},
     totalTrades: 0,
     history: []
@@ -123,7 +123,7 @@ app.get('/protocol-stats', (req, res) => res.json({
     totalTrades: state.totalTrades,
     totalVolume: state.stats.totalVolume,
     wallets: Object.keys(state.userProfiles || {}).length,
-    autoSignerFees: state.autoSignerFees
+    autoSignerFees: state.autoSignerFees || 0
 }));
 
 app.get('/escrow-stats', (req, res) => res.json({
@@ -131,9 +131,9 @@ app.get('/escrow-stats', (req, res) => res.json({
 }));
 
 app.post('/record-fee', (req, res) => {
-    const { amount } = req.body; // Assuming only Solana fees here
+    const { amount } = req.body;
     if (typeof amount === 'number') {
-        state.autoSignerFees.solana = (state.autoSignerFees.solana || 0) + amount;
+        state.autoSignerFees = (state.autoSignerFees || 0) + amount;
         saveState();
         console.log(`💰 [FEE] +${amount} SOL`);
         res.json({ success: true, autoSignerFees: state.autoSignerFees });
