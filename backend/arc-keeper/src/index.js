@@ -29,6 +29,7 @@ console.error = (...args) => logger.error(args.map(a => typeof a === 'object' ? 
 
 // --- CONFIG ---
 const ARC_RPC_LIST = [
+    "wss://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1",
     process.env.ARC_RPC || "https://rpc.testnet.arc.network",
     "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
 ];
@@ -100,9 +101,27 @@ class ArcKeeper {
         const fetchReq = new ethers.FetchRequest(rpc);
         fetchReq.timeout = 30000; // 30 seconds
 
-        this.provider = new ethers.JsonRpcProvider(fetchReq, undefined, { staticNetwork: true });
+        // USE WEBSOCKET IF AVAILABLE FOR INSTANT EVENTS
+        if (rpc.startsWith('http')) {
+            this.provider = new ethers.JsonRpcProvider(fetchReq, undefined, { staticNetwork: true });
+        } else {
+            this.provider = new ethers.WebSocketProvider(rpc, undefined, { staticNetwork: true });
+        }
+
         this.wallet = new ethers.Wallet(PRIVATE_KEY, this.provider);
         this.contract = new ethers.Contract(CONTRACT_ADDRESS, this.getAbi(), this.wallet);
+
+        // SETUP REAL-TIME LISTENERS
+        this.setupListeners();
+    }
+
+    setupListeners() {
+        console.log("📡 [EVENT] Setting up real-time contract listeners...");
+        this.contract.on("BetPlaced", async (...args) => {
+            const event = args[args.length - 1]; // Ethers v6 event is last
+            console.log(`⚡ [REALTIME] New Bet Detected: #${event.args.id}`);
+            await this.ingestBet(event, false);
+        });
     }
 
     getAbi() {
@@ -163,9 +182,10 @@ class ArcKeeper {
 
             await this.checkBalance();
 
-            setInterval(() => this.pollEvents(), 10000);
-            setInterval(() => this.evaluateBets(), 3000);
-            setInterval(() => this.processSettlementQueue(), 2000);
+            // SPEED OPTIMIZATION: Faster polling and evaluation
+            setInterval(() => this.pollEvents(), 30000); // Baseline sync
+            setInterval(() => this.evaluateBets(), 1000); // Check expiry every second
+            setInterval(() => this.processSettlementQueue(), 500); // Check settlement queue every 0.5s
             setInterval(() => this.checkBalance(), 60000);
 
             // Heartbeat
@@ -333,9 +353,13 @@ class ArcKeeper {
                     const priceParam = BigInt(Math.floor(exitPrice * 100000000));
                     const useNonce = this.nonce++;
 
-                    // Log gas check
+                    // Log gas check & Use aggressive gas pricing
                     const feeData = await this.provider.getFeeData();
-                    const requiredGas = 1500000n * (feeData.maxFeePerGas || feeData.gasPrice || 20000000000n);
+                    // 30% Buffer for Tip
+                    const priorityFee = feeData.maxPriorityFeePerGas ? (feeData.maxPriorityFeePerGas * 130n / 100n) : 2000000000n;
+                    const maxFee = feeData.maxFeePerGas ? (feeData.maxFeePerGas * 120n / 100n) : undefined;
+
+                    const requiredGas = 1500000n * (maxFee || feeData.gasPrice || 20000000000n);
                     const bal = await this.provider.getBalance(this.wallet.address);
 
                     if (bal < requiredGas) {
@@ -348,7 +372,9 @@ class ArcKeeper {
                     const tx = await this.callWithRetry(() =>
                         this.contract.settleBet(bet.id, priceParam, {
                             nonce: useNonce,
-                            gasLimit: 1500000
+                            gasLimit: 1500000,
+                            maxPriorityFeePerGas: priorityFee,
+                            maxFeePerGas: maxFee
                         }), `SEND_TX_${bet.id}`
                     );
 
