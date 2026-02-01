@@ -117,7 +117,7 @@ let state = {
     enrollments: {}, // { campaignId: { address: true } }
     escrowStats: {
         solana: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 },
-        arc: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 }
+        arc: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0, address: '0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8' }
     },
     autoSignerFees: { solana: 0, arc: 0 },
     userProfiles: {}, // { address: { username, tosAccepted, network, timestamp } }
@@ -308,9 +308,21 @@ const server = http.createServer(async (req, res) => {
     else if (pathName === '/escrow-stats') {
         if (req.method === 'POST') {
             readBody(data => {
-                // Merge stats
-                if (data.arc) state.escrowStats.arc = { ...state.escrowStats.arc, ...data.arc };
-                if (data.solana) state.escrowStats.solana = { ...state.escrowStats.solana, ...data.solana };
+                // Merge stats (Increment numerical values instead of overwriting)
+                const mergeStats = (network, newData) => {
+                    if (!state.escrowStats[network]) state.escrowStats[network] = {};
+                    for (const key in newData) {
+                        if (typeof newData[key] === 'number') {
+                            state.escrowStats[network][key] = (state.escrowStats[network][key] || 0) + newData[key];
+                        } else {
+                            state.escrowStats[network][key] = newData[key];
+                        }
+                    }
+                };
+
+                if (data.arc) mergeStats('arc', data.arc);
+                if (data.solana) mergeStats('solana', data.solana);
+
                 res.writeHead(200); res.end(JSON.stringify({ success: true }));
             });
         } else {
@@ -332,9 +344,9 @@ const server = http.createServer(async (req, res) => {
     else if (pathName === '/protocol-stats') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            wallets: state.wallets || 0,
+            wallets: Object.keys(state.userProfiles || {}).length,
             activeCount: trackedBets.size,
-            totalVolume: state.totalVolume || 0,
+            totalVolume: (state.escrowStats.solana.totalVolume || 0) + (state.escrowStats.arc.totalVolume || 0),
             totalTrades: state.totalTrades || 0,
             autoSignerFees: state.autoSignerFees || { solana: 0, arc: 0 },
             escrowStats: state.escrowStats || {

@@ -35,6 +35,8 @@ const ARC_RPC_LIST = [
 ];
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const KEEPER_URL = process.env.KEEPER_URL || "http://localhost:8080";
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "15MARKET_ADMIN_SECRET_KEY_2024";
 const PORT = process.env.PORT || 3010;
 
 const ASSET_MAP = {
@@ -113,6 +115,25 @@ class ArcKeeper {
 
         // SETUP REAL-TIME LISTENERS
         this.setupListeners();
+    }
+
+    async reportToUnifiedKeeper(endpoint, payload) {
+        try {
+            const res = await fetch(`${KEEPER_URL}${endpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': ADMIN_TOKEN
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                // console.warn(`⚠️ [UNIFIED_REPORT_FAIL] ${endpoint}: ${text}`);
+            }
+        } catch (e) {
+            // console.warn(`⚠️ [UNIFIED_REPORT_ERROR] ${endpoint}: ${e.message}`);
+        }
     }
 
     setupListeners() {
@@ -295,6 +316,29 @@ class ArcKeeper {
             saveState();
 
             console.log(`📥 Tracked Bet #${betId} (${symbol})`);
+
+            // Report to Unified Keeper for Admin Metrics (Pings & Pulse)
+            await this.reportToUnifiedKeeper('/trade-ping', {
+                id: betId,
+                amount: parseFloat(ethers.formatEther(amount)),
+                network: 'arc',
+                address: user,
+                expiry: expiry,
+                entryPrice: Number(entryPrice) / 100000000,
+                direction: Number(direction),
+                duration: Number(duration),
+                symbol: symbol,
+                mainOwner: user
+            });
+
+            // Report Initial Volume/Stake to Unified Keeper
+            this.reportToUnifiedKeeper('/escrow-stats', {
+                arc: {
+                    totalVolume: parseFloat(ethers.formatEther(amount)),
+                    stake: parseFloat(ethers.formatEther(amount)),
+                    count: 1
+                }
+            });
         } catch (e) { }
     }
 
@@ -407,6 +451,30 @@ class ArcKeeper {
                             });
                             if (state.history.length > 200) state.history.pop();
                             saveState();
+
+                            // Report Result to Unified Keeper
+                            this.reportToUnifiedKeeper('/report-arc-trade', {
+                                id: bet.id,
+                                user: bet.user,
+                                amount: bet.amount,
+                                direction: bet.direction,
+                                strike: bet.entryPrice,
+                                final: exitPrice,
+                                timestamp: Math.floor(Date.now() / 1000),
+                                won: isWin,
+                                payout: isWin ? (parseFloat(bet.amount) * 1.8).toFixed(4) : "0"
+                            });
+
+                            // Record Fee (if applicable - assuming 5% profit take for keeper/protocol)
+                            // For now we just report successful trade to increment volume
+                            this.reportToUnifiedKeeper('/escrow-stats', {
+                                arc: {
+                                    totalVolume: parseFloat(bet.amount),
+                                    wallets: 0, // Profile sync handles wallets
+                                    stake: -parseFloat(bet.amount), // Remove from active stake
+                                    count: -1 // Remove from active count
+                                }
+                            });
 
                         }
                     }).catch(e => console.error(`❌ [FAILED] Bet #${bet.id} confirmation: ${e.message}`));
