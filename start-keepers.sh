@@ -1,15 +1,17 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Starting 15market Keeper Monolith..."
+echo "🚀 Starting Isolated 15market Keepers..."
 
-# Start Arc Keeper in background (printing to stdout for Dokploy)
-cd /app/arc_keeper
-node index.js &
-ARC_PID=$!
-echo "✅ Arc Keeper backgrounded (PID: $ARC_PID)"
+# Note: In production (Dokploy), it is recommended to run these as separate services.
+# If running in a single container for now:
 
-# Start Solana Keeper in foreground
-cd /app
 echo "✅ Starting Solana Keeper..."
-node keeper/src/index.js
+node backend/solana-keeper/src/index.js &
+SOL_PID=$!
+
+echo "✅ Starting Arc Keeper..."
+node backend/arc-keeper/src/index.js &
+ARC_PID=$!
+
+wait $SOL_PID $ARC_PID
