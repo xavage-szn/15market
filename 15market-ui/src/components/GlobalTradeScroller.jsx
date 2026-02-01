@@ -7,7 +7,7 @@ import { getProfilePda } from '../api/pdas';
 import { Megaphone, Clock, Radio } from 'lucide-react';
 import { ethers } from 'ethers';
 import ArcABI from '../abi/ArcPrediction.json';
-import { ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL } from '../constants';
+import { ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL, KEEPER_URL_SOLANA, KEEPER_URL_ARC } from '../constants';
 
 const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwork }) => {
     const [history, setHistory] = useState(() => {
@@ -30,39 +30,49 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
 
     const fetchGlobalData = async () => {
         try {
-            // 1. Fetch Total Trade Count for IDX
+            // 1. Fetch Stats (Primarily from Solana Keeper which holds listings/campaigns)
             try {
-                const statsRes = await fetch(`${KEEPER_URL}/protocol-stats`);
+                const statsRes = await fetch(`${KEEPER_URL_SOLANA}/protocol-stats`);
                 if (statsRes.ok) {
                     const stats = await statsRes.json();
                     if (stats.totalTrades !== undefined) {
                         localStorage.setItem("15market_total_trades", stats.totalTrades.toString());
                     }
                     setIsConnected(true);
-                } else {
-                    setIsConnected(false);
                 }
-            } catch (e) {
-                console.error("Stats Fetch Error:", e);
-                setIsConnected(false);
+            } catch (e) { }
+
+            // 2. Fetch History from BOTH Keepers and Merge
+            const [solRes, arcRes] = await Promise.allSettled([
+                fetch(`${KEEPER_URL_SOLANA}/history`),
+                fetch(`${KEEPER_URL_ARC}/history`)
+            ]);
+
+            let mergedHistory = [];
+
+            if (solRes.status === 'fulfilled' && solRes.value.ok) {
+                const solData = await solRes.value.json();
+                if (Array.isArray(solData)) mergedHistory = [...mergedHistory, ...solData];
             }
 
-            // 2. Fetch Unified History
-            const historyRes = await fetch(`${KEEPER_URL}/history`);
-            if (!historyRes.ok) throw new Error("History fetch failed");
-
-            const historyData = await historyRes.json();
-            if (!Array.isArray(historyData)) {
-                console.warn("[SCROLLER] History data is not an array:", historyData);
-                return;
+            if (arcRes.status === 'fulfilled' && arcRes.value.ok) {
+                const arcData = await arcRes.value.json();
+                if (Array.isArray(arcData)) mergedHistory = [...mergedHistory, ...arcData];
             }
 
-            setHistory(historyData);
-            localStorage.setItem("15market_global_history_v2", JSON.stringify(historyData));
+            // Sort by timestamp descending
+            mergedHistory.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            // Limit to 100 for scroller performance
+            const finalHistory = mergedHistory.slice(0, 100);
 
-            // 3. Update Profiles
+            if (finalHistory.length > 0) {
+                setHistory(finalHistory);
+                localStorage.setItem("15market_global_history_v2", JSON.stringify(finalHistory));
+            }
+
+            // 3. Update Profiles (Try Solana Keeper first as it hosts the profile DB)
             let updatedProfiles = { ...profiles };
-            const ownersToFetch = Array.from(new Set(historyData.map(item => item.owner)))
+            const ownersToFetch = Array.from(new Set(finalHistory.map(item => item.owner)))
                 .filter(owner => owner && !updatedProfiles[owner]);
 
             if (ownersToFetch.length > 0) {
@@ -71,7 +81,7 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                     const chunk = ownersToFetch.slice(i, i + CHUNK_SIZE);
                     await Promise.all(chunk.map(async (owner) => {
                         try {
-                            const keeperRes = await fetch(`${KEEPER_URL}/profile?address=${owner}`);
+                            const keeperRes = await fetch(`${KEEPER_URL_SOLANA}/profile?address=${owner}`);
                             if (keeperRes.ok) {
                                 const keeperData = await keeperRes.json();
                                 if (keeperData && keeperData.username) {

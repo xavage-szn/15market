@@ -1,0 +1,406 @@
+require('dotenv').config();
+const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const cors = require('cors');
+const pricing = require('shared-utils/pricing');
+const Logger = require('shared-utils/logger');
+
+// --- DNS FIX ---
+const dns = require('dns');
+const originalLookup = dns.lookup;
+dns.lookup = (hostname, options, callback) => {
+    if (typeof options === 'function') {
+        callback = options;
+        options = {};
+    }
+    if (hostname === 'rpc.testnet.arc.network') {
+        if (options && options.all) return callback(null, [{ address: '64.130.40.38', family: 4 }]);
+        return callback(null, '64.130.40.38', 4);
+    }
+    return originalLookup(hostname, options, callback);
+};
+
+// --- LOGGING ---
+const logger = new Logger('ARC_KEEPER');
+console.log = (...args) => logger.info(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+console.error = (...args) => logger.error(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+
+// --- CONFIG ---
+const ARC_RPC_LIST = [
+    process.env.ARC_RPC || "https://rpc.testnet.arc.network",
+    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
+];
+const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const PORT = process.env.PORT || 3010;
+
+const ASSET_MAP = {
+    0: 'BTC', 1: 'ETH', 2: 'MON', 3: 'JUP', 4: 'XRP', 5: 'SOL', 6: 'LINK', 7: 'PEPE'
+};
+
+// --- STATE ---
+const STORAGE_FILE = path.resolve(__dirname, '../storage.json');
+let state = {
+    activeBets: {}, // Using object for JSON persistence instead of Map
+    history: [],
+    stats: { totalTrades: 0, wins: 0, volume: 0 }
+};
+
+try {
+    if (fs.existsSync(STORAGE_FILE)) {
+        const saved = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf8'));
+        state = { ...state, ...saved };
+    }
+} catch (e) {
+    console.error("Failed to load storage:", e.message);
+}
+
+function saveState() {
+    try {
+        fs.writeFileSync(STORAGE_FILE, JSON.stringify(state, null, 2));
+    } catch (e) {
+        console.error("Save failed:", e.message);
+    }
+}
+
+// --- EXPRESS ---
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.use((req, res, next) => {
+    if (req.path !== '/logs') console.log(`[REQ] ${req.method} ${req.path}`);
+    next();
+});
+
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
+app.get('/logs', (req, res) => res.json(logger.getLogs()));
+app.get('/history', (req, res) => res.json(state.history));
+app.get('/active-bets', (req, res) => res.json(Object.values(state.activeBets)));
+
+// --- KEEPER CLASS ---
+class ArcKeeper {
+    constructor() {
+        this.currentRpcIdx = 0;
+        this.settlementQueue = [];
+        this.lastCheckedBlock = 0;
+        this.nonce = -1;
+        this.isSettling = false;
+        this.isRateLimited = false;
+
+        this.initProvider();
+    }
+
+    initProvider() {
+        const rpc = ARC_RPC_LIST[this.currentRpcIdx];
+        // ethers v6 uses FetchRequest for timeout
+        const fetchReq = new ethers.FetchRequest(rpc);
+        fetchReq.timeout = 30000; // 30 seconds
+
+        this.provider = new ethers.JsonRpcProvider(fetchReq, undefined, { staticNetwork: true });
+        this.wallet = new ethers.Wallet(PRIVATE_KEY, this.provider);
+        this.contract = new ethers.Contract(CONTRACT_ADDRESS, this.getAbi(), this.wallet);
+    }
+
+    getAbi() {
+        return [
+            "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId) external payable",
+            "function settleBet(uint256 _betId, uint256 _exitPrice) external",
+            "function bets(uint256) view returns (uint256 id, address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 timestamp, uint256 duration, uint8 marketId, uint256 settlementPrice, bool settled, bool won)",
+            "event BetPlaced(uint256 indexed id, address indexed user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 duration, uint256 timestamp, uint8 marketId)",
+            "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
+        ];
+    }
+
+    rotateRpc() {
+        this.currentRpcIdx = (this.currentRpcIdx + 1) % ARC_RPC_LIST.length;
+        console.log(`🔄 [NETWORK] Rotating Arc RPC to: ${ARC_RPC_LIST[this.currentRpcIdx]}`);
+        this.initProvider();
+    }
+
+    async callWithRetry(fn, label = "RPC", retries = 5, delay = 2000) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                if (this.isRateLimited) await new Promise(r => setTimeout(r, 5000));
+                return await fn();
+            } catch (err) {
+                const isLimit = err.message.includes("limit reached") || err.code === -32007 || err.code === -32005;
+                const isQuota = err.message.includes("daily request limit") || err.code === -32003;
+
+                if (isQuota) {
+                    console.error(`🚨 [QUOTA] RPC quota hit. Rotating...`);
+                    this.rotateRpc();
+                    continue;
+                }
+
+                if (isLimit) {
+                    this.isRateLimited = true;
+                    console.warn(`⚠️ [RATE_LIMIT] Cooling down... (Attempt ${i + 1}/${retries})`);
+                    await new Promise(r => setTimeout(r, delay * (i + 1)));
+                    continue;
+                }
+                if (i === retries - 1) throw err;
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+    }
+
+    async init() {
+        console.log("🚀 Initializing Isolated Arc Keeper...");
+        try {
+            const network = await this.callWithRetry(() => this.provider.getNetwork(), "INIT_NETWORK");
+            console.log(`✅ Connected to Chain ID: ${network.chainId}`);
+
+            this.nonce = await this.callWithRetry(() => this.wallet.getNonce(), "INIT_NONCE");
+            console.log(`🔢 Initial Nonce: ${this.nonce}`);
+
+            // Set lastCheckedBlock to current block so we ONLY listen from now forward
+            this.lastCheckedBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "GET_INITIAL_BLOCK");
+            console.log(`🛰️ [START] Monitoring starts from block: ${this.lastCheckedBlock}`);
+
+            await this.checkBalance();
+
+            setInterval(() => this.pollEvents(), 10000);
+            setInterval(() => this.evaluateBets(), 3000);
+            setInterval(() => this.processSettlementQueue(), 2000);
+            setInterval(() => this.checkBalance(), 60000);
+
+            // Heartbeat
+            setInterval(() => {
+                this.isRateLimited = false;
+                console.log(`💓 [HEARTBEAT] Arc Keeper Valid. Tracking: ${Object.keys(state.activeBets).length}`);
+            }, 30000);
+
+        } catch (err) {
+            console.error(`❌ Init Failure: ${err.message}`);
+        }
+    }
+
+    async checkBalance() {
+        try {
+            // Check Contract Balance (this is what pays users)
+            const bal = await this.provider.getBalance(CONTRACT_ADDRESS);
+            const ethBal = ethers.formatEther(bal);
+            console.log(`💰 [TREASURY] Contract Balance: ${ethBal} ARC`);
+            if (parseFloat(ethBal) < 1.0) {
+                console.warn(`⚠️ [LOW FUNDS] Contract balance is low! Payouts may fail.`);
+            }
+
+            // Check Keeper Balance (for gas)
+            const gasBal = await this.provider.getBalance(this.wallet.address);
+            if (parseFloat(ethers.formatEther(gasBal)) < 0.1) {
+                console.warn(`⚠️ [LOW GAS] Keeper wallet low on gas: ${ethers.formatEther(gasBal)} ARC`);
+            }
+        } catch (e) { console.error("Balance check failed", e.message); }
+    }
+
+    async discoverActiveBets() {
+        const currentBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "GET_BLOCK");
+        const LOOKBACK = 200; // Reduced for Free Tier compliance
+        const MAX_CHUNK = 5; // Very strict limit
+        let fromBlock = Math.max(0, currentBlock - LOOKBACK);
+
+        console.log(`🔍 Scanning last ${LOOKBACK} blocks (Chunks of ${MAX_CHUNK})...`);
+
+        try {
+            const filter = this.contract.filters.BetPlaced();
+
+            for (let i = fromBlock; i < currentBlock; i += MAX_CHUNK) {
+                const to = Math.min(i + MAX_CHUNK - 1, currentBlock);
+                try {
+                    const events = await this.callWithRetry(
+                        () => this.contract.queryFilter(filter, i, to),
+                        "DISCOVERY_CHUNK"
+                    );
+
+                    for (const e of events) await this.ingestBet(e, true);
+                    await new Promise(r => setTimeout(r, 100));
+                } catch (chunkErr) {
+                    console.warn(`  ⚠️ Chunk ${i}-${to} failed: ${chunkErr.message}`);
+                }
+            }
+        } catch (err) { console.warn(`Discovery failed: ${err.message}`); }
+
+        this.lastCheckedBlock = currentBlock;
+        console.log(`✅ Discovery complete.`);
+    }
+
+    async pollEvents() {
+        try {
+            const currentBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "POLL_BLOCK");
+            if (currentBlock <= this.lastCheckedBlock) return;
+
+            const filter = this.contract.filters.BetPlaced();
+            const MAX_CHUNK = 5;
+
+            for (let i = this.lastCheckedBlock + 1; i <= currentBlock; i += MAX_CHUNK) {
+                const to = Math.min(i + MAX_CHUNK - 1, currentBlock);
+                try {
+                    const events = await this.callWithRetry(
+                        () => this.contract.queryFilter(filter, i, to), "POLL_CHUNK"
+                    );
+                    for (const e of events) await this.ingestBet(e, false);
+                } catch (e) { }
+            }
+
+            this.lastCheckedBlock = currentBlock;
+        } catch (err) { }
+    }
+
+    async ingestBet(event, isHistorical = false) {
+        const { id, user, amount, direction, entryPrice, duration, timestamp, marketId } = event.args;
+        const betId = id.toString();
+
+        if (state.activeBets[betId]) return;
+
+        const expiry = Number(timestamp) + Number(duration);
+        if (Date.now() / 1000 > expiry + 1800) return; // Expired > 30 mins ago
+
+        try {
+            const betStruct = await this.callWithRetry(() => this.contract.bets(id), `CHECK_${betId}`, 2, 1000);
+            if (betStruct.settled) return;
+
+            const symbol = ASSET_MAP[marketId] || 'SOL';
+            state.activeBets[betId] = {
+                id: betId, user, symbol, duration: Number(duration),
+                amount: ethers.formatEther(amount),
+                direction: Number(direction),
+                entryPrice: Number(entryPrice) / 100000000,
+                expiry,
+                processing: false
+            };
+            saveState();
+
+            console.log(`📥 Tracked Bet #${betId} (${symbol})`);
+        } catch (e) { }
+    }
+
+    async evaluateBets() {
+        const now = Date.now() / 1000;
+        for (const [id, bet] of Object.entries(state.activeBets)) {
+            if (bet.processing) continue;
+            if (now >= bet.expiry) {
+                bet.processing = true;
+                this.settlementQueue.push(bet);
+            }
+        }
+    }
+
+    async processSettlementQueue() {
+        if (this.isSettling || this.settlementQueue.length === 0) return;
+        this.isSettling = true;
+
+        try {
+            const batch = this.settlementQueue.splice(0, 5);
+            console.log(`⚡ Settling batch of ${batch.length}...`);
+
+            const uniqueSymbols = [...new Set(batch.map(b => b.symbol))];
+            const priceMap = {};
+
+            await Promise.all(uniqueSymbols.map(async s => {
+                const verdict = await pricing.getResultVerdict(0, s); // 0 because we just want reliable price
+                priceMap[s] = verdict.price;
+            }));
+
+            const txPromises = batch.map(async (bet) => {
+                const exitPrice = priceMap[bet.symbol];
+                if (!exitPrice) {
+                    bet.processing = false;
+                    this.settlementQueue.push(bet);
+                    return;
+                }
+
+                // SECURITY CHECK: Is it already settled on-chain?
+                try {
+                    const onChainBet = await this.callWithRetry(() => this.contract.bets(bet.id), "CHECK_STATUS");
+                    if (onChainBet && onChainBet.settled) {
+                        console.log(`ℹ️ [SKIP] Bet #${bet.id} already settled on-chain.`);
+                        delete state.activeBets[bet.id];
+                        saveState();
+                        return;
+                    }
+                } catch (statusErr) {
+                    console.warn(`⚠️ [STATUS_CHECK_FAILED] #${bet.id}: ${statusErr.message}`);
+                }
+
+                const isWin = (bet.direction === 1 && exitPrice > bet.entryPrice) ||
+                    (bet.direction === 0 && exitPrice < bet.entryPrice);
+
+                try {
+                    const priceParam = BigInt(Math.floor(exitPrice * 100000000));
+                    const useNonce = this.nonce++;
+
+                    // Log gas check
+                    const feeData = await this.provider.getFeeData();
+                    const requiredGas = 1500000n * (feeData.maxFeePerGas || feeData.gasPrice || 20000000000n);
+                    const bal = await this.provider.getBalance(this.wallet.address);
+
+                    if (bal < requiredGas) {
+                        console.error(`🔴 [GAS_FAILURE] Keeper has ${ethers.formatEther(bal)} ARC, but needs ~${ethers.formatEther(requiredGas)} ARC for settlement safety.`);
+                        bet.processing = false;
+                        this.settlementQueue.push(bet);
+                        return;
+                    }
+
+                    const tx = await this.callWithRetry(() =>
+                        this.contract.settleBet(bet.id, priceParam, {
+                            nonce: useNonce,
+                            gasLimit: 1500000
+                        }), `SEND_TX_${bet.id}`
+                    );
+
+                    console.log(`📤 [SENT] #${bet.id} (${isWin ? 'WIN' : 'LOSS'}) | Price: $${exitPrice} | TX: ${tx.hash.substr(0, 10)}...`);
+
+                    tx.wait().then((receipt) => {
+                        if (receipt.status === 1) {
+                            console.log(`✅ [CONFIRMED] Bet #${bet.id}`);
+                            // Log events for debugging
+                            if (receipt.logs.length > 0) {
+                                console.log(`📜 [LOGS] ${receipt.logs.length} events emitted. Check explorer for details.`);
+                            } else {
+                                console.warn(`⚠️ [NO_LOGS] Confirmed but no events? Payout might have failed.`);
+                            }
+
+                            delete state.activeBets[bet.id];
+
+                            // History Update
+                            state.history.unshift({
+                                id: bet.id,
+                                owner: bet.user,
+                                amount: bet.amount,
+                                currency: "USDC", // Assuming USDC/ARC
+                                direction: bet.direction === 1 ? "UP" : "DOWN",
+                                entryPrice: bet.entryPrice,
+                                exitPrice,
+                                timestamp: Date.now(),
+                                status: isWin ? "WON" : "LOST",
+                                network: 'arc'
+                            });
+                            if (state.history.length > 200) state.history.pop();
+                            saveState();
+
+                        }
+                    }).catch(e => console.error(`❌ [FAILED] Bet #${bet.id} confirmation: ${e.message}`));
+
+                } catch (txErr) {
+                    console.error(`❌ [TX_ERROR] #${bet.id}: ${txErr.message}`);
+                    bet.processing = false;
+                    this.settlementQueue.push(bet);
+                    this.nonce = await this.callWithRetry(() => this.wallet.getNonce(), "RESYNC_NONCE");
+                }
+            });
+
+            await Promise.all(txPromises);
+        } finally {
+            this.isSettling = false;
+        }
+    }
+}
+
+// Start Server & Keeper
+const keeper = new ArcKeeper();
+keeper.init();
+
+app.listen(PORT, () => console.log(`[ARC KEEPER] Running on port ${PORT}`));

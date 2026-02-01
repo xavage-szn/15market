@@ -273,7 +273,7 @@ export default function UserApp() {
 
     // 2. Persist to Keeper Backend
     try {
-      await fetch(`${KEEPER_URL}/record-fee`, {
+      await fetch(`${KEEPER_URL_SOLANA}/record-fee`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -386,8 +386,8 @@ export default function UserApp() {
   useEffect(() => {
     const syncMarket = async () => {
       try {
-        // 1. Fetch Remote Listings from Keeper (Source of Truth)
-        const res = await fetch(`${KEEPER_URL}/listings`);
+        // 1. Fetch Remote Listings from Keeper (Source of Truth - Solana Keeper Hub)
+        const res = await fetch(`${KEEPER_URL_SOLANA}/listings`);
         const remoteListings = await res.json();
 
         if (Array.isArray(remoteListings) && remoteListings.length > 0) {
@@ -401,7 +401,7 @@ export default function UserApp() {
         }
 
         // 2. Fetch Remote Active Market (LIVE SYNC)
-        const activeRes = await fetch(`${KEEPER_URL}/active-market`);
+        const activeRes = await fetch(`${KEEPER_URL_SOLANA}/active-market`);
         const activeData = await activeRes.json();
         if (activeData && activeData.activeId) {
           const currentLocalActiveId = localStorage.getItem('15market_active_token_id');
@@ -452,12 +452,12 @@ export default function UserApp() {
 
   const fetchCampaigns = useCallback(async () => {
     try {
-      const res = await fetch(`${KEEPER_URL}/campaigns`);
+      const res = await fetch(`${KEEPER_URL_SOLANA}/campaigns`);
       if (!res.ok) return;
       const data = await res.json();
       setCampaigns(data);
 
-      const wbRes = await fetch(`${KEEPER_URL}/winner-banner`);
+      const wbRes = await fetch(`${KEEPER_URL_SOLANA}/winner-banner`);
       if (wbRes.ok) {
         const wbData = await wbRes.json();
         setWinnerBanner(wbData && wbData.winnerAddress ? wbData : null);
@@ -471,7 +471,7 @@ export default function UserApp() {
 
         for (const c of active) {
           if (newEnrollments[c.id] === undefined) {
-            const eRes = await fetch(`${KEEPER_URL}/enroll?campaignId=${c.id}&address=${address}`);
+            const eRes = await fetch(`${KEEPER_URL_SOLANA}/enroll?campaignId=${c.id}&address=${address}`);
             if (eRes.ok) {
               const eData = await eRes.json();
               newEnrollments[c.id] = eData.enrolled;
@@ -515,7 +515,7 @@ export default function UserApp() {
       return;
     }
     try {
-      const res = await fetch(`${KEEPER_URL}/enroll`, {
+      const res = await fetch(`${KEEPER_URL_SOLANA}/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaignId, address })
@@ -711,7 +711,7 @@ export default function UserApp() {
 
         // 2. Try Keeper (Hybrid/Arc Fallback)
         if (!profile) {
-          const res = await fetch(`${KEEPER_URL}/profile?address=${address}`);
+          const res = await fetch(`${KEEPER_URL_SOLANA}/profile?address=${address}`);
           if (res.ok) {
             const data = await res.json();
             if (data) profile = data;
@@ -751,8 +751,8 @@ export default function UserApp() {
         notify("On-chain profile created!", "success");
       }
 
-      // Sync to Keeper for all networks (Global Identity)
-      await fetch(`${KEEPER_URL}/sync-profile`, {
+      // Sync to Keeper for all networks (Global Identity - Solana Hub)
+      await fetch(`${KEEPER_URL_SOLANA}/sync-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1204,8 +1204,8 @@ export default function UserApp() {
         setTimeLeft(duration);
         setTimerActive(true);
 
-        // Send Globe Ping (Push to Reactive Escrow)
-        const PING_URL = KEEPER_URL;
+        // Send Globe Ping (Push to Reactive Escrow - Arc Specific Keeper)
+        const PING_URL = KEEPER_URL_ARC;
         fetch(`${PING_URL}/trade-ping`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1339,8 +1339,8 @@ export default function UserApp() {
       setTimerActive(true);
       notify("Trade executed successfully!", "success");
 
-      // Send Globe Ping (Push to Reactive Escrow)
-      fetch(`${KEEPER_URL}/trade-ping`, {
+      // Send Globe Ping (Push to Reactive Escrow - Solana Specific Keeper)
+      fetch(`${KEEPER_URL_SOLANA}/trade-ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
