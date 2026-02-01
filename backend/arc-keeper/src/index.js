@@ -102,7 +102,19 @@ app.get('/protocol-stats', (req, res) => {
         autoSignerFees: { arc: state.autoSignerFees || 0, solana: 0 },
         totalTrades: state.stats.totalTrades,
         totalVolume: state.stats.volume,
+        wallets: 0, // Not tracked on Arc yet
         activeCount: Object.keys(state.activeBets).length
+    });
+});
+
+app.get('/escrow-stats', (req, res) => {
+    res.json({
+        arc: {
+            stake: parseFloat(Object.values(state.activeBets).reduce((acc, b) => acc + (parseFloat(b.amount) || 0), 0)),
+            count: Object.keys(state.activeBets).length,
+            totalVolume: state.stats.volume,
+            address: process.env.CONTRACT_ADDRESS
+        }
     });
 });
 

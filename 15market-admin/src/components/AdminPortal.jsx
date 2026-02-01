@@ -74,7 +74,7 @@ import { Buffer } from 'buffer';
 import { AdminAuthDB } from '../utils/adminAuthDb';
 import bs58 from 'bs58';
 
-import { KEEPER_URL, ADMIN_TOKEN } from '../constants';
+import { KEEPER_URL, KEEPER_URL_SOLANA, KEEPER_URL_ARC, ADMIN_TOKEN } from '../constants';
 
 // RBAC Roles
 const ROLES = {
@@ -973,7 +973,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             setTreasuryStats({ balance: treasuryBal / LAMPORTS_PER_SOL, pda: treasuryPda.toBase58() });
 
             // 2. Fetch Keeper Stats (Escrow)
-            const statsRes = await fetch(`${KEEPER_URL}/escrow-stats`);
+            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            const statsRes = await fetch(`${targetUrl}/escrow-stats`);
             if (statsRes.ok) {
                 const stats = await statsRes.json();
                 setEscrowStats({
@@ -984,8 +985,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
             // 3. Fetch Protocol Data (Active Bets & Stats) from Keeper (OFFLOADED FROM RPC)
             const [activeRes, protoRes] = await Promise.all([
-                fetch(`${KEEPER_URL}/active-bets`),
-                fetch(`${KEEPER_URL}/protocol-stats`)
+                fetch(`${targetUrl}/active-bets`),
+                fetch(`${targetUrl}/protocol-stats`)
             ]);
 
             if (activeRes.ok && protoRes.ok) {
@@ -1042,7 +1043,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
         try {
             // 1. Fetch Unified History from Keeper (OFFLOADED FROM RPC)
-            const res = await fetch(`${KEEPER_URL}/history`);
+            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            const res = await fetch(`${targetUrl}/history`);
             if (res.ok) {
                 const allTrades = await res.json();
 

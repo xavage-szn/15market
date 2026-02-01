@@ -121,7 +121,13 @@ app.get('/active-bets', (req, res) => res.json(Array.from(trackedBets.values()))
 app.get('/protocol-stats', (req, res) => res.json({
     activeCount: trackedBets.size,
     totalTrades: state.totalTrades,
+    totalVolume: state.stats.totalVolume,
+    wallets: Object.keys(state.userProfiles || {}).length,
     autoSignerFees: state.autoSignerFees
+}));
+
+app.get('/escrow-stats', (req, res) => res.json({
+    solana: state.stats
 }));
 
 app.post('/record-fee', (req, res) => {

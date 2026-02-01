@@ -2,7 +2,7 @@ import { AnchorProvider, Program, BN } from "@coral-xyz/anchor";
 import idl from "../idl/sol_prediction.json";
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 
-import { SOLANA_RPC, SOLANA_READ_RPC } from "../constants";
+import { SOLANA_RPC, SOLANA_READ_RPC, SOLANA_PROGRAM_ID } from "../constants";
 
 // Default connection (Writes/Broadcast)
 export const defaultConnection = new Connection(
@@ -17,7 +17,7 @@ export const readConnection = new Connection(
 );
 
 export const programID = new PublicKey(
-    "9bK6W6uAS2xC9Xdw6fcMgHH1BwLp4gJDKj5dwciF8CPe"
+    SOLANA_PROGRAM_ID
 );
 
 export const getProvider = (wallet, connection = defaultConnection) => {

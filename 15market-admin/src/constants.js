@@ -3,6 +3,7 @@
 // 1. Solana RPC Endpoints
 export const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC || "https://api.devnet.solana.com";
 export const SOLANA_READ_RPC = import.meta.env.VITE_SOLANA_READ_RPC || "https://api.devnet.solana.com";
+export const SOLANA_PROGRAM_ID = import.meta.env.VITE_PROGRAM_ID || "9bK6W6uAS2xC9Xdw6fcMgHH1BwLp4gJDKj5dwciF8CPe";
 
 // 2. Arc Network Constants
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS || "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8";
