@@ -1,13 +1,12 @@
-# Build from the /backend directory to include the shared-utils
+# Build from the REPO ROOT (not backend/)
+# This makes path configuration much easier in Dokploy
 FROM node:20-slim
 
 WORKDIR /app
 
-# Copy shared utils first
-COPY shared ./shared
-
-# Copy the keeper code
-COPY arc-keeper ./arc-keeper
+# Copy the entire backend directory structure
+COPY backend/shared ./shared
+COPY backend/arc-keeper ./arc-keeper
 
 # Install shared dependencies
 WORKDIR /app/shared

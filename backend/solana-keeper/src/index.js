@@ -56,6 +56,7 @@ function saveState() {
 
 // --- EXPRESS SERVER ---
 const app = express();
+app.set('trust proxy', 1); // Trust Dokploy/Nginx proxy
 app.use(cors());
 app.use(express.json()); // Body parser
 
