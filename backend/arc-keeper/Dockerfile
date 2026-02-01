@@ -1,12 +1,13 @@
-# Build from the REPO ROOT (not backend/)
-# This makes path configuration much easier in Dokploy
+# Build from the /backend directory
 FROM node:20-slim
 
 WORKDIR /app
 
-# Copy the entire backend directory structure
-COPY backend/shared ./shared
-COPY backend/arc-keeper ./arc-keeper
+# Copy shared utils (relative to backend/)
+COPY shared ./shared
+
+# Copy keeper code (relative to backend/)
+COPY arc-keeper ./arc-keeper
 
 # Install shared dependencies
 WORKDIR /app/shared
@@ -19,5 +20,5 @@ RUN npm install
 # Expose port
 EXPOSE 3010
 
-# Start the keeper
+# Start
 CMD ["npm", "start"]
