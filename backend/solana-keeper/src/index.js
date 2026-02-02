@@ -227,7 +227,7 @@ app.get('/auth/twitter/callback', async (req, res) => {
     res.send("OAuth Callback Handled by Solana Keeper");
 });
 
-app.post('/trade-ping', (req, res) => {
+app.post('/trade-ping', async (req, res) => {
     // Only handle Solana pings
     const { id, amount, network, address, expiry, entryPrice, direction, duration, symbol, mainOwner } = req.body;
     if (network !== 'solana') return res.status(200).json({ ignored: true });
