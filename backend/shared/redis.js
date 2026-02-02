@@ -10,19 +10,25 @@ class RedisClient {
 
     connect() {
         const url = process.env.REDIS_URL;
-        if (!url) {
-            logger.warn('REDIS_URL not found in environment. Redis features will be disabled.');
-            return null;
-        }
 
         try {
-            this.client = new Redis(url, {
-                retryStrategy: (times) => {
-                    const delay = Math.min(times * 50, 2000);
-                    return delay;
-                },
-                maxRetriesPerRequest: 3
-            });
+            if (url) {
+                this.client = new Redis(url, {
+                    retryStrategy: (times) => Math.min(times * 50, 2000),
+                    maxRetriesPerRequest: 3
+                });
+            } else {
+                // Fallback to hardcoded credentials provided by user
+                logger.info('REDIS_URL not found, using provided Redis Cloud credentials');
+                this.client = new Redis({
+                    host: 'redis-14672.c277.us-east-1-3.ec2.cloud.redislabs.com',
+                    port: 14672,
+                    password: 'ueZrTByLR9Iq6lbmqJwRNxv0YJuUoNYj',
+                    username: 'default',
+                    retryStrategy: (times) => Math.min(times * 50, 2000),
+                    maxRetriesPerRequest: 3
+                });
+            }
 
             this.client.on('connect', () => logger.info('Successfully connected to Redis Cloud'));
             this.client.on('error', (err) => logger.error(`Redis Error: ${err.message}`));
@@ -33,6 +39,7 @@ class RedisClient {
             return null;
         }
     }
+
 
     async get(key) {
         if (!this.client) return null;
