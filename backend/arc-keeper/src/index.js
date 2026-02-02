@@ -579,3 +579,15 @@ const keeper = new ArcKeeper();
 keeper.init();
 
 app.listen(PORT, () => console.log(`[ARC KEEPER] Running on port ${PORT}`));
+
+// --- KEEP ALIVE ---
+// Self-ping to keep the instance warm if running on a platform that sleeps (like Render/Dokploy free tiers)
+setInterval(async () => {
+    try {
+        const fetch = (await import('node-fetch')).default;
+        await fetch(`http://localhost:${PORT}/health`);
+        // Silently success or debug log if needed
+    } catch (e) {
+        // Ignore errors from self-ping
+    }
+}, 60000);
