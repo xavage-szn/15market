@@ -6,6 +6,8 @@ const express = require('express');
 const cors = require('cors');
 const pricing = require('shared-utils/pricing');
 const Logger = require('shared-utils/logger');
+const redis = require('shared-utils/redis');
+
 
 // --- DNS FIX ---
 const dns = require('dns');
@@ -46,10 +48,23 @@ const ASSET_MAP = {
 // --- STATE ---
 const STORAGE_FILE = path.resolve(__dirname, '../storage.json');
 let state = {
+    listings: [
+        { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT' },
+        { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT' }
+    ],
+    activeMarket: { activeId: 'eth' },
+    campaigns: [],
+    winnerBanner: null,
+    enrollments: {},
     activeBets: {}, // Using object for JSON persistence
     history: [],
     stats: { totalTrades: 0, wins: 0, volume: 0 },
-    autoSignerFees: 0
+    autoSignerFees: 0,
+    settings: {
+        minBet: 0.1,
+        maxBet: 5.0,
+        maintenanceMode: false
+    }
 };
 
 try {
@@ -61,6 +76,9 @@ try {
     console.error("Failed to load storage:", e.message);
 }
 
+// --- REDIS ---
+redis.connect();
+
 function saveState() {
     try {
         fs.writeFileSync(STORAGE_FILE, JSON.stringify(state, null, 2));
@@ -68,6 +86,7 @@ function saveState() {
         console.error("Save failed:", e.message);
     }
 }
+
 
 // --- EXPRESS ---
 const app = express();
@@ -85,17 +104,105 @@ app.get('/logs', (req, res) => res.json(logger.getLogs()));
 app.get('/history', (req, res) => res.json(state.history));
 app.get('/active-bets', (req, res) => res.json(Object.values(state.activeBets)));
 
-app.post('/record-fee', (req, res) => {
+app.get('/listings', (req, res) => res.json(state.listings));
+app.post('/listings', (req, res) => {
+    if (Array.isArray(req.body)) {
+        state.listings = req.body;
+        saveState();
+        res.json({ success: true });
+    } else res.status(400).end();
+});
+
+app.get('/active-market', (req, res) => res.json(state.activeMarket));
+app.post('/active-market', (req, res) => {
+    state.activeMarket = req.body;
+    saveState();
+    res.json({ success: true });
+});
+
+app.get('/settings', (req, res) => res.json(state.settings));
+app.post('/settings', (req, res) => {
+    state.settings = { ...state.settings, ...req.body };
+    saveState();
+    res.json({ success: true });
+});
+
+app.get('/campaigns', (req, res) => res.json(state.campaigns));
+app.post('/campaigns', (req, res) => {
+    state.campaigns = req.body;
+    saveState();
+    res.json({ success: true });
+});
+
+app.get('/winner-banner', (req, res) => res.json(state.winnerBanner));
+app.post('/winner-banner', (req, res) => {
+    state.winnerBanner = req.body;
+    saveState();
+    res.json({ success: true });
+});
+
+app.get('/enroll', (req, res) => {
+    const { campaignId, address } = req.query;
+    const enrolled = state.enrollments[campaignId]?.[address] || false;
+    res.json({ enrolled });
+});
+app.post('/enroll', (req, res) => {
+    const { campaignId, address } = req.body;
+    if (!state.enrollments[campaignId]) state.enrollments[campaignId] = {};
+    state.enrollments[campaignId][address] = true;
+    saveState();
+    res.json({ success: true });
+});
+
+app.get('/profile', async (req, res) => {
+    const { address } = req.query;
+    if (!address) return res.status(400).json({ error: "Missing address" });
+
+    // 1. Check Redis Cache
+    const cached = await redis.hget('user_profiles', address.toLowerCase());
+    if (cached) return res.json(cached);
+
+    res.json(null);
+});
+
+app.post('/sync-profile', async (req, res) => {
+    const { address, username, xHandle, xProfileImage, tosAccepted } = req.body;
+    if (address && username) {
+        const profile = {
+            username,
+            xHandle: xHandle || "",
+            xProfileImage: xProfileImage || "",
+            tosAccepted: !!tosAccepted,
+            network: 'arc',
+            timestamp: Date.now()
+        };
+
+        // 1. Save to Redis (Global sync)
+        await redis.hset('user_profiles', address.toLowerCase(), profile);
+
+        console.log(`👤 [PROFILE] ${username} (${address.slice(0, 8)}...)`);
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: "Missing address or username" });
+    }
+});
+
+app.post('/record-fee', async (req, res) => {
     const { amount } = req.body;
     if (typeof amount === 'number') {
         state.autoSignerFees = (state.autoSignerFees || 0) + amount;
         saveState();
+
+        // Sync to Redis
+        await redis.set('auto_signer_fees_arc', state.autoSignerFees);
+
         console.log(`💰 [FEE_RECORDED] ${amount} USDC | Total: ${state.autoSignerFees}`);
         res.json({ success: true, total: state.autoSignerFees });
     } else {
         res.status(400).json({ error: 'Invalid amount' });
     }
 });
+
 
 app.get('/protocol-stats', (req, res) => {
     res.json({

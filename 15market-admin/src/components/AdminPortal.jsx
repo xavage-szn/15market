@@ -598,7 +598,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     // 🔄 STANDALONE MARKET SYNC (KEEPER BRIDGE)
     const syncWithKeeper = async (tokens) => {
         try {
-            const res = await fetch(`${KEEPER_URL}/listings`, {
+            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            const res = await fetch(`${targetUrl}/listings`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -606,34 +607,39 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 },
                 body: JSON.stringify(tokens)
             });
-            if (res.ok) console.log("✅ Market listings synced with Keeper.");
+            if (res.ok) console.log(`✅ Market listings synced with ${adminNetwork} Keeper.`);
         } catch (e) {
-            console.error("❌ Market sync failed (Is Keeper running?):", e.message);
+            console.error("❌ Market sync failed:", e.message);
         }
     };
 
     useEffect(() => {
         const fetchRemoteTokens = async () => {
             try {
+                const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
                 // 1. Fetch Listings
-                const res = await fetch(`${KEEPER_URL}/listings`);
-                const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    setListedTokens(data);
-                    localStorage.setItem('15market_listed_tokens', JSON.stringify(data));
+                const res = await fetch(`${targetUrl}/listings`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        setListedTokens(data);
+                        localStorage.setItem('15market_listed_tokens', JSON.stringify(data));
+                    }
                 }
 
                 // 2. Fetch Active Market
-                const activeRes = await fetch(`${KEEPER_URL}/active-market`);
-                const activeData = await activeRes.json();
-                if (activeData.activeId) {
-                    setActiveTokenId(activeData.activeId);
-                    localStorage.setItem('15market_active_token_id', activeData.activeId);
+                const activeRes = await fetch(`${targetUrl}/active-market`);
+                if (activeRes.ok) {
+                    const activeData = await activeRes.json();
+                    if (activeData.activeId) {
+                        setActiveTokenId(activeData.activeId);
+                        localStorage.setItem('15market_active_token_id', activeData.activeId);
+                    }
                 }
             } catch (e) { console.warn("Keeper sync failed, using local."); }
         };
         fetchRemoteTokens();
-    }, []);
+    }, [adminNetwork]);
 
     const [newTokenForm, setNewTokenForm] = useState({
         symbol: '',
@@ -663,7 +669,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         localStorage.setItem('15market_active_token_id', tokenId);
 
         try {
-            await fetch(`${KEEPER_URL}/active-market`, {
+            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            await fetch(`${targetUrl}/active-market`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -671,7 +678,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 },
                 body: JSON.stringify({ activeId: tokenId })
             });
-            notify('success', 'GLOBAL MARKET SWITCHED', `Citadel has set ${tokenId.toUpperCase()} as the primary market.`);
+            notify('success', 'GLOBAL MARKET SWITCHED', `Citadel has set ${tokenId.toUpperCase()} as the primary market on ${adminNetwork}.`);
         } catch (e) {
             notify('warning', 'LOCAL SWITCH ONLY', 'Market switched locally but Keeper sync failed.');
         }
@@ -718,8 +725,30 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
     }, [platformSettings]);
 
-    const handleSaveSettings = () => {
-        notify('success', 'CONFIGURATION STORED', 'Citadel operational parameters updated across all clusters.');
+    const handleSaveSettings = async () => {
+        try {
+            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            const res = await fetch(`${targetUrl}/settings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': ADMIN_TOKEN
+                },
+                body: JSON.stringify(platformSettings)
+            });
+
+            if (res.ok) {
+                notify('success', 'CONFIGURATION SYNCED', `Platform settings pushed to ${adminNetwork} Cluster.`);
+                // Also update local storage for local persistence
+                localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
+            } else {
+                throw new Error("Keeper rejected settings update");
+            }
+        } catch (e) {
+            console.error("Settings sync failed:", e);
+            notify('error', 'SYNC FAILED', 'Could not push settings to Keeper. Local fallback active.');
+            localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
+        }
     };
 
     const handleToggleSetting = (key) => {
@@ -1820,7 +1849,12 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             {/* Main Content */}
             <div className="flex-1 flex flex-col h-screen overflow-hidden pt-16 lg:pt-0">
                 <div className="z-50 border-b border-white/5 hidden lg:block">
-                    <GlobalTradeScroller wallet={DISCONNECTED_WALLET} connection={connection} currentNetwork={adminNetwork} />
+                    <GlobalTradeScroller
+                        wallet={DISCONNECTED_WALLET}
+                        connection={connection}
+                        currentNetwork={adminNetwork}
+                        history={tradeHistory}
+                    />
                 </div>
 
                 <div className="flex-1 overflow-y-auto bg-[#050505] p-4 lg:p-10 custom-scrollbar relative">

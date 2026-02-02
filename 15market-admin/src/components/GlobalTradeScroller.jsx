@@ -1,153 +1,35 @@
 import React, { useEffect, useState, useRef, memo, useMemo } from 'react';
-import { Program, AnchorProvider } from '@coral-xyz/anchor';
-import idl from '../idl/sol_prediction.json';
-import { Connection, PublicKey } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getProfilePda } from '../api/pdas';
-import { Megaphone, Clock, Radio } from 'lucide-react';
-import { ethers } from 'ethers';
-import ArcABI from '../abi/ArcPrediction.json';
-import { ARC_CONTRACT_ADDRESS, ARC_RPC } from '../constants';
+import { Megaphone, Radio } from 'lucide-react';
 
-const GlobalTradeScrollerComponent = React.memo(({ wallet, connection, theme, currentNetwork }) => {
-    const [history, setHistory] = useState([]);
-    const [profiles, setProfiles] = useState({});
+const truncate = (str) => str ? `${str.slice(0, 4)}...${str.slice(-4)}` : "";
+
+const GlobalTradeScrollerComponent = React.memo(({ theme, currentNetwork, history = [] }) => {
     const [activeBroadcast, setActiveBroadcast] = useState(null);
 
-    // Persistent instances to avoid re-creation overhead
-    const programRef = useRef(null);
-    const arcProviderRef = useRef(null);
-    const arcContractRef = useRef(null);
+    // Filter history based on currentNetwork
+    const filteredHistory = useMemo(() => {
+        if (!history || history.length === 0) return [];
+        return history.filter(h => {
+            if (!currentNetwork || currentNetwork === 'ALL') return true;
+            const target = currentNetwork.toLowerCase();
+            if (target === 'solana') return h.network === 'solana' || !h.network;
+            return h.network === target;
+        });
+    }, [history, currentNetwork]);
 
-    const truncate = (str) => str ? `${str.slice(0, 4)}...${str.slice(-4)}` : "";
-
-    const fetchGlobalData = async () => {
-        try {
-            // --- Solana Fetching ---
-            if (!programRef.current) {
-                const dummyWallet = {
-                    publicKey: PublicKey.default,
-                    signTransaction: async (tx) => tx,
-                    signAllTransactions: async (txs) => txs,
-                };
-                const provider = new AnchorProvider(connection, dummyWallet, { commitment: "confirmed" });
-                programRef.current = new Program(idl, provider);
-            }
-
-            const program = programRef.current;
-            // Optimized bet fetch using getProgramAccounts and dataSlice
-            const rawBets = await connection.getProgramAccounts(program.programId, {
-                filters: [{ memcmp: { offset: 0, bytes: "RbxjeDxFruM" } }], // Bet discriminator
-                dataSlice: { offset: 0, length: 120 } // Enough to grab key fields without full bloat
-            });
-
-            const mappedSolBets = rawBets.map(bet => {
-                try {
-                    const decoded = program.coder.accounts.decode("Bet", bet.account.data);
-                    return {
-                        id: bet.pubkey.toBase58(),
-                        owner: decoded.owner.toBase58(),
-                        amount: (decoded.amountLamports.toNumber() / 1e9).toFixed(2),
-                        currency: "SOL",
-                        direction: (decoded.direction === 1 || (typeof decoded.direction === 'object' && 'bull' in decoded.direction)) ? "UP" : "DOWN",
-                        entryPrice: (decoded.entryPrice.toNumber() / 1000000).toFixed(2),
-                        timestamp: decoded.timestamp ? decoded.timestamp.toNumber() * 1000 : 0,
-                        status: decoded.resolved ? "SETTLED" : "ACTIVE",
-                        network: 'solana'
-                    };
-                } catch (e) { return null; }
-            }).filter(b => b !== null);
-
-            // --- Arc Fetching ---
-            if (!arcProviderRef.current) {
-                arcProviderRef.current = new ethers.JsonRpcProvider(ARC_RPC);
-                arcContractRef.current = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, arcProviderRef.current);
-            }
-
-            let mappedArcBets = [];
-            try {
-                const nextId = await arcContractRef.current.nextBetId();
-                const totalBets = Number(nextId);
-                const startFetch = Math.max(0, totalBets - 15);
-                const arcPromises = [];
-                for (let i = startFetch; i < totalBets; i++) {
-                    arcPromises.push(arcContractRef.current.bets(i).catch(() => null));
-                }
-                const arcResults = (await Promise.all(arcPromises)).filter(b => b !== null);
-                mappedArcBets = arcResults.filter(b => b.user && b.user !== '0x0000000000000000000000000000000000000000').map((bet, idx) => {
-                    return {
-                        id: bet.id.toString(),
-                        owner: bet.user,
-                        amount: (Number(bet.amount) / 10 ** 18).toFixed(2),
-                        currency: "USDC",
-                        direction: Number(bet.direction) === 1 ? "UP" : "DOWN",
-                        entryPrice: (Number(bet.entryPrice) / 100000000).toFixed(2),
-                        timestamp: Number(bet.timestamp) * 1000,
-                        status: bet.settled ? "SETTLED" : "ACTIVE",
-                        network: 'arc'
-                    };
-                });
-            } catch (e) { console.error("Arc Scroller Fetch Error:", e); }
-
-            // --- Aggregation & Sorting ---
-            const combined = [...mappedSolBets, ...mappedArcBets];
-            combined.sort((a, b) => b.timestamp - a.timestamp);
-            const latest = combined.slice(0, 30);
-
-            // Fetch profiles (Batched & Optimized)
-            const uniqueOwners = Array.from(new Set(latest.map(h => h.owner))).filter(owner => !profiles[owner]);
-
-            if (uniqueOwners.length > 0) {
-                const CHUNK_SIZE = 5;
-                const newProfiles = {};
-
-                for (let i = 0; i < uniqueOwners.length; i += CHUNK_SIZE) {
-                    const chunk = uniqueOwners.slice(i, i + CHUNK_SIZE);
-                    await Promise.all(chunk.map(async (owner) => {
-                        try {
-                            const latestItem = latest.find(h => h.owner === owner);
-                            if (latestItem.network === 'solana') {
-                                const [pPda] = getProfilePda(new PublicKey(owner), program.programId);
-                                const pAcc = await program.account.userProfile.fetchNullable(pPda);
-                                if (pAcc) newProfiles[owner] = pAcc;
-                            } else if (latestItem.network === 'arc') {
-                                const pAcc = await arcContractRef.current.profiles(owner);
-                                if (pAcc?.username) newProfiles[owner] = { username: pAcc.username };
-                            }
-                        } catch (e) { }
-                    }));
-                }
-
-                if (Object.keys(newProfiles).length > 0) {
-                    setProfiles(prev => ({ ...prev, ...newProfiles }));
-                }
-            }
-
-            const historyData = latest.map(item => ({
-                ...item,
-                user: (newProfiles[item.owner] || profiles[item.owner])?.username || truncate(item.owner),
-            }));
-
-            setHistory(historyData);
-            localStorage.setItem("15market_global_history_v2", JSON.stringify(historyData));
-
-        } catch (err) {
-            console.error("Global Scroller Sync Error:", err);
-        }
-    };
+    // Format for display if needed
+    const displayHistory = useMemo(() => {
+        return filteredHistory.map(item => ({
+            ...item,
+            user: item.user || (item.owner ? truncate(item.owner) : 'Anon'),
+            amount: item.amount || 0,
+            currency: item.currency || (item.network === 'arc' ? 'USDC' : 'SOL'),
+            direction: item.direction || 'UP'
+        }));
+    }, [filteredHistory]);
 
     useEffect(() => {
-        const saved = localStorage.getItem("15market_global_history_v2");
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                setHistory(parsed);
-            } catch (e) { }
-        }
-
-        fetchGlobalData();
-        const interval = setInterval(fetchGlobalData, 10000); // Relaxed further to 10s to prevent rate limits
-
         const checkBroadcast = () => {
             try {
                 // 1. Priority Check: Maintenance Mode
@@ -184,11 +66,16 @@ const GlobalTradeScrollerComponent = React.memo(({ wallet, connection, theme, cu
         window.addEventListener('storage', onStorage);
 
         return () => {
-            clearInterval(interval);
             clearInterval(bInterval);
             window.removeEventListener('storage', onStorage);
         };
     }, []);
+
+    const renderEvents = useMemo(() => {
+        if (displayHistory.length === 0) return [];
+        // Triple up for smooth infinite scroller feel
+        return [...displayHistory, ...displayHistory, ...displayHistory];
+    }, [displayHistory]);
 
     return (
         <div className={`w-full border-y h-10 flex items-center overflow-hidden relative transition-colors duration-300 ${theme === 'light'
@@ -247,32 +134,7 @@ const GlobalTradeScrollerComponent = React.memo(({ wallet, connection, theme, cu
                             className="flex items-center gap-12 lg:gap-24 whitespace-nowrap pl-24 lg:pl-52"
                             transition={{ x: { duration: 40, repeat: Infinity, ease: "linear" }, opacity: { duration: 0.5 } }}
                         >
-                            {(history.filter(h => {
-                                if (!currentNetwork) return true;
-                                const target = currentNetwork.toLowerCase();
-                                if (target === 'solana') return h.network === 'solana' || !h.network;
-                                return h.network === target;
-                            }).length > 0 ? [...history.filter(h => {
-                                if (!currentNetwork) return true;
-                                const target = currentNetwork.toLowerCase();
-                                if (target === 'solana') return h.network === 'solana' || !h.network;
-                                return h.network === target;
-                            }), ...history.filter(h => {
-                                if (!currentNetwork) return true;
-                                const target = currentNetwork.toLowerCase();
-                                if (target === 'solana') return h.network === 'solana' || !h.network;
-                                return h.network === target;
-                            }), ...history.filter(h => {
-                                if (!currentNetwork) return true;
-                                const target = currentNetwork.toLowerCase();
-                                if (target === 'solana') return h.network === 'solana' || !h.network;
-                                return h.network === target;
-                            }), ...history.filter(h => {
-                                if (!currentNetwork) return true;
-                                const target = currentNetwork.toLowerCase();
-                                if (target === 'solana') return h.network === 'solana' || !h.network;
-                                return h.network === target;
-                            })] : []).map((event, i) => (
+                            {renderEvents.map((event, i) => (
                                 <div key={`${event.id}-${i}`} className="flex items-center mx-4 lg:mx-8">
                                     <div className={`flex items-center gap-3 lg:gap-4 px-3 py-1 lg:px-4 lg:py-1.5 rounded-full border backdrop-blur-sm ${theme === 'light'
                                         ? 'bg-white/40 border-black/5 shadow-[0_0_15px_rgba(60,179,113,0.3)] hover:shadow-[0_0_20px_rgba(60,179,113,0.5)]'
@@ -329,7 +191,7 @@ const GlobalTradeScrollerComponent = React.memo(({ wallet, connection, theme, cu
                 </AnimatePresence>
             </div>
             <div className={`absolute right-0 top-0 bottom-0 w-48 bg-gradient-to-l z-20 pointer-events-none ${theme === 'light' ? 'from-white to-transparent' : 'from-[#050505] to-transparent'}`} />
-        </div >
+        </div>
     );
 });
 

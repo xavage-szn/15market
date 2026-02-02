@@ -8,6 +8,8 @@ const bs58 = require("bs58");
 const { Connection } = require("@solana/web3.js");
 const pricing = require('shared-utils/pricing');
 const Logger = require('shared-utils/logger');
+const redis = require('shared-utils/redis');
+
 
 // --- SETUP LOGGER ---
 const logger = new Logger('SOLANA_KEEPER');
@@ -46,6 +48,9 @@ try {
     console.error("Failed to load storage:", e.message);
 }
 
+// --- REDIS INITIALIZATION ---
+redis.connect();
+
 function saveState() {
     try {
         fs.writeFileSync(STORAGE_FILE, JSON.stringify(state, null, 2));
@@ -53,6 +58,7 @@ function saveState() {
         console.error("Save failed:", e.message);
     }
 }
+
 
 // --- EXPRESS SERVER ---
 const app = express();
@@ -130,6 +136,23 @@ app.get('/escrow-stats', (req, res) => res.json({
     solana: state.stats
 }));
 
+app.get('/settings', (req, res) => res.json(state.settings || {
+    minBet: 0.1,
+    maxBet: 5.0,
+    maintenanceMode: false
+}));
+
+app.post('/settings', async (req, res) => {
+    state.settings = { ...(state.settings || {}), ...req.body };
+    saveState();
+
+    // Sync to Redis
+    await redis.set('platform_settings', state.settings);
+
+    res.json({ success: true });
+});
+
+
 app.post('/record-fee', (req, res) => {
     const { amount } = req.body;
     if (typeof amount === 'number') {
@@ -142,14 +165,26 @@ app.post('/record-fee', (req, res) => {
     }
 });
 
-app.get('/profile', (req, res) => {
+app.get('/profile', async (req, res) => {
     const { address } = req.query;
-    res.json(state.userProfiles[address] || null);
+    if (!address) return res.status(400).json({ error: "Missing address" });
+
+    // 1. Check Redis Cache
+    const cached = await redis.hget('user_profiles', address);
+    if (cached) return res.json(cached);
+
+    // 2. Fallback to local state (for migration)
+    const local = state.userProfiles[address] || null;
+    if (local) {
+        await redis.hset('user_profiles', address, local);
+    }
+    res.json(local);
 });
-app.post('/sync-profile', (req, res) => {
+
+app.post('/sync-profile', async (req, res) => {
     const { address, username, xHandle, xProfileImage, tosAccepted } = req.body;
     if (address && username) {
-        state.userProfiles[address] = {
+        const profile = {
             username,
             xHandle: xHandle || "",
             xProfileImage: xProfileImage || "",
@@ -157,13 +192,21 @@ app.post('/sync-profile', (req, res) => {
             network: 'solana',
             timestamp: Date.now()
         };
+
+        // 1. Save to Redis
+        await redis.hset('user_profiles', address, profile);
+
+        // 2. Legacy fallback
+        state.userProfiles[address] = profile;
         saveState();
+
         console.log(`👤 [PROFILE] ${username} (${address.slice(0, 8)}...)`);
         res.json({ success: true });
     } else {
         res.status(400).json({ error: "Missing address or username" });
     }
 });
+
 
 // Twitter OAuth (Proxy should route /auth/twitter/* to here if matching)
 // But front-end logic might need adjustment if using different ports/prefixes.
@@ -214,9 +257,16 @@ app.post('/trade-ping', (req, res) => {
             user: state.userProfiles[address]?.username || address.slice(0, 4)
         });
         if (state.history.length > 200) state.history.pop();
+
+        state.totalTrades = (state.totalTrades || 0) + 1;
         saveState();
 
+        // Sync to Redis
+        await redis.set('total_trades', state.totalTrades);
+        await redis.set('protocol_history', state.history.slice(0, 50)); // Cache recent history
+
         res.json({ success: true });
+
     } catch (e) {
         console.error("Ping error", e);
         res.status(500).json({ error: e.message });
