@@ -261,9 +261,27 @@ export default function UserApp() {
   });
 
   const [platformSettings, setPlatformSettings] = useState(() => {
-    const saved = localStorage.getItem("15market_citadel_settings");
-    return saved ? JSON.parse(saved) : { minBet: 0.1, maxBet: 5.0, maintenanceMode: false };
+    try {
+      const saved = localStorage.getItem("15market_citadel_settings");
+      return saved ? JSON.parse(saved) : { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false };
+    } catch (e) { return { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false }; }
   });
+
+  // Sync settings across tabs and periodically
+  useEffect(() => {
+    const syncSettings = () => {
+      try {
+        const loaded = JSON.parse(localStorage.getItem('15market_citadel_settings'));
+        if (loaded) setPlatformSettings(loaded);
+      } catch (e) { }
+    };
+    window.addEventListener('storage', syncSettings);
+    const interval = setInterval(syncSettings, 1000);
+    return () => {
+      window.removeEventListener('storage', syncSettings);
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("15market_citadel_settings", JSON.stringify(platformSettings));
@@ -1097,26 +1115,7 @@ export default function UserApp() {
 
 
   // Platform Settings Sync
-  const [platformSettings, setPlatformSettings] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('15market_citadel_settings')) || {};
-    } catch (e) { return {}; }
-  });
 
-  useEffect(() => {
-    const syncSettings = () => {
-      try {
-        const loaded = JSON.parse(localStorage.getItem('15market_citadel_settings')) || {};
-        setPlatformSettings(loaded);
-      } catch (e) { }
-    };
-    window.addEventListener('storage', syncSettings);
-    const interval = setInterval(syncSettings, 1000);
-    return () => {
-      window.removeEventListener('storage', syncSettings);
-      clearInterval(interval);
-    };
-  }, []);
 
   // Execute trade
   const executeTrade = async () => {
