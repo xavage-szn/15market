@@ -10,21 +10,34 @@ const XLogo = ({ size = 24, className = "" }) => (
     </svg>
 );
 
-export const OnboardingModal = ({ isOpen, onComplete, address, network }) => {
+export const OnboardingModal = ({ isOpen, onComplete, address, network, existingProfile }) => {
+
     const [step, setStep] = useState(() => {
         if (!address) return 1;
+        // Priority 1: User just redirected from Twitter
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('x_handle')) return 2;
+
+        // Priority 2: Profile already exists but missing X
+        if (existingProfile && !existingProfile.xHandle) return 2;
+
+        // Priority 3: Local storage (for multi-step sessions)
         const savedStep = localStorage.getItem(`15market_onboarding_step_${address}`);
         return savedStep ? parseInt(savedStep) : 1;
     });
+
     const [username, setUsername] = useState(() => {
+        if (existingProfile?.username) return existingProfile.username;
         if (!address) return "";
         return localStorage.getItem(`15market_onboarding_username_${address}`) || "";
     });
-    const [twitterHandle, setTwitterHandle] = useState("");
-    const [twitterImage, setTwitterImage] = useState("");
+
+    const [twitterHandle, setTwitterHandle] = useState(existingProfile?.xHandle || "");
+    const [twitterImage, setTwitterImage] = useState(existingProfile?.xProfileImage || "");
     const [tosAccepted, setTosAccepted] = useState(false);
     const [riskAcknowledged, setRiskAcknowledged] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
 
     // Detect Twitter Redirect
     useEffect(() => {

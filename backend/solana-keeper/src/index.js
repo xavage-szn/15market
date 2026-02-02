@@ -168,15 +168,16 @@ app.post('/record-fee', (req, res) => {
 app.get('/profile', async (req, res) => {
     const { address } = req.query;
     if (!address) return res.status(400).json({ error: "Missing address" });
+    const lookupAddress = address.startsWith('0x') ? address.toLowerCase() : address;
 
     // 1. Check Redis Cache
-    const cached = await redis.hget('user_profiles', address);
+    const cached = await redis.hget('user_profiles', lookupAddress);
     if (cached) return res.json(cached);
 
     // 2. Fallback to local state (for migration)
-    const local = state.userProfiles[address] || null;
+    const local = state.userProfiles[lookupAddress] || null;
     if (local) {
-        await redis.hset('user_profiles', address, local);
+        await redis.hset('user_profiles', lookupAddress, local);
     }
     res.json(local);
 });
@@ -184,6 +185,7 @@ app.get('/profile', async (req, res) => {
 app.post('/sync-profile', async (req, res) => {
     const { address, username, xHandle, xProfileImage, tosAccepted } = req.body;
     if (address && username) {
+        const lookupAddress = address.startsWith('0x') ? address.toLowerCase() : address;
         const profile = {
             username,
             xHandle: xHandle || "",
@@ -194,10 +196,10 @@ app.post('/sync-profile', async (req, res) => {
         };
 
         // 1. Save to Redis
-        await redis.hset('user_profiles', address, profile);
+        await redis.hset('user_profiles', lookupAddress, profile);
 
         // 2. Legacy fallback
-        state.userProfiles[address] = profile;
+        state.userProfiles[lookupAddress] = profile;
         saveState();
 
         console.log(`👤 [PROFILE] ${username} (${address.slice(0, 8)}...)`);
@@ -206,6 +208,7 @@ app.post('/sync-profile', async (req, res) => {
         res.status(400).json({ error: "Missing address or username" });
     }
 });
+
 
 
 // Twitter OAuth (Proxy should route /auth/twitter/* to here if matching)

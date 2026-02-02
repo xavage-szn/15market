@@ -760,11 +760,17 @@ export default function UserApp() {
 
         if (profile) {
           setUserProfile(profile);
-          setShowOnboarding(false);
+          // Trigger onboarding if X account is not linked
+          if (!profile.xHandle) {
+            setShowOnboarding(true);
+          } else {
+            setShowOnboarding(false);
+          }
         } else {
           setUserProfile(null);
           setShowOnboarding(true);
         }
+
       } catch (err) {
         console.error("My profile error:", err);
       } finally {
@@ -2003,7 +2009,9 @@ export default function UserApp() {
         onComplete={handleOnboardingComplete}
         address={address}
         network={network}
+        existingProfile={userProfile}
       />
+
     </motion.div>
   );
 }
