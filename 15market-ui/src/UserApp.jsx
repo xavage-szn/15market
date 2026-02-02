@@ -260,6 +260,15 @@ export default function UserApp() {
     return saved ? JSON.parse(saved) : { solana: 0, arc: 0 };
   });
 
+  const [platformSettings, setPlatformSettings] = useState(() => {
+    const saved = localStorage.getItem("15market_citadel_settings");
+    return saved ? JSON.parse(saved) : { minBet: 0.1, maxBet: 5.0, maintenanceMode: false };
+  });
+
+  useEffect(() => {
+    localStorage.setItem("15market_citadel_settings", JSON.stringify(platformSettings));
+  }, [platformSettings]);
+
   useEffect(() => {
     localStorage.setItem("15market_autosigner_fees", JSON.stringify(autoSignerFees));
   }, [autoSignerFees]);
@@ -387,8 +396,9 @@ export default function UserApp() {
   useEffect(() => {
     const syncMarket = async () => {
       try {
-        // 1. Fetch Remote Listings from Keeper (Source of Truth - Solana Keeper Hub)
-        const res = await fetch(`${KEEPER_URL_SOLANA}/listings`);
+        const targetUrl = network === 'arc' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
+        // 1. Fetch Remote Listings from Keeper (Source of Truth - Network Specific)
+        const res = await fetch(`${targetUrl}/listings`);
         const remoteListings = await res.json();
 
         if (Array.isArray(remoteListings) && remoteListings.length > 0) {
@@ -396,20 +406,30 @@ export default function UserApp() {
           const remoteStr = JSON.stringify(remoteListings);
 
           if (currentListedStr !== remoteStr) {
-            console.log("🔄 Market listings updated from Keeper.");
+            console.log(`🔄 Market listings updated from ${network} Keeper.`);
             localStorage.setItem('15market_listed_tokens', remoteStr);
           }
         }
 
         // 2. Fetch Remote Active Market (LIVE SYNC)
-        const activeRes = await fetch(`${KEEPER_URL_SOLANA}/active-market`);
+        const activeRes = await fetch(`${targetUrl}/active-market`);
         const activeData = await activeRes.json();
         if (activeData && activeData.activeId) {
           const currentLocalActiveId = localStorage.getItem('15market_active_token_id');
           if (currentLocalActiveId !== activeData.activeId) {
             console.log(`🎯 Syncing with LIVE active market: ${activeData.activeId}`);
             localStorage.setItem('15market_active_token_id', activeData.activeId);
-            // The next logic in this useEffect will pick up the change from localStorage
+          }
+        }
+
+        // 3. Fetch Remote Platform Settings
+        const settingsRes = await fetch(`${targetUrl}/settings`);
+        const settingsData = await settingsRes.json();
+        if (settingsData) {
+          const settingsStr = JSON.stringify(settingsData);
+          if (localStorage.getItem('15market_citadel_settings') !== settingsStr) {
+            console.log(`🛡️ Syncing platform settings from ${network} Keeper.`);
+            setPlatformSettings(settingsData);
           }
         }
 
@@ -449,11 +469,12 @@ export default function UserApp() {
       window.removeEventListener('storage', syncMarket);
       clearInterval(poller);
     };
-  }, [activeMarket.id]);
+  }, [activeMarket.id, network]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
-      const res = await fetch(`${KEEPER_URL_SOLANA}/campaigns`);
+      const targetUrl = network === 'arc' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
+      const res = await fetch(`${targetUrl}/campaigns`);
       if (!res.ok) return;
       const data = await res.json();
       setCampaigns(data);

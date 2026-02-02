@@ -44,26 +44,16 @@ const TradeTerminalComponent = ({
         <div className={`w-full h-full p-2 lg:p-5 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-2 lg:gap-4 ${isLight ? 'static-panel-light !shadow-xl' : ''}`}>
 
             {/* Header: Title + Engine Status + Right Controls */}
-            <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-0">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 lg:gap-6">
                     <div className="flex items-center gap-1">
                         <h2 className={`text-[10px] lg:text-lg font-black tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>
                             TERMINAL
                         </h2>
                         <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: GREEN, boxShadow: `0 0-10px ${GREEN}` }} />
                     </div>
-                </div>
 
-                <div className="flex flex-col items-end gap-1">
-                    {/* Market Price Box */}
-                    <div className={`px-1.5 py-0.5 lg:px-2 lg:py-1 rounded-lg border flex flex-col items-end min-w-[50px] lg:min-w-[80px] ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
-                        <span className="text-[5px] lg:text-[6px] font-black opacity-30 uppercase tracking-widest">Market</span>
-                        <span className="text-[7px] lg:text-[10px] font-mono font-black" style={{ color: GREEN }}>
-                            ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                    </div>
-
-                    {/* Auto Sign Toggle */}
+                    {/* Auto Sign Toggle - Now on the same line as Terminal */}
                     <div className="flex items-center gap-1 lg:gap-2">
                         <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
                         <button
@@ -72,6 +62,16 @@ const TradeTerminalComponent = ({
                         >
                             <div className={`absolute top-0.5 left-0.5 w-1.5 h-1.5 lg:w-3 lg:h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${sessionMode ? 'translate-x-3 lg:translate-x-4' : 'translate-x-0'}`} />
                         </button>
+                    </div>
+                </div>
+
+                <div className="flex flex-col items-end">
+                    {/* Market Price - Box Removed */}
+                    <div className="flex flex-col items-end">
+                        <span className="text-[5px] lg:text-[6px] font-black opacity-30 uppercase tracking-widest">Market</span>
+                        <span className="text-[7px] lg:text-[10px] font-mono font-black" style={{ color: GREEN }}>
+                            ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
                     </div>
                 </div>
             </div>
