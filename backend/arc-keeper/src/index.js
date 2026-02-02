@@ -562,6 +562,7 @@ class ArcKeeper {
                     console.error(`❌ [TX_ERROR] #${bet.id}: ${txErr.message}`);
                     bet.processing = false;
                     this.settlementQueue.push(bet);
+                    // Reset nonce synchronization on error to prevent spiral
                     this.nonce = await this.callWithRetry(() => this.wallet.getNonce(), "RESYNC_NONCE");
                 }
             });
