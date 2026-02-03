@@ -34,7 +34,8 @@ const TradeTerminalComponent = ({
     sessionKeypair,
     theme,
     hasProfile,
-    activeMarket
+    activeMarket,
+    maintenanceMode = false
 }) => {
     const isArc = currentNetwork === 'arc';
     const isWrongNetwork = isArc && chainId !== 5042002;
@@ -79,7 +80,8 @@ const TradeTerminalComponent = ({
             {/* CALL / PUT Buttons */}
             <div className="grid grid-cols-2 gap-1 lg:gap-2">
                 <button
-                    onClick={() => setDirection("buy")}
+                    onClick={() => !maintenanceMode && setDirection("buy")}
+                    disabled={maintenanceMode}
                     className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "buy"
                         ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
                         : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
@@ -91,7 +93,8 @@ const TradeTerminalComponent = ({
                     <span className="text-[7px] lg:text-[10px] font-black uppercase tracking-widest">Call</span>
                 </button>
                 <button
-                    onClick={() => setDirection("sell")}
+                    onClick={() => !maintenanceMode && setDirection("sell")}
+                    disabled={maintenanceMode}
                     className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "sell"
                         ? (isLight ? 'bg-[#FF7F50] text-white border-transparent' : 'bg-[#FF7F50]/20 border-[#FF7F50] text-[#FF7F50]')
                         : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
@@ -161,16 +164,17 @@ const TradeTerminalComponent = ({
             <button
                 id="trade-confirm-button"
                 onClick={isWrongNetwork ? () => switchChain({ chainId: 5042002 }) : executeTrade}
-                disabled={isExecuting}
+                disabled={isExecuting || maintenanceMode}
                 className={`w-full py-2.5 lg:py-3.5 rounded-xl font-black text-[8px] lg:text-[10px] uppercase tracking-[0.2em] lg:tracking-[0.3em] transition-all 
-                ${isExecuting ? "opacity-40 cursor-not-allowed" : "hover:brightness-110 active:scale-[0.99] shadow-xl"}`}
+                ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "hover:brightness-110 active:scale-[0.99] shadow-xl"}`}
                 style={{
-                    background: isWrongNetwork ? "#3B82F6" : (direction === "sell" ? CORAL : GREEN),
+                    background: maintenanceMode ? "#333" : (isWrongNetwork ? "#3B82F6" : (direction === "sell" ? CORAL : GREEN)),
                     color: "white",
-                    boxShadow: `0 5px 15px ${isWrongNetwork ? "#3B82F633" : (direction === "sell" ? CORAL + '33' : GREEN + '33')}`
+                    boxShadow: maintenanceMode ? "none" : `0 5px 15px ${isWrongNetwork ? "#3B82F633" : (direction === "sell" ? CORAL + '33' : GREEN + '33')}`,
+                    cursor: maintenanceMode ? "not-allowed" : "pointer"
                 }}
             >
-                {isExecuting ? "Wait" : (wallet.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect"}
+                {maintenanceMode ? "PAUSED" : (isExecuting ? "Wait" : (wallet.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect")}
             </button>
         </div>
     );

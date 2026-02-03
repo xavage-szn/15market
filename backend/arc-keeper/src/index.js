@@ -435,6 +435,11 @@ class ArcKeeper {
                 expiry,
                 processing: false
             };
+
+            // Update Stats
+            state.stats.totalTrades = (state.stats.totalTrades || 0) + 1;
+            state.stats.volume = (state.stats.volume || 0) + parseFloat(ethers.formatEther(amount));
+
             saveState();
 
             // Report to logs

@@ -262,6 +262,11 @@ app.post('/trade-ping', async (req, res) => {
         if (state.history.length > 200) state.history.pop();
 
         state.totalTrades = (state.totalTrades || 0) + 1;
+
+        // Update Stats Volume
+        state.stats.totalVolume = (state.stats.totalVolume || 0) + parseFloat(amount);
+        state.stats.count = (state.stats.count || 0) + 1;
+
         saveState();
 
         // Sync to Redis
@@ -311,6 +316,12 @@ function setupAccountSubscription() {
                                 direction, duration: decoded.duration, symbol, expiry
                             };
                             trackedBets.set(id, betData);
+
+                            // Update Volume from On-Chain Event (if not already tracked)
+                            state.stats.totalVolume = (state.stats.totalVolume || 0) + amt;
+                            state.stats.count = (state.stats.count || 0) + 1;
+                            saveState();
+
                             console.log(`[NEW BET] ${id.slice(0, 8)} | ${amt} ${symbol}`);
                         }
                     } else if (decoded.resolved) {

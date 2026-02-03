@@ -1882,6 +1882,7 @@ export default function UserApp() {
               CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
               evmSessionWallet={evmSessionWallet} sessionKeypair={sessionKeypair} hasProfile={!!userProfile}
               activeMarket={activeMarket}
+              maintenanceMode={platformSettings.maintenanceMode}
             />
           </div>
 

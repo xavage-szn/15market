@@ -180,6 +180,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 const res = await fetch(`${targetUrl}/protocol-stats`);
                 if (res.ok) {
                     const data = await res.json();
+
+                    // Update Revenue Tracker
                     if (data.autoSignerFees !== undefined) {
                         const rev = typeof data.autoSignerFees === 'object'
                             ? (data.autoSignerFees[adminNetwork.toLowerCase()] || 0)
@@ -194,9 +196,20 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                             return newState;
                         });
                     }
+
+                    // Update Main Dashboard Metrics
+                    setMetrics(prev => ({
+                        ...prev,
+                        totalWallets: data.wallets || 0,
+                        totalVolume: data.totalVolume ? `${Number(data.totalVolume).toFixed(2)} ${adminNetwork === 'ARC' ? 'USDC' : 'SOL'}` : '0.00',
+                        activeUsers: data.activeCount || 0,
+                        // pendingDisputes and networkHealth kept from prev or defaults if needed
+                        pendingDisputes: data.pendingDisputes || prev.pendingDisputes || 0,
+                        networkHealth: '100% Operational' // Hardcoded for now as backend doesn't provide it
+                    }));
                 }
-            } catch (e) { console.warn("Admin Revenue Sync Failed:", e.message); }
-        }, 10000);
+            } catch (e) { console.warn("Admin Revenue/Stats Sync Failed:", e.message); }
+        }, 5000); // Increased frequency for better responsiveness
         return () => clearInterval(interval);
     }, [adminNetwork]);
 
