@@ -38,6 +38,34 @@ let state = {
 const trackedBets = new Map();
 const oauthStates = new Map();
 
+// --- ARC DATA AGGREGATION ---
+let arcStats = { stake: 0, count: 0, totalVolume: 0, balance: 0, address: 'Scanning...' };
+let arcHistory = [];
+const KEEPER_URL_ARC = process.env.KEEPER_URL_ARC || "http://localhost:3010";
+
+async function syncArcData() {
+    try {
+        // Fetch Arc Stats
+        const statsRes = await fetch(`${KEEPER_URL_ARC}/escrow-stats`);
+        if (statsRes.ok) {
+            const data = await statsRes.json();
+            if (data.arc) arcStats = data.arc;
+        }
+
+        // Fetch Arc History
+        const historyRes = await fetch(`${KEEPER_URL_ARC}/history`);
+        if (historyRes.ok) {
+            arcHistory = await historyRes.json();
+        }
+    } catch (e) {
+        console.warn(`[SYNC] Failed to fetch Arc data: ${e.message}`);
+    }
+}
+
+// Initial sync and then every 15s
+syncArcData();
+setInterval(syncArcData, 15000);
+
 // Load State
 try {
     if (fs.existsSync(STORAGE_FILE)) {
@@ -121,19 +149,35 @@ app.post('/enroll', (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/history', (req, res) => res.json(state.history));
-app.get('/active-bets', (req, res) => res.json(Array.from(trackedBets.values())));
+app.get('/history', (req, res) => {
+    const combined = [...state.history, ...arcHistory];
+    combined.sort((a, b) => b.timestamp - a.timestamp);
+    res.json(combined.slice(0, 200));
+});
+app.get('/active-bets', async (req, res) => {
+    try {
+        const arcRes = await fetch(`${KEEPER_URL_ARC}/active-bets`);
+        let arcBets = [];
+        if (arcRes.ok) arcBets = await arcRes.json();
+
+        const solBets = Array.from(trackedBets.values());
+        res.json([...solBets, ...arcBets]);
+    } catch (e) {
+        res.json(Array.from(trackedBets.values()));
+    }
+});
 
 app.get('/protocol-stats', (req, res) => res.json({
-    activeCount: trackedBets.size,
-    totalTrades: state.totalTrades,
-    totalVolume: state.stats.totalVolume,
+    activeCount: trackedBets.size + (arcStats.count || 0),
+    totalTrades: (state.totalTrades || 0) + (arcHistory.length || 0),
+    totalVolume: (state.stats.totalVolume || 0) + (arcStats.totalVolume || 0),
     wallets: Object.keys(state.userProfiles || {}).length,
     autoSignerFees: state.autoSignerFees || 0
 }));
 
 app.get('/escrow-stats', (req, res) => res.json({
-    solana: state.stats
+    solana: state.stats,
+    arc: arcStats
 }));
 
 app.get('/settings', (req, res) => res.json(state.settings || {

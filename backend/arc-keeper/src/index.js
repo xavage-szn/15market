@@ -154,6 +154,41 @@ app.post('/enroll', (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/withdraw', async (req, res) => {
+    const { amount, password } = req.body;
+    if (password !== ADMIN_TOKEN) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+        const amtWei = ethers.parseEther(amount.toString());
+        const tx = await keeper.contract.withdraw(amtWei);
+        await tx.wait();
+        res.json({ success: true, hash: tx.hash });
+    } catch (e) {
+        console.error("Manual Arc withdraw failed:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/manual-settle', async (req, res) => {
+    const { betId, exitPrice, password } = req.body;
+    if (password !== ADMIN_TOKEN) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+        const priceParam = BigInt(Math.floor(exitPrice * 100000000));
+        const tx = await keeper.contract.settleBet(betId, priceParam);
+        await tx.wait();
+
+        // Update local state if needed
+        delete state.activeBets[betId];
+        saveState();
+
+        res.json({ success: true, hash: tx.hash });
+    } catch (e) {
+        console.error("Manual Arc settle failed:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/profile', async (req, res) => {
     const { address } = req.query;
     if (!address) return res.status(400).json({ error: "Missing address" });

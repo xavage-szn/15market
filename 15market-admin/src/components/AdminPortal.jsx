@@ -67,7 +67,7 @@ import {
 } from 'recharts';
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, Keypair } from '@solana/web3.js';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
-import { getTreasuryPda, getBetPda } from '../api/pdas';
+import { getTreasuryPda, getBetPda, getMarketPda } from '../api/pdas';
 import { programID } from '../api/program';
 import idl from '../idl/sol_prediction.json';
 import { Buffer } from 'buffer';
@@ -956,42 +956,66 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     };
 
     const handleOnChainSettle = async (betData, userWon) => {
-        if (!adminWallet || !adminWallet.publicKey) {
-            notify('error', 'CITADEL ADVISORY', 'Authorize Master Authority to execute on-chain settlements.');
-            return;
-        }
-
+        const network = betData.network || (adminNetwork.toLowerCase());
         const actionLabel = userWon ? "WIN (Payout Profit)" : "LOSS (Take Stake)";
 
         setConfirmAction({
-            title: 'ESTABLISH ON-CHAIN VERDICT',
-            message: `MANUAL SETTLE Bet ${betData.publicKey.slice(0, 8)} as ${actionLabel}?`,
+            title: `ESTABLISH ${network.toUpperCase()} VERDICT`,
+            message: `MANUAL SETTLE Bet ${betData.publicKey?.slice(0, 8) || betData.id} as ${actionLabel}?`,
             onConfirm: async () => {
                 try {
-                    const program = getProgram(adminWallet, connection);
-                    const userPub = new PublicKey(betData.owner);
-                    const [betPda] = PublicKey.findProgramAddressSync(
-                        [Buffer.from("bet_v6"), userPub.toBuffer(), new BN(betData.nonce).toArrayLike(Buffer, 'le', 8)],
-                        program.programId
-                    );
+                    if (network === 'arc') {
+                        // Current price for manual settlement (Ideally admin would provide, here we fetch latest)
+                        const pricingRes = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${(betData.symbol || 'ETH') + 'USDT'}`);
+                        const pricingData = await pricingRes.json();
+                        const currentPrice = parseFloat(pricingData.price);
 
-                    const [treasuryPda] = getTreasuryPda(program.programId);
+                        const res = await fetch(`${KEEPER_URL_ARC}/manual-settle`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                betId: betData.nonce || betData.id,
+                                exitPrice: currentPrice,
+                                password: ADMIN_TOKEN
+                            })
+                        });
+                        if (res.ok) {
+                            notify('success', 'SETTLEMENT EXECUTED', `Arc trade #${betData.id} settled.`);
+                        } else {
+                            throw new Error("Arc Keeper rejected settlement");
+                        }
+                    } else {
+                        // Solana Logic
+                        if (!adminWallet || !adminWallet.publicKey) {
+                            notify('error', 'AUTH FAILED', 'Master Authority required.');
+                            return;
+                        }
+                        const program = getProgram(adminWallet, connection);
+                        const userPub = new PublicKey(betData.owner);
 
-                    console.log(`📡 [MANUAL_SETTLE] Relaying on-chain ${userWon ? 'WIN' : 'LOSS'} for:`, betPda.toBase58());
+                        // Handle different versions of program address derivation if needed
+                        const nonce = new BN(betData.nonce);
+                        const [betPda] = PublicKey.findProgramAddressSync(
+                            [Buffer.from("bet_v7"), userPub.toBuffer(), nonce.toArrayLike(Buffer, 'le', 8)],
+                            program.programId
+                        );
 
-                    const tx = await program.methods
-                        .settleBet(userWon)
-                        .accounts({
-                            bet: betPda,
-                            owner: userPub,
-                            treasury: treasuryPda,
-                            keeper: adminWallet.publicKey,
-                            systemProgram: SystemProgram.programId
-                        })
-                        .rpc();
+                        const [treasuryPda] = getTreasuryPda(program.programId);
 
-                    await connection.confirmTransaction(tx, 'confirmed');
-                    notify('success', 'SETTLEMENT EXECUTED', `Trade settled as ${userWon ? 'WON' : 'LOST'}.`);
+                        const tx = await program.methods
+                            .settleBet(userWon)
+                            .accounts({
+                                bet: betPda,
+                                owner: userPub,
+                                treasury: treasuryPda,
+                                keeper: adminWallet.publicKey,
+                                systemProgram: SystemProgram.programId
+                            })
+                            .rpc();
+
+                        await connection.confirmTransaction(tx, 'confirmed');
+                        notify('success', 'SETTLEMENT EXECUTED', `Solana trade settled.`);
+                    }
                     triggerAnalysis();
                 } catch (err) {
                     console.error("Manual settle failed:", err);
@@ -1048,15 +1072,15 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 setProtocolData({
                     activeList: activeBets.map(b => ({
                         publicKey: b.id,
-                        amount: b.amountLamports ? Number(b.amountLamports) / 1e9 : 0, // Fallback if format differs
-                        owner: b.owner,
-                        nonce: b.nonce,
-                        direction: b.direction === 1 ? "buy" : "sell",
+                        amount: b.amountLamports ? Number(b.amountLamports) / 1e9 : (parseFloat(b.amount) || 0),
+                        owner: b.owner || b.user,
+                        nonce: b.nonce || b.id,
+                        direction: b.direction === 1 || b.direction === "buy" ? "buy" : "sell",
                         entryPrice: b.entryPrice,
                         duration: b.duration || 60,
                         timestamp: b.timestamp || (Date.now() / 1000 - 60),
                         isExpired: b.expiry < (Date.now() / 1000),
-                        network: 'protocol'
+                        network: b.network || 'solana'
                     })),
                     totalVolume: protoStats.totalVolume,
                     wallets: protoStats.wallets,
@@ -1080,8 +1104,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             triggerAnalysis();
-            // OPTIMIZED: Reduced to 2s for instant treasury balance updates
-            const interval = setInterval(triggerAnalysis, 2000);
+            // OPTIMIZED: Increased from 2s to 15s to prevent UI freezing
+            const interval = setInterval(triggerAnalysis, 15000);
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, triggerAnalysis]);
@@ -1391,14 +1415,52 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     };
 
     const handleWithdraw = async (amt) => {
-        if (!adminWallet || !adminWallet.publicKey) {
-            notify('error', 'UNAUTHORIZED', 'Root Admin signature required for treasury extraction.');
-            return;
-        }
-
         const amtNum = parseFloat(amt);
         if (isNaN(amtNum) || amtNum <= 0) {
             notify('error', 'INVALID AMOUNT', 'Specify a valid amount for withdrawal.');
+            return;
+        }
+
+        if (adminNetwork === 'ARC') {
+            const currentBal = arcTreasuryBalance;
+            if (amtNum > currentBal) {
+                notify('error', 'INSUFFICIENT FUNDS', 'Treasury balance is lower than the requested withdrawal amount.');
+                return;
+            }
+
+            setConfirmAction({
+                title: 'EXTRACT ARC LIQUIDITY',
+                message: `Are you sure you want to withdraw ${amt} USDC from the Arc Network treasury?`,
+                onConfirm: async () => {
+                    try {
+                        const targetUrl = KEEPER_URL_ARC;
+                        const res = await fetch(`${targetUrl}/withdraw`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                amount: amtNum,
+                                password: ADMIN_TOKEN
+                            })
+                        });
+
+                        const data = await res.json();
+                        if (res.ok) {
+                            notify('success', 'WITHDRAWAL SUCCESS', `Successfully extracted ${amt} USDC. TX: ${data.hash?.slice(0, 10)}...`);
+                            setIsTreasuryModalOpen(false);
+                        } else {
+                            throw new Error(data.error || "Arc withdrawal failed");
+                        }
+                    } catch (e) {
+                        notify('error', 'ARC WITHDRAWAL FAILED', e.message);
+                    }
+                }
+            });
+            return;
+        }
+
+        // Solana Withdrawal Logic
+        if (!adminWallet || !adminWallet.publicKey) {
+            notify('error', 'UNAUTHORIZED', 'Root Admin signature required for treasury extraction.');
             return;
         }
 
@@ -1414,8 +1476,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
             notify('info', 'EXTRACTING FUNDS', 'Broadcasting withdrawal instruction to Solana clusters...');
 
-            const [marketPda] = getMarketPda(programID);
-            const [treasuryPda] = getTreasuryPda(programID);
+            const [marketPda] = getMarketPda(program.programId);
+            const [treasuryPda] = getTreasuryPda(program.programId);
 
             const tx = await program.methods
                 .withdrawTreasury(new BN((amtNum * LAMPORTS_PER_SOL).toString()))
