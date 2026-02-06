@@ -264,7 +264,7 @@ export default function UserApp() {
     try {
       const saved = localStorage.getItem("15market_citadel_settings");
       return saved ? JSON.parse(saved) : { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false };
-    } catch (e) { return { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false }; }
+    } catch (e) { return { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false, rpcEndpoint: 'https://api.devnet.solana.com' }; }
   });
 
   // Sync settings across tabs and periodically
@@ -281,6 +281,36 @@ export default function UserApp() {
       window.removeEventListener('storage', syncSettings);
       clearInterval(interval);
     };
+  }, []);
+
+  // Sync settings with Backend (Keeper)
+  useEffect(() => {
+    const fetchRemoteSettings = async () => {
+      try {
+        const primaryUrl = network === 'solana' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+        const secondaryUrl = network === 'solana' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
+
+        let res = await fetch(`${primaryUrl}/settings`);
+        if (!res.ok) res = await fetch(`${secondaryUrl}/settings`);
+
+        if (res && res.ok) {
+          const remoteSettings = await res.json();
+          // Update local state if different
+          if (JSON.stringify(remoteSettings) !== JSON.stringify(platformSettings)) {
+            setPlatformSettings(remoteSettings);
+            localStorage.setItem('15market_citadel_settings', JSON.stringify(remoteSettings));
+            // Dispatch event for other components listening to storage
+            window.dispatchEvent(new Event('storage'));
+          }
+        }
+      } catch (e) {
+        console.warn("Settings sync failed:", e);
+      }
+    };
+
+    fetchRemoteSettings(); // Initial fetch
+    const settingsInterval = setInterval(fetchRemoteSettings, 10000); // Poll every 10s
+    return () => clearInterval(settingsInterval);
   }, []);
 
   useEffect(() => {

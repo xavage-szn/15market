@@ -205,10 +205,20 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         activeUsers: data.activeCount || 0,
                         // pendingDisputes and networkHealth kept from prev or defaults if needed
                         pendingDisputes: data.pendingDisputes || prev.pendingDisputes || 0,
-                        networkHealth: '100% Operational' // Hardcoded for now as backend doesn't provide it
+                        networkHealth: '100% Operational'
                     }));
+                    setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
+                } else {
+                    throw new Error("Stats request failed");
                 }
-            } catch (e) { console.warn("Admin Revenue/Stats Sync Failed:", e.message); }
+            } catch (e) {
+                console.warn("Admin Revenue/Stats Sync Failed:", e.message);
+                setKeeperHealth(prev => ({
+                    connected: false,
+                    failCount: prev.failCount + 1,
+                    lastCheck: Date.now()
+                }));
+            }
         }, 5000); // Increased frequency for better responsiveness
         return () => clearInterval(interval);
     }, [adminNetwork]);
@@ -740,26 +750,30 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
     const handleSaveSettings = async () => {
         try {
-            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
-            const res = await fetch(`${targetUrl}/settings`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': ADMIN_TOKEN
-                },
-                body: JSON.stringify(platformSettings)
-            });
+            // Push to both keepers to ensure global sync
+            const syncToKeeper = async (url, networkLabel) => {
+                const res = await fetch(`${url}/settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': ADMIN_TOKEN
+                    },
+                    body: JSON.stringify(platformSettings)
+                });
+                if (!res.ok) throw new Error(`${networkLabel} Keeper rejected settings`);
+                return res;
+            };
 
-            if (res.ok) {
-                notify('success', 'CONFIGURATION SYNCED', `Platform settings pushed to ${adminNetwork} Cluster.`);
-                // Also update local storage for local persistence
-                localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
-            } else {
-                throw new Error("Keeper rejected settings update");
-            }
+            await Promise.all([
+                syncToKeeper(KEEPER_URL_SOLANA, 'Solana'),
+                syncToKeeper(KEEPER_URL_ARC, 'Arc')
+            ]);
+
+            notify('success', 'CONFIGURATION SYNCED', `Platform settings pushed to all Network Clusters.`);
+            localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
         } catch (e) {
             console.error("Settings sync failed:", e);
-            notify('error', 'SYNC FAILED', 'Could not push settings to Keeper. Local fallback active.');
+            notify('error', 'SYNC FAILED', e.message || 'Could not push settings to Keepers. Local fallback active.');
             localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
         }
     };
@@ -1094,12 +1108,18 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             if (ts) setClockOffset(ts - (Date.now() / 1000));
 
             setLastSync(new Date().toLocaleTimeString());
+            setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
         } catch (e) {
             console.error("Global Analysis Failed:", e);
+            setKeeperHealth(prev => ({
+                connected: false,
+                failCount: prev.failCount + 1,
+                lastCheck: Date.now()
+            }));
         } finally {
             triggerAnalysis.isRunning = false;
         }
-    }, [connection]);
+    }, [connection, adminNetwork]);
 
     useEffect(() => {
         if (isLoggedIn) {
