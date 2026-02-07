@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDown, Search, CheckCircle, ShieldCheck, X, Loader2, ArrowRightLeft, TrendingUp, Info } from 'lucide-react';
-import { useAppKit, useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
+import { useAccount, useWallet, useModal } from "@getpara/react-sdk";
 import { VersionedTransaction, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 
@@ -11,9 +11,12 @@ if (typeof window !== 'undefined' && !window.Buffer) {
 }
 
 export const SwapPage = ({ onBack, connection }) => {
-    const { address, isConnected } = useAppKitAccount();
-    const { walletProvider } = useAppKitProvider('solana');
-    const { open } = useAppKit();
+    const { isConnected } = useAccount();
+    const { data: wallet } = useWallet();
+    const address = wallet?.address;
+    const { openModal } = useModal();
+    // const { walletProvider } = useAppKitProvider('solana'); // Reown removed
+    const open = openModal; // Alias for compatibility with existing button onClick
 
     const wallet = useMemo(() => {
         if (!isConnected || !address) return { connected: false };

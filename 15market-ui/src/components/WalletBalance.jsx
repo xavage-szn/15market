@@ -1,11 +1,13 @@
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useEffect, useState } from "react";
-import { useAppKitAccount } from "@reown/appkit/react";
+import { useAccount, useWallet } from "@getpara/react-sdk";
 import { useBalance } from "wagmi";
 import { defaultConnection as connection } from "../api/program";
 
 export const WalletBalance = ({ network, theme, balanceOverride, sessionMode }) => {
-    const { address, isConnected } = useAppKitAccount();
+    const { isConnected } = useAccount();
+    const { data: wallet } = useWallet();
+    const address = wallet?.address;
     const [internalBalance, setInternalBalance] = useState(0);
 
     const balance = balanceOverride !== undefined ? balanceOverride : internalBalance;

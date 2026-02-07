@@ -26,7 +26,12 @@ import { AnchorProvider, Program } from "@coral-xyz/anchor";
 import idl from '../idl/sol_prediction.json';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useWallet } from "@getpara/react-sdk";
+import { useWriteContract } from "wagmi"; // Keep wagmi for writeContract if Para supports it, or replace usage.
+// Actually, better to unify. Let's see if we can use Para wallet for signing. The code uses writeContractAsync.
+// If we switch to Para, we might need to useethers/viem with the provider from Para.
+// For now, let's swap the account hook to ensure UI consistency.
+
 import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL } from "../constants";
 import { ARC_CONTRACT_ADDRESS, ARC_RPC } from "../reownConfig";
@@ -36,8 +41,11 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
     autoSignerFees,
     userProfile
 }) => {
-    const { address, isConnected } = useAccount();
+    const { isConnected } = useAccount();
+    const { data: wallet } = useWallet();
+    const address = wallet?.address;
     const { writeContractAsync } = useWriteContract();
+
     const [activeTab, setActiveTab] = useState("overview"); // overview, profile, settings
     const [stats, setStats] = useState({
         userWinRate: 0,

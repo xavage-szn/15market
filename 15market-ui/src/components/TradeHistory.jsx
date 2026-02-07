@@ -1,5 +1,5 @@
 import React, { memo, useState } from 'react';
-import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
+import { useAccount, useWallet } from "@getpara/react-sdk";
 import { Lock, Share2 } from 'lucide-react';
 
 const TradeHistoryComponent = ({
@@ -18,7 +18,9 @@ const TradeHistoryComponent = ({
     currentNetwork
 }) => {
     const { open } = useAppKit();
-    const { address: evmAddress, isConnected } = useAppKitAccount();
+    const { isConnected } = useAccount();
+    const { data: wallet } = useWallet();
+    const evmAddress = wallet?.address;
     const mainAddress = wallet.publicKey?.toBase58();
     const sessionAddress = sessionKeypair?.publicKey.toBase58();
     const isLight = theme === 'light';
