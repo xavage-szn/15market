@@ -9,6 +9,8 @@ export const ARC_RPC_BACKUP = "https://rpc.testnet.arc.network";
 // 2. Keeper Configuration
 export const KEEPER_URL = "https://api.15market.online";
 export const KEEPER_URL_ARC = `${KEEPER_URL}/arc`;
+export const KEEPER_URL_SOLANA = `${KEEPER_URL}/solana`;
+export const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC || "https://api.devnet.solana.com";
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 
 // 2. Project ID

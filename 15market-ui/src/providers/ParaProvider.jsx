@@ -14,7 +14,7 @@ export function AppParaProvider({ children }) {
                 }}
                 config={{
                     appName: "15market",
-                    chains: ["evm"], // Only Arc (EVM)
+                    chains: ["evm", "solana"], // Support both Arc and Solana
                     appLogo: "/logo.png",
                 }}
                 paraModalConfig={{

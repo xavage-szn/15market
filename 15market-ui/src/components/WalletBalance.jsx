@@ -10,25 +10,39 @@ export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
 
     const balance = balanceOverride !== undefined ? balanceOverride : internalBalance;
 
-    const { data: evmBalance, refetch } = useBalance({
+    const isSolana = address && !address.startsWith('0x');
+
+    const { data: evmBalance, refetch: refetchEvm } = useBalance({
         address: address,
         chainId: 5042002, // Arc Testnet
+        query: { enabled: isConnected && !isSolana }
     });
 
     useEffect(() => {
-        if (isConnected && evmBalance) {
-            setInternalBalance(parseFloat(evmBalance.formatted));
-        } else {
+        if (!isConnected || !address) {
             setInternalBalance(0);
+            return;
         }
-    }, [isConnected, evmBalance]);
+
+        if (isSolana) {
+            const fetchSol = async () => {
+                const { Connection } = await import("@solana/web3.js");
+                const conn = new Connection("https://api.devnet.solana.com"); // Simple fallback
+                const bal = await conn.getBalance(new (await import("@solana/web3.js")).PublicKey(address));
+                setInternalBalance(bal / 1e9);
+            };
+            fetchSol();
+        } else if (evmBalance) {
+            setInternalBalance(parseFloat(evmBalance.formatted));
+        }
+    }, [isConnected, address, evmBalance, isSolana]);
 
     useEffect(() => {
-        if (isConnected) {
-            const interval = setInterval(() => refetch(), 5000);
+        if (isConnected && !isSolana) {
+            const interval = setInterval(() => refetchEvm(), 5000);
             return () => clearInterval(interval);
         }
-    }, [isConnected, refetch]);
+    }, [isConnected, refetchEvm, isSolana]);
 
     if (!isConnected) return null;
 
@@ -53,7 +67,7 @@ export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
             )}
 
             <span className={`text-[10px] font-bold font-mono tracking-wide ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC
+                {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {isSolana ? 'SOL' : 'USDC'}
             </span>
         </div>
     );

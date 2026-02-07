@@ -9,8 +9,11 @@ import { MessageSquare, User } from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { useWriteContract, useAccount, useSwitchChain, useWatchContractEvent, useBalance, useSendTransaction, useSignMessage, useDisconnect } from "wagmi";
 import { parseEther, parseUnits } from "viem";
-import * as ethers from "ethers";
+import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { getProgram, defaultConnection as connection, BN } from "./api/program";
+import idl from './idl/sol_prediction.json';
 import ArcABI from "./abi/ArcPrediction.json";
+import * as ethers from "ethers";
 
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
@@ -87,8 +90,8 @@ export default function UserApp() {
   const [enrollments, setEnrollments] = useState({}); // { campaignId: boolean }
   const [userLocation, setUserLocation] = useState(null); // { country, countryCode, lat, lng }
 
-  // Initialize network state to ARC only
-  const network = "arc";
+  // Main Network State
+  const [network, setNetwork] = useState(() => localStorage.getItem("15market_network") || "solana");
   const [theme, setTheme] = useState(() => localStorage.getItem("15market_theme") || "dark");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
 
@@ -135,7 +138,8 @@ export default function UserApp() {
   const address = paraWallet?.address;
   const isConnected = isParaConnected && !!address;
 
-  const { chainId } = useAccount();
+  const { data: paraAccount } = useParaAccount();
+  const { chainId } = useAccount(); // Still useful to see if Wagmi is on Arc
   const { switchChain } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
@@ -146,20 +150,52 @@ export default function UserApp() {
     address: address,
     chainId: 5042002, // Arc Testnet
     query: {
-      enabled: isConnected,
+      enabled: isConnected && address?.startsWith('0x'),
       refetchInterval: 5000,
     }
   });
+
+  // Main Wallet Balance Sync (Multi-chain)
+  useEffect(() => {
+    if (!isConnected || !address) {
+      setBalance(0);
+      return;
+    }
+
+    if (!address.startsWith('0x')) {
+      // Solana Balance
+      const fetchSolBalance = async () => {
+        try {
+          const pubkey = new PublicKey(address);
+          const bal = await connection.getBalance(pubkey, "confirmed");
+          setBalance(bal / LAMPORTS_PER_SOL);
+        } catch (e) {
+          console.error("Solana balance fetch error:", e);
+        }
+      };
+      fetchSolBalance();
+      const id = connection.onAccountChange(new PublicKey(address), (acc) => {
+        setBalance(acc.lamports / LAMPORTS_PER_SOL);
+      }, "confirmed");
+      return () => connection.removeAccountChangeListener(id);
+    } else {
+      // EVM Balance
+      if (evmBalance) {
+        setBalance(parseFloat(evmBalance.formatted));
+      }
+    }
+  }, [isConnected, address, network, evmBalance]);
 
   const authenticated = isConnected;
 
   const wallet = useMemo(() => {
     if (!isConnected || !address || !paraWallet) return { connected: false };
 
+    const isSolana = !address.startsWith('0x');
     try {
       return {
         connected: true,
-        publicKey: null,
+        publicKey: isSolana ? new PublicKey(address) : null,
         signTransaction: async (tx) => {
           if (!paraWallet.signTransaction) throw new Error("Wallet does not support signTransaction");
           return await paraWallet.signTransaction(tx);
@@ -306,12 +342,13 @@ export default function UserApp() {
     setToast(null);
   }, []);
 
-  const { caipNetwork } = useAppKitNetwork();
   const { disconnect } = useDisconnect();
   const navigate = useNavigate();
 
-  const handleNetworkSwitch = async (newNetwork) => {
-    console.log("Network switch disabled. Arc is native.");
+  const handleNetworkSwitch = (newNetwork) => {
+    setNetwork(newNetwork);
+    localStorage.setItem("15market_network", newNetwork);
+    notify(`Switched to ${newNetwork.toUpperCase()} Mode`, "info");
   };
 
   // Clear stale wallet states on app mount
@@ -352,14 +389,14 @@ export default function UserApp() {
   // Debug logging for connection issues
   useEffect(() => {
     if (isConnected) {
-      console.log(`Connected to: ${caipNetwork?.name || 'Unknown'} (ID: ${chainId})`);
+      console.log(`Connected to: ${paraAccount?.chainId || 'Unknown'} (ID: ${chainId})`);
       if (network === 'arc' && chainId !== 5042002) {
         notify("Wrong network detected. Please switch to Arc Testnet.", "error");
       } else if (network === 'arc' && chainId === 5042002) {
         notify("Connected to Arc Network", "success");
       }
     }
-  }, [isConnected, caipNetwork, chainId, network, notify]);
+  }, [isConnected, paraAccount, chainId, network, notify]);
 
   // Dynamic Market State
 
@@ -607,14 +644,6 @@ export default function UserApp() {
     return () => clearInterval(interval);
   }, [evmSessionWallet, updateEvmSessionBal]);
 
-  // Arc / Base Balance from Wagmi
-  useEffect(() => {
-    if (evmBalance) {
-      setBalance(parseFloat(evmBalance.formatted));
-    } else {
-      setBalance(0);
-    }
-  }, [evmBalance]);
 
   // Fetch current user profile
   useEffect(() => {
@@ -920,62 +949,75 @@ export default function UserApp() {
     if (!activePrice || activePrice <= 0) return;
     if (!direction) return notify("Select UP or DOWN first", "error");
     if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
-    if (Number(amount) < parseFloat(minStake)) return notify(`Min trade: ${minStake} USDC`, "error");
+    if (Number(amount) < parseFloat(minStake)) return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
 
-    // Arc Trade execution logic
     setIsExecuting(true);
     try {
-      if (!user?.wallet) {
+      if (!isConnected) {
         notify("Please connect wallet first", "error");
         setIsExecuting(false);
         return;
       }
 
-      // Amount to correct units (USDC on Arc is 18 decimals)
-      const amountWei = parseUnits(amount.toString(), 18);
       const tradeId = Date.now();
-      const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
-      const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
-
       const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
       const entryPriceParams = Math.floor(activePrice * 100000000);
-
       let txHash;
-      if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
-        notify(`Auto-signing on Arc...`, "success");
-        const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-        const feeData = await provider.getFeeData();
-        const sessionWallet = new ethers.Wallet(evmSessionWallet.privateKey, provider);
-        const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, sessionWallet);
 
-        const tx = await contract.placeBet(
-          BigInt(tradeId),
-          Number(dirVal),
-          BigInt(duration),
-          BigInt(entryPriceParams),
-          Number(assetId),
-          {
-            value: amountWei,
-            gasLimit: 600000n,
-            maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || undefined,
-            maxFeePerGas: feeData.maxFeePerGas || undefined
-          }
-        );
-        txHash = tx.hash;
+      if (network === 'solana') {
+        const program = getProgram(wallet, connection);
+        const amountLamports = Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL);
+
+        notify("Confirming on Solana...", "success");
+        txHash = await program.methods
+          .placeBet(
+            dirVal,
+            new BN(amountLamports),
+            new BN(entryPriceParams),
+            new BN(tradeId),
+            Number(duration)
+          )
+          .rpc();
+        notify("Solana Trade Executed!", "success");
       } else {
-        notify(`Confirm on Arc...`, "success");
-        const hash = await writeContractAsync({
-          address: ARC_CONTRACT_ADDRESS,
-          abi: ArcABI.abi,
-          functionName: 'placeBet',
-          args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
-          value: amountWei,
-          gas: 600000n
-        });
-        txHash = hash;
-      }
+        // Arc Trade logic (EVM)
+        const amountWei = parseUnits(amount.toString(), 18);
+        const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
+        const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
 
-      notify(`Trade executed on Arc!`, "success");
+        if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
+          notify(`Auto-signing on Arc...`, "success");
+          const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
+          const feeData = await provider.getFeeData();
+          const sessionWallet = new ethers.Wallet(evmSessionWallet.privateKey, provider);
+          const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, sessionWallet);
+
+          const tx = await contract.placeBet(
+            BigInt(tradeId),
+            Number(dirVal),
+            BigInt(duration),
+            BigInt(entryPriceParams),
+            Number(assetId),
+            {
+              value: amountWei,
+              gasLimit: 600000n,
+            }
+          );
+          txHash = tx.hash;
+        } else {
+          notify(`Confirm on Arc...`, "success");
+          const hash = await writeContractAsync({
+            address: ARC_CONTRACT_ADDRESS,
+            abi: ArcABI.abi,
+            functionName: 'placeBet',
+            args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
+            value: amountWei,
+            gas: 600000n
+          });
+          txHash = hash;
+        }
+        notify(`Arc Trade Executed!`, "success");
+      }
 
       if (sessionMode) setSessionBalance(prev => Math.max(0, prev - parseFloat(amount)));
       else setBalance(prev => Math.max(0, prev - parseFloat(amount)));

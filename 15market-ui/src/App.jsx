@@ -7,14 +7,15 @@ import CampaignPage from "./components/CampaignPage";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
 import { wagmiAdapter } from './reownConfig'
-import { useAppKitAccount } from "@reown/appkit/react";
+import { useWallet } from "@getpara/react-sdk";
 
 // Create Query Client
 const queryClient = new QueryClient()
 
 // Wrapper component to access hooks
 function AppRoutes() {
-  const { address } = useAppKitAccount();
+  const { data: wallet } = useWallet();
+  const address = wallet?.address;
   const network = useMemo(() => localStorage.getItem("15market_network") || "solana", []);
 
   return (
