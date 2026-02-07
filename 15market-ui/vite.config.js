@@ -47,6 +47,7 @@ export default defineConfig({
       "@solana/wallet-adapter-react": path.resolve(__dirname, "./src/utils/mock-module.js"),
       "@solana/wallet-adapter-base": path.resolve(__dirname, "./src/utils/mock-module.js"),
       "@solana/wallet-adapter-wallets": path.resolve(__dirname, "./src/utils/mock-module.js"),
+      "@solana-mobile/wallet-adapter-mobile": path.resolve(__dirname, "./src/utils/mock-module.js"),
     },
   },
   server: {
