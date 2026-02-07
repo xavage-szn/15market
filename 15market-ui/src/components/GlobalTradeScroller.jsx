@@ -38,6 +38,9 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                     if (stats.totalTrades !== undefined) {
                         localStorage.setItem("15market_total_trades", stats.totalTrades.toString());
                     }
+                    if (stats.settings) {
+                        localStorage.setItem("15market_citadel_settings", JSON.stringify(stats.settings));
+                    }
                     setIsConnected(true);
                 }
             } catch (e) { }

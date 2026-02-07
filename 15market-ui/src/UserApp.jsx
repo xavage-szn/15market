@@ -295,6 +295,7 @@ export default function UserApp() {
 
         if (res && res.ok) {
           const remoteSettings = await res.json();
+          console.log("📡 [SETTINGS_SYNC] Received remote settings:", remoteSettings);
           // Update local state if different
           if (JSON.stringify(remoteSettings) !== JSON.stringify(platformSettings)) {
             setPlatformSettings(remoteSettings);
@@ -302,6 +303,8 @@ export default function UserApp() {
             // Dispatch event for other components listening to storage
             window.dispatchEvent(new Event('storage'));
           }
+        } else {
+          console.warn(`⚠️ [SETTINGS_SYNC] Failed fetch from both keepers. Status: ${res?.status}`);
         }
       } catch (e) {
         console.warn("Settings sync failed:", e);

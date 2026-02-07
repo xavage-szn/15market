@@ -177,9 +177,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         const interval = setInterval(async () => {
             try {
                 const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+                console.log(`📡 [ADMIN_SYNC] Polling ${targetUrl}/protocol-stats...`);
                 const res = await fetch(`${targetUrl}/protocol-stats`);
                 if (res.ok) {
                     const data = await res.json();
+                    console.log(`✅ [ADMIN_SYNC] Data received from ${targetUrl}`);
 
                     // Update Revenue Tracker
                     if (data.autoSignerFees !== undefined) {
@@ -203,10 +205,21 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         totalWallets: data.wallets || 0,
                         totalVolume: data.totalVolume ? `${Number(data.totalVolume).toFixed(2)} ${adminNetwork === 'ARC' ? 'USDC' : 'SOL'}` : '0.00',
                         activeUsers: data.activeCount || 0,
-                        // pendingDisputes and networkHealth kept from prev or defaults if needed
                         pendingDisputes: data.pendingDisputes || prev.pendingDisputes || 0,
                         networkHealth: '100% Operational'
                     }));
+
+                    // Sync unified state for dashboard rendering
+                    setEscrowStats(prev => ({
+                        ...prev,
+                        [adminNetwork.toLowerCase()]: {
+                            totalVolume: data.totalVolume || 0,
+                            wallets: data.wallets || 0,
+                            stake: data.activeStakes || 0,
+                            count: data.totalTrades || 0
+                        }
+                    }));
+
                     setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
                 } else {
                     throw new Error("Stats request failed");

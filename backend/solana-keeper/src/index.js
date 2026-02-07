@@ -204,13 +204,32 @@ app.get('/active-bets', async (req, res) => {
     }
 });
 
-app.get('/protocol-stats', (req, res) => res.json({
-    activeCount: trackedBets.size + (arcStats.count || 0),
-    totalTrades: (state.totalTrades || 0) + (arcHistory.length || 0),
-    totalVolume: (state.stats.totalVolume || 0) + (arcStats.totalVolume || 0),
-    wallets: Object.keys(state.userProfiles || {}).length,
-    autoSignerFees: state.autoSignerFees || 0
-}));
+app.get('/protocol-stats', async (req, res) => {
+    try {
+        const totalVolume = await redis.get('global_total_volume') || 0;
+        const totalTrades = await redis.get('global_total_trades') || 0;
+        const wallets = await redis.get('global_total_wallets') || 0;
+        const autoSignerFees = await redis.get('global_autosigner_fees') || 0;
+        const platformSettings = await redis.get('platform_settings') || state.settings;
+
+        res.json({
+            activeCount: trackedBets.size + (arcStats.count || 0),
+            totalTrades: Number(totalTrades),
+            totalVolume: Number(totalVolume),
+            wallets: Number(wallets),
+            autoSignerFees: Number(autoSignerFees),
+            settings: platformSettings
+        });
+    } catch (e) {
+        res.json({
+            activeCount: trackedBets.size + (arcStats.count || 0),
+            totalTrades: (state.totalTrades || 0) + (arcHistory.length || 0),
+            totalVolume: (state.stats.totalVolume || 0) + (arcStats.totalVolume || 0),
+            wallets: Object.keys(state.userProfiles || {}).length,
+            autoSignerFees: state.autoSignerFees || 0
+        });
+    }
+});
 
 app.get('/escrow-stats', (req, res) => res.json({
     solana: state.stats,
@@ -234,11 +253,18 @@ app.post('/settings', async (req, res) => {
 });
 
 
-app.post('/record-fee', (req, res) => {
+app.post('/record-fee', async (req, res) => {
     const { amount } = req.body;
     if (typeof amount === 'number') {
         state.autoSignerFees = (state.autoSignerFees || 0) + amount;
         saveState();
+
+        // Sync to Redis
+        try {
+            const current = await redis.get('global_autosigner_fees') || 0;
+            await redis.set('global_autosigner_fees', Number(current) + amount);
+        } catch (e) { }
+
         console.log(`💰 [FEE] +${amount} SOL`);
         res.json({ success: true, autoSignerFees: state.autoSignerFees });
     } else {
@@ -267,6 +293,16 @@ app.post('/sync-profile', async (req, res) => {
     const { address, username, xHandle, xProfileImage, tosAccepted } = req.body;
     if (address && username) {
         const lookupAddress = address.startsWith('0x') ? address.toLowerCase() : address;
+
+        // Check if new user
+        const existing = await redis.hget('user_profiles', lookupAddress);
+        if (!existing) {
+            try {
+                const currentWallets = await redis.get('global_total_wallets') || 0;
+                await redis.set('global_total_wallets', Number(currentWallets) + 1);
+            } catch (e) { }
+        }
+
         const profile = {
             username,
             xHandle: xHandle || "",
@@ -350,9 +386,16 @@ app.post('/trade-ping', async (req, res) => {
 
         saveState();
 
-        // Sync to Redis
-        await redis.set('total_trades', state.totalTrades);
-        await redis.set('protocol_history', state.history.slice(0, 50)); // Cache recent history
+        // Sync to Redis Global Stats
+        try {
+            const v = await redis.get('global_total_volume') || 0;
+            const t = await redis.get('global_total_trades') || 0;
+            await redis.set('global_total_volume', Number(v) + parseFloat(amount));
+            await redis.set('global_total_trades', Number(t) + 1);
+
+            await redis.set('total_trades', (state.totalTrades || 0)); // Scroller compat
+            await redis.set('protocol_history', state.history.slice(0, 50)); // Cache recent history
+        } catch (e) { }
 
         res.json({ success: true });
 
