@@ -44,11 +44,6 @@ export default defineConfig({
       // Mock unnecessary Cosmos dependency from Para SDK
       "graz": path.resolve(__dirname, "./src/utils/mock-module.js"),
       "@cosmjs/stargate": path.resolve(__dirname, "./src/utils/mock-module.js"),
-      // Mock unnecessary Solana dependencies from Para SDK
-      "@solana/wallet-adapter-react": path.resolve(__dirname, "./src/utils/mock-module.js"),
-      "@solana/wallet-adapter-base": path.resolve(__dirname, "./src/utils/mock-module.js"),
-      "@solana/wallet-adapter-wallets": path.resolve(__dirname, "./src/utils/mock-module.js"),
-      "@solana-mobile/wallet-adapter-mobile": path.resolve(__dirname, "./src/utils/mock-module.js"),
     },
   },
   server: {

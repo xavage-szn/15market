@@ -6,7 +6,7 @@ import CampaignPage from "./components/CampaignPage";
 // Reown & Wagmi Imports
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
-import { wagmiAdapter } from './reownConfig'
+import { wagmiConfig } from './wagmiConfig'
 import { useWallet } from "@getpara/react-sdk";
 
 // Create Query Client
@@ -29,7 +29,7 @@ function AppRoutes() {
 export default function App() {
   // Render Main User Application wrapped in Web3 Providers
   return (
-    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+    <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AppRoutes />
