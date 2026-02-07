@@ -172,9 +172,9 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         return saved ? JSON.parse(saved) : { solana: 0, arc: 0 };
     });
 
-    // Refresh revenue every 10 seconds from Keeper Backend
+    // Refresh revenue every 5 seconds from Keeper Backend
     useEffect(() => {
-        const interval = setInterval(async () => {
+        const fetchStats = async () => {
             try {
                 const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
                 console.log(`📡 [ADMIN_SYNC] Polling ${targetUrl}/protocol-stats...`);
@@ -232,7 +232,13 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                     lastCheck: Date.now()
                 }));
             }
-        }, 5000); // Increased frequency for better responsiveness
+        };
+
+        // Immediate fetch on mount
+        fetchStats();
+
+        // Then poll every 5s
+        const interval = setInterval(fetchStats, 5000);
         return () => clearInterval(interval);
     }, [adminNetwork]);
 

@@ -112,7 +112,18 @@ try {
 }
 
 // --- REDIS INITIALIZATION ---
-redis.connect();
+redis.connect()
+    .then(() => {
+        console.log('✅ REDIS CONNECTED SUCCESSFULLY');
+        console.log('📍 Redis URL:', process.env.REDIS_URL || 'default (localhost:6379)');
+        syncRedis(); // Initial sync
+        setInterval(syncRedis, 10000); // Sync every 10s
+    })
+    .catch(err => {
+        console.error('❌ REDIS CONNECTION FAILED:', err.message);
+        console.error('📍 Attempted URL:', process.env.REDIS_URL || 'default (localhost:6379)');
+        console.error('⚠️ WARNING: Running in LOCAL MODE - data will NOT sync across instances!');
+    });
 
 function saveState() {
     try {
@@ -126,7 +137,12 @@ function saveState() {
 // --- EXPRESS SERVER ---
 const app = express();
 app.set('trust proxy', 1); // Trust Dokploy/Nginx proxy
-app.use(cors());
+app.use(cors({
+    origin: true, // Allow all origins in production
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json()); // Body parser
 
 const PORT = process.env.PORT || 3005;

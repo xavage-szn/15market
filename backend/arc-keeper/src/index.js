@@ -76,9 +76,6 @@ try {
     console.error("Failed to load storage:", e.message);
 }
 
-// --- REDIS ---
-redis.connect();
-
 // --- REDIS SYNC LOGIC ---
 async function syncRedis() {
     try {
@@ -101,9 +98,19 @@ async function syncRedis() {
     }
 }
 
-// Global Sync (Linking User side to Admin side via Redis)
-syncRedis();
-setInterval(syncRedis, 10000); // 10s linkage
+// --- REDIS ---
+redis.connect()
+    .then(() => {
+        console.log('✅ REDIS CONNECTED SUCCESSFULLY');
+        console.log('📍 Redis URL:', process.env.REDIS_URL || 'default (localhost:6379)');
+        syncRedis(); // Initial sync
+        setInterval(syncRedis, 10000); // 10s linkage
+    })
+    .catch(err => {
+        console.error('❌ REDIS CONNECTION FAILED:', err.message);
+        console.error('📍 Attempted URL:', process.env.REDIS_URL || 'default (localhost:6379)');
+        console.error('⚠️ WARNING: Running in LOCAL MODE - data will NOT sync across instances!');
+    });
 
 function saveState() {
     try {
@@ -117,7 +124,12 @@ function saveState() {
 // --- EXPRESS ---
 const app = express();
 app.set('trust proxy', 1); // Trust Dokploy/Nginx proxy
-app.use(cors());
+app.use(cors({
+    origin: true, // Allow all origins in production
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 app.use((req, res, next) => {
