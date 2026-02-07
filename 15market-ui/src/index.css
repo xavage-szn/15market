@@ -31,9 +31,9 @@ body {
   --primary-glow: rgba(60, 179, 113, 0.6);
   --primary-glow-strong: rgba(60, 179, 113, 0.8);
   --primary-glow-subtle: rgba(60, 179, 111, 0.4);
-  --glass-bg: rgba(10, 10, 10, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.05);
-  --glass-highlight: rgba(255, 255, 255, 0.02);
+  --glass-bg: rgba(15, 15, 15, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
 }
 
 .theme-arc {
@@ -49,7 +49,7 @@ body {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 0 0 1px rgba(255, 255, 255, 0.1) inset;
   position: relative;
   overflow: hidden;
 }
@@ -63,7 +63,7 @@ body {
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg,
-      rgba(255, 255, 255, 0.03) 0%,
+      rgba(255, 255, 255, 0.08) 0%,
       transparent 50%,
       transparent 100%);
   pointer-events: none;

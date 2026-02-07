@@ -312,7 +312,7 @@ export default function UserApp() {
     };
 
     fetchRemoteSettings(); // Initial fetch
-    const settingsInterval = setInterval(fetchRemoteSettings, 10000); // Poll every 10s
+    const settingsInterval = setInterval(fetchRemoteSettings, 2000); // Poll every 2s for instant updates
     return () => clearInterval(settingsInterval);
   }, []);
 
