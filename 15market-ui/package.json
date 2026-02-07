@@ -35,6 +35,7 @@
     "ethers": "^6.16.0",
     "events": "^3.3.0",
     "framer-motion": "^11.11.17",
+    "graz": "^0.1.34",
     "html-to-image": "^1.11.13",
     "keen-slider": "^6.8.6",
     "lightweight-charts": "^5.0.9",
