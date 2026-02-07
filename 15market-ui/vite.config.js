@@ -42,7 +42,11 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       // Mock unnecessary Cosmos dependency from Para SDK
-      "graz": path.resolve(__dirname, "./src/utils/mock-graz.js"),
+      "graz": path.resolve(__dirname, "./src/utils/mock-module.js"),
+      // Mock unnecessary Solana dependencies from Para SDK
+      "@solana/wallet-adapter-react": path.resolve(__dirname, "./src/utils/mock-module.js"),
+      "@solana/wallet-adapter-base": path.resolve(__dirname, "./src/utils/mock-module.js"),
+      "@solana/wallet-adapter-wallets": path.resolve(__dirname, "./src/utils/mock-module.js"),
     },
   },
   server: {
