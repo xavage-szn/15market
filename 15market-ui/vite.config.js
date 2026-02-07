@@ -41,6 +41,8 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', '@tanstack/react-query'],
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Mock unnecessary Cosmos dependency from Para SDK
+      "graz": path.resolve(__dirname, "./src/utils/mock-graz.js"),
     },
   },
   server: {
