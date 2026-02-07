@@ -7,6 +7,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { AppParaProvider } from './providers/ParaProvider';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -68,7 +69,9 @@ const Root = () => {
   return (
     <React.StrictMode>
       <ErrorBoundary>
-        <App />
+        <AppParaProvider>
+          <App />
+        </AppParaProvider>
       </ErrorBoundary>
     </React.StrictMode>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAppKitAccount, useAppKitProvider, useAppKitNetwork, useDisconnect } from "@reown/appkit/react";
+import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
 import { defaultConnection as connection } from "./api/program";
 import { rotateRpc, SOLANA_RPC_FALLBACKS } from "./api/program";
 import { hasPendingWalletRequests, clearWalletStorage } from "./utils/walletCleanup";
@@ -140,13 +140,17 @@ export default function UserApp() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const { address, isConnected } = useAppKitAccount();
-  const { chainId } = useAccount();
+  const { isConnected: isParaConnected } = useParaAccount();
+  const { data: paraWallet } = useWallet();
+  const address = paraWallet?.address;
+  const isConnected = isParaConnected && !!address;
+
+  const { chainId } = useAccount(); // Wagmi
   const { switchChain } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
-  const { walletProvider } = useAppKitProvider('solana');
   const { writeContractAsync } = useWriteContract();
   const { signMessageAsync } = useSignMessage();
+  // const { walletProvider } = useAppKitProvider('solana'); // Removed Reown provider
   const { data: evmBalance, refetch: refetchEvmBalance } = useBalance({
     address: address,
     chainId: network === 'arc' ? 5042002 : undefined,
@@ -193,33 +197,33 @@ export default function UserApp() {
   }, [isConnected, network, address]);
 
   const wallet = useMemo(() => {
-    if (!isConnected || !address) return { connected: false };
+    if (!isConnected || !address || !paraWallet) return { connected: false };
 
-    // Solana compatibility wrapper - only attempt to create PublicKey if on Solana network
+    // Solana compatibility wrapper
     try {
       const isSolana = network === 'solana';
       return {
         connected: true,
         publicKey: isSolana ? new PublicKey(address) : null,
         signTransaction: async (tx) => {
-          if (!walletProvider) throw new Error("Wallet not connected");
-          return await walletProvider.signTransaction(tx);
+          if (!paraWallet.signTransaction) throw new Error("Wallet does not support signTransaction");
+          return await paraWallet.signTransaction(tx);
         },
         signAllTransactions: async (txs) => {
-          if (!walletProvider) throw new Error("Wallet not connected");
-          return await walletProvider.signAllTransactions(txs);
+          if (!paraWallet.signAllTransactions) throw new Error("Wallet does not support signAllTransactions");
+          return await paraWallet.signAllTransactions(txs);
         },
         signMessage: async (msg) => {
-          if (!walletProvider) throw new Error("Wallet not connected");
+          if (!paraWallet.signMessage) throw new Error("Wallet does not support signMessage");
           const encoded = new TextEncoder().encode(msg);
-          return await walletProvider.signMessage(encoded);
+          return await paraWallet.signMessage(encoded);
         }
       };
     } catch (e) {
       console.error("Wallet wrapper error:", e);
       return { connected: false };
     }
-  }, [isConnected, address, walletProvider, network]);
+  }, [isConnected, address, paraWallet, network]);
 
   const user = useMemo(() => {
     if (isConnected && address) return { wallet: { address } };
