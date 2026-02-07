@@ -1,84 +1,38 @@
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useEffect, useState } from "react";
 import { useAccount, useWallet } from "@getpara/react-sdk";
 import { useBalance } from "wagmi";
-import { defaultConnection as connection } from "../api/program";
 
-export const WalletBalance = ({ network, theme, balanceOverride, sessionMode }) => {
+export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
     const { isConnected } = useAccount();
     const { data: wallet } = useWallet();
     const address = wallet?.address;
     const [internalBalance, setInternalBalance] = useState(0);
 
     const balance = balanceOverride !== undefined ? balanceOverride : internalBalance;
-    const setBalance = setInternalBalance;
 
-    // Reown Hooks for EVM
     const { data: evmBalance, refetch } = useBalance({
         address: address,
-        token: network === 'arc' ? "0x3600000000000000000000000000000000000000" : undefined,
-        chainId: network === 'arc' ? 5042002 : (network === 'base' ? 8453 : undefined),
+        chainId: 5042002, // Arc Testnet
     });
 
-    const isSolana = network === 'solana';
-
     useEffect(() => {
-        if (isSolana && isConnected && address) {
-            // Validate it's a Solana address (not EVM)
-            if (address.startsWith('0x')) {
-                console.warn("[HEADER-BALANCE] Solana mode with 0x address, skipping:", address);
-                return;
-            }
-
-            let publicKey;
-            try {
-                publicKey = new PublicKey(address);
-                console.log(`[HEADER-BALANCE] Fetching Solana balance for: ${address}...`);
-            } catch (e) {
-                console.error("[HEADER-BALANCE] Invalid Solana Public Key:", address);
-                return;
-            }
-
-            const getBalance = async () => {
-                try {
-                    const bal = await connection.getBalance(publicKey, "confirmed");
-                    const solVal = bal / LAMPORTS_PER_SOL;
-                    console.log(`[HEADER-BALANCE] Success! Balance: ${solVal} SOL`);
-                    setBalance(solVal);
-                } catch (e) {
-                    console.error("[HEADER-BALANCE] Solana balance fetch error:", e);
-                }
-            };
-            getBalance();
-
-            const id = connection.onAccountChange(publicKey, (accountInfo) => {
-                const liveBal = accountInfo.lamports / LAMPORTS_PER_SOL;
-                console.log(`[HEADER-BALANCE] Live update: ${liveBal} SOL`);
-                setBalance(liveBal);
-            }, "confirmed");
-
-            return () => { connection.removeAccountChangeListener(id); };
-        } else if (!isSolana) {
-            if (isConnected && evmBalance) {
-                setBalance(parseFloat(evmBalance.formatted));
-            } else {
-                setBalance(0);
-            }
+        if (isConnected && evmBalance) {
+            setInternalBalance(parseFloat(evmBalance.formatted));
+        } else {
+            setInternalBalance(0);
         }
-    }, [address, network, isSolana, isConnected, evmBalance]);
+    }, [isConnected, evmBalance]);
 
-    // Refresh EVM balance periodically
     useEffect(() => {
-        if (!isSolana && isConnected) {
+        if (isConnected) {
             const interval = setInterval(() => refetch(), 5000);
             return () => clearInterval(interval);
         }
-    }, [isSolana, isConnected, refetch]);
-
+    }, [isConnected, refetch]);
 
     if (!isConnected) return null;
 
-    const networkColor = isSolana ? '#3CB371' : '#3B82F6';
+    const networkColor = '#3B82F6'; // Arc Blue
 
     return (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-xl transition-all duration-300 group hover:scale-105"
@@ -99,10 +53,7 @@ export const WalletBalance = ({ network, theme, balanceOverride, sessionMode }) 
             )}
 
             <span className={`text-[10px] font-bold font-mono tracking-wide ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                {isSolana
-                    ? `${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} SOL`
-                    : `${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${network === 'arc' ? 'USDC' : (evmBalance?.symbol || 'USDC')}`
-                }
+                {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC
             </span>
         </div>
     );

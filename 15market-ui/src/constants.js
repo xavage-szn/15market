@@ -6,10 +6,8 @@ export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS ||
 export const ARC_USDC_ADDRESS = import.meta.env.VITE_ARC_USDC_ADDRESS || "0x3600000000000000000000000000000000000000";
 export const ARC_RPC = "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1";
 export const ARC_RPC_BACKUP = "https://rpc.testnet.arc.network";
-export const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC || "https://api.devnet.solana.com";
 // 2. Keeper Configuration
 export const KEEPER_URL = "https://api.15market.online";
-export const KEEPER_URL_SOLANA = `${KEEPER_URL}/solana`;
 export const KEEPER_URL_ARC = `${KEEPER_URL}/arc`;
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 

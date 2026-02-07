@@ -19,25 +19,15 @@ import {
     AlertCircle
 } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
-import { getProgram } from "../api/program";
-import { getProfilePda } from "../api/pdas";
-import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
-import { AnchorProvider, Program } from "@coral-xyz/anchor";
-import idl from '../idl/sol_prediction.json';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
 import { useAccount, useWallet } from "@getpara/react-sdk";
-import { useWriteContract } from "wagmi"; // Keep wagmi for writeContract if Para supports it, or replace usage.
-// Actually, better to unify. Let's see if we can use Para wallet for signing. The code uses writeContractAsync.
-// If we switch to Para, we might need to useethers/viem with the provider from Para.
-// For now, let's swap the account hook to ensure UI consistency.
-
+import { useWriteContract } from "wagmi";
 import ArcABI from "../abi/ArcPrediction.json";
-import { KEEPER_URL } from "../constants";
-import { ARC_CONTRACT_ADDRESS, ARC_RPC } from "../reownConfig";
+import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC } from "../constants";
 import { parseEther } from "viem";
 
-export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sessionBalance, onRefill, onWithdraw, treasuryBalance, currentNetwork,
+export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance, currentNetwork,
     autoSignerFees,
     userProfile
 }) => {
@@ -46,7 +36,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
     const address = wallet?.address;
     const { writeContractAsync } = useWriteContract();
 
-    const [activeTab, setActiveTab] = useState("overview"); // overview, profile, settings
+    const [activeTab, setActiveTab] = useState("overview"); // overview, profile, community
     const [stats, setStats] = useState({
         userWinRate: 0,
         userTotalTrades: 0,
@@ -60,7 +50,6 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
     });
     const [userHistory, setUserHistory] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isMessagingOpen, setIsMessagingOpen] = useState(false);
     const [localWithdrawAmount, setLocalWithdrawAmount] = useState("");
     const [modalConfig, setModalConfig] = useState(null); // { title: string, message: string, onConfirm: function }
     const [promptConfig, setPromptConfig] = useState(null); // { title: string, placeholder: string, onConfirm: function }
@@ -83,8 +72,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
         const params = new URLSearchParams(window.location.search);
         const xHandle = params.get('x_handle');
         const xImage = params.get('x_image');
-        if (xHandle && (wallet?.publicKey || address)) {
-            console.log("🎯 Detected X Handle from redirect:", xHandle, "Image:", xImage);
+        if (xHandle && address) {
             handleSyncX(xHandle, xImage);
             window.history.replaceState({}, document.title, window.location.pathname);
         }
@@ -92,48 +80,21 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
         fetchMetrics();
         const interval = setInterval(fetchMetrics, 5000); // Poll every 5s
         return () => clearInterval(interval);
-    }, [wallet, connection]);
+    }, [address]);
 
     const handleSyncX = async (handle, image) => {
-        if (!wallet?.publicKey && !address) return;
+        if (!address) return;
         setIsSyncing(true);
         try {
-            // 1. Sync On-Chain (Handle only, as contract doesn't support image URL)
-            if (currentNetwork === 'solana' && wallet?.publicKey) {
-                const program = getProgram(wallet, connection);
-                const [profilePda] = getProfilePda(wallet.publicKey, program.programId);
-                const existing = await program.account.userProfile.fetchNullable(profilePda);
-                const username = existing?.username || `User_${wallet.publicKey.toBase58().slice(0, 4)}`;
-                const discord = existing?.discordHandle || "";
-
-                console.log("🔗 Syncing X handle to Solana:", handle);
-                await program.methods
-                    .syncProfile(username, handle, discord)
-                    .accounts({
-                        user: wallet.publicKey,
-                        profile: profilePda,
-                    })
-                    .rpc();
-            } else if (currentNetwork === 'arc' && address) {
-                console.log("🔗 Syncing X handle to Arc/EVM:", handle);
-                await writeContractAsync({
-                    address: ARC_CONTRACT_ADDRESS,
-                    abi: ArcABI.abi,
-                    functionName: 'syncProfile',
-                    args: [`User_${address.slice(0, 6)}`, handle, ""],
-                });
-            }
-
-            // 2. Sync to Keeper (Handle + Image)
-            await fetch(`${KEEPER_URL}/sync-profile`, {
+            // Sync to Keeper (Handle + Image)
+            await fetch(`${KEEPER_URL_ARC}/profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    address: currentNetwork === 'solana' ? wallet?.publicKey?.toBase58() : address,
-                    username: `Trader_${(wallet?.publicKey?.toBase58() || address || "").slice(0, 4)}`,
+                    address: address,
+                    username: userProfile?.username || `Trader_${address.slice(0, 4)}`,
                     xHandle: handle,
                     xProfileImage: image || "",
-                    network: currentNetwork
                 })
             });
 
@@ -148,48 +109,8 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
 
     const fetchMetrics = async () => {
         try {
-            // 1. User Metrics (Hybrid: On-chain + Local Fallback)
-            let onChainProfile = null;
             let uWins = 0;
             let uTrades = 0;
-
-            // Fetch On-Chain
-            if (currentNetwork === 'solana' && wallet?.publicKey) {
-                const program = getProgram(wallet, connection);
-                try {
-                    const [profilePda] = getProfilePda(wallet.publicKey, program.programId);
-                    const profile = await program.account.userProfile.fetchNullable(profilePda);
-                    if (profile) {
-                        onChainProfile = {
-                            ...profile,
-                            xHandle: profile.xHandle // Match Solana naming? Actually it's x_handle in Anchor but we should normalize
-                        };
-                        uWins = profile.totalWins.toNumber();
-                        uTrades = profile.totalTrades.toNumber();
-                    }
-                } catch (e) {
-                    console.log("On-chain profile not found or error:", e);
-                }
-            } else if (currentNetwork === 'arc' && address) {
-                try {
-                    const provider = new ethers.JsonRpcProvider(ARC_RPC);
-                    const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, provider);
-                    const profile = await contract.profiles(address);
-                    if (profile && profile.totalTrades > 0) {
-                        onChainProfile = {
-                            username: profile.username,
-                            xHandle: profile.xHandle,
-                            totalWins: profile.totalWins,
-                            totalTrades: profile.totalTrades,
-                            totalVolume: profile.totalVolume
-                        };
-                        uWins = Number(profile.totalWins);
-                        uTrades = Number(profile.totalTrades);
-                    }
-                } catch (e) {
-                    console.log("Arc profile error:", e);
-                }
-            }
 
             // Fetch Local History (Fallback/Supplement)
             const localHistoryFn = localStorage.getItem("15market_history_v1");
@@ -197,14 +118,9 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                 try {
                     const localHistory = JSON.parse(localHistoryFn);
                     if (Array.isArray(localHistory)) {
-                        setUserHistory(localHistory.reverse()); // Store full history
-                        const localTrades = localHistory.length;
-                        const localWins = localHistory.filter(t => t.status === "WON").length;
-
-                        // Use whichever is higher (Local might be more up to date if keeper is slow, 
-                        // On-chain might be higher if local storage was cleared)
-                        uTrades = Math.max(uTrades, localTrades);
-                        uWins = Math.max(uWins, localWins);
+                        setUserHistory([...localHistory].reverse()); // Store full history
+                        uTrades = localHistory.length;
+                        uWins = localHistory.filter(t => t.status === "WON").length;
                     }
                 } catch (e) { }
             }
@@ -216,15 +132,10 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                 userTotalWins: uWins
             }));
 
-            // 2. Global Market Data (Live + History)
-            // We combine localStorage history (past) with live fetching if we wanted stricter accuracy
-            // For now, we rely on the same shared localStorage cache that GlobalTradeScroller populates
-            // PLUS we fetch active bets to ensure "Live" data is fresh.
-
+            // Global Market Data
             const savedHistory = localStorage.getItem("15market_global_history_v2");
             let history = savedHistory ? JSON.parse(savedHistory) : [];
 
-            // Simple Analysis
             let bulls = 0;
             let bears = 0;
             let totalStake = 0;
@@ -247,7 +158,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                 marketTotalVol: vol.toFixed(2),
                 bullsInfo: bulls,
                 bearsInfo: bears,
-                recentTrades: history.slice(0, 50).reverse() // Newest first
+                recentTrades: history.slice(0, 50)
             }));
 
             setIsLoading(false);
@@ -257,11 +168,10 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
         }
     };
 
-    // Chart Data Preparation
     const chartData = useMemo(() => {
         return stats.recentTrades
             .slice(0, 20)
-            .reverse() // Oldest to newest for chart
+            .reverse()
             .map((t, i) => ({
                 name: i,
                 amount: parseFloat(t.amount),
@@ -269,12 +179,12 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
             }));
     }, [stats.recentTrades]);
 
+    const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
+
     return (
         <div className="min-h-screen w-full bg-transparent text-white flex flex-col">
-            {/* Fixed Top Navigation Bar - Mobile Optimized */}
             <div className="sticky top-0 z-40 bg-[#0d0d0d] border-b border-white/5 backdrop-blur-xl">
                 <div className="max-w-7xl mx-auto p-4 md:p-6">
-                    {/* Header Row */}
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <button
@@ -286,16 +196,15 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                             <div>
                                 <h1 className="text-lg md:text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
                                     Command Center
-                                    <span className="text-[8px] md:text-[10px] bg-[#3CB371]/20 text-[#3CB371] px-2 py-0.5 rounded border border-[#3CB371]/30">LIVE</span>
+                                    <span className="text-[8px] md:text-[10px] bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded border border-blue-500/30">ARC LIVE</span>
                                 </h1>
                                 <p className="text-[10px] md:text-xs text-white/40 font-bold uppercase tracking-widest hidden md:block">
-                                    {wallet?.publicKey ? `${wallet.publicKey.toBase58().slice(0, 4)}...${wallet.publicKey.toBase58().slice(-4)}` : "Guest View"}
+                                    {address ? truncate(address) : "Guest View"}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Scrollable Tab Bar */}
                     <div className="overflow-x-auto no-scrollbar -mx-4 px-4">
                         <div className="flex bg-[#111] p-1 rounded-xl border border-white/5 w-max md:w-auto">
                             <NavTab active={activeTab} id="overview" label="Overview" icon={<Activity size={14} />} onClick={setActiveTab} />
@@ -306,51 +215,46 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                 </div>
             </div>
 
-            {/* Scrollable Content Area */}
             <div className="flex-1 overflow-y-auto">
                 <div className="max-w-7xl mx-auto p-4 md:p-8">
-
-                    {/* CONTENT AREA */}
                     <div>
                         {activeTab === "overview" && (
                             <div className="space-y-6">
-                                {/* Key Stats Row */}
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <StatCard
                                         label="Market Volume"
-                                        value={`${stats.marketTotalVol} ${currentNetwork === 'arc' ? 'USDC' : 'SOL'}`}
+                                        value={`${stats.marketTotalVol} USDC`}
                                         sub="24h Observed"
-                                        icon={<Globe size={16} className="text-[#3CB371]" />}
+                                        icon={<Globe size={16} className="text-blue-500" />}
                                     />
                                     <StatCard
                                         label="Bullish Sentiment"
                                         value={`${stats.marketSentiment}%`}
                                         sub={`${stats.bullsInfo} Calls vs ${stats.bearsInfo} Puts`}
-                                        icon={<TrendingUp size={16} className={Number(stats.marketSentiment) > 50 ? "text-[#3CB371]" : "text-white/20"} />}
+                                        icon={<TrendingUp size={16} className={Number(stats.marketSentiment) > 50 ? "text-blue-500" : "text-white/20"} />}
                                     />
                                     <StatCard
                                         label="Avg. Stake Size"
-                                        value={`${stats.marketAvgStake} ${currentNetwork === 'arc' ? 'USDC' : 'SOL'}`}
+                                        value={`${stats.marketAvgStake} USDC`}
                                         sub="Per Trade"
-                                        icon={<DollarSign size={16} className="text-[#3CB371]" />}
+                                        icon={<DollarSign size={16} className="text-blue-500" />}
                                     />
                                     <StatCard
                                         label="Your Win Rate"
                                         value={`${stats.userWinRate}%`}
                                         sub={`${stats.userTotalWins} / ${stats.userTotalTrades} Trades`}
-                                        icon={<Award size={16} className="text-[#3CB371]" />}
+                                        icon={<Award size={16} className="text-blue-500" />}
                                         highlight
                                     />
                                 </div>
 
-                                {/* Main Chart Section */}
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                                     <div className="lg:col-span-2 bg-[#111] border border-white/5 rounded-[24px] p-6 relative overflow-hidden">
                                         <div className="flex justify-between items-center mb-6">
                                             <h3 className="text-sm font-black uppercase tracking-widest text-white/40">Market Activity Pulse</h3>
                                             <div className="flex gap-2">
-                                                <span className="h-2 w-2 rounded-full bg-[#3CB371] animate-pulse" />
-                                                <span className="text-[10px] text-[#3CB371] font-bold">Real-time</span>
+                                                <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                                                <span className="text-[10px] text-blue-500 font-bold">Real-time</span>
                                             </div>
                                         </div>
                                         <div className="h-[300px] w-full">
@@ -358,8 +262,8 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                                 <AreaChart data={chartData}>
                                                     <defs>
                                                         <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#3CB371" stopOpacity={0.3} />
-                                                            <stop offset="95%" stopColor="#3CB371" stopOpacity={0} />
+                                                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                                                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                                                         </linearGradient>
                                                     </defs>
                                                     <Tooltip
@@ -369,7 +273,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                                     <Area
                                                         type="monotone"
                                                         dataKey="amount"
-                                                        stroke="#3CB371"
+                                                        stroke="#3B82F6"
                                                         fillOpacity={1}
                                                         fill="url(#colorAmt)"
                                                         strokeWidth={2}
@@ -388,7 +292,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                                 ) : stats.recentTrades.map((t, i) => (
                                                     <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-lg ${t.direction === "UP" ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-[#FF7F50]/10 text-[#FF7F50]"}`}>
+                                                            <div className={`p-2 rounded-lg ${t.direction === "UP" ? "bg-blue-500/10 text-blue-500" : "bg-orange-500/10 text-orange-500"}`}>
                                                                 {t.direction === "UP" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                                             </div>
                                                             <div>
@@ -397,7 +301,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
-                                                            <div className="text-[10px] font-mono font-bold text-[#3CB371]">{t.amount} {currentNetwork === 'arc' ? 'USDC' : 'SOL'}</div>
+                                                            <div className="text-[10px] font-mono font-bold text-blue-500">{t.amount} USDC</div>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -411,7 +315,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                         {activeTab === "profile" && (
                             <div className="max-w-2xl mx-auto bg-[#111] border border-white/5 rounded-[32px] p-8">
                                 <div className="flex flex-col items-center mb-8">
-                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[2px] mb-4 overflow-hidden">
+                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-black p-[2px] mb-4 overflow-hidden">
                                         <div className="w-full h-full rounded-full bg-[#050505] flex items-center justify-center overflow-hidden">
                                             {userProfile?.xProfileImage ? (
                                                 <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
@@ -420,13 +324,13 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                             )}
                                         </div>
                                     </div>
-                                    <h2 className="text-2xl font-black">{userProfile?.username || (wallet?.publicKey ? "Trader" : "Guest User")}</h2>
-                                    <div className="text-sm text-white/40 font-mono mb-4">
-                                        {wallet?.publicKey?.toBase58()}
+                                    <h2 className="text-2xl font-black">{userProfile?.username || (address ? "Trader" : "Guest User")}</h2>
+                                    <div className="text-sm text-white/40 font-mono mb-4 text-center">
+                                        {address}
                                     </div>
                                     <div className="flex items-center gap-3">
                                         {userProfile?.xHandle ? (
-                                            <div className="flex items-center gap-2 px-4 py-2 bg-[#6366f1]/10 border border-[#6366f1]/20 rounded-xl text-[#6366f1]">
+                                            <div className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-500">
                                                 <Globe size={14} />
                                                 <span className="text-[10px] font-black uppercase tracking-widest">@{userProfile.xHandle}</span>
                                             </div>
@@ -435,17 +339,13 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                                 onClick={async () => {
                                                     try {
                                                         const CLIENT_ID = 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
-                                                        const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL}/auth/twitter/callback`);
+                                                        const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL_ARC}/auth/twitter/callback`);
                                                         const SCOPE = encodeURIComponent('users.read tweet.read offline.access');
 
-                                                        // Securely prepare state on backend
-                                                        const prepareRes = await fetch(`${KEEPER_URL}/auth/twitter/prepare`, {
+                                                        const prepareRes = await fetch(`${KEEPER_URL_ARC}/auth/twitter/prepare`, {
                                                             method: 'POST',
                                                             headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify({
-                                                                address: currentNetwork === 'solana' ? wallet?.publicKey?.toBase58() : address,
-                                                                network: currentNetwork
-                                                            })
+                                                            body: JSON.stringify({ address })
                                                         });
                                                         const { state: stateId } = await prepareRes.json();
 
@@ -462,7 +362,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                                         });
                                                     }
                                                 }}
-                                                className="flex items-center gap-2 px-4 py-2 bg-[#1DA1F2]/10 border border-[#1DA1F2]/20 rounded-xl text-[#1DA1F2] hover:bg-[#1DA1F2]/20 transition-all"
+                                                className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-500 hover:bg-blue-500/20 transition-all"
                                             >
                                                 <MessageSquare size={14} />
                                                 <span className="text-[10px] font-black uppercase tracking-widest">Link Twitter (X)</span>
@@ -473,7 +373,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
 
                                 <div className="grid grid-cols-2 gap-4 mb-8">
                                     <div className="p-4 bg-white/5 rounded-2xl text-center">
-                                        <div className="text-3xl font-black text-[#3CB371]">{stats.userTotalWins}</div>
+                                        <div className="text-3xl font-black text-blue-500">{stats.userTotalWins}</div>
                                         <div className="text-[10px] font-bold uppercase tracking-widest text-white/30">Total Wins</div>
                                     </div>
                                     <div className="p-4 bg-white/5 rounded-2xl text-center">
@@ -482,17 +382,16 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                     </div>
                                 </div>
 
-                                <div className="p-4 rounded-xl bg-[#3CB371]/10 border border-[#3CB371]/20 flex gap-4 mb-4">
-                                    <Shield className="text-[#3CB371] shrink-0" />
+                                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-4 mb-4">
+                                    <Shield className="text-blue-500 shrink-0" />
                                     <div>
-                                        <h4 className="font-bold text-[#3CB371] mb-1">Account Status: Good</h4>
+                                        <h4 className="font-bold text-blue-500 mb-1">Account Status: Good</h4>
                                         <p className="text-xs text-white/60 leading-relaxed">
                                             Your account is active. You can now dispute trades below if you find discrepancies.
                                         </p>
                                     </div>
                                 </div>
 
-                                {/* Burner Wallet Section */}
                                 <div className="p-6 bg-black/40 border border-white/5 rounded-[24px] mb-8">
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center gap-3">
@@ -505,15 +404,8 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-xl font-black text-[#3CB371] tabular-nums">{(sessionBalance || 0).toFixed(4)} {currentNetwork === 'arc' ? 'USDC' : 'SOL'}</div>
+                                            <div className="text-xl font-black text-blue-500 tabular-nums">{(sessionBalance || 0).toFixed(4)} USDC</div>
                                             <div className="text-[9px] text-white/20 font-black uppercase tracking-tighter">Current Balance</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-3 bg-black/60 rounded-xl border border-white/5 mb-6">
-                                        <div className="text-[8px] font-black text-white/20 uppercase mb-1 tracking-widest">Burner Public Key</div>
-                                        <div className="text-xs font-mono text-[#3CB371] break-all">
-                                            {sessionKeypair?.publicKey.toBase58()}
                                         </div>
                                     </div>
 
@@ -522,51 +414,39 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                         <div className="flex items-center gap-3 p-1 rounded-xl border border-white/5 bg-black/60">
                                             <input
                                                 type="number"
-                                                step="0.0001"
-                                                min="0.0001"
+                                                step="0.1"
+                                                min="0.1"
                                                 value={localWithdrawAmount}
                                                 onChange={(e) => setLocalWithdrawAmount(e.target.value)}
-                                                className="flex-1 bg-transparent px-3 py-2 text-sm font-black text-[#3CB371] outline-none"
-                                                placeholder={`Max: ${(sessionBalance - 0.0005).toFixed(4)}`}
+                                                className="flex-1 bg-transparent px-3 py-2 text-sm font-black text-blue-500 outline-none"
+                                                placeholder={`Amount to sweep...`}
                                             />
-                                            <span className="pr-3 text-[9px] font-black uppercase text-white/20">{currentNetwork === 'arc' ? 'USDC' : 'SOL'}</span>
+                                            <span className="pr-3 text-[9px] font-black uppercase text-white/20">USDC</span>
                                         </div>
-                                        <p className="text-[8px] font-bold text-white/10 uppercase italic">A 0.5% Protocol Fee applies to all withdrawals.</p>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <button
                                             onClick={() => {
                                                 setPromptConfig({
-                                                    title: `Refill ${currentNetwork === 'arc' ? 'USDC' : 'SOL'}`,
-                                                    placeholder: "Enter amount (e.g. 0.1)",
+                                                    title: `Refill USDC`,
+                                                    placeholder: "Enter amount (e.g. 1.0)",
                                                     onConfirm: (val) => onRefill(val)
                                                 });
                                             }}
-                                            className="py-3 bg-[#3CB371] text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:brightness-110 active:scale-[0.98] transition-all"
+                                            className="py-3 bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:brightness-110 active:scale-[0.98] transition-all"
                                         >
                                             Refill Funds
                                         </button>
                                         <button
                                             onClick={() => {
-                                                const buffer = 0.0005;
-                                                const maxPossible = Math.max(0, sessionBalance - buffer);
                                                 const inputVal = localWithdrawAmount.trim();
-                                                const amtToWithdraw = inputVal === "" ? maxPossible : parseFloat(inputVal);
+                                                const amtToWithdraw = parseFloat(inputVal);
 
                                                 if (isNaN(amtToWithdraw) || amtToWithdraw <= 0) {
                                                     setModalConfig({
                                                         title: "Invalid Amount",
-                                                        message: "Please enter a valid amount or leave it empty to sweep all.",
-                                                        type: 'alert'
-                                                    });
-                                                    return;
-                                                }
-
-                                                if (amtToWithdraw > maxPossible + 0.0000001) {
-                                                    setModalConfig({
-                                                        title: "Balance Exceeded",
-                                                        message: `Amount exceeds available balance. Max possible after gas buffer: ${maxPossible.toFixed(6)}`,
+                                                        message: "Please enter a valid amount to sweep.",
                                                         type: 'alert'
                                                     });
                                                     return;
@@ -574,8 +454,8 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
 
                                                 setModalConfig({
                                                     title: "Confirm Withdrawal",
-                                                    message: `Withdraw ${amtToWithdraw.toFixed(6)} ${currentNetwork === 'arc' ? 'USDC' : 'SOL'} to your main wallet?\n\nProtocol Fee (0.5%) will be deducted.`,
-                                                    onConfirm: () => onWithdraw(amtToWithdraw.toFixed(6)),
+                                                    message: `Withdraw ${amtToWithdraw.toFixed(4)} USDC to your main wallet?\n\nProtocol Fee (1%) will be deducted.`,
+                                                    onConfirm: () => onWithdraw(amtToWithdraw.toFixed(4)),
                                                     confirmText: "Sweep Now",
                                                     type: 'confirm'
                                                 });
@@ -595,53 +475,26 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                         ) : paginatedHistory.map((trade, i) => (
                                             <div key={trade.id || i} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group hover:border-white/10 transition-all">
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${trade.status === "WON" ? "bg-[#3CB371]/20 text-[#3CB371]" : trade.status === "LOST" ? "bg-red-500/20 text-red-500" : "bg-orange-500/20 text-orange-500"}`}>
-                                                        {trade.direction === "buy" ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${trade.status === "WON" ? "bg-blue-500/20 text-blue-500" : trade.status === "LOST" ? "bg-red-500/20 text-red-500" : "bg-orange-500/20 text-orange-500"}`}>
+                                                        {trade.direction === "UP" ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                                                     </div>
                                                     <div>
-                                                        <div className="text-xs font-black uppercase">{trade.direction === "buy" ? "CALL / UP" : "PUT / DOWN"}</div>
+                                                        <div className="text-xs font-black uppercase">{trade.direction === "UP" ? "CALL / UP" : "PUT / DOWN"}</div>
                                                         <div className="text-[10px] text-white/30 font-mono">Entry: ${trade.entryPrice}</div>
                                                     </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-6">
                                                     <div className="text-right">
-                                                        <div className={`text-xs font-black ${trade.status === "WON" ? "text-[#3CB371]" : trade.status === "LOST" ? "text-red-500" : "text-orange-500"}`}>
+                                                        <div className={`text-xs font-black ${trade.status === "WON" ? "text-blue-500" : trade.status === "LOST" ? "text-red-500" : "text-orange-500"}`}>
                                                             {trade.status}
                                                         </div>
-                                                        <div className="text-[10px] text-white/30">{trade.amount} {trade.network === 'arc' ? 'USDC' : 'SOL'}</div>
+                                                        <div className="text-[10px] text-white/30">{trade.amount} USDC</div>
                                                     </div>
-
-                                                    {(trade.status === "LOST" || trade.status === "STUCK" || trade.status === "TIMEOUT") && (
-                                                        <button
-                                                            onClick={() => {
-                                                                const confirmed = window.confirm("Initiate a dispute for this trade? Admins will review the settlement price.");
-                                                                if (confirmed) {
-                                                                    const updated = userHistory.map(t =>
-                                                                        t.id === trade.id ? { ...t, status: "DISPUTED" } : t
-                                                                    );
-                                                                    localStorage.setItem("15market_history_v1", JSON.stringify([...updated].reverse()));
-                                                                    fetchMetrics();
-                                                                }
-                                                            }}
-                                                            className="p-2 rounded-lg bg-white/5 hover:bg-[#FF8C00]/20 text-white/40 hover:text-[#FF8C00] transition-all"
-                                                            title="Dispute Trade"
-                                                        >
-                                                            <AlertCircle size={16} />
-                                                        </button>
-                                                    )}
-
-                                                    {trade.status === "DISPUTED" && (
-                                                        <div className="flex items-center gap-1 text-[9px] font-black text-[#FF8C00] uppercase animate-pulse">
-                                                            <Activity size={12} />
-                                                            URGENT REVIEW
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
                                         ))}
 
-                                        {/* Pagination Controls */}
                                         {totalPages > 1 && (
                                             <div className="flex items-center justify-center gap-2 mt-8 py-4 border-t border-white/5">
                                                 <button
@@ -651,28 +504,6 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                                 >
                                                     Prev
                                                 </button>
-
-                                                <div className="flex gap-1">
-                                                    {[...Array(totalPages)].map((_, i) => {
-                                                        const p = i + 1;
-                                                        // Only show first, last, and pages around current
-                                                        if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
-                                                            return (
-                                                                <button
-                                                                    key={p}
-                                                                    onClick={() => setCurrentPage(p)}
-                                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black transition-all ${currentPage === p ? 'bg-[#3CB371] text-black' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
-                                                                >
-                                                                    {p}
-                                                                </button>
-                                                            );
-                                                        } else if (p === currentPage - 2 || p === currentPage + 2) {
-                                                            return <span key={p} className="text-white/20 px-1">...</span>;
-                                                        }
-                                                        return null;
-                                                    })}
-                                                </div>
-
                                                 <button
                                                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                                                     disabled={currentPage === totalPages}
@@ -690,8 +521,6 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                         {activeTab === "community" && (
                             <div className="max-w-4xl mx-auto">
                                 <MessagingSystem
-                                    wallet={wallet}
-                                    connection={connection}
                                     isOpen={true}
                                     embedded={true}
                                     onClose={() => { }}
@@ -699,13 +528,10 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                 />
                             </div>
                         )}
-
-
                     </div>
                 </div>
             </div>
 
-            {/* Branded Confirm/Alert Modal */}
             {modalConfig && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
                     <motion.div
@@ -713,31 +539,26 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 shadow-2xl relative overflow-hidden"
                     >
-                        {/* Background Glow */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
-
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-blue-500/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10 flex flex-col items-center text-center">
-                            <div className="w-16 h-16 rounded-2xl bg-[#3CB371]/10 flex items-center justify-center mb-6">
+                            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-6">
                                 {modalConfig.type === 'alert' ? (
-                                    <AlertCircle size={32} className="text-[#3CB371]" />
+                                    <AlertCircle size={32} className="text-blue-500" />
                                 ) : (
-                                    <Zap size={32} className="text-[#3CB371]" />
+                                    <Zap size={32} className="text-blue-500" />
                                 )}
                             </div>
-
                             <h3 className="text-2xl font-black text-white mb-2 tracking-tight uppercase">
                                 {modalConfig.title}
                             </h3>
-
                             <p className="text-sm font-medium text-white/50 mb-8 whitespace-pre-line leading-relaxed">
                                 {modalConfig.message}
                             </p>
-
                             <div className="grid grid-cols-2 gap-4 w-full">
                                 {modalConfig.type === 'confirm' && (
                                     <button
                                         onClick={() => setModalConfig(null)}
-                                        className="py-4 bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-white/10 transition-all font-sans"
+                                        className="py-4 bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-white/10 transition-all"
                                     >
                                         Cancel
                                     </button>
@@ -747,7 +568,7 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                         if (modalConfig.onConfirm) modalConfig.onConfirm();
                                         setModalConfig(null);
                                     }}
-                                    className={`py-4 bg-[#3CB371] text-black text-xs font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all font-sans ${modalConfig.type === 'alert' ? 'col-span-2' : ''}`}
+                                    className={`py-4 bg-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all ${modalConfig.type === 'alert' ? 'col-span-2' : ''}`}
                                 >
                                     {modalConfig.confirmText || "OK"}
                                 </button>
@@ -757,7 +578,6 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                 </div>
             )}
 
-            {/* Branded Prompt Modal */}
             {promptConfig && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
                     <motion.div
@@ -765,30 +585,25 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 shadow-2xl relative overflow-hidden"
                     >
-                        {/* Background Glow */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
-
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-blue-500/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10">
                             <h3 className="text-2xl font-black text-white mb-6 tracking-tight uppercase text-center">
                                 {promptConfig.title}
                             </h3>
-
                             <div className="mb-8 relative">
                                 <input
                                     type="number"
                                     autoFocus
                                     placeholder={promptConfig.placeholder}
-                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white font-black text-center focus:border-[#3CB371]/50 outline-none transition-all"
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white font-black text-center focus:border-blue-500/50 outline-none transition-all"
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             promptConfig.onConfirm(e.target.value);
                                             setPromptConfig(null);
                                         }
                                     }}
-                                    id="branded-prompt-input"
                                 />
                             </div>
-
                             <div className="grid grid-cols-2 gap-4 w-full">
                                 <button
                                     onClick={() => setPromptConfig(null)}
@@ -798,11 +613,11 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
                                 </button>
                                 <button
                                     onClick={() => {
-                                        const val = document.getElementById('branded-prompt-input').value;
-                                        if (val) promptConfig.onConfirm(val);
+                                        const val = document.querySelector('input[type="number"]').value;
+                                        promptConfig.onConfirm(val);
                                         setPromptConfig(null);
                                     }}
-                                    className="py-4 bg-[#3CB371] text-black text-xs font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all font-sans"
+                                    className="py-4 bg-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all font-sans"
                                 >
                                     Confirm
                                 </button>
@@ -815,12 +630,12 @@ export const DashboardPage = ({ onBack, wallet, connection, sessionKeypair, sess
     );
 };
 
-const NavTab = ({ id, label, icon, active, onClick }) => (
+const NavTab = ({ active, id, label, icon, onClick }) => (
     <button
         onClick={() => onClick(id)}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${active === id
-            ? "bg-[#3CB371] text-black shadow-lg shadow-[#3CB371]/20"
-            : "text-white/40 hover:text-white hover:bg-white/5"
+        className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${active === id
+            ? 'bg-blue-500 text-white shadow-[0_0_20px_#3B82F650]'
+            : 'text-white/40 hover:text-white hover:bg-white/5'
             }`}
     >
         {icon}
@@ -829,20 +644,12 @@ const NavTab = ({ id, label, icon, active, onClick }) => (
 );
 
 const StatCard = ({ label, value, sub, icon, highlight }) => (
-    <div className={`p-6 rounded-[24px] border transition-all hover:scale-[1.02] ${highlight ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : 'bg-[#111] border-white/5'}`}>
+    <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-blue-500/10 border-blue-500/30' : 'bg-[#111] border-white/5'}`}>
         <div className="flex justify-between items-start mb-4">
-            <span className={`text-[9px] font-black uppercase tracking-widest ${highlight ? 'text-[#3CB371]' : 'text-white/30'}`}>{label}</span>
-            <div className={`p-2 rounded-lg ${highlight ? 'bg-[#3CB371]/20' : 'bg-white/5'}`}>
-                {icon}
-            </div>
+            <div className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{label}</div>
+            <div className="p-2 bg-white/5 rounded-lg">{icon}</div>
         </div>
-        <div className="text-3xl font-black text-white tracking-tight mb-1">{value}</div>
-        {sub && <div className="text-[10px] font-bold text-white/30 uppercase tracking-wider">{sub}</div>}
-    </div>
-);
-
-const Toggle = ({ active }) => (
-    <div className={`w-10 h-6 rounded-full p-1 transition-colors ${active ? 'bg-[#3CB371]' : 'bg-white/10'}`}>
-        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${active ? 'translate-x-4' : ''}`} />
+        <div className="text-xl md:text-2xl font-black mb-1 tracking-tighter">{value}</div>
+        <div className="text-[8px] md:text-[10px] font-bold text-white/20 uppercase">{sub}</div>
     </div>
 );

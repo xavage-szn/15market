@@ -1,8 +1,6 @@
 import React, { memo } from 'react';
-import { Zap } from 'lucide-react';
 
 const TradeTerminalComponent = ({
-    activeTrade,
     sessionMode,
     setSessionMode,
     price,
@@ -14,52 +12,32 @@ const TradeTerminalComponent = ({
     amount,
     handleAmountChange,
     balance,
-    sliderValue,
     handleSliderChange,
     executeTrade,
-    minStake,
-    timerActive,
     isExecuting,
     wallet,
-    refillAmount,
-    setRefillAmount,
-    onRefill,
-    onWithdraw,
-    CORAL,
-    GREEN,
-    currentNetwork,
-    chainId,
-    switchChain,
-    evmSessionWallet,
-    sessionKeypair,
     theme,
-    hasProfile,
-    activeMarket,
     maintenanceMode = false
 }) => {
-    const isArc = currentNetwork === 'arc';
-    const isWrongNetwork = isArc && chainId !== 5042002;
     const isLight = theme === 'light';
 
     return (
         <div className={`w-full h-full p-2 lg:p-5 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-2 lg:gap-4 ${isLight ? 'static-panel-light !shadow-xl' : ''}`}>
 
-            {/* Header: Title + Engine Status + Right Controls */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 lg:gap-6">
                     <div className="flex items-center gap-1">
                         <h2 className={`text-[10px] lg:text-lg font-black tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>
                             TERMINAL
                         </h2>
-                        <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: GREEN, boxShadow: `0 0-10px ${GREEN}` }} />
+                        <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#3B82F6', boxShadow: `0 0-10px #3B82F6` }} />
                     </div>
 
-                    {/* Auto Sign Toggle - Now on the same line as Terminal */}
                     <div className="flex items-center gap-1 lg:gap-2">
                         <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
                         <button
                             onClick={() => setSessionMode(!sessionMode)}
-                            className={`w-5 border lg:w-8 h-2.5 lg:h-4 rounded-full relative transition-all duration-300 ${sessionMode ? 'bg-[#3CB371] border-transparent' : (isLight ? 'bg-black/10 border-black/10' : 'bg-white/10 border-white/10')}`}
+                            className={`w-5 border lg:w-8 h-2.5 lg:h-4 rounded-full relative transition-all duration-300 ${sessionMode ? 'bg-blue-500 border-transparent' : (isLight ? 'bg-black/10 border-black/10' : 'bg-white/10 border-white/10')}`}
                         >
                             <div className={`absolute top-0.5 left-0.5 w-1.5 h-1.5 lg:w-3 lg:h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${sessionMode ? 'translate-x-3 lg:translate-x-4' : 'translate-x-0'}`} />
                         </button>
@@ -67,75 +45,71 @@ const TradeTerminalComponent = ({
                 </div>
 
                 <div className="flex flex-col items-end">
-                    {/* Market Price - Box Removed */}
                     <div className="flex flex-col items-end">
                         <span className="text-[5px] lg:text-[6px] font-black opacity-30 uppercase tracking-widest">Market</span>
-                        <span className="text-[7px] lg:text-[10px] font-mono font-black" style={{ color: GREEN }}>
+                        <span className="text-[7px] lg:text-[10px] font-mono font-black" style={{ color: '#3B82F6' }}>
                             ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* CALL / PUT Buttons */}
             <div className="grid grid-cols-2 gap-1 lg:gap-2">
                 <button
-                    onClick={() => !maintenanceMode && setDirection("buy")}
+                    onClick={() => !maintenanceMode && setDirection("UP")}
                     disabled={maintenanceMode}
-                    className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "buy"
-                        ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
+                    className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "UP"
+                        ? (isLight ? 'bg-blue-500 text-white border-transparent' : 'bg-blue-500/20 border-blue-500 text-blue-500')
                         : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                         }`}
                     style={{
-                        boxShadow: direction === "buy" ? `0 0 20px ${GREEN}33` : 'none'
+                        boxShadow: direction === "UP" ? `0 0 20px rgba(59, 130, 246, 0.2)` : 'none'
                     }}
                 >
                     <span className="text-[7px] lg:text-[10px] font-black uppercase tracking-widest">Call</span>
                 </button>
                 <button
-                    onClick={() => !maintenanceMode && setDirection("sell")}
+                    onClick={() => !maintenanceMode && setDirection("DOWN")}
                     disabled={maintenanceMode}
-                    className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "sell"
+                    className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "DOWN"
                         ? (isLight ? 'bg-[#FF7F50] text-white border-transparent' : 'bg-[#FF7F50]/20 border-[#FF7F50] text-[#FF7F50]')
                         : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                         }`}
                     style={{
-                        boxShadow: direction === "sell" ? `0 0 20px ${CORAL}33` : 'none'
+                        boxShadow: direction === "DOWN" ? `0 0 20px rgba(255, 127, 80, 0.2)` : 'none'
                     }}
                 >
                     <span className="text-[7px] lg:text-[10px] font-black uppercase tracking-widest">Put</span>
                 </button>
             </div>
 
-            {/* Duration Selector */}
             <div className="flex flex-col gap-1 lg:gap-2">
                 <div className="flex items-center justify-between px-0.5">
                     <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
-                    <span className="text-[6px] lg:text-[8px] font-mono font-bold" style={{ color: GREEN }}>
+                    <span className="text-[6px] lg:text-[8px] font-mono font-bold" style={{ color: '#3B82F6' }}>
                         {duration === 5 ? '6.98x' : duration === 10 ? '4.98x' : '1.98x'}
                     </span>
                 </div>
                 <div className="grid grid-cols-3 gap-1 lg:gap-2">
-                    {[15, 10, 5].map(d => (
+                    {[60, 300, 900].map(d => (
                         <button
                             key={d}
                             onClick={() => setDuration(d)}
                             className={`flex flex-col items-center justify-center py-1.5 lg:py-3 rounded-xl border transition-all duration-300 active:scale-95 ${duration === d
-                                ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
+                                ? (isLight ? 'bg-blue-500 text-white border-transparent' : 'bg-blue-500/20 border-blue-500 text-blue-500')
                                 : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
                                 }`}
                         >
-                            <span className="text-[10px] lg:text-base font-black tracking-tighter">{d}s</span>
+                            <span className="text-[10px] lg:text-base font-black tracking-tighter">{d / 60}m</span>
                         </button>
                     ))}
                 </div>
             </div>
 
-            {/* Stake Amount */}
             <div className="flex flex-col gap-1 lg:gap-2">
                 <div className="flex items-center justify-between px-1">
                     <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
-                    <span className={`text-[6px] lg:text-[8px] font-bold opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>{(sessionMode ? sessionBalance : balance).toFixed(1)}</span>
+                    <span className={`text-[6px] lg:text-[8px] font-bold opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>{(sessionMode ? sessionBalance : balance).toFixed(2)}</span>
                 </div>
                 <div className={`flex items-center gap-1.5 p-1.5 lg:p-2.5 rounded-xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
                     <input
@@ -146,35 +120,34 @@ const TradeTerminalComponent = ({
                         className={`w-full bg-transparent text-xs lg:text-lg font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
                     />
                     <div className={`px-1 lg:px-1.5 py-0.5 rounded-md text-[5px] lg:text-[8px] font-black uppercase tracking-tight ${isLight ? 'bg-black/10 text-black/60' : 'bg-white/10 text-white/60'}`}>
-                        {currentNetwork === 'solana' ? 'SOL' : 'USDC'}
+                        USDC
                     </div>
                 </div>
                 <input
                     type="range"
                     min="0"
                     max="100"
-                    value={sliderValue}
+                    step="1"
                     onChange={handleSliderChange}
                     className={`w-full h-0.5 lg:h-1 rounded-lg appearance-none cursor-pointer ${isLight ? 'bg-black/10' : 'bg-white/10'}`}
-                    style={{ accentColor: GREEN }}
+                    style={{ accentColor: '#3B82F6' }}
                 />
             </div>
 
-            {/* Action Button */}
             <button
                 id="trade-confirm-button"
-                onClick={isWrongNetwork ? () => switchChain({ chainId: 5042002 }) : executeTrade}
+                onClick={executeTrade}
                 disabled={isExecuting || maintenanceMode}
                 className={`w-full py-2.5 lg:py-3.5 rounded-xl font-black text-[8px] lg:text-[10px] uppercase tracking-[0.2em] lg:tracking-[0.3em] transition-all 
                 ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "hover:brightness-110 active:scale-[0.99] shadow-xl"}`}
                 style={{
-                    background: maintenanceMode ? "#333" : (isWrongNetwork ? "#3B82F6" : (direction === "sell" ? CORAL : GREEN)),
+                    background: maintenanceMode ? "#333" : (direction === "DOWN" ? '#FF7F50' : '#3B82F6'),
                     color: "white",
-                    boxShadow: maintenanceMode ? "none" : `0 5px 15px ${isWrongNetwork ? "#3B82F633" : (direction === "sell" ? CORAL + '33' : GREEN + '33')}`,
+                    boxShadow: maintenanceMode ? "none" : `0 5px 15px ${direction === "DOWN" ? 'rgba(255, 127, 80, 0.2)' : 'rgba(59, 130, 246, 0.2)'}`,
                     cursor: maintenanceMode ? "not-allowed" : "pointer"
                 }}
             >
-                {maintenanceMode ? "PAUSED" : (isExecuting ? "Wait" : (wallet.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect")}
+                {maintenanceMode ? "PAUSED" : (isExecuting ? "Wait" : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect")}
             </button>
         </div>
     );

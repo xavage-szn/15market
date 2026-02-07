@@ -13,7 +13,7 @@ export function AppParaProvider({ children }) {
                 }}
                 config={{
                     appName: "15market",
-                    chains: ["solana", "evm"], // Adjust based on supported chains
+                    chains: ["evm"], // Only Arc (EVM)
                 }}
             >
                 {children}

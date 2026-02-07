@@ -1,18 +1,15 @@
 import React from 'react';
-import { useModal, useAccount, useWallet } from "@getpara/react-sdk";
+import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
 import { Copy, LogOut, ChevronDown } from 'lucide-react';
 
 export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) => {
     const { openModal } = useModal();
-    const { isConnected } = useAccount();
-    const { data: wallet } = useWallet();
-    const address = wallet?.address;
+    const { isConnected: isParaConnected } = useParaAccount();
+    const { data: paraWallet } = useWallet();
+    const address = paraWallet?.address;
+    const isConnected = isParaConnected && !!address;
 
-    const chainColors = {
-        solana: '#3CB371',
-        arc: '#3B82F6',
-    };
-    const currentColor = chainColors[currentNetwork] || chainColors.solana;
+    const currentColor = '#3B82F6'; // Arc Blue
 
     if (!isConnected) {
         return (

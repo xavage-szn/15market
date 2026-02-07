@@ -12,6 +12,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
     "@fontsource/inter": "^5.2.8",
+    "@getpara/react-sdk": "^2.8.0",
     "@jup-ag/api": "^6.0.48",
     "@pythnetwork/client": "^2.22.1",
     "@pythnetwork/pyth-solana-receiver": "^0.13.0",

@@ -2,23 +2,17 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { defaultConnection as connection } from "./api/program";
-import { rotateRpc, SOLANA_RPC_FALLBACKS } from "./api/program";
-import { hasPendingWalletRequests, clearWalletStorage } from "./utils/walletCleanup";
-import { useWriteContract, useAccount, useSwitchChain, useWatchContractEvent, useBalance, useSendTransaction, useSignMessage } from "wagmi";
-import { parseEther, parseUnits } from "viem";
-import * as ethers from "ethers";
-import ArcABI from "./abi/ArcPrediction.json";
-
-import { WalletBalance } from "./components/WalletBalance";
-import { LAMPORTS_PER_SOL, SystemProgram, PublicKey, SendTransactionError, Keypair, Transaction, ComputeBudgetProgram } from "@solana/web3.js";
-import { getProgram, BN, programID } from "./api/program";
-import { getMarketPda, getBetPda, getTreasuryPda, getProfilePda } from "./api/pdas";
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
 import { MessageSquare, User } from "lucide-react";
 import { Stamp } from "./components/Stamp";
+import { useWriteContract, useAccount, useSwitchChain, useWatchContractEvent, useBalance, useSendTransaction, useSignMessage, useDisconnect } from "wagmi";
+import { parseEther, parseUnits } from "viem";
+import * as ethers from "ethers";
+import ArcABI from "./abi/ArcPrediction.json";
+
+import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 
@@ -93,12 +87,8 @@ export default function UserApp() {
   const [enrollments, setEnrollments] = useState({}); // { campaignId: boolean }
   const [userLocation, setUserLocation] = useState(null); // { country, countryCode, lat, lng }
 
-  // Initialize network state BEFORE using it in wallet memo and balance hooks
-  const currentNetwork = useMemo(() => localStorage.getItem("15market_network") || "solana", []);
-  const [network, setNetwork] = useState(currentNetwork);
-
-  // Theme state
-  // Theme state
+  // Initialize network state to ARC only
+  const network = "arc";
   const [theme, setTheme] = useState(() => localStorage.getItem("15market_theme") || "dark");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
 
@@ -145,66 +135,31 @@ export default function UserApp() {
   const address = paraWallet?.address;
   const isConnected = isParaConnected && !!address;
 
-  const { chainId } = useAccount(); // Wagmi
+  const { chainId } = useAccount();
   const { switchChain } = useSwitchChain();
-  const { sendTransactionAsync } = useSendTransaction();
   const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
   const { signMessageAsync } = useSignMessage();
-  // const { walletProvider } = useAppKitProvider('solana'); // Removed Reown provider
+
+  // Use raw Wagmi hooks for balance
   const { data: evmBalance, refetch: refetchEvmBalance } = useBalance({
     address: address,
-    chainId: network === 'arc' ? 5042002 : undefined,
+    chainId: 5042002, // Arc Testnet
     query: {
-      enabled: network === 'arc',
+      enabled: isConnected,
       refetchInterval: 5000,
     }
   });
 
   const authenticated = isConnected;
 
-  // Solana Balance Polling
-  useEffect(() => {
-    if (!isConnected || network !== 'solana' || !address) {
-      if (!isConnected) console.log("[BALANCE] Not connected, skipping Solana fetch");
-      return;
-    }
-
-    const fetchSolBalance = async () => {
-      try {
-        if (address.startsWith('0x')) return;
-
-        const currentRpc = connection.rpcEndpoint;
-        console.log(`[BALANCE] Fetching Solana balance from ${currentRpc} for: ${address}...`);
-
-        const pubKey = new PublicKey(address);
-        const bal = await connection.getBalance(pubKey, 'confirmed');
-        const solVal = bal / LAMPORTS_PER_SOL;
-
-        setBalance(solVal);
-        console.log(`[BALANCE] Success! Balance: ${solVal} SOL`);
-      } catch (e) {
-        console.error("[BALANCE] Solana balance fetch error:", e.message);
-        // Automatic RPC Rotation
-        const failedUrl = connection.rpcEndpoint;
-        const { rotateRpc } = await import("./api/program");
-        rotateRpc(failedUrl);
-      }
-    };
-
-    fetchSolBalance();
-    const intv = setInterval(fetchSolBalance, 10000);
-    return () => clearInterval(intv);
-  }, [isConnected, network, address]);
-
   const wallet = useMemo(() => {
     if (!isConnected || !address || !paraWallet) return { connected: false };
 
-    // Solana compatibility wrapper
     try {
-      const isSolana = network === 'solana';
       return {
         connected: true,
-        publicKey: isSolana ? new PublicKey(address) : null,
+        publicKey: null,
         signTransaction: async (tx) => {
           if (!paraWallet.signTransaction) throw new Error("Wallet does not support signTransaction");
           return await paraWallet.signTransaction(tx);
@@ -215,7 +170,7 @@ export default function UserApp() {
         },
         signMessage: async (msg) => {
           if (!paraWallet.signMessage) throw new Error("Wallet does not support signMessage");
-          const encoded = new TextEncoder().encode(msg);
+          const encoded = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
           return await paraWallet.signMessage(encoded);
         }
       };
@@ -223,32 +178,27 @@ export default function UserApp() {
       console.error("Wallet wrapper error:", e);
       return { connected: false };
     }
-  }, [isConnected, address, paraWallet, network]);
+  }, [isConnected, address, paraWallet]);
+
+  const { open: openPara } = useModal();
+  const login = () => openPara();
 
   const user = useMemo(() => {
     if (isConnected && address) return { wallet: { address } };
     return null;
   }, [isConnected, address]);
 
-  const login = () => {
-    // handled by button
-    console.log("Login requested");
-  };
-
-  const GREEN = theme === 'light'
-    ? (network === "solana" ? "#059669" : "#2563eb") // Light mode: Darker Green / Darker Blue
-    : (network === "solana" ? "#3CB371" : "#3B82F6"); // Dark mode: Original Green / Arc Blue
+  const GREEN = theme === 'light' ? "#2563eb" : "#3B82F6";
   const CORAL = "#FF7F50";
 
   useEffect(() => {
     localStorage.setItem("15market_network", network);
   }, [network]);
 
-  const themeClass = network === "solana" ? "" : `theme-${network}`;
+  const themeClass = "theme-arc";
 
   // Session Wallet State
   const [sessionMode, setSessionMode] = useState(false);
-  const [sessionKeypair, setSessionKeypair] = useState(null);
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
   const [sessionBalance, setSessionBalance] = useState(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
@@ -261,14 +211,14 @@ export default function UserApp() {
   // 15MARKET REVENUE TRACKER (Auto-Signer Fees)
   const [autoSignerFees, setAutoSignerFees] = useState(() => {
     const saved = localStorage.getItem("15market_autosigner_fees");
-    return saved ? JSON.parse(saved) : { solana: 0, arc: 0 };
+    return saved ? JSON.parse(saved) : { arc: 0 };
   });
 
   const [platformSettings, setPlatformSettings] = useState(() => {
     try {
       const saved = localStorage.getItem("15market_citadel_settings");
       return saved ? JSON.parse(saved) : { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false };
-    } catch (e) { return { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false, rpcEndpoint: 'https://api.devnet.solana.com' }; }
+    } catch (e) { return { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false }; }
   });
 
   // Sync settings across tabs and periodically
@@ -291,11 +241,8 @@ export default function UserApp() {
   useEffect(() => {
     const fetchRemoteSettings = async () => {
       try {
-        const primaryUrl = network === 'solana' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
-        const secondaryUrl = network === 'solana' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
-
+        const primaryUrl = KEEPER_URL_ARC;
         let res = await fetch(`${primaryUrl}/settings`);
-        if (!res.ok) res = await fetch(`${secondaryUrl}/settings`);
 
         if (res && res.ok) {
           const remoteSettings = await res.json();
@@ -332,11 +279,11 @@ export default function UserApp() {
     // 1. Update local state for instant UI feedback
     setAutoSignerFees(prev => ({
       ...prev,
-      [network]: prev[network] + amount
+      arc: prev.arc + amount
     }));
 
     // 2. Persist to Keeper Backend
-    const targetUrl = network === 'arc' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
+    const targetUrl = KEEPER_URL_ARC;
     try {
       await fetch(`${targetUrl}/record-fee`, {
         method: 'POST',
@@ -344,7 +291,7 @@ export default function UserApp() {
           'Content-Type': 'application/json',
           'Authorization': ADMIN_TOKEN
         },
-        body: JSON.stringify({ network, amount })
+        body: JSON.stringify({ network: 'arc', amount })
       });
     } catch (e) {
       console.error("Failed to sync fee with keeper:", e);
@@ -364,22 +311,7 @@ export default function UserApp() {
   const navigate = useNavigate();
 
   const handleNetworkSwitch = async (newNetwork) => {
-    if (network === newNetwork) return;
-
-    if (isConnected && caipNetwork?.id) {
-      const isSolanaWallet = String(caipNetwork.id).startsWith('solana');
-      const targetIsSolana = newNetwork === 'solana';
-
-      // Strict Disconnect on VM Mismatch
-      if (isSolanaWallet !== targetIsSolana) {
-        await disconnect();
-        notify("Wallet disconnected for network switch", "info");
-      }
-    }
-
-
-
-    setNetwork(newNetwork);
+    console.log("Network switch disabled. Arc is native.");
   };
 
   // Clear stale wallet states on app mount
@@ -443,7 +375,7 @@ export default function UserApp() {
     const saved = localStorage.getItem('15market_listed_tokens');
     const listed = saved ? JSON.parse(saved) : defaultTokens;
 
-    const activeId = localStorage.getItem('15market_active_token_id') || 'sol';
+    const activeId = localStorage.getItem('15market_active_token_id') || 'eth'; // Default to ETH
     return listed.find(t => t.id === activeId) || listed[0];
   });
 
@@ -451,8 +383,8 @@ export default function UserApp() {
   useEffect(() => {
     const syncMarket = async () => {
       try {
-        const targetUrl = network === 'arc' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
-        // 1. Fetch Remote Listings from Keeper (Source of Truth - Network Specific)
+        const targetUrl = KEEPER_URL_ARC;
+        // 1. Fetch Remote Listings from Keeper (Source of Truth)
         const res = await fetch(`${targetUrl}/listings`);
         const remoteListings = await res.json();
 
@@ -461,7 +393,7 @@ export default function UserApp() {
           const remoteStr = JSON.stringify(remoteListings);
 
           if (currentListedStr !== remoteStr) {
-            console.log(`🔄 Market listings updated from ${network} Keeper.`);
+            console.log(`🔄 Market listings updated from Arc Keeper.`);
             localStorage.setItem('15market_listed_tokens', remoteStr);
           }
         }
@@ -483,18 +415,16 @@ export default function UserApp() {
         if (settingsData) {
           const settingsStr = JSON.stringify(settingsData);
           if (localStorage.getItem('15market_citadel_settings') !== settingsStr) {
-            console.log(`🛡️ Syncing platform settings from ${network} Keeper.`);
+            console.log(`🛡️ Syncing platform settings from Arc Keeper.`);
             setPlatformSettings(settingsData);
           }
         }
-
-
       } catch (e) {
         // Fallback to local storage if keeper is down
       }
 
       const listed = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
-      const activeId = localStorage.getItem('15market_active_token_id') || 'sol'; // Default to SOL as per request
+      const activeId = localStorage.getItem('15market_active_token_id') || 'eth'; // Default to ETH
       const market = listed.find(t => t.id === activeId);
 
       if (market) {
@@ -528,17 +458,11 @@ export default function UserApp() {
 
   const fetchCampaigns = useCallback(async () => {
     try {
-      const targetUrl = network === 'arc' ? KEEPER_URL_ARC : KEEPER_URL_SOLANA;
+      const targetUrl = KEEPER_URL_ARC;
       const res = await fetch(`${targetUrl}/campaigns`);
       if (!res.ok) return;
       const data = await res.json();
       setCampaigns(data);
-
-      const wbRes = await fetch(`${KEEPER_URL_SOLANA}/winner-banner`);
-      if (wbRes.ok) {
-        const wbData = await wbRes.json();
-        setWinnerBanner(wbData && wbData.winnerAddress ? wbData : null);
-      }
 
       if (address && data.length > 0) {
         // Check enrollments for all active campaigns
@@ -548,7 +472,7 @@ export default function UserApp() {
 
         for (const c of active) {
           if (newEnrollments[c.id] === undefined) {
-            const eRes = await fetch(`${KEEPER_URL_SOLANA}/enroll?campaignId=${c.id}&address=${address}`);
+            const eRes = await fetch(`${KEEPER_URL_ARC}/enroll?campaignId=${c.id}&address=${address}`);
             if (eRes.ok) {
               const eData = await eRes.json();
               newEnrollments[c.id] = eData.enrolled;
@@ -592,7 +516,7 @@ export default function UserApp() {
       return;
     }
     try {
-      const res = await fetch(`${KEEPER_URL_SOLANA}/enroll`, {
+      const res = await fetch(`${KEEPER_URL_ARC}/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaignId, address })
@@ -605,9 +529,8 @@ export default function UserApp() {
   };
 
   const minStake = useMemo(() => {
-    if (network === 'solana') return "0.005"; // ~1 USD at $200 SOL
-    return "0.1"; // 0.1 USDC minimum for Arc/Base
-  }, [network]);
+    return "0.1"; // 0.1 USDC min stake on Arc
+  }, []);
 
   // Persistence
   useEffect(() => {
@@ -643,19 +566,6 @@ export default function UserApp() {
 
   // Session Wallet Initialization
   useEffect(() => {
-    // Solana Session Key
-    const savedKey = localStorage.getItem("15market_session_key");
-    if (savedKey) {
-      try {
-        const secret = new Uint8Array(JSON.parse(savedKey));
-        setSessionKeypair(Keypair.fromSecretKey(secret));
-      } catch (e) { console.error("Session key failed:", e); }
-    } else {
-      const newKp = Keypair.generate();
-      localStorage.setItem("15market_session_key", JSON.stringify(Array.from(newKp.secretKey)));
-      setSessionKeypair(newKp);
-    }
-
     // EVM Session Wallet
     const savedEvmKey = localStorage.getItem("15market_evm_session_key");
 
@@ -687,84 +597,24 @@ export default function UserApp() {
     }
   }, [evmSessionWallet]);
 
-  // Update Session Balance - REAL-TIME via account listener (Solana) + Polling (EVM)
+  // Update Session Balance - Polling (Arc)
   useEffect(() => {
-    if (network === 'solana') {
-      if (!connection || !sessionKeypair) return;
+    if (!evmSessionWallet) return;
 
-      const updateSolanaSessionBal = async () => {
-        try {
-          const bal = await connection.getBalance(sessionKeypair.publicKey, "confirmed");
-          setSessionBalance(bal / LAMPORTS_PER_SOL);
-          // console.log("Session Balance Updated:", bal / LAMPORTS_PER_SOL);
-        } catch (err) { }
-      };
+    updateEvmSessionBal();
+    // Poll every 5s for Arc Session balance
+    const interval = setInterval(updateEvmSessionBal, 5000);
+    return () => clearInterval(interval);
+  }, [evmSessionWallet, updateEvmSessionBal]);
 
-      updateSolanaSessionBal();
-
-      const subId = connection.onAccountChange(
-        sessionKeypair.publicKey,
-        (info) => {
-          setSessionBalance(info.lamports / LAMPORTS_PER_SOL);
-        },
-        "confirmed"
-      );
-
-      // Fallback Polling (Every 3s) to be 100% sure
-      const poller = setInterval(updateSolanaSessionBal, 3000);
-
-      return () => {
-        connection.removeAccountChangeListener(subId);
-        clearInterval(poller);
-      };
-    } else if (network === 'arc') {
-      if (!evmSessionWallet) return;
-
-      console.log("🔗 Connecting to Arc RPC:", ARC_RPC);
-
-      updateEvmSessionBal();
-      // Increase polling to 5s to avoid timeout/rate-limiting on public RPC
-      const interval = setInterval(updateEvmSessionBal, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [connection, sessionKeypair, evmSessionWallet, network, updateEvmSessionBal]);
-
-  // Fetch wallet balance
+  // Arc / Base Balance from Wagmi
   useEffect(() => {
-    if (network === 'solana') {
-      if (!connection || !wallet.publicKey) return;
-
-      const fetchSolBalance = async () => {
-        try {
-          const bal = await connection.getBalance(wallet.publicKey);
-          setBalance(bal / LAMPORTS_PER_SOL);
-        } catch (e) { console.error("Bal fetch error:", e); }
-      };
-
-      fetchSolBalance();
-
-      // Fallback Polling if balance is 0 (RPC can be laggy)
-      const pollId = setInterval(() => {
-        if (balance === 0) fetchSolBalance();
-      }, 2000);
-
-      const id = connection.onAccountChange(wallet.publicKey, (info) => {
-        setBalance(info.lamports / LAMPORTS_PER_SOL);
-      });
-
-      return () => {
-        connection.removeAccountChangeListener(id);
-        clearInterval(pollId);
-      };
+    if (evmBalance) {
+      setBalance(parseFloat(evmBalance.formatted));
     } else {
-      // Arc / Base Balance from Wagmi
-      if (evmBalance) {
-        setBalance(parseFloat(evmBalance.formatted));
-      } else {
-        setBalance(0);
-      }
+      setBalance(0);
     }
-  }, [connection, wallet.publicKey, network, evmBalance]);
+  }, [evmBalance]);
 
   // Fetch current user profile
   useEffect(() => {
@@ -778,36 +628,19 @@ export default function UserApp() {
     const fetchMyProfile = async () => {
       try {
         let profile = null;
-
-        // 1. Try Solana On-Chain
-        if (network === 'solana' && wallet.publicKey) {
-          const program = getProgram(wallet, connection);
-          const [profilePda] = getProfilePda(wallet.publicKey);
-          profile = await program.account.userProfile.fetchNullable(profilePda);
-        }
-
-        // 2. Try Keeper (Hybrid/Arc Fallback)
-        if (!profile) {
-          const res = await fetch(`${KEEPER_URL_SOLANA}/profile?address=${address}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data) profile = data;
-          }
+        const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data) profile = data;
         }
 
         if (profile) {
           setUserProfile(profile);
-          // Trigger onboarding if X account is not linked
-          if (!profile.xHandle) {
-            setShowOnboarding(true);
-          } else {
-            setShowOnboarding(false);
-          }
+          setShowOnboarding(!profile.xHandle);
         } else {
           setUserProfile(null);
           setShowOnboarding(true);
         }
-
       } catch (err) {
         console.error("My profile error:", err);
       } finally {
@@ -815,38 +648,23 @@ export default function UserApp() {
       }
     };
     fetchMyProfile();
-  }, [isConnected, address, network, isProfileOpen]);
+  }, [isConnected, address]);
 
   const handleOnboardingComplete = async (onboardingData) => {
     try {
-      if (network === 'solana' && wallet.publicKey) {
-        // Create On-Chain Profile
-        const program = getProgram(wallet, connection);
-        const [profilePda] = getProfilePda(wallet.publicKey);
-        await program.methods
-          .syncProfile(onboardingData.username, onboardingData.twitterHandle || "", "")
-          .accounts({
-            profile: profilePda,
-            user: wallet.publicKey,
-            systemProgram: SystemProgram.programId,
-          })
-          .rpc();
-        notify("On-chain profile created!", "success");
-      }
-
-      // Sync to Keeper for all networks (Global Identity - Solana Hub)
-      await fetch(`${KEEPER_URL_SOLANA}/sync-profile`, {
+      // Setup profile on Arc Keeper
+      const res = await fetch(`${KEEPER_URL_ARC}/profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           address,
           username: onboardingData.username,
-          xHandle: onboardingData.twitterHandle,
-          xProfileImage: onboardingData.twitterImage || "",
-          tosAccepted: onboardingData.tosAccepted,
-          network
+          xHandle: onboardingData.twitterHandle || "",
+          discordHandle: ""
         })
       });
+
+      if (!res.ok) throw new Error("Backend save failed");
 
       setUserProfile({
         username: onboardingData.username,
@@ -858,7 +676,7 @@ export default function UserApp() {
       notify("Welcome to 15market, " + onboardingData.username, "success");
     } catch (err) {
       console.error("Profile sync failed:", err);
-      notify("Failed to setup profile. Check SOL balance.", "error");
+      notify("Failed to setup profile. Check connection.", "error");
     }
   };
 
@@ -1052,86 +870,15 @@ export default function UserApp() {
 
     const resolveBet = async (capturedTrade, capturedPrice) => {
       try {
-        let userPub;
-        let pollInterval;
-        const isSolanaTrade = capturedTrade.network === 'solana';
+        // Arc resolution is handled via on-chain events (useWatchContractEvent)
+        // and background keeper settlement.
+        // We just need to manage the local resolving lock.
 
-        if (isSolanaTrade) {
-          try {
-            userPub = capturedTrade.userPublicKey ? new PublicKey(capturedTrade.userPublicKey) : wallet.publicKey;
-            if (!userPub) {
-              resolvingInProgress.current.delete(capturedTrade.id);
-              return;
-            }
-          } catch (e) {
-            console.error("Solana PK error:", e);
-            resolvingInProgress.current.delete(capturedTrade.id);
-            return;
-          }
-
-          const program = getProgram(wallet, connection);
-          const [betPda] = getBetPda(userPub, program.programId, capturedTrade.nonce);
-
-          const checkAndFinalize = async () => {
-            try {
-              const betAcc = await program.account.bet.fetchNullable(betPda);
-              if (!betAcc) {
-                const [profilePda] = getProfilePda(userPub, program.programId);
-                const currentProfile = await program.account.userProfile.fetchNullable(profilePda).catch(() => null);
-                let settleUSD = parseFloat(capturedPrice) || parseFloat(priceRef.current);
-                const entryUSD = parseFloat(capturedTrade.entryPrice);
-                const isWinByPrice = (settleUSD > 0) && (capturedTrade.direction === "buy" ? (settleUSD >= entryUSD) : (settleUSD <= entryUSD));
-                const finalStatus = isWinByPrice ? "WON" : "LOST";
-
-                if (currentProfile) setUserProfile(currentProfile);
-
-                setTradeHistory(prev => prev.map(t => t.id === capturedTrade.id ? { ...t, status: finalStatus, settlementPrice: settleUSD.toFixed(4) } : t));
-                setActiveTrades(prev => prev.map(t => t.id === capturedTrade.id ? { ...t, status: finalStatus, settlementPrice: settleUSD.toFixed(4) } : t));
-                resolvingInProgress.current.delete(capturedTrade.id);
-
-                const refreshBalance = () => {
-                  connection.getBalance(userPub, "confirmed").then(bal => {
-                    if (sessionKeypair && userPub.equals(sessionKeypair.publicKey)) setSessionBalance(bal / LAMPORTS_PER_SOL);
-                    else setBalance(bal / LAMPORTS_PER_SOL);
-                  }).catch(e => console.error("Balance refresh failed", e));
-                };
-
-                // Multi-stage refresh to catch propagation
-                refreshBalance();
-                setTimeout(refreshBalance, 1000);
-                setTimeout(refreshBalance, 2500);
-
-                return true;
-              }
-            } catch (err) { console.error("Finalize error:", err); }
-            return false;
-          };
-
-          if (await checkAndFinalize()) return;
-          pollInterval = setInterval(async () => {
-            if (await checkAndFinalize()) clearInterval(pollInterval);
-          }, 1200);
-        }
-
-        // Universal Timeout (20s) for all networks
-        setTimeout(async () => {
-          if (pollInterval) clearInterval(pollInterval);
+        setTimeout(() => {
           if (resolvingInProgress.current.has(capturedTrade.id)) {
-            let status = "TIMEOUT";
-            if (isSolanaTrade) {
-              const [tPda] = getTreasuryPda(programID);
-              const currentTreasury = await connection.getBalance(tPda).catch(() => 0);
-              const mult = capturedTrade.duration <= 5 ? 6.98 : (capturedTrade.duration <= 10 ? 4.98 : 1.98);
-              const neededForPayout = (parseFloat(capturedTrade.amount) * mult) * LAMPORTS_PER_SOL;
-              const isActuallyWin = (parseFloat(capturedPrice) || parseFloat(priceRef.current)) > parseFloat(capturedTrade.entryPrice);
-              if (isActuallyWin && currentTreasury < neededForPayout) status = "PAYOUT_DELAYED";
-            }
-
-            setTradeHistory(prev => prev.map(t => t.id === capturedTrade.id ? { ...t, status: status } : t));
-            setActiveTrades(prev => prev.map(t => t.id === capturedTrade.id ? { ...t, status: status } : t));
             resolvingInProgress.current.delete(capturedTrade.id);
           }
-        }, 35000);
+        }, 35000); // Expiry safety
       } catch (err) {
         console.error("Resolution loop crash:", err);
         resolvingInProgress.current.delete(capturedTrade.id);
@@ -1173,269 +920,102 @@ export default function UserApp() {
     if (!activePrice || activePrice <= 0) return;
     if (!direction) return notify("Select UP or DOWN first", "error");
     if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
-    if (Number(amount) < parseFloat(minStake)) return notify(`Min trade: ${minStake} ${network === 'solana' ? 'SOL' : 'USDC'}`, "error");
+    if (Number(amount) < parseFloat(minStake)) return notify(`Min trade: ${minStake} USDC`, "error");
 
-    if (network === 'arc' || network === 'base') {
-      setIsExecuting(true);
-      try {
-        if (!user?.wallet) {
-          notify("Please connect wallet first", "error");
-          setIsExecuting(false);
-          return;
-        }
-
-        // Amount to correct units (USDC on Arc might be 6 or 18)
-        const amountWei = parseUnits(amount.toString(), evmBalance?.decimals || 18);
-        const tradeId = Date.now();
-        const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
-        const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
-
-        const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
-        // Entry Price (8 decimals)
-        const entryPriceParams = Math.floor(activePrice * 100000000);
-
-        let txHash;
-        if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
-          notify(`Auto-signing on Arc...`, "success");
-          try {
-            const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-            const feeData = await provider.getFeeData();
-
-            const sessionWallet = new ethers.Wallet(evmSessionWallet.privateKey, provider);
-            const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, sessionWallet);
-
-
-            console.log("Arc Auto-Sign params:", { dirVal, duration, entryPriceParams, assetId, value: amountWei.toString() });
-
-            const tx = await contract.placeBet(
-              BigInt(tradeId),
-              Number(dirVal),
-              BigInt(duration),
-              BigInt(entryPriceParams),
-              Number(assetId),
-              {
-                value: amountWei,
-                gasLimit: 600000n, // Hardcode gas to bypass flaky RPC simulation
-                maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || undefined,
-                maxFeePerGas: feeData.maxFeePerGas || undefined
-              }
-            );
-            txHash = tx.hash;
-            notify(`Trade triggered!`, "success");
-          } catch (autoErr) {
-            console.error("Auto-sign failed:", autoErr);
-            throw new Error(`Auto-sign failed: ${autoErr.reason || autoErr.message}`);
-          }
-        } else {
-          notify(`Confirm on ${network === 'arc' ? 'Arc' : 'Base'}...`, "success");
-
-
-          try {
-            const hash = await writeContractAsync({
-              address: ARC_CONTRACT_ADDRESS,
-              abi: ArcABI.abi,
-              functionName: 'placeBet',
-              args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
-              value: amountWei,
-              gas: 600000n // Hardcode gas to bypass flaky RPC simulation
-            });
-            txHash = hash;
-          } catch (simErr) {
-            console.error("Direct trade simulation failed:", simErr);
-            throw new Error(`Trade failed: ${simErr.shortMessage || simErr.message}`);
-          }
-        }
-
-        notify(`Trade executed on ${network === 'arc' ? 'Arc' : 'Base'}!`, "success");
-
-        // OPTIMISTIC BALANCE DEDUCTION
-        if (sessionMode) {
-          setSessionBalance(prev => Math.max(0, prev - parseFloat(amount)));
-        } else {
-          setBalance(prev => Math.max(0, prev - parseFloat(amount)));
-        }
-
-        const activeUserAddr = (sessionMode && sessionBalance >= (Number(amount) + 0.001)) ? evmSessionWallet.address : user.wallet.address;
-        const newTrade = {
-          id: tradeId, direction, amount: Number(amount).toFixed(4), entryPrice: activePrice.toFixed(4),
-          timestamp: new Date().toLocaleTimeString(), status: "PENDING", tx: txHash, nonce: tradeId,
-          userPublicKey: activeUserAddr, duration, network: network, startTime: Date.now()
-        };
-        setTradeHistory(prev => [newTrade, ...prev]);
-        setActiveTrades(prev => [newTrade, ...prev]);
-        setDirection(null);
-        setAmount("");
-        setTimeLeft(duration);
-        setTimerActive(true);
-
-        // Send Globe Ping (Push to Reactive Escrow - Arc Specific Keeper)
-        const PING_URL = KEEPER_URL_ARC;
-        fetch(`${PING_URL}/trade-ping`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...(userLocation || { country: 'Unknown', countryCode: 'XX', lat: 0, lng: 0 }),
-            amount: amount,
-            network: network,
-            address: activeUserAddr,
-            id: newTrade.id,
-            expiry: Math.floor(newTrade.startTime / 1000) + newTrade.duration,
-            entryPrice: activePrice,
-            direction: (direction === "buy" || direction === "UP") ? 1 : 0,
-            duration: duration,
-            symbol: activeMarket.symbol
-          })
-        }).catch(() => { });
-      } catch (err) {
-        console.error("Arc Trade Error:", err);
-        notify("Trade failed: " + (err.shortMessage || err.message), "error");
-      } finally {
-        setIsExecuting(false);
-      }
-      return;
-    }
-
+    // Arc Trade execution logic
+    setIsExecuting(true);
     try {
-      let activeWallet = wallet;
-      if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
-        activeWallet = {
-          publicKey: sessionKeypair.publicKey,
-          signTransaction: async (tx) => { tx.partialSign(sessionKeypair); return tx; },
-          signAllTransactions: async (txs) => { txs.forEach(t => t.partialSign(sessionKeypair)); return txs; }
-        };
-      } else if (!wallet.publicKey) {
-        notify("Connect wallet or fund auto-sign first", "error");
+      if (!user?.wallet) {
+        notify("Please connect wallet first", "error");
         setIsExecuting(false);
         return;
       }
 
-      // OPTIMISTIC BALANCE DEDUCTION - Do this FIRST to prevent race conditions
-      const amountNum = parseFloat(amount);
-      if (sessionMode) {
-        setSessionBalance(prev => Math.max(0, prev - amountNum));
+      // Amount to correct units (USDC on Arc is 18 decimals)
+      const amountWei = parseUnits(amount.toString(), 18);
+      const tradeId = Date.now();
+      const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
+      const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
+
+      const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
+      const entryPriceParams = Math.floor(activePrice * 100000000);
+
+      let txHash;
+      if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
+        notify(`Auto-signing on Arc...`, "success");
+        const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
+        const feeData = await provider.getFeeData();
+        const sessionWallet = new ethers.Wallet(evmSessionWallet.privateKey, provider);
+        const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, sessionWallet);
+
+        const tx = await contract.placeBet(
+          BigInt(tradeId),
+          Number(dirVal),
+          BigInt(duration),
+          BigInt(entryPriceParams),
+          Number(assetId),
+          {
+            value: amountWei,
+            gasLimit: 600000n,
+            maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || undefined,
+            maxFeePerGas: feeData.maxFeePerGas || undefined
+          }
+        );
+        txHash = tx.hash;
       } else {
-        setBalance(prev => Math.max(0, prev - amountNum));
+        notify(`Confirm on Arc...`, "success");
+        const hash = await writeContractAsync({
+          address: ARC_CONTRACT_ADDRESS,
+          abi: ArcABI.abi,
+          functionName: 'placeBet',
+          args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
+          value: amountWei,
+          gas: 600000n
+        });
+        txHash = hash;
       }
 
-      setIsExecuting(true);
-      const program = getProgram(activeWallet, connection);
+      notify(`Trade executed on Arc!`, "success");
 
-      const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
-      const assetId = ASSET_ID_MAP[activeMarket.id] || 0;
-      // Encode Asset ID in Nonce Trick: (Timestamp * 100) + AssetID
-      const nonceValue = Math.floor(Date.now() / 1000) * 100 + assetId;
-      const nonceBN = new BN(nonceValue.toString());
+      if (sessionMode) setSessionBalance(prev => Math.max(0, prev - parseFloat(amount)));
+      else setBalance(prev => Math.max(0, prev - parseFloat(amount)));
 
-      const [marketPda] = getMarketPda(program.programId);
-      const [betPda] = getBetPda(activeWallet.publicKey, program.programId, nonceValue);
-      const [treasuryPda] = getTreasuryPda(program.programId);
-
-      const modifyUnits = ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 });
-      // Ultra Priority Fee for instant execution
-      const addFee = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 2000000 });
-
-      // Build Instruction
-      const ix = await program.methods
-        .placeBet(
-          (direction === "buy" || direction === "UP") ? 1 : 0,
-          new BN(Math.floor(amountNum * LAMPORTS_PER_SOL)),
-          new BN(Math.floor(activePrice * 1000000)),
-          nonceBN,
-          duration
-        )
-        .accounts({
-          market: marketPda,
-          bet: betPda,
-          treasury: treasuryPda,
-          user: activeWallet.publicKey,
-          systemProgram: SystemProgram.programId
-        })
-        .remainingAccounts(
-          sessionMode ? [{ pubkey: wallet.publicKey, isWritable: false, isSigner: false }] : []
-        )
-        .instruction();
-
-      // Manual Transaction Construction for better control
-      const transaction = new Transaction().add(modifyUnits, addFee, ix);
-
-      // Wrapper to ensure we don't hang forever
-      const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error("RPC_TIMEOUT")), ms));
-
-      const { blockhash, lastValidBlockHeight } = await Promise.race([
-        getRecentBlockhashWithRetry(connection),
-        timeout(10000)
-      ]);
-
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = activeWallet.publicKey;
-
-      // Sign & Send
-      const signedTx = await activeWallet.signTransaction(transaction);
-      const tx = await Promise.race([
-        connection.sendRawTransaction(signedTx.serialize(), {
-          skipPreflight: true,
-          preflightCommitment: "confirmed"
-        }),
-        timeout(8000)
-      ]);
-
-      // Background Confirmation (Don't await this to prevent UI blocking)
-      (async () => {
-        try {
-          await pollConfirmation(tx, blockhash, lastValidBlockHeight);
-        } catch (e) {
-          console.warn("Confirmation slow/failed:", e);
-        }
-      })();
-
+      const activeUserAddr = (sessionMode && sessionBalance >= (Number(amount) + 0.001)) ? evmSessionWallet.address : user.wallet.address;
       const newTrade = {
-        id: nonceValue, direction, amount: amountNum.toFixed(4), entryPrice: activePrice.toFixed(4),
-        timestamp: new Date().toLocaleTimeString(), status: "PENDING", tx, nonce: nonceValue,
-        userPublicKey: activeWallet.publicKey.toBase58(), duration, network: 'solana',
-        startTime: Date.now()
+        id: tradeId, direction, amount: Number(amount).toFixed(4), entryPrice: activePrice.toFixed(4),
+        timestamp: new Date().toLocaleTimeString(), status: "PENDING", tx: txHash, nonce: tradeId,
+        userPublicKey: activeUserAddr, duration, network: 'arc', startTime: Date.now()
       };
       setTradeHistory(prev => [newTrade, ...prev]);
       setActiveTrades(prev => [newTrade, ...prev]);
       setDirection(null);
       setAmount("");
-      setSliderValue(0);
       setTimeLeft(duration);
       setTimerActive(true);
-      notify("Trade executed successfully!", "success");
 
-      // Send Globe Ping (Push to Reactive Escrow - Solana Specific Keeper)
-      fetch(`${KEEPER_URL_SOLANA}/trade-ping`, {
+      const PING_URL = KEEPER_URL_ARC;
+      fetch(`${PING_URL}/trade-ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(userLocation || { country: 'Unknown', countryCode: 'XX', lat: 0, lng: 0 }),
-          amount: amountNum,
-          network: 'solana',
-          address: activeWallet.publicKey.toBase58(), // This is the 'owner'
+          amount: amount,
+          network: 'arc',
+          address: activeUserAddr,
           id: newTrade.id,
           expiry: Math.floor(newTrade.startTime / 1000) + newTrade.duration,
-          // Enhanced data for faster settlement
           entryPrice: activePrice,
-          direction: (direction === "buy" || direction === "UP") ? 1 : 0,
+          direction: dirVal,
           duration: duration,
-          symbol: activeMarket.symbol,
-          mainOwner: wallet.publicKey?.toBase58() || activeWallet.publicKey.toBase58()
+          symbol: activeMarket.symbol
         })
       }).catch(() => { });
     } catch (err) {
-      console.error(err);
-      console.error("Solana Execution Error:", err);
-      const msg = err?.message || (typeof err === 'string' ? err : JSON.stringify(err));
-      notify(`Trade failed: ${msg}`, "error");
-
-      // Restore balance on failure
-      const amountNum = parseFloat(amount);
-      if (sessionMode) {
-        setSessionBalance(prev => prev + amountNum);
-      } else {
-        setBalance(prev => prev + amountNum);
-      }
-    } finally { setIsExecuting(false); }
+      console.error("Arc Trade Error:", err);
+      notify("Trade failed: " + (err.shortMessage || err.message), "error");
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   // Arc Settlement Listener
@@ -1487,174 +1067,49 @@ export default function UserApp() {
     },
   });
 
-  const getRecentBlockhashWithRetry = async (conn) => {
-    const commitments = ['processed', 'confirmed', 'finalized'];
-    const maxRpcAttempts = SOLANA_RPC_FALLBACKS.length;
 
-    for (let rpcAttempt = 0; rpcAttempt < maxRpcAttempts; rpcAttempt++) {
-      for (const commitment of commitments) {
-        let retries = 2;
-        while (retries > 0) {
-          try {
-            const bh = await conn.getLatestBlockhash(commitment);
-            if (bh) {
-              console.log(`✅ [BLOCKHASH] Fetched on RPC ${rpcAttempt + 1}, commitment: ${commitment}`);
-              return bh;
-            }
-          } catch (e) {
-            console.warn(`⚠️ [BLOCKHASH] Failed (${commitment}, RPC ${rpcAttempt + 1}/${maxRpcAttempts}):`, e.message);
-            retries--;
-            if (retries > 0) await new Promise(r => setTimeout(r, 800));
-          }
-        }
-      }
-
-      // All commitments failed on this RPC, try next one
-      if (rpcAttempt < maxRpcAttempts - 1) {
-        console.warn(`🔄 [BLOCKHASH] All commitments failed, rotating RPC...`);
-        conn = rotateRpc(conn.rpcEndpoint);
-      }
-    }
-
-    throw new Error("Failed to fetch blockhash after trying all RPCs and commitments.");
-  };
-
-  const pollConfirmation = async (sig, blockhash, lastValidBlockHeight) => {
-    const start = Date.now();
-    while (Date.now() - start < 60000) { // Max 60 seconds
-      try {
-        const { value: status } = await connection.getSignatureStatus(sig);
-        if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
-          return { value: { err: status.err } };
-        }
-
-        const currentHeight = await connection.getBlockHeight();
-        if (currentHeight > lastValidBlockHeight) {
-          // Final check after expiry
-          const { value: finalStatus } = await connection.getSignatureStatus(sig);
-          if (finalStatus?.confirmationStatus === 'confirmed' || finalStatus?.confirmationStatus === 'finalized') {
-            return { value: { err: finalStatus.err } };
-          }
-          throw new Error("Transaction expired: block height exceeded");
-        }
-      } catch (e) {
-        if (e.message.includes("expired")) throw e;
-        console.warn("Poll check failed, retrying...", e);
-      }
-      await new Promise(r => setTimeout(r, 2000));
-    }
-    throw new Error("Confirmation polling timed out");
-  };
 
   const handleRefill = useCallback(async (amt) => {
     try {
       const amtNum = parseFloat(amt);
-      const feePercent = 0.01; // 1% Protocol Fee for both networks as requested
+      const feePercent = 0.01; // 1% Protocol Fee
       const fee = amtNum * feePercent;
       const netAmt = amtNum - fee;
 
-      if (network === 'solana') {
-        if (!wallet.publicKey) {
-          notify("Wallet not connected for Solana refill", "error");
-          return;
-        }
-        notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} SOL)...`, "info");
+      if (!address) {
+        notify("Connect Arc wallet for refill", "error");
+        return;
+      }
+      notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} USDC)...`, "success");
 
-        // Add Priority Fees to Refill
-        const units = ComputeBudgetProgram.setComputeUnitLimit({ units: 80000 });
-        const price = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 2000000 });
+      try {
+        // Net to Session
+        await sendTransactionAsync({
+          to: evmSessionWallet.address,
+          value: parseEther(netAmt.toFixed(18)),
+          chainId: 5042002
+        });
 
-        const [treasuryPda] = getTreasuryPda(programID);
+        // Fee to Treasury
+        await sendTransactionAsync({
+          to: ARC_CONTRACT_ADDRESS,
+          value: parseEther(fee.toFixed(18)),
+          chainId: 5042002
+        });
 
-        const tx = new Transaction().add(
-          units,
-          price,
-          // 1. Send Net Amount to Session Wallet
-          SystemProgram.transfer({
-            fromPubkey: wallet.publicKey,
-            toPubkey: sessionKeypair.publicKey,
-            lamports: Math.floor(netAmt * LAMPORTS_PER_SOL),
-          }),
-          // 2. Send Fee to Treasury
-          SystemProgram.transfer({
-            fromPubkey: wallet.publicKey,
-            toPubkey: treasuryPda,
-            lamports: Math.floor(fee * LAMPORTS_PER_SOL),
-          })
-        );
-
-        const bhStart = Date.now();
-        const { blockhash, lastValidBlockHeight } = await getRecentBlockhashWithRetry(connection);
-        console.log(`[REFILL] Blockhash fetched in ${Date.now() - bhStart}ms: ${blockhash}`);
-
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = wallet.publicKey;
-
-        notify("Please sign in wallet...", "success");
-        const signStart = Date.now();
-        const signed = await wallet.signTransaction(tx);
-        console.log(`[REFILL] Transaction signed in ${Date.now() - signStart}ms`);
-
-        try {
-          const sig = await connection.sendRawTransaction(signed.serialize(), {
-            skipPreflight: true,
-            preflightCommitment: "confirmed"
-          });
-
-          notify(`Refill broadcast: ${sig.slice(0, 8)}...`, "success");
-          console.log(`[REFILL] Transaction broadcasted: ${sig}. Waiting for confirmation...`);
-          const result = await pollConfirmation(sig, blockhash, lastValidBlockHeight);
-
-          if (result.value.err) {
-            console.error("[REFILL] Transaction landed but failed:", result.value.err);
-            throw new Error("Transaction failed on-chain");
-          }
-
-          notify("Refill confirmed! (Fee collected)", "success");
-          console.log("[REFILL] ✅ Success!");
-          recordFee('solana', fee);
-          setSessionBalance(prev => prev + netAmt);
-
-        } catch (sendErr) {
-          notify(`Refill failed: ${sendErr.message}`, "error");
-        }
-      } else if (network === 'arc') {
-        if (!address) {
-          notify("Connect EVM wallet for Arc refill", "error");
-          return;
-        }
-        notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} USDC)...`, "success");
-
-        try {
-          // Net to Session
-          const hashMatch = await sendTransactionAsync({
-            to: evmSessionWallet.address,
-            value: parseEther(netAmt.toFixed(18)),
-            chainId: 5042002
-          });
-
-          // Fee to Treasury
-          await sendTransactionAsync({
-            to: ARC_CONTRACT_ADDRESS,
-            value: parseEther(fee.toFixed(18)),
-            chainId: 5042002
-          });
-
-          notify(`Refill Successful! Fee: ${fee.toFixed(4)} USDC`, "success");
-          recordFee('arc', fee);
-        } catch (evmErr) {
-          const msg = evmErr.shortMessage || evmErr.message || "EVM Error";
-          notify(`Refill failed: ${msg}`, "error");
-        }
+        notify(`Refill Successful! Fee: ${fee.toFixed(4)} USDC`, "success");
+        recordFee('arc', fee);
+      } catch (evmErr) {
+        const msg = evmErr.shortMessage || evmErr.message || "EVM Error";
+        notify(`Refill failed: ${msg}`, "error");
       }
     } catch (e) {
       const msg = e.shortMessage || e.message || "Refill failed";
       notify(`Refill failed: ${msg}`, "error");
     }
-  }, [wallet, sessionKeypair, evmSessionWallet, connection, network, address, sendTransactionAsync, notify, recordFee]);
+  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee]);
 
   const handleWithdraw = useCallback(async (amt) => {
-    console.log("🏦 Withdrawal Initiated:", amt);
     try {
       const amtNum = parseFloat(amt);
       if (isNaN(amtNum) || amtNum <= 0) {
@@ -1664,128 +1119,40 @@ export default function UserApp() {
 
       const fee = amtNum * 0.01; // 1% Fee
       const netAmt = amtNum - fee;
-      const currency = network === 'solana' ? 'SOL' : 'USDC';
 
-      // 1. FORCED WALLET CALL: Authorization Signature
-      // This satisfies the requirement to "call the wallet" explicitly.
       notify("Sign the withdrawal authorization in your wallet...", "info");
-      const authHeader = `--- 15MARKET PROTOCOL ---`;
-      const authBody = `ACTION: SECURE SCAN SWEEP\nAMOUNT: ${amt} ${currency}\nWALLET: ${address || wallet.publicKey?.toBase58()}\nTIMESTAMP: ${Date.now()}`;
-      const authMsg = `${authHeader}\n${authBody}`;
+      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: SECURE SCAN SWEEP\nAMOUNT: ${amt} USDC\nWALLET: ${address}\nTIMESTAMP: ${Date.now()}`;
 
-      if (network === 'solana') {
-        if (!wallet.publicKey || !sessionKeypair) {
-          notify("Connection Error: Wallet or Session not ready", "error");
-          return;
-        }
-
-        // Force wallet prompt
-        await wallet.signMessage(authMsg);
-
-        notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} SOL)...`, "info");
-
-        // Convert to Number to check against current balance
-        const currentBal = await connection.getBalance(sessionKeypair.publicKey, "confirmed");
-
-        // Fee deduction: Subtract ~0.00001 SOL (5000 lamports * 2 for safety) if withdrawing everything
-        const txFeeBuffer = 10000;
-        let finalLamports = Math.floor(netAmt * LAMPORTS_PER_SOL);
-        let finalFeeLamports = Math.floor(fee * LAMPORTS_PER_SOL);
-
-        if (finalLamports + finalFeeLamports >= currentBal - txFeeBuffer) {
-          // Adjust if total exceeds balance
-          const totalAvailable = currentBal - txFeeBuffer;
-          // Recalculate net and fee proportionally based on the available amount
-          const totalRequestedLamports = Math.floor(amtNum * LAMPORTS_PER_SOL);
-          if (totalRequestedLamports === 0) { // Avoid division by zero
-            finalLamports = 0;
-            finalFeeLamports = 0;
-          } else {
-            finalLamports = Math.floor(totalAvailable * (netAmt / amtNum));
-            finalFeeLamports = Math.max(0, totalAvailable - finalLamports);
-          }
-        }
-
-        if (finalLamports <= 0) {
-          notify("Insufficient balance for transaction fee", "error");
-          return;
-        }
-
-        const [treasuryPda] = getTreasuryPda(programID);
-
-        const tx = new Transaction().add(
-          // 1. Send Net to Main Wallet
-          SystemProgram.transfer({
-            fromPubkey: sessionKeypair.publicKey,
-            toPubkey: wallet.publicKey,
-            lamports: finalLamports,
-          }),
-          // 2. Send Fee to Treasury
-          SystemProgram.transfer({
-            fromPubkey: sessionKeypair.publicKey,
-            toPubkey: treasuryPda,
-            lamports: finalFeeLamports,
-          })
-        );
-
-        const { blockhash } = await getRecentBlockhashWithRetry(connection);
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = wallet.publicKey; // Invoke main wallet for fees
-
-        // Sign with session wallet first
-        tx.partialSign(sessionKeypair);
-
-        // Invoke browser wallet for final signature and gas authorization
-        notify("Authorizing withdrawal in wallet...", "info");
-        const signedTx = await wallet.signTransaction(tx);
-
-        const sig = await connection.sendRawTransaction(signedTx.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: "confirmed"
-        });
-
-        notify("Withdrawal broadcasted. Finalizing...", "success");
-        const confirmed = await connection.confirmTransaction(sig, 'confirmed');
-
-        if (confirmed.value.err) throw new Error("Transaction confirmed but failed");
-
-        recordFee('solana', finalFeeLamports / LAMPORTS_PER_SOL);
-        notify("SOL Withdrawal Successful! (Fee collected)", "success");
-
-      } else if (network === 'arc') {
-        if (!address || !evmSessionWallet) {
-          notify("Identity Error: Connect your main wallet and ensure auto-signer is active.", "error");
-          return;
-        }
-
-        // Force wallet prompt
-        await signMessageAsync({ message: authMsg });
-
-        notify(`Charging 1% Protocol Fee (${fee.toFixed(4)} USDC)...`, "info");
-
-        // 1. Fee to Contract
-        await evmSessionWallet.sendTransaction({
-          to: ARC_CONTRACT_ADDRESS,
-          value: parseEther(fee.toFixed(18)),
-        });
-
-        // 2. Net to Main
-        const tx = await evmSessionWallet.sendTransaction({
-          to: address,
-          value: parseEther(netAmt.toFixed(18)),
-        });
-
-        notify("Sweep broadcasted. Waiting for confirmation...", "info");
-        await tx.wait();
-        recordFee('arc', fee);
-        notify("Arc Withdrawal Successful!", "success");
+      if (!address || !evmSessionWallet) {
+        notify("Identity Error: Connect your wallet", "error");
+        return;
       }
+
+      await signMessageAsync({ message: authMsg });
+      notify(`Charging 1% Protocol Fee (${fee.toFixed(4)} USDC)...`, "info");
+
+      // 1. Fee to Contract
+      await evmSessionWallet.sendTransaction({
+        to: ARC_CONTRACT_ADDRESS,
+        value: parseEther(fee.toFixed(18)),
+      });
+
+      // 2. Net to Main
+      const tx = await evmSessionWallet.sendTransaction({
+        to: address,
+        value: parseEther(netAmt.toFixed(18)),
+      });
+
+      notify("Sweep broadcasted. Waiting for confirmation...", "info");
+      await tx.wait();
+      recordFee('arc', fee);
+      notify("Arc Withdrawal Successful!", "success");
     } catch (e) {
       console.error("Withdraw error:", e);
       const msg = e.reason || e.message || "Withdraw failed";
       notify(msg, "error");
     }
-  }, [wallet, wallet?.publicKey, sessionKeypair, evmSessionWallet, network, address, connection, notify, recordFee, signMessageAsync]);
+  }, [evmSessionWallet, address, notify, recordFee, signMessageAsync]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
@@ -1808,8 +1175,6 @@ export default function UserApp() {
     <DashboardPage
       onBack={() => setView("trading")}
       wallet={wallet}
-      connection={connection}
-      sessionKeypair={sessionKeypair}
       sessionBalance={sessionBalance}
       onRefill={handleRefill}
       onWithdraw={handleWithdraw}
@@ -1892,7 +1257,7 @@ export default function UserApp() {
       <>
         <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
           <div className="w-full -mx-2 lg:mx-0">
-            <GlobalTradeScroller wallet={wallet} connection={connection} theme={theme} currentNetwork={network} />
+            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
           </div>
         </div>
 
@@ -1914,10 +1279,10 @@ export default function UserApp() {
               sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
               setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
               sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-              theme={theme} minStake={minStake} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+              theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
               refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
               CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
-              evmSessionWallet={evmSessionWallet} sessionKeypair={sessionKeypair} hasProfile={!!userProfile}
+              evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
               activeMarket={activeMarket}
               maintenanceMode={platformSettings.maintenanceMode}
             />
@@ -1940,7 +1305,7 @@ export default function UserApp() {
           tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
           setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
           GREEN={GREEN} CORAL={CORAL}
-          sessionKeypair={sessionKeypair} evmSessionWallet={evmSessionWallet}
+          evmSessionWallet={evmSessionWallet}
           theme={theme} currentNetwork={network}
         />
       </>
@@ -1967,7 +1332,7 @@ export default function UserApp() {
                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 truncate max-w-[100px] lg:max-w-none">{winnerBanner.owner}</span>
                 </div>
                 <h3 className="text-lg lg:text-xl font-black text-white tracking-tighter uppercase">
-                  Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} {currentNetwork === 'arc' ? 'USDC' : 'SOL'}</span>
+                  Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
                 </h3>
               </div>
             </div>
@@ -2029,7 +1394,6 @@ export default function UserApp() {
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
         wallet={wallet}
-        connection={connection}
         theme={theme}
         toggleTheme={toggleTheme}
         userProfile={userProfile}

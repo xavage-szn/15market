@@ -1,15 +1,9 @@
 import React, { useEffect, useState, useRef, memo, useMemo } from 'react';
-import { Program, AnchorProvider } from '@coral-xyz/anchor';
-import idl from '../idl/sol_prediction.json';
-import { Connection, PublicKey } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getProfilePda } from '../api/pdas';
-import { Megaphone, Clock, Radio } from 'lucide-react';
-import { ethers } from 'ethers';
-import ArcABI from '../abi/ArcPrediction.json';
-import { ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL, KEEPER_URL_SOLANA, KEEPER_URL_ARC } from '../constants';
+import { Radio } from 'lucide-react';
+import { KEEPER_URL_ARC } from '../constants';
 
-const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwork }) => {
+const GlobalTradeScrollerComponent = ({ theme }) => {
     const [history, setHistory] = useState(() => {
         try {
             const saved = localStorage.getItem("15market_global_history_v2");
@@ -19,86 +13,43 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
     const [profiles, setProfiles] = useState({});
     const [activeBroadcast, setActiveBroadcast] = useState(null);
 
-    // Persistent instances to avoid re-creation overhead
-    const programRef = useRef(null);
-    const arcProviderRef = useRef(null);
-    const arcContractRef = useRef(null);
-
     const truncate = (str) => str ? `${str.slice(0, 4)}...${str.slice(-4)}` : "";
-
-    const [isConnected, setIsConnected] = useState(true);
 
     const fetchGlobalData = async () => {
         try {
-            // 1. Fetch Stats (Primarily from Solana Keeper which holds listings/campaigns)
-            try {
-                const statsRes = await fetch(`${KEEPER_URL_SOLANA}/protocol-stats`);
-                if (statsRes.ok) {
-                    const stats = await statsRes.json();
-                    if (stats.totalTrades !== undefined) {
-                        localStorage.setItem("15market_total_trades", stats.totalTrades.toString());
-                    }
-                    if (stats.settings) {
-                        localStorage.setItem("15market_citadel_settings", JSON.stringify(stats.settings));
-                    }
-                    setIsConnected(true);
-                }
-            } catch (e) { }
+            const arcRes = await fetch(`${KEEPER_URL_ARC}/history`);
+            if (arcRes.ok) {
+                const arcData = await arcRes.json();
+                if (Array.isArray(arcData)) {
+                    arcData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    const finalHistory = arcData.slice(0, 100);
+                    setHistory(finalHistory);
+                    localStorage.setItem("15market_global_history_v2", JSON.stringify(finalHistory));
 
-            // 2. Fetch History from BOTH Keepers and Merge
-            const [solRes, arcRes] = await Promise.allSettled([
-                fetch(`${KEEPER_URL_SOLANA}/history`),
-                fetch(`${KEEPER_URL_ARC}/history`)
-            ]);
+                    // Update Profiles
+                    let updatedProfiles = { ...profiles };
+                    const ownersToFetch = Array.from(new Set(finalHistory.map(item => item.owner)))
+                        .filter(owner => owner && !updatedProfiles[owner]);
 
-            let mergedHistory = [];
-
-            if (solRes.status === 'fulfilled' && solRes.value.ok) {
-                const solData = await solRes.value.json();
-                if (Array.isArray(solData)) mergedHistory = [...mergedHistory, ...solData];
-            }
-
-            if (arcRes.status === 'fulfilled' && arcRes.value.ok) {
-                const arcData = await arcRes.value.json();
-                if (Array.isArray(arcData)) mergedHistory = [...mergedHistory, ...arcData];
-            }
-
-            // Sort by timestamp descending
-            mergedHistory.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            // Limit to 100 for scroller performance
-            const finalHistory = mergedHistory.slice(0, 100);
-
-            if (finalHistory.length > 0) {
-                setHistory(finalHistory);
-                localStorage.setItem("15market_global_history_v2", JSON.stringify(finalHistory));
-            }
-
-            // 3. Update Profiles (Try Solana Keeper first as it hosts the profile DB)
-            let updatedProfiles = { ...profiles };
-            const ownersToFetch = Array.from(new Set(finalHistory.map(item => item.owner)))
-                .filter(owner => owner && !updatedProfiles[owner]);
-
-            if (ownersToFetch.length > 0) {
-                const CHUNK_SIZE = 5;
-                for (let i = 0; i < ownersToFetch.length; i += CHUNK_SIZE) {
-                    const chunk = ownersToFetch.slice(i, i + CHUNK_SIZE);
-                    await Promise.all(chunk.map(async (owner) => {
-                        try {
-                            const keeperRes = await fetch(`${KEEPER_URL_SOLANA}/profile?address=${owner}`);
-                            if (keeperRes.ok) {
-                                const keeperData = await keeperRes.json();
-                                if (keeperData && keeperData.username) {
-                                    updatedProfiles[owner] = keeperData;
-                                    return;
+                    if (ownersToFetch.length > 0) {
+                        await Promise.all(ownersToFetch.map(async (owner) => {
+                            try {
+                                const keeperRes = await fetch(`${KEEPER_URL_ARC}/profile?address=${owner}`);
+                                if (keeperRes.ok) {
+                                    const keeperData = await keeperRes.json();
+                                    if (keeperData && keeperData.username) {
+                                        updatedProfiles[owner] = keeperData;
+                                        return;
+                                    }
                                 }
+                                updatedProfiles[owner] = { username: truncate(owner) };
+                            } catch (e) {
+                                updatedProfiles[owner] = { username: truncate(owner) };
                             }
-                            updatedProfiles[owner] = { username: truncate(owner) };
-                        } catch (e) {
-                            updatedProfiles[owner] = { username: truncate(owner) };
-                        }
-                    }));
+                        }));
+                        setProfiles(prev => ({ ...prev, ...updatedProfiles }));
+                    }
                 }
-                setProfiles(prev => ({ ...prev, ...updatedProfiles }));
             }
         } catch (err) {
             console.error("Global Scroller Sync Error:", err);
@@ -124,12 +75,6 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                         return;
                     }
                 }
-                const saved = localStorage.getItem('15market_admin_broadcast');
-                if (saved) {
-                    const broadcasts = JSON.parse(saved);
-                    const active = broadcasts.find(b => b.expiry > Date.now());
-                    setActiveBroadcast(active || null);
-                } else setActiveBroadcast(null);
             } catch (e) { setActiveBroadcast(null); }
         };
 
@@ -144,13 +89,8 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
 
     const repeatedHistory = useMemo(() => {
         if (!history || history.length === 0) return [];
-        const totalTrades = parseInt(localStorage.getItem("15market_total_trades") || history.length);
-        const indexedHistory = history.map((item, idx) => ({
-            ...item,
-            absIndex: totalTrades - idx
-        }));
-        let list = [...indexedHistory];
-        while (list.length < 40) { list = [...list, ...indexedHistory]; }
+        let list = [...history];
+        while (list.length < 40) { list = [...list, ...history]; }
         return [...list, ...list];
     }, [history]);
 
@@ -163,16 +103,14 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                 : 'border-white/5'
                 }`}
             style={{
-                boxShadow: isLight ? 'none' : `0 0 15px #3CB37115, inset 0 0 10px #3CB37110`
+                boxShadow: isLight ? 'none' : `0 0 15px #3B82F615, inset 0 0 10px #3B82F610`
             }}
         >
-
-            {/* Left Status Label - Compact on mobile */}
             <div className={`absolute left-0 top-0 bottom-0 px-2 lg:px-4 z-30 flex items-center border-r transition-all duration-300 ${isLight ? 'bg-slate-50 border-black/10' : 'bg-[#050505]/80 backdrop-blur-md border-white/10'}`}>
                 <div className="flex items-center gap-1.5 lg:gap-2">
                     <div className="relative flex h-1.5 w-1.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3CB371]"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3B82F6] opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3B82F6]"></span>
                     </div>
                     <span className={`text-[7px] lg:text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap ${isLight ? 'text-black/60' : 'text-white/60'}`}>
                         Network Live
@@ -180,7 +118,6 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                 </div>
             </div>
 
-            {/* Scrolling Content */}
             <div className="flex-1 h-full flex items-center relative overflow-hidden">
                 <AnimatePresence mode="wait">
                     {activeBroadcast && (
@@ -198,7 +135,7 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                             >
                                 {[...Array(8)].map((_, i) => (
                                     <div key={i} className="flex items-center gap-4 lg:gap-6">
-                                        <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest ${activeBroadcast.type === 'EMERGENCY' ? 'bg-red-500 text-white' : 'bg-[#3CB371] text-black'}`}>
+                                        <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest bg-[#3B82F6] text-white`}>
                                             <Radio size={10} className="animate-pulse" />
                                             {activeBroadcast.type}
                                         </div>
@@ -221,7 +158,7 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                                 {profiles[event.owner]?.xProfileImage ? (
                                     <img src={profiles[event.owner].xProfileImage} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className={`w-full h-full flex items-center justify-center text-[8px] lg:text-[10px] font-black ${event.network === 'arc' ? 'text-blue-500' : 'text-[#3CB371]'}`}>
+                                    <div className={`w-full h-full flex items-center justify-center text-[8px] lg:text-[10px] font-black text-blue-500`}>
                                         {(profiles[event.owner]?.username || "A").charAt(0).toUpperCase()}
                                     </div>
                                 )}
@@ -229,10 +166,10 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
 
                             <div className="flex flex-col">
                                 <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {event.network?.toUpperCase() || 'SOL'} • #{event.absIndex || '---'}
+                                    ARC • #{event.absIndex || '---'}
                                 </span>
                                 <span className={`text-[8px] lg:text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {event.user}
+                                    {profiles[event.owner]?.username || truncate(event.owner)}
                                 </span>
                             </div>
 
@@ -241,9 +178,9 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                             <div className="flex flex-col items-end">
                                 <div className="flex items-baseline gap-0.5 lg:gap-1">
                                     <span className={`text-[10px] lg:text-xs font-black ${isLight ? 'text-black' : 'text-white'}`}>{event.amount}</span>
-                                    <span className="text-[6px] lg:text-[8px] font-bold opacity-40">{event.currency || 'SOL'}</span>
+                                    <span className="text-[6px] lg:text-[8px] font-bold opacity-40">USDC</span>
                                 </div>
-                                <span className={`text-[8px] lg:text-[9px] font-black ${event.direction === "UP" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                <span className={`text-[8px] lg:text-[9px] font-black ${event.direction === "UP" ? "text-blue-500" : "text-[#FF7F50]"}`}>
                                     {event.direction === "UP" ? "CALL ▲" : "PUT ▼"}
                                 </span>
                             </div>
@@ -252,7 +189,6 @@ const GlobalTradeScrollerComponent = ({ wallet, connection, theme, currentNetwor
                 </motion.div>
             </div>
 
-            {/* Fade Out Edge */}
             <div className={`absolute right-0 top-0 bottom-0 w-24 lg:w-32 bg-gradient-to-l pointer-events-none z-20 ${isLight ? 'from-white to-transparent' : 'from-[#030303] to-transparent'}`} />
         </div>
     );

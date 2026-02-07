@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { getProgram } from '../api/program';
-import { getProfilePda } from '../api/pdas';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SystemProgram } from '@solana/web3.js';
 import { ThemeToggle } from './ThemeToggle';
+import { KEEPER_URL_ARC } from '../constants';
 
-export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggleTheme, userProfile = null }) => {
+export const ProfileModal = ({ isOpen, onClose, wallet, theme, toggleTheme, userProfile = null }) => {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -13,66 +11,71 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
     const [isSaving, setIsSaving] = useState(false);
     const [isVerifyingX, setIsVerifyingX] = useState(false);
 
+    // wallet prop is the Wagmi/Para wallet object or wrapper. 
+    // userProfile is passed from UserApp
+    const address = wallet?.address || wallet?.publicKey; // Adapting to whatever wallet object structure is passed, mostly { address } from UserApp "user" memo
+
     useEffect(() => {
         if (isOpen) {
-            if (wallet.publicKey) {
-                fetchProfile();
-            } else if (userProfile) {
+            if (userProfile) {
                 setUsername(userProfile.username || "");
+                setXHandle(userProfile.xHandle || "");
+                setDiscordHandle(userProfile.discordHandle || "");
+            }
+            // Fetch metrics from backend if address is available
+            if (address) {
+                fetchMetrics();
             }
         }
-    }, [isOpen, wallet.publicKey, userProfile]);
+    }, [isOpen, address, userProfile]);
 
-    const fetchProfile = async () => {
+    const fetchMetrics = async () => {
         try {
-            const program = getProgram(wallet, connection);
-            const [profilePda] = getProfilePda(wallet.publicKey);
-            const profileAcc = await program.account.userProfile.fetchNullable(profilePda);
-            if (profileAcc) {
-                setUsername(profileAcc.username || "");
-                setXHandle(profileAcc.xHandle || "");
-                setDiscordHandle(profileAcc.discordHandle || "");
-                setMetrics({
-                    wins: profileAcc.totalWins ? profileAcc.totalWins.toNumber() : 0,
-                    losses: profileAcc.totalLosses ? profileAcc.totalLosses.toNumber() : 0,
-                    trades: profileAcc.totalTrades ? profileAcc.totalTrades.toNumber() : 0,
-                    volume: profileAcc.totalVolume ? (profileAcc.totalVolume.toNumber() / 1e9).toFixed(2) : "0.00"
-                });
+            // Fetch from Keeper
+            const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data) {
+                    setMetrics({
+                        wins: data.totalWins || 0,
+                        losses: data.totalLosses || 0,
+                        trades: data.totalTrades || 0,
+                        volume: data.totalVolume ? (parseFloat(data.totalVolume)).toFixed(2) : "0.00"
+                    });
+                }
             }
         } catch (err) {
-            console.error("Fetch profile error:", err);
+            console.error("Fetch profile metrics error:", err);
         }
     };
 
     const handleSave = async () => {
-        if (!wallet.publicKey) {
+        if (!address) {
             alert("Please connect your wallet first.");
             return;
         }
         setIsSaving(true);
         try {
-            const program = getProgram(wallet, connection);
-            const [profilePda] = getProfilePda(wallet.publicKey);
-
-            console.log("Saving profile to:", profilePda.toBase58());
-
-            await program.methods
-                .syncProfile(username, xHandle, discordHandle)
-                .accounts({
-                    profile: profilePda,
-                    user: wallet.publicKey,
-                    systemProgram: SystemProgram.programId,
+            const res = await fetch(`${KEEPER_URL_ARC}/profile`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address: address,
+                    username: username,
+                    xHandle: xHandle,
+                    discordHandle: discordHandle
                 })
-                .rpc();
+            });
 
-            alert("Profile synced on-chain successfully!");
+            if (!res.ok) throw new Error("Failed to save profile on backend.");
+
+            alert("Profile synced successfully!");
             onClose();
+            // Trigger a refresh in UserApp if possible, or assume UserApp polling will catch it
+            window.location.reload(); // Simple way to refresh app state for now, or we could add an onUpdate callback prop
         } catch (err) {
             console.error("Save profile error:", err);
-            // Check if it's a "Simulation failed" or "Account already exists" or "Insufficient SOL"
-            let msg = err.message;
-            if (msg.includes("0x1")) msg = "Insufficient SOL for on-chain storage.";
-            alert("Failed to save profile: " + msg);
+            alert("Failed to save profile: " + err.message);
         } finally {
             setIsSaving(false);
         }
@@ -80,7 +83,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
 
     const handleVerifyX = () => {
         setIsVerifyingX(true);
-        const tweetText = encodeURIComponent(`Verifying my on-chain identity on @15market_sol 🚀\n\nWallet: ${wallet.publicKey?.toBase58()}\n\n#15market #Solana`);
+        const tweetText = encodeURIComponent(`Verifying my on-chain identity on @15market_ 🚀\n\nWallet: ${address}\n\n#15market #Arc`);
         window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, '_blank');
         setTimeout(() => setIsVerifyingX(false), 3000);
     };
@@ -94,18 +97,18 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className="w-full max-w-md bg-[#0D0D0D] border border-[#3CB371]/30 rounded-[32px] p-8 shadow-[0_0_50px_rgba(60,179,113,0.15)] relative overflow-hidden"
+                    className="w-full max-w-md bg-[#0D0D0D] border border-[#3B82F6]/30 rounded-[32px] p-8 shadow-[0_0_50px_rgba(59,130,246,0.15)] relative overflow-hidden"
                 >
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent" />
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#3B82F6] to-transparent" />
 
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#3CB371] to-black p-[1px] overflow-hidden">
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#3B82F6] to-black p-[1px] overflow-hidden">
                                 <div className="w-full h-full rounded-2xl bg-[#050505] flex items-center justify-center overflow-hidden">
                                     {userProfile?.xProfileImage ? (
                                         <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                     ) : (
-                                        <span className="text-[#3CB371] font-black text-xl">
+                                        <span className="text-[#3B82F6] font-black text-xl">
                                             {(username || "A").charAt(0).toUpperCase()}
                                         </span>
                                     )}
@@ -125,7 +128,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
                     {metrics && (
                         <div className="grid grid-cols-2 gap-4 mb-8">
                             <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col justify-center">
-                                <p className="text-[8px] font-bold text-[#3CB371] uppercase tracking-widest mb-1">Win Rate</p>
+                                <p className="text-[8px] font-bold text-[#3B82F6] uppercase tracking-widest mb-1">Win Rate</p>
                                 <div className="flex items-baseline gap-1">
                                     <p className="text-2xl font-black text-white">
                                         {metrics.trades > 0 ? ((metrics.wins / metrics.trades) * 100).toFixed(0) : 0}
@@ -137,7 +140,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
                                 <p className="text-[8px] font-bold text-white/40 uppercase tracking-widest mb-1">Total Volume</p>
                                 <div className="flex items-baseline gap-1">
                                     <p className="text-2xl font-black text-white">{metrics.volume}</p>
-                                    <span className="text-xs font-bold text-white/40">SOL</span>
+                                    <span className="text-xs font-bold text-white/40">USDC</span>
                                 </div>
                             </div>
                         </div>
@@ -150,7 +153,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 placeholder="Anonymous DeGen"
-                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3CB371]/50 focus:ring-1 focus:ring-[#3CB371]/20 outline-none transition-all placeholder:text-white/10"
+                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3B82F6]/50 focus:ring-1 focus:ring-[#3B82F6]/20 outline-none transition-all placeholder:text-white/10"
                             />
                         </div>
 
@@ -161,11 +164,11 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
                                     value={xHandle}
                                     onChange={(e) => setXHandle(e.target.value)}
                                     placeholder="@username"
-                                    className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
+                                    className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3B82F6]/50 outline-none transition-all placeholder:text-white/10"
                                 />
                                 <button
                                     onClick={handleVerifyX}
-                                    className="px-4 rounded-2xl bg-white text-black text-xs font-black transition-transform active:scale-95 hover:bg-[#3CB371]"
+                                    className="px-4 rounded-2xl bg-white text-black text-xs font-black transition-transform active:scale-95 hover:bg-[#3B82F6]"
                                 >
                                     {isVerifyingX ? "OPENING..." : "VERIFY"}
                                 </button>
@@ -178,7 +181,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
                                 value={discordHandle}
                                 onChange={(e) => setDiscordHandle(e.target.value)}
                                 placeholder="name#0000"
-                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
+                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3B82F6]/50 outline-none transition-all placeholder:text-white/10"
                             />
                         </div>
                     </div>
@@ -187,17 +190,17 @@ export const ProfileModal = ({ isOpen, onClose, wallet, connection, theme, toggl
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className={`w-full bg-[#3CB371] text-black font-black py-5 rounded-2xl shadow-[0_10px_30px_rgba(60,179,113,0.2)] transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
+                            className={`w-full bg-[#3B82F6] text-black font-black py-5 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.2)] transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
                         >
                             {isSaving ? (
                                 <>
                                     <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                                    SYNCING IDENTITY...
+                                    SYNCING...
                                 </>
                             ) : "SAVE & SYNC PROFILE"}
                         </button>
 
-                        <p className="text-[7px] text-center text-white/10 uppercase tracking-[0.4em]">Requires one-time SOL for account initialization</p>
+                        <p className="text-[7px] text-center text-white/10 uppercase tracking-[0.4em]">Profile data stored on 15Market Keepers</p>
                     </div>
                 </motion.div>
             </div>
