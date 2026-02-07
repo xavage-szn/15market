@@ -8,9 +8,9 @@ export const ARC_RPC = "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8P
 export const ARC_RPC_BACKUP = "https://rpc.testnet.arc.network";
 export const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC || "https://api.devnet.solana.com";
 // 2. Keeper Configuration
-export const KEEPER_URL = import.meta.env.VITE_KEEPER_URL || "https://api.15market.online";
-export const KEEPER_URL_SOLANA = import.meta.env.VITE_KEEPER_URL_SOLANA || `${KEEPER_URL}/solana`;
-export const KEEPER_URL_ARC = import.meta.env.VITE_KEEPER_URL_ARC || `${KEEPER_URL}/arc`;
+export const KEEPER_URL = "https://api.15market.online";
+export const KEEPER_URL_SOLANA = `${KEEPER_URL}/solana`;
+export const KEEPER_URL_ARC = `${KEEPER_URL}/arc`;
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 
 // 2. Project ID

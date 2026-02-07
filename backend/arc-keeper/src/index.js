@@ -79,6 +79,32 @@ try {
 // --- REDIS ---
 redis.connect();
 
+// --- REDIS SYNC LOGIC ---
+async function syncRedis() {
+    try {
+        const platformSettings = await redis.get('platform_settings');
+        if (platformSettings) {
+            state.settings = platformSettings;
+        }
+
+        const listings = await redis.get('platform_listings');
+        if (listings) {
+            state.listings = listings;
+        }
+
+        const activeMarket = await redis.get('active_market');
+        if (activeMarket) {
+            state.activeMarket = activeMarket;
+        }
+    } catch (e) {
+        console.warn(`[REDIS_SYNC] Failed: ${e.message}`);
+    }
+}
+
+// Global Sync (Linking User side to Admin side via Redis)
+syncRedis();
+setInterval(syncRedis, 10000); // 10s linkage
+
 function saveState() {
     try {
         fs.writeFileSync(STORAGE_FILE, JSON.stringify(state, null, 2));
@@ -121,9 +147,10 @@ app.post('/active-market', (req, res) => {
 });
 
 app.get('/settings', (req, res) => res.json(state.settings));
-app.post('/settings', (req, res) => {
+app.post('/settings', async (req, res) => {
     state.settings = { ...state.settings, ...req.body };
     saveState();
+    await redis.set('platform_settings', state.settings);
     res.json({ success: true });
 });
 

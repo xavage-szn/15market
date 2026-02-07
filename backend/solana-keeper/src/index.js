@@ -62,9 +62,44 @@ async function syncArcData() {
     }
 }
 
+// --- REDIS SYNC LOGIC ---
+async function syncFromRedis() {
+    try {
+        const platformSettings = await redis.get('platform_settings');
+        if (platformSettings) {
+            state.settings = platformSettings;
+        }
+
+        const listings = await redis.get('platform_listings');
+        if (listings) {
+            state.listings = listings;
+        }
+
+        const activeMarket = await redis.get('active_market');
+        if (activeMarket) {
+            state.activeMarket = activeMarket;
+        }
+
+        const campaigns = await redis.get('active_campaigns');
+        if (campaigns) {
+            state.campaigns = campaigns;
+        }
+    } catch (e) {
+        console.warn(`[REDIS_SYNC] Failed: ${e.message}`);
+    }
+}
+
+// Global Sync Loop (Backend linking)
+syncRedis();
+setInterval(syncRedis, 10000); // Sync every 10s for perfect linkage
+
 // Initial sync and then every 15s
 syncArcData();
 setInterval(syncArcData, 15000);
+
+async function syncRedis() {
+    await syncFromRedis();
+}
 
 // Load State
 try {
@@ -106,26 +141,28 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
 app.get('/logs', (req, res) => res.json(logger.getLogs()));
 
-app.get('/listings', (req, res) => res.json(state.listings));
-app.post('/listings', (req, res) => {
+app.post('/listings', async (req, res) => {
     if (Array.isArray(req.body)) {
         state.listings = req.body;
         saveState();
+        await redis.set('platform_listings', state.listings);
         res.json({ success: true });
     } else res.status(400).end();
 });
 
 app.get('/active-market', (req, res) => res.json(state.activeMarket));
-app.post('/active-market', (req, res) => {
+app.post('/active-market', async (req, res) => {
     state.activeMarket = req.body;
     saveState();
+    await redis.set('active_market', state.activeMarket);
     res.json({ success: true });
 });
 
 app.get('/campaigns', (req, res) => res.json(state.campaigns));
-app.post('/campaigns', (req, res) => {
+app.post('/campaigns', async (req, res) => {
     state.campaigns = req.body;
     saveState();
+    await redis.set('active_campaigns', state.campaigns);
     res.json({ success: true });
 });
 
