@@ -178,6 +178,12 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         // Ensure root user is always present and has correct credentials
         const rootIndex = parsed.findIndex(s => s.address?.toLowerCase() === ROOT_WALLET.toLowerCase());
         if (rootIndex === -1) {
+            // Check if there is an old Solana entry to migrated or replaced
+            const oldRootIndex = parsed.findIndex(s => (s.publicKey || s.address)?.toLowerCase() === ROOT_WALLET.toLowerCase());
+            if (oldRootIndex !== -1) {
+                parsed[oldRootIndex] = { ...parsed[oldRootIndex], ...defaultStaff[0] };
+                return parsed;
+            }
             return [...defaultStaff, ...parsed];
         } else {
             parsed[rootIndex] = { ...parsed[rootIndex], ...defaultStaff[0] };
@@ -187,7 +193,22 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     const currentStaffMember = useMemo(() => {
         if (!walletAddress) return null;
-        return staffMembers.find(s => s.address?.toLowerCase() === walletAddress?.toLowerCase());
+        const addr = walletAddress.toLowerCase().trim();
+        const member = staffMembers.find(s => s.address?.toLowerCase().trim() === addr);
+
+        // Root Wallet is always authorized as a fallback
+        if (!member && addr === ROOT_WALLET.toLowerCase().trim()) {
+            return {
+                id: 1,
+                address: ROOT_WALLET,
+                role: 'ROOT',
+                username: 'xavageszn-root',
+                password: 'NORgate123+',
+                status: 'ACTIVE',
+                onboardingComplete: true
+            };
+        }
+        return member;
     }, [staffMembers, walletAddress]);
 
     const isAuthorizedWallet = !!currentStaffMember;
