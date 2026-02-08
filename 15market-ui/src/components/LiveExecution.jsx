@@ -26,13 +26,13 @@ const LiveExecutionComponent = ({
         <div className="flex flex-col gap-3 relative min-h-0 h-full">
             <div className="flex items-center justify-between px-2 flex-none">
                 <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] shadow-[0_0_10px_#3B82F6]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
                     <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
                         LIVE ENGINES
                     </h4>
                 </div>
                 {activeTrades.length > 0 && (
-                    <div className="bg-[#3B82F6]/10 text-[#3B82F6] px-2 py-0.5 rounded-md text-[8px] font-black border border-[#3B82F6]/20">
+                    <div className="bg-[#3CB371]/10 text-[#3CB371] px-2 py-0.5 rounded-md text-[8px] font-black border border-[#3CB371]/20">
                         {activeTrades.length} ACTIVE
                     </div>
                 )}
@@ -57,7 +57,7 @@ const LiveExecutionComponent = ({
                             >
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${isFinal ? (isLight ? 'bg-black/10' : 'bg-white/10') : 'bg-[#3B82F6] animate-pulse shadow-[0_0_10px_#3B82F6]'}`} />
+                                        <div className={`w-1.5 h-1.5 rounded-full ${isFinal ? (isLight ? 'bg-black/10' : 'bg-white/10') : 'bg-[#3CB371] animate-pulse shadow-[0_0_10px_#3CB371]'}`} />
                                         <span className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/50' : 'text-white/40'}`}>
                                             {isFinal ? trade.status : isResolving ? "Syncing..." : "Monitoring"}
                                         </span>
@@ -85,7 +85,7 @@ const LiveExecutionComponent = ({
                                     </div>
                                 </div>
 
-                                <div className={`rounded-xl flex flex-col items-center justify-center p-3 transition-all duration-500 overflow-hidden relative ${trade.status === "WON" ? "bg-[#3B82F6]/10 border border-[#3B82F6]/20" :
+                                <div className={`rounded-xl flex flex-col items-center justify-center p-3 transition-all duration-500 overflow-hidden relative ${trade.status === "WON" ? "bg-[#3CB371]/10 border border-[#3CB371]/20" :
                                     trade.status === "LOST" ? "bg-[#FF7F50]/10 border border-[#FF7F50]/20" :
                                         (isLight ? "bg-black/5 border-black/5" : "bg-white/[0.02] border border-white/5")
                                     }`}>
@@ -97,7 +97,7 @@ const LiveExecutionComponent = ({
 
                                             <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
                                                 <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${(trade.direction === "buy" ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
-                                                    ? "text-[#3B82F6]" : "text-[#FF7F50]"
+                                                    ? "text-[#3CB371]" : "text-[#FF7F50]"
                                                     }`}>
                                                     {(trade.direction === "buy" ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
                                                         ? "WIN" : "LOSS"
@@ -107,20 +107,20 @@ const LiveExecutionComponent = ({
 
                                             <div className="flex items-center gap-1 opacity-60 mb-2 lg:mb-3">
                                                 <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/30'}`}>Profit:</span>
-                                                <span className={`text-[8px] lg:text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3B82F6' }}>
+                                                <span className={`text-[8px] lg:text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3CB371' }}>
                                                     +{(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98))).toFixed(2)}
                                                 </span>
                                             </div>
 
                                             {isResolving ? (
                                                 <div className="flex flex-col items-center gap-2">
-                                                    <div className="w-4 h-4 rounded-full border-2 border-[#3B82F6] border-t-transparent animate-spin" />
-                                                    <span className="text-[7px] font-black text-[#3B82F6] uppercase tracking-[0.2em] animate-pulse">Finalizing</span>
+                                                    <div className="w-4 h-4 rounded-full border-2 border-[#3CB371] border-t-transparent animate-spin" />
+                                                    <span className="text-[7px] font-black text-[#3CB371] uppercase tracking-[0.2em] animate-pulse">Finalizing</span>
                                                 </div>
                                             ) : (
                                                 <div className={`w-full h-1 rounded-full overflow-hidden ${isLight ? 'bg-black/10' : 'bg-white/5'}`}>
                                                     <div
-                                                        className="h-full bg-[#3B82F6] transition-all duration-1000 ease-linear shadow-[0_0_15px_#3B82F6]"
+                                                        className="h-full bg-[#3CB371] transition-all duration-1000 ease-linear shadow-[0_0_15px_#3CB371]"
                                                         style={{ width: `${(timeLeft / trade.duration) * 100}%` }}
                                                     />
                                                 </div>
@@ -138,7 +138,7 @@ const LiveExecutionComponent = ({
                                                     setSelectedPnLTrade(trade);
                                                     setIsPnLOpen(true);
                                                 }}
-                                                className="w-full mt-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 border border-[#3B82F6]/20 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] transition-all text-[#3B82F6]"
+                                                className="w-full mt-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border border-[#3CB371]/20 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] transition-all text-[#3CB371]"
                                             >
                                                 <Share2 size={10} />
                                                 Share
@@ -161,10 +161,10 @@ const LiveExecutionComponent = ({
 
             <div className={`p-2.5 rounded-xl border flex items-center justify-between flex-none ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-white/[0.02] border-white/5'}`}>
                 <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-[#3B82F6]/10 flex items-center justify-center text-[10px]">⚡</div>
+                    <div className="w-6 h-6 rounded-lg bg-[#3CB371]/10 flex items-center justify-center text-[10px]">⚡</div>
                     <div>
                         <p className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/20'}`}>ENGINE STATUS</p>
-                        <p className="text-[7px] text-[#3B82F6] font-black tracking-widest uppercase">V2 ACTIVE</p>
+                        <p className="text-[7px] text-[#3CB371] font-black tracking-widest uppercase">V2 ACTIVE</p>
                     </div>
                 </div>
                 <div className="text-right">

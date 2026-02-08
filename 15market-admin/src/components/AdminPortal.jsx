@@ -65,16 +65,13 @@ import {
     Pie,
     Cell
 } from 'recharts';
-import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, Keypair } from '@solana/web3.js';
-import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
-import { getTreasuryPda, getBetPda, getMarketPda } from '../api/pdas';
-import { programID } from '../api/program';
-import idl from '../idl/sol_prediction.json';
-import { Buffer } from 'buffer';
 import { AdminAuthDB } from '../utils/adminAuthDb';
-import bs58 from 'bs58';
+import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useAccount as useWagmiAccount } from "wagmi";
 
-import { KEEPER_URL, KEEPER_URL_SOLANA, KEEPER_URL_ARC, ADMIN_TOKEN } from '../constants';
+const ROOT_WALLET = "0x4c8C0fb7333E3ab1594e69c0F5F751150502C28C";
+
+import { KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_CONTRACT_ADDRESS } from '../constants';
 
 // RBAC Roles
 const ROLES = {
@@ -119,7 +116,7 @@ const StatCard = React.memo(({ icon: Icon, label, value, trend, positive, onClic
 
 const DISCONNECTED_WALLET = { connected: false };
 
-const AdminPortal = React.memo(({ onBack, connection, price }) => {
+const AdminPortal = React.memo(({ onBack, price }) => {
     // Auth State - SECURED
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
@@ -139,7 +136,6 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     const [keeperLogs, setKeeperLogs] = useState([]);
     const [escrowBalance, setEscrowBalance] = useState(0);
     const [escrowStats, setEscrowStats] = useState({
-        solana: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 },
         arc: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 }
     }); // Unified stats from keeper
     const [liveEscrowBuffer, setLiveEscrowBuffer] = useState(new Map());
@@ -160,23 +156,65 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
 
     const [protocolData, setProtocolData] = useState({ activeList: [], totalVolume: 0, wallets: 0, profiles: [] });
-    const [tradeHistory, setTradeHistory] = useState([]); // Settled trades from Solana + Arc
-    const [historyFilter, setHistoryFilter] = useState({ network: 'ALL', search: '' }); // ALL, SOLANA, ARC
-    const [adminNetwork, setAdminNetwork] = useState('SOLANA'); // 'SOLANA' | 'ARC'
-    const [loginForm, setLoginForm] = useState({ username: '', password: '', securityCode: '' });
+    const [tradeHistory, setTradeHistory] = useState([]); // Settled trades from Arc
+    const [historyFilter, setHistoryFilter] = useState({ search: '' });
+    const [loginForm, setLoginForm] = useState({ username: '', password: '' });
     const [authError, setAuthError] = useState(null);
+
+    // Para & Wallet Integration
+    const { openModal } = useModal();
+    const { data: paraWallet } = useWallet();
+    const { isConnected: isParaConnected } = useParaAccount();
+    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+
+    const walletAddress = paraWallet?.address || wagmiAddress;
+    const isWalletConnected = isParaConnected || isWagmiConnected;
+
+    const [staffMembers, setStaffMembers] = useState(() => {
+        const saved = localStorage.getItem('15market_staff_members');
+        const defaultStaff = [
+            { id: 1, address: ROOT_WALLET, role: 'ROOT', username: 'xavageszn-root', password: 'NORgate123+', status: 'ACTIVE', onboardingComplete: true }
+        ];
+        if (!saved) return defaultStaff;
+        const parsed = JSON.parse(saved);
+        // Ensure root user is always present and has correct credentials
+        const rootIndex = parsed.findIndex(s => s.address?.toLowerCase() === ROOT_WALLET.toLowerCase());
+        if (rootIndex === -1) {
+            return [...defaultStaff, ...parsed];
+        } else {
+            parsed[rootIndex] = { ...parsed[rootIndex], ...defaultStaff[0] };
+            return parsed;
+        }
+    });
+
+    const currentStaffMember = useMemo(() => {
+        if (!walletAddress) return null;
+        return staffMembers.find(s => s.address?.toLowerCase() === walletAddress?.toLowerCase());
+    }, [staffMembers, walletAddress]);
+
+    const isAuthorizedWallet = !!currentStaffMember;
+
+    useEffect(() => {
+        localStorage.setItem('15market_staff_members', JSON.stringify(staffMembers));
+    }, [staffMembers]);
+
+    // Onboarding State for new staff
+    const [isOnboarding, setIsOnboarding] = useState(false);
+    const [onboardingForm, setOnboardingForm] = useState({ username: '', password: '', xLinked: false });
+    const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+    const [newStaffForm, setNewStaffForm] = useState({ address: '', role: 'MODERATOR' });
 
     // Protocol Revenue Tracker (Shared via localStorage with UserApp for demo)
     const [autoSignerFees, setAutoSignerFees] = useState(() => {
         const saved = localStorage.getItem("15market_autosigner_fees");
-        return saved ? JSON.parse(saved) : { solana: 0, arc: 0 };
+        return saved ? JSON.parse(saved) : { arc: 0 };
     });
 
     // Refresh revenue every 5 seconds from Keeper Backend
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+                const targetUrl = KEEPER_URL_ARC;
                 console.log(`📡 [ADMIN_SYNC] Polling ${targetUrl}/protocol-stats...`);
                 const res = await fetch(`${targetUrl}/protocol-stats`);
                 if (res.ok) {
@@ -186,14 +224,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                     // Update Revenue Tracker
                     if (data.autoSignerFees !== undefined) {
                         const rev = typeof data.autoSignerFees === 'object'
-                            ? (data.autoSignerFees[adminNetwork.toLowerCase()] || 0)
+                            ? (data.autoSignerFees.arc || 0)
                             : data.autoSignerFees;
 
                         setAutoSignerFees(prev => {
-                            const newState = {
-                                ...prev,
-                                [adminNetwork.toLowerCase()]: rev
-                            };
+                            const newState = { arc: rev };
                             localStorage.setItem("15market_autosigner_fees", JSON.stringify(newState));
                             return newState;
                         });
@@ -203,7 +238,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                     setMetrics(prev => ({
                         ...prev,
                         totalWallets: data.wallets || 0,
-                        totalVolume: data.totalVolume ? `${Number(data.totalVolume).toFixed(2)} ${adminNetwork === 'ARC' ? 'USDC' : 'SOL'}` : '0.00',
+                        totalVolume: data.totalVolume ? `${Number(data.totalVolume).toFixed(2)} USDC` : '0.00',
                         activeUsers: data.activeCount || 0,
                         pendingDisputes: data.pendingDisputes || prev.pendingDisputes || 0,
                         networkHealth: '100% Operational'
@@ -212,7 +247,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                     // Sync unified state for dashboard rendering
                     setEscrowStats(prev => ({
                         ...prev,
-                        [adminNetwork.toLowerCase()]: {
+                        arc: {
                             totalVolume: data.totalVolume || 0,
                             wallets: data.wallets || 0,
                             stake: data.activeStakes || 0,
@@ -234,13 +269,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             }
         };
 
-        // Immediate fetch on mount
         fetchStats();
-
-        // Then poll every 5s
         const interval = setInterval(fetchStats, 5000);
         return () => clearInterval(interval);
-    }, [adminNetwork]);
+    }, []);
 
     // Real-time Arc Treasury Balance
     const [arcTreasuryBalance, setArcTreasuryBalance] = useState(0);
@@ -249,24 +281,19 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         let interval;
         const fetchArcBalance = async () => {
             try {
-                const ARC_RPC = "https://rpc.testnet.arc.network";
-                const ARC_CONTRACT = "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8";
                 const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-                const bal = await provider.getBalance(ARC_CONTRACT);
+                const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
                 const formattedBal = parseFloat(ethers.formatEther(bal)) || 0;
-                console.log(`📡 [ARC_POLL] Treasury Balance: ${formattedBal} USDC`);
                 setArcTreasuryBalance(formattedBal);
-            } catch (e) {
-                console.warn("Real-time Arc balance fetch failed:", e.message);
-            }
+            } catch (e) { }
         };
 
-        if (isLoggedIn && adminNetwork === 'ARC') {
+        if (isLoggedIn) {
             fetchArcBalance();
-            interval = setInterval(fetchArcBalance, 5000); // 5s polling
+            interval = setInterval(fetchArcBalance, 10000);
         }
         return () => clearInterval(interval);
-    }, [isLoggedIn, adminNetwork]);
+    }, [isLoggedIn]);
 
     // Force re-render every second to update expiry status in real-time
     const [tick, setTick] = useState(0);
@@ -282,17 +309,14 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         return () => clearInterval(interval);
     }, []);
 
-    // Master Authority State (Autonomous Signatures)
-    const [masterKeypair, setMasterKeypair] = useState(null);
-    const [masterImportKey, setMasterImportKey] = useState('');
-    const [masterBalance, setMasterBalance] = useState(0);
+
 
     // Custom Styled Notification System
     const [notification, setNotification] = useState(null); // { type: 'success' | 'error' | 'info', title: '...', message: '...' }
     const [confirmAction, setConfirmAction] = useState(null); // { title: '...', message: '...', onConfirm: () => void }
 
     // Treasury State - Protocol Unified
-    const [treasuryStats, setTreasuryStats] = useState({ balance: 0, pda: null });
+
     const [treasuryAction, setTreasuryAction] = useState('DEPOSIT'); // 'DEPOSIT' | 'WITHDRAW'
     const [networkTime, setNetworkTime] = useState(Date.now() / 1000);
     const [clockOffset, setClockOffset] = useState(0);
@@ -307,7 +331,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         description: '',
         startTime: '',
         endTime: '',
-        network: 'general',
+        network: 'arc',
         reboot: 'none', // none, daily, weekly, monthly
         prize: ''
     });
@@ -459,104 +483,9 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         }
     };
 
-    // Sync Master Key from Storage
-    useEffect(() => {
-        setMasterKeypair(null);
-        setMasterBalance(0);
 
-        const storageKey = '15market_citadel_master_protocol';
-        const saved = localStorage.getItem(storageKey);
 
-        if (saved) {
-            try {
-                const arr = JSON.parse(saved);
-                const kp = Keypair.fromSecretKey(new Uint8Array(arr));
-                setMasterKeypair(kp);
-            } catch (e) { console.error("Master key load failed", e); }
-        }
-    }, []);
 
-    // Derived Admin Wallet
-    const adminWallet = useMemo(() => {
-        if (!masterKeypair) return { connected: false };
-        return {
-            publicKey: masterKeypair.publicKey,
-            signTransaction: async (tx) => { tx.partialSign(masterKeypair); return tx; },
-            signAllTransactions: async (txs) => { txs.forEach(t => t.partialSign(masterKeypair)); return txs; },
-            connected: true
-        };
-    }, [masterKeypair]);
-
-    // Helper to get Anchor Program instance
-    const getProgram = (wallet, conn) => {
-        const provider = new AnchorProvider(
-            conn,
-            wallet,
-            { commitment: "confirmed" }
-        );
-        return new Program(idl, programID, provider);
-    };
-
-    // Update Master Balance
-    useEffect(() => {
-        if (!adminWallet.publicKey || !connection) return;
-
-        const updateMasterBal = async () => {
-            try {
-                const b = await connection.getBalance(adminWallet.publicKey);
-                setMasterBalance(b / LAMPORTS_PER_SOL);
-            } catch (e) { }
-        };
-
-        updateMasterBal();
-        const interval = setInterval(updateMasterBal, 10000);
-
-        const solSubId = connection.onAccountChange(adminWallet.publicKey, (info) => {
-            setMasterBalance(info.lamports / LAMPORTS_PER_SOL);
-        });
-
-        return () => {
-            clearInterval(interval);
-            if (solSubId) connection.removeAccountChangeListener(solSubId);
-        };
-    }, [adminWallet.publicKey, connection]);
-
-    const handleImportMaster = () => {
-        try {
-            const arr = JSON.parse(masterImportKey);
-            if (!Array.isArray(arr) || arr.length !== 64) throw new Error("Invalid Secret Key Array");
-            const kp = Keypair.fromSecretKey(new Uint8Array(arr));
-            setMasterKeypair(kp);
-            localStorage.setItem('15market_citadel_master_protocol', JSON.stringify(arr));
-            notify('success', 'MASTER AUTHORITY LINKED', `Citadel now operates with autonomous protocol signatures.`);
-            setMasterImportKey('');
-        } catch (e) {
-            notify('error', 'IMPORT FAILED', 'Invalid format. Please paste the Secret Key Array [12,34,...]');
-        }
-    };
-
-    // Drains the Admin/Master Wallet itself (Emergency)
-    const drainAuthorityWallet = async (destination, amtUnit) => {
-        if (!adminWallet.publicKey || !connection) return;
-        try {
-            const destPub = new PublicKey(destination);
-            const tx = new Transaction().add(
-                SystemProgram.transfer({
-                    fromPubkey: adminWallet.publicKey,
-                    toPubkey: destPub,
-                    lamports: Math.floor(amtUnit * LAMPORTS_PER_SOL)
-                })
-            );
-            const { blockhash } = await connection.getLatestBlockhash();
-            tx.recentBlockhash = blockhash;
-            tx.feePayer = adminWallet.publicKey;
-            const signed = await adminWallet.signTransaction(tx);
-            const sig = await connection.sendRawTransaction(signed.serialize());
-            notify('success', 'DRAIN SUCCESSFUL', `Sweep completed. TX: ${sig.slice(0, 8)}...`);
-        } catch (e) {
-            notify('error', 'DRAIN FAILED', e.message);
-        }
-    };
 
 
     // Dispute Management
@@ -564,13 +493,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     const [disputeFilterState, setDisputeFilterState] = useState({ status: 'ALL' });
 
 
-    // Staff Management State
-    const [staffMembers, setStaffMembers] = useState([
-        { id: 1, address: 'Global Root', role: 'admin', key: 'ROOT_AUTH', status: 'ACTIVE' },
-        { id: 2, address: '8xJ...4k2', role: 'moderator', key: 'MOD_KEY_01', status: 'ACTIVE' }
-    ]);
-    const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
-    const [newStaff, setNewStaff] = useState({ address: '', role: 'moderator' });
+
 
     // Global Broadcast State
     const [broadcasts, setBroadcasts] = useState(() => {
@@ -619,12 +542,9 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     // --- TOKEN LISTING ENGINE ---
 
     const VERIFIED_SUGGESTIONS = [
-        { id: 'sol', symbol: 'SOL', name: 'Solana', mint: 'So11111111111111111111111111111111111111112', pair: 'Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
-        { id: 'jup', symbol: 'JUP', name: 'Jupiter', mint: 'JUPyiZJpEGkW4eePUMJuC9eJ9FNoAnatUnat5yW6H6j', pair: 'ABySmsN7X4f5hNoRiaK29Uj3uK59at8vD5j5z2r5G9oP', pythId: '0x07f1f31f90e542bb00e4085f1c91f9302e6d6282d8c30d70da6b9fcc9cc1f50a', binance: 'JUPUSDT' },
-        { id: 'bonk', symbol: 'BONK', name: 'Bonk', mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixeb6f3E9pTEUkD5Y67', pair: '8S89R89n8R9n8R9n8R9n8R9n8R9n8R9n8R9n8R9n', pythId: '0x72813589988168f003f533f5727d530f9ca21976f9d311978897829ec311654', binance: 'BONKUSDT' },
-        { id: 'trump', symbol: 'TRUMP', name: 'Official TRUMP', mint: '6p6xgHy9S7Bn3KyjzC98725y0y4s2Ooyb4w6w4Ooyb4w', pair: 'D1x1D1x1D1x1D1x1D1x1D1x1D1x1D1x1D1x1D1x1', pythId: '', binance: '' },
-        { id: 'btc', symbol: 'WBTC', name: 'WBTC', mint: '3NZ9J7zBW1rj9n2g779YtRwWc6mC8K6mC8K6mC8K6mC8', pair: 'G1x1G1x1G1x1G1x1G1x1G1x1G1x1G1x1G1x1G1x1', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT' },
-        { id: 'eth', symbol: 'ETH', name: 'ETH', mint: '7vfCXTUXpS6NL57f495146p6xgHy9S7Bn3KyjzC9872', pair: 'H1x1H1x1H1x1H1x1H1x1H1x1H1x1H1x1H1x1H1x1', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT' },
+        { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT' },
+        { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT' },
+        { id: 'sol', symbol: 'SOL', name: 'Solana', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
     ];
 
     const [listedTokens, setListedTokens] = useState(() => {
@@ -634,13 +554,13 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
     const [activeTokenId, setActiveTokenId] = useState(() => {
         const saved = localStorage.getItem('15market_active_token_id');
-        return saved || 'sol';
+        return saved || 'eth';
     });
 
     // 🔄 STANDALONE MARKET SYNC (KEEPER BRIDGE)
     const syncWithKeeper = async (tokens) => {
         try {
-            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            const targetUrl = KEEPER_URL_ARC;
             const res = await fetch(`${targetUrl}/listings`, {
                 method: 'POST',
                 headers: {
@@ -649,7 +569,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 },
                 body: JSON.stringify(tokens)
             });
-            if (res.ok) console.log(`✅ Market listings synced with ${adminNetwork} Keeper.`);
+            if (res.ok) console.log(`✅ Market listings synced with Arc Keeper.`);
         } catch (e) {
             console.error("❌ Market sync failed:", e.message);
         }
@@ -658,7 +578,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     useEffect(() => {
         const fetchRemoteTokens = async () => {
             try {
-                const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+                const targetUrl = KEEPER_URL_ARC;
                 // 1. Fetch Listings
                 const res = await fetch(`${targetUrl}/listings`);
                 if (res.ok) {
@@ -681,7 +601,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             } catch (e) { console.warn("Keeper sync failed, using local."); }
         };
         fetchRemoteTokens();
-    }, [adminNetwork]);
+    }, []);
 
     const [newTokenForm, setNewTokenForm] = useState({
         symbol: '',
@@ -711,7 +631,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         localStorage.setItem('15market_active_token_id', tokenId);
 
         try {
-            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            const targetUrl = KEEPER_URL_ARC;
             await fetch(`${targetUrl}/active-market`, {
                 method: 'POST',
                 headers: {
@@ -720,7 +640,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 },
                 body: JSON.stringify({ activeId: tokenId })
             });
-            notify('success', 'GLOBAL MARKET SWITCHED', `Citadel has set ${tokenId.toUpperCase()} as the primary market on ${adminNetwork}.`);
+            notify('success', 'GLOBAL MARKET SWITCHED', `Citadel has set ${tokenId.toUpperCase()} as the primary market.`);
         } catch (e) {
             notify('warning', 'LOCAL SWITCH ONLY', 'Market switched locally but Keeper sync failed.');
         }
@@ -770,7 +690,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     const handleSaveSettings = async () => {
         try {
             // Push to both keepers to ensure global sync
-            const syncToKeeper = async (url, networkLabel) => {
+            const syncToKeeper = async (url) => {
                 const res = await fetch(`${url}/settings`, {
                     method: 'POST',
                     headers: {
@@ -779,14 +699,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                     },
                     body: JSON.stringify(platformSettings)
                 });
-                if (!res.ok) throw new Error(`${networkLabel} Keeper rejected settings`);
+                if (!res.ok) throw new Error(`Keeper rejected settings`);
                 return res;
             };
 
-            await Promise.all([
-                syncToKeeper(KEEPER_URL_SOLANA, 'Solana'),
-                syncToKeeper(KEEPER_URL_ARC, 'Arc')
-            ]);
+            await syncToKeeper(KEEPER_URL_ARC);
 
             notify('success', 'CONFIGURATION SYNCED', `Platform settings pushed to all Network Clusters.`);
             localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
@@ -873,36 +790,18 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         if (action === 'REFUND') {
             setConfirmAction({
                 title: `INITIATE ROBUST REFUND`,
-                message: `Executing refund for user ${dispute.user}. This will attempt to settle the trade as WON on-chain to return funds and clear escrow.`,
+                message: `Executing refund for user ${dispute.user}. This will attempt to settle the trade as WON to return funds.`,
                 onConfirm: async () => {
                     try {
-                        const recipient = dispute.originalTrade?.userPublicKey || dispute.user;
-                        const amount = parseFloat(dispute.amount);
-
-                        // If it's a real on-chain trade, settle it properly
                         if (dispute.originalTrade) {
-                            console.log(`🔗 Attempting on-chain settlement for REFUND:`, dispute.id);
+                            console.log(`🔗 Attempting manual settlement for REFUND:`, dispute.id);
                             await handleOnChainSettle(dispute.originalTrade, true);
-                        } else {
-                            // Manual transfer fallback
-                            const userPub = new PublicKey(recipient);
-                            const tx = new Transaction().add(
-                                SystemProgram.transfer({
-                                    fromPubkey: adminWallet.publicKey,
-                                    toPubkey: userPub,
-                                    lamports: amount * LAMPORTS_PER_SOL
-                                })
-                            );
-                            const signed = await adminWallet.signTransaction(tx);
-                            const sig = await connection.sendRawTransaction(signed.serialize());
-                            await connection.confirmTransaction(sig, 'confirmed');
                         }
-
                         notify('success', 'REFUND SUCCESSFUL', `Stake returned/settled as WIN.`);
                         finalizeAction(disputeId, action);
                     } catch (err) {
                         console.error("Refund failed:", err);
-                        notify('error', 'REFUND FAILED', err.message || 'Blockchain transfer failed.');
+                        notify('error', 'REFUND FAILED', err.message || 'Transfer failed.');
                     }
                 }
             });
@@ -989,65 +888,31 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     };
 
     const handleOnChainSettle = async (betData, userWon) => {
-        const network = betData.network || (adminNetwork.toLowerCase());
         const actionLabel = userWon ? "WIN (Payout Profit)" : "LOSS (Take Stake)";
 
         setConfirmAction({
-            title: `ESTABLISH ${network.toUpperCase()} VERDICT`,
-            message: `MANUAL SETTLE Bet ${betData.publicKey?.slice(0, 8) || betData.id} as ${actionLabel}?`,
+            title: `ESTABLISH ARC VERDICT`,
+            message: `MANUAL SETTLE Bet ${betData.id} as ${actionLabel}?`,
             onConfirm: async () => {
                 try {
-                    if (network === 'arc') {
-                        // Current price for manual settlement (Ideally admin would provide, here we fetch latest)
-                        const pricingRes = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${(betData.symbol || 'ETH') + 'USDT'}`);
-                        const pricingData = await pricingRes.json();
-                        const currentPrice = parseFloat(pricingData.price);
+                    // Current price for manual settlement
+                    const pricingRes = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${(betData.symbol || 'ETH') + 'USDT'}`);
+                    const pricingData = await pricingRes.json();
+                    const currentPrice = parseFloat(pricingData.price);
 
-                        const res = await fetch(`${KEEPER_URL_ARC}/manual-settle`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                betId: betData.nonce || betData.id,
-                                exitPrice: currentPrice,
-                                password: ADMIN_TOKEN
-                            })
-                        });
-                        if (res.ok) {
-                            notify('success', 'SETTLEMENT EXECUTED', `Arc trade #${betData.id} settled.`);
-                        } else {
-                            throw new Error("Arc Keeper rejected settlement");
-                        }
+                    const res = await fetch(`${KEEPER_URL_ARC}/manual-settle`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            betId: betData.nonce || betData.id,
+                            exitPrice: currentPrice,
+                            password: ADMIN_TOKEN
+                        })
+                    });
+                    if (res.ok) {
+                        notify('success', 'SETTLEMENT EXECUTED', `Arc trade #${betData.id} settled.`);
                     } else {
-                        // Solana Logic
-                        if (!adminWallet || !adminWallet.publicKey) {
-                            notify('error', 'AUTH FAILED', 'Master Authority required.');
-                            return;
-                        }
-                        const program = getProgram(adminWallet, connection);
-                        const userPub = new PublicKey(betData.owner);
-
-                        // Handle different versions of program address derivation if needed
-                        const nonce = new BN(betData.nonce);
-                        const [betPda] = PublicKey.findProgramAddressSync(
-                            [Buffer.from("bet_v7"), userPub.toBuffer(), nonce.toArrayLike(Buffer, 'le', 8)],
-                            program.programId
-                        );
-
-                        const [treasuryPda] = getTreasuryPda(program.programId);
-
-                        const tx = await program.methods
-                            .settleBet(userWon)
-                            .accounts({
-                                bet: betPda,
-                                owner: userPub,
-                                treasury: treasuryPda,
-                                keeper: adminWallet.publicKey,
-                                systemProgram: SystemProgram.programId
-                            })
-                            .rpc();
-
-                        await connection.confirmTransaction(tx, 'confirmed');
-                        notify('success', 'SETTLEMENT EXECUTED', `Solana trade settled.`);
+                        throw new Error("Arc Keeper rejected settlement");
                     }
                     triggerAnalysis();
                 } catch (err) {
@@ -1059,40 +924,11 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
     };
 
     const triggerAnalysis = useCallback(async () => {
-        if (!connection) return;
-
-        // SKIP if keeper is down - prevent pile-up
-        if (!keeperHealthRef.current.connected) {
-            console.log('⚠️ [SKIP_ANALYSIS] Keeper down, waiting for recovery...');
-            return;
-        }
-
-        // Prevent concurrent calls
-        if (triggerAnalysis.isRunning) {
-            console.log('⏳ Analysis already in progress, skipping...');
-            return;
-        }
-
+        if (triggerAnalysis.isRunning) return;
         triggerAnalysis.isRunning = true;
 
         try {
-            // 1. Fetch Treasury
-            const [treasuryPda] = getTreasuryPda(programID);
-            const treasuryBal = await connection.getBalance(treasuryPda);
-            setTreasuryStats({ balance: treasuryBal / LAMPORTS_PER_SOL, pda: treasuryPda.toBase58() });
-
-            // 2. Fetch Keeper Stats (Escrow)
-            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
-            const statsRes = await fetch(`${targetUrl}/escrow-stats`);
-            if (statsRes.ok) {
-                const stats = await statsRes.json();
-                setEscrowStats({
-                    solana: stats.solana || { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 },
-                    arc: stats.arc || { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 }
-                });
-            }
-
-            // 3. Fetch Protocol Data (Active Bets & Stats) from Keeper (OFFLOADED FROM RPC)
+            const targetUrl = KEEPER_URL_ARC;
             const [activeRes, protoRes] = await Promise.all([
                 fetch(`${targetUrl}/active-bets`),
                 fetch(`${targetUrl}/protocol-stats`)
@@ -1105,26 +941,21 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 setProtocolData({
                     activeList: activeBets.map(b => ({
                         publicKey: b.id,
-                        amount: b.amountLamports ? Number(b.amountLamports) / 1e9 : (parseFloat(b.amount) || 0),
-                        owner: b.owner || b.user,
+                        amount: parseFloat(b.amount) || 0,
+                        owner: b.user,
                         nonce: b.nonce || b.id,
-                        direction: b.direction === 1 || b.direction === "buy" ? "buy" : "sell",
+                        direction: b.direction === 1 ? "buy" : "sell",
                         entryPrice: b.entryPrice,
                         duration: b.duration || 60,
-                        timestamp: b.timestamp || (Date.now() / 1000 - 60),
+                        timestamp: b.timestamp,
                         isExpired: b.expiry < (Date.now() / 1000),
-                        network: b.network || 'solana'
+                        network: 'arc'
                     })),
                     totalVolume: protoStats.totalVolume,
                     wallets: protoStats.wallets,
-                    profiles: [] // Profiles not critically needed for dashboard
+                    profiles: []
                 });
             }
-
-            // 4. Sync Clock
-            const slot = await connection.getSlot();
-            const ts = await connection.getBlockTime(slot);
-            if (ts) setClockOffset(ts - (Date.now() / 1000));
 
             setLastSync(new Date().toLocaleTimeString());
             setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
@@ -1138,7 +969,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         } finally {
             triggerAnalysis.isRunning = false;
         }
-    }, [connection, adminNetwork]);
+    }, []);
 
     useEffect(() => {
         if (isLoggedIn) {
@@ -1151,31 +982,23 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
     // Fetch Trade History (Settled Trades from Solana + Arc)
     const fetchTradeHistory = useCallback(async () => {
-        if (!connection) return;
         if (fetchTradeHistory.isRunning) return;
-
         fetchTradeHistory.isRunning = true;
 
         try {
-            // 1. Fetch Unified History from Keeper (OFFLOADED FROM RPC)
-            const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
+            const targetUrl = KEEPER_URL_ARC;
             const res = await fetch(`${targetUrl}/history`);
             if (res.ok) {
                 const allTrades = await res.json();
-
-                // Sort by timestamp (newest first)
                 allTrades.sort((a, b) => b.timestamp - a.timestamp);
-
-                // Limit to last 100 trades
                 setTradeHistory(allTrades.slice(0, 100));
-                console.log(`📜 [HISTORY] Loaded ${allTrades.length} trades from Keeper cache`);
             }
         } catch (e) {
             console.error("Trade History Fetch Error:", e);
         } finally {
             fetchTradeHistory.isRunning = false;
         }
-    }, [connection]);
+    }, []);
 
     useEffect(() => {
         if (isLoggedIn) {
@@ -1190,78 +1013,30 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
         const nowSeconds = nowRef.current + clockOffset;
         const liveValues = Array.from(liveEscrowBuffer.values()).filter(b => b.expiry > nowSeconds);
 
-        // Network-aware active list
-        const activeList = adminNetwork === 'SOLANA'
-            ? (protocolData.activeList || [])
-            : liveValues.filter(b => b.network === 'arc');
+        const activeList = liveValues.filter(b => b.network === 'arc');
+        const arcStats = escrowStats.arc || { totalVolume: 0, wallets: 0, stake: 0, count: 0, address: '' };
 
-        // Sum volumes and wallets from both networks
-        const solStats = escrowStats.solana || { totalVolume: 0, wallets: 0, stake: 0, count: 0, balance: 0, address: '' };
-        const arcStats = escrowStats.arc || { totalVolume: 0, wallets: 0, stake: 0, count: 0, balance: 0, address: '' };
+        // HYBRID VOLUME: Keeper Total + fresh unexpired pings for instant jump
+        const freshArcPings = liveValues.filter(b => b.network === 'arc');
+        const unconfirmedArcVol = freshArcPings.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
 
-        let totalVolume = 0;
-        let totalWallets = 0;
+        const totalVolume = (parseFloat(arcStats.totalVolume) || 0) + unconfirmedArcVol;
+        const totalWallets = parseInt(arcStats.wallets) || 0;
 
-        if (adminNetwork === 'SOLANA') {
-            totalVolume = parseFloat(solStats.totalVolume) || 0;
-            totalWallets = parseInt(solStats.wallets) || 0;
-        } else {
-            // HYBRID VOLUME: Keeper Total + fresh unexpired pings for instant jump
-            const freshArcPings = liveValues.filter(b => b.network === 'arc');
-            const unconfirmedArcVol = freshArcPings.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
+        const pingsStake = freshArcPings.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
+        const finalActiveStake = Math.max(parseFloat(arcStats.stake) || 0, pingsStake);
+        const finalActiveCount = Math.max(parseInt(arcStats.count) || 0, freshArcPings.length);
 
-            totalVolume = (parseFloat(arcStats.totalVolume) || 0) + unconfirmedArcVol;
-            totalWallets = parseInt(arcStats.wallets) || 0;
-        }
-
-        // Solana "Live" comes from protocolData. Arc comes solely from stats.
-        let finalActiveStake = 0;
-        let finalActiveCount = 0;
-
-        if (adminNetwork === 'SOLANA') {
-            const onChainList = protocolData.activeList || [];
-
-            // HYBRID ESCROW: Combine on-chain data with "Fresh" pings from liveEscrowBuffer
-            // Deduplicate using nonce/ID to ensure pings don't double-count once confirmed on-chain
-            const onChainIds = new Set(onChainList.map(b => b.nonce?.toString()));
-            const freshPings = liveValues.filter(b => b.network === 'solana' && !onChainIds.has(b.id));
-
-            finalActiveStake = onChainList.reduce((acc, b) => acc + (parseFloat(b.amount) || 0), 0) +
-                freshPings.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
-
-            finalActiveCount = onChainList.length + freshPings.length;
-        } else {
-            // Arc Hybrid: arcStats is reported by the Arc Keeper (on-chain aggregate)
-            // freshArcPings are the direct inputs from the user app.
-            const freshArcPings = liveValues.filter(b => b.network === 'arc');
-            const pingsStake = freshArcPings.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
-
-            // Use Math.max to prioritize the "instant" feel of pings while keeping the stats floor.
-            finalActiveStake = Math.max(parseFloat(arcStats.stake) || 0, pingsStake);
-            finalActiveCount = Math.max(parseInt(arcStats.count) || 0, freshArcPings.length);
-        }
-
-        // Determine currency unit based on network
-        const currencyUnit = adminNetwork === 'SOLANA' ? 'SOL' : 'USDC';
-
-        // Network-specific treasury/reserve balance
-        // Solana: Use actual on-chain treasury balance
-        // Arc: Use the balance reported by the Arc Keeper
-        const PHYSICAL_TREASURY_BAL = adminNetwork === 'SOLANA'
-            ? (treasuryStats.balance || 0)
-            : arcTreasuryBalance; // Direct real-time fetch
-
-        const RESERVE_ADDRESS = adminNetwork === 'SOLANA'
-            ? treasuryStats.pda
-            : (arcStats.address || 'Scanning...');
+        const PHYSICAL_TREASURY_BAL = arcTreasuryBalance;
+        const RESERVE_ADDRESS = arcStats.address || 'Scanning...';
 
         const currentStats = {
-            volume: (totalVolume || 0).toFixed(2),
+            volume: totalVolume.toFixed(2),
             wallets: totalWallets,
             activeStakes: finalActiveStake.toFixed(2),
             totalPlatformFunds: PHYSICAL_TREASURY_BAL.toFixed(2),
             activeCount: finalActiveCount,
-            unit: currencyUnit
+            unit: 'USDC'
         };
 
         return {
@@ -1273,43 +1048,29 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             displayReserve: PHYSICAL_TREASURY_BAL.toFixed(2),
             reserveAddress: RESERVE_ADDRESS,
             pendingDisputes: activeList.length,
-            currencyUnit
+            currencyUnit: 'USDC'
         };
-    }, [protocolData, escrowStats, liveEscrowBuffer, treasuryStats, clockOffset, adminNetwork]);
+    }, [escrowStats, liveEscrowBuffer, arcTreasuryBalance, clockOffset]);
 
 
 
     // Trade History Filtering (Settled Trades Only)
     const filteredHistory = useMemo(() => {
         return tradeHistory.filter(trade => {
-            // Network filter
-            const matchesNetwork = historyFilter.network === 'ALL' ||
-                (historyFilter.network === 'SOLANA' && trade.network === 'solana') ||
-                (historyFilter.network === 'ARC' && trade.network === 'arc');
-
-            // Search filter
             const matchesSearch = !historyFilter.search ||
                 trade.owner?.toLowerCase().includes(historyFilter.search.toLowerCase()) ||
                 trade.publicKey?.toLowerCase().includes(historyFilter.search.toLowerCase());
-
-            return matchesNetwork && matchesSearch;
+            return matchesSearch;
         });
-    }, [tradeHistory, historyFilter.network, historyFilter.search]);
+    }, [tradeHistory, historyFilter.search]);
 
     // Filtered Disputes
     const filteredDisputes = useMemo(() => {
         return disputes.filter(d => {
-            // Status match
             const matchesStatus = disputeFilterState.status === 'ALL' || d.status === disputeFilterState.status;
-
-            // Network match: If on ARC dashboard, only show ARC disputes (usually automated)
-            // If on SOLANA, only show Solana/Protocol disputes
-            const matchesNetwork = (adminNetwork === 'SOLANA' && (d.network === 'solana' || d.network === 'protocol')) ||
-                (adminNetwork === 'ARC' && d.network === 'arc');
-
-            return matchesStatus && matchesNetwork;
+            return matchesStatus;
         });
-    }, [disputes, disputeFilterState, adminNetwork]);
+    }, [disputes, disputeFilterState]);
 
     // Background Log Synchronization
     useEffect(() => {
@@ -1328,7 +1089,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         id,
                         amount: parseFloat(amount),
                         expiry: parseFloat(expiry),
-                        network: network || 'solana'
+                        network: network || 'arc'
                     });
                 }
             });
@@ -1340,14 +1101,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         if (!next.has(id)) next.set(id, val);
                     });
 
-                    // Cleanup expired items to prevent memory bloat
                     const nowSec = Date.now() / 1000;
                     for (const [key, val] of next.entries()) {
-                        if (val.expiry < nowSec - 60) { // Remove 60s after expiry
-                            next.delete(key);
-                        }
+                        if (val.expiry < nowSec - 60) next.delete(key);
                     }
-
                     return next;
                 });
             }
@@ -1355,50 +1112,29 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
         const fetchLogs = async () => {
             const currentHealth = keeperHealthRef.current;
-            // Exponential backoff if keeper is unhealthy
             const timeSinceLastCheck = Date.now() - currentHealth.lastCheck;
-            const backoffDelay = Math.min(60000, 5000 * Math.pow(2, currentHealth.failCount)); // Max 60s
+            const backoffDelay = Math.min(60000, 5000 * Math.pow(2, currentHealth.failCount));
 
-            if (!currentHealth.connected && timeSinceLastCheck < backoffDelay) {
-                return; // Skip this poll
-            }
+            if (!currentHealth.connected && timeSinceLastCheck < backoffDelay) return;
 
             try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-                const targetUrl = adminNetwork === 'SOLANA' ? KEEPER_URL_SOLANA : KEEPER_URL_ARC;
-                const res = await fetch(`${targetUrl}/logs`, { signal: controller.signal });
-                clearTimeout(timeout);
-
+                const targetUrl = KEEPER_URL_ARC;
+                const res = await fetch(`${targetUrl}/logs`);
                 if (res.ok) {
                     const data = await res.json();
                     if (activeTab === 'terminal') setKeeperLogs(data);
                     parseBetData(data);
-
-                    // Reset health on success
-                    if (!currentHealth.connected) {
-                        console.log('✅ Keeper connection restored');
-                    }
                     setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
-                } else {
-                    throw new Error(`Server returned ${res.status}`);
-                }
+                } else throw new Error(`Server error`);
             } catch (e) {
-                const newFailCount = currentHealth.failCount + 1;
-                setKeeperHealth({ connected: false, failCount: newFailCount, lastCheck: Date.now() });
-
-                if (newFailCount === 1) {
-                    console.warn('⚠️ Keeper connection lost, entering backoff mode');
-                }
+                setKeeperHealth({ connected: false, failCount: currentHealth.failCount + 1, lastCheck: Date.now() });
             }
         };
 
         fetchLogs();
-        // OPTIMIZED: Increased from 10s to 20s to prevent UI freezing
         const interval = setInterval(fetchLogs, 20000);
         return () => clearInterval(interval);
-    }, [isLoggedIn, activeTab, adminNetwork]); // Added adminNetwork to respond to switch
+    }, [isLoggedIn, activeTab]);
 
     const nodeStats = [
         { name: 'US-East (RPC)', status: 'Optimal', latency: '22ms', load: 34 },
@@ -1422,37 +1158,6 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
 
     // Unified Treasury Balance is now handled by the updateBalances() loop in the monitoring effect above
 
-    const handleDeposit = async (amt) => {
-        if (!wallet || !wallet.publicKey) {
-            notify('error', 'AUTH FAILED', 'Wallet connection required for deposits.');
-            return;
-        }
-        try {
-            const [pda] = getTreasuryPda(programID);
-            const tx = new Transaction().add(
-                SystemProgram.transfer({
-                    fromPubkey: wallet.publicKey,
-                    toPubkey: pda,
-                    lamports: parseFloat(amt) * LAMPORTS_PER_SOL
-                })
-            );
-            const sig = await wallet.sendTransaction(tx, connection);
-            await connection.confirmTransaction(sig, 'confirmed');
-
-            // Immediately update treasury balance to hide alert instantly
-            const newBalance = await connection.getBalance(pda);
-            setTreasuryStats({
-                balance: newBalance / LAMPORTS_PER_SOL,
-                pda: pda.toBase58()
-            });
-
-            notify('success', 'DEPOSIT CONFIRMED', `${amt} SOL injected into Treasury liquidity pool.`);
-            setIsTreasuryModalOpen(false);
-        } catch (err) {
-            notify('error', 'DEPOSIT FAILED', err.message);
-        }
-    };
-
     const handleWithdraw = async (amt) => {
         const amtNum = parseFloat(amt);
         if (isNaN(amtNum) || amtNum <= 0) {
@@ -1460,147 +1165,128 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             return;
         }
 
-        if (adminNetwork === 'ARC') {
-            const currentBal = arcTreasuryBalance;
-            if (amtNum > currentBal) {
-                notify('error', 'INSUFFICIENT FUNDS', 'Treasury balance is lower than the requested withdrawal amount.');
-                return;
-            }
-
-            setConfirmAction({
-                title: 'EXTRACT ARC LIQUIDITY',
-                message: `Are you sure you want to withdraw ${amt} USDC from the Arc Network treasury?`,
-                onConfirm: async () => {
-                    try {
-                        const targetUrl = KEEPER_URL_ARC;
-                        const res = await fetch(`${targetUrl}/withdraw`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                amount: amtNum,
-                                password: ADMIN_TOKEN
-                            })
-                        });
-
-                        const data = await res.json();
-                        if (res.ok) {
-                            notify('success', 'WITHDRAWAL SUCCESS', `Successfully extracted ${amt} USDC. TX: ${data.hash?.slice(0, 10)}...`);
-                            setIsTreasuryModalOpen(false);
-                        } else {
-                            throw new Error(data.error || "Arc withdrawal failed");
-                        }
-                    } catch (e) {
-                        notify('error', 'ARC WITHDRAWAL FAILED', e.message);
-                    }
-                }
-            });
-            return;
-        }
-
-        // Solana Withdrawal Logic
-        if (!adminWallet || !adminWallet.publicKey) {
-            notify('error', 'UNAUTHORIZED', 'Root Admin signature required for treasury extraction.');
-            return;
-        }
-
-        const currentBal = treasuryStats.balance;
+        const currentBal = arcTreasuryBalance;
         if (amtNum > currentBal) {
             notify('error', 'INSUFFICIENT FUNDS', 'Treasury balance is lower than the requested withdrawal amount.');
             return;
         }
 
-        try {
-            const program = getProgram(adminWallet, connection);
-            if (!program) return;
+        setConfirmAction({
+            title: 'EXTRACT ARC LIQUIDITY',
+            message: `Are you sure you want to withdraw ${amt} USDC from the Arc Network treasury?`,
+            onConfirm: async () => {
+                try {
+                    const targetUrl = KEEPER_URL_ARC;
+                    const res = await fetch(`${targetUrl}/withdraw`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: amtNum,
+                            password: ADMIN_TOKEN
+                        })
+                    });
 
-            notify('info', 'EXTRACTING FUNDS', 'Broadcasting withdrawal instruction to Solana clusters...');
-
-            const [marketPda] = getMarketPda(program.programId);
-            const [treasuryPda] = getTreasuryPda(program.programId);
-
-            const tx = await program.methods
-                .withdrawTreasury(new BN((amtNum * LAMPORTS_PER_SOL).toString()))
-                .accounts({
-                    market: marketPda,
-                    treasury: treasuryPda,
-                    authority: adminWallet.publicKey,
-                    systemProgram: SystemProgram.programId,
-                })
-                .rpc();
-
-            notify('success', 'WITHDRAWAL SUCCESS', `Successfully extracted ${amt} SOL to Admin Authority wallet.`);
-
-            // Refresh balance
-            const bal = await connection.getBalance(treasuryPda);
-            setTreasuryStats({ balance: bal / LAMPORTS_PER_SOL, pda: treasuryPda.toBase58() });
-
-            setIsTreasuryModalOpen(false);
-        } catch (err) {
-            console.error("Withdrawal failed:", err);
-            notify('error', 'WITHDRAWAL FAILED', err.message || 'An error occurred during treasury extraction.');
-        }
+                    const data = await res.json();
+                    if (res.ok) {
+                        notify('success', 'WITHDRAWAL SUCCESS', `Successfully extracted ${amt} USDC. TX: ${data.hash?.slice(0, 10)}...`);
+                        setIsTreasuryModalOpen(false);
+                    } else {
+                        throw new Error(data.error || "Arc withdrawal failed");
+                    }
+                } catch (e) {
+                    notify('error', 'ARC WITHDRAWAL FAILED', e.message);
+                }
+            }
+        });
     };
 
     const handleTreasuryAction = (amt) => {
-        if (treasuryAction === 'DEPOSIT') {
-            handleDeposit(amt);
-        } else {
-            handleWithdraw(amt);
-        }
+        handleWithdraw(amt);
     };
 
+
+
     const handleAssignRole = () => {
-        if (!newStaff.address) return;
-        setStaffMembers([...staffMembers, {
+        if (!newStaffForm.address) return;
+        if (staffMembers.some(s => s.address.toLowerCase() === newStaffForm.address.toLowerCase())) {
+            notify('error', 'EXISTS', 'This wallet is already registered.');
+            return;
+        }
+
+        const newStaff = {
             id: Date.now(),
-            address: newStaff.address,
-            role: newStaff.role,
-            key: `AUTH_${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
-            status: 'ACTIVE'
-        }]);
+            address: newStaffForm.address,
+            role: newStaffForm.role,
+            status: 'ACTIVE',
+            onboardingComplete: false
+        };
+
+        setStaffMembers(prev => [...prev, newStaff]);
         setIsStaffModalOpen(false);
-        setNewStaff({ address: '', role: 'moderator' });
+        setNewStaffForm({ address: '', role: 'MODERATOR' });
+        notify('success', 'ROLE ASSIGNED', `${newStaffForm.role} access granted to ${newStaffForm.address}. Onboarding required.`);
     };
 
     const handleRevokeRole = (id) => {
-        if (id === 1) {
-            notify('error', 'ACCESS DENIED', 'Cannot revoke Global Root authority.');
+        const staff = staffMembers.find(s => s.id === id);
+        if (staff.role === 'ROOT') {
+            notify('error', 'DENIED', 'Citadel Root cannot be removed.');
             return;
         }
 
         setConfirmAction({
-            title: 'REVOKE OPERATOR ACCESS',
-            message: 'Are you sure you want to terminate this operator\'s access keys? They will no longer be able to log in to the Citadel.',
+            title: 'REVOKE ACCESS',
+            message: `Deauthorize ${staff.address}? This action is immediate.`,
             onConfirm: () => {
                 setStaffMembers(prev => prev.filter(s => s.id !== id));
-                notify('success', 'ACCESS REVOKED', 'Operator privileges has been terminated.');
+                notify('info', 'ACCESS REVOKED', 'Operator permissions purged.');
             }
         });
+    };
+
+    const handleOnboarding = () => {
+        if (!onboardingForm.username || !onboardingForm.password || !onboardingForm.xLinked) {
+            notify('error', 'INCOMPLETE', 'Complete all onboarding steps (Link X, Set Credentials).');
+            return;
+        }
+
+        setStaffMembers(prev => prev.map(s =>
+            s.address.toLowerCase() === walletAddress.toLowerCase()
+                ? { ...s, username: onboardingForm.username, password: onboardingForm.password, onboardingComplete: true }
+                : s
+        ));
+        setIsOnboarding(false);
+        notify('success', 'ONBOARDING COMPLETE', 'Your administrative keys have been initialized.');
     };
 
     const handleLogin = async (e) => {
         if (e) e.preventDefault();
         setAuthError(null);
 
+        if (!isWalletConnected) {
+            notify('error', 'WALLET REQUIRED', 'Connect authorized wallet to proceed.');
+            return;
+        }
+
+        if (!isAuthorizedWallet) {
+            notify('error', 'NOT ALLOWED', 'This wallet address is not registered in the administrative directory.');
+            return;
+        }
+
+        if (!currentStaffMember.onboardingComplete) {
+            setIsOnboarding(true);
+            return;
+        }
+
         try {
-            const result = await AdminAuthDB.verifyCoordinates(loginForm.username, loginForm.password);
-
-            if (result.success) {
+            // Check credentials against our staff database
+            if (loginForm.username === currentStaffMember.username && loginForm.password === currentStaffMember.password) {
                 setIsLoggedIn(true);
-                setCurrentUser({ username: result.user.username || 'Admin Staff', role: result.user.role || ROLES.MODERATOR });
-
-                // Automatically link Master Authority if not already set (For Protocol Default)
-                const storageKey = '15market_citadel_master_protocol';
-                if (!localStorage.getItem(storageKey)) {
-                    const keeperKey = [115, 158, 186, 9, 238, 165, 46, 111, 213, 187, 96, 61, 32, 72, 136, 41, 118, 180, 29, 127, 190, 219, 71, 166, 173, 188, 113, 25, 11, 90, 182, 176, 184, 245, 75, 239, 163, 125, 183, 66, 243, 208, 176, 159, 125, 216, 202, 96, 210, 219, 119, 83, 156, 192, 167, 72, 36, 175, 117, 16, 120, 105, 136, 117];
-                    localStorage.setItem(storageKey, JSON.stringify(keeperKey));
-                    setMasterKeypair(Keypair.fromSecretKey(new Uint8Array(keeperKey)));
-                    console.log("🛡️ Master Authority Key auto-linked for Admin session.");
-                }
-                notify('success', 'ACCESS GRANTED', 'Session Initialized.');
+                setCurrentUser({ username: currentStaffMember.username, role: currentStaffMember.role });
+                notify('success', 'ACCESS GRANTED', 'Citadel Session Initialized.');
             } else {
-                notify('error', 'AUTH FAILED', result.message);
-                setAuthError(result.message);
+                notify('error', 'AUTH FAILED', 'INVALID LOGIN COORDINATES');
+                setAuthError("INVALID AUTHENTICATION COORDINATES");
             }
         } catch (err) {
             console.error("Login Error:", err);
@@ -1623,42 +1309,118 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                     animate={{ opacity: 1, scale: 1 }}
                     className="w-full max-w-[480px] bg-[#050505]/80 backdrop-blur-2xl border border-white/10 p-12 rounded-[48px] relative z-20 shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
                 >
-                    <div className="flex flex-col items-center mb-12">
+                    <div className="flex flex-col items-center mb-10">
                         <motion.div
                             animate={{ y: [0, -10, 0] }}
                             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                             className="relative mb-6"
                         >
                             <div className="absolute inset-0 blur-3xl bg-[#3CB371]/40 opacity-50" />
-                            <img src="/logo.png" alt="15market" className="h-48 w-auto relative z-10 filter drop-shadow-[0_0_30px_rgba(60,179,113,0.6)]" />
+                            <img src="/logo.png" alt="15market" className="h-40 w-auto relative z-10 filter drop-shadow-[0_0_30px_rgba(60,179,113,0.6)]" />
                         </motion.div>
-                        <h2 className="text-2xl font-black uppercase tracking-[0.3em] text-white">Citadel Access</h2>
+                        <h2 className="text-xl font-black uppercase tracking-[0.3em] text-white">Citadel Access</h2>
                         <div className="flex items-center gap-2 mt-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-ping" />
-                            <p className="text-[10px] text-[#3CB371] font-black uppercase tracking-[0.2em]">Secure Node 01</p>
+                            <p className="text-[9px] text-[#3CB371] font-black uppercase tracking-[0.2em]">{isWalletConnected ? 'AUTHENTICATING WALLET' : 'SECURE NODE 01'}</p>
                         </div>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key="step1"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20 }}
-                                className="space-y-6"
+                    {!isWalletConnected ? (
+                        <div className="space-y-6">
+                            <p className="text-center text-[10px] text-white/30 uppercase font-black tracking-widest leading-relaxed">
+                                Administrative access requires an authorized wallet connection. Secure your identity to proceed.
+                            </p>
+                            <button
+                                onClick={() => openModal()}
+                                className="group relative w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-center ml-1">
-                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest">Operator ID</label>
-                                        <span className="text-[9px] text-white/10 font-mono">ROOT.AUTH</span>
+                                <div className="absolute inset-0 bg-gradient-to-r from-[#3CB371] to-[#4ADE80] opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <span className="relative z-10 group-hover:text-white transition-colors">Authorize Wallet</span>
+                            </button>
+                        </div>
+                    ) : !isAuthorizedWallet ? (
+                        <div className="space-y-6 text-center">
+                            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                                <ShieldAlert size={32} className="mx-auto text-red-500 mb-3" />
+                                <p className="text-[10px] text-red-500 font-black uppercase tracking-widest leading-relaxed">
+                                    ACCESS DENIED<br />
+                                    Wallet {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)} is not registered in the 15Market administrative directory.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => openModal()}
+                                className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] hover:text-white transition-colors"
+                            >
+                                Change Identity
+                            </button>
+                        </div>
+                    ) : isOnboarding ? (
+                        <div className="space-y-6">
+                            <div className="text-center space-y-2">
+                                <h3 className="text-xs font-black text-[#3CB371] uppercase tracking-widest">Operator Onboarding</h3>
+                                <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest">Initialize your administrative vault keys.</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <button
+                                    onClick={() => setOnboardingForm({ ...onboardingForm, xLinked: true })}
+                                    className={`w-full py-4 rounded-xl border flex items-center justify-center gap-3 transition-all ${onboardingForm.xLinked ? 'bg-[#3CB371]/20 border-[#3CB371]/30 text-[#3CB371]' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                                >
+                                    <Globe size={16} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{onboardingForm.xLinked ? 'X ACCOUNT LINKED' : 'LINK X ACCOUNT'}</span>
+                                </button>
+
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        value={onboardingForm.username}
+                                        onChange={(e) => setOnboardingForm({ ...onboardingForm, username: e.target.value })}
+                                        placeholder="CHOOSE USERNAME"
+                                        className="w-full bg-black/60 border border-white/5 rounded-xl px-5 py-4 text-[10px] font-black text-white outline-none focus:border-[#3CB371]/40 uppercase tracking-widest"
+                                    />
+                                    <input
+                                        type="password"
+                                        value={onboardingForm.password}
+                                        onChange={(e) => setOnboardingForm({ ...onboardingForm, password: e.target.value })}
+                                        placeholder="SET SECURE PASS-KEY"
+                                        className="w-full bg-black/60 border border-white/5 rounded-xl px-5 py-4 text-[10px] font-black text-white outline-none focus:border-[#3CB371]/40"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={handleOnboarding}
+                                    className="w-full bg-[#3CB371] text-white py-4.5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-[0_10px_30px_rgba(60,179,113,0.3)] hover:scale-[1.02] transition-transform"
+                                >
+                                    Initialize Operator Profile
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <form onSubmit={handleLogin} className="space-y-6">
+                            <div className="space-y-4">
+                                <div className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-[#3CB371]/10 flex items-center justify-center border border-[#3CB371]/20 text-[#3CB371]">
+                                            <Shield size={16} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[8px] text-white/30 font-black uppercase tracking-widest">Authorized Wallet</p>
+                                            <p className="text-[10px] text-white font-mono">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
+                                        </div>
                                     </div>
+                                    <div className="px-2 py-1 rounded bg-[#3CB371]/10 text-[#3CB371] text-[8px] font-black uppercase tracking-tighter border border-[#3CB371]/20">
+                                        VERIFIED
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Operator ID</label>
                                     <input
                                         type="text"
                                         value={loginForm.username}
                                         onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
                                         className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40 focus:bg-black/80 transition-all placeholder:text-white/5"
-                                        placeholder="admin"
+                                        placeholder="operator"
                                         autoFocus
                                     />
                                 </div>
@@ -1679,9 +1441,19 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     <div className="absolute inset-0 bg-gradient-to-r from-[#3CB371] to-[#4ADE80] opacity-0 group-hover:opacity-100 transition-opacity" />
                                     <span className="relative z-10 group-hover:text-white transition-colors">Verify Credentials</span>
                                 </button>
-                            </motion.div>
-                        </AnimatePresence>
-                    </form>
+
+                                <div className="text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => openModal()}
+                                        className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] hover:text-white transition-colors"
+                                    >
+                                        Switch Wallet
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    )}
 
                     <div className="mt-10 flex flex-col items-center gap-4">
                         <div className="h-[1px] w-12 bg-white/5" />
@@ -1829,94 +1601,18 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 </div>
 
                 <div className="flex-1 space-y-2">
-                    <NavItem
-                        icon={BarChart3}
-                        label="Overview"
-                        id="dashboard"
-                        active={activeTab === 'dashboard'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={Gavel}
-                        label="Disputes"
-                        id="disputes"
-                        active={activeTab === 'disputes'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={Coins}
-                        label="Listing"
-                        id="listing"
-                        active={activeTab === 'listing'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={Megaphone}
-                        label="Broadcasts"
-                        id="broadcasts"
-                        active={activeTab === 'broadcasts'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={Users}
-                        label="Directory"
-                        id="directory"
-                        active={activeTab === 'directory'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={TerminalIcon}
-                        label="Terminal"
-                        id="terminal"
-                        active={activeTab === 'terminal'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={Coins}
-                        label="Treasury"
-                        id="treasury"
-                        active={activeTab === 'treasury'}
-                        onClick={setActiveTab}
-                    />
-                    {currentUser?.role === ROLES.ROOT && (
-                        <NavItem
-                            icon={Lock}
-                            label="Master Vault"
-                            id="vault"
-                            active={activeTab === 'vault'}
-                            onClick={setActiveTab}
-                        />
+                    <NavItem icon={BarChart3} label="Terminal" id="dashboard" active={activeTab === 'dashboard'} onClick={setActiveTab} />
+                    <NavItem icon={Gavel} label="Disputes" id="disputes" active={activeTab === 'disputes'} onClick={setActiveTab} />
+                    {currentUser?.role === 'ROOT' && (
+                        <NavItem icon={Users} label="Staff Mgmt" id="staff" active={activeTab === 'staff'} onClick={setActiveTab} />
                     )}
-                    {currentUser?.role === ROLES.ROOT && (
-                        <NavItem
-                            icon={ShieldCheck}
-                            label="Staff Mgmt"
-                            id="staff"
-                            active={activeTab === 'staff'}
-                            onClick={setActiveTab}
-                        />
-                    )}
-                    <NavItem
-                        icon={Trophy}
-                        label="Campaigns"
-                        id="campaigns"
-                        active={activeTab === 'campaigns'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={Settings}
-                        label="Settings"
-                        id="settings"
-                        active={activeTab === 'settings'}
-                        onClick={setActiveTab}
-                    />
-                    <NavItem
-                        icon={Globe}
-                        label="Global Reach"
-                        id="globe"
-                        active={activeTab === 'globe'}
-                        onClick={setActiveTab}
-                    />
+                    <NavItem icon={Coins} label="Treasury" id="treasury" active={activeTab === 'treasury'} onClick={setActiveTab} />
+                    <NavItem icon={Globe} label="Geo-Map" id="globe" active={activeTab === 'globe'} onClick={setActiveTab} />
+                    <NavItem icon={Users} label="Profiles" id="directory" active={activeTab === 'directory'} onClick={setActiveTab} />
+                    <NavItem icon={Megaphone} label="Campaigns" id="campaigns" active={activeTab === 'campaigns'} onClick={setActiveTab} />
+                    <NavItem icon={Database} label="Markets" id="markets" active={activeTab === 'markets'} onClick={setActiveTab} />
+                    <NavItem icon={ShieldCheck} label="Security" id="security" active={activeTab === 'security'} onClick={setActiveTab} />
+                    <NavItem icon={TerminalIcon} label="Logs" id="logs" active={activeTab === 'logs'} onClick={setActiveTab} />
                     <div className="h-[1px] w-full bg-white/5 my-4" />
                     <button
                         onClick={() => setIsMessagingOpen(true)}
@@ -1965,8 +1661,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 <div className="z-50 border-b border-white/5 hidden lg:block">
                     <GlobalTradeScroller
                         wallet={DISCONNECTED_WALLET}
-                        connection={connection}
-                        currentNetwork={adminNetwork}
+                        currentNetwork="ARC"
                         history={tradeHistory}
                     />
                 </div>
@@ -1977,10 +1672,9 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         <AnimatePresence>
                             {(() => {
                                 const pendingDisputes = unifiedMetrics.pendingDisputes;
-                                const isLowTreasury = treasuryStats.balance < (platformSettings.treasuryThreshold || 0.5);
                                 const isHighDisputes = pendingDisputes > 5;
 
-                                if (!isLowTreasury && !isHighDisputes) return null;
+                                if (!isHighDisputes) return null;
 
                                 return (
                                     <motion.div
@@ -1995,40 +1689,17 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                             </div>
                                             <div>
                                                 <h3 className="text-lg font-black text-white uppercase tracking-tight">
-                                                    {isLowTreasury ? "System Emergency: Treasury Depleted" : "Security Alert: High Dispute Load"}
+                                                    Security Alert: High Dispute Load
                                                 </h3>
-                                                <div className="flex items-center gap-3 mt-3 bg-black/40 px-3 py-1.5 rounded-lg border border-white/5 w-fit">
-                                                    <p className="text-[9px] font-mono text-[#FF4444]">{unifiedMetrics.reserveAddress || 'Scanning...'}</p>
-                                                    <button
-                                                        onClick={() => {
-                                                            if (unifiedMetrics.reserveAddress) {
-                                                                navigator.clipboard.writeText(unifiedMetrics.reserveAddress);
-                                                                notify('info', 'DATA COPIED', 'Treasury address copied to clipboard.');
-                                                            }
-                                                        }}
-                                                        className="text-[9px] font-black text-white/40 hover:text-white uppercase tracking-tighter"
-                                                    >
-                                                        [Copy Addr]
-                                                    </button>
-                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex gap-3">
-                                            {isLowTreasury ? (
-                                                <button
-                                                    onClick={() => setIsTreasuryModalOpen(true)}
-                                                    className="px-6 py-3 bg-[#FF4444] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_10px_30px_rgba(255,68,68,0.3)]"
-                                                >
-                                                    Deposit Now
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => setActiveTab('disputes')}
-                                                    className="px-6 py-3 bg-[#FF4444] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_10px_30px_rgba(255,68,68,0.3)]"
-                                                >
-                                                    Process Disputes
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={() => setActiveTab('disputes')}
+                                                className="px-6 py-3 bg-[#FF4444] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_10px_30px_rgba(255,68,68,0.3)]"
+                                            >
+                                                Process Disputes
+                                            </button>
                                         </div>
                                     </motion.div>
                                 );
@@ -2045,20 +1716,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                 </p>
                             </div>
                             <div className="flex flex-col sm:flex-row items-center gap-4">
-                                {/* Network Switch */}
                                 <div className="flex w-full sm:w-auto bg-black/40 p-1 rounded-xl border border-white/5">
-                                    <button
-                                        onClick={() => setAdminNetwork('SOLANA')}
-                                        className={`flex-1 sm:px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${adminNetwork === 'SOLANA' ? 'bg-[#9945FF] text-white shadow-[0_0_20px_rgba(153,69,255,0.3)]' : 'text-white/20 hover:text-white'}`}
-                                    >
-                                        Solana
-                                    </button>
-                                    <button
-                                        onClick={() => setAdminNetwork('ARC')}
-                                        className={`flex-1 sm:px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${adminNetwork === 'ARC' ? 'bg-[#3B82F6] text-white shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'text-white/20 hover:text-white'}`}
-                                    >
-                                        Arc
-                                    </button>
+                                    <div className="px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg bg-[#3B82F6] text-white shadow-[0_0_20px_rgba(59,130,246,0.3)]">
+                                        Arc Network
+                                    </div>
                                 </div>
 
                                 <div className="relative w-full sm:w-64">
@@ -2082,21 +1743,21 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     className="space-y-8 pb-20"
                                 >
                                     {/* Advanced Command Header */}
-                                    <div className={`flex flex-col lg:flex-row lg:items-center justify-between bg-[#111] border border-white/5 p-6 rounded-[32px] overflow-hidden relative transition-colors duration-500 ${adminNetwork === 'ARC' ? 'border-blue-500/10' : ''}`}>
-                                        <div className={`absolute top-0 right-0 h-full w-1/3 bg-gradient-to-l pointer-events-none ${adminNetwork === 'SOLANA' ? 'from-[#9945FF]/10' : 'from-[#3B82F6]/10'} to-transparent`} />
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between bg-[#111] border border-white/5 p-6 rounded-[32px] overflow-hidden relative transition-colors duration-500 border-blue-500/10">
+                                        <div className="absolute top-0 right-0 h-full w-1/3 bg-gradient-to-l pointer-events-none from-[#3B82F6]/10 to-transparent" />
                                         <div className="flex flex-col md:flex-row md:items-center gap-6 relative z-10 w-full">
-                                            <div className={`p-4 bg-black rounded-2xl border ${adminNetwork === 'SOLANA' ? 'border-[#9945FF]/20' : 'border-[#3B82F6]/20'} w-fit`}>
-                                                <Activity className={`animate-pulse ${adminNetwork === 'SOLANA' ? 'text-[#9945FF]' : 'text-[#3B82F6]'}`} size={32} />
+                                            <div className="p-4 bg-black rounded-2xl border border-[#3B82F6]/20 w-fit">
+                                                <Activity className="animate-pulse text-[#3B82F6]" size={32} />
                                             </div>
                                             <div className="flex-1">
                                                 <div>
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-1" style={{ color: adminNetwork === 'SOLANA' ? '#9945FF' : '#3B82F6' }}>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-1 text-[#3B82F6]">
                                                         NODE STATUS {lastSync && `• SYNC: ${lastSync}`}
                                                     </p>
                                                     <h2 className="text-xl lg:text-3xl font-black text-white">{unifiedMetrics.currentStats.wallets} <span className="text-[10px] font-bold text-white/40 ml-2 uppercase tracking-widest">Active Users</span></h2>
                                                     <div className="flex items-center gap-2 mt-2">
                                                         <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest">
-                                                            Active Relay: {adminNetwork === 'SOLANA' ? 'Solana Protocol' : 'Arc Network'}
+                                                            Active Relay: Arc Network
                                                         </p>
                                                     </div>
                                                 </div>
@@ -2132,7 +1793,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         />
                                         <StatCard
                                             icon={Database}
-                                            label={adminNetwork === 'SOLANA' ? "Active Treasury" : "Arc Treasury"}
+                                            label="Arc Treasury"
                                             value={`${unifiedMetrics.displayReserve} ${unifiedMetrics.currencyUnit}`}
                                             trend="VAULT"
                                             positive={true}
@@ -2140,7 +1801,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         <StatCard
                                             icon={TrendingUp}
                                             label="Protocol Revenue"
-                                            value={`${(adminNetwork === 'SOLANA' ? (autoSignerFees?.solana || 0) : (autoSignerFees?.arc || 0)).toFixed(6)} ${unifiedMetrics.currencyUnit}`}
+                                            value={`${(autoSignerFees?.arc || 0).toFixed(6)} ${unifiedMetrics.currencyUnit}`}
                                             trend="REVENUE"
                                             positive={true}
                                         />
@@ -2153,23 +1814,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         <div className="p-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6">
                                             <div>
                                                 <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Platform Trade History</h3>
-                                                <p className="text-[10px] font-bold text-white/20 mt-1">Settled trades from Solana and Arc networks</p>
+                                                <p className="text-[10px] font-bold text-white/20 mt-1">Settled trades from Arc network</p>
                                             </div>
 
                                             <div className="flex flex-wrap gap-4">
-                                                {/* Network Filter */}
-                                                <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
-                                                    {['ALL', 'SOLANA', 'ARC'].map(n => (
-                                                        <button
-                                                            key={n}
-                                                            onClick={() => setHistoryFilter(f => ({ ...f, network: n }))}
-                                                            className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${historyFilter.network === n ? 'bg-[#3CB371] text-white' : 'text-white/20 hover:text-white'}`}
-                                                        >
-                                                            {n}
-                                                        </button>
-                                                    ))}
-                                                </div>
-
                                                 {/* Search */}
                                                 <div className="relative">
                                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={14} />
@@ -2206,8 +1854,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                                 </div>
                                                             </td>
                                                             <td className="px-8 py-5">
-                                                                <span className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter ${trade.network === 'solana' ? 'bg-[#9945FF]/10 text-[#9945FF]' : 'bg-blue-500/10 text-blue-500'}`}>
-                                                                    {trade.network === 'solana' ? 'SOLANA' : 'ARC'}
+                                                                <span className="px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter bg-blue-500/10 text-blue-500">
+                                                                    ARC
                                                                 </span>
                                                             </td>
                                                             <td className="px-8 py-5">
@@ -2217,7 +1865,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                                 </div>
                                                             </td>
                                                             <td className="px-8 py-5 text-center">
-                                                                <span className="text-[11px] font-black text-white">{parseFloat(trade.amount || 0).toFixed(4)} {trade.network === 'solana' ? 'SOL' : 'USDC'}</span>
+                                                                <span className="text-[11px] font-black text-white">{parseFloat(trade.amount || 0).toFixed(4)} USDC</span>
                                                             </td>
                                                             <td className="px-8 py-5">
                                                                 <div className="flex items-center gap-2">
@@ -2339,7 +1987,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                             </td>
                                                             <td className="px-8 py-6">
                                                                 <span className="px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter bg-[#3CB371]/10 text-[#3CB371]">
-                                                                    PROTOCOL
+                                                                    ARC
                                                                 </span>
                                                             </td>
                                                             <td className="px-8 py-6 font-mono text-xs text-white">{dispute.user}</td>
@@ -2384,10 +2032,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                                             <div className="flex flex-col">
                                                 <h3 className="text-xl lg:text-2xl font-black text-white uppercase tracking-tighter">
-                                                    {adminNetwork === 'SOLANA' ? 'Protocol Liquidity Reserve (SOL)' : 'Arc Treasury (USDC)'}
+                                                    Arc Treasury (USDC)
                                                 </h3>
                                                 <p className="text-[9px] lg:text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
-                                                    {adminNetwork === 'SOLANA' ? 'Real-time Solana treasury monitoring & management portal.' : 'Automated platform reserve tracking for Arc Network.'}
+                                                    Automated platform reserve tracking for Arc Network.
                                                 </p>
                                             </div>
                                             <div className="flex gap-4">
@@ -2406,7 +2054,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                         <Database size={28} className="text-[#3CB371]" />
                                                     </div>
                                                     <div>
-                                                        <h4 className="text-lg font-black text-white uppercase italic">Protocol Treasury</h4>
+                                                        <h4 className="text-lg font-black text-white uppercase italic">Arc Treasury</h4>
                                                         <p className="text-[9px] font-black text-[#3CB371] uppercase tracking-widest">Global Liquidity Vault</p>
                                                     </div>
                                                 </div>
@@ -2457,7 +2105,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                                     )}
                                                                 </div>
                                                                 <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest leading-relaxed">
-                                                                    Scan to fund the {adminNetwork === 'SOLANA' ? 'Protocol Liquidity Reserve' : 'Arc Treasury'}.
+                                                                    Scan to fund the Arc Treasury.
                                                                     Direct transfers are automatically detected and credited to the vault balance.
                                                                 </p>
                                                             </div>
@@ -2465,7 +2113,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                     </div>
 
                                                     <button
-                                                        onClick={() => setActiveTab('vault')}
+                                                        onClick={() => setIsTreasuryModalOpen(true)}
                                                         className="w-full py-5 bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border border-[#3CB371]/10 text-[#3CB371] text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl transition-all"
                                                     >
                                                         Manage Liquidity
@@ -2491,7 +2139,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                 <button
                                                     onClick={() => {
                                                         setTreasuryAction('WITHDRAW');
-                                                        setActiveTab('vault');
+                                                        setIsTreasuryModalOpen(true);
                                                     }}
                                                     className="w-full md:px-8 py-4 bg-red-600 hover:bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg"
                                                 >
@@ -2503,160 +2151,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                 )
                             }
 
-                            {
-                                activeTab === 'vault' && (
-                                    <motion.div
-                                        key="vault"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className="space-y-8"
-                                    >
-                                        <div className="flex flex-col">
-                                            <h3 className="text-xl font-black text-white uppercase tracking-tighter">Master Vault Intelligence</h3>
-                                            <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Autonomous signature management & liquidity extraction portal.</p>
-                                        </div>
 
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                            {/* Master Key Import */}
-                                            <div className="bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] relative overflow-hidden group">
-                                                <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
-                                                    <Lock size={120} />
-                                                </div>
-                                                <h4 className="text-sm font-black text-white uppercase mb-6 flex items-center gap-2">
-                                                    <ShieldCheck size={16} className="text-[#3CB371]" />
-                                                    Master Authority Link
-                                                </h4>
-                                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-6 leading-relaxed">
-                                                    By linking a Master Secret Key (e.g. Keeper Key), the Citadel gains the ability to sign transactions autonomously. This is required for high-speed manual settlements without browser wallet popups.
-                                                </p>
-
-                                                <div className="space-y-5">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest ml-1 mb-1.5 block">Secret Key Array</label>
-                                                        <textarea
-                                                            value={masterImportKey}
-                                                            onChange={e => setMasterImportKey(e.target.value)}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-[9px] font-mono font-bold text-white outline-none focus:border-[#3CB371]/40 h-24 resize-none"
-                                                            placeholder="[12, 45, 233, ...]"
-                                                        />
-                                                    </div>
-                                                    <button
-                                                        onClick={handleImportMaster}
-                                                        className="w-full py-4 bg-[#3CB371] hover:bg-[#3CB371]/80 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-[0_10px_30px_rgba(60,179,113,0.3)]"
-                                                    >
-                                                        Link Root Authority
-                                                    </button>
-                                                    {masterKeypair && (
-                                                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
-                                                            <p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Linked Authority Address</p>
-                                                            <p className="text-[10px] font-mono text-[#3CB371] break-all mt-1">{masterKeypair.publicKey.toBase58()}</p>
-                                                            <p className="text-[14px] font-black text-[#3CB371] mt-2">{masterBalance.toFixed(4)} SOL</p>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="p-4 bg-[#3CB371]/5 border border-[#3CB371]/10 rounded-2xl">
-                                                        <p className="text-[8px] font-black text-[#3CB371] uppercase tracking-widest">Target Treasury Address ({adminNetwork === 'SOLANA' ? 'Solana PDA' : 'Arc Keeper'})</p>
-                                                        <p className="text-[9px] font-mono text-white/60 break-all mt-1">{unifiedMetrics.reserveAddress || 'Scanning...'}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Treasury Console */}
-                                            <div className="bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] relative overflow-hidden group">
-                                                <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none text-[#3CB371]">
-                                                    <Coins size={120} />
-                                                </div>
-                                                <h4 className="text-sm font-black text-white uppercase mb-6 flex items-center gap-2">
-                                                    <Coins size={16} className="text-[#3CB371]" />
-                                                    Treasury Console
-                                                </h4>
-                                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mb-6 leading-relaxed">
-                                                    Directly manage protocol liquidity. Deposits inject capital into the Program PDA. Withdrawals transfer funds to the active Authority wallet.
-                                                </p>
-
-                                                <div className="flex bg-black/40 p-1.5 rounded-xl border border-white/5 mb-6">
-                                                    <button
-                                                        onClick={() => setTreasuryAction('DEPOSIT')}
-                                                        className={`flex-1 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${treasuryAction === 'DEPOSIT' ? 'bg-[#3CB371] text-white shadow-lg' : 'text-white/20 hover:text-white'}`}
-                                                    >
-                                                        Deposit
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setTreasuryAction('WITHDRAW')}
-                                                        className={`flex-1 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${treasuryAction === 'WITHDRAW' ? 'bg-red-500 text-white shadow-lg' : 'text-white/20 hover:text-white'}`}
-                                                    >
-                                                        Withdraw
-                                                    </button>
-                                                </div>
-
-                                                <form className="space-y-5" onSubmit={(e) => {
-                                                    e.preventDefault();
-                                                    const formData = new FormData(e.target);
-                                                    handleTreasuryAction(parseFloat(formData.get('amt')));
-                                                }}>
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest ml-1 mb-1.5 block">Amount (SOL)</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                name="amt"
-                                                                type="number"
-                                                                step="0.0001"
-                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black text-white outline-none focus:border-[#3CB371]/40"
-                                                                placeholder={treasuryAction === 'WITHDRAW' ? `Max: ${treasuryStats.balance.toFixed(4)}` : "0.00"}
-                                                                required
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    const input = e.target.parentElement.querySelector('input');
-                                                                    if (treasuryAction === 'DEPOSIT') {
-                                                                        input.value = Math.max(0, masterBalance - 0.005).toFixed(4);
-                                                                    } else {
-                                                                        const max = treasuryStats.balance;
-                                                                        input.value = max.toFixed(4);
-                                                                    }
-                                                                }}
-                                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#3CB371] hover:underline"
-                                                            >
-                                                                MAX
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        type="submit"
-                                                        disabled={!masterKeypair && !adminWallet.publicKey}
-                                                        className={`w-full py-4 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed ${treasuryAction === 'DEPOSIT' ? 'bg-[#3CB371] hover:bg-[#3CB371]/80 shadow-[0_10px_30px_rgba(60,179,113,0.3)]' : 'bg-red-600 hover:bg-red-500 shadow-[0_10px_30px_rgba(255,0,0,0.2)]'}`}
-                                                    >
-                                                        {treasuryAction === 'DEPOSIT' ? 'Inject Liquidity' : 'Execute Withdrawal'}
-                                                    </button>
-
-                                                    <div
-                                                        className="text-center pt-2 cursor-pointer opacity-20 hover:opacity-100 transition-opacity"
-                                                        onClick={() => {
-                                                            const dest = prompt("Enter emergency drain destination address:");
-                                                            if (dest) drainAuthorityWallet(dest, masterBalance); // Drain max
-                                                        }}
-                                                    >
-                                                        <p className="text-[8px] font-black text-red-500 uppercase tracking-widest">⚠ Emergency: Drain Authority Wallet</p>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-[#1A1010] border border-red-500/20 p-6 rounded-[32px]">
-                                            <div className="flex items-center gap-4">
-                                                <ShieldAlert className="text-red-500 shrink-0" size={24} />
-                                                <div>
-                                                    <p className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em]">Protocol Advisory: Treasury PDA Logic</p>
-                                                    <p className="text-[9px] text-white/40 uppercase font-bold mt-1 leading-relaxed">
-                                                        The Treasury Account is a secure Program Derived Address (PDA). Funds are autonomously managed by the protocol based on trade outcomes (Wins/Losses).
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
 
                             {
                                 activeTab === 'listing' && (
@@ -2754,7 +2249,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                     <button
                                                         onClick={() => {
                                                             if (!newTokenForm.symbol || !newTokenForm.mint || !newTokenForm.pair) {
-                                                                notify('error', 'INCOMPLETE DATA', 'Fill all critical fields (Symbol, Mint, Pair) to initialize market.');
+                                                                notify('error', 'INCOMPLETE DATA', 'Fill all critical fields (Symbol, Contract, Pair) to initialize market.');
                                                                 return;
                                                             }
                                                             handleListToken(newTokenForm);
@@ -2859,7 +2354,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     >
                                         <GlobalExpansionMap
                                             theme="dark"
-                                            currentNetwork={adminNetwork}
+                                            currentNetwork="ARC"
                                             activeBets={unifiedMetrics.activeList}
                                             isFullscreen={true}
                                         />
@@ -2926,7 +2421,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                                     <div className="text-[9px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{profile.trades > 0 ? ((profile.wins / profile.trades) * 100).toFixed(0) : 0}% WR</div>
                                                                 </td>
                                                                 <td className="px-8 py-6 text-right">
-                                                                    <p className="text-xs font-black text-white">{profile.volume} SOL</p>
+                                                                    <p className="text-xs font-black text-white">{profile.volume} USDC</p>
                                                                     <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Life Vol</p>
                                                                 </td>
                                                             </tr>
@@ -2949,7 +2444,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                             }
 
                             {
-                                activeTab === 'staff' && (
+                                activeTab === 'staff' && currentUser?.role === 'ROOT' && (
                                     <motion.div
                                         key="staff"
                                         initial={{ opacity: 0, x: 20 }}
@@ -2959,15 +2454,15 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     >
                                         <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div className="flex flex-col">
-                                                <h3 className="text-sm font-black uppercase tracking-widest text-white">Authorized Staff</h3>
-                                                <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Manage infrastructure access & roles</p>
+                                                <h3 className="text-sm font-black uppercase tracking-widest text-white">Citadel Operators</h3>
+                                                <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Manage infrastructure access & wallet-based roles</p>
                                             </div>
                                             <button
                                                 onClick={() => setIsStaffModalOpen(true)}
                                                 className="w-fit flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
                                             >
                                                 <PlusCircle size={14} />
-                                                Assign New Role
+                                                Authorize New Wallet
                                             </button>
                                         </div>
                                         <div className="p-8">
@@ -2975,18 +2470,27 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                 {staffMembers.map((staff) => (
                                                     <div key={staff.id} className="p-6 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group">
                                                         <div className="flex items-center gap-4">
-                                                            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
-                                                                <Users size={20} className="text-white/40 group-hover:text-[#3CB371] transition-colors" />
+                                                            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center relative">
+                                                                <User size={20} className="text-white/40 group-hover:text-[#3CB371] transition-colors" />
+                                                                {staff.onboardingComplete ? (
+                                                                    <div className="absolute -top-1 -right-1 bg-[#3CB371] rounded-full p-0.5 border border-[#0D0D0D]">
+                                                                        <CheckCircle2 size={10} className="text-white" />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-0.5 border border-[#0D0D0D]">
+                                                                        <Clock size={10} className="text-white" />
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <p className="text-xs font-black text-white truncate w-32">{staff.address}</p>
                                                                 <p className="text-[9px] font-bold text-[#3CB371] uppercase tracking-widest">{staff.role}</p>
-                                                                <p className="text-[8px] font-mono text-white/20 mt-1">{staff.key}</p>
+                                                                <p className="text-[10px] text-white/40 font-bold uppercase mt-0.5">{staff.username || 'Uninitialized'}</p>
                                                             </div>
                                                         </div>
                                                         <div className="flex flex-col items-end gap-3">
                                                             <div className={`w-2 h-2 rounded-full ${staff.status === 'ACTIVE' ? 'bg-[#3CB371] animate-pulse' : 'bg-white/10'}`} />
-                                                            {staff.id !== 1 && (
+                                                            {staff.role !== 'ROOT' && (
                                                                 <button
                                                                     onClick={() => handleRevokeRole(staff.id)}
                                                                     className="p-2 hover:bg-red-500/10 text-white/20 hover:text-red-500 rounded-lg transition-colors group/btn"
@@ -3003,6 +2507,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     </motion.div>
                                 )
                             }
+
 
                             {
                                 activeTab === 'campaigns' && (
@@ -3046,7 +2551,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                             type="text"
                                                             value={newCampaign.prize}
                                                             onChange={(e) => setNewCampaign({ ...newCampaign, prize: e.target.value })}
-                                                            placeholder="e.g. 10.0 SOL / 500 USDC"
+                                                            placeholder="e.g. 500 USDC"
                                                             className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-xs text-white outline-none focus:border-yellow-500/40 transition-all font-bold"
                                                         />
                                                     </div>
@@ -3076,7 +2581,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                             onChange={(e) => setNewCampaign({ ...newCampaign, network: e.target.value })}
                                                             className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-xs text-white outline-none focus:border-yellow-500/40 appearance-none font-black uppercase tracking-widest"
                                                         >
-                                                            <option value="general">PLATFORM WIDE</option>
+                                                            <option value="arc">ARC NETWORK</option>
                                                         </select>
                                                     </div>
                                                 </div>
@@ -3129,8 +2634,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                                 <div>
                                                                     <div className="flex items-center flex-wrap gap-3 mb-2">
                                                                         <h4 className="text-xl font-black text-white uppercase tracking-tight">{camp.title}</h4>
-                                                                        <div className={`px-2.5 py-1 rounded-md text-[8px] font-black uppercase border ${camp.network === 'solana' ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : camp.network === 'arc' ? 'bg-blue-500/10 border-blue-500/30 text-blue-500' : 'bg-white/10 border-white/20 text-white/40'}`}>
-                                                                            {camp.network.toUpperCase()}
+                                                                        <div className={`px-2.5 py-1 rounded-md text-[8px] font-black uppercase border bg-blue-500/10 border-blue-500/30 text-blue-500`}>
+                                                                            ARC NETWORK
                                                                         </div>
                                                                         {Date.now() < camp.endTime && Date.now() > camp.startTime && (
                                                                             <div className="flex items-center gap-2 px-2.5 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded-md text-[8px] font-black text-yellow-500 uppercase animate-pulse">
@@ -3663,7 +3168,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             </div >
 
             {/* Detailed Review Modal Simulation */}
-            < AnimatePresence >
+            <AnimatePresence>
                 {activeCase && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -3696,7 +3201,6 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                 <div className="p-6 bg-black/40 border border-white/5 rounded-3xl space-y-6">
                                     <h4 className="text-[10px] font-black uppercase text-white/40 tracking-[0.3em] mb-2">Technical Metadata</h4>
                                     <div className="space-y-4">
-
                                         <div>
                                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Full Wallet Address</p>
                                             <p className="text-xs font-mono text-white break-all bg-white/5 p-3 rounded-lg border border-white/5">
@@ -3716,18 +3220,6 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                                     {activeCase.originalTrade?.direction?.toUpperCase() || "N/A"}
                                                 </p>
                                             </div>
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Transaction Instance</p>
-                                            <a
-                                                href={`https://solscan.io/tx/${activeCase.originalTrade?.tx}?cluster=devnet`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="flex items-center justify-between text-xs font-mono text-[#3CB371] bg-[#3CB371]/5 p-3 rounded-lg border border-[#3CB371]/10 hover:bg-[#3CB371]/10 transition-colors"
-                                            >
-                                                <span className="truncate mr-4">{activeCase.originalTrade?.tx || "NO_SIG_FOUND"}</span>
-                                                <ArrowUpRight size={14} />
-                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -3786,10 +3278,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence >
+            </AnimatePresence>
 
             {/* Treasury Management Modal */}
-            < AnimatePresence >
+            <AnimatePresence>
                 {isTreasuryModalOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -3805,43 +3297,35 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                                     <Database size={32} />
                                 </div>
                                 <h3 className="text-xl font-black text-white uppercase tracking-widest">Treasury Control</h3>
-                                <p className="text-xs text-white/20 font-bold mt-1 uppercase">Balance: {treasuryStats.balance.toFixed(4)} SOL</p>
+                                <p className="text-xs text-white/20 font-bold mt-1 uppercase">Balance: {arcTreasuryBalance.toFixed(4)} USDC</p>
                             </div>
 
                             <div className="space-y-6">
                                 <div>
-                                    <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 block">Transaction Amount (SOL)</label>
+                                    <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 block">Withdrawal Amount (USDC)</label>
                                     <input
                                         id="treasury-amt"
                                         type="number"
-                                        placeholder="1.0"
+                                        placeholder="100.0"
                                         className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40"
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button
-                                        onClick={() => handleDeposit(document.getElementById('treasury-amt').value)}
-                                        className="bg-[#3CB371] text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all"
-                                    >
-                                        Deposit Funds
-                                    </button>
-                                    <button
-                                        onClick={() => handleWithdraw(document.getElementById('treasury-amt').value)}
-                                        className="bg-white/5 text-white/40 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-white/5 hover:bg-white/10"
-                                    >
-                                        Withdraw
-                                    </button>
-                                </div>
-                                <p className="text-[9px] text-white/20 text-center uppercase font-bold px-4">Withdrawals are restricted to Authority Multi-Sig for platform security.</p>
+                                <button
+                                    onClick={() => handleWithdraw(document.getElementById('treasury-amt').value)}
+                                    className="w-full bg-[#3CB371] text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-[0_10px_30px_rgba(60,179,113,0.3)]"
+                                >
+                                    Authorize Withdrawal
+                                </button>
+                                <p className="text-[9px] text-white/20 text-center uppercase font-bold px-4">Withdrawals are processed via the Arc Keeper and require valid admin credentials.</p>
                             </div>
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence >
+            </AnimatePresence>
 
             {/* Broadcast Modal */}
-            < AnimatePresence >
+            <AnimatePresence>
                 {isBroadcastModalOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -3905,10 +3389,10 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence >
+            </AnimatePresence>
 
             {/* Staff Assignment Modal */}
-            < AnimatePresence >
+            <AnimatePresence>
                 {isStaffModalOpen && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -3916,53 +3400,63 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                     >
                         <motion.div
                             initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 relative"
+                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[40px] p-10 relative overflow-hidden"
                         >
-                            <button onClick={() => setIsStaffModalOpen(false)} className="absolute top-8 right-8 text-white/20 hover:text-white"><X size={24} /></button>
-                            <div className="flex flex-col items-center mb-10">
-                                <div className="w-16 h-16 rounded-3xl bg-[#3CB371]/10 flex items-center justify-center mb-4 text-[#3CB371]">
-                                    <ShieldCheck size={32} />
-                                </div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-widest">Identity Access</h3>
-                                <p className="text-xs text-white/20 font-bold mt-1 uppercase px-6 text-center">Grant operational roles to decentralized identities.</p>
+                            <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                                <Shield size={160} />
                             </div>
 
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 block">Operator Wallet Address</label>
-                                    <input
-                                        type="text"
-                                        value={newStaff.address}
-                                        onChange={(e) => setNewStaff({ ...newStaff, address: e.target.value })}
-                                        placeholder="Enter Wallet Address..."
-                                        className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono font-bold text-white outline-none focus:border-[#3CB371]/40"
-                                    />
+                            <div className="relative z-10 space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-xl font-black text-white uppercase italic">Authorize Operator</h4>
+                                    <button onClick={() => setIsStaffModalOpen(false)} className="text-white/20 hover:text-white transition-colors">
+                                        <X size={20} />
+                                    </button>
                                 </div>
+                                <p className="text-[10px] text-white/30 uppercase font-bold tracking-widest leading-relaxed">
+                                    Assign administrative rights to a specific wallet address. The user will be required to complete onboarding.
+                                </p>
 
-                                <div>
-                                    <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 block">Assigned Role</label>
-                                    <select
-                                        value={newStaff.role}
-                                        onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
-                                        className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-xs font-bold text-white outline-none focus:border-[#3CB371]/40 appearance-none"
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] ml-1">Wallet Address</label>
+                                        <input
+                                            type="text"
+                                            value={newStaffForm.address}
+                                            onChange={(e) => setNewStaffForm({ ...newStaffForm, address: e.target.value })}
+                                            placeholder="0x..."
+                                            className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-xs font-mono text-white outline-none focus:border-[#3CB371]/40"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] ml-1">Access Level</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {['MODERATOR', 'LISTER'].map(role => (
+                                                <button
+                                                    key={role}
+                                                    onClick={() => setNewStaffForm({ ...newStaffForm, role })}
+                                                    className={`py-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${newStaffForm.role === role ? 'bg-[#3CB371]/20 border-[#3CB371]/30 text-[#3CB371]' : 'bg-white/5 border-white/10 text-white/20 hover:text-white'}`}
+                                                >
+                                                    {role}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={handleAssignRole}
+                                        className="w-full bg-white text-black py-4.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-[0_10px_30px_rgba(255,255,255,0.1)] mt-4"
                                     >
-                                        <option value="moderator">MODERATOR</option>
-                                        <option value="lister">LISTER</option>
-                                        <option value="admin">CO-ADMIN</option>
-                                    </select>
+                                        Grant Access
+                                    </button>
                                 </div>
-
-                                <button
-                                    onClick={handleAssignRole}
-                                    className="w-full bg-[#3CB371] text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all"
-                                >
-                                    Establish Access Key
-                                </button>
                             </div>
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence >
+            </AnimatePresence>
+
 
             <MessagingSystem
                 wallet={null}
@@ -3970,8 +3464,8 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
                 onClose={() => setIsMessagingOpen(false)}
                 isAdminView={true}
                 adminRole={
-                    currentUser?.role === ROLES.ROOT ? '15market admin' :
-                        currentUser?.role === 'moderator' ? '15market Mod' : '15listers'
+                    currentUser?.role === 'ROOT' ? '15market admin' :
+                        currentUser?.role === 'MODERATOR' ? '15market Mod' : '15listers'
                 }
             />
 
@@ -3983,7 +3477,7 @@ const AdminPortal = React.memo(({ onBack, connection, price }) => {
             >
                 <MessageSquare size={24} />
             </motion.button>
-        </div >
+        </div>
     );
 });
 

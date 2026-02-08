@@ -1,10 +1,15 @@
 import React from 'react';
-import { useModal, useAccount, useWallet } from "@getpara/react-sdk";
+import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useAccount as useWagmiAccount } from "wagmi";
 
 export const ParaConnectButton = ({ className, style }) => {
     const { openModal } = useModal();
-    const { data: wallet } = useWallet();
-    const { isConnected } = useAccount();
+    const { data: paraWallet } = useWallet();
+    const { isConnected: isParaConnected } = useParaAccount();
+    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+
+    const address = paraWallet?.address || wagmiAddress;
+    const isConnected = isParaConnected || isWagmiConnected;
 
     return (
         <button
@@ -13,7 +18,7 @@ export const ParaConnectButton = ({ className, style }) => {
             style={style}
         >
             {isConnected
-                ? `${wallet?.address?.slice(0, 4)}...${wallet?.address?.slice(-4)}`
+                ? `${address?.slice(0, 4)}...${address?.slice(-4)}`
                 : "CONNECT WALLET"}
         </button>
     );

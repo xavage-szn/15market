@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 
-export function OrderBook({ price, theme = 'dark', network = 'solana', symbol = 'USDC' }) {
+export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
     const [asks, setAsks] = useState([]);
     const [bids, setBids] = useState([]);
 
     // Colors
     const isDark = theme !== 'light';
     const RED = "#FF4444";
-    const GREEN = network === 'solana' ? "#3CB371" : "#3B82F6";
-    const GREEN_BG = network === 'solana' ? "rgba(60, 179, 113, 0.15)" : "rgba(59, 130, 246, 0.15)";
+    const GREEN = "#3CB371";
+    const GREEN_BG = "rgba(60, 179, 113, 0.15)";
     const RED_BG = "rgba(255, 68, 68, 0.15)";
 
     // Generate simulated depth

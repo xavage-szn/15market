@@ -11,33 +11,52 @@ class RedisClient {
     connect() {
         const url = process.env.REDIS_URL;
 
-        try {
-            if (url) {
-                this.client = new Redis(url, {
-                    retryStrategy: (times) => Math.min(times * 50, 2000),
-                    maxRetriesPerRequest: 3
+        return new Promise((resolve, reject) => {
+            try {
+                if (url) {
+                    this.client = new Redis(url, {
+                        retryStrategy: (times) => Math.min(times * 50, 2000),
+                        maxRetriesPerRequest: 3,
+                        connectTimeout: 10000
+                    });
+                } else {
+                    logger.info('REDIS_URL not found, using provided Redis Cloud credentials');
+                    this.client = new Redis({
+                        host: 'redis-14672.c277.us-east-1-3.ec2.cloud.redislabs.com',
+                        port: 14672,
+                        password: 'ueZrTByLR9Iq6lbmqJwRNxv0YJuUoNYj',
+                        username: 'default',
+                        retryStrategy: (times) => Math.min(times * 50, 2000),
+                        maxRetriesPerRequest: 3,
+                        connectTimeout: 10000
+                    });
+                }
+
+                this.client.on('connect', () => {
+                    logger.info('Successfully connected to Redis Cloud');
+                    resolve(this.client);
                 });
-            } else {
-                // Fallback to hardcoded credentials provided by user
-                logger.info('REDIS_URL not found, using provided Redis Cloud credentials');
-                this.client = new Redis({
-                    host: 'redis-14672.c277.us-east-1-3.ec2.cloud.redislabs.com',
-                    port: 14672,
-                    password: 'ueZrTByLR9Iq6lbmqJwRNxv0YJuUoNYj',
-                    username: 'default',
-                    retryStrategy: (times) => Math.min(times * 50, 2000),
-                    maxRetriesPerRequest: 3
+
+                this.client.on('error', (err) => {
+                    logger.error(`Redis Error: ${err.message}`);
+                    // Only reject if not already resolved/rejected
+                    if (this.client.status === 'connecting') {
+                        reject(err);
+                    }
                 });
+
+                // Handle timeout if it takes too long to connect
+                setTimeout(() => {
+                    if (this.client.status === 'connecting') {
+                        reject(new Error('Redis connection timeout'));
+                    }
+                }, 15000);
+
+            } catch (err) {
+                logger.error(`Redis connection failed: ${err.message}`);
+                reject(err);
             }
-
-            this.client.on('connect', () => logger.info('Successfully connected to Redis Cloud'));
-            this.client.on('error', (err) => logger.error(`Redis Error: ${err.message}`));
-
-            return this.client;
-        } catch (err) {
-            logger.error(`Redis connection failed: ${err.message}`);
-            return null;
-        }
+        });
     }
 
 

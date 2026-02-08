@@ -98,19 +98,20 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
 
     return (
         <div
-            className={`w-full h-9 flex items-center overflow-hidden relative transition-all duration-500 rounded-none lg:rounded-xl glass-panel ${isLight
-                ? 'bg-white border-black/5 shadow-md'
-                : 'border-white/5'
+            className={`w-full h-9 flex items-center overflow-hidden relative transition-all duration-500 rounded-none lg:rounded-xl ${isLight
+                ? 'border-y-2 border-[#3CB371]/30 shadow-[0_0_15px_rgba(60,179,113,0.1)]'
+                : 'glass-panel border-white/5'
                 }`}
             style={{
-                boxShadow: isLight ? 'none' : `0 0 15px #3B82F615, inset 0 0 10px #3B82F610`
+                backgroundColor: isLight ? '#FFF8E7' : undefined,
+                boxShadow: isLight ? '0 0 20px rgba(60, 179, 113, 0.1)' : `0 0 15px #3CB37115, inset 0 0 10px #3CB37110`
             }}
         >
-            <div className={`absolute left-0 top-0 bottom-0 px-2 lg:px-4 z-30 flex items-center border-r transition-all duration-300 ${isLight ? 'bg-slate-50 border-black/10' : 'bg-[#050505]/80 backdrop-blur-md border-white/10'}`}>
+            <div className={`absolute left-0 top-0 bottom-0 px-2 lg:px-4 z-30 flex items-center border-r transition-all duration-300 ${isLight ? 'bg-[#FFF8E7]/95 border-[#3CB371]/10' : 'bg-[#050505]/80 backdrop-blur-md border-white/10'}`}>
                 <div className="flex items-center gap-1.5 lg:gap-2">
                     <div className="relative flex h-1.5 w-1.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3B82F6] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3B82F6]"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3CB371]"></span>
                     </div>
                     <span className={`text-[7px] lg:text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap ${isLight ? 'text-black/60' : 'text-white/60'}`}>
                         Network Live
@@ -126,7 +127,7 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className={`absolute inset-0 flex items-center z-40 ${isLight ? 'bg-white/90 backdrop-blur-md' : 'bg-[#050505]/95 backdrop-blur-md'}`}
+                            className={`absolute inset-0 flex items-center z-40 ${isLight ? 'bg-[#FFF8E7]/90 backdrop-blur-md' : 'bg-[#050505]/95 backdrop-blur-md'}`}
                         >
                             <motion.div
                                 className="flex items-center gap-24 whitespace-nowrap pl-24 lg:pl-32"
@@ -135,7 +136,7 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                             >
                                 {[...Array(8)].map((_, i) => (
                                     <div key={i} className="flex items-center gap-4 lg:gap-6">
-                                        <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest bg-[#3B82F6] text-white`}>
+                                        <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest bg-[#3CB371] text-white`}>
                                             <Radio size={10} className="animate-pulse" />
                                             {activeBroadcast.type}
                                         </div>
@@ -153,12 +154,12 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                     transition={{ x: { duration: 240, repeat: Infinity, ease: "linear" } }}
                 >
                     {repeatedHistory.map((event, i) => (
-                        <div key={`${event.id}-${i}`} className="flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05] transition-all group">
-                            <div className="w-5 h-5 lg:w-6 lg:h-6 rounded-lg overflow-hidden bg-white/5 flex items-center justify-center shrink-0">
+                        <div key={`${event.id}-${i}`} className={`flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border transition-all group ${isLight ? 'border-black/[0.05] bg-black/[0.02] hover:bg-black/[0.05]' : 'border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05]'}`}>
+                            <div className={`w-5 h-5 lg:w-6 lg:h-6 rounded-lg overflow-hidden flex items-center justify-center shrink-0 ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
                                 {profiles[event.owner]?.xProfileImage ? (
                                     <img src={profiles[event.owner].xProfileImage} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className={`w-full h-full flex items-center justify-center text-[8px] lg:text-[10px] font-black text-blue-500`}>
+                                    <div className={`w-full h-full flex items-center justify-center text-[8px] lg:text-[10px] font-black text-[#3CB371]`}>
                                         {(profiles[event.owner]?.username || "A").charAt(0).toUpperCase()}
                                     </div>
                                 )}
@@ -173,14 +174,14 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                                 </span>
                             </div>
 
-                            <div className={`w-px h-4 lg:h-6 bg-white/10 mx-0.5 lg:mx-1`} />
+                            <div className={`w-px h-4 lg:h-6 mx-0.5 lg:mx-1 ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
 
                             <div className="flex flex-col items-end">
                                 <div className="flex items-baseline gap-0.5 lg:gap-1">
                                     <span className={`text-[10px] lg:text-xs font-black ${isLight ? 'text-black' : 'text-white'}`}>{event.amount}</span>
                                     <span className="text-[6px] lg:text-[8px] font-bold opacity-40">USDC</span>
                                 </div>
-                                <span className={`text-[8px] lg:text-[9px] font-black ${event.direction === "UP" ? "text-blue-500" : "text-[#FF7F50]"}`}>
+                                <span className={`text-[8px] lg:text-[9px] font-black ${event.direction === "UP" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
                                     {event.direction === "UP" ? "CALL ▲" : "PUT ▼"}
                                 </span>
                             </div>
@@ -189,7 +190,7 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                 </motion.div>
             </div>
 
-            <div className={`absolute right-0 top-0 bottom-0 w-24 lg:w-32 bg-gradient-to-l pointer-events-none z-20 ${isLight ? 'from-white to-transparent' : 'from-[#030303] to-transparent'}`} />
+            <div className={`absolute right-0 top-0 bottom-0 w-24 lg:w-32 bg-gradient-to-l pointer-events-none z-20 ${isLight ? 'from-[#FFF8E7] to-transparent' : 'from-[#030303] to-transparent'}`} />
         </div>
     );
 };

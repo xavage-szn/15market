@@ -1,5 +1,4 @@
 import React, { Suspense } from 'react';
-import { defaultConnection as connection } from './api/program';
 import SimpleAdmin from './components/SimpleAdmin';
 
 const AdminPortal = React.lazy(() => import('./components/AdminPortal'));
@@ -10,7 +9,7 @@ export default function App() {
     React.useEffect(() => {
         const fetchPrice = async () => {
             try {
-                const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT');
+                const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT');
                 const data = await res.json();
                 setPrice(parseFloat(data.price));
             } catch (e) {
@@ -64,7 +63,6 @@ export default function App() {
             }>
                 <MemoizedAdminPortal
                     onBack={handleBack}
-                    connection={connection}
                     price={price}
                 />
             </Suspense>

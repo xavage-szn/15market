@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Zap, Globe, Cpu, Activity } from "lucide-react";
 
-export const LatencyMeter = ({ connection, currentNetwork = 'solana' }) => {
+export const LatencyMeter = ({ currentNetwork = 'arc' }) => {
     const [rpcLatency, setRpcLatency] = useState(0);
     const [priceLatency, setPriceLatency] = useState(0);
     const [status, setStatus] = useState("OPTIMAL");
@@ -13,16 +13,12 @@ export const LatencyMeter = ({ connection, currentNetwork = 'solana' }) => {
         try {
             // Measure RPC Latency
             const rpcStart = performance.now();
-            if (currentNetwork === 'solana') {
-                await connection.getSlot("confirmed");
-            } else {
-                // Fetch for EVM / Arc
-                await fetch(currentNetwork === 'arc' ? "https://rpc.quicknode.testnet.arc.network" : "https://mainnet.base.org", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 })
-                });
-            }
+            // Fetch for EVM / Arc
+            await fetch(currentNetwork === 'arc' ? "https://rpc.testnet.arc.network" : "https://mainnet.base.org", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 })
+            });
             const rpcEnd = performance.now();
             const rpcTime = Math.round(rpcEnd - rpcStart);
             setRpcLatency(rpcTime);
@@ -44,7 +40,7 @@ export const LatencyMeter = ({ connection, currentNetwork = 'solana' }) => {
             console.error("Latency measurement failed:", e);
             setStatus("ERROR");
         }
-    }, [connection]);
+    }, [currentNetwork]);
 
     useEffect(() => {
         const interval = setInterval(measureLatency, 3000);
@@ -97,7 +93,7 @@ export const LatencyMeter = ({ connection, currentNetwork = 'solana' }) => {
                 {history.map((h, i) => (
                     <div key={i} className="flex-1 flex flex-col justify-end h-full">
                         <div
-                            className="w-full bg-blue-500/30 rounded-t-[1px] transition-all duration-500"
+                            className="w-full bg-[#3CB371]/30 rounded-t-[1px] transition-all duration-500"
                             style={{ height: `${Math.min((h.rpc / 1000) * 100, 100)}%` }}
                         />
                         <div
@@ -110,7 +106,7 @@ export const LatencyMeter = ({ connection, currentNetwork = 'solana' }) => {
             <div className="flex justify-between mt-3 px-1">
                 <div className="flex gap-3">
                     <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]/50" />
                         <span className="text-[7px] font-black text-white/20 uppercase tracking-widest">RPC</span>
                     </div>
                     <div className="flex items-center gap-1">

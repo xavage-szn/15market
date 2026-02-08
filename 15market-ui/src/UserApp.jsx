@@ -9,9 +9,7 @@ import { MessageSquare, User } from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { useWriteContract, useAccount, useSwitchChain, useWatchContractEvent, useBalance, useSendTransaction, useSignMessage, useDisconnect } from "wagmi";
 import { parseEther, parseUnits } from "viem";
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { getProgram, defaultConnection as connection, BN } from "./api/program";
-import idl from './idl/sol_prediction.json';
+// Solana imports removed
 import ArcABI from "./abi/ArcPrediction.json";
 import * as ethers from "ethers";
 
@@ -20,7 +18,7 @@ import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 
 import MessagingSystem from "./components/MessagingSystem";
-import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP } from "./constants";
+import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP } from "./constants";
 import { Trophy, Calendar, CheckCircle, ChevronRight, Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X } from "lucide-react";
 
 import { OnboardingModal } from "./components/OnboardingModal";
@@ -91,7 +89,7 @@ export default function UserApp() {
   const [userLocation, setUserLocation] = useState(null); // { country, countryCode, lat, lng }
 
   // Main Network State
-  const [network, setNetwork] = useState(() => localStorage.getItem("15market_network") || "solana");
+  const [network, setNetwork] = useState(() => localStorage.getItem("15market_network") || "arc");
   const [theme, setTheme] = useState(() => localStorage.getItem("15market_theme") || "dark");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
 
@@ -134,9 +132,10 @@ export default function UserApp() {
   }, []);
 
   const { isConnected: isParaConnected } = useParaAccount();
+  const { isConnected: isWagmiConnected, address: wagmiAddress } = useAccount();
   const { data: paraWallet } = useWallet();
-  const address = paraWallet?.address;
-  const isConnected = isParaConnected && !!address;
+  const address = paraWallet?.address || wagmiAddress;
+  const isConnected = isParaConnected || isWagmiConnected;
 
   const { data: paraAccount } = useParaAccount();
   const { chainId } = useAccount(); // Still useful to see if Wagmi is on Arc
@@ -155,57 +154,38 @@ export default function UserApp() {
     }
   });
 
-  // Main Wallet Balance Sync (Multi-chain)
+  // Main Wallet Balance Sync
   useEffect(() => {
     if (!isConnected || !address) {
       setBalance(0);
       return;
     }
 
-    if (!address.startsWith('0x')) {
-      // Solana Balance
-      const fetchSolBalance = async () => {
-        try {
-          const pubkey = new PublicKey(address);
-          const bal = await connection.getBalance(pubkey, "confirmed");
-          setBalance(bal / LAMPORTS_PER_SOL);
-        } catch (e) {
-          console.error("Solana balance fetch error:", e);
-        }
-      };
-      fetchSolBalance();
-      const id = connection.onAccountChange(new PublicKey(address), (acc) => {
-        setBalance(acc.lamports / LAMPORTS_PER_SOL);
-      }, "confirmed");
-      return () => connection.removeAccountChangeListener(id);
-    } else {
-      // EVM Balance
-      if (evmBalance) {
-        setBalance(parseFloat(evmBalance.formatted));
-      }
+    if (evmBalance) {
+      setBalance(parseFloat(evmBalance.formatted));
     }
-  }, [isConnected, address, network, evmBalance]);
+  }, [isConnected, address, evmBalance]);
 
   const authenticated = isConnected;
 
   const wallet = useMemo(() => {
-    if (!isConnected || !address || !paraWallet) return { connected: false };
+    if (!isConnected || !address) return { connected: false };
 
-    const isSolana = !address.startsWith('0x');
     try {
       return {
         connected: true,
-        publicKey: isSolana ? new PublicKey(address) : null,
+        address: address,
+        publicKey: null,
         signTransaction: async (tx) => {
-          if (!paraWallet.signTransaction) throw new Error("Wallet does not support signTransaction");
+          if (!paraWallet?.signTransaction) throw new Error("Wallet does not support signTransaction or not fully initialized");
           return await paraWallet.signTransaction(tx);
         },
         signAllTransactions: async (txs) => {
-          if (!paraWallet.signAllTransactions) throw new Error("Wallet does not support signAllTransactions");
+          if (!paraWallet?.signAllTransactions) throw new Error("Wallet does not support signAllTransactions or not fully initialized");
           return await paraWallet.signAllTransactions(txs);
         },
         signMessage: async (msg) => {
-          if (!paraWallet.signMessage) throw new Error("Wallet does not support signMessage");
+          if (!paraWallet?.signMessage) throw new Error("Wallet does not support signMessage or not fully initialized");
           const encoded = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
           return await paraWallet.signMessage(encoded);
         }
@@ -224,8 +204,8 @@ export default function UserApp() {
     return null;
   }, [isConnected, address]);
 
-  const GREEN = theme === 'light' ? "#2563eb" : "#3B82F6";
-  const CORAL = "#FF7F50";
+  const GREEN = "#3CB371";
+  const CORAL = "#3CB371";
 
   useEffect(() => {
     localStorage.setItem("15market_network", network);
@@ -249,6 +229,20 @@ export default function UserApp() {
     const saved = localStorage.getItem("15market_autosigner_fees");
     return saved ? JSON.parse(saved) : { arc: 0 };
   });
+
+  // Fetch Treasury (Contract) Balance
+  useEffect(() => {
+    const fetchTreasury = async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider(ARC_RPC);
+        const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
+        setTreasuryBalance(parseFloat(ethers.formatEther(bal)));
+      } catch (e) { }
+    };
+    fetchTreasury();
+    const interval = setInterval(fetchTreasury, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const [platformSettings, setPlatformSettings] = useState(() => {
     try {
@@ -307,6 +301,48 @@ export default function UserApp() {
     localStorage.setItem("15market_citadel_settings", JSON.stringify(platformSettings));
   }, [platformSettings]);
 
+  // Fetch and Index Trade History
+  useEffect(() => {
+    if (!address || !isConnected) return;
+
+    const fetchTradeHistory = async () => {
+      try {
+        const res = await fetch(`${KEEPER_URL_ARC}/trades/${address}`);
+
+        if (res.ok) {
+          const trades = await res.json();
+          console.log(`📊 [TRADE_HISTORY] Fetched ${trades.length} trades`);
+          if (trades.length > 0) console.log(`📊 [TRADE_HISTORY] Sample:`, trades[0]);
+
+          // Merge backend trades with local trades to prevent flickering/overwriting
+          setTradeHistory(prev => {
+            const merged = [...trades];
+            prev.forEach(local => {
+              if (!merged.find(m => String(m.id) === String(local.id))) {
+                merged.push(local);
+              }
+            });
+            // Sort merged history by timestamp descending
+            return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          });
+          localStorage.setItem("15market_history_v1", JSON.stringify(trades));
+
+          // Update active trades
+          const pending = trades.filter(t => ["PENDING", "RESOLVING"].includes(t.status));
+          setActiveTrades(pending);
+        }
+      } catch (e) {
+        console.error("Failed to fetch trade history:", e);
+      }
+    };
+
+    fetchTradeHistory();
+
+    // Poll for updates every 5 seconds
+    const interval = setInterval(fetchTradeHistory, 5000);
+    return () => clearInterval(interval);
+  }, [address, isConnected, network]);
+
   useEffect(() => {
     localStorage.setItem("15market_autosigner_fees", JSON.stringify(autoSignerFees));
   }, [autoSignerFees]);
@@ -351,16 +387,9 @@ export default function UserApp() {
     notify(`Switched to ${newNetwork.toUpperCase()} Mode`, "info");
   };
 
-  // Clear stale wallet states on app mount
+  // Stale wallet cleanup replaced with Para SDK's internal handling
   useEffect(() => {
-    const checkAndCleanup = async () => {
-      if (hasPendingWalletRequests()) {
-        console.log("⚠️ Detected stale wallet connection requests, cleaning up...");
-        await clearWalletStorage();
-        notify("Cleared stale wallet connection", "info");
-      }
-    };
-    checkAndCleanup();
+    // Para handles its own session persistence, no manual cleanup needed here
   }, []); // Run once on mount
 
   // Auto-Switch UI Network based on Wallet
@@ -403,16 +432,15 @@ export default function UserApp() {
 
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
-      { id: 'sol', symbol: 'SOL', name: 'Solana', mint: 'So11111111111111111111111111111111111111112', pair: 'Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: 'GHm8da6zV8x69R7L6vAcTAVH7shU6fupB6itE8pXg573', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT', kraken: 'BTCUSD', gecko: 'bitcoin' },
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '716YvEi9Y3q6Sst77sH7q2X2fA7rhtq8K8fJ9f2r7f7C', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT', kraken: 'ETHUSD', gecko: 'ethereum' },
-      { id: 'jup', symbol: 'JUP', name: 'Jupiter', pair: '6U6MAtfR3sY8W7S6W3L1f2n7L5fU9J6U2S2S2S2S2S2S', pythId: '0x0a049d6824976cfdc3c0f2ee054e7d1e92d528b8b989498877171d0e12d00996', binance: 'JUPUSDT', kraken: 'JUPUSD', gecko: 'jupiter-exchange-solana' },
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT' },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
     ];
 
     const saved = localStorage.getItem('15market_listed_tokens');
     const listed = saved ? JSON.parse(saved) : defaultTokens;
 
-    const activeId = localStorage.getItem('15market_active_token_id') || 'eth'; // Default to ETH
+    const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
     return listed.find(t => t.id === activeId) || listed[0];
   });
 
@@ -964,69 +992,74 @@ export default function UserApp() {
       const entryPriceParams = Math.floor(activePrice * 100000000);
       let txHash;
 
-      if (network === 'solana') {
-        const program = getProgram(wallet, connection);
-        const amountLamports = Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL);
+      // Arc Trade logic (EVM)
+      const amountWei = parseUnits(amount.toString(), 18);
+      const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
+      const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
 
-        notify("Confirming on Solana...", "success");
-        txHash = await program.methods
-          .placeBet(
-            dirVal,
-            new BN(amountLamports),
-            new BN(entryPriceParams),
-            new BN(tradeId),
-            Number(duration)
-          )
-          .rpc();
-        notify("Solana Trade Executed!", "success");
-      } else {
-        // Arc Trade logic (EVM)
-        const amountWei = parseUnits(amount.toString(), 18);
-        const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
-        const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
+      if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
+        const feePercent = 0.001; // 0.1% Auto-Signer Fee
+        const signerFee = Number(amount) * feePercent;
+        const feeWei = parseUnits(signerFee.toFixed(18), 18);
 
-        if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
-          notify(`Auto-signing on Arc...`, "success");
-          const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-          const feeData = await provider.getFeeData();
-          const sessionWallet = new ethers.Wallet(evmSessionWallet.privateKey, provider);
-          const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, sessionWallet);
+        notify(`Auto-signing on Arc (0.1% fee: ${signerFee.toFixed(4)} USDC)...`, "success");
+        const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
+        const wallet = new ethers.Wallet(evmSessionWallet.privateKey, provider);
+        const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, wallet);
 
-          const tx = await contract.placeBet(
-            BigInt(tradeId),
-            Number(dirVal),
-            BigInt(duration),
-            BigInt(entryPriceParams),
-            Number(assetId),
-            {
-              value: amountWei,
-              gasLimit: 600000n,
-            }
-          );
-          txHash = tx.hash;
-        } else {
-          notify(`Confirm on Arc...`, "success");
-          const hash = await writeContractAsync({
-            address: ARC_CONTRACT_ADDRESS,
-            abi: ArcABI.abi,
-            functionName: 'placeBet',
-            args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
+        const tx = await contract.placeBet(
+          BigInt(tradeId),
+          Number(dirVal),
+          BigInt(duration),
+          BigInt(entryPriceParams),
+          Number(assetId),
+          {
             value: amountWei,
-            gas: 600000n
-          });
-          txHash = hash;
-        }
-        notify(`Arc Trade Executed!`, "success");
+            gasLimit: 600000n,
+          }
+        );
+        txHash = tx.hash;
+
+        // Take fee from session wallet to treasury
+        setTimeout(async () => {
+          try {
+            await wallet.sendTransaction({
+              to: ARC_CONTRACT_ADDRESS,
+              value: feeWei,
+              gasLimit: 50000n
+            });
+            recordFee('arc', signerFee);
+          } catch (feeErr) {
+            console.error("Signer fee failed:", feeErr);
+          }
+        }, 100);
+      } else {
+        notify(`Confirm on Arc...`, "success");
+        const hash = await writeContractAsync({
+          address: ARC_CONTRACT_ADDRESS,
+          abi: ArcABI.abi,
+          functionName: 'placeBet',
+          args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
+          value: amountWei,
+          gas: 600000n
+        });
+        txHash = hash;
+      }
+      notify(`Arc Trade Executed!`, "success");
+
+      if (sessionMode) {
+        const feePercent = 0.001;
+        const signerFee = Number(amount) * feePercent;
+        setSessionBalance(prev => Math.max(0, prev - parseFloat(amount) - signerFee));
+      } else {
+        setBalance(prev => Math.max(0, prev - parseFloat(amount)));
       }
 
-      if (sessionMode) setSessionBalance(prev => Math.max(0, prev - parseFloat(amount)));
-      else setBalance(prev => Math.max(0, prev - parseFloat(amount)));
-
-      const activeUserAddr = (sessionMode && sessionBalance >= (Number(amount) + 0.001)) ? evmSessionWallet.address : user.wallet.address;
+      const activeUserAddr = (sessionMode && sessionBalance >= (Number(amount) + 0.001)) ? evmSessionWallet.address : (address || user?.wallet?.address);
       const newTrade = {
         id: tradeId, direction, amount: Number(amount).toFixed(4), entryPrice: activePrice.toFixed(4),
-        timestamp: new Date().toLocaleTimeString(), status: "PENDING", tx: txHash, nonce: tradeId,
-        userPublicKey: activeUserAddr, duration, network: 'arc', startTime: Date.now()
+        timestamp: Date.now(), status: "PENDING", tx: txHash, nonce: tradeId,
+        userPublicKey: activeUserAddr, owner: activeUserAddr, duration, network: network, startTime: Date.now()
       };
       setTradeHistory(prev => [newTrade, ...prev]);
       setActiveTrades(prev => [newTrade, ...prev]);
@@ -1042,7 +1075,7 @@ export default function UserApp() {
         body: JSON.stringify({
           ...(userLocation || { country: 'Unknown', countryCode: 'XX', lat: 0, lng: 0 }),
           amount: amount,
-          network: 'arc',
+          network: network,
           address: activeUserAddr,
           id: newTrade.id,
           expiry: Math.floor(newTrade.startTime / 1000) + newTrade.duration,
@@ -1224,6 +1257,7 @@ export default function UserApp() {
       currentNetwork={network}
       autoSignerFees={autoSignerFees}
       userProfile={userProfile}
+      theme={theme}
     />
   );
 
@@ -1305,11 +1339,13 @@ export default function UserApp() {
 
         <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
           {/* Chart - Responsive - Full width */}
-          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel`}
+          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
             style={{
               background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
-              boxShadow: `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-              borderColor: `${GREEN}40`
+              boxShadow: theme === 'light'
+                ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
+              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
             }}>
             <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} />
           </div>
@@ -1454,7 +1490,25 @@ export default function UserApp() {
         address={address}
         network={network}
         existingProfile={userProfile}
+        theme={theme}
       />
+
+      {/* Footer */}
+      <footer className="w-full max-w-7xl mt-24 mb-10 flex items-center justify-center gap-6 opacity-60 hover:opacity-100 transition-opacity" style={{ fontFamily: 'Arial, sans-serif' }}>
+        <img
+          src="/logo.png"
+          alt="15market"
+          className="h-10 w-auto opacity-80"
+        />
+        <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
+        <span className={`text-xs md:text-sm font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+          © 2026 15market
+        </span>
+        <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
+        <span className={`text-xs md:text-sm font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+          Built by 15labs
+        </span>
+      </footer>
 
     </motion.div>
   );

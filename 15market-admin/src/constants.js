@@ -1,18 +1,36 @@
 // Network Constants & Chain Definitions
+import { defineChain } from 'viem'
 
-// 1. Solana RPC Endpoints
-export const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC || "https://api.devnet.solana.com";
-export const SOLANA_READ_RPC = import.meta.env.VITE_SOLANA_READ_RPC || "https://api.devnet.solana.com";
-export const SOLANA_PROGRAM_ID = import.meta.env.VITE_PROGRAM_ID || "9bK6W6uAS2xC9Xdw6fcMgHH1BwLp4gJDKj5dwciF8CPe";
-
-// 2. Arc Network Constants
+// Arc Network Constants
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS || "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8";
 export const ARC_RPC = import.meta.env.VITE_ARC_RPC || "https://rpc.testnet.arc.network";
 
-// 3. Project ID
+// Project ID
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID || 'c57ca95b47569778a828d19178114f4d';
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || "https://api.15market.online";
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
-export const KEEPER_URL_SOLANA = `${KEEPER_URL}/solana`;
-export const KEEPER_URL_ARC = `${KEEPER_URL}/arc`;
+export const KEEPER_URL_ARC = KEEPER_URL;
+
+// Chain Definition for Arc
+export const arcTestnet = defineChain({
+    id: 5042002,
+    name: 'Arc Testnet',
+    nativeCurrency: {
+        name: 'USDC',
+        symbol: 'USDC',
+        decimals: 18
+    },
+    rpcUrls: {
+        default: {
+            http: [ARC_RPC],
+        },
+        public: {
+            http: [ARC_RPC],
+        },
+    },
+    blockExplorers: {
+        default: { name: 'ArcScan', url: 'https://testnet.arcscan.app' },
+    },
+    testnet: true,
+});

@@ -6,21 +6,15 @@ import { UnifiedWalletButton } from './UnifiedWalletButton';
 export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
     // Theme colors based on selected chain
     const themeColors = {
-        solana: {
+        arc: {
             primary: '#3CB371',
             glow: 'rgba(60, 179, 113, 0.08)',
             glowBottom: 'rgba(60, 179, 113, 0.05)',
             selection: '#3CB371'
-        },
-        arc: {
-            primary: '#3B82F6',
-            glow: 'rgba(59, 130, 246, 0.08)',
-            glowBottom: 'rgba(59, 130, 246, 0.05)',
-            selection: '#3B82F6'
         }
     };
 
-    const currentTheme = themeColors[currentNetwork] || themeColors.solana;
+    const currentTheme = themeColors[currentNetwork] || themeColors.arc;
 
     const handleChainChange = (chainId) => {
         onNetworkChange(chainId);

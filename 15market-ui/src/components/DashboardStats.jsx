@@ -23,7 +23,7 @@ export default function DashboardStats() {
         value="850B"
         percentage={-2.11}
         icon={Briefcase}
-        iconBgColor="bg-blue-500"
+        iconBgColor="bg-[#3CB371]"
       />
       <StatCard
         title="Open Trades"

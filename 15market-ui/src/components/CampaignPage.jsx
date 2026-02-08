@@ -127,7 +127,7 @@ const CampaignPage = ({ address, network }) => {
             {/* Background elements for premium look */}
             <div className="fixed inset-0 pointer-events-none">
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#3CB371] opacity-[0.03] blur-[100px] rounded-full" />
-                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-500 opacity-[0.03] blur-[100px] rounded-full" />
+                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#3CB371] opacity-[0.03] blur-[100px] rounded-full" />
             </div>
 
             {/* Header */}

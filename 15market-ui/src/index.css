@@ -30,17 +30,17 @@ body {
   --primary-color: #3CB371;
   --primary-glow: rgba(60, 179, 113, 0.6);
   --primary-glow-strong: rgba(60, 179, 113, 0.8);
-  --primary-glow-subtle: rgba(60, 179, 111, 0.4);
+  --primary-glow-subtle: rgba(60, 179, 113, 0.4);
   --glass-bg: rgba(15, 15, 15, 0.85);
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.06);
 }
 
 .theme-arc {
-  --primary-color: #3B82F6;
-  --primary-glow: rgba(59, 130, 246, 0.6);
-  --primary-glow-strong: rgba(59, 130, 246, 0.8);
-  --primary-glow-subtle: rgba(59, 130, 246, 0.4);
+  --primary-color: #3CB371;
+  --primary-glow: rgba(60, 179, 113, 0.6);
+  --primary-glow-strong: rgba(60, 179, 113, 0.8);
+  --primary-glow-subtle: rgba(60, 179, 113, 0.4);
 }
 
 /* Glassmorphism Utilities */
@@ -102,6 +102,224 @@ body {
   box-shadow: none !important;
 }
 
+/* ===== PREMIUM LIGHT MODE ===== */
+html.light,
+body.light {
+  background-color: #FFF8E7 !important;
+  background-image: radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.04) 1px, transparent 0) !important;
+  background-size: 32px 32px !important;
+}
+
+.light {
+  --primary-color: #3CB371;
+  --primary-glow: rgba(60, 179, 113, 0.3);
+  --primary-glow-strong: rgba(60, 179, 113, 0.5);
+  --primary-glow-subtle: rgba(60, 179, 113, 0.15);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(60, 179, 113, 0.15);
+  --glass-highlight: rgba(60, 179, 113, 0.05);
+  --text-primary: #1a1a1a;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+}
+
+/* Light Mode Glass Panels */
+.light .glass-panel {
+  background: rgba(255, 248, 231, 0.9) !important;
+  /* Cream Color */
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(60, 179, 113, 0.12) !important;
+  box-shadow:
+    0 4px 24px rgba(60, 179, 113, 0.08),
+    0 0 1px rgba(60, 179, 113, 0.2) inset !important;
+}
+
+.light .glass-panel::before {
+  background: linear-gradient(135deg,
+      rgba(60, 179, 113, 0.06) 0%,
+      transparent 50%,
+      transparent 100%) !important;
+}
+
+/* Light Mode Static Panels */
+.light .static-panel-light {
+  background: #FFF8E7 !important;
+  /* Cream Color */
+  border: 1px solid rgba(60, 179, 113, 0.15) !important;
+  box-shadow:
+    0 2px 12px rgba(60, 179, 113, 0.06),
+    0 0 0 1px rgba(60, 179, 113, 0.08) inset !important;
+}
+
+/* Light Mode Scrollbar */
+.light ::-webkit-scrollbar-track {
+  background: rgba(60, 179, 113, 0.05);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(60, 179, 113, 0.2);
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(60, 179, 113, 0.35);
+}
+
+/* Light Mode Neon Effects */
+.light .neon-border {
+  border: 1px solid rgba(60, 179, 113, 0.2) !important;
+  box-shadow: 0 0 20px rgba(60, 179, 113, 0.1) !important;
+}
+
+/* Light Mode Button Enhancements */
+.light button[style*="#3CB371"],
+.light .bg-\[#3CB371\] {
+  box-shadow:
+    0 4px 12px rgba(60, 179, 113, 0.25),
+    0 0 0 1px rgba(60, 179, 113, 0.1) inset !important;
+}
+
+.light button[style*="#3CB371"]:hover,
+.light .bg-\[#3CB371\]:hover {
+  box-shadow:
+    0 6px 16px rgba(60, 179, 113, 0.35),
+    0 0 0 1px rgba(60, 179, 113, 0.2) inset !important;
+  transform: translateY(-1px);
+}
+
+/* Light Mode Text Readability */
+.light .text-white {
+  color: #1a1a1a !important;
+}
+
+.light .text-white\/60 {
+  color: rgba(26, 26, 26, 0.6) !important;
+}
+
+.light .text-white\/40 {
+  color: rgba(26, 26, 26, 0.4) !important;
+}
+
+.light .text-white\/20 {
+  color: rgba(26, 26, 26, 0.2) !important;
+}
+
+/* Preserve Coral Green Text */
+.light [style*="color: #3CB371"],
+.light .text-\[#3CB371\] {
+  color: #3CB371 !important;
+}
+
+/* Light Mode Borders */
+.light .border-white\/5,
+.light .border-white\/10 {
+  border-color: rgba(60, 179, 113, 0.1) !important;
+}
+
+/* Light Mode Backgrounds */
+.light .bg-white\/5 {
+  background-color: rgba(60, 179, 113, 0.04) !important;
+}
+
+.light .bg-white\/10 {
+  background-color: rgba(60, 179, 113, 0.06) !important;
+}
+
+.light .bg-black\/5 {
+  background-color: rgba(60, 179, 113, 0.04) !important;
+}
+
+.light .bg-black\/10 {
+  background-color: rgba(60, 179, 113, 0.06) !important;
+}
+
+/* Light Mode Hover States */
+.light .hover\:bg-white\/5:hover {
+  background-color: rgba(60, 179, 113, 0.08) !important;
+}
+
+.light .hover\:bg-white\/10:hover {
+  background-color: rgba(60, 179, 113, 0.12) !important;
+}
+
+/* Chart Widget Glow - Light Mode */
+.light .chart-glow {
+  box-shadow:
+    0 0 40px rgba(60, 179, 113, 0.5),
+    0 0 25px rgba(60, 179, 113, 0.4),
+    0 0 15px rgba(60, 179, 113, 0.3),
+    inset 0 0 40px rgba(60, 179, 113, 0.1) !important;
+  border-color: rgba(60, 179, 113, 0.8) !important;
+}
+
+/* Coral Green Sliders - Always Visible */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-track {
+  background: rgba(60, 179, 113, 0.2);
+  height: 6px;
+  border-radius: 3px;
+}
+
+input[type="range"]::-moz-range-track {
+  background: rgba(60, 179, 113, 0.2);
+  height: 6px;
+  border-radius: 3px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3CB371;
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(60, 179, 113, 0.6);
+  border: 2px solid white;
+  margin-top: -6px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3CB371;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 10px rgba(60, 179, 113, 0.5);
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: #48c97f;
+  box-shadow: 0 0 15px rgba(60, 179, 113, 0.7);
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  background: #48c97f;
+  box-shadow: 0 0 15px rgba(60, 179, 113, 0.7);
+}
+
 .wallet-adapter-modal-wrapper {
   background: #1a1a1a !important;
+}
+
+/* Force Para Modal Branding */
+.para-modal-container,
+.para-modal {
+  --para-accent-color: #3CB371 !important;
+  --para-brand-color: #3CB371 !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+.para-button-primary {
+  background-color: #3CB371 !important;
+  color: white !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
 }

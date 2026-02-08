@@ -69,9 +69,7 @@ const Root = () => {
   return (
     <React.StrictMode>
       <ErrorBoundary>
-        <AppParaProvider>
-          <App />
-        </AppParaProvider>
+        <App />
       </ErrorBoundary>
     </React.StrictMode>
   );

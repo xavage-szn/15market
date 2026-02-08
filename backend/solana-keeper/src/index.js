@@ -207,6 +207,30 @@ app.get('/history', (req, res) => {
     combined.sort((a, b) => b.timestamp - a.timestamp);
     res.json(combined.slice(0, 200));
 });
+app.get('/trades/:address', async (req, res) => {
+    const { address } = req.params;
+    if (!address) return res.status(400).json({ error: 'Missing address' });
+
+    // Get Solana trades for this user
+    const solTrades = state.history.filter(t =>
+        t.owner && t.owner.toLowerCase() === address.toLowerCase()
+    );
+
+    // Get Arc trades for this user
+    let arcTrades = [];
+    try {
+        const arcRes = await fetch(`${KEEPER_URL_ARC}/trades/${address}`);
+        if (arcRes.ok) arcTrades = await arcRes.json();
+    } catch (e) {
+        console.warn(`Failed to fetch Arc trades: ${e.message}`);
+    }
+
+    // Combine and sort by timestamp
+    const combined = [...solTrades, ...arcTrades];
+    combined.sort((a, b) => b.timestamp - a.timestamp);
+
+    res.json(combined);
+});
 app.get('/active-bets', async (req, res) => {
     try {
         const arcRes = await fetch(`${KEEPER_URL_ARC}/active-bets`);

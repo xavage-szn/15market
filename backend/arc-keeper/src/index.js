@@ -140,6 +140,16 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
 app.get('/logs', (req, res) => res.json(logger.getLogs()));
 app.get('/history', (req, res) => res.json(state.history));
+app.get('/trades/:address', (req, res) => {
+    const { address } = req.params;
+    if (!address) return res.status(400).json({ error: 'Missing address' });
+
+    const userTrades = state.history.filter(t =>
+        t.owner && t.owner.toLowerCase() === address.toLowerCase()
+    );
+
+    res.json(userTrades);
+});
 app.get('/active-bets', (req, res) => res.json(Object.values(state.activeBets)));
 
 app.get('/listings', (req, res) => res.json(state.listings));

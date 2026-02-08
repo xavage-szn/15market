@@ -7,8 +7,7 @@ export const NetworkSwitcher = ({ currentNetwork, onNetworkChange }) => {
     const dropdownRef = useRef(null);
 
     const networks = [
-        { id: 'solana', name: 'Solana', icon: '🟢', color: '#3CB371', comingSoon: false },
-        { id: 'arc', name: 'Arc Network', icon: '🔵', color: '#3B82F6', comingSoon: false },
+        { id: 'arc', name: 'Arc Network', icon: '🔵', color: '#3CB371', comingSoon: false },
         { id: 'base', name: 'Base', icon: '🔵', color: '#0052FF', comingSoon: true },
     ];
 
@@ -57,10 +56,10 @@ export const NetworkSwitcher = ({ currentNetwork, onNetworkChange }) => {
                                     }
                                 }}
                                 className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-200 group ${currentNetwork === net.id
-                                        ? 'bg-white/10 border border-white/10'
-                                        : net.comingSoon
-                                            ? 'opacity-50 cursor-not-allowed'
-                                            : 'hover:bg-white/5'
+                                    ? 'bg-white/10 border border-white/10'
+                                    : net.comingSoon
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : 'hover:bg-white/5'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">

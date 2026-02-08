@@ -9,17 +9,36 @@ const TradeHistoryComponent = ({
     theme,
 }) => {
     const { openModal } = useModal();
-    const { isConnected } = useAccount();
-    const { data: wallet } = useWallet();
-    const address = wallet?.address;
+    const { isConnected: isParaConnected } = useAccount();
+    const { isConnected: isWagmiConnected, address: wagmiAddress } = useAccount();
+    const { data: paraWallet } = useWallet();
+    const address = paraWallet?.address || wagmiAddress;
+    const isConnected = isParaConnected || isWagmiConnected;
     const isLight = theme === 'light';
 
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
 
     const filteredTrades = tradeHistory.filter(t => {
-        return address && t.userPublicKey?.toLowerCase() === address.toLowerCase();
+        if (!address) return false;
+        const trader = t.userPublicKey || t.owner || t.user || "";
+        if (address.startsWith('0x') || String(trader).startsWith('0x')) {
+            return String(trader).toLowerCase() === address.toLowerCase();
+        }
+        return String(trader) === address;
     });
+
+    // Debugging logs
+    React.useEffect(() => {
+        if (isConnected && address) {
+            console.log(`🔍 [TRADE_HISTORY] Address: ${address}`);
+            console.log(`🔍 [TRADE_HISTORY] Raw Trade Count: ${tradeHistory.length}`);
+            console.log(`🔍 [TRADE_HISTORY] Filtered Count: ${filteredTrades.length}`);
+            if (tradeHistory.length > 0 && filteredTrades.length === 0) {
+                console.log(`🔍 [TRADE_HISTORY] Sample Trade Data:`, tradeHistory[0]);
+            }
+        }
+    }, [address, isConnected, tradeHistory.length, filteredTrades.length]);
 
     const totalPages = Math.ceil(filteredTrades.length / ITEMS_PER_PAGE);
     const paginatedTrades = filteredTrades.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -47,7 +66,7 @@ const TradeHistoryComponent = ({
                         <p className={`text-sm max-w-xs text-center mb-8 font-medium ${isLight ? 'text-black/40' : 'text-white/40'}`}>Connect your wallet to access your private trading records and performance metrics.</p>
                         <button
                             onClick={() => openModal()}
-                            className="px-8 py-3 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-lg"
+                            className="px-8 py-3 bg-[#3CB371] text-white font-black uppercase text-xs tracking-widest rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-lg"
                         >
                             Connect Wallet
                         </button>
@@ -59,9 +78,9 @@ const TradeHistoryComponent = ({
                         {paginatedTrades.map((t) => (
                             <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border-2 gap-2 lg:gap-4 transition-all group ${isLight
                                 ? 'bg-[#f8fafc] border-black/5 shadow-md hover:shadow-lg hover:border-black/10'
-                                : 'bg-black/40 border-white/10 hover:border-blue-500/30'}`}>
+                                : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
                                 <div className="flex items-center gap-2 lg:gap-4">
-                                    <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{ background: t.direction === "UP" ? `rgba(59, 130, 246, 0.2)` : `rgba(255, 127, 80, 0.2)`, color: t.direction === "UP" ? '#3B82F6' : '#FF7F50' }}>
+                                    <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{ background: t.direction === "UP" ? `rgba(59, 130, 246, 0.2)` : `rgba(255, 127, 80, 0.2)`, color: t.direction === "UP" ? '#3CB371' : '#FF7F50' }}>
                                         {t.direction?.toUpperCase()}
                                     </div>
                                     <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-black/90' : 'text-white/90'}`}>{t.amount} USDC</div>
@@ -79,7 +98,7 @@ const TradeHistoryComponent = ({
                                         href={`https://testnet.arcscan.app/tx/${t.tx}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-blue-500/10 text-blue-500 border border-blue-500/30" :
+                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
                                             t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
                                                 (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                             }`}
@@ -95,7 +114,7 @@ const TradeHistoryComponent = ({
                                                 setSelectedPnLTrade(t);
                                                 setIsPnLOpen(true);
                                             }}
-                                            className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-blue-500' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-blue-500'}`}
+                                            className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#3CB371]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#3CB371]'}`}
                                             title="Share PnL"
                                         >
                                             <Share2 size={16} />

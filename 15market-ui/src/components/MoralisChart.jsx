@@ -15,8 +15,8 @@ const MoralisWidget = memo(({ pairAddress, network, theme }) => {
 
                     window.createMyWidget(containerId, {
                         autoSize: true,
-                        chainId: network === 'arc' ? '0x1' : 'solana', // Fallback to ETH if not solana
-                        pairAddress: pairAddress || 'Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE',
+                        chainId: '0x1', // Use Mainnet ETH chart for base assets
+                        pairAddress: pairAddress || '0xae7ab96520de3a18e5e111b5eaab095312d7fe84', // Defalut to StETH/ETH or similar for ETH trades
                         showHoldersChart: false,
                         defaultInterval: '1m',
                         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Etc/UTC',
@@ -24,7 +24,7 @@ const MoralisWidget = memo(({ pairAddress, network, theme }) => {
                         locale: 'en',
                         backgroundColor: theme === 'light' ? '#ffffff' : '#050505',
                         gridColor: theme === 'light' ? '#f0f0f0' : '#111111',
-                        candleUpColor: network === 'arc' ? '#3B82F6' : '#3CB371',
+                        candleUpColor: '#3CB371',
                         candleDownColor: '#FF4444',
                         textColor: theme === 'light' ? '#000000' : '#ffffff',
                         hideLeftToolbar: false,

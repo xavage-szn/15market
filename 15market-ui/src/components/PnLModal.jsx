@@ -50,7 +50,7 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
         return 1.98;
     };
 
-    const currency = trade.network === 'arc' ? 'USDC' : 'SOL';
+    const currency = 'USDC';
     const multiplier = getMultiplier(trade.duration || 15);
     const totalPayout = trade.payout ? parseFloat(trade.payout) : (parseFloat(trade.amount) * multiplier);
     // User wants '1.98x profit' to reflect the gross payout amount (+1.98) instead of net gain (+0.98)
@@ -75,10 +75,18 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
                             minHeight: 'min(580px, 85vh)',
                         }}
                     >
-                        {/* Watermark Logo */}
-                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center justify-center opacity-[0.05] pointer-events-none select-none -rotate-12">
-                            <img src="/logo.png" alt="watermark" className="w-[110%] h-auto" />
-                        </div>
+                        {/* Repeating Watermark Pattern */}
+                        <div
+                            className="absolute inset-0 pointer-events-none select-none"
+                            style={{
+                                backgroundImage: 'url(/logo.png)',
+                                backgroundSize: '80px 80px',
+                                backgroundRepeat: 'repeat',
+                                opacity: 0.03,
+                                transform: 'rotate(-15deg)',
+                                transformOrigin: 'center'
+                            }}
+                        />
 
                         {/* Receipt Content */}
                         <div className="relative z-10 flex flex-col items-center">
@@ -86,7 +94,7 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
                                 <img src="/logo.png" alt="15market" className="h-14 w-auto mb-2 drop-shadow-sm" />
                                 <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">15MARKET</h1>
                                 <p className="text-[8px] font-black mt-1.5 tracking-[0.2em] text-black/50 uppercase">
-                                    VERIFIED PREDICTION • {trade.network === 'arc' ? 'ARC_NETWORK' : 'SOLANA_PROTOCOL'}
+                                    VERIFIED PREDICTION • ARC_NETWORK
                                 </p>
                             </div>
 

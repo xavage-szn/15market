@@ -12,14 +12,14 @@ export const AdminAuthDB = {
      * @returns {Promise<{success: boolean, message?: string, user?: {id: string, username: string}}>}
      */
     verifyCoordinates: async (username, password) => {
-        // Root credentials - should be moved to env or backend in production
-        const ROOT_USER = "admin";
-        const ROOT_PASS = "admin123";
+        // Root credentials
+        const ROOT_USER = "xavageszn-root";
+        const ROOT_PASS = "NORgate123+";
 
         if (username === ROOT_USER && password === ROOT_PASS) {
             return {
                 success: true,
-                user: { id: 'root_admin', username: 'Root Admin' }
+                user: { id: 'root_admin', username: 'Root Admin (xavageszn)', role: 'ROOT' }
             };
         }
 

@@ -1,15 +1,16 @@
-import React from 'react';
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { Copy, LogOut, ChevronDown } from 'lucide-react';
+import { useAccount as useWagmiAccount } from "wagmi";
 
 export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) => {
     const { openModal } = useModal();
     const { isConnected: isParaConnected } = useParaAccount();
+    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
     const { data: paraWallet } = useWallet();
-    const address = paraWallet?.address;
-    const isConnected = isParaConnected && !!address;
 
-    const currentColor = '#3B82F6'; // Arc Blue
+    const address = paraWallet?.address || wagmiAddress;
+    const isConnected = isParaConnected || isWagmiConnected;
+
+    const currentColor = '#3CB371'; // Coral Green
 
     if (!isConnected) {
         return (

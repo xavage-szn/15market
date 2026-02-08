@@ -10,12 +10,10 @@ export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
 
     const balance = balanceOverride !== undefined ? balanceOverride : internalBalance;
 
-    const isSolana = address && !address.startsWith('0x');
-
     const { data: evmBalance, refetch: refetchEvm } = useBalance({
         address: address,
         chainId: 5042002, // Arc Testnet
-        query: { enabled: isConnected && !isSolana }
+        query: { enabled: isConnected }
     });
 
     useEffect(() => {
@@ -24,29 +22,21 @@ export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
             return;
         }
 
-        if (isSolana) {
-            const fetchSol = async () => {
-                const { Connection } = await import("@solana/web3.js");
-                const conn = new Connection("https://api.devnet.solana.com"); // Simple fallback
-                const bal = await conn.getBalance(new (await import("@solana/web3.js")).PublicKey(address));
-                setInternalBalance(bal / 1e9);
-            };
-            fetchSol();
-        } else if (evmBalance) {
+        if (evmBalance) {
             setInternalBalance(parseFloat(evmBalance.formatted));
         }
-    }, [isConnected, address, evmBalance, isSolana]);
+    }, [isConnected, address, evmBalance]);
 
     useEffect(() => {
-        if (isConnected && !isSolana) {
+        if (isConnected) {
             const interval = setInterval(() => refetchEvm(), 5000);
             return () => clearInterval(interval);
         }
-    }, [isConnected, refetchEvm, isSolana]);
+    }, [isConnected, refetchEvm]);
 
     if (!isConnected) return null;
 
-    const networkColor = '#3B82F6'; // Arc Blue
+    const networkColor = '#3CB371'; // Arc Green
 
     return (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-xl transition-all duration-300 group hover:scale-105"
@@ -67,7 +57,7 @@ export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
             )}
 
             <span className={`text-[10px] font-bold font-mono tracking-wide ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {isSolana ? 'SOL' : 'USDC'}
+                {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC
             </span>
         </div>
     );

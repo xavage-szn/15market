@@ -3,20 +3,18 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import UserApp from "./UserApp";
 import CampaignPage from "./components/CampaignPage";
 
-// Reown & Wagmi Imports
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WagmiProvider } from 'wagmi'
-import { wagmiConfig } from './wagmiConfig'
+// Reown & Wagmi cleaned up - Using GetPara native provider
+import { QueryClientProvider } from '@tanstack/react-query'
+import { AppParaProvider, queryClient } from './providers/ParaProvider'
 import { useWallet } from "@getpara/react-sdk";
-
-// Create Query Client
-const queryClient = new QueryClient()
+import { useAccount } from "wagmi";
 
 // Wrapper component to access hooks
 function AppRoutes() {
   const { data: wallet } = useWallet();
-  const address = wallet?.address;
-  const network = useMemo(() => localStorage.getItem("15market_network") || "solana", []);
+  const { address: wagmiAddress } = useAccount();
+  const address = wallet?.address || wagmiAddress;
+  const network = useMemo(() => localStorage.getItem("15market_network") || "arc", []);
 
   return (
     <Routes>
@@ -27,14 +25,13 @@ function AppRoutes() {
 }
 
 export default function App() {
-  // Render Main User Application wrapped in Web3 Providers
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <AppParaProvider>
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>
-      </QueryClientProvider>
-    </WagmiProvider>
+      </AppParaProvider>
+    </QueryClientProvider>
   );
 }

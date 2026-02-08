@@ -64,48 +64,16 @@ export const clearWalletStorage = () => {
 };
 
 /**
- * Disconnect all Solana wallet adapters
- */
-export const disconnectSolanaWallets = async () => {
-    try {
-        const wallets = [
-            window.solana,
-            window.solflare,
-            window.phantom,
-            window.backpack,
-            window.glow
-        ];
-
-        for (const wallet of wallets) {
-            if (wallet?.disconnect) {
-                try {
-                    await wallet.disconnect();
-                } catch (e) {
-                    // Ignore errors, wallet might not be connected
-                }
-            }
-        }
-
-        console.log('✅ Solana wallets disconnected');
-    } catch (error) {
-        console.error('Error disconnecting Solana wallets:', error);
-    }
-};
-
-/**
  * Full wallet reset - clears all states and disconnects all wallets
  */
 export const fullWalletReset = async () => {
     try {
         console.log('🔄 Performing full wallet reset...');
 
-        // 1. Disconnect Solana wallets
-        await disconnectSolanaWallets();
-
-        // 2. Clear storage
+        // 1. Clear storage
         clearWalletStorage();
 
-        // 3. Small delay to ensure cleanup completes
+        // 2. Small delay to ensure cleanup completes
         await new Promise(resolve => setTimeout(resolve, 300));
 
         console.log('✅ Full wallet reset complete');
