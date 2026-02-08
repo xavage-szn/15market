@@ -50,7 +50,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [
-      '@getpara/evm-wallet-connectors',
       '@getpara/solana-wallet-connectors',
       '@getpara/cosmjs-v0-integration',
       'graz',
@@ -62,7 +61,6 @@ export default defineConfig({
   build: {
     rollupOptions: {
       external: [
-        '@getpara/evm-wallet-connectors',
         '@getpara/solana-wallet-connectors',
         '@getpara/cosmjs-v0-integration',
         'graz',
