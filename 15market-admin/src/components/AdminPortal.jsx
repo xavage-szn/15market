@@ -1342,7 +1342,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 <ShieldAlert size={32} className="mx-auto text-red-500 mb-3" />
                                 <p className="text-[10px] text-red-500 font-black uppercase tracking-widest leading-relaxed">
                                     ACCESS DENIED<br />
-                                    Wallet {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)} is not registered in the 15Market administrative directory.
+                                    Wallet {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)} is not registered in the 15Market administrative directory.
                                 </p>
                             </div>
                             <button
@@ -1403,7 +1403,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                         </div>
                                         <div>
                                             <p className="text-[8px] text-white/30 font-black uppercase tracking-widest">Authorized Wallet</p>
-                                            <p className="text-[10px] text-white font-mono">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
+                                            <p className="text-[10px] text-white font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</p>
                                         </div>
                                     </div>
                                     <div className="px-2 py-1 rounded bg-[#3CB371]/10 text-[#3CB371] text-[8px] font-black uppercase tracking-tighter border border-[#3CB371]/20">
