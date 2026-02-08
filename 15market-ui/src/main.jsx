@@ -10,9 +10,8 @@ import './index.css';
 import { AppParaProvider } from './providers/ParaProvider';
 import { WagmiProvider } from 'wagmi';
 import { wagmiConfig } from './wagmiConfig';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-const queryClient = new QueryClient();
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './paraClient';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
