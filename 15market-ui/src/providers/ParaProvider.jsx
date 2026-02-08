@@ -1,15 +1,28 @@
 import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
 import { arcTestnet } from "../constants";
-import { para } from "../paraClient";
+import { paraApiKey, paraEnv } from "../paraClient";
 
 export function AppParaProvider({ children }) {
     return (
         <ParaProvider
-            para={para}
+            paraClientConfig={{
+                env: paraEnv,
+                apiKey: paraApiKey,
+            }}
             config={{
                 appName: "15market",
                 chains: ["evm"],
+            }}
+            externalWalletConfig={{
+                appName: "15market",
+                wallets: ["METAMASK", "WALLETCONNECT", "ZERION", "COINBASE_WALLET", "RAINBOW", "RABBY", "HAHA", "OKX"],
+                walletConnect: { projectId: import.meta.env.VITE_REOWN_PROJECT_ID || "" },
+                evmConnector: {
+                    config: {
+                        chains: [arcTestnet],
+                    },
+                },
             }}
             paraModalConfig={{
                 theme: {
