@@ -2400,7 +2400,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                         </div>
                                                                         <div>
                                                                             <p className="text-xs font-black text-white">{profile.username || "Anonymous Operator"}</p>
-                                                                            <p className="text-[10px] font-mono text-white/20">{profile.address.slice(0, 12)}...</p>
+                                                                            <p className="text-[10px] font-mono text-white/20">{profile.address?.slice(0, 12)}...</p>
                                                                         </div>
                                                                     </div>
                                                                 </td>
@@ -2778,7 +2778,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                                         <td className="px-6 py-4">
                                                                                             {i === 0 ? '👑' : i + 1}
                                                                                         </td>
-                                                                                        <td className="px-6 py-4 text-xs font-mono font-bold text-white/80">{row.address.slice(0, 8)}...</td>
+                                                                                        <td className="px-6 py-4 text-xs font-mono font-bold text-white/80">{row.address?.slice(0, 8)}...</td>
                                                                                         <td className="px-6 py-4 text-right text-xs font-bold text-[#3CB371]">{row.winRate.toFixed(1)}%</td>
                                                                                         <td className="px-6 py-4 text-right text-xs font-bold text-white">{row.pnl > 0 ? '+' : ''}{row.pnl.toFixed(4)}</td>
                                                                                     </tr>
@@ -2802,7 +2802,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                                 <div className="flex items-center gap-3">
                                                                                     <div className={`w-2 h-2 rounded-full ${t.won ? 'bg-[#3CB371]' : 'bg-red-500'}`} />
                                                                                     <div>
-                                                                                        <p className="text-[10px] font-bold text-white mb-0.5">{t.address.slice(0, 6)}...</p>
+                                                                                        <p className="text-[10px] font-bold text-white mb-0.5">{t.address?.slice(0, 6)}...</p>
                                                                                         <p className="text-[8px] font-mono text-white/30">{new Date(t.timestamp).toLocaleTimeString()}</p>
                                                                                     </div>
                                                                                 </div>

@@ -277,10 +277,10 @@ const CampaignPage = ({ address, network }) => {
                                             <td className="py-6 px-6">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-xs text-white/40">
-                                                        {entry.address.slice(0, 2)}
+                                                        {entry.address?.slice(0, 2)}
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-bold text-white font-mono">{entry.address.slice(0, 6)}...{entry.address.slice(-4)}</p>
+                                                        <p className="text-sm font-bold text-white font-mono">{entry.address?.slice(0, 6)}...{entry.address?.slice(-4)}</p>
                                                         {isCurrentUser && <p className="text-[8px] font-black text-yellow-500 uppercase tracking-widest mt-0.5">Your Position</p>}
                                                     </div>
                                                 </div>

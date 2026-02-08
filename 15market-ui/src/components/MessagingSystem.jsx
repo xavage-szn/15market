@@ -22,8 +22,8 @@ const MessagingSystem = ({ wallet, connection, isOpen, onClose, isAdminView = fa
     const messagesEndRef = useRef(null);
 
     // Current User Identity
-    const myAddress = isAdminView && adminRole ? adminRole : (wallet?.publicKey?.toBase58() || 'GUEST_' + Math.floor(Math.random() * 1000));
-    const myDisplayName = userProfile?.username || (isAdminView ? 'Admin' : myAddress.slice(0, 8));
+    const myAddress = isAdminView && adminRole ? adminRole : (wallet?.address || 'GUEST_' + Math.floor(Math.random() * 1000));
+    const myDisplayName = userProfile?.username || (isAdminView ? 'Admin' : (myAddress && typeof myAddress === 'string' ? myAddress.slice(0, 8) : 'Guest'));
 
     // Persistence Key
     const STORAGE_KEY = '15market_global_chat_v1';
@@ -65,6 +65,7 @@ const MessagingSystem = ({ wallet, connection, isOpen, onClose, isAdminView = fa
     };
 
     const formatAddress = (addr) => {
+        if (!addr || typeof addr !== 'string') return "Unknown";
         if (Object.values(ROLES).includes(addr)) return addr;
         if (addr.length < 10) return addr;
         return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
