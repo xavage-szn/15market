@@ -15,6 +15,7 @@
     "@cosmjs/proto-signing": "^0.38.1",
     "@cosmjs/stargate": "^0.38.1",
     "@fontsource/inter": "^5.2.8",
+    "@getpara/evm-wallet-connectors": "^2.8.0",
     "@getpara/react-sdk": "2.8.0",
     "@getpara/wagmi-v2-integration": "2.8.0",
     "@getpara/web-sdk": "2.8.0",
