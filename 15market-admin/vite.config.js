@@ -19,6 +19,10 @@ export default defineConfig({
         dedupe: ['react', 'react-dom', '@tanstack/react-query'],
         alias: {
             "@": path.resolve(__dirname, "./src"),
+            "graz": path.resolve(__dirname, "./src/utils/mock-module.js"),
+            "@cosmjs/amino": path.resolve(__dirname, "./src/utils/mock-module.js"),
+            "@cosmjs/stargate": path.resolve(__dirname, "./src/utils/mock-module.js"),
+            "@cosmjs/proto-signing": path.resolve(__dirname, "./src/utils/mock-module.js"),
         },
     },
     optimizeDeps: {
