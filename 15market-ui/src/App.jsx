@@ -4,8 +4,7 @@ import UserApp from "./UserApp";
 import CampaignPage from "./components/CampaignPage";
 
 // Reown & Wagmi cleaned up - Using GetPara native provider
-import { QueryClientProvider } from '@tanstack/react-query'
-import { AppParaProvider, queryClient } from './providers/ParaProvider'
+import { AppParaProvider } from './providers/ParaProvider'
 import { useWallet } from "@getpara/react-sdk";
 
 // Wrapper component to access hooks
