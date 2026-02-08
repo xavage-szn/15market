@@ -46,6 +46,30 @@ export default defineConfig({
       "@cosmjs/stargate": path.resolve(__dirname, "./src/utils/mock-module.js"),
     },
   },
+  optimizeDeps: {
+    exclude: [
+      '@getpara/evm-wallet-connectors',
+      '@getpara/solana-wallet-connectors',
+      '@getpara/cosmjs-v0-integration',
+      'graz',
+      '@cosmjs/amino',
+      '@cosmjs/stargate',
+      '@cosmjs/proto-signing'
+    ]
+  },
+  build: {
+    rollupOptions: {
+      external: [
+        '@getpara/evm-wallet-connectors',
+        '@getpara/solana-wallet-connectors',
+        '@getpara/cosmjs-v0-integration',
+        'graz',
+        '@cosmjs/amino',
+        '@cosmjs/stargate',
+        '@cosmjs/proto-signing'
+      ]
+    }
+  },
   server: {
     port: 3000,
     host: true,

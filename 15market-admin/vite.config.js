@@ -21,6 +21,30 @@ export default defineConfig({
             "@": path.resolve(__dirname, "./src"),
         },
     },
+    optimizeDeps: {
+        exclude: [
+            '@getpara/evm-wallet-connectors',
+            '@getpara/solana-wallet-connectors',
+            '@getpara/cosmjs-v0-integration',
+            'graz',
+            '@cosmjs/amino',
+            '@cosmjs/stargate',
+            '@cosmjs/proto-signing'
+        ]
+    },
+    build: {
+        rollupOptions: {
+            external: [
+                '@getpara/evm-wallet-connectors',
+                '@getpara/solana-wallet-connectors',
+                '@getpara/cosmjs-v0-integration',
+                'graz',
+                '@cosmjs/amino',
+                '@cosmjs/stargate',
+                '@cosmjs/proto-signing'
+            ]
+        }
+    },
     server: {
         port: 3001,
         host: true,
