@@ -2406,7 +2406,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                 </div>
                                                 <div className="flex items-center gap-4 text-[9px] lg:text-[10px] font-black text-[#3CB371] uppercase w-fit">
                                                     <div className="h-2 w-2 rounded-full bg-[#3CB371] animate-pulse" />
-                                                    {userProfiles.length} Total Profiles
+                                                    {protocolData.profiles?.length || 0} Total Profiles
                                                 </div>
                                             </div>
                                             <div className="overflow-x-auto">
@@ -2420,7 +2420,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {userProfiles.length > 0 ? userProfiles.sort((a, b) => b.trades - a.trades).map((profile) => (
+                                                        {protocolData.profiles?.length > 0 ? [...protocolData.profiles].sort((a, b) => (b.trades || 0) - (a.trades || 0)).map((profile) => (
                                                             <tr key={profile.address} className="border-b border-white/5 hover:bg-white/[0.01] transition-colors group">
                                                                 <td className="px-8 py-6">
                                                                     <div className="flex items-center gap-4">
