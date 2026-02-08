@@ -67,7 +67,6 @@ import {
 } from 'recharts';
 import { AdminAuthDB } from '../utils/adminAuthDb';
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { useAccount as useWagmiAccount } from "wagmi";
 
 const ROOT_WALLET = "0x4c8C0fb7333E3ab1594e69c0F5F751150502C28C";
 
@@ -164,11 +163,10 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     // Para & Wallet Integration
     const { openModal } = useModal();
     const { data: paraWallet } = useWallet();
-    const { isConnected: isParaConnected } = useParaAccount();
-    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+    const { isConnected, address } = useParaAccount();
 
-    const walletAddress = paraWallet?.address || wagmiAddress;
-    const isWalletConnected = isParaConnected || isWagmiConnected;
+    const walletAddress = address;
+    const isWalletConnected = isConnected;
 
     const [staffMembers, setStaffMembers] = useState(() => {
         const saved = localStorage.getItem('15market_staff_members');
