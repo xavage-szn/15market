@@ -7,7 +7,7 @@ import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
 import { MessageSquare, User } from "lucide-react";
 import { Stamp } from "./components/Stamp";
-import { useWriteContract, useAccount, useSwitchChain, useWatchContractEvent, useBalance, useSendTransaction, useSignMessage, useDisconnect } from "wagmi";
+import { useWriteContract, useBalance, useSendTransaction, useSignMessage } from "wagmi";
 import { parseEther, parseUnits } from "viem";
 // Solana imports removed
 import ArcABI from "./abi/ArcPrediction.json";
@@ -131,15 +131,9 @@ export default function UserApp() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const { isConnected: isParaConnected } = useParaAccount();
-  const { isConnected: isWagmiConnected, address: wagmiAddress } = useAccount();
+  const { isConnected, address } = useParaAccount();
   const { data: paraWallet } = useWallet();
-  const address = paraWallet?.address || wagmiAddress;
-  const isConnected = isParaConnected || isWagmiConnected;
 
-  const { data: paraAccount } = useParaAccount();
-  const { chainId } = useAccount(); // Still useful to see if Wagmi is on Arc
-  const { switchChain } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
   const { signMessageAsync } = useSignMessage();
@@ -378,7 +372,6 @@ export default function UserApp() {
     setToast(null);
   }, []);
 
-  const { disconnect } = useDisconnect();
   const navigate = useNavigate();
 
   const handleNetworkSwitch = (newNetwork) => {
@@ -418,14 +411,9 @@ export default function UserApp() {
   // Debug logging for connection issues
   useEffect(() => {
     if (isConnected) {
-      console.log(`Connected to: ${paraAccount?.chainId || 'Unknown'} (ID: ${chainId})`);
-      if (network === 'arc' && chainId !== 5042002) {
-        notify("Wrong network detected. Please switch to Arc Testnet.", "error");
-      } else if (network === 'arc' && chainId === 5042002) {
-        notify("Connected to Arc Network", "success");
-      }
+      console.log(`Connected to: ${address}`);
     }
-  }, [isConnected, paraAccount, chainId, network, notify]);
+  }, [isConnected, address]);
 
   // Dynamic Market State
 
@@ -1472,8 +1460,6 @@ export default function UserApp() {
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
         wallet={wallet}
-        theme={theme}
-        toggleTheme={toggleTheme}
         userProfile={userProfile}
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />

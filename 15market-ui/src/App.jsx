@@ -7,13 +7,12 @@ import CampaignPage from "./components/CampaignPage";
 import { QueryClientProvider } from '@tanstack/react-query'
 import { AppParaProvider, queryClient } from './providers/ParaProvider'
 import { useWallet } from "@getpara/react-sdk";
-import { useAccount } from "wagmi";
 
 // Wrapper component to access hooks
-function AppRoutes() {
+function AppContent() {
   const { data: wallet } = useWallet();
-  const { address: wagmiAddress } = useAccount();
-  const address = wallet?.address || wagmiAddress;
+  const address = wallet?.address;
+  // Use local storage for network preference, default to arc
   const network = useMemo(() => localStorage.getItem("15market_network") || "arc", []);
 
   return (
@@ -26,12 +25,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppParaProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </AppParaProvider>
-    </QueryClientProvider>
+    <AppParaProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </AppParaProvider>
   );
 }

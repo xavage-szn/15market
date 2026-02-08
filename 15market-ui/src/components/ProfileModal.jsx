@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ThemeToggle } from './ThemeToggle';
 import { KEEPER_URL_ARC } from '../constants';
 
-export const ProfileModal = ({ isOpen, onClose, wallet, theme, toggleTheme, userProfile = null }) => {
+export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) => {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -120,7 +119,6 @@ export const ProfileModal = ({ isOpen, onClose, wallet, theme, toggleTheme, user
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <ThemeToggle theme={theme} onToggle={toggleTheme} />
                             <button onClick={onClose} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-white/40">✕</button>
                         </div>
                     </div>
