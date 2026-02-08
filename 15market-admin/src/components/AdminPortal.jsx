@@ -165,8 +165,16 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const { data: paraWallet } = useWallet();
     const { isConnected, address } = useParaAccount();
 
-    const walletAddress = address;
-    const isWalletConnected = isConnected;
+    const walletAddress = address || paraWallet?.address;
+    const isWalletConnected = isConnected || !!walletAddress;
+
+    useEffect(() => {
+        if (isWalletConnected) {
+            console.log("[AdminAuth] Connected Address:", walletAddress);
+            console.log("[AdminAuth] Root Address Target:", ROOT_WALLET);
+            console.log("[AdminAuth] Is Root Match:", walletAddress?.toLowerCase().trim() === ROOT_WALLET.toLowerCase().trim());
+        }
+    }, [isWalletConnected, walletAddress]);
 
     const [staffMembers, setStaffMembers] = useState(() => {
         const saved = localStorage.getItem('15market_staff_members');
@@ -1363,7 +1371,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 <ShieldAlert size={32} className="mx-auto text-red-500 mb-3" />
                                 <p className="text-[10px] text-red-500 font-black uppercase tracking-widest leading-relaxed">
                                     ACCESS DENIED<br />
-                                    Wallet {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)} is not registered in the 15Market administrative directory.
+                                    Wallet <span className="font-mono break-all text-[8px] opacity-60">{walletAddress || 'UNDEFINED'}</span> is not registered in the 15Market administrative directory.
                                 </p>
                             </div>
                             <button
