@@ -55,7 +55,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) =>
         }
         setIsSaving(true);
         try {
-            const res = await fetch(`${KEEPER_URL_ARC}/profile`, {
+            const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

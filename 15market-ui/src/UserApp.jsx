@@ -753,14 +753,16 @@ export default function UserApp() {
   const handleOnboardingComplete = async (onboardingData) => {
     try {
       // Setup profile on Arc Keeper
-      const res = await fetch(`${KEEPER_URL_ARC}/profile`, {
+      const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           address,
           username: onboardingData.username,
           xHandle: onboardingData.twitterHandle || "",
-          discordHandle: ""
+          xProfileImage: onboardingData.twitterImage || "",
+          discordHandle: "",
+          tosAccepted: onboardingData.tosAccepted
         })
       });
 
