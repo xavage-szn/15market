@@ -43,7 +43,8 @@ import {
     User,
     Shield,
     Image as ImageIcon,
-    Copy
+    Copy,
+    Key
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import MessagingSystem from './MessagingSystem';
