@@ -736,9 +736,11 @@ export default function UserApp() {
 
         if (profile) {
           setUserProfile(profile);
-          setShowOnboarding(!profile.xHandle);
+          // FORCE X LINKING: If profile exists but xHandle is missing, show onboarding
+          setShowOnboarding(!profile.xHandle || profile.xHandle === "");
         } else {
           setUserProfile(null);
+          // New user -> Show onboarding
           setShowOnboarding(true);
         }
       } catch (err) {
