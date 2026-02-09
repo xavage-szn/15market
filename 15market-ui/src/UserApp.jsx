@@ -7,7 +7,7 @@ import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
 import { MessageSquare, User } from "lucide-react";
 import { Stamp } from "./components/Stamp";
-import { useWriteContract, useBalance, useSendTransaction, useSignMessage } from "wagmi";
+import { useWriteContract, useBalance, useSendTransaction, useSignMessage, useWatchContractEvent, useChainId, useSwitchChain, useAccount as useWagmiAccount } from "wagmi";
 import { parseEther, parseUnits } from "viem";
 // Solana imports removed
 import ArcABI from "./abi/ArcPrediction.json";
@@ -89,7 +89,7 @@ export default function UserApp() {
   const [userLocation, setUserLocation] = useState(null); // { country, countryCode, lat, lng }
 
   // Main Network State
-  const [network, setNetwork] = useState(() => localStorage.getItem("15market_network") || "arc");
+  const [network, setNetwork] = useState("arc");
   const [theme, setTheme] = useState(() => localStorage.getItem("15market_theme") || "dark");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
 
@@ -131,15 +131,22 @@ export default function UserApp() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const { isConnected, address } = useParaAccount();
+  const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
+  const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+
+  const isConnected = isParaConnected || isWagmiConnected;
+  const address = paraAddress || wagmiAddress;
   const { data: paraWallet } = useWallet();
 
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
   const { signMessageAsync } = useSignMessage();
 
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+
   // Use raw Wagmi hooks for balance
-  const { data: evmBalance, refetch: refetchEvmBalance } = useBalance({
+  const { data: evmBalance, refetch: refetchEvmBalance, isLoading: isBalanceLoading, error: balanceError } = useBalance({
     address: address,
     chainId: 5042002, // Arc Testnet
     query: {
@@ -150,15 +157,36 @@ export default function UserApp() {
 
   // Main Wallet Balance Sync
   useEffect(() => {
+    console.log("💰 [BALANCE] Main wallet balance check:", {
+      isConnected,
+      address,
+      chainId,
+      evmBalance: evmBalance?.formatted,
+      isBalanceLoading,
+      balanceError: balanceError?.message
+    });
+
     if (!isConnected || !address) {
       setBalance(0);
       return;
     }
 
-    if (evmBalance) {
-      setBalance(parseFloat(evmBalance.formatted));
+    // Network Enforcement: Force Arc Network (5042002)
+    const storedLastChain = localStorage.getItem('last_switched_chain');
+    if (isConnected && chainId && chainId !== 5042002 && storedLastChain !== String(chainId)) {
+      console.warn(`⚠️ [NETWORK] Wrong chain detected: ${chainId}. Switching to Arc (5042002)...`);
+      localStorage.setItem('last_switched_chain', String(chainId));
+      switchChain({ chainId: 5042002 });
     }
-  }, [isConnected, address, evmBalance]);
+
+    if (evmBalance) {
+      const bal = parseFloat(evmBalance.formatted);
+      console.log("✅ [BALANCE] Main wallet balance updated:", bal);
+      setBalance(bal);
+    } else {
+      console.warn("⚠️ [BALANCE] No balance data available yet");
+    }
+  }, [isConnected, address, evmBalance, chainId, switchChain, isBalanceLoading, balanceError]);
 
   const authenticated = isConnected;
 
@@ -171,24 +199,27 @@ export default function UserApp() {
         address: address,
         publicKey: null,
         signTransaction: async (tx) => {
-          if (!paraWallet?.signTransaction) throw new Error("Wallet does not support signTransaction or not fully initialized");
-          return await paraWallet.signTransaction(tx);
+          if (paraWallet?.signTransaction) return await paraWallet.signTransaction(tx);
+          throw new Error("signTransaction not supported for this provider. Use writeContract for EVM.");
         },
         signAllTransactions: async (txs) => {
-          if (!paraWallet?.signAllTransactions) throw new Error("Wallet does not support signAllTransactions or not fully initialized");
-          return await paraWallet.signAllTransactions(txs);
+          if (paraWallet?.signAllTransactions) return await paraWallet.signAllTransactions(txs);
+          throw new Error("signAllTransactions not supported for this provider.");
         },
         signMessage: async (msg) => {
-          if (!paraWallet?.signMessage) throw new Error("Wallet does not support signMessage or not fully initialized");
-          const encoded = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
-          return await paraWallet.signMessage(encoded);
+          if (paraWallet?.signMessage) {
+            const encoded = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
+            return await paraWallet.signMessage(encoded);
+          }
+          // Fallback to Wagmi
+          return await signMessageAsync({ message: msg });
         }
       };
     } catch (e) {
       console.error("Wallet wrapper error:", e);
       return { connected: false };
     }
-  }, [isConnected, address, paraWallet]);
+  }, [isConnected, address, paraWallet, signMessageAsync]);
 
   const { open: openPara } = useModal();
   const login = () => openPara();
@@ -297,33 +328,76 @@ export default function UserApp() {
 
   // Fetch and Index Trade History
   useEffect(() => {
-    if (!address || !isConnected) return;
+    if (!address || !isConnected) {
+      setTradeHistory([]);
+      return;
+    }
 
     const fetchTradeHistory = async () => {
       try {
-        const res = await fetch(`${KEEPER_URL_ARC}/trades/${address}`);
+        const addressesToFetch = [address];
+        if (evmSessionWallet?.address) addressesToFetch.push(evmSessionWallet.address);
 
-        if (res.ok) {
-          const trades = await res.json();
-          console.log(`📊 [TRADE_HISTORY] Fetched ${trades.length} trades`);
-          if (trades.length > 0) console.log(`📊 [TRADE_HISTORY] Sample:`, trades[0]);
+        const fetchPromises = addressesToFetch.map(async (addr) => {
+          const [resT, resA] = await Promise.all([
+            fetch(`${KEEPER_URL_ARC}/trades/${addr}`),
+            fetch(`${KEEPER_URL_ARC}/active-bets/${addr}`)
+          ]);
+          if (resT.ok && resA.ok) {
+            const t = await resT.json();
+            const a = await resA.json();
+            return [...t, ...a];
+          }
+          return [];
+        });
+
+        const results = await Promise.all(fetchPromises);
+        const backendAllRaw = results.flat();
+
+        if (backendAllRaw.length >= 0) {
+          // Normalized trades from backend
+          const backendAll = backendAllRaw.map(t => ({
+            ...t,
+            // Normalize direction: 0 -> UP, 1 -> DOWN (matches new mapping)
+            direction: typeof t.direction === 'number' ? (t.direction === 0 ? "UP" : "DOWN") : t.direction,
+            status: t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING"),
+            owner: t.owner || t.user || t.userPublicKey || t.userAddress
+          }));
 
           // Merge backend trades with local trades to prevent flickering/overwriting
           setTradeHistory(prev => {
-            const merged = [...trades];
+            const merged = [...backendAll];
             prev.forEach(local => {
               if (!merged.find(m => String(m.id) === String(local.id))) {
                 merged.push(local);
               }
             });
-            // Sort merged history by timestamp descending
-            return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-          });
-          localStorage.setItem("15market_history_v1", JSON.stringify(trades));
+            // Sort merged history by timestamp descending, normalizing s vs ms
+            const sorted = merged.sort((a, b) => {
+              const timeA = (a.timestamp || a.startTime || 0);
+              const timeB = (b.timestamp || b.startTime || 0);
+              const normA = timeA > 1000000000000 ? timeA : timeA * 1000;
+              const normB = timeB > 1000000000000 ? timeB : timeB * 1000;
+              return normB - normA;
+            });
 
-          // Update active trades
-          const pending = trades.filter(t => ["PENDING", "RESOLVING"].includes(t.status));
-          setActiveTrades(pending);
+            // Save full merged history for this address
+            localStorage.setItem("15market_history_v1", JSON.stringify(sorted.slice(0, 100)));
+            return sorted;
+          });
+
+          // Update active trades - merge backend view with local-only view
+          setActiveTrades(prev => {
+            const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status));
+            const updatedActive = [...backendActive];
+            // Keep local trades that are not yet in any backend response
+            prev.forEach(local => {
+              if (local.status === "PENDING" && !updatedActive.find(a => String(a.id) === String(local.id))) {
+                updatedActive.push(local);
+              }
+            });
+            return updatedActive;
+          });
         }
       } catch (e) {
         console.error("Failed to fetch trade history:", e);
@@ -643,10 +717,13 @@ export default function UserApp() {
   const updateEvmSessionBal = useCallback(async () => {
     if (!evmSessionWallet) return;
     try {
+      console.log("💰 [SESSION BALANCE] Fetching session wallet balance...", evmSessionWallet.address);
       const balanceWei = await evmSessionWallet.provider.getBalance(evmSessionWallet.address);
-      setSessionBalance(parseFloat(ethers.formatEther(balanceWei)));
+      const bal = parseFloat(ethers.formatEther(balanceWei));
+      console.log("✅ [SESSION BALANCE] Updated:", bal, "USDC");
+      setSessionBalance(bal);
     } catch (err) {
-      console.error("EVM Session bal fetch failed:", err);
+      console.error("❌ [SESSION BALANCE] Fetch failed:", err);
     }
   }, [evmSessionWallet]);
 
@@ -726,7 +803,11 @@ export default function UserApp() {
   };
 
   // Slider / amount handlers - active balance aware
-  const activeBal = useMemo(() => (sessionMode ? sessionBalance : balance), [sessionMode, sessionBalance, balance]);
+  const activeBal = useMemo(() => {
+    const bal = sessionMode ? sessionBalance : balance;
+    console.log("💰 [ACTIVE BALANCE]", { sessionMode, sessionBalance, mainBalance: balance, activeBal: bal });
+    return bal;
+  }, [sessionMode, sessionBalance, balance]);
 
   const handleSliderChange = useCallback((e) => {
     const val = e.target.value;
@@ -967,6 +1048,13 @@ export default function UserApp() {
     if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
     if (Number(amount) < parseFloat(minStake)) return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
 
+    console.log("🎯 [TRADE] Initiating trade...", {
+      sessionMode,
+      sessionBalance,
+      amount: Number(amount),
+      willUseAutoSigner: sessionMode && sessionBalance >= (Number(amount) + 0.005)
+    });
+
     setIsExecuting(true);
     try {
       if (!isConnected) {
@@ -976,7 +1064,7 @@ export default function UserApp() {
       }
 
       const tradeId = Date.now();
-      const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
+      const dirVal = (direction === "buy" || direction === "UP") ? 0 : 1;
       const entryPriceParams = Math.floor(activePrice * 100000000);
       let txHash;
 
@@ -986,6 +1074,7 @@ export default function UserApp() {
       const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
 
       if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
+        console.log("✅ [TRADE] Using AUTO-SIGNER (Session Wallet)");
         const feePercent = 0.001; // 0.1% Auto-Signer Fee
         const signerFee = Number(amount) * feePercent;
         const feeWei = parseUnits(signerFee.toFixed(18), 18);
@@ -1007,6 +1096,7 @@ export default function UserApp() {
           }
         );
         txHash = tx.hash;
+        console.log("📤 [TRADE] Auto-signed tx:", txHash);
 
         // Take fee from session wallet to treasury
         setTimeout(async () => {
@@ -1017,21 +1107,48 @@ export default function UserApp() {
               gasLimit: 50000n
             });
             recordFee('arc', signerFee);
+            console.log("✅ [TRADE] Auto-signer fee collected:", signerFee);
           } catch (feeErr) {
             console.error("Signer fee failed:", feeErr);
           }
         }, 100);
       } else {
-        notify(`Confirm on Arc...`, "success");
-        const hash = await writeContractAsync({
+        console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required)");
+        console.log("📝 [TRADE] Main wallet trade params:", {
           address: ARC_CONTRACT_ADDRESS,
-          abi: ArcABI.abi,
-          functionName: 'placeBet',
-          args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
-          value: amountWei,
-          gas: 600000n
+          tradeId,
+          dirVal,
+          duration,
+          entryPriceParams,
+          assetId,
+          amountWei: amountWei.toString(),
+          userAddress: address
         });
-        txHash = hash;
+
+        notify(`Confirm on Arc...`, "success");
+
+        try {
+          const hash = await writeContractAsync({
+            address: ARC_CONTRACT_ADDRESS,
+            abi: ArcABI.abi,
+            functionName: 'placeBet',
+            args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
+            value: amountWei,
+            gas: 600000n
+          });
+          txHash = hash;
+          console.log("📤 [TRADE] Main wallet tx:", txHash);
+        } catch (mainWalletError) {
+          console.error("❌ [TRADE] Main wallet error:", mainWalletError);
+          console.error("❌ [TRADE] Error details:", {
+            message: mainWalletError.message,
+            shortMessage: mainWalletError.shortMessage,
+            code: mainWalletError.code,
+            cause: mainWalletError.cause,
+            details: mainWalletError.details
+          });
+          throw mainWalletError; // Re-throw to be caught by outer try-catch
+        }
       }
       notify(`Arc Trade Executed!`, "success");
 
@@ -1133,89 +1250,197 @@ export default function UserApp() {
 
 
   const handleRefill = useCallback(async (amt) => {
+    console.log("🔵 [REFILL] Starting refill process...", { amt, balance, address });
+
     try {
       const amtNum = parseFloat(amt);
       const feePercent = 0.01; // 1% Protocol Fee
       const fee = amtNum * feePercent;
-      const netAmt = amtNum - fee;
 
-      if (!address) {
+      if (!address || !evmSessionWallet) {
+        console.error("❌ [REFILL] Wallet not connected:", { address, hasSessionWallet: !!evmSessionWallet });
         notify("Connect Arc wallet for refill", "error");
         return;
       }
-      notify(`Charging 1% Auto-Signer Fee (${fee.toFixed(6)} USDC)...`, "success");
+
+      console.log("✅ [REFILL] Wallets ready:", {
+        mainAddress: address,
+        sessionAddress: evmSessionWallet.address,
+        amount: amtNum,
+        fee
+      });
+
+      // Check main wallet balance
+      if (balance < amtNum) {
+        console.error("❌ [REFILL] Insufficient balance in main wallet:", { balance, requested: amtNum });
+        notify(`Insufficient balance. You have ${balance.toFixed(4)} USDC`, "error");
+        return;
+      }
+
+      notify(`Initiating Refill (${amtNum} USDC)...`, "success");
 
       try {
-        // Net to Session
-        await sendTransactionAsync({
+        // Send FULL amount to Session Wallet from Main
+        console.log("💸 [REFILL] Sending to session wallet...", {
           to: evmSessionWallet.address,
-          value: parseEther(netAmt.toFixed(18)),
+          amount: amtNum
+        });
+
+        const hash = await sendTransactionAsync({
+          to: evmSessionWallet.address,
+          value: parseEther(amtNum.toFixed(18)),
           chainId: 5042002
         });
 
-        // Fee to Treasury
-        await sendTransactionAsync({
-          to: ARC_CONTRACT_ADDRESS,
-          value: parseEther(fee.toFixed(18)),
-          chainId: 5042002
-        });
+        console.log("📤 [REFILL] Main tx broadcasted:", hash);
+        notify("Refill broadcasted. Processing fee in background...", "info");
 
-        notify(`Refill Successful! Fee: ${fee.toFixed(4)} USDC`, "success");
-        recordFee('arc', fee);
+        // Let the session wallet send the fee to Treasury after it receives funds
+        // This keeps user experience to just ONE signature
+        setTimeout(async () => {
+          try {
+            console.log("💸 [REFILL] Sending fee to treasury...", { fee, to: ARC_CONTRACT_ADDRESS });
+            const tx = await evmSessionWallet.sendTransaction({
+              to: ARC_CONTRACT_ADDRESS,
+              value: parseEther(fee.toFixed(18)),
+            });
+            console.log("📤 [REFILL] Fee tx broadcasted:", tx.hash);
+            await tx.wait();
+            console.log("✅ [REFILL] Fee tx confirmed");
+            recordFee('arc', fee);
+            notify(`System Fee of ${fee.toFixed(4)} USDC processed.`, "info");
+          } catch (feeErr) {
+            console.error("❌ [REFILL] Delayed fee payment failed:", feeErr);
+          }
+        }, 3000); // 3s delay to allow main tx to at least be broadcasted
+
+        notify(`Refill Success!`, "success");
+        console.log("🎉 [REFILL] Refill complete!");
+
+        // Refresh balance
+        setTimeout(() => updateEvmSessionBal(), 3000);
       } catch (evmErr) {
+        console.error("❌ [REFILL] EVM Error:", evmErr);
+        console.error("❌ [REFILL] Error details:", {
+          message: evmErr.message,
+          shortMessage: evmErr.shortMessage,
+          code: evmErr.code
+        });
         const msg = evmErr.shortMessage || evmErr.message || "EVM Error";
         notify(`Refill failed: ${msg}`, "error");
       }
     } catch (e) {
+      console.error("❌ [REFILL] Error:", e);
       const msg = e.shortMessage || e.message || "Refill failed";
       notify(`Refill failed: ${msg}`, "error");
     }
-  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee]);
+  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee, balance, updateEvmSessionBal]);
 
   const handleWithdraw = useCallback(async (amt) => {
+    console.log("🔵 [WITHDRAW] Starting withdrawal process...", { amt, sessionBalance, address });
+
     try {
+      // Step 1: Validate amount
       const amtNum = parseFloat(amt);
       if (isNaN(amtNum) || amtNum <= 0) {
+        console.error("❌ [WITHDRAW] Invalid amount:", amt);
         notify("Invalid withdrawal amount", "error");
         return;
       }
 
+      // Step 2: Check session wallet exists
+      if (!evmSessionWallet) {
+        console.error("❌ [WITHDRAW] Session wallet not initialized!");
+        notify("Session wallet not ready. Please refresh the page.", "error");
+        return;
+      }
+
+      console.log("✅ [WITHDRAW] Session wallet exists:", evmSessionWallet.address);
+
+      // Step 3: Check session balance
+      if (sessionBalance < amtNum) {
+        console.error("❌ [WITHDRAW] Insufficient balance:", { sessionBalance, requested: amtNum });
+        notify(`Insufficient balance. You have ${sessionBalance.toFixed(4)} USDC`, "error");
+        return;
+      }
+
       const fee = amtNum * 0.01; // 1% Fee
-      const netAmt = amtNum - fee;
+      const gasBuffer = 0.005; // Leave 0.005 for gas
+      const netAmt = amtNum - fee - gasBuffer;
 
-      notify("Sign the withdrawal authorization in your wallet...", "info");
-      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: SECURE SCAN SWEEP\nAMOUNT: ${amt} USDC\nWALLET: ${address}\nTIMESTAMP: ${Date.now()}`;
+      console.log("💰 [WITHDRAW] Calculated amounts:", { amtNum, fee, gasBuffer, netAmt });
 
-      if (!address || !evmSessionWallet) {
+      if (netAmt <= 0) {
+        console.error("❌ [WITHDRAW] Net amount too low after fees");
+        notify("Amount too low after fees/gas", "error");
+        return;
+      }
+
+      // Step 4: Check wallet connection
+      if (!address) {
+        console.error("❌ [WITHDRAW] No wallet address");
         notify("Identity Error: Connect your wallet", "error");
         return;
       }
 
-      await signMessageAsync({ message: authMsg });
+      // Step 5: Request signature
+      notify("Sign the withdrawal authorization in your wallet...", "info");
+      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: SECURE SCAN SWEEP\nAMOUNT: ${amt} USDC\nWALLET: ${address}\nTIMESTAMP: ${Date.now()}`;
+
+      console.log("📝 [WITHDRAW] Requesting signature...");
+      try {
+        await wallet.signMessage(authMsg);
+        console.log("✅ [WITHDRAW] Signature received");
+      } catch (sigErr) {
+        console.error("❌ [WITHDRAW] Signature rejected:", sigErr);
+        notify("Signature rejected", "error");
+        return;
+      }
+
       notify(`Charging 1% Protocol Fee (${fee.toFixed(4)} USDC)...`, "info");
 
-      // 1. Fee to Contract
-      await evmSessionWallet.sendTransaction({
+      // Step 6: Send fee to contract
+      console.log("💸 [WITHDRAW] Sending fee to contract...", { fee, to: ARC_CONTRACT_ADDRESS });
+      const feeTx = await evmSessionWallet.sendTransaction({
         to: ARC_CONTRACT_ADDRESS,
         value: parseEther(fee.toFixed(18)),
       });
+      console.log("📤 [WITHDRAW] Fee tx broadcasted:", feeTx.hash);
 
-      // 2. Net to Main
-      const tx = await evmSessionWallet.sendTransaction({
+      notify("Processing protocol fee...", "info");
+      await feeTx.wait();
+      console.log("✅ [WITHDRAW] Fee tx confirmed");
+
+      // Step 7: Send net amount to main wallet
+      console.log("💸 [WITHDRAW] Sending net amount to main wallet...", { netAmt, to: address });
+      const sweepTx = await evmSessionWallet.sendTransaction({
         to: address,
         value: parseEther(netAmt.toFixed(18)),
       });
+      console.log("📤 [WITHDRAW] Sweep tx broadcasted:", sweepTx.hash);
 
       notify("Sweep broadcasted. Waiting for confirmation...", "info");
-      await tx.wait();
+      await sweepTx.wait();
+      console.log("✅ [WITHDRAW] Sweep tx confirmed");
+
       recordFee('arc', fee);
       notify("Arc Withdrawal Successful!", "success");
+      console.log("🎉 [WITHDRAW] Withdrawal complete!");
+
+      // Refresh balance
+      setTimeout(() => updateEvmSessionBal(), 2000);
     } catch (e) {
-      console.error("Withdraw error:", e);
+      console.error("❌ [WITHDRAW] Error:", e);
+      console.error("❌ [WITHDRAW] Error details:", {
+        message: e.message,
+        reason: e.reason,
+        code: e.code,
+        stack: e.stack
+      });
       const msg = e.reason || e.message || "Withdraw failed";
       notify(msg, "error");
     }
-  }, [evmSessionWallet, address, notify, recordFee, signMessageAsync]);
+  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
@@ -1246,6 +1471,7 @@ export default function UserApp() {
       autoSignerFees={autoSignerFees}
       userProfile={userProfile}
       theme={theme}
+      evmSessionWallet={evmSessionWallet}
     />
   );
 

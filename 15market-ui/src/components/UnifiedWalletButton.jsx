@@ -1,11 +1,15 @@
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useAccount as useWagmiAccount } from "wagmi";
 
 export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) => {
     const { openModal } = useModal();
-    const { isConnected, address } = useParaAccount();
+    const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
+    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+    const isConnected = isParaConnected || isWagmiConnected;
+    const address = paraAddress || wagmiAddress;
     const { data: paraWallet } = useWallet();
 
-    const displayAddress = address || paraWallet?.address;
+    const displayAddress = address || paraWallet?.address || wagmiAddress;
 
     const currentColor = '#3CB371'; // Coral Green
 

@@ -37,7 +37,8 @@ const TradeTerminalComponent = ({
                         <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
                         <button
                             onClick={() => setSessionMode(!sessionMode)}
-                            className={`w-5 border lg:w-8 h-2.5 lg:h-4 rounded-full relative transition-all duration-300 ${sessionMode ? 'bg-[#3CB371] border-transparent' : (isLight ? 'bg-black/10 border-black/10' : 'bg-white/10 border-white/10')}`}
+                            title={sessionMode ? `Auto-Signer Active (${sessionBalance.toFixed(4)} USDC) - Click to use Main Wallet` : "Auto-Signer Inactive - Click to activate"}
+                            className={`w-5 border lg:w-8 h-2.5 lg:h-4 rounded-full relative transition-all duration-300 cursor-pointer hover:opacity-80 ${sessionMode ? 'bg-[#3CB371] border-transparent' : (isLight ? 'bg-black/10 border-black/10' : 'bg-white/10 border-white/10')}`}
                         >
                             <div className={`absolute top-0.5 left-0.5 w-1.5 h-1.5 lg:w-3 lg:h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${sessionMode ? 'translate-x-3 lg:translate-x-4' : 'translate-x-0'}`} />
                         </button>

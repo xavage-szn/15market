@@ -13,7 +13,7 @@ export const KEEPER_URL_ARC = KEEPER_URL;
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 
 // 2. Project ID
-export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID || 'c57ca95b47569778a828d19178114f4d';
+export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID || '4aebd2ef806c541b6aaf003da2930c58';
 
 // 3. Chain Definition for Arc
 export const arcTestnet = defineChain({

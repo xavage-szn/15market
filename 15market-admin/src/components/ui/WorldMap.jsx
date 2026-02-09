@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import DottedMap from "dotted-map";
 import { cn } from "../../utils/cn";
 
+// Initialize the map grid ONCE at module level to prevent UI thread blocking on re-renders
+const mapInstance = new DottedMap({ height: 100, grid: "diagonal" });
+
 export const WorldMap = React.memo(function WorldMap({
     dots = [],
     lineColor = "#22c55e",
@@ -11,9 +14,9 @@ export const WorldMap = React.memo(function WorldMap({
     const svgRef = useRef(null);
     const isDark = theme === "dark";
 
+    // Only regenerate the background SVG string if the theme (color) actually changes
     const svgMap = React.useMemo(() => {
-        const map = new DottedMap({ height: 100, grid: "diagonal" });
-        return map.getSVG({
+        return mapInstance.getSVG({
             radius: 0.22,
             color: isDark ? "#FFFFFF40" : "#00000040",
             shape: "circle",

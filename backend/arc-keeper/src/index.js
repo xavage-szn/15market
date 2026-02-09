@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const pricing = require('shared-utils/pricing');
 const Logger = require('shared-utils/logger');
 const redis = require('shared-utils/redis');
@@ -31,9 +32,9 @@ console.error = (...args) => logger.error(args.map(a => typeof a === 'object' ? 
 
 // --- CONFIG ---
 const ARC_RPC_LIST = [
-    "wss://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1",
     process.env.ARC_RPC || "https://rpc.testnet.arc.network",
-    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
+    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1",
+    "wss://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
 ];
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
@@ -71,6 +72,16 @@ try {
     if (fs.existsSync(STORAGE_FILE)) {
         const saved = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf8'));
         state = { ...state, ...saved };
+
+        // Reset processing flags on restart
+        let resetCount = 0;
+        for (const id in state.activeBets) {
+            if (state.activeBets[id].processing) {
+                state.activeBets[id].processing = false;
+                resetCount++;
+            }
+        }
+        if (resetCount > 0) console.log(`🔄 [STATE] Reset ${resetCount} stuck 'processing' bets.`);
     }
 } catch (e) {
     console.error("Failed to load storage:", e.message);
@@ -144,13 +155,24 @@ app.get('/trades/:address', (req, res) => {
     const { address } = req.params;
     if (!address) return res.status(400).json({ error: 'Missing address' });
 
-    const userTrades = state.history.filter(t =>
-        t.owner && t.owner.toLowerCase() === address.toLowerCase()
-    );
+    const userTrades = state.history.filter(t => {
+        const owner = (t.owner || t.user || t.userPublicKey || t.userAddress || "").toString().toLowerCase();
+        return owner === address.toLowerCase();
+    });
 
     res.json(userTrades);
 });
 app.get('/active-bets', (req, res) => res.json(Object.values(state.activeBets)));
+app.get('/active-bets/:address', (req, res) => {
+    const { address } = req.params;
+    if (!address) return res.status(400).json({ error: 'Missing address' });
+
+    const userActive = Object.values(state.activeBets).filter(b =>
+        b.user && b.user.toLowerCase() === address.toLowerCase()
+    );
+
+    res.json(userActive);
+});
 
 app.get('/listings', (req, res) => res.json(state.listings));
 app.post('/listings', (req, res) => {
@@ -238,6 +260,30 @@ app.post('/manual-settle', async (req, res) => {
     }
 });
 
+app.post('/trade-ping', (req, res) => {
+    const trade = req.body;
+    console.log(`📡 [PING] New trade ping received: #${trade.id} from ${trade.address}`);
+
+    // Optimistically add to active bets if not already there
+    const betId = String(trade.id);
+    if (!state.activeBets[betId]) {
+        state.activeBets[betId] = {
+            id: betId,
+            user: trade.address,
+            symbol: trade.symbol || 'SOL',
+            duration: Number(trade.duration),
+            amount: trade.amount,
+            direction: Number(trade.direction),
+            entryPrice: Number(trade.entryPrice),
+            timestamp: Math.floor(Date.now() / 1000),
+            status: 'PENDING',
+            isPing: true // Flag to indicate it came from a ping
+        };
+        saveState();
+    }
+    res.json({ success: true });
+});
+
 app.get('/profile', async (req, res) => {
     const { address } = req.query;
     if (!address) return res.status(400).json({ error: "Missing address" });
@@ -268,6 +314,60 @@ app.post('/sync-profile', async (req, res) => {
         res.json({ success: true });
     } else {
         res.status(400).json({ error: "Missing address or username" });
+    }
+});
+
+
+// --- X OAUTH ---
+const X_CLIENT_ID = process.env.X_CLIENT_ID || 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
+const X_CLIENT_SECRET = process.env.X_CLIENT_SECRET || 'Bt5h0g_Lr7XtksAQnynyEwRIN5ldvHljhIaFlYJc3SY-1Zt6rm';
+const CALLBACK_URL = `${KEEPER_URL}/auth/twitter/callback`;
+
+app.post('/auth/twitter/prepare', async (req, res) => {
+    const { address } = req.body;
+    const stateId = crypto.randomUUID();
+    await redis.setex(`x_auth_state:${stateId}`, 600, JSON.stringify({ address }));
+    res.json({ state: stateId });
+});
+
+app.get('/auth/twitter/callback', async (req, res) => {
+    const { code, state } = req.query;
+
+    try {
+        const rawState = await redis.get(`x_auth_state:${state}`);
+        if (!rawState) return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?error=invalid_state`);
+
+        const { address } = JSON.parse(rawState);
+
+        // Exchange code for token
+        const tokenRes = await axios.post('https://api.twitter.com/2/oauth2/token', new URLSearchParams({
+            code,
+            grant_type: 'authorization_code',
+            client_id: X_CLIENT_ID,
+            redirect_uri: CALLBACK_URL,
+            code_verifier: 'challenge'
+        }), {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': `Basic ${Buffer.from(`${X_CLIENT_ID}:${X_CLIENT_SECRET}`).toString('base64')}`
+            }
+        });
+
+        const { access_token } = tokenRes.data;
+
+        // Get User Info
+        const userRes = await axios.get('https://api.twitter.com/2/users/me?user.fields=profile_image_url', {
+            headers: { 'Authorization': `Bearer ${access_token}` }
+        });
+
+        const { username, profile_image_url } = userRes.data.data;
+
+        // Redirect back to frontend with data
+        res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?x_handle=${username}&x_image=${encodeURIComponent(profile_image_url)}`);
+
+    } catch (e) {
+        console.error("X Auth Failed:", e.response?.data || e.message);
+        res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?error=auth_failed`);
     }
 });
 
@@ -464,11 +564,11 @@ class ArcKeeper {
 
     async discoverActiveBets() {
         const currentBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "GET_BLOCK");
-        const LOOKBACK = 200; // Reduced for Free Tier compliance
-        const MAX_CHUNK = 5; // Very strict limit
+        const LOOKBACK = 1000; // Increased to recover more history
+        const MAX_CHUNK = 100; // Increased for faster recovery
         let fromBlock = Math.max(0, currentBlock - LOOKBACK);
 
-        console.log(`🔍 Scanning last ${LOOKBACK} blocks (Chunks of ${MAX_CHUNK})...`);
+        console.log(`🔍 Scanning last ${LOOKBACK} blocks for historical trades...`);
 
         try {
             const filter = this.contract.filters.BetPlaced();
@@ -482,7 +582,7 @@ class ArcKeeper {
                     );
 
                     for (const e of events) await this.ingestBet(e, true);
-                    await new Promise(r => setTimeout(r, 100));
+                    await new Promise(r => setTimeout(r, 50));
                 } catch (chunkErr) {
                     console.warn(`  ⚠️ Chunk ${i}-${to} failed: ${chunkErr.message}`);
                 }
@@ -490,7 +590,7 @@ class ArcKeeper {
         } catch (err) { console.warn(`Discovery failed: ${err.message}`); }
 
         this.lastCheckedBlock = currentBlock;
-        console.log(`✅ Discovery complete.`);
+        console.log(`✅ Discovery complete. History size: ${state.history.length}`);
     }
 
     async pollEvents() {
@@ -499,7 +599,7 @@ class ArcKeeper {
             if (currentBlock <= this.lastCheckedBlock) return;
 
             const filter = this.contract.filters.BetPlaced();
-            const MAX_CHUNK = 5;
+            const MAX_CHUNK = 100;
 
             for (let i = this.lastCheckedBlock + 1; i <= currentBlock; i += MAX_CHUNK) {
                 const to = Math.min(i + MAX_CHUNK - 1, currentBlock);
@@ -521,20 +621,43 @@ class ArcKeeper {
 
         if (state.activeBets[betId]) return;
 
+        // Skip really old historical trades to prevent bloating
         const expiry = Number(timestamp) + Number(duration);
-        if (Date.now() / 1000 > expiry + 1800) return; // Expired > 30 mins ago
+        if (isHistorical && (Date.now() / 1000 > expiry + 86400)) return; // Older than 24h
 
         try {
             const betStruct = await this.callWithRetry(() => this.contract.bets(id), `CHECK_${betId}`, 2, 1000);
-            if (betStruct.settled) return;
+
+            if (betStruct.settled) {
+                // Recover settled bet into history if missing
+                if (!state.history.find(h => String(h.id) === betId)) {
+                    state.history.unshift({
+                        id: betId,
+                        owner: user,
+                        amount: ethers.formatEther(amount),
+                        currency: "USDC",
+                        direction: Number(direction) === 0 ? "UP" : "DOWN",
+                        entryPrice: (Number(entryPrice) / 100000000).toFixed(4),
+                        exitPrice: (Number(betStruct.settlementPrice) / 100000000).toFixed(4),
+                        timestamp: Number(timestamp) * 1000,
+                        status: betStruct.won ? "WON" : "LOST",
+                        network: 'arc'
+                    });
+                    if (state.history.length > 500) state.history.pop();
+                    if (!isHistorical) saveState();
+                }
+                return;
+            }
 
             const symbol = ASSET_MAP[marketId] || 'SOL';
             state.activeBets[betId] = {
                 id: betId, user, symbol, duration: Number(duration),
                 amount: ethers.formatEther(amount),
                 direction: Number(direction),
-                entryPrice: Number(entryPrice) / 100000000,
-                expiry,
+                entryPrice: (Number(entryPrice) / 100000000).toFixed(4),
+                timestamp: Number(timestamp),
+                expiry: expiry,
+                tx: event.transactionHash,
                 processing: false
             };
 
@@ -606,8 +729,8 @@ class ArcKeeper {
                     console.warn(`⚠️ [STATUS_CHECK_FAILED] #${bet.id}: ${statusErr.message}`);
                 }
 
-                const isWin = (bet.direction === 1 && exitPrice > bet.entryPrice) ||
-                    (bet.direction === 0 && exitPrice < bet.entryPrice);
+                const isWin = (Number(bet.direction) === 0 && exitPrice > bet.entryPrice) ||
+                    (Number(bet.direction) === 1 && exitPrice < bet.entryPrice);
 
                 try {
                     const priceParam = BigInt(Math.floor(exitPrice * 100000000));
@@ -657,15 +780,15 @@ class ArcKeeper {
                                 id: bet.id,
                                 owner: bet.user,
                                 amount: bet.amount,
-                                currency: "USDC", // Assuming USDC/ARC
-                                direction: bet.direction === 1 ? "UP" : "DOWN",
+                                currency: "USDC",
+                                direction: Number(bet.direction) === 0 ? "UP" : "DOWN",
                                 entryPrice: bet.entryPrice,
                                 exitPrice,
-                                timestamp: Date.now(),
+                                timestamp: Number(bet.timestamp) * 1000,
                                 status: isWin ? "WON" : "LOST",
                                 network: 'arc'
                             });
-                            if (state.history.length > 200) state.history.pop();
+                            if (state.history.length > 500) state.history.pop();
                             saveState();
 
                             // Settlement complete

@@ -21,11 +21,7 @@ class RedisClient {
                     });
                 } else {
                     logger.info('REDIS_URL not found, using provided Redis Cloud credentials');
-                    this.client = new Redis({
-                        host: 'redis-14672.c277.us-east-1-3.ec2.cloud.redislabs.com',
-                        port: 14672,
-                        password: 'ueZrTByLR9Iq6lbmqJwRNxv0YJuUoNYj',
-                        username: 'default',
+                    this.client = new Redis('redis://:ueZrTByLR9Iq6lbmqJwRNxv0YJuUoNYj@redis-14672.c277.us-east-1-3.ec2.cloud.redislabs.com:14672', {
                         retryStrategy: (times) => Math.min(times * 50, 2000),
                         maxRetriesPerRequest: 3,
                         connectTimeout: 10000

@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
-import { useAccount, useWallet } from "@getpara/react-sdk";
-import { useBalance } from "wagmi";
+import { useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useBalance, useAccount as useWagmiAccount } from "wagmi";
 
 export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
-    const { isConnected } = useAccount();
-    const { data: wallet } = useWallet();
-    const address = wallet?.address;
+    const { isConnected: isParaConnected } = useParaAccount();
+    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+    const { data: paraWallet } = useWallet();
+    const address = paraWallet?.address || wagmiAddress;
+    const isConnected = isParaConnected || isWagmiConnected;
     const [internalBalance, setInternalBalance] = useState(0);
 
-    const balance = balanceOverride !== undefined ? balanceOverride : internalBalance;
+    // Only use balanceOverride when in session mode
+    const balance = sessionMode ? balanceOverride : internalBalance;
 
     const { data: evmBalance, refetch: refetchEvm } = useBalance({
         address: address,
@@ -17,15 +20,27 @@ export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
     });
 
     useEffect(() => {
+        console.log("💰 [WALLET BALANCE] Component update:", {
+            isConnected,
+            address,
+            sessionMode,
+            balanceOverride,
+            internalBalance,
+            evmBalance: evmBalance?.formatted,
+            finalBalance: balance
+        });
+
         if (!isConnected || !address) {
             setInternalBalance(0);
             return;
         }
 
         if (evmBalance) {
-            setInternalBalance(parseFloat(evmBalance.formatted));
+            const bal = parseFloat(evmBalance.formatted);
+            console.log("✅ [WALLET BALANCE] Setting internal balance:", bal);
+            setInternalBalance(bal);
         }
-    }, [isConnected, address, evmBalance]);
+    }, [isConnected, address, evmBalance, sessionMode, balanceOverride, balance]);
 
     useEffect(() => {
         if (isConnected) {

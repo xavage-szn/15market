@@ -158,6 +158,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [tradeHistory, setTradeHistory] = useState([]); // Settled trades from Arc
     const [historyFilter, setHistoryFilter] = useState({ search: '' });
     const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+    const [securityForm, setSecurityForm] = useState({ username: '', password: '', confirmPassword: '' });
     const [authError, setAuthError] = useState(null);
 
     // Para & Wallet Integration
@@ -178,24 +179,31 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     const [staffMembers, setStaffMembers] = useState(() => {
         const saved = localStorage.getItem('15market_staff_members');
-        const defaultStaff = [
-            { id: 1, address: ROOT_WALLET, role: 'ROOT', username: 'xavageszn-root', password: 'NORgate123+', status: 'ACTIVE', onboardingComplete: true }
-        ];
-        if (!saved) return defaultStaff;
-        const parsed = JSON.parse(saved);
-        // Ensure root user is always present and has correct credentials
-        const rootIndex = parsed.findIndex(s => s.address?.toLowerCase() === ROOT_WALLET.toLowerCase());
-        if (rootIndex === -1) {
-            // Check if there is an old Solana entry to migrated or replaced
-            const oldRootIndex = parsed.findIndex(s => (s.publicKey || s.address)?.toLowerCase() === ROOT_WALLET.toLowerCase());
-            if (oldRootIndex !== -1) {
-                parsed[oldRootIndex] = { ...parsed[oldRootIndex], ...defaultStaff[0] };
+        const defaultStaffEntry = {
+            id: 1,
+            address: ROOT_WALLET,
+            role: 'ROOT',
+            username: 'xavageszn-root',
+            password: 'NORgate123+',
+            status: 'ACTIVE',
+            onboardingComplete: true
+        };
+
+        if (!saved) return [defaultStaffEntry];
+
+        try {
+            const parsed = JSON.parse(saved);
+            const rootIndex = parsed.findIndex(s => s.address?.toLowerCase() === ROOT_WALLET.toLowerCase());
+
+            if (rootIndex === -1) {
+                return [defaultStaffEntry, ...parsed];
+            } else {
+                // Keep existing root entry but ensure role is ROOT
+                parsed[rootIndex].role = 'ROOT';
                 return parsed;
             }
-            return [...defaultStaff, ...parsed];
-        } else {
-            parsed[rootIndex] = { ...parsed[rootIndex], ...defaultStaff[0] };
-            return parsed;
+        } catch (e) {
+            return [defaultStaffEntry];
         }
     });
 
@@ -1319,6 +1327,30 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             console.error("Login Error:", err);
             notify('error', 'SYSTEM ERROR', err.message);
         }
+    };
+
+    const handleUpdateSecurity = () => {
+        if (!securityForm.username || !securityForm.password) {
+            notify('error', 'INCOMPLETE', 'Username and Password are required.');
+            return;
+        }
+
+        if (securityForm.password !== securityForm.confirmPassword) {
+            notify('error', 'MISMATCH', 'Passwords do not match.');
+            return;
+        }
+
+        setStaffMembers(prev => prev.map(s =>
+            s.address.toLowerCase() === walletAddress.toLowerCase()
+                ? { ...s, username: securityForm.username, password: securityForm.password }
+                : s
+        ));
+
+        // Update local session as well
+        setCurrentUser(prev => ({ ...prev, username: securityForm.username }));
+
+        notify('success', 'SECURITY UPDATED', 'Your login coordinates have been re-initialized.');
+        setSecurityForm({ username: '', password: '', confirmPassword: '' });
     };
 
 
@@ -3189,6 +3221,119 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                     </motion.div>
                                 )
                             }
+                            {
+                                activeTab === 'security' && (
+                                    <motion.div
+                                        key="security"
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                        className="max-w-4xl mx-auto space-y-8 pb-20"
+                                    >
+                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[48px] p-10 overflow-hidden relative shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
+                                            <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+                                                <ShieldCheck size={200} />
+                                            </div>
+
+                                            <div className="relative z-10 flex flex-col gap-10">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                                                    <div className="p-5 bg-[#3CB371]/10 rounded-[28px] border border-[#3CB371]/20 shadow-[0_0_30px_rgba(60,179,113,0.1)] w-fit">
+                                                        <Key className="text-[#3CB371]" size={32} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-2xl font-black text-white uppercase tracking-tight">Security Credentials</h3>
+                                                        <p className="text-[10px] text-white/40 font-bold uppercase tracking-[0.2em] mt-1">Re-initialize your administrative access keys</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">New Operator ID</label>
+                                                        <div className="relative group">
+                                                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                                                <User size={16} className="text-white/20 group-focus-within:text-[#3CB371] transition-colors" />
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                value={securityForm.username}
+                                                                onChange={(e) => setSecurityForm({ ...securityForm, username: e.target.value })}
+                                                                placeholder="CHOOSE NEW IDENTITY"
+                                                                className="w-full bg-black/60 border border-white/5 rounded-2xl pl-14 pr-5 py-5 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40 transition-all placeholder:text-white/5"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Current Authorized Wallet</label>
+                                                        <div className="p-5 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-4">
+                                                            <div className="w-10 h-10 rounded-full bg-[#3CB371]/10 flex items-center justify-center border border-[#3CB371]/20 text-[#3CB371] shrink-0">
+                                                                <Shield size={18} />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-[10px] text-white font-mono truncate">{walletAddress}</p>
+                                                                <p className="text-[8px] text-[#3CB371] font-black uppercase tracking-widest mt-0.5">Role: {currentUser?.role}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">New Pass-Key</label>
+                                                        <div className="relative group">
+                                                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                                                <Lock size={16} className="text-white/20 group-focus-within:text-[#3CB371] transition-colors" />
+                                                            </div>
+                                                            <input
+                                                                type="password"
+                                                                value={securityForm.password}
+                                                                onChange={(e) => setSecurityForm({ ...securityForm, password: e.target.value })}
+                                                                placeholder="SET NEW PASS-KEY"
+                                                                className="w-full bg-black/60 border border-white/5 rounded-2xl pl-14 pr-5 py-5 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40 transition-all placeholder:text-white/5"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Confirm Identity Key</label>
+                                                        <div className="relative group">
+                                                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                                                <Lock size={16} className="text-white/20 group-focus-within:text-[#3CB371] transition-colors" />
+                                                            </div>
+                                                            <input
+                                                                type="password"
+                                                                value={securityForm.confirmPassword}
+                                                                onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })}
+                                                                placeholder="REPEAT NEW PASS-KEY"
+                                                                className="w-full bg-black/60 border border-white/5 rounded-2xl pl-14 pr-5 py-5 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40 transition-all placeholder:text-white/5"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-6">
+                                                    <button
+                                                        onClick={handleUpdateSecurity}
+                                                        className="group relative w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-xs overflow-hidden transition-all hover:scale-[1.01] active:scale-[0.99] shadow-[0_20px_50px_rgba(255,255,255,0.05)]"
+                                                    >
+                                                        <div className="absolute inset-0 bg-gradient-to-r from-[#3CB371] to-[#4ADE80] opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                        <span className="relative z-10 group-hover:text-white transition-colors">Apply Security Updates</span>
+                                                    </button>
+                                                </div>
+
+                                                <div className="p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-3xl flex items-start gap-4">
+                                                    <AlertCircle size={20} className="text-yellow-500 shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-1">Authorization Warning</p>
+                                                        <p className="text-[9px] text-yellow-500/60 font-medium uppercase leading-relaxed tracking-widest">
+                                                            Updating your credentials will take effect immediately for the current session and all future logins from this wallet. Ensure you store your new coordinates securely.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
                         </AnimatePresence >
                     </div >
                 </div >

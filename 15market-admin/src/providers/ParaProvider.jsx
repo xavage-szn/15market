@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ParaProvider, Environment } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
-import { arcTestnet } from "../constants";
+import { arcTestnet, projectId } from "../constants";
 
 const queryClient = new QueryClient();
 
 export function AppParaProvider({ children }) {
+    const activeProjectId = projectId || import.meta.env.VITE_REOWN_PROJECT_ID || "";
+
     return (
         <QueryClientProvider client={queryClient}>
             <ParaProvider
@@ -15,19 +17,23 @@ export function AppParaProvider({ children }) {
                 }}
                 config={{
                     appName: "15market-admin",
-                    chains: ["evm"],
+                    chains: ["evm:5042002"],
+                    defaultChainId: "evm:5042002",
+                    walletConnectProjectId: activeProjectId
                 }}
                 externalWalletConfig={{
                     appName: "15market-admin",
                     wallets: ["METAMASK", "WALLETCONNECT", "ZERION", "COINBASE_WALLET", "RAINBOW", "RABBY", "HAHA", "OKX"],
-                    walletConnect: { projectId: import.meta.env.VITE_REOWN_PROJECT_ID || "" },
+                    walletConnect: { projectId: activeProjectId },
                     evmConnector: {
                         config: {
                             chains: [arcTestnet],
+                            defaultChainId: arcTestnet.id,
                         },
                         wagmiProviderProps: {} // Para will handle the WagmiProvider context
                     },
                 }}
+
                 paraModalConfig={{
                     theme: {
                         mode: 'dark',

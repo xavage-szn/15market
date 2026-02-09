@@ -8,10 +8,9 @@ export const NetworkSwitcher = ({ currentNetwork, onNetworkChange }) => {
 
     const networks = [
         { id: 'arc', name: 'Arc Network', icon: '🔵', color: '#3CB371', comingSoon: false },
-        { id: 'base', name: 'Base', icon: '🔵', color: '#0052FF', comingSoon: true },
     ];
 
-    const current = networks.find(n => n.id === currentNetwork) || networks[0];
+    const current = networks[0];
 
     useEffect(() => {
         const handleClickOutside = (event) => {

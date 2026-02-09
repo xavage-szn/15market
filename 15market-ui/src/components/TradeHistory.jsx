@@ -1,5 +1,5 @@
-import React, { memo, useState } from 'react';
-import { useAccount, useWallet, useModal } from "@getpara/react-sdk";
+import React, { memo, useState, useMemo } from 'react';
+import { useModal } from "@getpara/react-sdk";
 import { Lock, Share2 } from 'lucide-react';
 
 const TradeHistoryComponent = ({
@@ -7,38 +7,38 @@ const TradeHistoryComponent = ({
     setSelectedPnLTrade,
     setIsPnLOpen,
     theme,
+    wallet
 }) => {
     const { openModal } = useModal();
-    const { isConnected: isParaConnected } = useAccount();
-    const { isConnected: isWagmiConnected, address: wagmiAddress } = useAccount();
-    const { data: paraWallet } = useWallet();
-    const address = paraWallet?.address || wagmiAddress;
-    const isConnected = isParaConnected || isWagmiConnected;
+
+    // Combined address source
+    const address = wallet?.address;
+    // We are connected if the wallet object says so, OR if we have a valid address string
+    const isConnected = !!address || wallet?.connected;
     const isLight = theme === 'light';
+
+    // Debugging logs to help diagnosis
+    React.useEffect(() => {
+        console.log(`🔍 [TRADE_HISTORY] PROP_WALLET:`, wallet);
+        console.log(`🔍 [TRADE_HISTORY] DERIVED_ADDR: ${address}`);
+        console.log(`🔍 [TRADE_HISTORY] DERIVED_CONN: ${isConnected}`);
+    }, [wallet, address, isConnected]);
 
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
 
-    const filteredTrades = tradeHistory.filter(t => {
-        if (!address) return false;
-        const trader = t.userPublicKey || t.owner || t.user || "";
-        if (address.startsWith('0x') || String(trader).startsWith('0x')) {
-            return String(trader).toLowerCase() === address.toLowerCase();
-        }
-        return String(trader) === address;
-    });
+    const filteredTrades = useMemo(() => {
+        // We trust the tradeHistory prop as it's already pre-filtered by UserApp 
+        // to include both main and session wallet trades.
+        return tradeHistory;
+    }, [tradeHistory]);
 
-    // Debugging logs
     React.useEffect(() => {
-        if (isConnected && address) {
-            console.log(`🔍 [TRADE_HISTORY] Address: ${address}`);
-            console.log(`🔍 [TRADE_HISTORY] Raw Trade Count: ${tradeHistory.length}`);
-            console.log(`🔍 [TRADE_HISTORY] Filtered Count: ${filteredTrades.length}`);
-            if (tradeHistory.length > 0 && filteredTrades.length === 0) {
-                console.log(`🔍 [TRADE_HISTORY] Sample Trade Data:`, tradeHistory[0]);
-            }
+        if (address) {
+            console.log(`🔍 [TRADE_HISTORY] Connected as: ${address}`);
+            console.log(`🔍 [TRADE_HISTORY] Trades: ${tradeHistory.length}, Filtered: ${filteredTrades.length}`);
         }
-    }, [address, isConnected, tradeHistory.length, filteredTrades.length]);
+    }, [address, tradeHistory.length, filteredTrades.length]);
 
     const totalPages = Math.ceil(filteredTrades.length / ITEMS_PER_PAGE);
     const paginatedTrades = filteredTrades.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -57,21 +57,7 @@ const TradeHistoryComponent = ({
                     <h3 className={`text-xs lg:text-base font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
                 </div>
 
-                {!isConnected ? (
-                    <div className={`py-20 flex flex-col items-center justify-center border-2 border-dashed rounded-2xl ${isLight ? 'border-black/5 bg-black/5' : 'border-white/5 bg-black/20'}`}>
-                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 ${isLight ? 'bg-white shadow-lg' : 'bg-white/5'}`}>
-                            <Lock className={isLight ? 'text-black/20' : 'text-white/20'} size={32} />
-                        </div>
-                        <h4 className={`text-xl font-black uppercase tracking-widest mb-2 text-center ${isLight ? 'text-black/80' : 'text-white'}`}>History Locked</h4>
-                        <p className={`text-sm max-w-xs text-center mb-8 font-medium ${isLight ? 'text-black/40' : 'text-white/40'}`}>Connect your wallet to access your private trading records and performance metrics.</p>
-                        <button
-                            onClick={() => openModal()}
-                            className="px-8 py-3 bg-[#3CB371] text-white font-black uppercase text-xs tracking-widest rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-lg"
-                        >
-                            Connect Wallet
-                        </button>
-                    </div>
-                ) : filteredTrades.length === 0 ? (
+                {filteredTrades.length === 0 ? (
                     <div className={`${isLight ? 'text-black/40' : 'text-white/40'} py-10 text-center`}>No trades yet for this wallet. Reach for the stars!</div>
                 ) : (
                     <div className="space-y-2">

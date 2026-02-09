@@ -69,10 +69,12 @@ class PricingService {
                 const sources = this.getSources(symbol);
                 const results = await Promise.allSettled(sources.map(async s => {
                     try {
-                        const res = await axios.get(s.url, { timeout: 4000 });
+                        const res = await axios.get(s.url, { timeout: 15000 });
                         const val = s.parse(res.data);
                         return (!isNaN(val) && val > 0) ? val : null;
-                    } catch (e) { return null; }
+                    } catch (e) {
+                        return null;
+                    }
                 }));
 
                 const validPrices = results

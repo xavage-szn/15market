@@ -21,8 +21,8 @@ import {
 import MessagingSystem from "./MessagingSystem";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
-import { useAccount, useWallet } from "@getpara/react-sdk";
-import { useWriteContract } from "wagmi";
+import { useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useWriteContract, useAccount as useWagmiAccount } from "wagmi";
 import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC } from "../constants";
 import { parseEther } from "viem";
@@ -30,12 +30,15 @@ import { parseEther } from "viem";
 export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance, currentNetwork,
     autoSignerFees,
     userProfile,
-    theme
+    theme,
+    evmSessionWallet
 }) => {
     const isLight = theme === 'light';
-    const { isConnected } = useAccount();
-    const { data: wallet } = useWallet();
-    const address = wallet?.address;
+    const { isConnected: isParaConnected } = useParaAccount();
+    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+    const { data: paraWallet } = useWallet();
+    const address = paraWallet?.address || wagmiAddress;
+    const isConnected = isParaConnected || isWagmiConnected;
     const { writeContractAsync } = useWriteContract();
 
     const [activeTab, setActiveTab] = useState("overview"); // overview, profile, community
@@ -120,9 +123,15 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                 try {
                     const localHistory = JSON.parse(localHistoryFn);
                     if (Array.isArray(localHistory)) {
-                        setUserHistory([...localHistory].reverse()); // Store full history
-                        uTrades = localHistory.length;
-                        uWins = localHistory.filter(t => t.status === "WON").length;
+                        const me = (address || "").toLowerCase().trim();
+                        // Only show trades that belong to us (or have no owner info)
+                        const filtered = localHistory.filter(t => {
+                            const trader = (t.owner || t.user || t.userPublicKey || t.userAddress || "").toString().toLowerCase().trim();
+                            return !trader || !me || trader === me;
+                        });
+                        setUserHistory([...filtered].reverse()); // Store full history
+                        uTrades = filtered.length;
+                        uWins = filtered.filter(t => t.status === "WON").length;
                     }
                 } catch (e) { }
             }
@@ -406,7 +415,9 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                             </div>
                                             <div>
                                                 <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-700' : 'text-white/80'}`}>Auto-Signer Module</h4>
-                                                <p className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'} font-bold uppercase`}>Active Burner Identity</p>
+                                                <p className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'} font-bold uppercase`}>
+                                                    {evmSessionWallet ? `Active: ${evmSessionWallet.address.slice(0, 6)}...${evmSessionWallet.address.slice(-4)}` : "Initializing..."}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="text-right flex flex-col items-end">
@@ -419,22 +430,6 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                     </div>
                                                 )}
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-col gap-4 mb-6">
-                                        <div className={`text-[8px] font-black ${isLight ? 'text-gray-400' : 'text-white/20'} uppercase tracking-widest mb-1`}>Withdrawal Amount</div>
-                                        <div className={`flex items-center gap-3 p-1 rounded-xl border ${isLight ? 'border-gray-200 bg-gray-50' : 'border-white/5 bg-black/60'}`}>
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                min="0.1"
-                                                value={localWithdrawAmount}
-                                                onChange={(e) => setLocalWithdrawAmount(e.target.value)}
-                                                className={`flex-1 bg-transparent px-3 py-2 text-sm font-black text-[#3CB371] outline-none placeholder:${isLight ? 'text-gray-300' : 'text-white/10'}`}
-                                                placeholder={`Amount to sweep...`}
-                                            />
-                                            <span className={`pr-3 text-[9px] font-black uppercase ${isLight ? 'text-gray-400' : 'text-white/20'}`}>USDC</span>
                                         </div>
                                     </div>
 
@@ -457,33 +452,29 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                     }
                                                 });
                                             }}
-                                            className="py-3 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:brightness-110 active:scale-[0.98] transition-all"
+                                            className="py-4 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-[#3CB371]/10"
                                         >
                                             Refill Funds
                                         </button>
                                         <button
                                             onClick={() => {
-                                                const inputVal = localWithdrawAmount.trim();
-                                                const amtToWithdraw = parseFloat(inputVal);
-
-                                                if (isNaN(amtToWithdraw) || amtToWithdraw <= 0) {
-                                                    setModalConfig({
-                                                        title: "Invalid Amount",
-                                                        message: "Please enter a valid amount to sweep.",
-                                                        type: 'alert'
-                                                    });
-                                                    return;
-                                                }
-
-                                                setModalConfig({
-                                                    title: "Confirm Withdrawal",
-                                                    message: `Withdraw ${amtToWithdraw.toFixed(4)} USDC to your main wallet?\n\nProtocol Fee (1%) will be deducted.`,
-                                                    onConfirm: () => onWithdraw(amtToWithdraw.toFixed(4)),
-                                                    confirmText: "Sweep Now",
-                                                    type: 'confirm'
+                                                setPromptConfig({
+                                                    title: `Sweep to Main`,
+                                                    placeholder: "Enter amount (e.g. 0.5)",
+                                                    onConfirm: (val) => {
+                                                        const amt = parseFloat(val);
+                                                        if (isNaN(amt) || amt <= 0) return;
+                                                        setModalConfig({
+                                                            title: "Confirm Withdrawal",
+                                                            message: `Withdraw ${amt.toFixed(4)} USDC to your main wallet?\n\nProtocol Fee (1%) will be deducted.`,
+                                                            onConfirm: () => onWithdraw(amt.toFixed(4)),
+                                                            confirmText: "Sweep Now",
+                                                            type: 'confirm'
+                                                        });
+                                                    }
                                                 });
                                             }}
-                                            className={`py-3 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'} text-[10px] font-black uppercase tracking-widest rounded-xl active:scale-[0.98] transition-all border`}
+                                            className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'} text-[10px] font-black uppercase tracking-widest rounded-2xl active:scale-[0.98] transition-all border shadow-lg`}
                                         >
                                             Sweep to Main
                                         </button>

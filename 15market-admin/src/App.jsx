@@ -3,6 +3,31 @@ import SimpleAdmin from './components/SimpleAdmin';
 
 const AdminPortal = React.lazy(() => import('./components/AdminPortal'));
 
+// Simple Error Boundary for Lazy Load
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div>
+                    <SimpleAdmin />
+                    <div style={{ padding: '20px', color: 'red', background: '#330000', borderTop: '1px solid #ff4444' }}>
+                        <h3 style={{ margin: 0 }}>CRITICAL ERROR:</h3>
+                        <pre style={{ overflow: 'auto', marginTop: '10px' }}>{this.state.error.toString()}</pre>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
 export default function App() {
     const [price, setPrice] = React.useState(0);
 
@@ -21,35 +46,7 @@ export default function App() {
         return () => clearInterval(interval);
     }, []);
 
-    // Simple Error Boundary for Lazy Load
-    class ErrorBoundary extends React.Component {
-        constructor(props) {
-            super(props);
-            this.state = { hasError: false, error: null };
-        }
-        static getDerivedStateFromError(error) {
-            return { hasError: true, error };
-        }
-        render() {
-            if (this.state.hasError) {
-                return (
-                    <div>
-                        <SimpleAdmin />
-                        <div style={{ padding: '20px', color: 'red', background: '#330000', borderTop: '1px solid #ff4444' }}>
-                            <h3 style={{ margin: 0 }}>CRITICAL ERROR:</h3>
-                            <pre style={{ overflow: 'auto', marginTop: '10px' }}>{this.state.error.toString()}</pre>
-                        </div>
-                    </div>
-                );
-            }
-            return this.props.children;
-        }
-    }
-
     const handleBack = React.useCallback(() => console.log("Back"), []);
-
-    // Memoize the lazy component to prevent re-creation
-    const MemoizedAdminPortal = React.useMemo(() => React.memo(AdminPortal), []);
 
     return (
         <ErrorBoundary>
@@ -61,7 +58,7 @@ export default function App() {
                     </div>
                 </div>
             }>
-                <MemoizedAdminPortal
+                <AdminPortal
                     onBack={handleBack}
                     price={price}
                 />
