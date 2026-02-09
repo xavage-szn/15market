@@ -89,7 +89,7 @@ export default function UserApp() {
   const [userLocation, setUserLocation] = useState(null); // { country, countryCode, lat, lng }
 
   // Main Network State
-  const [network, setNetwork] = useState("arc");
+  const network = "arc";
   const [theme, setTheme] = useState(() => localStorage.getItem("15market_theme") || "dark");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
 
@@ -233,8 +233,8 @@ export default function UserApp() {
   const CORAL = "#3CB371";
 
   useEffect(() => {
-    localStorage.setItem("15market_network", network);
-  }, [network]);
+    localStorage.setItem("15market_network", "arc");
+  }, []);
 
   const themeClass = "theme-arc";
 
@@ -459,25 +459,8 @@ export default function UserApp() {
     // Para handles its own session persistence, no manual cleanup needed here
   }, []); // Run once on mount
 
-  // Auto-Switch UI Network based on Wallet
-  // useEffect(() => {
-  //   if (isConnected && caipNetwork?.id) {
-  //     const caipId = String(caipNetwork.id);
-  //     console.log("Network Detection:", caipId, "Current UI:", network);
+  // Auto-Switch logic removed 
 
-  //     if (caipId.startsWith('solana') && network !== 'solana') {
-  //       console.log("Switching UI to Solana...");
-  //       setNetwork('solana');
-  //       localStorage.setItem("15market_network", 'solana');
-  //       notify("Switched to Solana Mode", "success");
-  //     } else if (caipId.startsWith('eip155') && network !== 'arc') {
-  //       console.log("Switching UI to Arc...");
-  //       setNetwork('arc');
-  //       localStorage.setItem("15market_network", 'arc');
-  //       notify("Switched to Arc Mode", "success");
-  //     }
-  //   }
-  // }, [isConnected, caipNetwork, network, notify]);
 
   // Force Chain Switch when network state changes to 'arc'
 

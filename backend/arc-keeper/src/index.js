@@ -8,6 +8,7 @@ const axios = require('axios');
 const pricing = require('shared-utils/pricing');
 const Logger = require('shared-utils/logger');
 const redis = require('shared-utils/redis');
+const crypto = require('crypto');
 
 
 // --- DNS FIX ---
@@ -326,7 +327,7 @@ const CALLBACK_URL = `${KEEPER_URL}/auth/twitter/callback`;
 app.post('/auth/twitter/prepare', async (req, res) => {
     const { address } = req.body;
     const stateId = crypto.randomUUID();
-    await redis.setex(`x_auth_state:${stateId}`, 600, JSON.stringify({ address }));
+    await redis.set(`x_auth_state:${stateId}`, { address }, 600);
     res.json({ state: stateId });
 });
 
