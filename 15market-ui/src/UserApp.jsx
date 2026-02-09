@@ -89,7 +89,7 @@ export default function UserApp() {
   const [userLocation, setUserLocation] = useState(null); // { country, countryCode, lat, lng }
 
   // Main Network State
-  const network = "arc";
+  const [network, setNetwork] = useState("arc");
   const [theme, setTheme] = useState(() => localStorage.getItem("15market_theme") || "dark");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
 

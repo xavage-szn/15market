@@ -246,7 +246,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         return saved ? JSON.parse(saved) : { arc: 0 };
     });
 
-    // Refresh revenue every 5 seconds from Keeper Backend
+    // Fetch Stats and Metrics regularly
     useEffect(() => {
         const fetchStats = async () => {
             try {

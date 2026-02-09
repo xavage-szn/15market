@@ -9,7 +9,7 @@ export const ARC_RPC_BACKUP = "https://rpc.testnet.arc.network";
 // 2. Keeper Configuration
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 export const KEEPER_URL = isLocal ? "http://localhost:3010" : "https://api.15market.online";
-export const KEEPER_URL_ARC = KEEPER_URL;
+export const KEEPER_URL_ARC = isLocal ? "http://localhost:3010" : "https://api.15market.online/arc";
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 
 // 2. Project ID
