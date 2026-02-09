@@ -221,8 +221,17 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                                 <XLogo size={36} />
                                             )}
                                         </div>
-                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Link X Account</h2>
-                                        <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Connect your X (formerly Twitter) account to your wallet.</p>
+                                        {twitterHandle ? (
+                                            <>
+                                                <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Welcome, @{twitterHandle}</h2>
+                                                <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Your X account has been successfully verified.</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Link X Account</h2>
+                                                <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Connect your X (formerly Twitter) account to your wallet.</p>
+                                            </>
+                                        )}
                                     </div>
 
                                     {twitterHandle ? (
@@ -233,7 +242,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                                 </div>
                                                 <div>
                                                     <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">Verified Identity</p>
-                                                    <p className={`font-bold ${isLight ? 'text-black' : 'text-white'}`}>@{twitterHandle}</p>
+                                                    <p className={`font-bold ${isLight ? 'text-black' : 'text-white'}`}>Ready to trade on 15Market</p>
                                                 </div>
                                             </div>
                                         </div>
