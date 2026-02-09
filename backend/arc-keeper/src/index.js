@@ -146,6 +146,14 @@ app.use(express.json());
 
 app.use((req, res, next) => {
     if (req.path !== '/logs') console.log(`[REQ] ${req.method} ${req.path}`);
+
+    // Prefix handling: If the frontend sends /arc/..., strip it so matching works
+    if (req.url.startsWith('/arc/')) {
+        req.url = req.url.replace('/arc/', '/');
+    } else if (req.url === '/arc') {
+        req.url = '/';
+    }
+
     next();
 });
 

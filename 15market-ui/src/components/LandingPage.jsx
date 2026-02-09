@@ -3,22 +3,13 @@ import { motion } from 'framer-motion';
 import { Zap, Shield, Clock, Activity } from 'lucide-react';
 import { UnifiedWalletButton } from './UnifiedWalletButton';
 
-export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
-    // Theme colors based on selected chain
-    const themeColors = {
-        arc: {
-            primary: '#3CB371',
-            glow: 'rgba(60, 179, 113, 0.08)',
-            glowBottom: 'rgba(60, 179, 113, 0.05)',
-            selection: '#3CB371'
-        }
-    };
-
-    const currentTheme = themeColors[currentNetwork] || themeColors.arc;
-
-    const handleChainChange = (chainId) => {
-        onNetworkChange(chainId);
-        localStorage.setItem("15market_network", chainId);
+export const LandingPage = () => {
+    // Theme colors for Arc
+    const currentTheme = {
+        primary: '#3CB371',
+        glow: 'rgba(60, 179, 113, 0.08)',
+        glowBottom: 'rgba(60, 179, 113, 0.05)',
+        selection: '#3CB371'
     };
 
     return (
@@ -40,10 +31,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                     />
                 </div>
                 <div className="flex items-center gap-4">
-                    <UnifiedWalletButton
-                        currentNetwork={currentNetwork}
-                        onNetworkChange={handleChainChange}
-                    />
+                    <UnifiedWalletButton />
                 </div>
             </nav>
 
@@ -93,10 +81,7 @@ export const LandingPage = ({ currentNetwork, onNetworkChange }) => {
                     <div className="relative group p-[2px] rounded-2xl bg-gradient-to-tr from-white/20 to-transparent">
                         <div className="absolute -inset-6 rounded-3xl blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" style={{ backgroundColor: currentTheme.primary }} />
                         <div className="relative scale-110 md:scale-125">
-                            <UnifiedWalletButton
-                                currentNetwork={currentNetwork}
-                                onNetworkChange={handleChainChange}
-                            />
+                            <UnifiedWalletButton />
                         </div>
                     </div>
 

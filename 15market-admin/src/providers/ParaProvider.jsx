@@ -13,7 +13,7 @@ export function AppParaProvider({ children }) {
             <ParaProvider
                 paraClientConfig={{
                     env: Environment.BETA,
-                    apiKey: import.meta.env.VITE_PARA_API_KEY || "",
+                    apiKey: import.meta.env.VITE_PARA_API_KEY || "beta_d86df4100fa75b359939af58f0f43abb",
                 }}
                 config={{
                     appName: "15market-admin",

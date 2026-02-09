@@ -27,7 +27,7 @@ import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC } from "../constants";
 import { parseEther } from "viem";
 
-export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance, currentNetwork,
+export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance,
     autoSignerFees,
     userProfile,
     theme,

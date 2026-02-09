@@ -4,7 +4,7 @@ import { projectId } from "./constants";
 
 export { Environment };
 
-export const paraApiKey = import.meta.env.VITE_PARA_API_KEY || "";
+export const paraApiKey = import.meta.env.VITE_PARA_API_KEY || "beta_d86df4100fa75b359939af58f0f43abb";
 export const paraEnv = Environment.BETA;
 
 // create a shared instance for Wagmi and other non-React code

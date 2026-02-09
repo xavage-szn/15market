@@ -448,11 +448,6 @@ export default function UserApp() {
 
   const navigate = useNavigate();
 
-  const handleNetworkSwitch = (newNetwork) => {
-    setNetwork(newNetwork);
-    localStorage.setItem("15market_network", newNetwork);
-    notify(`Switched to ${newNetwork.toUpperCase()} Mode`, "info");
-  };
 
   // Stale wallet cleanup replaced with Para SDK's internal handling
   useEffect(() => {
@@ -1440,7 +1435,7 @@ export default function UserApp() {
     </div>
   );
 
-  if (!authenticated) return <LandingPage currentNetwork={network} onNetworkChange={handleNetworkSwitch} />;
+  if (!authenticated) return <LandingPage />;
 
   if (view === "dashboard") return (
     <DashboardPage
@@ -1450,7 +1445,6 @@ export default function UserApp() {
       onRefill={handleRefill}
       onWithdraw={handleWithdraw}
       treasuryBalance={treasuryBalance}
-      currentNetwork={network}
       autoSignerFees={autoSignerFees}
       userProfile={userProfile}
       theme={theme}
@@ -1506,7 +1500,7 @@ export default function UserApp() {
             </>
           )}
 
-          <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
+          <UnifiedWalletButton theme={theme} />
         </div>
 
         {/* Mobile Controls */}
@@ -1521,7 +1515,7 @@ export default function UserApp() {
             <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
           </button>
 
-          <UnifiedWalletButton currentNetwork={network} onNetworkChange={handleNetworkSwitch} theme={theme} />
+          <UnifiedWalletButton theme={theme} />
         </div>
       </header>
 

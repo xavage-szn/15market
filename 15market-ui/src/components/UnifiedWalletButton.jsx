@@ -1,7 +1,7 @@
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
 import { useAccount as useWagmiAccount } from "wagmi";
 
-export const UnifiedWalletButton = ({ currentNetwork, onNetworkChange, theme }) => {
+export const UnifiedWalletButton = ({ theme }) => {
     const { openModal } = useModal();
     const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
     const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
