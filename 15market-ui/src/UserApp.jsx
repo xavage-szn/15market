@@ -10,7 +10,7 @@ import {
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
-import { useWriteContract, useBalance, useSendTransaction, useSignMessage, useWatchContractEvent, useChainId, useSwitchChain, useAccount as useWagmiAccount } from "wagmi";
+import { useWriteContract, useBalance, useSendTransaction, useSignMessage, useWatchContractEvent, useChainId, useSwitchChain, useAccount as useWagmiAccount, useConnect, useConfig } from "wagmi";
 import { parseEther, parseUnits } from "viem";
 // Solana imports removed
 import ArcABI from "./abi/ArcPrediction.json";
@@ -134,11 +134,23 @@ export default function UserApp() {
   }, []);
 
   const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
-  const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+  const { isConnected: isWagmiConnected, address: wagmiAddress, connector: wagmiConnector } = useWagmiAccount();
 
   const isConnected = isParaConnected || isWagmiConnected;
   const address = paraAddress || wagmiAddress;
   const { data: paraWallet } = useWallet();
+  const { connect, connectors } = useConnect();
+
+  // SYNC PARA WITH WAGMI: Ensure Para session is known to Wagmi
+  useEffect(() => {
+    if (isParaConnected && !isWagmiConnected) {
+      const paraWagmiConnector = connectors.find(c => c.id === 'para');
+      if (paraWagmiConnector) {
+        console.log("🔗 [WAGMI SYNC] Connecting Para session to Wagmi...");
+        connect({ connector: paraWagmiConnector });
+      }
+    }
+  }, [isParaConnected, isWagmiConnected, connectors, connect]);
 
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
@@ -147,48 +159,70 @@ export default function UserApp() {
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
 
-  // Use raw Wagmi hooks for balance
-  const { data: evmBalance, refetch: refetchEvmBalance, isLoading: isBalanceLoading, error: balanceError } = useBalance({
+  const { data: evmBalance } = useBalance({
     address: address,
-    chainId: 5042002, // Arc Testnet
+    chainId: 5042002,
     query: {
-      enabled: isConnected && address?.startsWith('0x'),
-      refetchInterval: 5000,
+      enabled: !!address && address.startsWith('0x'),
+      refetchInterval: 10000
     }
   });
 
-  // Main Wallet Balance Sync
+  // Main Wallet Balance Sync - ROBUST DUAL-PATH FETCHING WITH RPC FALLBACK
   useEffect(() => {
-    console.log("💰 [BALANCE] Main wallet balance check:", {
-      isConnected,
-      address,
-      chainId,
-      evmBalance: evmBalance?.formatted,
-      isBalanceLoading,
-      balanceError: balanceError?.message
-    });
+    let isMounted = true;
+    let failCount = 0;
 
-    if (!isConnected || !address) {
-      setBalance(0);
-      return;
-    }
+    const fetchBalance = async () => {
+      if (!isConnected || !address) {
+        setBalance(0);
+        return;
+      }
 
-    // Network Enforcement: Force Arc Network (5042002)
-    const storedLastChain = localStorage.getItem('last_switched_chain');
-    if (isConnected && chainId && chainId !== 5042002 && storedLastChain !== String(chainId)) {
-      console.warn(`⚠️ [NETWORK] Wrong chain detected: ${chainId}. Switching to Arc (5042002)...`);
-      localStorage.setItem('last_switched_chain', String(chainId));
+      // Method 1: Wagmi Balance (Reactive)
+      if (evmBalance) {
+        const bal = parseFloat(evmBalance.formatted);
+        if (isMounted) setBalance(bal);
+      }
+
+      // Method 2: Manual RPC Fallback
+      try {
+        const rpcToUse = failCount % 2 === 0 ? ARC_RPC : ARC_RPC_BACKUP;
+        const provider = new ethers.JsonRpcProvider(rpcToUse, undefined, { staticNetwork: true });
+        const balWei = await provider.getBalance(address);
+        const bal = parseFloat(ethers.formatUnits(balWei, 18));
+
+        if (isMounted) {
+          console.log(`✅ [BALANCE] RPC (${rpcToUse}) balance:`, bal);
+          setBalance(prev => {
+            // Only update if difference is significant to avoid jitter
+            if (Math.abs(prev - bal) > 0.0001) return bal;
+            return prev;
+          });
+        }
+        failCount = 0;
+      } catch (e) {
+        console.error("❌ [BALANCE] RPC Fetch failed:", e.message);
+        failCount++;
+      }
+    };
+
+    const interval = setInterval(fetchBalance, 6000);
+    fetchBalance();
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isConnected, address, evmBalance]);
+
+  // Network Enforcement
+  useEffect(() => {
+    if (isConnected && chainId && chainId !== 5042002) {
+      console.warn(`⚠️ [NETWORK] Switching to Arc...`);
       switchChain({ chainId: 5042002 });
     }
-
-    if (evmBalance) {
-      const bal = parseFloat(evmBalance.formatted);
-      console.log("✅ [BALANCE] Main wallet balance updated:", bal);
-      setBalance(bal);
-    } else {
-      console.warn("⚠️ [BALANCE] No balance data available yet");
-    }
-  }, [isConnected, address, evmBalance, chainId, switchChain, isBalanceLoading, balanceError]);
+  }, [isConnected, chainId, switchChain]);
 
   const authenticated = isConnected;
 
@@ -1174,26 +1208,36 @@ export default function UserApp() {
         notify(`Confirm on Arc...`, "success");
 
         try {
+
+          console.log("📝 [TRADE] Executing via writeContractAsync...", {
+            address: address,
+            chainId: chainId,
+            target: ARC_CONTRACT_ADDRESS
+          });
+
           const hash = await writeContractAsync({
             address: ARC_CONTRACT_ADDRESS,
             abi: ArcABI.abi,
             functionName: 'placeBet',
             args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
             value: amountWei,
-            gas: 600000n
+            gas: 800000n // Increased gas for safety
           });
           txHash = hash;
-          console.log("📤 [TRADE] Main wallet tx:", txHash);
+          console.log("📤 [TRADE] Main wallet tx successful:", txHash);
         } catch (mainWalletError) {
-          console.error("❌ [TRADE] Main wallet error:", mainWalletError);
-          console.error("❌ [TRADE] Error details:", {
-            message: mainWalletError.message,
-            shortMessage: mainWalletError.shortMessage,
-            code: mainWalletError.code,
-            cause: mainWalletError.cause,
-            details: mainWalletError.details
-          });
-          throw mainWalletError; // Re-throw to be caught by outer try-catch
+          console.error("❌ [TRADE] Main wallet error detail:", mainWalletError);
+
+          // Specific error handling for users
+          if (mainWalletError.message?.includes("user rejected")) {
+            notify("Transaction rejected in wallet", "error");
+          } else if (mainWalletError.message?.includes("insufficient funds")) {
+            notify("Insufficient funds for trade + gas", "error");
+          } else {
+            notify(`Trade failed: ${mainWalletError.shortMessage || "Transaction error"}`, "error");
+          }
+
+          throw mainWalletError;
         }
       }
       notify(`Arc Trade Executed!`, "success");
