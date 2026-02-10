@@ -34,14 +34,9 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
         }
     };
 
-    // Safety Mesh: Double check math in case status flag is de-synced or delayed
-    const entryUSD = parseFloat(trade.entryPrice);
-    const settleUSD = parseFloat(trade.settlementPrice);
+    // Trust the backend status - it now comes from the authoritative on-chain result
+    const isWon = trade.status === "WON";
     const isUp = trade.direction === "buy" || trade.direction === "UP";
-    const mathSaysWin = isUp ? (settleUSD >= entryUSD) : (settleUSD <= entryUSD);
-
-    // A trade is WON if the status says so OR if the math is undeniable (and we have a settlement price)
-    const isWon = trade.status === "WON" || (trade.settlementPrice && trade.settlementPrice !== "0.00" && mathSaysWin);
 
     // Calculate profit based on duration multiplier
     const getMultiplier = (duration) => {

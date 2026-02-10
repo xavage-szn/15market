@@ -898,7 +898,19 @@ class ArcKeeper {
 
                             delete state.activeBets[bet.id];
 
-                            // History Update
+                            // Fetch the actual on-chain result to get authoritative won/lost status
+                            let actualWon = isWin; // Fallback to calculated value
+                            try {
+                                const settledBet = await this.callWithRetry(() => this.contract.bets(bet.id), `VERIFY_${bet.id}`);
+                                if (settledBet && settledBet.settled) {
+                                    actualWon = settledBet.won;
+                                    console.log(`✓ [VERIFIED] Bet #${bet.id} on-chain result: ${actualWon ? 'WON' : 'LOST'}`);
+                                }
+                            } catch (verifyErr) {
+                                console.warn(`⚠️ [VERIFY_FAILED] Could not verify on-chain result for #${bet.id}, using calculated: ${isWin ? 'WON' : 'LOST'}`);
+                            }
+
+                            // History Update with actual on-chain result
                             state.history.unshift({
                                 id: bet.id,
                                 owner: bet.user,
@@ -908,14 +920,14 @@ class ArcKeeper {
                                 entryPrice: bet.entryPrice,
                                 exitPrice,
                                 timestamp: Number(bet.timestamp) * 1000,
-                                status: isWin ? "WON" : "LOST",
+                                status: actualWon ? "WON" : "LOST",
                                 network: 'arc'
                             });
                             if (state.history.length > 2000) state.history.pop();
                             saveState();
 
                             // Settlement complete
-                            console.log(`✅ [SETTLED] Bet #${bet.id} | Won: ${isWin}`);
+                            console.log(`✅ [SETTLED] Bet #${bet.id} | Won: ${actualWon}`);
 
                         }
                     }).catch(e => {
