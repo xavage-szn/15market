@@ -8,21 +8,24 @@ export function AppParaProvider({ children }) {
 
     return (
         <ParaProvider
-            para={para}
-            queryClient={queryClient}
-            config={{
-                appName: "15market",
-                chains: [{
-                    chainId: "eip155:5042002",
-                    chainName: "Arc Testnet",
-                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-                    rpcUrls: [ARC_RPC]
-                }],
-                defaultChainId: "eip155:5042002",
-                sessionConfig: {
-                    disableAutoSessionKeepAlive: false
+            paraClientConfig={{
+                apiKey: paraApiKey,
+                env: paraEnv,
+                opts: {
+                    appName: "15market",
+                    chains: [{
+                        chainId: "eip155:5042002",
+                        chainName: "Arc Testnet",
+                        nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+                        rpcUrls: [ARC_RPC]
+                    }],
+                    defaultChainId: "eip155:5042002",
+                    sessionConfig: {
+                        disableAutoSessionKeepAlive: false
+                    }
                 }
             }}
+            queryClient={queryClient}
             externalWalletConfig={{
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],

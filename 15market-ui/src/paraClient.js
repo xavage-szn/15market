@@ -16,7 +16,10 @@ export const para = new Para(paraEnv, paraApiKey, {
         chainName: "Arc Testnet",
         nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
         rpcUrls: [ARC_RPC]
-    }]
+    }],
+    sessionConfig: {
+        disableAutoSessionKeepAlive: false
+    }
 });
 
 export const queryClient = new QueryClient();
