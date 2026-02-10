@@ -286,130 +286,129 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                             {twitterHandle ? "CONTINUE" : "SKIP FOR NOW"} <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
                                         </button>
                                     </div>
-                                </div>
                                     {!twitterHandle && <p className={`text-[9px] ${isLight ? 'text-black/20' : 'text-white/20'} uppercase tracking-[0.2em] text-center font-bold`}>Linking X helps prevent sybil attacks, but you can do it later</p>}
-                        </motion.div>
+                                </motion.div>
                             )}
 
-                        {step === 3 && (
-                            <motion.div
-                                key="step3"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-8"
-                            >
-                                <div className="flex flex-col items-center text-center">
-                                    <div
-                                        className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
-                                        style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
-                                    >
-                                        <Scale size={36} />
+                            {step === 3 && (
+                                <motion.div
+                                    key="step3"
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    className="space-y-8"
+                                >
+                                    <div className="flex flex-col items-center text-center">
+                                        <div
+                                            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
+                                            style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
+                                        >
+                                            <Scale size={36} />
+                                        </div>
+                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Terms of Service</h2>
+                                        <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Please review our rules of engagement.</p>
                                     </div>
-                                    <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Terms of Service</h2>
-                                    <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Please review our rules of engagement.</p>
-                                </div>
 
-                                <div className={`h-64 ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'} border rounded-3xl p-6 overflow-y-auto custom-scrollbar ${isLight ? 'text-black/40' : 'text-white/30'} text-xs leading-relaxed space-y-4 font-medium`}>
-                                    <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>1. Platform Overview</p>
-                                    <p>15market provides a precision trading environment. By using this platform, you interact directly with smart contracts on the {network.toUpperCase()} network.</p>
+                                    <div className={`h-64 ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'} border rounded-3xl p-6 overflow-y-auto custom-scrollbar ${isLight ? 'text-black/40' : 'text-white/30'} text-xs leading-relaxed space-y-4 font-medium`}>
+                                        <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>1. Platform Overview</p>
+                                        <p>15market provides a precision trading environment. By using this platform, you interact directly with smart contracts on the {network.toUpperCase()} network.</p>
 
-                                    <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>2. Risks and Responsibility</p>
-                                    <p>Trading digital assets involves significant risk. You are solely responsible for your private keys and the funds in your wallet.</p>
+                                        <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>2. Risks and Responsibility</p>
+                                        <p>Trading digital assets involves significant risk. You are solely responsible for your private keys and the funds in your wallet.</p>
 
-                                    <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>3. Technical Integrity</p>
-                                    <p>15market is not liable for network congestion, RPC failures, or blockchain-level issues that may affect trade execution.</p>
+                                        <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>3. Technical Integrity</p>
+                                        <p>15market is not liable for network congestion, RPC failures, or blockchain-level issues that may affect trade execution.</p>
 
-                                    <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>4. Prohibited Jurisdictions</p>
-                                    <p>Users must comply with their local laws. Access from restricted regions is strictly prohibited.</p>
-                                </div>
-
-                                <label className="flex items-center gap-4 cursor-pointer group">
-                                    <div
-                                        onClick={() => setTosAccepted(!tosAccepted)}
-                                        className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${tosAccepted ? 'bg-[#3CB371] border-[#3CB371]' : `${isLight ? 'border-black/10 group-hover:border-black/20' : 'border-white/10 group-hover:border-white/20'}`}`}
-                                    >
-                                        {tosAccepted && <CheckCircle size={14} className="text-white" />}
+                                        <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>4. Prohibited Jurisdictions</p>
+                                        <p>Users must comply with their local laws. Access from restricted regions is strictly prohibited.</p>
                                     </div>
-                                    <span className={`text-sm font-bold ${isLight ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} transition-colors`}>I accept the Terms of Service</span>
-                                </label>
 
-                                <div className="flex gap-4">
-                                    <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
-                                    <button
-                                        onClick={handleNext}
-                                        disabled={!tosAccepted}
-                                        className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
-                                        style={{ backgroundColor: accentColor }}
-                                    >
-                                        CONTINUE <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                                    </button>
-                                </div>
-                            </motion.div>
-                        )}
+                                    <label className="flex items-center gap-4 cursor-pointer group">
+                                        <div
+                                            onClick={() => setTosAccepted(!tosAccepted)}
+                                            className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${tosAccepted ? 'bg-[#3CB371] border-[#3CB371]' : `${isLight ? 'border-black/10 group-hover:border-black/20' : 'border-white/10 group-hover:border-white/20'}`}`}
+                                        >
+                                            {tosAccepted && <CheckCircle size={14} className="text-white" />}
+                                        </div>
+                                        <span className={`text-sm font-bold ${isLight ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} transition-colors`}>I accept the Terms of Service</span>
+                                    </label>
 
-                        {step === 4 && (
-                            <motion.div
-                                key="step4"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-8"
-                            >
-                                <div className="flex flex-col items-center text-center">
-                                    <div
-                                        className="w-20 h-20 rounded-3xl bg-red-500/10 text-red-500 flex items-center justify-center mb-6 shadow-2xl"
-                                    >
-                                        <AlertTriangle size={36} />
+                                    <div className="flex gap-4">
+                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button
+                                            onClick={handleNext}
+                                            disabled={!tosAccepted}
+                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
+                                            style={{ backgroundColor: accentColor }}
+                                        >
+                                            CONTINUE <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                                        </button>
                                     </div>
-                                    <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Critical Risk Warning</h2>
-                                    <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>This is not a simulation. Real assets are at stake.</p>
-                                </div>
+                                </motion.div>
+                            )}
 
-                                <div className={`p-8 rounded-[32px] bg-red-500/5 ${isLight ? 'border-red-500/10' : 'border-red-500/20'} border text-center space-y-4`}>
-                                    <p className="text-red-500 font-bold uppercase tracking-widest text-xs">High Variance Activity</p>
-                                    <p className={`${isLight ? 'text-black/60' : 'text-white/60'} text-sm font-medium leading-relaxed`}>
-                                        By proceeding, you acknowledge that precision trading is high-risk. You can lose <span className={`${isLight ? 'text-black' : 'text-white'} font-black`}>100% of your staked funds</span> in any given trade.
-                                    </p>
-                                </div>
-
-                                <label className={`flex items-center gap-4 cursor-pointer group p-4 rounded-2xl border ${isLight ? 'border-black/5 bg-black/[0.02] hover:bg-black/[0.04]' : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'} transition-all`}>
-                                    <div
-                                        onClick={() => setRiskAcknowledged(!riskAcknowledged)}
-                                        className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${riskAcknowledged ? 'bg-red-500 border-red-500' : `${isLight ? 'border-black/10 group-hover:border-black/20' : 'border-white/10 group-hover:border-white/20'}`}`}
-                                    >
-                                        {riskAcknowledged && <CheckCircle size={14} className="text-white" />}
+                            {step === 4 && (
+                                <motion.div
+                                    key="step4"
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    className="space-y-8"
+                                >
+                                    <div className="flex flex-col items-center text-center">
+                                        <div
+                                            className="w-20 h-20 rounded-3xl bg-red-500/10 text-red-500 flex items-center justify-center mb-6 shadow-2xl"
+                                        >
+                                            <AlertTriangle size={36} />
+                                        </div>
+                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Critical Risk Warning</h2>
+                                        <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>This is not a simulation. Real assets are at stake.</p>
                                     </div>
-                                    <span className={`text-sm font-bold ${isLight ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} transition-colors`}>I accept that I can lose money using this platform</span>
-                                </label>
 
-                                <div className="flex gap-4">
-                                    <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
-                                    <button
-                                        onClick={handleSubmit}
-                                        disabled={!riskAcknowledged || isSubmitting}
-                                        className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
-                                        style={{ backgroundColor: accentColor }}
-                                    >
-                                        {isSubmitting ? "FINALIZING..." : "ENTER 15MARKET"}
-                                    </button>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                                    <div className={`p-8 rounded-[32px] bg-red-500/5 ${isLight ? 'border-red-500/10' : 'border-red-500/20'} border text-center space-y-4`}>
+                                        <p className="text-red-500 font-bold uppercase tracking-widest text-xs">High Variance Activity</p>
+                                        <p className={`${isLight ? 'text-black/60' : 'text-white/60'} text-sm font-medium leading-relaxed`}>
+                                            By proceeding, you acknowledge that precision trading is high-risk. You can lose <span className={`${isLight ? 'text-black' : 'text-white'} font-black`}>100% of your staked funds</span> in any given trade.
+                                        </p>
+                                    </div>
+
+                                    <label className={`flex items-center gap-4 cursor-pointer group p-4 rounded-2xl border ${isLight ? 'border-black/5 bg-black/[0.02] hover:bg-black/[0.04]' : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'} transition-all`}>
+                                        <div
+                                            onClick={() => setRiskAcknowledged(!riskAcknowledged)}
+                                            className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${riskAcknowledged ? 'bg-red-500 border-red-500' : `${isLight ? 'border-black/10 group-hover:border-black/20' : 'border-white/10 group-hover:border-white/20'}`}`}
+                                        >
+                                            {riskAcknowledged && <CheckCircle size={14} className="text-white" />}
+                                        </div>
+                                        <span className={`text-sm font-bold ${isLight ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} transition-colors`}>I accept that I can lose money using this platform</span>
+                                    </label>
+
+                                    <div className="flex gap-4">
+                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button
+                                            onClick={handleSubmit}
+                                            disabled={!riskAcknowledged || isSubmitting}
+                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
+                                            style={{ backgroundColor: accentColor }}
+                                        >
+                                            {isSubmitting ? "FINALIZING..." : "ENTER 15MARKET"}
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    <div className="mt-8 flex justify-center gap-2">
+                        {[1, 2, 3, 4].map(i => (
+                            <div
+                                key={i}
+                                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${step === i ? 'w-4' : 'opacity-20'}`}
+                                style={{ backgroundColor: accentColor }}
+                            />
+                        ))}
+                    </div>
+                </motion.div>
             </div>
-
-            <div className="mt-8 flex justify-center gap-2">
-                {[1, 2, 3, 4].map(i => (
-                    <div
-                        key={i}
-                        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${step === i ? 'w-4' : 'opacity-20'}`}
-                        style={{ backgroundColor: accentColor }}
-                    />
-                ))}
-            </div>
-        </motion.div>
-            </div >
-        </AnimatePresence >
+        </AnimatePresence>
     );
 };
