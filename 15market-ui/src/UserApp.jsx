@@ -773,9 +773,10 @@ export default function UserApp() {
     if (cachedProfile) {
       try {
         const parsed = JSON.parse(cachedProfile);
-        if (parsed.xHandle && parsed.xHandle !== "" && parsed.tosAccepted) {
+        // Check if username and TOS exist (X linking is optional now)
+        if (parsed.username && parsed.tosAccepted) {
           setUserProfile(parsed);
-          setShowOnboarding(false); // UNLOCK if cache is valid
+          setShowOnboarding(false); // UNLOCK
         }
       } catch (e) { }
     }
@@ -787,7 +788,8 @@ export default function UserApp() {
         if (res.ok) {
           const profile = await res.json();
 
-          if (profile && profile.xHandle && profile.xHandle !== "" && profile.tosAccepted) {
+          // Validate profile (Must have username and accepted TOS)
+          if (profile && profile.username && profile.tosAccepted) {
             // User is verified - allow access
             setUserProfile(profile);
             setShowOnboarding(false);
@@ -821,11 +823,9 @@ export default function UserApp() {
 
   const handleOnboardingComplete = async (onboardingData) => {
     try {
-      // CRITICAL: Verify X handle is present
-      if (!onboardingData.twitterHandle || onboardingData.twitterHandle === "") {
-        notify("X account linking is required to access 15market", "error");
-        return;
-      }
+      // NOTE: We no longer gate access based on X linking alone, but we encourage it.
+      // If user skipped X, handle will be empty.
+
 
       // Setup profile on Arc Keeper (Redis)
       const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {

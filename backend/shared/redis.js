@@ -6,6 +6,8 @@ const logger = new Logger('REDIS');
 class RedisClient {
     constructor() {
         this.client = null;
+        this.memoryStore = new Map(); // Fallback for when Redis is down
+        this.isRedisConnected = false;
     }
 
     connect() {
@@ -13,62 +15,71 @@ class RedisClient {
 
         return new Promise((resolve, reject) => {
             try {
+                let client;
                 if (url) {
-                    this.client = new Redis(url, {
+                    client = new Redis(url, {
                         retryStrategy: (times) => Math.min(times * 50, 2000),
                         maxRetriesPerRequest: 3,
                         connectTimeout: 10000
                     });
                 } else {
                     logger.info('REDIS_URL not found, using provided Redis Cloud credentials');
-                    this.client = new Redis('redis://:ueZrTByLR9Iq6lbmqJwRNxv0YJuUoNYj@redis-14672.c277.us-east-1-3.ec2.cloud.redislabs.com:14672', {
+                    client = new Redis('redis://:ueZrTByLR9Iq6lbmqJwRNxv0YJuUoNYj@redis-14672.c277.us-east-1-3.ec2.cloud.redislabs.com:14672', {
                         retryStrategy: (times) => Math.min(times * 50, 2000),
                         maxRetriesPerRequest: 3,
                         connectTimeout: 10000
                     });
                 }
 
-                this.client.on('connect', () => {
+                client.on('connect', () => {
                     logger.info('Successfully connected to Redis Cloud');
+                    this.client = client;
+                    this.isRedisConnected = true;
                     resolve(this.client);
                 });
 
-                this.client.on('error', (err) => {
+                client.on('error', (err) => {
                     logger.error(`Redis Error: ${err.message}`);
-                    // Only reject if not already resolved/rejected
-                    if (this.client.status === 'connecting') {
-                        reject(err);
+                    if (!this.isRedisConnected) {
+                        // If we haven't connected yet, switch to memory mode silently (don't reject main app crash)
+                        logger.warn('⚠️ Switching to IN-MEMORY storage (Redis unreachable)');
                     }
                 });
 
                 // Handle timeout if it takes too long to connect
                 setTimeout(() => {
-                    if (this.client.status === 'connecting') {
-                        reject(new Error('Redis connection timeout'));
+                    if (!this.isRedisConnected) {
+                        logger.warn('⚠️ Redis connection timed out. Switching to IN-MEMORY storage.');
+                        // We resolve anyway so the app starts
+                        resolve(null);
                     }
-                }, 15000);
+                }, 5000);
 
             } catch (err) {
-                logger.error(`Redis connection failed: ${err.message}`);
-                reject(err);
+                logger.error(`Redis connection failed completely: ${err.message}`);
+                resolve(null); // Fallback
             }
         });
     }
 
+    // --- KV UTILS ---
 
     async get(key) {
-        if (!this.client) return null;
+        if (!this.isRedisConnected) return this.memoryStore.get(key) || null;
         try {
             const val = await this.client.get(key);
             return val ? JSON.parse(val) : null;
         } catch (err) {
             logger.error(`Get error for key ${key}: ${err.message}`);
-            return null;
+            return this.memoryStore.get(key) || null;
         }
     }
 
     async set(key, value, ttl = null) {
-        if (!this.client) return false;
+        if (!this.isRedisConnected) {
+            this.memoryStore.set(key, JSON.parse(JSON.stringify(value))); // Clone to mimic serialization
+            return true;
+        }
         try {
             const strVal = JSON.stringify(value);
             if (ttl) {
@@ -79,34 +90,49 @@ class RedisClient {
             return true;
         } catch (err) {
             logger.error(`Set error for key ${key}: ${err.message}`);
-            return false;
+            // Fallback
+            this.memoryStore.set(key, value);
+            return true;
         }
     }
 
+    // --- HASH UTILS ---
+
     async hget(hash, key) {
-        if (!this.client) return null;
+        if (!this.isRedisConnected) {
+            const h = this.memoryStore.get(hash) || {};
+            return h[key] || null;
+        }
         try {
             const val = await this.client.hget(hash, key);
             return val ? JSON.parse(val) : null;
         } catch (err) {
-            logger.error(`HGET error for ${hash}:${key}: ${err.message}`);
-            return null;
+            return (this.memoryStore.get(hash) || {})[key] || null;
         }
     }
 
     async hset(hash, key, value) {
-        if (!this.client) return false;
+        if (!this.isRedisConnected) {
+            const h = this.memoryStore.get(hash) || {};
+            h[key] = JSON.parse(JSON.stringify(value));
+            this.memoryStore.set(hash, h);
+            return true;
+        }
         try {
             await this.client.hset(hash, key, JSON.stringify(value));
             return true;
         } catch (err) {
-            logger.error(`HSET error for ${hash}:${key}: ${err.message}`);
-            return false;
+            const h = this.memoryStore.get(hash) || {};
+            h[key] = value;
+            this.memoryStore.set(hash, h);
+            return true;
         }
     }
 
     async hgetall(hash) {
-        if (!this.client) return {};
+        if (!this.isRedisConnected) {
+            return this.memoryStore.get(hash) || {};
+        }
         try {
             const data = await this.client.hgetall(hash);
             const parsed = {};
@@ -119,10 +145,10 @@ class RedisClient {
             }
             return parsed;
         } catch (err) {
-            logger.error(`HGETALL error for ${hash}: ${err.message}`);
-            return {};
+            return this.memoryStore.get(hash) || {};
         }
     }
 }
 
 module.exports = new RedisClient();
+
