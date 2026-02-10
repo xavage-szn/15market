@@ -8,33 +8,17 @@ export function AppParaProvider({ children }) {
 
     return (
         <ParaProvider
-            para={para}
-            queryClient={queryClient}
-            config={{
-                appName: "15market",
-                chains: [{
-                    chainId: "eip155:5042002",
-                    chainName: "Arc Testnet",
-                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-                    rpcUrls: [ARC_RPC]
-                }],
-                defaultChainId: "eip155:5042002",
+            paraClientConfig={{
+                apiKey: paraApiKey,
+                env: paraEnv,
             }}
+            queryClient={queryClient}
             externalWalletConfig={{
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],
                 walletConnect: { projectId: activeProjectId },
             }}
             paraModalConfig={{
-                theme: {
-                    mode: 'dark',
-                    foregroundColor: "#ffffff",
-                    backgroundColor: "#050505",
-                    accentColor: "#3CB371",
-                    brandColor: "#3CB371",
-                    modalHeaderLogo: "https://api.15market.online/logo.png",
-                    font: "Inter",
-                },
                 oAuthMethods: ["GOOGLE", "DISCORD", "TWITTER"],
                 disableEmailLogin: false,
                 disablePhoneLogin: true,

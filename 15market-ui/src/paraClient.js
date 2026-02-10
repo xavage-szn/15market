@@ -7,10 +7,9 @@ export { Environment };
 export const paraApiKey = import.meta.env.VITE_PARA_API_KEY || "beta_d86df4100fa75b359939af58f0f43abb";
 export const paraEnv = Environment.BETA;
 
-// create a shared instance for Wagmi and other non-React code
 export const para = new Para(paraEnv, paraApiKey, {
     appName: "15market",
-    walletConnectProjectId: projectId || import.meta.env.VITE_REOWN_PROJECT_ID || "4aebd2ef806c541b6aaf003da2930c58",
+    walletConnectProjectId: projectId || "4aebd2ef806c541b6aaf003da2930c58",
     defaultChainId: "eip155:5042002",
     chains: [{
         chainId: "eip155:5042002",
