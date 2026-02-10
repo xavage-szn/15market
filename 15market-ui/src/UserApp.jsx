@@ -1684,13 +1684,12 @@ export default function UserApp() {
         </div>
       </header>
 
-      <div className="w-full max-w-7xl flex flex-col items-center">
-        <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
-          <div className="w-full -mx-2 lg:mx-0">
-            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
-          </div>
-        </div>
+      {/* Full-width scroller - edge to edge */}
+      <div className="w-full mb-4 lg:mb-10">
+        <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
+      </div>
 
+      <div className="w-full max-w-7xl flex flex-col items-center">
         <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
           {/* Chart - Responsive - Full width */}
           <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
