@@ -1,4 +1,5 @@
 import { arcTestnet, ARC_RPC } from './constants'
+import { sepolia } from 'viem/chains'
 import { injected, walletConnect } from 'wagmi/connectors'
 import { paraConnector } from '@getpara/wagmi-v2-integration'
 import { para, queryClient } from './paraClient'
@@ -6,7 +7,7 @@ import { para, queryClient } from './paraClient'
 import { createConfig, http, createStorage } from 'wagmi'
 
 export const wagmiConfig = createConfig({
-    chains: [arcTestnet],
+    chains: [arcTestnet, sepolia],
     multiInjectedProviderDiscovery: false,
     storage: createStorage({ storage: window.localStorage }),
     connectors: [
@@ -20,5 +21,6 @@ export const wagmiConfig = createConfig({
             retryCount: 3,
             retryDelay: 1000,
         }),
+        [sepolia.id]: http(),
     },
 })

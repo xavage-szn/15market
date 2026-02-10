@@ -162,7 +162,7 @@ export default function UserApp() {
   const { signMessageAsync } = useSignMessage();
 
   const chainId = useChainId();
-  const { switchChain } = useSwitchChain();
+  const { switchChain, switchChainAsync } = useSwitchChain();
 
   const { data: evmBalance, refetch: refetchEvmBalance } = useBalance({
     address: address,
@@ -1217,7 +1217,7 @@ export default function UserApp() {
           console.log("🌐 [TRADE] Network mismatch detected. Current:", chainId, "Required: 5042002");
           notify("Switching to Arc Network...", "info");
           try {
-            await switchChain({ chainId: 5042002 });
+            await switchChainAsync({ chainId: 5042002 });
             // Wait for chain state to propagate
             await new Promise(r => setTimeout(r, 2000));
 
@@ -1396,7 +1396,7 @@ export default function UserApp() {
         console.log("🌐 [REFILL] Network mismatch. Current:", chainId, "Target: 5042002");
         notify("Switching to Arc network...", "info");
         try {
-          await switchChain({ chainId: 5042002 });
+          await switchChainAsync({ chainId: 5042002 });
           await new Promise(r => setTimeout(r, 2000));
         } catch (swErr) {
           return notify("Please switch to Arc Network to deposit", "error");

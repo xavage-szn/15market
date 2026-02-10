@@ -1,3 +1,4 @@
+import { sepolia } from "viem/chains";
 import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
 import { arcTestnet, projectId, ARC_RPC } from "../constants";
@@ -19,7 +20,7 @@ export function AppParaProvider({ children }) {
                 walletConnect: { projectId: activeProjectId },
                 evmConnector: {
                     config: {
-                        chains: [arcTestnet],
+                        chains: [arcTestnet, sepolia],
                         defaultChainId: arcTestnet.id,
                     },
                 },
@@ -33,12 +34,20 @@ export function AppParaProvider({ children }) {
                 onRampTestMode: true,
                 defaultChainId: "eip155:5042002",
                 preferredChainId: "eip155:5042002",
-                chains: [{
-                    chainId: "eip155:5042002",
-                    chainName: "Arc Testnet",
-                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-                    rpcUrls: [ARC_RPC]
-                }],
+                chains: [
+                    {
+                        chainId: "eip155:5042002",
+                        chainName: "Arc Testnet",
+                        nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+                        rpcUrls: [ARC_RPC]
+                    },
+                    {
+                        chainId: "eip155:11155111",
+                        chainName: "Sepolia",
+                        nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
+                        rpcUrls: ["https://rpc2.sepolia.org"]
+                    }
+                ],
             }}
         >
             {children}
