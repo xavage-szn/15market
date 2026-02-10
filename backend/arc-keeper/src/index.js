@@ -345,8 +345,11 @@ app.get('/auth/twitter/diag', (req, res) => {
 });
 app.post('/auth/twitter/prepare', async (req, res) => {
     const { address } = req.body;
+    if (!address) return res.status(400).json({ error: "Missing address" });
+
     const stateId = crypto.randomUUID();
-    await redis.set(`x_auth_state:${stateId}`, { address }, 600);
+    // Store full body so we can handle origin/onboarding in callback
+    await redis.set(`x_auth_state:${stateId}`, req.body, 600);
     res.json({ state: stateId });
 });
 
@@ -355,9 +358,12 @@ app.get('/auth/twitter/callback', async (req, res) => {
 
     try {
         const rawState = await redis.get(`x_auth_state:${state}`);
-        if (!rawState) return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?error=invalid_state`);
+        const defaultFront = process.env.FRONTEND_URL || "http://localhost:3000";
 
-        const { address } = rawState;
+        if (!rawState) return res.redirect(`${defaultFront}?error=invalid_state`);
+
+        const { address, origin } = rawState;
+        const redirectBase = origin || defaultFront;
 
         // Exchange code for token
         const params = new URLSearchParams();
@@ -389,8 +395,33 @@ app.get('/auth/twitter/callback', async (req, res) => {
 
         const { username, profile_image_url } = userRes.data.data;
 
+        // Auto-update profile in Redis to expedite frontend unlocking
+        try {
+            const existingRaw = await redis.hget('user_profiles', address.toLowerCase());
+            if (existingRaw) {
+                const profile = typeof existingRaw === 'string' ? JSON.parse(existingRaw) : existingRaw;
+                profile.xHandle = username;
+                profile.xProfileImage = profile_image_url;
+                await redis.hset('user_profiles', address.toLowerCase(), profile);
+                console.log(`✅ [X_AUTH] Updated existing profile for ${address}`);
+            } else if (rawState.username) {
+                const newProfile = {
+                    username: rawState.username,
+                    xHandle: username,
+                    xProfileImage: profile_image_url,
+                    tosAccepted: false,
+                    network: 'arc',
+                    timestamp: Date.now()
+                };
+                await redis.hset('user_profiles', address.toLowerCase(), newProfile);
+                console.log(`🆕 [X_AUTH] Pre-registered profile for ${address}`);
+            }
+        } catch (redisErr) {
+            console.error("⚠️ [X_AUTH] Redis sync failed (non-fatal):", redisErr.message);
+        }
+
         // Redirect back to frontend with data
-        res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?x_handle=${username}&x_image=${encodeURIComponent(profile_image_url)}`);
+        res.redirect(`${redirectBase}?x_handle=${username}&x_image=${encodeURIComponent(profile_image_url)}`);
 
     } catch (e) {
         const errorData = e.response?.data;
@@ -400,7 +431,7 @@ app.get('/auth/twitter/callback', async (req, res) => {
         if (errorData?.error === "invalid_request") errorType = "invalid_config";
         if (errorData?.error === "unauthorized_client") errorType = "client_error";
 
-        res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?error=${errorType}`);
+        res.redirect(`${redirectBase}?error=${errorType}`);
     }
 });
 
