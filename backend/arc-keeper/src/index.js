@@ -50,10 +50,10 @@ const ASSET_MAP = {
 
 // --- STATE ---
 const STORAGE_FILE = path.resolve(__dirname, '../storage.json');
-let state = {
+const state = {
     listings: [
-        { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT' },
-        { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT' }
+        { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
+        { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' }
     ],
     activeMarket: { activeId: 'eth' },
     campaigns: [],
