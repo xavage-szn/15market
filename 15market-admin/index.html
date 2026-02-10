@@ -6,9 +6,31 @@
   <link rel="icon" type="image/svg+xml" href="/logo.png" />
   <link rel="apple-touch-icon" href="/logo.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app.beta.getpara.com; connect-src 'self' https://app.beta.getpara.com https://pulse.walletconnect.org https://api.web3modal.org https://cca-lite.coinbase.com https://api.binance.com https://api.mexc.com https://api.15market.online https://rpc.testnet.arc.network; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>15market-ui</title>
+  <title>15market Admin</title>
+  <style>
+    #root:empty {
+      height: 100vh;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #3CB371;
+      font-family: sans-serif;
+    }
+  </style>
+  <script>
+    window.addEventListener('error', function (e) {
+      console.error('SYSTEM_CRASH_DETECTED:', e.message);
+      const root = document.getElementById('root');
+      if (root && root.innerHTML === '') {
+        root.innerHTML = '<div style="padding:40px; text-align:center;"><h2>Initialization Error</h2><p>' + e.message + '</p><p>Check console for details.</p></div>';
+      }
+    });
+  </script>
 </head>
 
 <body>
