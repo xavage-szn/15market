@@ -154,7 +154,14 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                     transition={{ x: { duration: 240, repeat: Infinity, ease: "linear" } }}
                 >
                     {repeatedHistory.map((event, i) => (
-                        <div key={`${event.id}-${i}`} className={`flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border transition-all group ${isLight ? 'border-black/[0.05] bg-black/[0.02] hover:bg-black/[0.05]' : 'border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05]'}`}>
+                        <div key={`${event.id}-${i}`}
+                            className={`flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border transition-all group ${isLight ? 'border-black/[0.05] bg-black/[0.02] hover:bg-black/[0.05]' : 'border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05]'}`}
+                            style={{
+                                boxShadow: event.direction === "UP"
+                                    ? `0 0 10px rgba(60, 179, 113, 0.15)`
+                                    : `0 0 10px rgba(255, 127, 80, 0.15)`
+                            }}
+                        >
                             <div className={`w-5 h-5 lg:w-6 lg:h-6 rounded-lg overflow-hidden flex items-center justify-center shrink-0 ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
                                 {profiles[event.owner]?.xProfileImage ? (
                                     <img src={profiles[event.owner].xProfileImage} alt="" className="w-full h-full object-cover" />

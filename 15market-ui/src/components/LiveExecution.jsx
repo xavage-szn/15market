@@ -32,7 +32,7 @@ const LiveExecutionComponent = ({
                     </h4>
                 </div>
                 {activeTrades.length > 0 && (
-                    <div className="bg-[#3CB371]/10 text-[#3CB371] px-2 py-0.5 rounded-md text-[8px] font-black border border-[#3CB371]/20">
+                    <div className="bg-[#3CB371]/10 text-[#3CB371] px-2 py-0.5 rounded-full text-[8px] font-black border border-[#3CB371]/20">
                         {activeTrades.length} ACTIVE
                     </div>
                 )}

@@ -86,14 +86,14 @@ const TradeTerminalComponent = ({
                         <button
                             onClick={() => onRefill(refillAmount)}
                             disabled={isExecuting}
-                            className={`py-1.5 lg:py-2 rounded-lg bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                            className={`py-1.5 lg:py-2 rounded-full bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
                         >
                             Deposit
                         </button>
                         <button
                             onClick={() => onWithdraw(refillAmount)}
                             disabled={isExecuting}
-                            className={`py-1.5 lg:py-2 rounded-lg border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                            className={`py-1.5 lg:py-2 rounded-full border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
                         >
                             Withdraw
                         </button>
