@@ -80,11 +80,40 @@ export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) =>
         }
     };
 
-    const handleVerifyX = () => {
+    const handleLinkTwitter = async () => {
         setIsVerifyingX(true);
-        const tweetText = encodeURIComponent(`Verifying my on-chain identity on @15market_ 🚀\n\nWallet: ${address}\n\n#15market #Arc`);
-        window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, '_blank');
-        setTimeout(() => setIsVerifyingX(false), 3000);
+        try {
+            const CLIENT_ID = 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
+            const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL_ARC}/auth/twitter/callback`);
+            const SCOPE = encodeURIComponent('users.read tweet.read offline.access');
+
+            // Securely prepare state on backend
+            // Note: onboarding is TRUE because we want the backend to auto-update the profile
+            // The backend handles both new and existing profiles nicely now.
+            const prepareRes = await fetch(`${KEEPER_URL_ARC}/auth/twitter/prepare`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address: address,
+                    username: username || "User", // Fallback if empty
+                    network: 'arc',
+                    onboarding: true, // Keep true to trigger the auto-save logic in backend
+                    origin: window.location.origin
+                })
+            });
+            const { state: stateId } = await prepareRes.json();
+
+            if (!stateId) throw new Error("Failed to prepare secure state");
+
+            const url = `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&state=${stateId}&code_challenge=challenge&code_challenge_method=plain`;
+
+            console.log('🔗 [X_AUTH] Initiating OAuth flow from Profile...');
+            window.location.href = url;
+        } catch (e) {
+            console.error("X Auth Failed:", e);
+            alert("Could not initiate X login.");
+            setIsVerifyingX(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -162,14 +191,24 @@ export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) =>
                                     value={xHandle}
                                     onChange={(e) => setXHandle(e.target.value)}
                                     placeholder="@username"
-                                    className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
+                                    disabled={true} // X Handle is managed via OAuth
+                                    className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold opacity-70 cursor-not-allowed focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
                                 />
-                                <button
-                                    onClick={handleVerifyX}
-                                    className="px-4 rounded-2xl bg-white text-black text-xs font-black transition-transform active:scale-95 hover:bg-[#3CB371]"
-                                >
-                                    {isVerifyingX ? "OPENING..." : "VERIFY"}
-                                </button>
+                                {xHandle ? (
+                                    <button
+                                        disabled
+                                        className="px-4 rounded-2xl bg-[#3CB371]/20 text-[#3CB371] text-xs font-black border border-[#3CB371]/20"
+                                    >
+                                        LINKED
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleLinkTwitter}
+                                        className="px-4 rounded-2xl bg-white text-black text-xs font-black transition-transform active:scale-95 hover:bg-[#3CB371]"
+                                    >
+                                        LINK X
+                                    </button>
+                                )}
                             </div>
                         </div>
 

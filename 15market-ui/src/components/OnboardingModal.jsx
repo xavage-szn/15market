@@ -3,26 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, User, AlertTriangle, CheckCircle, ChevronRight, Scale, MessageSquare } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-// X Logo Component
-const XLogo = ({ size = 24, className = "" }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-);
-
 export const OnboardingModal = ({ isOpen, onComplete, address, network, existingProfile, theme }) => {
     const isLight = theme === 'light';
 
     const [step, setStep] = useState(() => {
         if (!address) return 1;
-        // Priority 1: User just redirected from Twitter
+        // Priority 1: User just redirected from Twitter (Legacy check, can be ignored or cleaned)
         const params = new URLSearchParams(window.location.search);
-        if (params.get('x_handle')) return 2;
+        if (params.get('x_handle')) return 2; // Might need to just clear this URL param
 
-        // Priority 2: Profile already exists but missing X
-        if (existingProfile && !existingProfile.xHandle) return 2;
-
-        // Priority 3: Local storage (for multi-step sessions)
+        // Priority 2: Local storage (for multi-step sessions)
         const savedStep = localStorage.getItem(`15market_onboarding_step_${address}`);
         return savedStep ? parseInt(savedStep) : 1;
     });
@@ -33,42 +23,21 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
         return localStorage.getItem(`15market_onboarding_username_${address}`) || "";
     });
 
-    const [twitterHandle, setTwitterHandle] = useState(existingProfile?.xHandle || "");
-    const [twitterImage, setTwitterImage] = useState(existingProfile?.xProfileImage || "");
     const [tosAccepted, setTosAccepted] = useState(false);
     const [riskAcknowledged, setRiskAcknowledged] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
 
-    // Detect Twitter Redirect & Errors
+    // Detect Twitter Redirect & Errors (Cleanup)
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const xHandle = params.get('x_handle');
-        const xImage = params.get('x_image');
         const error = params.get('error');
 
         if (error) {
             console.error("❌ Onboarding: X Auth Error:", error);
-            let msg = "X Authentication failed.";
-            if (error === 'invalid_state') msg = "Session expired. Try again.";
-            if (error === 'invalid_config') msg = "X OAuth Configuration error. check Redirect URIs.";
-            if (error === 'client_error') msg = "X Client connection error. Try again later.";
-
-            if (typeof window.notify === 'function') window.notify(msg, "error");
-            else alert(msg);
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
             return;
-        }
-
-        if (xHandle && isOpen) {
-            console.log("🎯 Onboarding: Detected X Handle:", xHandle, "Image:", xImage);
-            setTwitterHandle(xHandle);
-            if (xImage) setTwitterImage(xImage);
-            setStep(3); // Jump to TOS
-            localStorage.setItem(`15market_onboarding_step_${address}`, '3');
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);
         }
     }, [isOpen, address]);
 
@@ -77,8 +46,10 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
         if (step === 1) {
             if (username.length < 3) return;
             localStorage.setItem(`15market_onboarding_username_${address}`, username);
+            // Skip step 2 (X Linking)
+            nextStep = 3;
         }
-        // Step 2 is now optional
+
         if (step === 3 && !tosAccepted) return;
 
         setStep(nextStep);
@@ -86,54 +57,20 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
     };
 
     const handleBack = () => {
-        const prevStep = Math.max(1, step - 1);
+        let prevStep = step - 1;
+        if (step === 3) prevStep = 1; // Skip back over step 2
+        prevStep = Math.max(1, prevStep);
+
         setStep(prevStep);
         localStorage.setItem(`15market_onboarding_step_${address}`, prevStep.toString());
-    };
-
-    const handleLinkTwitter = async () => {
-        try {
-            const CLIENT_ID = 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
-            const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL_ARC}/auth/twitter/callback`);
-            const SCOPE = encodeURIComponent('users.read tweet.read offline.access');
-
-            // Securely prepare state on backend
-            const prepareRes = await fetch(`${KEEPER_URL_ARC}/auth/twitter/prepare`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    address: address,
-                    username: username,
-                    network: network,
-                    onboarding: true,
-                    origin: window.location.origin
-                })
-            });
-            const { state: stateId } = await prepareRes.json();
-
-            if (!stateId) throw new Error("Failed to prepare secure state");
-
-            const url = `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&state=${stateId}&code_challenge=challenge&code_challenge_method=plain`;
-
-            // Save current progress before redirect
-            localStorage.setItem(`15market_onboarding_username_${address}`, username);
-            localStorage.setItem(`15market_onboarding_step_${address}`, '2');
-
-            console.log('🔗 [X_AUTH] Initiating OAuth flow with URI:', decodeURIComponent(REDIRECT_URI));
-            window.location.href = url;
-        } catch (e) {
-            console.error("X Auth Preparation Failed:", e);
-            const msg = "Could not initiate X login. Check backend connection.";
-            if (typeof window.notify === 'function') window.notify(msg, "error");
-            else alert(msg);
-        }
     };
 
     const handleSubmit = async () => {
         if (!riskAcknowledged) return;
         setIsSubmitting(true);
         try {
-            await onComplete({ username, twitterHandle, twitterImage, tosAccepted, riskAcknowledged });
+            // Pass empty twitter data
+            await onComplete({ username, twitterHandle: "", twitterImage: "", tosAccepted, riskAcknowledged });
             // Clean up
             localStorage.removeItem(`15market_onboarding_step_${address}`);
             localStorage.removeItem(`15market_onboarding_username_${address}`);
@@ -147,7 +84,15 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
     if (!isOpen) return null;
 
     const accentColor = '#3CB371';
-    const totalSteps = 4;
+    const totalSteps = 4; // Visual steps count
+
+    // Helper to calculate progress bar width visually skipping step 2
+    const getProgress = () => {
+        if (step === 1) return 25;
+        if (step === 3) return 75;
+        if (step === 4) return 100;
+        return 25;
+    };
 
     return (
         <AnimatePresence>
@@ -168,7 +113,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                     <div className={`absolute top-0 left-0 w-full h-1 ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
                         <motion.div
                             className="h-full transition-all duration-500"
-                            style={{ backgroundColor: accentColor, width: `${(step / totalSteps) * 100}%` }}
+                            style={{ backgroundColor: accentColor, width: `${getProgress()}%` }}
                         />
                     </div>
 
@@ -220,73 +165,6 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     >
                                         CONTINUE <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
                                     </button>
-                                </motion.div>
-                            )}
-
-                            {step === 2 && (
-                                <motion.div
-                                    key="step2"
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
-                                >
-                                    <div className="flex flex-col items-center text-center">
-                                        <div
-                                            className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl ${isLight ? 'bg-black/5 text-black border-black/5' : 'bg-black/40 text-white border-white/10'} border overflow-hidden`}
-                                        >
-                                            {twitterImage ? (
-                                                <img src={twitterImage} alt="X Profile" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <XLogo size={36} />
-                                            )}
-                                        </div>
-                                        {twitterHandle ? (
-                                            <>
-                                                <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Welcome, @{twitterHandle}</h2>
-                                                <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Your X account has been successfully verified.</p>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Link X Account</h2>
-                                                <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Connect your X (formerly Twitter) account to your wallet.</p>
-                                            </>
-                                        )}
-                                    </div>
-
-                                    {twitterHandle ? (
-                                        <div className={`p-6 rounded-3xl ${accentColor}10 border border-[#3CB371]/20 flex items-center justify-between`}>
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-[#3CB371]/20 flex items-center justify-center text-[#3CB371]">
-                                                    <CheckCircle size={24} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">Verified Identity</p>
-                                                    <p className={`font-bold ${isLight ? 'text-black' : 'text-white'}`}>Ready to trade on 15Market</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={handleLinkTwitter}
-                                            className={`w-full py-6 rounded-2xl ${isLight ? 'bg-black text-white shadow-xl' : 'bg-black text-white shadow-[0_20px_40px_rgba(255,255,255,0.1)]'} font-black transition-all flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] border border-white/20 hover:border-white/40`}
-                                        >
-                                            <XLogo size={20} />
-                                            LINK X ACCOUNT
-                                        </button>
-                                    )}
-
-                                    <div className="flex gap-4">
-                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
-                                        <button
-                                            onClick={handleNext}
-                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
-                                            style={{ backgroundColor: accentColor }}
-                                        >
-                                            {twitterHandle ? "CONTINUE" : "SKIP FOR NOW"} <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                                        </button>
-                                    </div>
-                                    {!twitterHandle && <p className={`text-[9px] ${isLight ? 'text-black/20' : 'text-white/20'} uppercase tracking-[0.2em] text-center font-bold`}>Linking X helps prevent sybil attacks, but you can do it later</p>}
                                 </motion.div>
                             )}
 
@@ -399,7 +277,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                     </div>
 
                     <div className="mt-8 flex justify-center gap-2">
-                        {[1, 2, 3, 4].map(i => (
+                        {[1, 3, 4].map(i => (
                             <div
                                 key={i}
                                 className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${step === i ? 'w-4' : 'opacity-20'}`}
