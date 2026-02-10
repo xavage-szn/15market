@@ -7,18 +7,13 @@ import { createConfig, http, createStorage } from 'wagmi'
 
 export const wagmiConfig = createConfig({
     chains: [arcTestnet],
-    multiInjectedProviderDiscovery: true,
+    multiInjectedProviderDiscovery: false, // Disable for stability
     storage: createStorage({ storage: window.localStorage }),
     connectors: [
         paraConnector({ para, queryClient, appName: '15market' }),
         injected(),
-        walletConnect({ projectId: "4aebd2ef806c541b6aaf003da2930c58" }),
     ],
     transports: {
-        [arcTestnet.id]: http(ARC_RPC, {
-            timeout: 30000,
-            retryCount: 3,
-            retryDelay: 1000,
-        }),
+        [arcTestnet.id]: http(ARC_RPC),
     },
 })
