@@ -474,9 +474,9 @@ export default function UserApp() {
 
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT' },
-      { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT', kraken: 'ETHUSD' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT', kraken: 'XBTUSD' },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
     ];
 
     const saved = localStorage.getItem('15market_listed_tokens');
@@ -814,11 +814,33 @@ export default function UserApp() {
     try {
       const sources = [];
 
-      // 1. Pyth Source
+      // 1. Pyth Sources (Multiple Hermers endpoints for redundancy)
       if (activeMarket.pythId) {
+        const pythIds = [activeMarket.pythId];
+        const pythIdStr = activeMarket.pythId.replace('0x', '');
+
+        // Try both v2 latest with/without 0x and beta
         sources.push({
           name: "pyth",
           url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${activeMarket.pythId}`,
+          parse: d => {
+            const p = d.parsed?.[0]?.price;
+            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+          }
+        });
+
+        sources.push({
+          name: "pyth-beta",
+          url: `https://hermes-beta.pyth.network/v2/updates/price/latest?ids[]=${activeMarket.pythId}`,
+          parse: d => {
+            const p = d.parsed?.[0]?.price;
+            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+          }
+        });
+
+        sources.push({
+          name: "pyth-bench",
+          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids[]=${activeMarket.pythId}`,
           parse: d => {
             const p = d.parsed?.[0]?.price;
             return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
@@ -1541,7 +1563,7 @@ export default function UserApp() {
           </div>
         ) : isConnected && showOnboarding ? (
           <div className="w-full py-20 lg:py-40 flex flex-col items-center px-6 relative">
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
+            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at center, #ffffff05 0%, transparent 70%)' }} />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
