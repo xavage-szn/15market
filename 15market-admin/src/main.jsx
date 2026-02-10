@@ -9,11 +9,20 @@ import App from './App.jsx';
 import './index.css';
 
 import { AppParaProvider } from './providers/ParaProvider.jsx';
+import { WagmiProvider } from 'wagmi';
+import { wagmiConfig } from './wagmiConfig';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <AppParaProvider>
-            <App />
-        </AppParaProvider>
+        <WagmiProvider config={wagmiConfig}>
+            <QueryClientProvider client={queryClient}>
+                <AppParaProvider>
+                    <App />
+                </AppParaProvider>
+            </QueryClientProvider>
+        </WagmiProvider>
     </React.StrictMode>
 );
