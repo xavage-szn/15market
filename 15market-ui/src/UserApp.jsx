@@ -142,7 +142,7 @@ export default function UserApp() {
   const address = useMemo(() => {
     return paraAddress || wagmiAddress || paraWallet?.address;
   }, [paraAddress, wagmiAddress, paraWallet]);
-  const { connect, connectors } = useConnect();
+  const { connect, connectAsync, connectors } = useConnect();
 
   // SYNC PARA WITH WAGMI: Ensure Para session is known to Wagmi
   useEffect(() => {
@@ -151,6 +151,8 @@ export default function UserApp() {
       if (paraWagmiConnector) {
         console.log("🔗 [WAGMI SYNC] Connecting Para session to Wagmi...");
         connect({ connector: paraWagmiConnector });
+      } else {
+        console.warn("⚠️ [WAGMI SYNC] Para connector not found in Wagmi config");
       }
     }
   }, [isParaConnected, isWagmiConnected, connectors, connect]);
@@ -1188,6 +1190,42 @@ export default function UserApp() {
         }, 100);
       } else {
         console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required)");
+
+        // 🛡️ [ROBUSTNESS] Ensure Wagmi is connected
+        if (!isWagmiConnected) {
+          console.warn("⚠️ [TRADE] Main wallet selected but Wagmi not connected. Attempting re-sync...");
+          if (isParaConnected) {
+            const paraWagmiConnector = connectors.find(c => c.id === 'para');
+            if (paraWagmiConnector) {
+              try {
+                await connectAsync({ connector: paraWagmiConnector });
+              } catch (reconnectErr) {
+                console.error("❌ [TRADE] Re-sync failed:", reconnectErr);
+              }
+            }
+          }
+
+          // Check again after attempt
+          if (!isWagmiConnected) {
+            setIsExecuting(false);
+            return notify("Wallet session disconnected. Please reconnect.", "error");
+          }
+        }
+
+        // 🛡️ [ROBUSTNESS] Ensure Correct Chain (Arc Testnet 5042002)
+        if (chainId !== 5042002) {
+          console.log("🌐 [TRADE] Network mismatch, requested switch to 5042002");
+          try {
+            await switchChain({ chainId: 5042002 });
+            // Wait a moment for chain state to update
+            await new Promise(r => setTimeout(r, 1000));
+          } catch (switchErr) {
+            console.error("❌ [TRADE] Network switch failed:", switchErr);
+            setIsExecuting(false);
+            return notify("Please switch your wallet to the Arc network", "error");
+          }
+        }
+
         console.log("📝 [TRADE] Main wallet trade params:", {
           address: ARC_CONTRACT_ADDRESS,
           tradeId,
