@@ -10,20 +10,9 @@ export function AppParaProvider({ children }) {
         <ParaProvider
             para={para}
             queryClient={queryClient}
-            config={{
-                appName: "15market",
-                chains: [{
-                    chainId: "eip155:5042002",
-                    chainName: "Arc Testnet",
-                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-                    rpcUrls: [ARC_RPC]
-                }],
-                defaultChainId: "eip155:5042002",
-                walletConnectProjectId: activeProjectId
-            }}
             externalWalletConfig={{
                 appName: "15market",
-                wallets: ["METAMASK", "PHANTOM", "RABBY", "WALLETCONNECT"],
+                wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],
                 walletConnect: { projectId: activeProjectId },
                 evmConnector: {
                     config: {
@@ -32,7 +21,6 @@ export function AppParaProvider({ children }) {
                     },
                 },
             }}
-
             paraModalConfig={{
                 theme: {
                     mode: 'dark',
@@ -46,9 +34,9 @@ export function AppParaProvider({ children }) {
                 oAuthMethods: [],
                 disableEmailLogin: true,
                 disablePhoneLogin: true,
-                authLayout: ["EXTERNAL"],
-                recoverySecretStepEnabled: false,
-                onRampTestMode: false,
+                authLayout: ["EXTERNAL:FULL"],
+                recoverySecretStepEnabled: true,
+                onRampTestMode: true,
                 defaultChainId: "eip155:5042002",
                 chains: [{
                     chainId: "eip155:5042002",
