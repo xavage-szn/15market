@@ -351,20 +351,24 @@ app.get('/auth/twitter/callback', async (req, res) => {
         const { address } = rawState;
 
         // Exchange code for token
-        const tokenRes = await axios.post('https://api.twitter.com/2/oauth2/token', new URLSearchParams({
-            code,
-            grant_type: 'authorization_code',
-            client_id: X_CLIENT_ID,
-            redirect_uri: CALLBACK_URL,
-            code_verifier: 'challenge'
-        }), {
+        // Use a simpler request structure that Twitter prefers
+        const params = new URLSearchParams();
+        params.append('code', code);
+        params.append('grant_type', 'authorization_code');
+        params.append('client_id', X_CLIENT_ID);
+        params.append('redirect_uri', CALLBACK_URL);
+        params.append('code_verifier', 'challenge');
+
+        const tokenRes = await axios.post('https://api.twitter.com/2/oauth2/token', params, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
+                // For Twitter, sometimes only Basic auth is enough, sometimes only body. Let's provide both or clarify.
                 'Authorization': `Basic ${Buffer.from(`${X_CLIENT_ID}:${X_CLIENT_SECRET}`).toString('base64')}`
             }
         });
 
         const { access_token } = tokenRes.data;
+        if (!access_token) throw new Error("no_access_token");
 
         // Get User Info
         const userRes = await axios.get('https://api.twitter.com/2/users/me?user.fields=profile_image_url', {
@@ -377,8 +381,14 @@ app.get('/auth/twitter/callback', async (req, res) => {
         res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?x_handle=${username}&x_image=${encodeURIComponent(profile_image_url)}`);
 
     } catch (e) {
-        console.error("X Auth Failed:", e.response?.data || e.message);
-        res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?error=auth_failed`);
+        const errorData = e.response?.data;
+        console.error("❌ [X_AUTH] Failed:", errorData || e.message);
+
+        let errorType = "auth_failed";
+        if (errorData?.error === "invalid_request") errorType = "invalid_config";
+        if (errorData?.error === "unauthorized_client") errorType = "client_error";
+
+        res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?error=${errorType}`);
     }
 });
 
