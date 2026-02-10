@@ -40,11 +40,23 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
     const [isSubmitting, setIsSubmitting] = useState(false);
 
 
-    // Detect Twitter Redirect
+    // Detect Twitter Redirect & Errors
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const xHandle = params.get('x_handle');
         const xImage = params.get('x_image');
+        const error = params.get('error');
+
+        if (error) {
+            console.error("❌ Onboarding: X Auth Error:", error);
+            const msg = error === 'invalid_state' ? "Session expired. Try again." : "X Authentication failed.";
+            if (typeof window.notify === 'function') window.notify(msg, "error");
+            else alert(msg);
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return;
+        }
+
         if (xHandle && isOpen) {
             console.log("🎯 Onboarding: Detected X Handle:", xHandle, "Image:", xImage);
             setTwitterHandle(xHandle);
@@ -54,7 +66,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
         }
-    }, [isOpen]);
+    }, [isOpen, address]);
 
     const handleNext = () => {
         let nextStep = step + 1;
@@ -101,11 +113,13 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
             localStorage.setItem(`15market_onboarding_username_${address}`, username);
             localStorage.setItem(`15market_onboarding_step_${address}`, '2');
 
-            console.log('🔗 [X_AUTH] Initiating OAuth flow...');
+            console.log('🔗 [X_AUTH] Initiating OAuth flow with URI:', decodeURIComponent(REDIRECT_URI));
             window.location.href = url;
         } catch (e) {
             console.error("X Auth Preparation Failed:", e);
-            // Optionally show alert here if modal feedback is available
+            const msg = "Could not initiate X login. Check backend connection.";
+            if (typeof window.notify === 'function') window.notify(msg, "error");
+            else alert(msg);
         }
     };
 
