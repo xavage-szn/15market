@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, User, AlertTriangle, CheckCircle, ChevronRight, Scale, MessageSquare } from 'lucide-react';
+import { Shield, User, AlertTriangle, CheckCircle, ChevronRight, Scale, MessageSquare, Zap, Receipt, TrendingUp, TrendingDown, Lock } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
 export const OnboardingModal = ({ isOpen, onComplete, address, network, existingProfile, theme }) => {
@@ -10,7 +10,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
         if (!address) return 1;
         // Priority 1: User just redirected from Twitter (Legacy check, can be ignored or cleaned)
         const params = new URLSearchParams(window.location.search);
-        if (params.get('x_handle')) return 2; // Might need to just clear this URL param
+        if (params.get('x_handle')) return 4; // Skip to TOS if already linked via redirect (rare now)
 
         // Priority 2: Local storage (for multi-step sessions)
         const savedStep = localStorage.getItem(`15market_onboarding_step_${address}`);
@@ -46,11 +46,9 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
         if (step === 1) {
             if (username.length < 3) return;
             localStorage.setItem(`15market_onboarding_username_${address}`, username);
-            // Skip step 2 (X Linking)
-            nextStep = 3;
         }
 
-        if (step === 3 && !tosAccepted) return;
+        if (step === 4 && !tosAccepted) return;
 
         setStep(nextStep);
         localStorage.setItem(`15market_onboarding_step_${address}`, nextStep.toString());
@@ -58,7 +56,6 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
 
     const handleBack = () => {
         let prevStep = step - 1;
-        if (step === 3) prevStep = 1; // Skip back over step 2
         prevStep = Math.max(1, prevStep);
 
         setStep(prevStep);
@@ -84,14 +81,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
     if (!isOpen) return null;
 
     const accentColor = '#3CB371';
-    const totalSteps = 4; // Visual steps count
+    const totalSteps = 5; // Visual steps count
 
     // Helper to calculate progress bar width visually skipping step 2
     const getProgress = () => {
-        if (step === 1) return 25;
-        if (step === 3) return 75;
-        if (step === 4) return 100;
-        return 25;
+        return (step / totalSteps) * 100;
     };
 
     return (
@@ -168,9 +162,133 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                 </motion.div>
                             )}
 
+                            {/* STEP 2: HOW TO TRADE */}
+                            {step === 2 && (
+                                <motion.div
+                                    key="step2"
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    className="space-y-8"
+                                >
+                                    <div className="flex flex-col items-center text-center">
+                                        <div
+                                            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
+                                            style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
+                                        >
+                                            <TrendingUp size={36} />
+                                        </div>
+                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>How to Trade</h2>
+                                        <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Predict price movements in 15-second windows.</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className={`p-4 rounded-3xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/5' : 'border-white/5'} flex flex-col items-center text-center gap-3`}>
+                                            <div className="w-10 h-10 rounded-full bg-[#3CB371]/20 text-[#3CB371] flex items-center justify-center">
+                                                <TrendingUp size={18} />
+                                            </div>
+                                            <div>
+                                                <p className={`font-black uppercase text-xs mb-1 ${isLight ? 'text-black' : 'text-white'}`}>Call (High)</p>
+                                                <p className={`text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Profit if price goes UP</p>
+                                            </div>
+                                        </div>
+                                        <div className={`p-4 rounded-3xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/5' : 'border-white/5'} flex flex-col items-center text-center gap-3`}>
+                                            <div className="w-10 h-10 rounded-full bg-[#FF7F50]/20 text-[#FF7F50] flex items-center justify-center">
+                                                <TrendingDown size={18} />
+                                            </div>
+                                            <div>
+                                                <p className={`font-black uppercase text-xs mb-1 ${isLight ? 'text-black' : 'text-white'}`}>Put (Low)</p>
+                                                <p className={`text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Profit if price goes DOWN</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/[0.03]' : 'bg-white/[0.03]'} text-center`}>
+                                        <p className={`text-xs ${isLight ? 'text-black/60' : 'text-white/60'}`}>
+                                            <span className="font-bold">Simple:</span> Choose a direction. If you're right after 15s, you win.
+                                        </p>
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button
+                                            onClick={handleNext}
+                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group"
+                                            style={{ backgroundColor: accentColor }}
+                                        >
+                                            NEXT <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* STEP 3: TRUST & PAYOUTS */}
                             {step === 3 && (
                                 <motion.div
                                     key="step3"
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    className="space-y-8"
+                                >
+                                    <div className="flex flex-col items-center text-center">
+                                        <div
+                                            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
+                                            style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
+                                        >
+                                            <Zap size={36} />
+                                        </div>
+                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Instant Payouts</h2>
+                                        <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Built on Arc for transparency and speed.</p>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className={`flex items-center gap-4 p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
+                                            <div className="w-10 h-10 rounded-full bg-[#3CB371]/20 flex items-center justify-center text-[#3CB371]">
+                                                <Lock size={18} />
+                                            </div>
+                                            <div>
+                                                <p className={`font-bold text-sm ${isLight ? 'text-black' : 'text-white'}`}>100% On-Chain</p>
+                                                <p className={`text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Every trade is recorded on the blockchain.</p>
+                                            </div>
+                                        </div>
+                                        <div className={`flex items-center gap-4 p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
+                                            <div className="w-10 h-10 rounded-full bg-[#3CB371]/20 flex items-center justify-center text-[#3CB371]">
+                                                <Receipt size={18} />
+                                            </div>
+                                            <div>
+                                                <p className={`font-bold text-sm ${isLight ? 'text-black' : 'text-white'}`}>Verifiable Receipts</p>
+                                                <p className={`text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Check your trade status instantly.</p>
+                                            </div>
+                                        </div>
+                                        <div className={`flex items-center gap-4 p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
+                                            <div className="w-10 h-10 rounded-full bg-[#3CB371]/20 flex items-center justify-center text-[#3CB371]">
+                                                <Zap size={18} />
+                                            </div>
+                                            <div>
+                                                <p className={`font-bold text-sm ${isLight ? 'text-black' : 'text-white'}`}>Direct-to-Wallet</p>
+                                                <p className={`text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Winnings are credited instantly. No withdrawals needed.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button
+                                            onClick={handleNext}
+                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group"
+                                            style={{ backgroundColor: accentColor }}
+                                        >
+                                            NEXT <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* STEP 4: TOS */}
+                            {step === 4 && (
+                                <motion.div
+                                    key="step4"
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
@@ -187,7 +305,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                         <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Please review our rules of engagement.</p>
                                     </div>
 
-                                    <div className={`h-64 ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'} border rounded-3xl p-6 overflow-y-auto custom-scrollbar ${isLight ? 'text-black/40' : 'text-white/30'} text-xs leading-relaxed space-y-4 font-medium`}>
+                                    <div className={`h-40 ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'} border rounded-3xl p-6 overflow-y-auto custom-scrollbar ${isLight ? 'text-black/40' : 'text-white/30'} text-xs leading-relaxed space-y-4 font-medium`}>
                                         <p className={`${isLight ? 'text-black/60' : 'text-white/60'} font-bold uppercase tracking-widest text-[10px]`}>1. Platform Overview</p>
                                         <p>15market provides a precision trading environment. By using this platform, you interact directly with smart contracts on the {network.toUpperCase()} network.</p>
 
@@ -225,7 +343,8 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                 </motion.div>
                             )}
 
-                            {step === 4 && (
+                            {/* STEP 5: RISK */}
+                            {step === 5 && (
                                 <motion.div
                                     key="step4"
                                     initial={{ opacity: 0, x: 20 }}
@@ -277,7 +396,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                     </div>
 
                     <div className="mt-8 flex justify-center gap-2">
-                        {[1, 3, 4].map(i => (
+                        {[1, 2, 3, 4, 5].map(i => (
                             <div
                                 key={i}
                                 className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${step === i ? 'w-4' : 'opacity-20'}`}
