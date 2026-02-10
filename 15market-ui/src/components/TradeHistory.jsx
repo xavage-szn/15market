@@ -54,7 +54,7 @@ const TradeHistoryComponent = ({
                 style={{ background: isLight ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
             >
                 <div className="flex items-center justify-between mb-3 lg:mb-4 px-1">
-                    <h3 className={`text-xs lg:text-base font-bold ${isLight ? '!text-black' : 'text-white'}`}>Recent Trades</h3>
+                    <h3 className={`text-xs lg:text-base font-bold ${isLight ? '!text-black' : 'text-white'}`}>Trade History</h3>
                 </div>
 
                 {filteredTrades.length === 0 ? (

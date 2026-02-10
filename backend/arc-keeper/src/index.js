@@ -709,7 +709,7 @@ class ArcKeeper {
                         status: betStruct.won ? "WON" : "LOST",
                         network: 'arc'
                     });
-                    if (state.history.length > 500) state.history.pop();
+                    if (state.history.length > 2000) state.history.pop();
                     if (!isHistorical) saveState();
                 }
                 return;
@@ -724,7 +724,8 @@ class ArcKeeper {
                 timestamp: Number(timestamp),
                 expiry: expiry,
                 tx: event.transactionHash,
-                processing: false
+                processing: false,
+                processingStartedAt: 0 // New field to track stuck processing
             };
 
             // Update Stats
@@ -750,9 +751,19 @@ class ArcKeeper {
     async evaluateBets() {
         const now = Date.now() / 1000;
         for (const [id, bet] of Object.entries(state.activeBets)) {
-            if (bet.processing) continue;
+            // STUCK PROCESSING GUARD: Reset if stuck > 45s
+            if (bet.processing) {
+                if (bet.processingStartedAt && (now - bet.processingStartedAt > 45)) {
+                    console.warn(`⚠️ [STUCK] Bet #${bet.id} stuck in processing > 45s. Resetting.`);
+                    bet.processing = false;
+                    bet.processingStartedAt = 0;
+                }
+                continue;
+            }
+
             if (now >= bet.expiry) {
                 bet.processing = true;
+                bet.processingStartedAt = now;
                 this.settlementQueue.push(bet);
             }
         }
@@ -777,7 +788,7 @@ class ArcKeeper {
             const txPromises = batch.map(async (bet) => {
                 const exitPrice = priceMap[bet.symbol];
                 if (!exitPrice) {
-                    bet.processing = false;
+                    bet.processing = false; // logic retry
                     this.settlementQueue.push(bet);
                     return;
                 }
@@ -788,6 +799,27 @@ class ArcKeeper {
                     if (onChainBet && onChainBet.settled) {
                         console.log(`ℹ️ [SKIP] Bet #${bet.id} already settled on-chain.`);
                         delete state.activeBets[bet.id];
+
+                        // Ensure history update even if we skip settlement
+                        const isWon = onChainBet.won;
+                        const exitP = (Number(onChainBet.settlementPrice) / 100000000).toFixed(4);
+
+                        if (!state.history.find(h => String(h.id) === bet.id)) {
+                            state.history.unshift({
+                                id: bet.id,
+                                owner: bet.user,
+                                amount: bet.amount,
+                                currency: "USDC",
+                                direction: Number(bet.direction) === 0 ? "UP" : "DOWN",
+                                entryPrice: bet.entryPrice,
+                                exitPrice: exitP,
+                                timestamp: Number(bet.timestamp) * 1000,
+                                status: isWon ? "WON" : "LOST",
+                                network: 'arc'
+                            });
+                            if (state.history.length > 2000) state.history.pop();
+                        }
+
                         saveState();
                         return;
                     }
@@ -829,7 +861,13 @@ class ArcKeeper {
 
                     console.log(`📤 [SENT] #${bet.id} (${isWin ? 'WIN' : 'LOSS'}) | Price: $${exitPrice} | TX: ${tx.hash.substr(0, 10)}...`);
 
-                    tx.wait().then((receipt) => {
+                    // TIMEOUT WRAPPER FOR TX CONFIRMATION
+                    const waitPromise = tx.wait();
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error("Confirmation Timeout")), 60000)
+                    );
+
+                    Promise.race([waitPromise, timeoutPromise]).then((receipt) => {
                         if (receipt.status === 1) {
                             console.log(`✅ [CONFIRMED] Bet #${bet.id}`);
                             // Log events for debugging
@@ -854,14 +892,18 @@ class ArcKeeper {
                                 status: isWin ? "WON" : "LOST",
                                 network: 'arc'
                             });
-                            if (state.history.length > 500) state.history.pop();
+                            if (state.history.length > 2000) state.history.pop();
                             saveState();
 
                             // Settlement complete
                             console.log(`✅ [SETTLED] Bet #${bet.id} | Won: ${isWin}`);
 
                         }
-                    }).catch(e => console.error(`❌ [FAILED] Bet #${bet.id} confirmation: ${e.message}`));
+                    }).catch(e => {
+                        console.error(`❌ [FAILED/TIMEOUT] Bet #${bet.id} confirmation: ${e.message}`);
+                        // Don't reset processing here immediately, let the "evaluateBets" stuck guard handle it
+                        // This prevents rapid retry loops if the RPC is just slow
+                    });
 
                 } catch (txErr) {
                     console.error(`❌ [TX_ERROR] #${bet.id}: ${txErr.message}`);
