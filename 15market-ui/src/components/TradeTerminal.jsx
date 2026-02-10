@@ -18,7 +18,11 @@ const TradeTerminalComponent = ({
     isExecuting,
     wallet,
     theme,
-    maintenanceMode = false
+    maintenanceMode = false,
+    refillAmount,
+    setRefillAmount,
+    onRefill,
+    onWithdraw,
 }) => {
     const isLight = theme === 'light';
 
@@ -43,14 +47,6 @@ const TradeTerminalComponent = ({
                         >
                             <div className={`absolute top-0.5 left-0.5 w-1.5 h-1.5 lg:w-3 lg:h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${sessionMode ? 'translate-x-3 lg:translate-x-4' : 'translate-x-0'}`} />
                         </button>
-                        {sessionMode && (
-                            <div className="flex flex-col items-start leading-none">
-                                <span className="text-[6px] lg:text-[8px] font-mono font-[900]" style={{ color: '#3CB371', fontWeight: 900 }}>
-                                    ${Number(sessionBalance).toFixed(2)}
-                                </span>
-                                <span className="text-[5px] lg:text-[6px] font-black uppercase opacity-40 ml-0.5" style={{ color: '#3CB371' }}>0.1% Fee</span>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -63,6 +59,51 @@ const TradeTerminalComponent = ({
                     </div>
                 </div>
             </div>
+
+            {/* Auto-Signer Management Panel */}
+            {sessionMode && (
+                <div className={`p-2 lg:p-3 rounded-xl border flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300 ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
+                            <span className="text-[8px] lg:text-sm font-mono font-black text-[#3CB371]">
+                                ${Number(sessionBalance).toFixed(4)} USDC
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-black/20 rounded-lg p-1">
+                            <input
+                                type="number"
+                                value={refillAmount}
+                                onChange={(e) => setRefillAmount(e.target.value)}
+                                className="w-10 lg:w-16 bg-transparent text-[8px] lg:text-xs font-black text-white outline-none px-1"
+                                placeholder="0.1"
+                            />
+                            <span className="text-[6px] lg:text-[8px] font-black opacity-40 text-white uppercase mr-1">USDC</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            onClick={() => onRefill(refillAmount)}
+                            disabled={isExecuting}
+                            className={`py-1.5 lg:py-2 rounded-lg bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                        >
+                            Deposit
+                        </button>
+                        <button
+                            onClick={() => onWithdraw(refillAmount)}
+                            disabled={isExecuting}
+                            className={`py-1.5 lg:py-2 rounded-lg border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                        >
+                            Withdraw
+                        </button>
+                    </div>
+                    <div className="flex items-center justify-center gap-1 opacity-40">
+                        <div className="w-1 h-1 rounded-full bg-[#3CB371]" />
+                        <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>1% Protocol Fee applies to balance movements</span>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-2 gap-1 lg:gap-2">
                 <button

@@ -164,7 +164,7 @@ export default function UserApp() {
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
 
-  const { data: evmBalance } = useBalance({
+  const { data: evmBalance, refetch: refetchEvmBalance } = useBalance({
     address: address,
     chainId: 5042002,
     query: {
@@ -1378,6 +1378,7 @@ export default function UserApp() {
 
   const handleRefill = useCallback(async (amt) => {
     console.log("🔵 [REFILL] Starting refill process...", { amt, balance, address });
+    if (isExecuting) return;
 
     try {
       const amtNum = parseFloat(amt);
@@ -1388,6 +1389,18 @@ export default function UserApp() {
         console.error("❌ [REFILL] Wallet not connected:", { address, hasSessionWallet: !!evmSessionWallet });
         notify("Connect Arc wallet for refill", "error");
         return;
+      }
+
+      // 🛡️ [NETWORK] Enforce Arc Testnet
+      if (chainId !== 5042002) {
+        console.log("🌐 [REFILL] Network mismatch. Current:", chainId, "Target: 5042002");
+        notify("Switching to Arc network...", "info");
+        try {
+          await switchChain({ chainId: 5042002 });
+          await new Promise(r => setTimeout(r, 2000));
+        } catch (swErr) {
+          return notify("Please switch to Arc Network to deposit", "error");
+        }
       }
 
       console.log("✅ [REFILL] Wallets ready:", {
@@ -1404,6 +1417,7 @@ export default function UserApp() {
         return;
       }
 
+      setIsExecuting(true);
       notify(`Initiating Refill (${amtNum} USDC)...`, "success");
 
       try {
@@ -1439,32 +1453,29 @@ export default function UserApp() {
           } catch (feeErr) {
             console.error("❌ [REFILL] Delayed fee payment failed:", feeErr);
           }
-        }, 3000); // 3s delay to allow main tx to at least be broadcasted
+        }, 5000); // Increased delay to allow main tx to confirm or at least be broadcasted
 
         notify(`Refill Success!`, "success");
         console.log("🎉 [REFILL] Refill complete!");
 
         // Refresh balance
-        setTimeout(() => updateEvmSessionBal(), 3000);
+        setTimeout(() => {
+          updateEvmSessionBal();
+          refetchEvmBalance();
+        }, 3000);
       } catch (evmErr) {
         console.error("❌ [REFILL] EVM Error:", evmErr);
-        console.error("❌ [REFILL] Error details:", {
-          message: evmErr.message,
-          shortMessage: evmErr.shortMessage,
-          code: evmErr.code
-        });
         const msg = evmErr.shortMessage || evmErr.message || "EVM Error";
         notify(`Refill failed: ${msg}`, "error");
       }
-    } catch (e) {
-      console.error("❌ [REFILL] Error:", e);
-      const msg = e.shortMessage || e.message || "Refill failed";
-      notify(`Refill failed: ${msg}`, "error");
+    } finally {
+      setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee, balance, updateEvmSessionBal]);
+  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee, balance, updateEvmSessionBal, isExecuting, chainId, switchChain, refetchEvmBalance]);
 
   const handleWithdraw = useCallback(async (amt) => {
     console.log("🔵 [WITHDRAW] Starting withdrawal process...", { amt, sessionBalance, address });
+    if (isExecuting) return;
 
     try {
       // Step 1: Validate amount
@@ -1480,6 +1491,18 @@ export default function UserApp() {
         console.error("❌ [WITHDRAW] Session wallet not initialized!");
         notify("Session wallet not ready. Please refresh the page.", "error");
         return;
+      }
+
+      // 🛡️ [NETWORK] Enforce Arc Testnet
+      if (chainId !== 5042002) {
+        console.log("🌐 [WITHDRAW] Network mismatch. Current:", chainId, "Target: 5042002");
+        notify("Switching to Arc network...", "info");
+        try {
+          await switchChain({ chainId: 5042002 });
+          await new Promise(r => setTimeout(r, 2000));
+        } catch (swErr) {
+          return notify("Please switch to Arc Network to withdraw", "error");
+        }
       }
 
       console.log("✅ [WITHDRAW] Session wallet exists:", evmSessionWallet.address);
@@ -1510,6 +1533,8 @@ export default function UserApp() {
         return;
       }
 
+      setIsExecuting(true);
+
       // Step 5: Request signature
       notify("Sign the withdrawal authorization in your wallet...", "info");
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: SECURE SCAN SWEEP\nAMOUNT: ${amt} USDC\nWALLET: ${address}\nTIMESTAMP: ${Date.now()}`;
@@ -1521,6 +1546,7 @@ export default function UserApp() {
       } catch (sigErr) {
         console.error("❌ [WITHDRAW] Signature rejected:", sigErr);
         notify("Signature rejected", "error");
+        setIsExecuting(false);
         return;
       }
 
@@ -1555,19 +1581,17 @@ export default function UserApp() {
       console.log("🎉 [WITHDRAW] Withdrawal complete!");
 
       // Refresh balance
-      setTimeout(() => updateEvmSessionBal(), 2000);
+      setTimeout(() => {
+        updateEvmSessionBal();
+        refetchEvmBalance();
+      }, 2000);
     } catch (e) {
       console.error("❌ [WITHDRAW] Error:", e);
-      console.error("❌ [WITHDRAW] Error details:", {
-        message: e.message,
-        reason: e.reason,
-        code: e.code,
-        stack: e.stack
-      });
-      const msg = e.reason || e.message || "Withdraw failed";
-      notify(msg, "error");
+      notify("Withdrawal failed: " + (e.shortMessage || e.message), "error");
+    } finally {
+      setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal]);
+  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal, isExecuting, chainId, switchChain, refetchEvmBalance]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
