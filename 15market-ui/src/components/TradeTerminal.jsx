@@ -117,8 +117,23 @@ const TradeTerminalComponent = ({
 
             <div className="flex flex-col gap-1 lg:gap-2">
                 <div className="flex items-center justify-between px-1">
-                    <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
-                    <span className={`text-[6px] lg:text-[8px] font-bold opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>{(sessionMode ? sessionBalance : balance).toFixed(2)}</span>
+                    <div className="flex items-center gap-2">
+                        <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
+                        <div className="flex items-center gap-1.5 ml-2">
+                            <div className="flex items-center gap-1">
+                                <div className={`w-1 h-1 rounded-full ${!sessionMode ? 'bg-[#3CB371] shadow-[0_0_5px_#3CB371]' : 'bg-white/10'}`} />
+                                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-tighter ${!sessionMode ? 'text-[#3CB371]' : 'opacity-20'}`}>Main: ${balance.toFixed(2)}</span>
+                            </div>
+                            <div className="w-px h-2 bg-white/10" />
+                            <div className="flex items-center gap-1">
+                                <div className={`w-1 h-1 rounded-full ${sessionMode ? 'bg-yellow-400 shadow-[0_0_5px_rgba(250,204,21,0.5)]' : 'bg-white/10'}`} />
+                                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-tighter ${sessionMode ? 'text-yellow-400' : 'opacity-20'}`}>Auto: ${sessionBalance.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <span className={`text-[6px] lg:text-[8px] font-bold ${sessionMode ? 'text-yellow-400' : 'text-[#3CB371]'}`}>
+                        Selected: ${(sessionMode ? sessionBalance : balance).toFixed(2)}
+                    </span>
                 </div>
                 <div className={`flex items-center gap-1.5 p-1.5 lg:p-2.5 rounded-xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
                     <input
