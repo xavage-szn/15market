@@ -329,11 +329,20 @@ app.post('/sync-profile', async (req, res) => {
 
 
 // --- X OAUTH ---
-const X_CLIENT_ID = process.env.X_CLIENT_ID || 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
-const X_CLIENT_SECRET = process.env.X_CLIENT_SECRET || 'Bt5h0g_Lr7XtksAQnynyEwRIN5ldvHljhIaFlYJc3SY-1Zt6rm';
+const X_CLIENT_ID = (process.env.X_CLIENT_ID || 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ').trim();
+const X_CLIENT_SECRET = (process.env.X_CLIENT_SECRET || 'Bt5h0g_Lr7XtksAQnynyEwRIN5ldvHljhIaFlYJc3SY-1Zt6rm').trim();
 const CLEAN_KEEPER_URL = KEEPER_URL.endsWith('/') ? KEEPER_URL.slice(0, -1) : KEEPER_URL;
 const CALLBACK_URL = `${CLEAN_KEEPER_URL}/auth/twitter/callback`;
 
+app.get('/auth/twitter/diag', (req, res) => {
+    res.json({
+        CALLBACK_URL,
+        X_CLIENT_ID,
+        FRONTEND_URL: process.env.FRONTEND_URL,
+        KEEPER_URL,
+        ENV_KEEPER_URL_ARC: process.env.KEEPER_URL_ARC
+    });
+});
 app.post('/auth/twitter/prepare', async (req, res) => {
     const { address } = req.body;
     const stateId = crypto.randomUUID();
