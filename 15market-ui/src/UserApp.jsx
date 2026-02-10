@@ -431,9 +431,13 @@ export default function UserApp() {
           setActiveTrades(prev => {
             const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status));
             const updatedActive = [...backendActive];
-            // Keep local trades that are not yet in any backend response
+            // Keep local trades ONLY if backend doesn't know about them at all
             prev.forEach(local => {
-              if (local.status === "PENDING" && !updatedActive.find(a => String(a.id) === String(local.id))) {
+              // Check if this local trade exists in the FULL backend list (history + active)
+              // If backend knows about it (in any state), don't keep local stale copy
+              const knownByBackend = backendAll.find(b => String(b.id) === String(local.id));
+
+              if (!knownByBackend && local.status === "PENDING") {
                 updatedActive.push(local);
               }
             });

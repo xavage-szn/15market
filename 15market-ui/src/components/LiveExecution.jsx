@@ -28,7 +28,7 @@ const LiveExecutionComponent = ({
                 <div className="flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
                     <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
-                        LIVE ENGINES
+                        ACTIVE TRADES
                     </h4>
                 </div>
                 {activeTrades.length > 0 && (
@@ -42,11 +42,21 @@ const LiveExecutionComponent = ({
                 {activeTrades.length > 0 ? (
                     activeTrades.map((trade) => {
                         const now = Date.now();
-                        const start = trade.startTime || (trade.nonce > 1000000000000 ? trade.nonce : Math.floor(trade.nonce / 100) * 1000);
+                        // Safety check for start time
+                        const start = trade.startTime || (trade.nonce > 1000000000000 ? trade.nonce : Math.floor(trade.nonce / 100) * 1000) || now;
                         const elapsed = Math.floor((now - start) / 1000);
-                        const timeLeft = Math.max(0, trade.duration - elapsed);
+                        const duration = trade.duration || 30;
+                        const timeLeft = Math.max(0, duration - elapsed);
                         const isResolving = trade.status === "RESOLVING" || (timeLeft === 0 && trade.status === "PENDING");
                         const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
+
+                        const entryPriceVal = parseFloat(trade.entryPrice);
+                        const amountVal = parseFloat(trade.amount);
+                        const currentPriceVal = parseFloat(price);
+
+                        // Profit multiplier based on duration
+                        const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+                        const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
                         return (
                             <div
@@ -77,7 +87,9 @@ const LiveExecutionComponent = ({
                                         <div className="flex justify-between items-center mb-0.5">
                                             <p className={`text-[5px] lg:text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/20'}`}>Entry</p>
                                         </div>
-                                        <p className={`text-[10px] lg:text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>${trade.entryPrice}</p>
+                                        <p className={`text-[10px] lg:text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>
+                                            {!isNaN(entryPriceVal) ? `$${entryPriceVal}` : "..."}
+                                        </p>
                                     </div>
                                     <div className={`p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
                                         <p className={`text-[5px] lg:text-[6px] font-black uppercase tracking-widest mb-0.5 ${isLight ? 'text-black/30' : 'text-white/20'}`}>Stake</p>
@@ -96,10 +108,10 @@ const LiveExecutionComponent = ({
                                             </div>
 
                                             <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${((trade.direction === "buy" || trade.direction === "UP") ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
+                                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${((trade.direction === "buy" || trade.direction === "UP") ? currentPriceVal >= entryPriceVal : currentPriceVal <= entryPriceVal)
                                                     ? "text-[#3CB371]" : "text-[#FF7F50]"
                                                     }`}>
-                                                    {((trade.direction === "buy" || trade.direction === "UP") ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
+                                                    {((trade.direction === "buy" || trade.direction === "UP") ? currentPriceVal >= entryPriceVal : currentPriceVal <= entryPriceVal)
                                                         ? "WIN" : "LOSS"
                                                     }
                                                 </span>
@@ -108,7 +120,7 @@ const LiveExecutionComponent = ({
                                             <div className="flex items-center gap-1 opacity-60 mb-2 lg:mb-3">
                                                 <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/30'}`}>Profit:</span>
                                                 <span className={`text-[8px] lg:text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3CB371' }}>
-                                                    +{(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98))).toFixed(2)}
+                                                    +{potentialProfit}
                                                 </span>
                                             </div>
 
