@@ -356,14 +356,16 @@ app.post('/auth/twitter/prepare', async (req, res) => {
 app.get('/auth/twitter/callback', async (req, res) => {
     const { code, state } = req.query;
 
+    const defaultFront = process.env.FRONTEND_URL || "http://localhost:3000";
+    let redirectBase = defaultFront;
+
     try {
         const rawState = await redis.get(`x_auth_state:${state}`);
-        const defaultFront = process.env.FRONTEND_URL || "http://localhost:3000";
 
         if (!rawState) return res.redirect(`${defaultFront}?error=invalid_state`);
 
         const { address, origin } = rawState;
-        const redirectBase = origin || defaultFront;
+        if (origin) redirectBase = origin;
 
         // Exchange code for token
         const params = new URLSearchParams();
