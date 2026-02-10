@@ -331,7 +331,8 @@ app.post('/sync-profile', async (req, res) => {
 // --- X OAUTH ---
 const X_CLIENT_ID = process.env.X_CLIENT_ID || 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
 const X_CLIENT_SECRET = process.env.X_CLIENT_SECRET || 'Bt5h0g_Lr7XtksAQnynyEwRIN5ldvHljhIaFlYJc3SY-1Zt6rm';
-const CALLBACK_URL = `${KEEPER_URL}/auth/twitter/callback`;
+const CLEAN_KEEPER_URL = KEEPER_URL.endsWith('/') ? KEEPER_URL.slice(0, -1) : KEEPER_URL;
+const CALLBACK_URL = `${CLEAN_KEEPER_URL}/auth/twitter/callback`;
 
 app.post('/auth/twitter/prepare', async (req, res) => {
     const { address } = req.body;
