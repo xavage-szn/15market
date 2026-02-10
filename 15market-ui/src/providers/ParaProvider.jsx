@@ -17,6 +17,12 @@ export function AppParaProvider({ children }) {
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],
                 walletConnect: { projectId: activeProjectId },
+                evmConnector: {
+                    config: {
+                        chains: [arcTestnet],
+                        defaultChainId: arcTestnet.id,
+                    },
+                },
             }}
             paraModalConfig={{
                 oAuthMethods: [],
@@ -26,6 +32,7 @@ export function AppParaProvider({ children }) {
                 recoverySecretStepEnabled: true,
                 onRampTestMode: true,
                 defaultChainId: "eip155:5042002",
+                preferredChainId: "eip155:5042002",
                 chains: [{
                     chainId: "eip155:5042002",
                     chainName: "Arc Testnet",
