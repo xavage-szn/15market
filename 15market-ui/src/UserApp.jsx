@@ -1212,17 +1212,21 @@ export default function UserApp() {
           }
         }
 
-        // 🛡️ [ROBUSTNESS] Ensure Correct Chain (Arc Testnet 5042002)
+        // 🛡️ [STRICT ENFORCEMENT] Ensure Correct Chain (Arc Testnet 5042002)
         if (chainId !== 5042002) {
-          console.log("🌐 [TRADE] Network mismatch, requested switch to 5042002");
+          console.log("🌐 [TRADE] Network mismatch detected. Current:", chainId, "Required: 5042002");
+          notify("Switching to Arc Network...", "info");
           try {
             await switchChain({ chainId: 5042002 });
-            // Wait a moment for chain state to update
-            await new Promise(r => setTimeout(r, 1000));
+            // Wait for chain state to propagate
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Re-check after switch attempt
+            // Note: chainId from hook might not update instantly, but writeContractAsync will use the target chainId
           } catch (switchErr) {
             console.error("❌ [TRADE] Network switch failed:", switchErr);
             setIsExecuting(false);
-            return notify("Please switch your wallet to the Arc network", "error");
+            return notify("Please switch your wallet to Arc Testnet (Chain 5042002)", "error");
           }
         }
 
@@ -1243,11 +1247,12 @@ export default function UserApp() {
 
           console.log("📝 [TRADE] Executing via writeContractAsync...", {
             address: address,
-            chainId: chainId,
+            chainId: 5042002, // ALWAYS FORCE ARC
             target: ARC_CONTRACT_ADDRESS
           });
 
           const hash = await writeContractAsync({
+            chainId: 5042002, // Explicitly force the target chain
             address: ARC_CONTRACT_ADDRESS,
             abi: ArcABI.abi,
             functionName: 'placeBet',
