@@ -80,7 +80,7 @@ export default function UserApp() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(true); // START LOCKED BY DEFAULT
+  const [showOnboarding, setShowOnboarding] = useState(false); // SITE IS OPEN BY DEFAULT
   const [isPnLOpen, setIsPnLOpen] = useState(false);
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
@@ -1529,281 +1529,228 @@ export default function UserApp() {
         transition: "color 0.3s ease"
       }}>
 
-      {/* CONTENT GATE - BLOCK ENTIRE SITE */}
-      {isConnected && (showOnboarding || !profileChecked) ? (
-        <div className="flex-1 w-full flex flex-col items-center justify-center px-6 relative z-[60] min-h-[80vh]">
-          <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at center, #ffffff05 0%, transparent 70%)' }} />
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-2xl bg-[#0D0D0D]/60 backdrop-blur-3xl !rounded-[48px] p-12 lg:p-20 text-center border border-white/10 relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
-          >
-            {/* Verification Content */}
-            <div className="absolute top-0 right-0 p-12 opacity-[0.02] pointer-events-none">
-              <Shield size={220} />
-            </div>
-
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="w-24 h-24 bg-red-500/10 border border-red-500/20 rounded-[32px] flex items-center justify-center mx-auto mb-10 relative"
-            >
-              <div className="absolute inset-0 blur-2xl bg-red-500/20 opacity-50" />
-              <Lock size={40} className="text-red-500 relative z-10" />
-            </motion.div>
-
-            <h2 className="text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter mb-6 leading-none">
-              Identity Verification <br /> <span className="text-red-500">{!profileChecked ? 'Authenticating...' : 'Required'}</span>
-            </h2>
-
-            <p className="text-white/40 text-sm lg:text-lg font-bold uppercase tracking-widest leading-relaxed mb-12 max-w-md mx-auto">
-              {!profileChecked
-                ? "Syndicating credentials with the Arc Security Node..."
-                : "A verified X account (Twitter) must be linked to access the 15market terminal."}
-            </p>
-
-            <div className="space-y-6">
-              <div className="flex flex-col items-center gap-4">
-                <div className="h-[1px] w-12 bg-white/10" />
-                {!profileChecked ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#3CB371] animate-ping" />
-                    <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-[0.4em]">Node Sync in Progress</p>
-                  </div>
-                ) : (
-                  <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-[0.4em] animate-pulse">Complete Onboarding to Unlock</p>
-                )}
-              </div>
-            </div>
-          </motion.div>
+      <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
+        <div className="flex items-center gap-4">
+          <img src="/logo.png" alt="logo" className={`h-16 lg:h-24 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
         </div>
-      ) : (
-        <>
-          <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
-            <div className="flex items-center gap-4">
-              <img src="/logo.png" alt="logo" className={`h-16 lg:h-24 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
-            </div>
 
-            {/* Desktop Nav */}
-            <div className="hidden lg:flex items-center gap-12">
-              {/* Dashboard/Trading links removed from navbar per request */}
-            </div>
+        {/* Desktop Nav */}
+        <div className="hidden lg:flex items-center gap-12">
+          {/* Dashboard/Trading links removed from navbar per request */}
+        </div>
 
-            {/* Desktop Controls */}
-            <div className="hidden lg:flex items-center gap-3">
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
+        {/* Desktop Controls */}
+        <div className="hidden lg:flex items-center gap-3">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
 
-              {uiVersion === 'v1' && (
-                <>
-                  <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
-                    style={{
-                      backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                      borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                    }}>
-                    <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-                  </button>
-                </>
-              )}
-
-              <UnifiedWalletButton theme={theme} />
-            </div>
-
-            {/* Mobile Controls */}
-            <div className="flex lg:hidden items-center gap-2">
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-
-              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+          {uiVersion === 'v1' && (
+            <>
+              <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
+            </>
+          )}
 
-              <UnifiedWalletButton theme={theme} />
+          <UnifiedWalletButton theme={theme} />
+        </div>
+
+        {/* Mobile Controls */}
+        <div className="flex lg:hidden items-center gap-2">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+
+          <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+            style={{
+              backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+              borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+            }}>
+            <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+          </button>
+
+          <UnifiedWalletButton theme={theme} />
+        </div>
+      </header>
+
+      <div className="w-full max-w-7xl flex flex-col items-center">
+        <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
+          <div className="w-full -mx-2 lg:mx-0">
+            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
+          </div>
+        </div>
+
+        <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
+          {/* Chart - Responsive - Full width */}
+          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
+            style={{
+              background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+              boxShadow: theme === 'light'
+                ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
+              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
+            }}>
+            <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} />
+          </div>
+
+          {/* Terminal - 50/50 split on desktop and mobile */}
+          <div className="col-span-6 lg:col-span-6 flex flex-col">
+            <TradeTerminal
+              activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
+              sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+              setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+              sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+              theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+              refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
+              evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+              activeMarket={activeMarket}
+              maintenanceMode={platformSettings.maintenanceMode}
+            />
+          </div>
+
+          {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
+          <div className="col-span-6 lg:col-span-6 flex flex-col">
+            <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
+              <LiveExecution
+                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                theme={theme} currentNetwork={network}
+              />
             </div>
-          </header>
+          </div>
+        </div>
 
-          <div className="w-full max-w-7xl flex flex-col items-center">
-            <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
-              <div className="w-full -mx-2 lg:mx-0">
-                <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
+        <TradeHistory
+          wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+          tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+          setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+          GREEN={GREEN} CORAL={CORAL}
+          evmSessionWallet={evmSessionWallet}
+          theme={theme} currentNetwork={network}
+        />
+        {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
+        <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
+          {winnerBanner && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border !border-white/5 relative`}
+              style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
+            >
+              <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                <Trophy size={80} />
               </div>
-            </div>
-
-            <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
-              {/* Chart - Responsive - Full width */}
-              <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
-                style={{
-                  background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
-                  boxShadow: theme === 'light'
-                    ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
-                    : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
-                }}>
-                <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} />
-              </div>
-
-              {/* Terminal - 50/50 split on desktop and mobile */}
-              <div className="col-span-6 lg:col-span-6 flex flex-col">
-                <TradeTerminal
-                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
-                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                  refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
-                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                  activeMarket={activeMarket}
-                  maintenanceMode={platformSettings.maintenanceMode}
-                />
-              </div>
-
-              {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
-              <div className="col-span-6 lg:col-span-6 flex flex-col">
-                <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
-                  <LiveExecution
-                    activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                    setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                    theme={theme} currentNetwork={network}
-                  />
+              <div className="flex items-center gap-4 lg:gap-8 relative z-10">
+                <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                  <Trophy size={32} className="text-yellow-500" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 truncate max-w-[100px] lg:max-w-none">{winnerBanner.owner}</span>
+                  </div>
+                  <h3 className="text-lg lg:text-xl font-black text-white tracking-tighter uppercase">
+                    Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
+                  </h3>
                 </div>
               </div>
-            </div>
+            </motion.div>
+          )}
 
-            <TradeHistory
-              wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-              tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-              GREEN={GREEN} CORAL={CORAL}
-              evmSessionWallet={evmSessionWallet}
-              theme={theme} currentNetwork={network}
-            />
-            {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
-            <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
-              {winnerBanner && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border !border-white/5 relative`}
-                  style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
-                >
-                  <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                    <Trophy size={80} />
-                  </div>
-                  <div className="flex items-center gap-4 lg:gap-8 relative z-10">
-                    <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
-                      <Trophy size={32} className="text-yellow-500" />
+          {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
+            <motion.div
+              key={camp.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
+            >
+              <div className="flex items-center gap-6">
+                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[#3CB371]">
+                  <Trophy size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">{camp.title}</h3>
+                  <div className="flex flex-wrap items-center gap-4 mt-1">
+                    <div className="flex items-center gap-1.5 text-[10px] font-black text-white/40 uppercase tracking-widest">
+                      <Calendar size={12} />
+                      Ends {new Date(camp.endTime).toLocaleString()}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 truncate max-w-[100px] lg:max-w-none">{winnerBanner.owner}</span>
-                      </div>
-                      <h3 className="text-lg lg:text-xl font-black text-white tracking-tighter uppercase">
-                        Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
-                      </h3>
+                    <div className="w-1 h-1 bg-white/10 rounded-full" />
+                    <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
+                      Prize: {camp.prize || 'Pride'}
                     </div>
                   </div>
-                </motion.div>
-              )}
+                </div>
+              </div>
 
-              {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
-                <motion.div
-                  key={camp.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
-                >
-                  <div className="flex items-center gap-6">
-                    <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[#3CB371]">
-                      <Trophy size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-black text-white uppercase tracking-tight">{camp.title}</h3>
-                      <div className="flex flex-wrap items-center gap-4 mt-1">
-                        <div className="flex items-center gap-1.5 text-[10px] font-black text-white/40 uppercase tracking-widest">
-                          <Calendar size={12} />
-                          Ends {new Date(camp.endTime).toLocaleString()}
-                        </div>
-                        <div className="w-1 h-1 bg-white/10 rounded-full" />
-                        <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
-                          Prize: {camp.prize || 'Pride'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => navigate(`/campaign/${camp.id}`)}
-                    className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
-                      ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
-                      : 'bg-white text-black hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.3)]'
-                      }`}
-                  >
-                    {enrollments[camp.id] ? (
-                      <>
-                        <CheckCircle size={14} />
-                        View Leaderboard
-                      </>
-                    ) : (
-                      <>
-                        View Campaign Details
-                        <ChevronRight size={14} />
-                      </>
-                    )}
-                  </button>
-                </motion.div>
-              ))}
-            </div>
+              <button
+                onClick={() => navigate(`/campaign/${camp.id}`)}
+                className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
+                  ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
+                  : 'bg-white text-black hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.3)]'
+                  }`}
+              >
+                {enrollments[camp.id] ? (
+                  <>
+                    <CheckCircle size={14} />
+                    View Leaderboard
+                  </>
+                ) : (
+                  <>
+                    View Campaign Details
+                    <ChevronRight size={14} />
+                  </>
+                )}
+              </button>
+            </motion.div>
+          ))}
+        </div>
 
 
 
-            <ProfileModal
-              isOpen={isProfileOpen}
-              onClose={() => setIsProfileOpen(false)}
-              wallet={wallet}
-              userProfile={userProfile}
-            />
-            <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
+        <ProfileModal
+          isOpen={isProfileOpen}
+          onClose={() => setIsProfileOpen(false)}
+          wallet={wallet}
+          userProfile={userProfile}
+        />
+        <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
 
 
 
-            <AnimatePresence>
-              {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
-            </AnimatePresence>
+        <AnimatePresence>
+          {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+        </AnimatePresence>
 
-            <OnboardingModal
-              isOpen={showOnboarding}
-              onComplete={handleOnboardingComplete}
-              address={address}
-              network={network}
-              existingProfile={userProfile}
-              theme={theme}
-            />
+        <OnboardingModal
+          isOpen={showOnboarding}
+          onComplete={handleOnboardingComplete}
+          address={address}
+          network={network}
+          existingProfile={userProfile}
+          theme={theme}
+        />
 
-            {/* Footer */}
-            <footer className="w-full max-w-7xl mt-24 mb-10 flex items-center justify-center gap-6 opacity-60 hover:opacity-100 transition-opacity" style={{ fontFamily: 'Arial, sans-serif' }}>
-              <img
-                src="/logo.png"
-                alt="15market"
-                className="h-10 w-auto opacity-80"
-              />
-              <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
-              <span className={`text-xs md:text-sm font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                © 2026 15market
-              </span>
-              <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
-              <span className={`text-xs md:text-sm font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-                Built by 15labs
-              </span>
-            </footer>
-          </div>
-        </>
-      )}
+        {/* Footer */}
+        <footer className="w-full max-w-7xl mt-24 mb-10 flex items-center justify-center gap-6 opacity-60 hover:opacity-100 transition-opacity" style={{ fontFamily: 'Arial, sans-serif' }}>
+          <img
+            src="/logo.png"
+            alt="15market"
+            className="h-10 w-auto opacity-80"
+          />
+          <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
+          <span className={`text-xs md:text-sm font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+            © 2026 15market
+          </span>
+          <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
+          <span className={`text-xs md:text-sm font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+            Built by 15labs
+          </span>
+        </footer>
+      </div>
     </motion.div>
   );
 }
