@@ -907,15 +907,6 @@ export default function UserApp() {
         });
 
         sources.push({
-          name: "pyth-beta",
-          url: `https://hermes-beta.pyth.network/v2/updates/price/latest?ids[]=${activeMarket.pythId}`,
-          parse: d => {
-            const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
-          }
-        });
-
-        sources.push({
           name: "pyth-bench",
           url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids[]=${activeMarket.pythId}`,
           parse: d => {
