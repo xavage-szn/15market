@@ -718,7 +718,7 @@ export default function UserApp() {
   }, [evmSessionWallet, updateEvmSessionBal]);
 
 
-  // Fetch current user profile
+  // Fetch current user profile - STRICT REDIS VERIFICATION
   useEffect(() => {
     if (!isConnected || !address) {
       setUserProfile(null);
@@ -727,34 +727,51 @@ export default function UserApp() {
       return;
     }
 
-    // SILENT CACHE OPTIMIZATION: Check local storage first for near-instant load
+    // OPTIMISTIC UI: Show cached profile immediately for UX
     const cachedProfile = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
     if (cachedProfile) {
       try {
         const parsed = JSON.parse(cachedProfile);
-        setUserProfile(parsed);
-        setShowOnboarding(!parsed.xHandle || parsed.xHandle === "");
-        setProfileChecked(true);
+        // Only use cache if it has xHandle (verified user)
+        if (parsed.xHandle && parsed.xHandle !== "") {
+          setUserProfile(parsed);
+          setShowOnboarding(false);
+        }
       } catch (e) { }
     }
 
+    // AUTHORITATIVE CHECK: Always verify with Redis (source of truth)
     const fetchMyProfile = async () => {
       try {
         const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
         if (res.ok) {
           const profile = await res.json();
-          if (profile) {
+
+          if (profile && profile.xHandle && profile.xHandle !== "") {
+            // User is verified - allow access
             setUserProfile(profile);
-            setShowOnboarding(!profile.xHandle || profile.xHandle === "");
-            // Update cache
+            setShowOnboarding(false);
+            // Update cache with verified profile
             localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
           } else {
+            // User not verified or no X handle - BLOCK ACCESS
             setUserProfile(null);
             setShowOnboarding(true);
+            // Clear stale cache
+            localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);
           }
+        } else {
+          // API error - assume not verified for security
+          setUserProfile(null);
+          setShowOnboarding(true);
+          localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);
         }
       } catch (err) {
-        console.error("My profile error:", err);
+        console.error("Profile verification failed:", err);
+        // On error, block access for security
+        setUserProfile(null);
+        setShowOnboarding(true);
+        localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);
       } finally {
         setProfileChecked(true);
       }
@@ -764,14 +781,20 @@ export default function UserApp() {
 
   const handleOnboardingComplete = async (onboardingData) => {
     try {
-      // Setup profile on Arc Keeper
+      // CRITICAL: Verify X handle is present
+      if (!onboardingData.twitterHandle || onboardingData.twitterHandle === "") {
+        notify("X account linking is required to access 15market", "error");
+        return;
+      }
+
+      // Setup profile on Arc Keeper (Redis)
       const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           address,
           username: onboardingData.username,
-          xHandle: onboardingData.twitterHandle || "",
+          xHandle: onboardingData.twitterHandle,
           xProfileImage: onboardingData.twitterImage || "",
           discordHandle: "",
           tosAccepted: onboardingData.tosAccepted
@@ -780,13 +803,19 @@ export default function UserApp() {
 
       if (!res.ok) throw new Error("Backend save failed");
 
-      setUserProfile({
+      const verifiedProfile = {
         username: onboardingData.username,
         xHandle: onboardingData.twitterHandle,
         xProfileImage: onboardingData.twitterImage || "",
         tosAccepted: onboardingData.tosAccepted
-      });
+      };
+
+      setUserProfile(verifiedProfile);
       setShowOnboarding(false);
+
+      // Cache verified profile
+      localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(verifiedProfile));
+
       notify("Welcome to 15market, " + onboardingData.username, "success");
     } catch (err) {
       console.error("Profile sync failed:", err);
