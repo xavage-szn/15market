@@ -24,12 +24,6 @@ export function AppParaProvider({ children }) {
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],
                 walletConnect: { projectId: activeProjectId },
-                evmConnector: {
-                    config: {
-                        chains: [arcTestnet],
-                        defaultChainId: arcTestnet.id,
-                    },
-                },
             }}
             paraModalConfig={{
                 theme: {

@@ -1,4 +1,4 @@
-import Para, { Environment } from "@getpara/web-sdk";
+import { Para, Environment } from "@getpara/react-sdk";
 import { QueryClient } from "@tanstack/react-query";
 import { projectId, ARC_RPC } from "./constants";
 
