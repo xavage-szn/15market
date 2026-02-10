@@ -2457,8 +2457,12 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                             <tr key={profile.address} className="border-b border-white/5 hover:bg-white/[0.01] transition-colors group">
                                                                 <td className="px-8 py-6">
                                                                     <div className="flex items-center gap-4">
-                                                                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                                                                            <User size={16} className="text-white/20 group-hover:text-[#3CB371] transition-colors" />
+                                                                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center overflow-hidden border border-white/5">
+                                                                            {profile.xProfileImage ? (
+                                                                                <img src={profile.xProfileImage} alt="" className="w-full h-full object-cover" />
+                                                                            ) : (
+                                                                                <User size={16} className="text-white/20 group-hover:text-[#3CB371] transition-colors" />
+                                                                            )}
                                                                         </div>
                                                                         <div>
                                                                             <p className="text-xs font-black text-white">{profile.username || "Anonymous Operator"}</p>

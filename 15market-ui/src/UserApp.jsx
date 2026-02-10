@@ -1525,63 +1525,116 @@ export default function UserApp() {
 
       {/* LAYOUT SWITCHER */}
       {/* V1 LAYOUT (Only layout now) */}
-      <>
-        <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
-          <div className="w-full -mx-2 lg:mx-0">
-            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
-          </div>
-        </div>
-
-        <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
-          {/* Chart - Responsive - Full width */}
-          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
-            style={{
-              background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
-              boxShadow: theme === 'light'
-                ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
-                : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
-            }}>
-            <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} />
-          </div>
-
-          {/* Terminal - 50/50 split on desktop and mobile */}
-          <div className="col-span-6 lg:col-span-6 flex flex-col">
-            <TradeTerminal
-              activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
-              sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-              setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-              sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-              theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-              refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
-              evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-              activeMarket={activeMarket}
-              maintenanceMode={platformSettings.maintenanceMode}
-            />
-          </div>
-
-          {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
-          <div className="col-span-6 lg:col-span-6 flex flex-col">
-            <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
-              <LiveExecution
-                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                theme={theme} currentNetwork={network}
-              />
+      <div className="w-full max-w-7xl flex flex-col items-center">
+        {isConnected && !profileChecked ? (
+          <div className="w-full py-40 flex flex-col items-center justify-center space-y-8">
+            <div className="relative">
+              <div className="absolute inset-0 blur-2xl bg-[#3CB371]/20 animate-pulse" />
+              <div className="w-16 h-16 border-2 border-[#3CB371]/30 border-t-[#3CB371] rounded-2xl animate-spin relative z-10" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-black text-white uppercase tracking-[0.3em]">Authenticating Identity</h3>
+              <p className="text-[#3CB371] text-[9px] font-black uppercase tracking-[0.4em] mt-3 animate-pulse">Syncing with Citadel Registry...</p>
             </div>
           </div>
-        </div>
+        ) : isConnected && showOnboarding ? (
+          <div className="w-full py-20 lg:py-40 flex flex-col items-center px-6 relative">
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
 
-        <TradeHistory
-          wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-          tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-          setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-          GREEN={GREEN} CORAL={CORAL}
-          evmSessionWallet={evmSessionWallet}
-          theme={theme} currentNetwork={network}
-        />
-      </>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-2xl bg-[#0D0D0D]/60 backdrop-blur-3xl !rounded-[48px] p-12 lg:p-20 text-center border border-white/10 relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
+            >
+              <div className="absolute top-0 right-0 p-12 opacity-[0.02] pointer-events-none">
+                <Shield size={220} />
+              </div>
+
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                className="w-24 h-24 bg-red-500/10 border border-red-500/20 rounded-[32px] flex items-center justify-center mx-auto mb-10 relative"
+              >
+                <div className="absolute inset-0 blur-2xl bg-red-500/20 opacity-50" />
+                <Lock size={40} className="text-red-500 relative z-10" />
+              </motion.div>
+
+              <h2 className="text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter mb-6 leading-none">
+                Identity Verification <br /> <span className="text-red-500">Required</span>
+              </h2>
+
+              <p className="text-white/40 text-sm lg:text-lg font-bold uppercase tracking-widest leading-relaxed mb-12 max-w-md mx-auto">
+                Access to the 15market terminal is restricted to verified operators only.
+              </p>
+
+              <div className="space-y-6">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="h-[1px] w-12 bg-white/10" />
+                  <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-[0.4em] animate-pulse">Complete Onboarding Below</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        ) : (
+          <>
+            <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
+              <div className="w-full -mx-2 lg:mx-0">
+                <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
+              </div>
+            </div>
+
+            <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
+              {/* Chart - Responsive - Full width */}
+              <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
+                style={{
+                  background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+                  boxShadow: theme === 'light'
+                    ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                    : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
+                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
+                }}>
+                <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} />
+              </div>
+
+              {/* Terminal - 50/50 split on desktop and mobile */}
+              <div className="col-span-6 lg:col-span-6 flex flex-col">
+                <TradeTerminal
+                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
+                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                  refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
+                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                  activeMarket={activeMarket}
+                  maintenanceMode={platformSettings.maintenanceMode}
+                />
+              </div>
+
+              {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
+              <div className="col-span-6 lg:col-span-6 flex flex-col">
+                <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
+                  <LiveExecution
+                    activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                    setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                    theme={theme} currentNetwork={network}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <TradeHistory
+              wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+              tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+              GREEN={GREEN} CORAL={CORAL}
+              evmSessionWallet={evmSessionWallet}
+              theme={theme} currentNetwork={network}
+            />
+          </>
+        )}
+      </div>
 
       {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
       <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
