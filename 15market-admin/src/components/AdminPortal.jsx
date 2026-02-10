@@ -149,15 +149,14 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [messages, setMessages] = useState({}); // { disputeId: [msgs] }
     const [newMessage, setNewMessage] = useState('');
     const [keeperHealth, setKeeperHealth] = useState({ connected: true, failCount: 0, lastCheck: Date.now() });
-    const [keeperHealthRef, useRef] = useState(keeperHealth); // FIXED: Using useState instead of useRef directly causing crash? No, useRef doesn't return state setter.
+    const keeperHealthRef = useRef(keeperHealth);
     // Wait, original code was: const keeperHealthRef = useRef(keeperHealth); useEffect(() => { keeperHealthRef.current = keeperHealth; }, [keeperHealth]);
     // The previous view showed: const keeperHealthRef = useRef(keeperHealth); which means keeperHealthRef.current is initial state.
     // The previous view also showed: useEffect(() => { keeperHealthRef.current = keeperHealth; }, [keeperHealth]);
 
     // Changing back to original ref usage pattern to avoid regressions, focusing on network fix.
-    const keeperHealthRefObj = React.useRef(keeperHealth);
     useEffect(() => {
-        keeperHealthRefObj.current = keeperHealth;
+        keeperHealthRef.current = keeperHealth;
     }, [keeperHealth]);
 
 
