@@ -172,14 +172,33 @@ app.get('/trades/:address', (req, res) => {
 
     res.json(userTrades);
 });
-app.get('/active-bets', (req, res) => res.json(Object.values(state.activeBets)));
+app.get('/active-bets', (req, res) => {
+    const now = Date.now() / 1000;
+    const activeBets = Object.values(state.activeBets).filter(b => {
+        // Filter out bets that expired more than 60 seconds ago
+        if (b.expiry && now > b.expiry + 60) {
+            console.warn(`⚠️ [STALE_BET] Bet #${b.id} expired ${Math.floor(now - b.expiry)}s ago but still in activeBets. Removing...`);
+            delete state.activeBets[b.id];
+            return false;
+        }
+        return true;
+    });
+    res.json(activeBets);
+});
 app.get('/active-bets/:address', (req, res) => {
     const { address } = req.params;
     if (!address) return res.status(400).json({ error: 'Missing address' });
 
-    const userActive = Object.values(state.activeBets).filter(b =>
-        b.user && b.user.toLowerCase() === address.toLowerCase()
-    );
+    const now = Date.now() / 1000;
+    const userActive = Object.values(state.activeBets).filter(b => {
+        // Filter out expired bets
+        if (b.expiry && now > b.expiry + 60) {
+            console.warn(`⚠️ [STALE_BET] Bet #${b.id} expired ${Math.floor(now - b.expiry)}s ago but still in activeBets. Removing...`);
+            delete state.activeBets[b.id];
+            return false;
+        }
+        return b.user && b.user.toLowerCase() === address.toLowerCase();
+    });
 
     res.json(userActive);
 });
@@ -938,3 +957,43 @@ setInterval(async () => {
         // Ignore errors from self-ping
     }
 }, 60000);
+
+// --- STALE BET CLEANUP ---
+// Remove bets that have expired but weren't properly settled
+setInterval(() => {
+    const now = Date.now() / 1000;
+    let cleanedCount = 0;
+
+    Object.keys(state.activeBets).forEach(betId => {
+        const bet = state.activeBets[betId];
+        // Remove bets that expired more than 2 minutes ago
+        if (bet.expiry && now > bet.expiry + 120) {
+            console.warn(`🧹 [CLEANUP] Removing stale bet #${betId} (expired ${Math.floor(now - bet.expiry)}s ago)`);
+
+            // Move to history if not already there
+            if (!state.history.find(h => String(h.id) === betId)) {
+                state.history.unshift({
+                    id: betId,
+                    owner: bet.user,
+                    amount: bet.amount,
+                    currency: "USDC",
+                    direction: Number(bet.direction) === 0 ? "UP" : "DOWN",
+                    entryPrice: bet.entryPrice,
+                    exitPrice: "0.00", // Unknown exit price
+                    timestamp: Number(bet.timestamp) * 1000,
+                    status: "TIMEOUT",
+                    network: 'arc'
+                });
+                if (state.history.length > 2000) state.history.pop();
+            }
+
+            delete state.activeBets[betId];
+            cleanedCount++;
+        }
+    });
+
+    if (cleanedCount > 0) {
+        console.log(`🧹 [CLEANUP] Removed ${cleanedCount} stale bet(s)`);
+        saveState();
+    }
+}, 30000); // Run every 30 seconds
