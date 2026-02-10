@@ -135,10 +135,13 @@ export default function UserApp() {
 
   const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
   const { isConnected: isWagmiConnected, address: wagmiAddress, connector: wagmiConnector } = useWagmiAccount();
+  const { data: paraWallet } = useWallet();
 
   const isConnected = isParaConnected || isWagmiConnected;
-  const address = paraAddress || wagmiAddress;
-  const { data: paraWallet } = useWallet();
+  // Robust address resolution across all possible states
+  const address = useMemo(() => {
+    return paraAddress || wagmiAddress || paraWallet?.address;
+  }, [paraAddress, wagmiAddress, paraWallet]);
   const { connect, connectors } = useConnect();
 
   // SYNC PARA WITH WAGMI: Ensure Para session is known to Wagmi
@@ -1586,7 +1589,7 @@ export default function UserApp() {
         {/* Desktop Controls */}
         <div className="hidden lg:flex items-center gap-3">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
+          <WalletBalance network={network} theme={theme} balanceOverride={balance} sessionMode={sessionMode} />
 
           {uiVersion === 'v1' && (
             <>

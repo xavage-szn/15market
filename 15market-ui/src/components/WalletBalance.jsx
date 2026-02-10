@@ -3,44 +3,27 @@ import { useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
 import { useBalance, useAccount as useWagmiAccount } from "wagmi";
 
 export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
-    const { isConnected: isParaConnected } = useParaAccount();
+    const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
     const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
     const { data: paraWallet } = useWallet();
-    const address = paraWallet?.address || wagmiAddress;
+    const address = paraAddress || wagmiAddress || paraWallet?.address;
     const isConnected = isParaConnected || isWagmiConnected;
     const [internalBalance, setInternalBalance] = useState(0);
 
-    // Only use balanceOverride when in session mode
-    const balance = sessionMode ? balanceOverride : internalBalance;
+    // Sync balance with the override passed from UserApp (robust fetch)
+    const balance = (typeof balanceOverride === 'number') ? balanceOverride : internalBalance;
 
     const { data: evmBalance, refetch: refetchEvm } = useBalance({
         address: address,
-        chainId: 5042002, // Arc Testnet
-        query: { enabled: isConnected }
+        chainId: 5042002,
+        query: { enabled: isConnected && !balanceOverride }
     });
 
     useEffect(() => {
-        console.log("💰 [WALLET BALANCE] Component update:", {
-            isConnected,
-            address,
-            sessionMode,
-            balanceOverride,
-            internalBalance,
-            evmBalance: evmBalance?.formatted,
-            finalBalance: balance
-        });
-
-        if (!isConnected || !address) {
-            setInternalBalance(0);
-            return;
+        if (evmBalance && !balanceOverride) {
+            setInternalBalance(parseFloat(evmBalance.formatted));
         }
-
-        if (evmBalance) {
-            const bal = parseFloat(evmBalance.formatted);
-            console.log("✅ [WALLET BALANCE] Setting internal balance:", bal);
-            setInternalBalance(bal);
-        }
-    }, [isConnected, address, evmBalance, sessionMode, balanceOverride, balance]);
+    }, [evmBalance, balanceOverride]);
 
     useEffect(() => {
         if (isConnected) {
