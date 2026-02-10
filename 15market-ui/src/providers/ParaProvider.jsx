@@ -8,11 +8,18 @@ export function AppParaProvider({ children }) {
 
     return (
         <ParaProvider
-            paraClientConfig={{
-                apiKey: paraApiKey,
-                env: paraEnv,
-            }}
+            para={para}
             queryClient={queryClient}
+            config={{
+                appName: "15market",
+                chains: [{
+                    chainId: "eip155:5042002",
+                    chainName: "Arc Testnet",
+                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+                    rpcUrls: [ARC_RPC]
+                }],
+                defaultChainId: "eip155:5042002",
+            }}
             externalWalletConfig={{
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],
