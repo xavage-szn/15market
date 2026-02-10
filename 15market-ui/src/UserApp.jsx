@@ -80,7 +80,7 @@ export default function UserApp() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(true); // START LOCKED BY DEFAULT
   const [isPnLOpen, setIsPnLOpen] = useState(false);
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
@@ -718,24 +718,27 @@ export default function UserApp() {
   }, [evmSessionWallet, updateEvmSessionBal]);
 
 
+
   // Fetch current user profile - STRICT REDIS VERIFICATION
   useEffect(() => {
     if (!isConnected || !address) {
       setUserProfile(null);
       setProfileChecked(false);
-      setShowOnboarding(false);
+      setShowOnboarding(false); // Only false if not connected at all
       return;
     }
 
-    // OPTIMISTIC UI: Show cached profile immediately for UX
+    // MANDATORY RESET: Assume onboarding is needed until proven otherwise
+    setShowOnboarding(true);
+
+    // OPTIMISTIC UI: Check cache for verified profile
     const cachedProfile = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
     if (cachedProfile) {
       try {
         const parsed = JSON.parse(cachedProfile);
-        // Only use cache if it has xHandle (verified user)
         if (parsed.xHandle && parsed.xHandle !== "") {
           setUserProfile(parsed);
-          setShowOnboarding(false);
+          setShowOnboarding(false); // UNLOCK if cache is valid
         }
       } catch (e) { }
     }
@@ -1526,107 +1529,104 @@ export default function UserApp() {
         transition: "color 0.3s ease"
       }}>
 
-      <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="logo" className={`h-16 lg:h-24 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
-        </div>
+      {/* CONTENT GATE - BLOCK ENTIRE SITE */}
+      {isConnected && (showOnboarding || !profileChecked) ? (
+        <div className="flex-1 w-full flex flex-col items-center justify-center px-6 relative z-[60] min-h-[80vh]">
+          <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at center, #ffffff05 0%, transparent 70%)' }} />
 
-        {/* Desktop Nav */}
-        <div className="hidden lg:flex items-center gap-12">
-          {/* Dashboard/Trading links removed from navbar per request */}
-        </div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl bg-[#0D0D0D]/60 backdrop-blur-3xl !rounded-[48px] p-12 lg:p-20 text-center border border-white/10 relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
+          >
+            {/* Verification Content */}
+            <div className="absolute top-0 right-0 p-12 opacity-[0.02] pointer-events-none">
+              <Shield size={220} />
+            </div>
 
+            <motion.div
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="w-24 h-24 bg-red-500/10 border border-red-500/20 rounded-[32px] flex items-center justify-center mx-auto mb-10 relative"
+            >
+              <div className="absolute inset-0 blur-2xl bg-red-500/20 opacity-50" />
+              <Lock size={40} className="text-red-500 relative z-10" />
+            </motion.div>
 
+            <h2 className="text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter mb-6 leading-none">
+              Identity Verification <br /> <span className="text-red-500">{!profileChecked ? 'Authenticating...' : 'Required'}</span>
+            </h2>
 
-        {/* Desktop Controls */}
-        <div className="hidden lg:flex items-center gap-3">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
+            <p className="text-white/40 text-sm lg:text-lg font-bold uppercase tracking-widest leading-relaxed mb-12 max-w-md mx-auto">
+              {!profileChecked
+                ? "Syndicating credentials with the Arc Security Node..."
+                : "A verified X account (Twitter) must be linked to access the 15market terminal."}
+            </p>
 
-          {uiVersion === 'v1' && (
-            <>
-              {/* Notifications Placeholder */}
-              <div className="relative group">
-                <button className={`p-2.5 rounded-xl border backdrop-blur-md transition-all ${theme === 'light' ? 'bg-black/[0.03] border-black/5 hover:bg-black/[0.08]' : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.08]'}`}>
-                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#3CB371] border-2 border-[#050505] flex items-center justify-center">
-                    <span className="text-[8px] font-black text-white">2</span>
+            <div className="space-y-6">
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-[1px] w-12 bg-white/10" />
+                {!profileChecked ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-[#3CB371] animate-ping" />
+                    <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-[0.4em]">Node Sync in Progress</p>
                   </div>
-                  <svg className={`w-5 h-5 ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                </button>
+                ) : (
+                  <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-[0.4em] animate-pulse">Complete Onboarding to Unlock</p>
+                )}
               </div>
+            </div>
+          </motion.div>
+        </div>
+      ) : (
+        <>
+          <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
+            <div className="flex items-center gap-4">
+              <img src="/logo.png" alt="logo" className={`h-16 lg:h-24 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+            </div>
 
-              <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+            {/* Desktop Nav */}
+            <div className="hidden lg:flex items-center gap-12">
+              {/* Dashboard/Trading links removed from navbar per request */}
+            </div>
+
+            {/* Desktop Controls */}
+            <div className="hidden lg:flex items-center gap-3">
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              <WalletBalance network={network} theme={theme} balanceOverride={activeBal} sessionMode={sessionMode} />
+
+              {uiVersion === 'v1' && (
+                <>
+                  <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+                    style={{
+                      backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                      borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                    }}>
+                    <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                  </button>
+                </>
+              )}
+
+              <UnifiedWalletButton theme={theme} />
+            </div>
+
+            {/* Mobile Controls */}
+            <div className="flex lg:hidden items-center gap-2">
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+
+              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
-            </>
-          )}
 
-          <UnifiedWalletButton theme={theme} />
-        </div>
+              <UnifiedWalletButton theme={theme} />
+            </div>
+          </header>
 
-        {/* Mobile Controls */}
-        <div className="flex lg:hidden items-center gap-2">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-
-          <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
-            style={{
-              backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-              borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-            }}>
-            <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-          </button>
-
-          <UnifiedWalletButton theme={theme} />
-        </div>
-      </header>
-
-      {/* LAYOUT SWITCHER */}
-      {/* V1 LAYOUT (Only layout now) */}
-      <div className="w-full max-w-7xl flex flex-col items-center">
-        {isConnected && showOnboarding ? (
-          <div className="w-full py-20 lg:py-40 flex flex-col items-center px-6 relative">
-            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at center, #ffffff05 0%, transparent 70%)' }} />
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="w-full max-w-2xl bg-[#0D0D0D]/60 backdrop-blur-3xl !rounded-[48px] p-12 lg:p-20 text-center border border-white/10 relative overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
-            >
-              <div className="absolute top-0 right-0 p-12 opacity-[0.02] pointer-events-none">
-                <Shield size={220} />
-              </div>
-
-              <motion.div
-                animate={{ y: [0, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="w-24 h-24 bg-red-500/10 border border-red-500/20 rounded-[32px] flex items-center justify-center mx-auto mb-10 relative"
-              >
-                <div className="absolute inset-0 blur-2xl bg-red-500/20 opacity-50" />
-                <Lock size={40} className="text-red-500 relative z-10" />
-              </motion.div>
-
-              <h2 className="text-3xl lg:text-4xl font-black text-white uppercase tracking-tighter mb-6 leading-none">
-                Identity Verification <br /> <span className="text-red-500">Required</span>
-              </h2>
-
-              <p className="text-white/40 text-sm lg:text-lg font-bold uppercase tracking-widest leading-relaxed mb-12 max-w-md mx-auto">
-                Access to the 15market terminal is restricted to verified operators only.
-              </p>
-
-              <div className="space-y-6">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="h-[1px] w-12 bg-white/10" />
-                  <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-[0.4em] animate-pulse">Complete Onboarding Below</p>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        ) : (
-          <>
+          <div className="w-full max-w-7xl flex flex-col items-center">
             <div className="w-full max-w-7xl mb-4 lg:mb-10 flex items-center justify-between">
               <div className="w-full -mx-2 lg:mx-0">
                 <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
@@ -1684,7 +1684,7 @@ export default function UserApp() {
             />
           </>
         )}
-      </div>
+        </div>
 
       {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
       <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
@@ -1805,7 +1805,10 @@ export default function UserApp() {
           Built by 15labs
         </span>
       </footer>
-
-    </motion.div>
+    </div>
+    </>
+    )
+}
+    </motion.div >
   );
 }
