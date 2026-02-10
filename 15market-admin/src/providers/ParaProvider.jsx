@@ -1,17 +1,15 @@
-import { ParaProvider, Environment } from "@getpara/react-sdk";
+import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
 import { arcTestnet, projectId } from "../constants";
+import { para, queryClient } from "../paraClient";
 
 export function AppParaProvider({ children }) {
-    const paraApiKey = import.meta.env.VITE_PARA_API_KEY || "beta_d86df4100fa75b359939af58f0f43abb";
-    const activeProjectId = projectId || import.meta.env.VITE_REOWN_PROJECT_ID || "4aebd2ef806c541b6aaf003da2930c58";
+    const activeProjectId = projectId || "4aebd2ef806c541b6aaf003da2930c58";
 
     return (
         <ParaProvider
-            paraClientConfig={{
-                env: Environment.BETA,
-                apiKey: paraApiKey,
-            }}
+            para={para}
+            queryClient={queryClient}
             config={{
                 appName: "15market",
                 chains: ["evm:5042002"],
