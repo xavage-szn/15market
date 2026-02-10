@@ -773,7 +773,7 @@ export default function UserApp() {
     if (cachedProfile) {
       try {
         const parsed = JSON.parse(cachedProfile);
-        if (parsed.xHandle && parsed.xHandle !== "") {
+        if (parsed.xHandle && parsed.xHandle !== "" && parsed.tosAccepted) {
           setUserProfile(parsed);
           setShowOnboarding(false); // UNLOCK if cache is valid
         }
@@ -787,15 +787,15 @@ export default function UserApp() {
         if (res.ok) {
           const profile = await res.json();
 
-          if (profile && profile.xHandle && profile.xHandle !== "") {
+          if (profile && profile.xHandle && profile.xHandle !== "" && profile.tosAccepted) {
             // User is verified - allow access
             setUserProfile(profile);
             setShowOnboarding(false);
             // Update cache with verified profile
             localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
           } else {
-            // User not verified or no X handle - BLOCK ACCESS
-            setUserProfile(null);
+            // User not verified or no X handle or no TOS - BLOCK ACCESS
+            setUserProfile(profile || null);
             setShowOnboarding(true);
             // Clear stale cache
             localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);

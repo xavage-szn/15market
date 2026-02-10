@@ -103,8 +103,10 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     address: address,
+                    username: username,
                     network: network,
-                    onboarding: true
+                    onboarding: true,
+                    origin: window.location.origin
                 })
             });
             const { state: stateId } = await prepareRes.json();
