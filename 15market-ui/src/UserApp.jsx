@@ -5,7 +5,10 @@ import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/reac
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
-import { MessageSquare, User } from "lucide-react";
+import {
+  MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
+  Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock
+} from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { useWriteContract, useBalance, useSendTransaction, useSignMessage, useWatchContractEvent, useChainId, useSwitchChain, useAccount as useWagmiAccount } from "wagmi";
 import { parseEther, parseUnits } from "viem";
@@ -19,7 +22,6 @@ import { DashboardPage } from "./components/DashboardPage";
 
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP } from "./constants";
-import { Trophy, Calendar, CheckCircle, ChevronRight, Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X } from "lucide-react";
 
 import { OnboardingModal } from "./components/OnboardingModal";
 
