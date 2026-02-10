@@ -39,7 +39,8 @@ const ARC_RPC_LIST = [
 ];
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const KEEPER_URL = process.env.KEEPER_URL || "http://localhost:8080";
+const KEEPER_URL_BASE = process.env.KEEPER_URL || "http://localhost:3010";
+const KEEPER_URL = process.env.KEEPER_URL_ARC || (KEEPER_URL_BASE.includes('localhost') ? KEEPER_URL_BASE : `${KEEPER_URL_BASE}/arc`);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "15MARKET_ADMIN_SECRET_KEY_2024";
 const PORT = process.env.PORT || 3010;
 
@@ -346,7 +347,7 @@ app.get('/auth/twitter/callback', async (req, res) => {
         const rawState = await redis.get(`x_auth_state:${state}`);
         if (!rawState) return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}?error=invalid_state`);
 
-        const { address } = JSON.parse(rawState);
+        const { address } = rawState;
 
         // Exchange code for token
         const tokenRes = await axios.post('https://api.twitter.com/2/oauth2/token', new URLSearchParams({

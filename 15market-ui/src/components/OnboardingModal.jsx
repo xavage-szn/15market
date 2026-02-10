@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, User, AlertTriangle, CheckCircle, ChevronRight, Scale, MessageSquare } from 'lucide-react';
-import { KEEPER_URL } from '../constants';
+import { KEEPER_URL_ARC } from '../constants';
 
 // X Logo Component
 const XLogo = ({ size = 24, className = "" }) => (
@@ -78,11 +78,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
     const handleLinkTwitter = async () => {
         try {
             const CLIENT_ID = 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
-            const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL}/auth/twitter/callback`);
+            const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL_ARC}/auth/twitter/callback`);
             const SCOPE = encodeURIComponent('users.read tweet.read offline.access');
 
             // Securely prepare state on backend
-            const prepareRes = await fetch(`${KEEPER_URL}/auth/twitter/prepare`, {
+            const prepareRes = await fetch(`${KEEPER_URL_ARC}/auth/twitter/prepare`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
