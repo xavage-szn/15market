@@ -727,23 +727,31 @@ export default function UserApp() {
       return;
     }
 
+    // SILENT CACHE OPTIMIZATION: Check local storage first for near-instant load
+    const cachedProfile = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
+    if (cachedProfile) {
+      try {
+        const parsed = JSON.parse(cachedProfile);
+        setUserProfile(parsed);
+        setShowOnboarding(!parsed.xHandle || parsed.xHandle === "");
+        setProfileChecked(true);
+      } catch (e) { }
+    }
+
     const fetchMyProfile = async () => {
       try {
-        let profile = null;
         const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
         if (res.ok) {
-          const data = await res.json();
-          if (data) profile = data;
-        }
-
-        if (profile) {
-          setUserProfile(profile);
-          // FORCE X LINKING: If profile exists but xHandle is missing, show onboarding
-          setShowOnboarding(!profile.xHandle || profile.xHandle === "");
-        } else {
-          setUserProfile(null);
-          // New user -> Show onboarding
-          setShowOnboarding(true);
+          const profile = await res.json();
+          if (profile) {
+            setUserProfile(profile);
+            setShowOnboarding(!profile.xHandle || profile.xHandle === "");
+            // Update cache
+            localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
+          } else {
+            setUserProfile(null);
+            setShowOnboarding(true);
+          }
         }
       } catch (err) {
         console.error("My profile error:", err);
@@ -1550,18 +1558,7 @@ export default function UserApp() {
       {/* LAYOUT SWITCHER */}
       {/* V1 LAYOUT (Only layout now) */}
       <div className="w-full max-w-7xl flex flex-col items-center">
-        {isConnected && !profileChecked ? (
-          <div className="w-full py-40 flex flex-col items-center justify-center space-y-8">
-            <div className="relative">
-              <div className="absolute inset-0 blur-2xl bg-[#3CB371]/20 animate-pulse" />
-              <div className="w-16 h-16 border-2 border-[#3CB371]/30 border-t-[#3CB371] rounded-2xl animate-spin relative z-10" />
-            </div>
-            <div className="text-center">
-              <h3 className="text-xl font-black text-white uppercase tracking-[0.3em]">Authenticating Identity</h3>
-              <p className="text-[#3CB371] text-[9px] font-black uppercase tracking-[0.4em] mt-3 animate-pulse">Syncing with Citadel Registry...</p>
-            </div>
-          </div>
-        ) : isConnected && showOnboarding ? (
+        {isConnected && showOnboarding ? (
           <div className="w-full py-20 lg:py-40 flex flex-col items-center px-6 relative">
             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at center, #ffffff05 0%, transparent 70%)' }} />
 
