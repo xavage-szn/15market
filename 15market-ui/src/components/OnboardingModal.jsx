@@ -49,7 +49,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
 
         if (error) {
             console.error("❌ Onboarding: X Auth Error:", error);
-            const msg = error === 'invalid_state' ? "Session expired. Try again." : "X Authentication failed.";
+            let msg = "X Authentication failed.";
+            if (error === 'invalid_state') msg = "Session expired. Try again.";
+            if (error === 'invalid_config') msg = "X OAuth Configuration error. check Redirect URIs.";
+            if (error === 'client_error') msg = "X Client connection error. Try again later.";
+
             if (typeof window.notify === 'function') window.notify(msg, "error");
             else alert(msg);
             // Clean up URL
