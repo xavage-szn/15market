@@ -19,6 +19,9 @@ export function AppParaProvider({ children }) {
                     rpcUrls: [ARC_RPC]
                 }],
                 defaultChainId: "eip155:5042002",
+                sessionConfig: {
+                    disableAutoSessionKeepAlive: false
+                }
             }}
             externalWalletConfig={{
                 appName: "15market",
