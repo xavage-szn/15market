@@ -37,7 +37,7 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
     // Safety Mesh: Double check math in case status flag is de-synced or delayed
     const entryUSD = parseFloat(trade.entryPrice);
     const settleUSD = parseFloat(trade.settlementPrice);
-    const isUp = trade.direction === "buy";
+    const isUp = trade.direction === "buy" || trade.direction === "UP";
     const mathSaysWin = isUp ? (settleUSD >= entryUSD) : (settleUSD <= entryUSD);
 
     // A trade is WON if the status says so OR if the math is undeniable (and we have a settlement price)
@@ -77,14 +77,14 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
                     >
                         {/* Repeating Watermark Pattern */}
                         <div
-                            className="absolute inset-0 pointer-events-none select-none"
+                            className="absolute inset-0 pointer-events-none select-none overflow-hidden"
                             style={{
-                                backgroundImage: 'url(/logo.png)',
-                                backgroundSize: '80px 80px',
+                                backgroundImage: `url('/logo.png')`,
+                                backgroundSize: '60px 60px',
                                 backgroundRepeat: 'repeat',
-                                opacity: 0.03,
-                                transform: 'rotate(-15deg)',
-                                transformOrigin: 'center'
+                                opacity: 0.04,
+                                transform: 'rotate(-25deg) scale(1.5)',
+                                mixBlendMode: 'multiply'
                             }}
                         />
 
@@ -121,8 +121,8 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <span className="text-[9px] opacity-40 font-black">EXECUTION</span>
-                                        <span className={`font-black uppercase text-sm ${trade.direction === 'buy' ? 'text-green-600' : 'text-red-600'}`}>
-                                            {trade.direction === 'buy' ? 'CALL_OPTION' : 'PUT_OPTION'}
+                                        <span className={`font-black uppercase text-sm ${isUp ? 'text-green-600' : 'text-red-600'}`}>
+                                            {isUp ? 'CALL_OPTION' : 'PUT_OPTION'}
                                         </span>
                                     </div>
                                 </div>

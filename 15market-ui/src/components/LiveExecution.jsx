@@ -96,10 +96,10 @@ const LiveExecutionComponent = ({
                                             </div>
 
                                             <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${(trade.direction === "buy" ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
+                                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${((trade.direction === "buy" || trade.direction === "UP") ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
                                                     ? "text-[#3CB371]" : "text-[#FF7F50]"
                                                     }`}>
-                                                    {(trade.direction === "buy" ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
+                                                    {((trade.direction === "buy" || trade.direction === "UP") ? parseFloat(price) >= parseFloat(trade.entryPrice) : parseFloat(price) <= parseFloat(trade.entryPrice))
                                                         ? "WIN" : "LOSS"
                                                     }
                                                 </span>

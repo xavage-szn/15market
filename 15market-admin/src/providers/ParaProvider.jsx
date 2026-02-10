@@ -12,7 +12,12 @@ export function AppParaProvider({ children }) {
             queryClient={queryClient}
             config={{
                 appName: "15market",
-                chains: ["evm:5042002"],
+                chains: [{
+                    chainId: "evm:5042002",
+                    chainName: "Arc Testnet",
+                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+                    rpcUrls: [ARC_RPC]
+                }],
                 defaultChainId: "evm:5042002",
                 walletConnectProjectId: activeProjectId
             }}

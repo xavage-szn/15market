@@ -258,7 +258,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                             </div>
                                             <div>
                                                 <p className={`font-bold text-sm ${isLight ? 'text-black' : 'text-white'}`}>Verifiable Receipts</p>
-                                                <p className={`text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Check your trade status instantly.</p>
+                                                <p className={`text-[10px] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Check receipts in 'Active Trades' and 'Recent Trades' tabs.</p>
                                             </div>
                                         </div>
                                         <div className={`flex items-center gap-4 p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>

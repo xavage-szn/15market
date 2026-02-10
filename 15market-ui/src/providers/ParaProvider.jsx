@@ -1,21 +1,24 @@
 import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
-import { arcTestnet, projectId } from "../constants";
-import { paraApiKey, paraEnv } from "../paraClient";
+import { arcTestnet, projectId, ARC_RPC } from "../constants";
+import { para, queryClient } from "../paraClient";
 
 export function AppParaProvider({ children }) {
     const activeProjectId = projectId || import.meta.env.VITE_REOWN_PROJECT_ID || "4aebd2ef806c541b6aaf003da2930c58";
 
     return (
         <ParaProvider
-            paraClientConfig={{
-                env: paraEnv,
-                apiKey: paraApiKey,
-            }}
+            para={para}
+            queryClient={queryClient}
             config={{
                 appName: "15market",
-                chains: ["evm:5042002"],
-                defaultChainId: "evm:5042002",
+                chains: [{
+                    chainId: "eip155:5042002",
+                    chainName: "Arc Testnet",
+                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+                    rpcUrls: [ARC_RPC]
+                }],
+                defaultChainId: "eip155:5042002",
                 walletConnectProjectId: activeProjectId
             }}
             externalWalletConfig={{
@@ -46,6 +49,13 @@ export function AppParaProvider({ children }) {
                 authLayout: ["EXTERNAL"],
                 recoverySecretStepEnabled: false,
                 onRampTestMode: false,
+                defaultChainId: "eip155:5042002",
+                chains: [{
+                    chainId: "eip155:5042002",
+                    chainName: "Arc Testnet",
+                    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+                    rpcUrls: [ARC_RPC]
+                }],
             }}
         >
             {children}
