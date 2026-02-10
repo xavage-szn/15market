@@ -13,6 +13,7 @@ const TradeTerminalComponent = ({
     handleAmountChange,
     balance,
     handleSliderChange,
+    sliderValue = 0, // Added sliderValue prop
     executeTrade,
     isExecuting,
     wallet,
@@ -147,15 +148,53 @@ const TradeTerminalComponent = ({
                         USDC
                     </div>
                 </div>
-                <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    onChange={handleSliderChange}
-                    className={`w-full h-0.5 lg:h-1 rounded-lg appearance-none cursor-pointer ${isLight ? 'bg-black/10' : 'bg-white/10'}`}
-                    style={{ accentColor: '#3CB371' }}
-                />
+                <div className="relative pt-4 pb-2 px-1">
+                    <div className="relative h-1.5 lg:h-2">
+                        {/* Custom Track Background */}
+                        <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
+
+                        {/* Custom Progress Fill */}
+                        <div
+                            className="absolute inset-y-0 left-0 rounded-full transition-all duration-150"
+                            style={{
+                                width: `${sliderValue || 0}%`,
+                                background: '#3CB371',
+                                boxShadow: '0 0 10px rgba(60, 179, 113, 0.3)'
+                            }}
+                        />
+
+                        {/* Transparent input for interaction */}
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={sliderValue || 0}
+                            onChange={handleSliderChange}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+                        />
+
+                        {/* Custom Thumb Visual */}
+                        <div
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full border-2 border-white shadow-lg pointer-events-none z-20 transition-all duration-150"
+                            style={{
+                                left: `${sliderValue || 0}%`,
+                                backgroundColor: '#3CB371'
+                            }}
+                        />
+                    </div>
+
+                    <div className="flex justify-between mt-3 px-0.5 relative">
+                        {[0, 25, 50, 75, 100].map((pct) => (
+                            <div key={pct} className="flex flex-col items-center gap-1.5 relative z-10">
+                                <div className={`w-0.5 h-1.5 rounded-full ${pct <= (sliderValue || 0) ? 'bg-[#3CB371]' : (isLight ? 'bg-black/20' : 'bg-white/10')}`} />
+                                <span className={`text-[6px] lg:text-[8px] font-black tracking-tighter transition-colors ${pct <= (sliderValue || 0) ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/30' : 'text-white/20')}`}>
+                                    {pct}%
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             <button
