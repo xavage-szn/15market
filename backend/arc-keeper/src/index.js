@@ -360,23 +360,24 @@ app.get('/auth/twitter/callback', async (req, res) => {
         const { address } = rawState;
 
         // Exchange code for token
-        // Use a structure that strictly follows OAuth 2.0 RFC for Twitter
         const params = new URLSearchParams();
         params.append('code', code);
         params.append('grant_type', 'authorization_code');
         params.append('redirect_uri', CALLBACK_URL);
         params.append('code_verifier', 'challenge');
+        params.append('client_id', X_CLIENT_ID);
+        params.append('client_secret', X_CLIENT_SECRET);
 
         console.log("📡 [X_AUTH] Attempting token exchange...", {
             url: 'https://api.twitter.com/2/oauth2/token',
             callback: CALLBACK_URL,
-            client_id: X_CLIENT_ID
+            client_id: X_CLIENT_ID,
+            code: code?.slice(0, 5) + '...'
         });
 
         const tokenRes = await axios.post('https://api.twitter.com/2/oauth2/token', params, {
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': `Basic ${Buffer.from(`${X_CLIENT_ID}:${X_CLIENT_SECRET}`).toString('base64')}`
+                'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
 
