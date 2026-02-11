@@ -75,18 +75,19 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
                             className="absolute inset-0 pointer-events-none select-none overflow-hidden"
                             style={{
                                 backgroundImage: `url('/logo.png')`,
-                                backgroundSize: '60px 60px',
+                                backgroundSize: '40px 40px',
                                 backgroundRepeat: 'repeat',
-                                opacity: 0.04,
-                                transform: 'rotate(-25deg) scale(1.5)',
-                                mixBlendMode: 'multiply'
+                                opacity: 0.08,
+                                transform: 'rotate(-20deg) scale(2)',
+                                mixBlendMode: 'multiply',
+                                filter: 'grayscale(100%) brightness(0.9)'
                             }}
                         />
 
                         {/* Receipt Content */}
                         <div className="relative z-10 flex flex-col items-center">
                             <div className="flex flex-col items-center mb-5">
-                                <img src="/logo.png" alt="15market" className="h-14 w-auto mb-2 drop-shadow-sm" />
+                                <img src="/logo.png" alt="15market" className="h-20 w-auto mb-2 drop-shadow-sm" />
                                 <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">15MARKET</h1>
                                 <p className="text-[8px] font-black mt-1.5 tracking-[0.2em] text-black/50 uppercase">
                                     VERIFIED PREDICTION • ARC_NETWORK
@@ -98,7 +99,7 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
                             <div className="w-full py-2 space-y-0.5 text-[10px] font-bold opacity-70">
                                 <div className="flex justify-between">
                                     <span className="opacity-40 uppercase">TX_REF:</span>
-                                    <span>{trade.tx ? trade.tx.slice(0, 12) + '...' : 'OFF_CHAIN'}</span>
+                                    <span>{trade.tx ? `${trade.tx.slice(0, 8)}...${trade.tx.slice(-6)}` : 'OFF_CHAIN'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="opacity-40 uppercase">BLOCK_TIME:</span>

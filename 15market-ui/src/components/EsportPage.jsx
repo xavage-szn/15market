@@ -36,7 +36,7 @@ export const EsportPage = ({ onBack }) => {
                     className="mb-8 relative"
                 >
                     <div className="absolute inset-0 bg-[#3CB371] blur-[60px] opacity-20" />
-                    <img src="/logo.png" alt="15market" className="h-40 w-auto relative z-10 drop-shadow-[0_0_50px_rgba(60,179,113,0.3)]" />
+                    <img src="/logo.png" alt="15market" className="h-48 lg:h-60 w-auto relative z-10 drop-shadow-[0_0_50px_rgba(60,179,113,0.3)]" />
 
                     {/* Stamp Badge */}
                     <motion.div

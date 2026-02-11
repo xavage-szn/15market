@@ -1625,7 +1625,7 @@ export default function UserApp() {
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
       <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative">
         <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
-        <img src="/logo.png" alt="logo" className="h-24 lg:h-32 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
+        <img src="/logo.png" alt="logo" className="h-32 lg:h-48 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
       </motion.div>
       <div className="mt-12 flex flex-col items-center gap-4">
         <div className="w-64 h-1.5 bg-white/10 rounded-full overflow-hidden relative border border-white/5">
@@ -1669,7 +1669,7 @@ export default function UserApp() {
 
       <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
         <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="logo" className={`h-16 lg:h-24 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+          <img src="/logo.png" alt="logo" className={`h-20 sm:h-24 lg:h-32 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
         </div>
 
         {/* Desktop Nav */}
@@ -1881,7 +1881,7 @@ export default function UserApp() {
           <img
             src="/logo.png"
             alt="15market"
-            className="h-10 w-auto opacity-80"
+            className="h-14 lg:h-18 w-auto opacity-80"
           />
           <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
           <span className={`text-xs md:text-sm font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>

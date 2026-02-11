@@ -238,7 +238,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: isDark ? '#0d0d0d' : '#FFF8E7', borderRadius: 'inherit', minHeight: '220px' }}>
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <img src="/logo.png" alt="15market" style={{
-                    width: '70%',
+                    width: '85%',
                     opacity: isDark ? 0.08 : 0.07,
                     filter: isDark ? 'grayscale(1) brightness(0.8) contrast(1.2)' : 'grayscale(1) brightness(0.05) contrast(1.5)',
                     mixBlendMode: isDark ? 'screen' : 'multiply'
