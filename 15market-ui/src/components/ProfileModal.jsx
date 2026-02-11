@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { KEEPER_URL_ARC } from '../constants';
 
-export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) => {
+import { Zap, Shield } from 'lucide-react';
+
+export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt }) => {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -153,7 +155,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) =>
                     </div>
 
                     {metrics && (
-                        <div className="grid grid-cols-2 gap-4 mb-8">
+                        <div className="grid grid-cols-2 gap-4 mb-6">
                             <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col justify-center">
                                 <p className="text-[8px] font-bold text-[#3CB371] uppercase tracking-widest mb-1">Win Rate</p>
                                 <div className="flex items-baseline gap-1">
@@ -162,6 +164,7 @@ export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) =>
                                     </p>
                                     <span className="text-xs font-bold text-white/40">%</span>
                                 </div>
+                                <p className="text-[7px] text-white/20 font-bold uppercase mt-1">{metrics.wins} W // {metrics.trades - metrics.wins} L</p>
                             </div>
                             <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col justify-center">
                                 <p className="text-[8px] font-bold text-white/40 uppercase tracking-widest mb-1">Total Volume</p>
@@ -169,75 +172,83 @@ export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null }) =>
                                     <p className="text-2xl font-black text-white">{metrics.volume}</p>
                                     <span className="text-xs font-bold text-white/40">USDC</span>
                                 </div>
+                                <p className="text-[7px] text-white/20 font-bold uppercase mt-1">Across {metrics.trades} Trades</p>
                             </div>
                         </div>
                     )}
 
-                    <div className="space-y-6">
+                    <div className="mb-6">
+                        <h4 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-3 block">Transaction History</h4>
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-2">
+                            {(!transactionHistory || transactionHistory.length === 0) ? (
+                                <div className="text-center py-4 text-white/10 text-[9px] uppercase font-black border border-white/5 rounded-xl">No transactions</div>
+                            ) : transactionHistory.map((tx, i) => (
+                                <div key={tx.id || i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-1.5 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
+                                            {tx.type === "DEPOSIT" ? <Zap size={14} /> : <Shield size={14} />}
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] font-black text-white uppercase">{tx.type}</div>
+                                            <div className="text-[8px] text-white/20 font-mono italic">{new Date(tx.timestamp).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right flex flex-col items-end">
+                                        <div className={`text-[11px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : "text-white/80"}`}>
+                                            {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount}
+                                        </div>
+                                        <button
+                                            onClick={() => onViewReceipt && onViewReceipt(tx)}
+                                            className="text-[7px] font-black text-[#3CB371] uppercase underline"
+                                        >
+                                            Receipt
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
                         <div>
                             <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">Username (Public)</label>
                             <input
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 placeholder="Anonymous DeGen"
-                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3CB371]/50 focus:ring-1 focus:ring-[#3CB371]/20 outline-none transition-all placeholder:text-white/10"
+                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
                             />
                         </div>
 
-                        <div className="relative">
-                            <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">X Handle Binding</label>
+                        <div>
+                            <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">X Handle</label>
                             <div className="flex gap-2">
                                 <input
                                     value={xHandle}
-                                    onChange={(e) => setXHandle(e.target.value)}
                                     placeholder="@username"
-                                    disabled={true} // X Handle is managed via OAuth
-                                    className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold opacity-70 cursor-not-allowed focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
+                                    disabled={true}
+                                    className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-bold opacity-70 outline-none cursor-not-allowed"
                                 />
-                                {xHandle ? (
-                                    <button
-                                        disabled
-                                        className="px-4 rounded-2xl bg-[#3CB371]/20 text-[#3CB371] text-xs font-black border border-[#3CB371]/20"
-                                    >
-                                        LINKED
-                                    </button>
-                                ) : (
+                                {!xHandle && (
                                     <button
                                         onClick={handleLinkTwitter}
-                                        className="px-4 rounded-2xl bg-white text-black text-xs font-black transition-transform active:scale-95 hover:bg-[#3CB371]"
+                                        className="px-4 rounded-2xl bg-white text-black text-[10px] font-black transition-transform active:scale-95 hover:bg-[#3CB371]"
                                     >
                                         LINK X
                                     </button>
                                 )}
                             </div>
                         </div>
-
-                        <div>
-                            <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">Discord ID</label>
-                            <input
-                                value={discordHandle}
-                                onChange={(e) => setDiscordHandle(e.target.value)}
-                                placeholder="name#0000"
-                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
-                            />
-                        </div>
                     </div>
 
-                    <div className="mt-8 flex flex-col gap-3">
+                    <div className="mt-6 flex flex-col gap-3">
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className={`w-full bg-[#3CB371] text-black font-black py-5 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.2)] transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
+                            className={`w-full bg-[#3CB371] text-black font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
                         >
-                            {isSaving ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                                    SYNCING...
-                                </>
-                            ) : "SAVE & SYNC PROFILE"}
+                            {isSaving ? "SYNCING..." : "SAVE PROFILE"}
                         </button>
-
-                        <p className="text-[7px] text-center text-white/10 uppercase tracking-[0.4em]">Profile data stored on 15Market Keepers</p>
                     </div>
                 </motion.div>
             </div>

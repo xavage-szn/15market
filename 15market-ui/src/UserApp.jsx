@@ -5,6 +5,7 @@ import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/reac
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
+import { TransactionReceiptModal } from "./components/TransactionReceiptModal";
 import {
   MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock
@@ -81,8 +82,16 @@ export default function UserApp() {
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false); // SITE IS OPEN BY DEFAULT
+  const [transactionHistory, setTransactionHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem("15market_transactions_v1");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
   const [isPnLOpen, setIsPnLOpen] = useState(false);
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
+  const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
 
   const [campaigns, setCampaigns] = useState([]);
@@ -1462,6 +1471,21 @@ export default function UserApp() {
         notify(`Refill Success!`, "success");
         console.log("🎉 [REFILL] Refill complete!");
 
+        // Record locally
+        const newTx = {
+          id: `dep_${Date.now()}`,
+          type: 'DEPOSIT',
+          amount: amtNum.toFixed(4),
+          timestamp: Date.now(),
+          tx: hash,
+          network: 'arc'
+        };
+        setTransactionHistory(prev => {
+          const updated = [newTx, ...prev];
+          localStorage.setItem("15market_transactions_v1", JSON.stringify(updated.slice(0, 50)));
+          return updated;
+        });
+
         // Refresh balance
         setTimeout(() => {
           updateEvmSessionBal();
@@ -1626,6 +1650,11 @@ export default function UserApp() {
       userProfile={userProfile}
       theme={theme}
       evmSessionWallet={evmSessionWallet}
+      transactionHistory={transactionHistory}
+      onViewReceipt={(tx) => {
+        setSelectedTransaction(tx);
+        setIsTransactionReceiptOpen(true);
+      }}
     />
   );
 
@@ -1824,6 +1853,11 @@ export default function UserApp() {
           onClose={() => setIsProfileOpen(false)}
           wallet={wallet}
           userProfile={userProfile}
+          transactionHistory={transactionHistory}
+          onViewReceipt={(tx) => {
+            setSelectedTransaction(tx);
+            setIsTransactionReceiptOpen(true);
+          }}
         />
         <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
 
@@ -1858,6 +1892,11 @@ export default function UserApp() {
             Built by 15labs
           </span>
         </footer>
+        <TransactionReceiptModal
+          isOpen={isTransactionReceiptOpen}
+          onClose={() => setIsTransactionReceiptOpen(false)}
+          transaction={selectedTransaction}
+        />
       </div>
     </motion.div>
   );

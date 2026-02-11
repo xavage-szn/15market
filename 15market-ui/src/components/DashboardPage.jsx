@@ -31,7 +31,9 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
     autoSignerFees,
     userProfile,
     theme,
-    evmSessionWallet
+    evmSessionWallet,
+    transactionHistory,
+    onViewReceipt
 }) => {
     const isLight = theme === 'light';
     const { isConnected: isParaConnected } = useParaAccount();
@@ -114,36 +116,23 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
 
     const fetchMetrics = async () => {
         try {
-            let uWins = 0;
-            let uTrades = 0;
-
-            // Fetch Local History (Fallback/Supplement)
-            const localHistoryFn = localStorage.getItem("15market_history_v1");
-            if (localHistoryFn) {
-                try {
-                    const localHistory = JSON.parse(localHistoryFn);
-                    if (Array.isArray(localHistory)) {
-                        const me = (address || "").toLowerCase().trim();
-                        // Only show trades that belong to us (or have no owner info)
-                        const filtered = localHistory.filter(t => {
-                            const trader = (t.owner || t.user || t.userPublicKey || t.userAddress || "").toString().toLowerCase().trim();
-                            return !trader || !me || trader === me;
-                        });
-                        setUserHistory([...filtered].reverse()); // Store full history
-                        uTrades = filtered.length;
-                        uWins = filtered.filter(t => t.status === "WON").length;
+            // AUTHORITATIVE BACKEND METRICS
+            if (address) {
+                const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data) {
+                        setStats(prev => ({
+                            ...prev,
+                            userWinRate: data.totalTrades > 0 ? ((data.totalWins / data.totalTrades) * 100).toFixed(1) : 0,
+                            userTotalTrades: data.totalTrades || 0,
+                            userTotalWins: data.totalWins || 0
+                        }));
                     }
-                } catch (e) { }
+                }
             }
 
-            setStats(prev => ({
-                ...prev,
-                userWinRate: uTrades > 0 ? ((uWins / uTrades) * 100).toFixed(1) : 0,
-                userTotalTrades: uTrades,
-                userTotalWins: uWins
-            }));
-
-            // Global Market Data
+            // Global Market Data... (keep existing logic for market pulse)
             const savedHistory = localStorage.getItem("15market_global_history_v2");
             let history = savedHistory ? JSON.parse(savedHistory) : [];
 
@@ -482,51 +471,37 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
 
                                 <div className="space-y-4">
-                                    <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-white/40'} mb-4`}>Your Trade History</h3>
+                                    <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-white/40'} mb-4`}>Transaction History</h3>
                                     <div className="space-y-3">
-                                        {userHistory.length === 0 ? (
-                                            <div className={`text-center py-8 ${isLight ? 'text-gray-300 bg-gray-50 border-gray-100' : 'text-white/20 bg-white/[0.02] border-white/5'} text-xs uppercase font-black border rounded-2xl`}>No trades found</div>
-                                        ) : paginatedHistory.map((trade, i) => (
-                                            <div key={trade.id || i} className={`p-4 ${isLight ? 'bg-white border-gray-100 hover:border-gray-200' : 'bg-white/5 border-white/5 hover:border-white/10'} border rounded-2xl flex items-center justify-between group transition-all`}>
+                                        {!transactionHistory || transactionHistory.length === 0 ? (
+                                            <div className={`text-center py-8 ${isLight ? 'text-gray-300 bg-gray-50 border-gray-100' : 'text-white/20 bg-white/[0.02] border-white/5'} text-xs uppercase font-black border rounded-2xl`}>No transactions found</div>
+                                        ) : transactionHistory.map((tx, i) => (
+                                            <div key={tx.id || i} className={`p-4 ${isLight ? 'bg-white border-gray-100 hover:border-gray-200' : 'bg-white/5 border-white/5 hover:border-white/10'} border rounded-2xl flex items-center justify-between group transition-all`}>
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${trade.status === "WON" ? "bg-[#3CB371]/20 text-[#3CB371]" : trade.status === "LOST" ? "bg-red-500/20 text-red-500" : "bg-orange-500/20 text-orange-500"}`}>
-                                                        {trade.direction === "UP" ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/20 text-[#3CB371]" : "bg-orange-500/20 text-orange-500"}`}>
+                                                        {tx.type === "DEPOSIT" ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                                                     </div>
                                                     <div>
-                                                        <div className={`text-xs font-black uppercase ${isLight ? 'text-gray-900' : 'text-white'}`}>{trade.direction === "UP" ? "CALL / UP" : "PUT / DOWN"}</div>
-                                                        <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'} font-mono`}>Entry: ${trade.entryPrice}</div>
+                                                        <div className={`text-xs font-black uppercase ${isLight ? 'text-gray-900' : 'text-white'}`}>{tx.type === "DEPOSIT" ? "Auto-Signer Deposit" : "Auto-Signer Withdrawal"}</div>
+                                                        <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'} font-mono uppercase`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
                                                     </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-6">
                                                     <div className="text-right">
-                                                        <div className={`text-xs font-black ${trade.status === "WON" ? "text-[#3CB371]" : trade.status === "LOST" ? "text-red-500" : "text-orange-500"}`}>
-                                                            {trade.status}
+                                                        <div className={`text-xs font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : "text-white/80"}`}>
+                                                            {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount} USDC
                                                         </div>
-                                                        <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'}`}>{trade.amount} USDC</div>
+                                                        <button
+                                                            onClick={() => onViewReceipt && onViewReceipt(tx)}
+                                                            className="text-[8px] font-black text-[#3CB371] uppercase underline hover:opacity-70 transition-opacity"
+                                                        >
+                                                            View Receipt
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
                                         ))}
-
-                                        {totalPages > 1 && (
-                                            <div className={`flex items-center justify-center gap-2 mt-8 py-4 border-t ${isLight ? 'border-gray-100' : 'border-white/5'}`}>
-                                                <button
-                                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                                    disabled={currentPage === 1}
-                                                    className={`px-4 py-2 rounded-xl ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/5 text-white hover:bg-white/10'} border text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed transition-all`}
-                                                >
-                                                    Prev
-                                                </button>
-                                                <button
-                                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                                    disabled={currentPage === totalPages}
-                                                    className={`px-4 py-2 rounded-xl ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/5 text-white hover:bg-white/10'} border text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed transition-all`}
-                                                >
-                                                    Next
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>

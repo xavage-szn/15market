@@ -317,11 +317,31 @@ app.get('/profile', async (req, res) => {
     const { address } = req.query;
     if (!address) return res.status(400).json({ error: "Missing address" });
 
-    // 1. Check Redis Cache
-    const cached = await redis.hget('user_profiles', address.toLowerCase());
-    if (cached) return res.json(cached);
+    // 1. Check Redis Cache for social profile
+    let profile = await redis.hget('user_profiles', address.toLowerCase());
+    if (!profile) profile = { address: address.toLowerCase() };
 
-    res.json(null);
+    // 2. Calculate authoritative metrics from state.history
+    const userTrades = state.history.filter(t => {
+        const owner = (t.owner || t.user || t.userPublicKey || t.userAddress || "").toString().toLowerCase();
+        return owner === address.toLowerCase();
+    });
+
+    const totalTrades = userTrades.length;
+    const totalWins = userTrades.filter(t => t.status === "WON").length;
+    const totalLosses = userTrades.filter(t => t.status === "LOST").length;
+    const totalVolume = userTrades.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+
+    // Merge profile with metrics
+    const result = {
+        ...profile,
+        totalTrades,
+        totalWins,
+        totalLosses,
+        totalVolume: totalVolume.toFixed(2)
+    };
+
+    res.json(result);
 });
 
 app.post('/sync-profile', async (req, res) => {
