@@ -174,7 +174,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const chainId = useChainId();
     const { switchChain } = useSwitchChain();
 
-    const walletAddress = address || paraWallet?.address;
+    const walletAddress = (address || paraWallet?.address)?.toString();
     const isWalletConnected = isConnected || !!walletAddress;
 
     // Enforce Arc Network
@@ -190,9 +190,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     useEffect(() => {
         if (isWalletConnected) {
-            console.log("[AdminAuth] Connected Address:", walletAddress);
-            console.log("[AdminAuth] Root Address Target:", ROOT_WALLET);
-            console.log("[AdminAuth] Is Root Match:", walletAddress?.toLowerCase().trim() === ROOT_WALLET.toLowerCase().trim());
+            // console.log("[AdminAuth] Connected");
         }
     }, [isWalletConnected, walletAddress]);
 
@@ -762,7 +760,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             notify('success', 'CONFIGURATION SYNCED', `Platform settings pushed to all Network Clusters.`);
             localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
         } catch (e) {
-            console.error("Settings sync failed:", e);
+            console.error("Settings sync failed:", e.message);
             notify('error', 'SYNC FAILED', e.message || 'Could not push settings to Keepers. Local fallback active.');
             localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
         }
@@ -1422,7 +1420,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 <ShieldAlert size={32} className="mx-auto text-red-500 mb-3" />
                                 <p className="text-[10px] text-red-500 font-black uppercase tracking-widest leading-relaxed">
                                     ACCESS DENIED<br />
-                                    Wallet <span className="font-mono break-all text-[8px] opacity-60">{walletAddress || 'UNDEFINED'}</span> is not registered in the 15Market administrative directory.
+                                    Wallet <span className="font-mono break-all text-[8px] opacity-60">{String(walletAddress || 'UNDEFINED')}</span> is not registered in the 15Market administrative directory.
                                 </p>
                             </div>
                             <button
@@ -1592,9 +1590,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                     notification.type === 'error' ? 'text-red-500' :
                                         'text-blue-500'
                                     }`}>
-                                    {notification.title}
+                                    {String(notification.title || '')}
                                 </h5>
-                                <p className="text-xs font-bold text-white/70 leading-relaxed uppercase tracking-widest">{notification.message}</p>
+                                <p className="text-xs font-bold text-white/70 leading-relaxed uppercase tracking-widest">{String(notification.message || '')}</p>
                             </div>
                             <button onClick={() => setNotification(null)} className="text-white/20 hover:text-white transition-colors">
                                 <X size={16} />
@@ -1629,9 +1627,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 <div className="p-5 bg-white/5 rounded-3xl mb-6 border border-white/10">
                                     <AlertCircle className="text-[#3CB371]" size={32} />
                                 </div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-4">{confirmAction.title}</h3>
+                                <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-4">{String(confirmAction.title || '')}</h3>
                                 <p className="text-xs font-bold text-white/40 uppercase tracking-[0.1em] leading-relaxed mb-10 max-w-sm">
-                                    {confirmAction.message}
+                                    {String(confirmAction.message || '')}
                                 </p>
 
                                 <div className="flex gap-4 w-full">

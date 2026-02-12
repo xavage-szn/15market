@@ -214,7 +214,7 @@ export default function UserApp() {
         const bal = parseFloat(ethers.formatUnits(balWei, 18));
 
         if (isMounted) {
-          console.log(`✅ [BALANCE] RPC (${rpcToUse}) balance:`, bal);
+          // console.log(`✅ [BALANCE] RPC (${rpcToUse}) balance:`, bal);
           setBalance(prev => {
             // Only update if difference is significant to avoid jitter
             if (Math.abs(prev - bal) > 0.0001) return bal;
@@ -524,7 +524,7 @@ export default function UserApp() {
   // Debug logging for connection issues
   useEffect(() => {
     if (isConnected) {
-      console.log(`Connected to: ${address}`);
+      // console.log(`Connected`);
     }
   }, [isConnected, address]);
 
@@ -756,10 +756,10 @@ export default function UserApp() {
   const updateEvmSessionBal = useCallback(async () => {
     if (!evmSessionWallet) return;
     try {
-      console.log("💰 [SESSION BALANCE] Fetching session wallet balance...", evmSessionWallet.address);
+      // console.log("💰 [SESSION BALANCE] Fetching session wallet balance...");
       const balanceWei = await evmSessionWallet.provider.getBalance(evmSessionWallet.address);
       const bal = parseFloat(ethers.formatEther(balanceWei));
-      console.log("✅ [SESSION BALANCE] Updated:", bal, "USDC");
+      // console.log("✅ [SESSION BALANCE] Updated");
       setSessionBalance(bal);
     } catch (err) {
       console.error("❌ [SESSION BALANCE] Fetch failed:", err);
@@ -902,7 +902,7 @@ export default function UserApp() {
   // Slider / amount handlers - active balance aware
   const activeBal = useMemo(() => {
     const bal = sessionMode ? sessionBalance : balance;
-    console.log("💰 [ACTIVE BALANCE]", { sessionMode, sessionBalance, mainBalance: balance, activeBal: bal });
+    // console.log("💰 [ACTIVE BALANCE]", { sessionMode, activeBal: bal });
     return bal;
   }, [sessionMode, sessionBalance, balance]);
 
@@ -1158,12 +1158,7 @@ export default function UserApp() {
     if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
     if (Number(amount) < parseFloat(minStake)) return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
 
-    console.log("🎯 [TRADE] Initiating trade...", {
-      sessionMode,
-      sessionBalance,
-      amount: Number(amount),
-      willUseAutoSigner: sessionMode && sessionBalance >= (Number(amount) + 0.005)
-    });
+    // console.log("🎯 [TRADE] Initiating trade...");
 
     setIsExecuting(true);
     try {
@@ -1264,26 +1259,13 @@ export default function UserApp() {
           }
         }
 
-        console.log("📝 [TRADE] Main wallet trade params:", {
-          address: ARC_CONTRACT_ADDRESS,
-          tradeId,
-          dirVal,
-          duration,
-          entryPriceParams,
-          assetId,
-          amountWei: amountWei.toString(),
-          userAddress: address
-        });
+        console.log("📝 [TRADE] Main wallet trade params prepared");
 
         notify(`Confirm on Arc...`, "success");
 
         try {
 
-          console.log("📝 [TRADE] Executing via writeContractAsync...", {
-            address: address,
-            chainId: 5042002, // ALWAYS FORCE ARC
-            target: ARC_CONTRACT_ADDRESS
-          });
+          // console.log("📝 [TRADE] Executing via writeContractAsync...");
 
           const hash = await writeContractAsync({
             chainId: 5042002, // Explicitly force the target chain
@@ -1297,7 +1279,7 @@ export default function UserApp() {
           txHash = hash;
           console.log("📤 [TRADE] Main wallet tx successful:", txHash);
         } catch (mainWalletError) {
-          console.error("❌ [TRADE] Main wallet error detail:", mainWalletError);
+          console.error("❌ [TRADE] Main wallet error detail:", mainWalletError.message);
 
           // Specific error handling for users
           if (mainWalletError.message?.includes("user rejected")) {
@@ -1411,7 +1393,7 @@ export default function UserApp() {
 
 
   const handleRefill = useCallback(async (amt) => {
-    console.log("🔵 [REFILL] Starting refill process...", { amt, balance, address });
+    // console.log("🔵 [REFILL] Starting refill process...");
     if (isExecuting) return;
 
     try {
@@ -1420,7 +1402,7 @@ export default function UserApp() {
       const fee = amtNum * feePercent;
 
       if (!address || !evmSessionWallet) {
-        console.error("❌ [REFILL] Wallet not connected:", { address, hasSessionWallet: !!evmSessionWallet });
+        console.error("❌ [REFILL] Wallet not connected");
         notify("Connect Arc wallet for refill", "error");
         return;
       }
@@ -1437,16 +1419,11 @@ export default function UserApp() {
         }
       }
 
-      console.log("✅ [REFILL] Wallets ready:", {
-        mainAddress: address,
-        sessionAddress: evmSessionWallet.address,
-        amount: amtNum,
-        fee
-      });
+      // console.log("✅ [REFILL] Wallets ready");
 
       // Check main wallet balance
       if (balance < amtNum) {
-        console.error("❌ [REFILL] Insufficient balance in main wallet:", { balance, requested: amtNum });
+        console.error("❌ [REFILL] Insufficient balance in main wallet");
         notify(`Insufficient balance. You have ${balance.toFixed(4)} USDC`, "error");
         return;
       }
@@ -1456,10 +1433,7 @@ export default function UserApp() {
 
       try {
         // Send FULL amount to Session Wallet from Main
-        console.log("💸 [REFILL] Sending to session wallet...", {
-          to: evmSessionWallet.address,
-          amount: amtNum
-        });
+        // console.log("💸 [REFILL] Sending to session wallet...");
 
         const hash = await sendTransactionAsync({
           to: evmSessionWallet.address,
@@ -1523,7 +1497,7 @@ export default function UserApp() {
   }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee, balance, updateEvmSessionBal, isExecuting, chainId, switchChain, refetchEvmBalance]);
 
   const handleWithdraw = useCallback(async (amt) => {
-    console.log("🔵 [WITHDRAW] Starting withdrawal process...", { amt, sessionBalance, address });
+    // console.log("🔵 [WITHDRAW] Starting withdrawal process...");
     if (isExecuting) return;
 
     try {
@@ -1554,11 +1528,11 @@ export default function UserApp() {
         }
       }
 
-      console.log("✅ [WITHDRAW] Session wallet exists:", evmSessionWallet.address);
+      // console.log("✅ [WITHDRAW] Session wallet exists");
 
       // Step 3: Check session balance
       if (sessionBalance < amtNum) {
-        console.error("❌ [WITHDRAW] Insufficient balance:", { sessionBalance, requested: amtNum });
+        console.error("❌ [WITHDRAW] Insufficient balance");
         notify(`Insufficient balance. You have ${sessionBalance.toFixed(4)} USDC`, "error");
         return;
       }

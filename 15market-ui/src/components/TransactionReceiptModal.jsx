@@ -60,7 +60,7 @@ export const TransactionReceiptModal = ({ isOpen, onClose, transaction }) => {
                                 backgroundImage: `url('/logo.png')`,
                                 backgroundSize: '40px 40px',
                                 backgroundRepeat: 'repeat',
-                                opacity: 0.08,
+                                opacity: 0.2,
                                 transform: 'rotate(-20deg) scale(2)',
                                 mixBlendMode: 'multiply',
                                 filter: 'grayscale(100%) brightness(0.9)'

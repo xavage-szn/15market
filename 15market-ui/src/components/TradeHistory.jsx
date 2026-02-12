@@ -19,9 +19,7 @@ const TradeHistoryComponent = ({
 
     // Debugging logs to help diagnosis
     React.useEffect(() => {
-        console.log(`🔍 [TRADE_HISTORY] PROP_WALLET:`, wallet);
-        console.log(`🔍 [TRADE_HISTORY] DERIVED_ADDR: ${address}`);
-        console.log(`🔍 [TRADE_HISTORY] DERIVED_CONN: ${isConnected}`);
+        // Debug logs removed for privacy
     }, [wallet, address, isConnected]);
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -35,8 +33,7 @@ const TradeHistoryComponent = ({
 
     React.useEffect(() => {
         if (address) {
-            console.log(`🔍 [TRADE_HISTORY] Connected as: ${address}`);
-            console.log(`🔍 [TRADE_HISTORY] Trades: ${tradeHistory.length}, Filtered: ${filteredTrades.length}`);
+            // Sync logic
         }
     }, [address, tradeHistory.length, filteredTrades.length]);
 
