@@ -906,7 +906,7 @@ class ArcKeeper {
                         setTimeout(() => reject(new Error("Confirmation Timeout")), 60000)
                     );
 
-                    Promise.race([waitPromise, timeoutPromise]).then((receipt) => {
+                    Promise.race([waitPromise, timeoutPromise]).then(async (receipt) => {
                         if (receipt.status === 1) {
                             console.log(`✅ [CONFIRMED] Bet #${bet.id}`);
                             // Log events for debugging
@@ -976,7 +976,17 @@ class ArcKeeper {
 const keeper = new ArcKeeper();
 keeper.init();
 
-app.listen(PORT, () => console.log(`[ARC KEEPER] Running on port ${PORT}`));
+app.listen(PORT, async () => {
+    console.log(`[ARC KEEPER] Running on port ${PORT}`);
+
+    // Self-warmup on start
+    try {
+        await axios.get(`http://localhost:${PORT}/health`);
+        console.log('🔥 Self-warmup complete');
+    } catch (e) {
+        console.warn('⚠️ Self-warmup failed:', e.message);
+    }
+});
 
 // --- KEEP ALIVE ---
 // Self-ping to keep the instance warm if running on a platform that sleeps (like Render/Dokploy free tiers)

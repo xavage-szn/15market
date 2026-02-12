@@ -95,11 +95,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                     initial={{ opacity: 0, scale: 0.9, y: 40 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 40 }}
-                    className={`w-full max-w-xl ${isLight ? 'bg-white border-black/5 shadow-2xl shadow-black/10' : 'bg-[#0A0A0A] border-white/10 shadow-[0_0_100px_rgba(0,0,0,1)]'} border rounded-[48px] p-10 relative overflow-hidden`}
+                    className={`w-full max-w-md ${isLight ? 'bg-white border-black/5 shadow-2xl shadow-black/10' : 'bg-[#0A0A0A] border-white/10 shadow-[0_0_100px_rgba(0,0,0,1)]'} border rounded-[32px] p-6 md:p-8 relative overflow-hidden`}
                 >
                     {/* Background Glow */}
                     <div
-                        className="absolute -top-24 -right-24 w-64 h-64 blur-[120px] rounded-full opacity-20 pointer-events-none"
+                        className="absolute -top-24 -right-24 w-48 h-48 blur-[100px] rounded-full opacity-20 pointer-events-none"
                         style={{ backgroundColor: accentColor }}
                     />
 
@@ -119,16 +119,16 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
+                                    className="space-y-6"
                                 >
                                     <div className="flex flex-col items-center text-center">
                                         <div
-                                            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
+                                            className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 shadow-2xl"
                                             style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
                                         >
                                             <User size={36} />
                                         </div>
-                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Choose your Alias</h2>
+                                        <h2 className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Choose your Alias</h2>
                                         <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3 max-w-xs`}>Your public identity on 15market. Make it count.</p>
                                     </div>
 
@@ -154,7 +154,7 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     <button
                                         onClick={handleNext}
                                         disabled={username.length < 3}
-                                        className="w-full py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30"
+                                        className="w-full py-4 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30"
                                         style={{ backgroundColor: accentColor }}
                                     >
                                         CONTINUE <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
@@ -169,16 +169,16 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
+                                    className="space-y-6"
                                 >
                                     <div className="flex flex-col items-center text-center">
                                         <div
-                                            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
+                                            className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 shadow-2xl"
                                             style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
                                         >
                                             <TrendingUp size={36} />
                                         </div>
-                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>How to Trade</h2>
+                                        <h2 className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>How to Trade</h2>
                                         <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Predict price movements in 15-second windows.</p>
                                     </div>
 
@@ -210,10 +210,10 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     </div>
 
                                     <div className="flex gap-4">
-                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button onClick={handleBack} className={`flex-1 py-4 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
                                         <button
                                             onClick={handleNext}
-                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group"
+                                            className="flex-[2] py-4 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group"
                                             style={{ backgroundColor: accentColor }}
                                         >
                                             NEXT <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
@@ -229,16 +229,16 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
+                                    className="space-y-6"
                                 >
                                     <div className="flex flex-col items-center text-center">
                                         <div
-                                            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
+                                            className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 shadow-2xl"
                                             style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
                                         >
                                             <Zap size={36} />
                                         </div>
-                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Instant Payouts</h2>
+                                        <h2 className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Instant Payouts</h2>
                                         <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Built on Arc for transparency and speed.</p>
                                     </div>
 
@@ -273,10 +273,10 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     </div>
 
                                     <div className="flex gap-4">
-                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button onClick={handleBack} className={`flex-1 py-4 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
                                         <button
                                             onClick={handleNext}
-                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group"
+                                            className="flex-[2] py-4 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group"
                                             style={{ backgroundColor: accentColor }}
                                         >
                                             NEXT <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
@@ -292,16 +292,16 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
+                                    className="space-y-6"
                                 >
                                     <div className="flex flex-col items-center text-center">
                                         <div
-                                            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-2xl"
+                                            className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 shadow-2xl"
                                             style={{ backgroundColor: `${accentColor}10`, color: accentColor }}
                                         >
                                             <Scale size={36} />
                                         </div>
-                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Terms of Service</h2>
+                                        <h2 className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Terms of Service</h2>
                                         <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>Please review our rules of engagement.</p>
                                     </div>
 
@@ -319,9 +319,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                         <p>Users must comply with their local laws. Access from restricted regions is strictly prohibited.</p>
                                     </div>
 
-                                    <label className="flex items-center gap-4 cursor-pointer group">
+                                    <label
+                                        className="flex items-center gap-4 cursor-pointer group"
+                                        onClick={() => setTosAccepted(!tosAccepted)}
+                                    >
                                         <div
-                                            onClick={() => setTosAccepted(!tosAccepted)}
                                             className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${tosAccepted ? 'bg-[#3CB371] border-[#3CB371]' : `${isLight ? 'border-black/10 group-hover:border-black/20' : 'border-white/10 group-hover:border-white/20'}`}`}
                                         >
                                             {tosAccepted && <CheckCircle size={14} className="text-white" />}
@@ -330,11 +332,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     </label>
 
                                     <div className="flex gap-4">
-                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button onClick={handleBack} className={`flex-1 py-4 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
                                         <button
                                             onClick={handleNext}
                                             disabled={!tosAccepted}
-                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
+                                            className="flex-[2] py-4 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
                                             style={{ backgroundColor: accentColor }}
                                         >
                                             CONTINUE <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
@@ -350,15 +352,15 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
+                                    className="space-y-6"
                                 >
                                     <div className="flex flex-col items-center text-center">
                                         <div
-                                            className="w-20 h-20 rounded-3xl bg-red-500/10 text-red-500 flex items-center justify-center mb-6 shadow-2xl"
+                                            className="w-16 h-16 rounded-3xl bg-red-500/10 text-red-500 flex items-center justify-center mb-4 shadow-2xl"
                                         >
                                             <AlertTriangle size={36} />
                                         </div>
-                                        <h2 className={`text-3xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Critical Risk Warning</h2>
+                                        <h2 className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'} uppercase tracking-tighter`}>Critical Risk Warning</h2>
                                         <p className={`${isLight ? 'text-black/40' : 'text-white/40'} text-sm mt-3`}>This is not a simulation. Real assets are at stake.</p>
                                     </div>
 
@@ -369,9 +371,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                         </p>
                                     </div>
 
-                                    <label className={`flex items-center gap-4 cursor-pointer group p-4 rounded-2xl border ${isLight ? 'border-black/5 bg-black/[0.02] hover:bg-black/[0.04]' : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'} transition-all`}>
+                                    <label
+                                        className={`flex items-center gap-4 cursor-pointer group p-4 rounded-2xl border ${isLight ? 'border-black/5 bg-black/[0.02] hover:bg-black/[0.04]' : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'} transition-all`}
+                                        onClick={() => setRiskAcknowledged(!riskAcknowledged)}
+                                    >
                                         <div
-                                            onClick={() => setRiskAcknowledged(!riskAcknowledged)}
                                             className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${riskAcknowledged ? 'bg-red-500 border-red-500' : `${isLight ? 'border-black/10 group-hover:border-black/20' : 'border-white/10 group-hover:border-white/20'}`}`}
                                         >
                                             {riskAcknowledged && <CheckCircle size={14} className="text-white" />}
@@ -380,11 +384,11 @@ export const OnboardingModal = ({ isOpen, onComplete, address, network, existing
                                     </label>
 
                                     <div className="flex gap-4">
-                                        <button onClick={handleBack} className={`flex-1 py-6 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
+                                        <button onClick={handleBack} className={`flex-1 py-4 rounded-2xl ${isLight ? 'bg-black/5 text-black/40 hover:bg-black/10' : 'bg-white/5 text-white/40 hover:bg-white/10'} font-black transition-all uppercase tracking-widest text-xs`}>BACK</button>
                                         <button
                                             onClick={handleSubmit}
                                             disabled={!riskAcknowledged || isSubmitting}
-                                            className="flex-[2] py-6 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
+                                            className="flex-[2] py-4 rounded-2xl font-black text-white transition-all flex items-center justify-center gap-2 group disabled:opacity-30 disabled:grayscale"
                                             style={{ backgroundColor: accentColor }}
                                         >
                                             {isSubmitting ? "FINALIZING..." : "ENTER 15MARKET"}

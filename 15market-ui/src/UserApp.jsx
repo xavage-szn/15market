@@ -85,7 +85,14 @@ export default function UserApp() {
   const [transactionHistory, setTransactionHistory] = useState(() => {
     try {
       const saved = localStorage.getItem("15market_transactions_v1");
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (!Array.isArray(parsed)) return [];
+      // Filter out invalid items to prevent rendering crashes
+      return parsed.filter(tx =>
+        tx &&
+        typeof tx === 'object' &&
+        (typeof tx.amount === 'string' || typeof tx.amount === 'number')
+      );
     } catch (e) { return []; }
   });
   const [isPnLOpen, setIsPnLOpen] = useState(false);
@@ -803,32 +810,46 @@ export default function UserApp() {
         if (res.ok) {
           const profile = await res.json();
 
-          // Validate profile (Must have username and accepted TOS)
-          if (profile && profile.username && profile.tosAccepted) {
-            // User is verified - allow access
+          // REQUIREMENT: Onboarding is reserved ONLY for users who have NEVER interacted before.
+          // If profile exists with data OR has a trade history, we skip onboarding.
+          const hasTraded = profile && profile.totalTrades > 0;
+          const isRegistered = profile && profile.username && profile.tosAccepted;
+
+          if (isRegistered || hasTraded) {
+            // User is verified OR a returning participant - allow access
             setUserProfile(profile);
             setShowOnboarding(false);
-            // Update cache with verified profile
-            localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
+
+            // Only cache fully registered profiles to prevent prompt on refresh
+            if (isRegistered) {
+              localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
+            }
           } else {
-            // User not verified or no X handle or no TOS - BLOCK ACCESS
+            // New user with no profile and no trades - SHOW ONBOARDING
             setUserProfile(profile || null);
             setShowOnboarding(true);
-            // Clear stale cache
             localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);
           }
         } else {
-          // API error - assume not verified for security
-          setUserProfile(null);
-          setShowOnboarding(true);
-          localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);
+          // API error - safer to assume not verified, but don't block if we have a cache
+          const cached = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
+          if (cached) {
+            try { setUserProfile(JSON.parse(cached)); } catch (e) { setShowOnboarding(true); }
+            setShowOnboarding(false);
+          } else {
+            setShowOnboarding(true);
+          }
         }
       } catch (err) {
         console.error("Profile verification failed:", err);
-        // On error, block access for security
-        setUserProfile(null);
-        setShowOnboarding(true);
-        localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);
+        // On error, only show onboarding if no cache exists to prevent blocking on network flickers
+        const cached = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
+        if (cached) {
+          try { setUserProfile(JSON.parse(cached)); } catch (e) { setShowOnboarding(true); }
+          setShowOnboarding(false);
+        } else {
+          setShowOnboarding(true);
+        }
       } finally {
         setProfileChecked(true);
       }
@@ -837,12 +858,26 @@ export default function UserApp() {
   }, [isConnected, address]);
 
   const handleOnboardingComplete = async (onboardingData) => {
+    // OPTIMISTIC: Close modal immediately to avoid "stuck" feeling
+    setShowOnboarding(false);
+
+    // Create local profile immediately
+    const localProfile = {
+      username: onboardingData.username,
+      xHandle: onboardingData.twitterHandle || "",
+      xProfileImage: onboardingData.twitterImage || "",
+      tosAccepted: onboardingData.tosAccepted,
+      totalTrades: 0,
+      totalWins: 0,
+      totalLosses: 0,
+      totalVolume: "0.00"
+    };
+
+    setUserProfile(localProfile);
+    localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(localProfile));
+
     try {
-      // NOTE: We no longer gate access based on X linking alone, but we encourage it.
-      // If user skipped X, handle will be empty.
-
-
-      // Setup profile on Arc Keeper (Redis)
+      // Sync with backend in background
       const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -856,25 +891,11 @@ export default function UserApp() {
         })
       });
 
-      if (!res.ok) throw new Error("Backend save failed");
+      if (!res.ok) console.warn("Background profile sync failed");
+      else notify("Welcome to 15market, " + onboardingData.username, "success");
 
-      const verifiedProfile = {
-        username: onboardingData.username,
-        xHandle: onboardingData.twitterHandle,
-        xProfileImage: onboardingData.twitterImage || "",
-        tosAccepted: onboardingData.tosAccepted
-      };
-
-      setUserProfile(verifiedProfile);
-      setShowOnboarding(false);
-
-      // Cache verified profile
-      localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(verifiedProfile));
-
-      notify("Welcome to 15market, " + onboardingData.username, "success");
     } catch (err) {
       console.error("Profile sync failed:", err);
-      notify("Failed to setup profile. Check connection.", "error");
     }
   };
 
