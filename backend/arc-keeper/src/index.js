@@ -626,17 +626,20 @@ class ArcKeeper {
             this.nonce = await this.callWithRetry(() => this.wallet.getNonce(), "INIT_NONCE");
             console.log(`🔢 Initial Nonce: ${this.nonce}`);
 
-            // Set lastCheckedBlock to current block so we ONLY listen from now forward
-            this.lastCheckedBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "GET_INITIAL_BLOCK");
-            console.log(`🛰️ [START] Monitoring starts from block: ${this.lastCheckedBlock}`);
-
-            await this.checkBalance();
-
             // SPEED OPTIMIZATION: Faster polling and evaluation
             setInterval(() => this.pollEvents(), 30000); // Baseline sync
             setInterval(() => this.evaluateBets(), 1000); // Check expiry every second
             setInterval(() => this.processSettlementQueue(), 500); // Check settlement queue every 0.5s
             setInterval(() => this.checkBalance(), 60000);
+
+            // COMPREHENSIVE DISCOVERY: Look back 5000 blocks for missed bets
+            const currentBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "GET_INITIAL_BLOCK");
+            const lookback = 5000;
+            const fromBlock = Math.max(0, currentBlock - lookback);
+            this.lastCheckedBlock = currentBlock;
+
+            console.log(`🛰️ [DISCOVERY] Booting up discovery phase...`);
+            this.discoverActiveBets();
 
             // Heartbeat
             setInterval(() => {
@@ -669,7 +672,7 @@ class ArcKeeper {
 
     async discoverActiveBets() {
         const currentBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "GET_BLOCK");
-        const LOOKBACK = 1000; // Increased to recover more history
+        const LOOKBACK = 5000; // Increased to recover more history
         const MAX_CHUNK = 100; // Increased for faster recovery
         let fromBlock = Math.max(0, currentBlock - LOOKBACK);
 
@@ -742,8 +745,8 @@ class ArcKeeper {
                         amount: ethers.formatUnits(amount, 18), // Arc Native USDC uses 18 decimals
                         currency: "USDC",
                         direction: Number(direction) === 1 ? "UP" : "DOWN",
-                        entryPrice: (Number(entryPrice) / 100000000).toFixed(4),
-                        exitPrice: (Number(betStruct.settlementPrice) / 100000000).toFixed(4),
+                        entryPrice: (Number(entryPrice) / 100000000), // Keep as float for precision
+                        exitPrice: (Number(betStruct.settlementPrice) / 100000000),
                         timestamp: Number(timestamp) * 1000,
                         status: betStruct.won ? "WON" : "LOST",
                         network: 'arc'
@@ -759,7 +762,7 @@ class ArcKeeper {
                 id: betId, user, symbol, duration: Number(duration),
                 amount: ethers.formatUnits(amount, 18), // Arc Native USDC uses 18 decimals
                 direction: Number(direction),
-                entryPrice: (Number(entryPrice) / 100000000).toFixed(4),
+                entryPrice: Number(entryPrice) / 100000000,
                 timestamp: Number(timestamp),
                 expiry: expiry,
                 tx: event.transactionHash,

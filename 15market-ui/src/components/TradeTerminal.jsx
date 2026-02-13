@@ -25,6 +25,7 @@ const TradeTerminalComponent = ({
     onWithdraw,
 }) => {
     const isLight = theme === 'light';
+    const [showManagement, setShowManagement] = React.useState(false);
 
     return (
         <div className={`w-full h-full p-2 lg:p-5 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-2 lg:gap-4 ${isLight ? 'static-panel-light !shadow-xl' : ''}`}>
@@ -70,38 +71,54 @@ const TradeTerminalComponent = ({
                                 ${Number(sessionBalance).toFixed(4)} USDC
                             </span>
                         </div>
-                        <div className="flex items-center gap-1 bg-black/20 rounded-lg p-1">
-                            <input
-                                type="number"
-                                value={refillAmount}
-                                onChange={(e) => setRefillAmount(e.target.value)}
-                                className="w-10 lg:w-16 bg-transparent text-[8px] lg:text-xs font-black text-white outline-none px-1"
-                                placeholder="0.1"
-                            />
-                            <span className="text-[6px] lg:text-[8px] font-black opacity-40 text-white uppercase mr-1">USDC</span>
-                        </div>
+                        <button
+                            onClick={() => setShowManagement(!showManagement)}
+                            className={`p-1 rounded-md transition-all ${isLight ? 'hover:bg-black/5' : 'hover:white/5'} ${showManagement ? 'rotate-180' : ''}`}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            onClick={() => onRefill(refillAmount)}
-                            disabled={isExecuting}
-                            className={`py-1.5 lg:py-2 rounded-full bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
-                        >
-                            Deposit
-                        </button>
-                        <button
-                            onClick={() => onWithdraw(refillAmount)}
-                            disabled={isExecuting}
-                            className={`py-1.5 lg:py-2 rounded-full border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
-                        >
-                            Withdraw
-                        </button>
-                    </div>
-                    <div className="flex items-center justify-center gap-1 opacity-40">
-                        <div className="w-1 h-1 rounded-full bg-[#3CB371]" />
-                        <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>1% Protocol Fee applies to balance movements</span>
-                    </div>
+                    {showManagement && (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="flex items-center justify-between bg-black/20 rounded-lg p-1.5">
+                                <span className="text-[6px] lg:text-[8px] font-black opacity-40 text-white uppercase ml-1">Refill Amount</span>
+                                <div className="flex items-center gap-1">
+                                    <input
+                                        type="number"
+                                        value={refillAmount}
+                                        onChange={(e) => setRefillAmount(e.target.value)}
+                                        className="w-10 lg:w-16 bg-transparent text-[8px] lg:text-xs font-black text-white outline-none px-1 text-right"
+                                        placeholder="0.1"
+                                    />
+                                    <span className="text-[6px] lg:text-[8px] font-black opacity-40 text-white uppercase mr-1">USDC</span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => onRefill(refillAmount)}
+                                    disabled={isExecuting}
+                                    className={`py-1.5 lg:py-2 rounded-lg bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                                >
+                                    Deposit
+                                </button>
+                                <button
+                                    onClick={() => onWithdraw(refillAmount)}
+                                    disabled={isExecuting}
+                                    className={`py-1.5 lg:py-2 rounded-lg border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                                >
+                                    Withdraw
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-center gap-1 opacity-20">
+                                <div className="w-1 h-1 rounded-full bg-[#3CB371]" />
+                                <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>1% Protocol Fee applies</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

@@ -415,8 +415,8 @@ export default function UserApp() {
           // Normalized trades from backend
           const backendAll = backendAllRaw.map(t => ({
             ...t,
-            // Normalize direction: 0 -> UP, 1 -> DOWN (matches new mapping)
-            direction: typeof t.direction === 'number' ? (t.direction === 0 ? "UP" : "DOWN") : t.direction,
+            // Normalize direction: 1 -> UP, 0 -> DOWN (matches Contract mapping)
+            direction: typeof t.direction === 'number' ? (t.direction === 1 ? "UP" : "DOWN") : t.direction,
             status: t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING"),
             owner: t.owner || t.user || t.userPublicKey || t.userAddress
           }));
