@@ -1,10 +1,11 @@
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { useAccount as useWagmiAccount, useChainId } from "wagmi";
+import { useAccount as useWagmiAccount, useChainId, useConnect } from "wagmi";
 
 export const UnifiedWalletButton = ({ theme }) => {
     const { openModal } = useModal();
     const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
     const { isConnected: isWagmiConnected, address: wagmiAddress, connector: wagmiConnector } = useWagmiAccount();
+    const { connect, connectors } = useConnect();
     const chainId = useChainId();
     const isConnected = isParaConnected || isWagmiConnected;
     const address = paraAddress || wagmiAddress;
@@ -15,16 +16,23 @@ export const UnifiedWalletButton = ({ theme }) => {
     const currentColor = isWrongNetwork ? '#FF4444' : '#3CB371';
 
     // Determine if we should allow clicking to open Para modal
-    // If not connected, yes. If connected via Para, yes (to see Para settings).
-    // If connected via plain Wagmi (Rabby/MetaMask), no (to avoid provider fighting).
     const handleClick = () => {
         if (!isConnected) {
-            openModal();
+            // Priority: Direct Injected Connection for Rabby/MetaMask on Mobile
+            const isRabby = window.ethereum?.isRabby;
+            const isMetaMask = window.ethereum?.isMetaMask;
+            const injectedConnector = connectors.find(c => c.id === 'injected');
+
+            if ((isRabby || isMetaMask) && injectedConnector) {
+                console.log("🔌 [WALLET] Triggering direct injected connection...");
+                connect({ connector: injectedConnector });
+            } else {
+                // Default to Para Modal for all other cases (email, social, or desktop browser wallets)
+                openModal();
+            }
         } else if (isParaConnected) {
             openModal();
         } else {
-            // Already connected via Rabby/MetaMask/etc. 
-            // Avoid opening Para modal to prevent mobile crashes
             console.log("Connect status: Already connected via", wagmiConnector?.name);
         }
     };

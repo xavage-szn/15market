@@ -951,7 +951,8 @@ class ArcKeeper {
                                 exitPrice,
                                 timestamp: Number(bet.timestamp) * 1000,
                                 status: actualWon ? "WON" : "LOST",
-                                network: 'arc'
+                                network: 'arc',
+                                absIndex: state.stats.totalTrades
                             });
                             if (state.history.length > 2000) state.history.pop();
                             saveState();

@@ -23,8 +23,12 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                 if (Array.isArray(arcData)) {
                     arcData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                     const finalHistory = arcData.slice(0, 100);
-                    setHistory(finalHistory);
-                    localStorage.setItem("15market_global_history_v2", JSON.stringify(finalHistory));
+
+                    // Only update if history actually changed to prevent animation resets
+                    if (JSON.stringify(finalHistory) !== JSON.stringify(history)) {
+                        setHistory(finalHistory);
+                        localStorage.setItem("15market_global_history_v2", JSON.stringify(finalHistory));
+                    }
 
                     // Update Profiles
                     let updatedProfiles = { ...profiles };
@@ -151,7 +155,7 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                 <motion.div
                     animate={{ x: ["0%", "-50%"] }}
                     className="flex items-center gap-6 lg:gap-10 whitespace-nowrap pl-40 lg:pl-52"
-                    transition={{ x: { duration: 240, repeat: Infinity, ease: "linear" } }}
+                    transition={{ x: { duration: 60, repeat: Infinity, ease: "linear" } }}
                 >
                     {repeatedHistory.map((event, i) => (
                         <div key={`${event.id}-${i}`}
