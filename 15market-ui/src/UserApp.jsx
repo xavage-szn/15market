@@ -161,12 +161,16 @@ export default function UserApp() {
   const { connect, connectAsync, connectors } = useConnect();
 
   // SYNC PARA WITH WAGMI: Ensure Para session is known to Wagmi
+  const isSyncingRef = useRef(false);
   useEffect(() => {
-    if (isParaConnected && !isWagmiConnected) {
+    if (isParaConnected && !isWagmiConnected && !isSyncingRef.current) {
       const paraWagmiConnector = connectors.find(c => c.id === 'para');
       if (paraWagmiConnector) {
         console.log("🔗 [WAGMI SYNC] Connecting Para session to Wagmi...");
-        connect({ connector: paraWagmiConnector });
+        isSyncingRef.current = true;
+        connect({ connector: paraWagmiConnector }, {
+          onSettled: () => { isSyncingRef.current = false; }
+        });
       } else {
         console.warn("⚠️ [WAGMI SYNC] Para connector not found in Wagmi config");
       }
@@ -237,11 +241,18 @@ export default function UserApp() {
     };
   }, [isConnected, address, evmBalance]);
 
-  // Network Enforcement
+  // Network Enforcement with loop protection
+  const lastSwitchTime = useRef(0);
   useEffect(() => {
-    if (isConnected && chainId && chainId !== 5042002) {
-      console.warn(`⚠️ [NETWORK] Switching to Arc...`);
-      switchChain({ chainId: 5042002 });
+    const now = Date.now();
+    if (isConnected && chainId && chainId !== 5042002 && (now - lastSwitchTime.current > 10000)) {
+      console.warn(`⚠️ [NETWORK] Correct chain required (Current: ${chainId}, Required: 5042002). Prompting switch...`);
+      lastSwitchTime.current = now;
+      try {
+        switchChain({ chainId: 5042002 });
+      } catch (err) {
+        console.error("❌ [NETWORK] Switch failed:", err);
+      }
     }
   }, [isConnected, chainId, switchChain]);
 
