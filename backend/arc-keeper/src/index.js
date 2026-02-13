@@ -64,8 +64,8 @@ const state = {
     stats: { totalTrades: 0, wins: 0, volume: 0 },
     autoSignerFees: 0,
     settings: {
-        minBet: 0.1,
-        maxBet: 5.0,
+        minBet: 1.0,
+        maxBet: 1000000.0,
         maintenanceMode: false
     }
 };

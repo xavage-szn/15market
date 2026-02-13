@@ -343,8 +343,8 @@ export default function UserApp() {
   const [platformSettings, setPlatformSettings] = useState(() => {
     try {
       const saved = localStorage.getItem("15market_citadel_settings");
-      return saved ? JSON.parse(saved) : { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false };
-    } catch (e) { return { minBet: 0.1, maxBet: 5.0, maintenanceMode: false, tradingHalted: false }; }
+      return saved ? JSON.parse(saved) : { minBet: 1.0, maxBet: 1000000.0, maintenanceMode: false, tradingHalted: false };
+    } catch (e) { return { minBet: 1.0, maxBet: 1000000.0, maintenanceMode: false, tradingHalted: false }; }
   });
 
   // Sync settings across tabs and periodically
