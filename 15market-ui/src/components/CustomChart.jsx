@@ -235,6 +235,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 chartRef.current.remove();
                 chartRef.current = null;
             }
+            seriesRef.current = null;
+            volumeSeriesRef.current = null;
+            smaSeriesRef.current = null;
             tradePriceLines.current.clear();
         };
     }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType]);
@@ -244,12 +247,20 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         if (!seriesRef.current || !chartRef.current) return;
 
         const updateMarkers = () => {
+            const currentSeries = seriesRef.current;
+            const currentChart = chartRef.current;
+            if (!currentSeries || !currentChart) return;
+
             const currentTradeIds = new Set(activeTrades.map(t => String(t.id)));
 
             // Remove price lines for closed trades
             for (const [id, line] of tradePriceLines.current.entries()) {
                 if (!currentTradeIds.has(id)) {
-                    seriesRef.current.removePriceLine(line);
+                    if (typeof currentSeries.removePriceLine === 'function') {
+                        try {
+                            currentSeries.removePriceLine(line);
+                        } catch (e) { }
+                    }
                     tradePriceLines.current.delete(id);
                 }
             }
@@ -272,15 +283,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
                 // Add Price Line
                 if (!tradePriceLines.current.has(id)) {
-                    const priceLine = seriesRef.current.createPriceLine({
-                        price: entryPrice,
-                        color: isCall ? '#3CB371' : '#FF4444',
-                        lineWidth: 2,
-                        lineStyle: 2,
-                        axisLabelVisible: true,
-                        title: `${trade.amount} USDC`,
-                    });
-                    tradePriceLines.current.set(id, priceLine);
+                    if (typeof currentSeries.createPriceLine === 'function') {
+                        try {
+                            const priceLine = currentSeries.createPriceLine({
+                                price: entryPrice,
+                                color: isCall ? '#3CB371' : '#FF4444',
+                                lineWidth: 2,
+                                lineStyle: 2,
+                                axisLabelVisible: true,
+                                title: `${trade.amount} USDC`,
+                            });
+                            tradePriceLines.current.set(id, priceLine);
+                        } catch (e) { }
+                    }
                 }
 
                 // Entry Marker
@@ -306,13 +321,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 }
             });
 
-            seriesRef.current.setMarkers(markers);
+            if (typeof currentSeries.setMarkers === 'function') {
+                try {
+                    currentSeries.setMarkers(markers);
+                } catch (e) { }
+            }
         };
 
         updateMarkers();
         const interval = setInterval(updateMarkers, 1000);
         return () => clearInterval(interval);
-    }, [activeTrades, currentPrice]);
+    }, [activeTrades, currentPrice, chartType]);
 
     useEffect(() => {
         if (!currentPrice || !seriesRef.current) return;

@@ -7,7 +7,7 @@ import { para, queryClient } from './paraClient'
 import { createConfig, http, createStorage } from 'wagmi'
 
 export const wagmiConfig = createConfig({
-    chains: [arcTestnet, sepolia],
+    chains: [arcTestnet],
     multiInjectedProviderDiscovery: false,
     storage: createStorage({ storage: window.localStorage }),
     connectors: [
@@ -21,6 +21,5 @@ export const wagmiConfig = createConfig({
             retryCount: 3,
             retryDelay: 1000,
         }),
-        [sepolia.id]: http(),
     },
 })

@@ -104,11 +104,11 @@ const StatCard = React.memo(({ icon: Icon, label, value, trend, positive, onClic
             <Icon size={48} />
         </div>
         <div className="relative z-10">
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em] mb-1">{label}</p>
-            <h4 className="text-2xl font-black text-white mb-2">{value}</h4>
+            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em] mb-1">{String(label || '')}</p>
+            <h4 className="text-2xl font-black text-white mb-2">{String(value || '0')}</h4>
             <div className={`flex items-center gap-1 text-[10px] font-bold ${positive ? 'text-[#3CB371]' : 'text-[#FF4444]'}`}>
                 {positive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {trend}
+                {String(trend || '0%')}
                 <span className="text-white/20 ml-1">since yesterday</span>
             </div>
         </div>
@@ -397,7 +397,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [campaignTradesData, setCampaignTradesData] = useState([]);
 
     const notify = useCallback((type, title, message) => {
-        setNotification({ type, title, message });
+        setNotification({
+            type,
+            title: String(title || ''),
+            message: String(message || '')
+        });
         setTimeout(() => setNotification(null), 5000);
     }, []);
 
@@ -1418,10 +1422,10 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                         <div className="space-y-6 text-center">
                             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
                                 <ShieldAlert size={32} className="mx-auto text-red-500 mb-3" />
-                                <p className="text-[10px] text-red-500 font-black uppercase tracking-widest leading-relaxed">
+                                <div className="p-2 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] leading-relaxed">
                                     ACCESS DENIED<br />
-                                    Wallet <span className="font-mono break-all text-[8px] opacity-60">{String(walletAddress || 'UNDEFINED')}</span> is not registered in the 15Market administrative directory.
-                                </p>
+                                    Wallet <span className="font-mono break-all text-[8px] opacity-60">{String(walletAddress || 'NOT CONNECTED')}</span> is not registered in the 15Market administrative directory.
+                                </div>
                             </div>
                             <button
                                 onClick={() => openModal()}
@@ -1481,7 +1485,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                         </div>
                                         <div>
                                             <p className="text-[8px] text-white/30 font-black uppercase tracking-widest">Authorized Wallet</p>
-                                            <p className="text-[10px] text-white font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</p>
+                                            <p className="text-[10px] text-white font-mono">{String(walletAddress || '').slice(0, 6)}...{String(walletAddress || '').slice(-4)}</p>
                                         </div>
                                     </div>
                                     <div className="px-2 py-1 rounded bg-[#3CB371]/10 text-[#3CB371] text-[8px] font-black uppercase tracking-tighter border border-[#3CB371]/20">
@@ -1558,7 +1562,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     >
                         <AlertCircle size={20} className="animate-pulse" />
                         <span className="text-xs font-bold uppercase tracking-widest">
-                            Connection Lost: Trying to reconnect to Keeper Node (Attempt {keeperHealth.failCount})...
+                            Connection Lost: Trying to reconnect to Keeper Node (Attempt {String(keeperHealth.failCount || '0')})...
                         </span>
                     </motion.div>
                 )}
@@ -1705,8 +1709,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                             <Users size={16} className="text-[#3CB371]" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-white">{currentUser?.username}</p>
-                            <p className="text-[8px] font-bold text-white/40 uppercase tracking-widest">{currentUser?.role}</p>
+                            <p className="text-[10px] font-black text-white">{String(currentUser?.username || 'GUEST')}</p>
+                            <p className="text-[8px] font-bold text-white/40 uppercase tracking-widest">{String(currentUser?.role || 'IDENTITY_PENDING')}</p>
                         </div>
                     </div>
                     <button
@@ -1828,7 +1832,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                             <div className="flex-1">
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-1 text-[#3B82F6]">
-                                                        NODE STATUS {lastSync && `• SYNC: ${lastSync}`}
+                                                        NODE STATUS {lastSync && `• SYNC: ${String(lastSync)}`}
                                                     </p>
                                                     <h2 className="text-xl lg:text-3xl font-black text-white">{unifiedMetrics.currentStats.wallets} <span className="text-[10px] font-bold text-white/40 ml-2 uppercase tracking-widest">Active Users</span></h2>
                                                     <div className="flex items-center gap-2 mt-2">
@@ -2481,7 +2485,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                             )}
                                                                         </div>
                                                                         <div>
-                                                                            <p className="text-xs font-black text-white">{profile.username || "Anonymous Operator"}</p>
+                                                                            <p className="text-xs font-black text-white">{String(profile.username || "Anonymous Operator")}</p>
                                                                             <p className="text-[10px] font-mono text-white/20">{profile.address?.slice(0, 12)}...</p>
                                                                         </div>
                                                                     </div>
