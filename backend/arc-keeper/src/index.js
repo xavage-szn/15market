@@ -259,7 +259,7 @@ app.post('/withdraw', async (req, res) => {
     if (password !== ADMIN_TOKEN) return res.status(401).json({ error: "Unauthorized" });
 
     try {
-        const amtWei = ethers.parseUnits(amount.toString(), 6); // Arc USDC uses 6 decimals
+        const amtWei = ethers.parseUnits(amount.toString(), 18); // Arc Native USDC uses 18 decimals
         const tx = await keeper.contract.withdraw(amtWei);
         await tx.wait();
         res.json({ success: true, hash: tx.hash });
@@ -653,7 +653,7 @@ class ArcKeeper {
         try {
             // Check Contract Balance (this is what pays users)
             const bal = await this.provider.getBalance(CONTRACT_ADDRESS);
-            const ethBal = ethers.formatUnits(bal, 6); // Arc USDC uses 6 decimals
+            const ethBal = ethers.formatUnits(bal, 18); // Arc Native USDC uses 18 decimals
             console.log(`💰 [TREASURY] Contract Balance: ${ethBal} ARC`);
             if (parseFloat(ethBal) < 1.0) {
                 console.warn(`⚠️ [LOW FUNDS] Contract balance is low! Payouts may fail.`);
@@ -661,8 +661,8 @@ class ArcKeeper {
 
             // Check Keeper Balance (for gas)
             const gasBal = await this.provider.getBalance(this.wallet.address);
-            if (parseFloat(ethers.formatUnits(gasBal, 6)) < 0.1) {
-                console.warn(`⚠️ [LOW GAS] Keeper wallet low on gas: ${ethers.formatUnits(gasBal, 6)} ARC`);
+            if (parseFloat(ethers.formatUnits(gasBal, 18)) < 0.1) {
+                console.warn(`⚠️ [LOW GAS] Keeper wallet low on gas: ${ethers.formatUnits(gasBal, 18)} ARC`);
             }
         } catch (e) { console.error("Balance check failed", e.message); }
     }
@@ -739,7 +739,7 @@ class ArcKeeper {
                     state.history.unshift({
                         id: betId,
                         owner: user,
-                        amount: ethers.formatUnits(amount, 6), // Arc USDC uses 6 decimals
+                        amount: ethers.formatUnits(amount, 18), // Arc Native USDC uses 18 decimals
                         currency: "USDC",
                         direction: Number(direction) === 0 ? "UP" : "DOWN",
                         entryPrice: (Number(entryPrice) / 100000000).toFixed(4),
@@ -757,7 +757,7 @@ class ArcKeeper {
             const symbol = ASSET_MAP[marketId] || 'SOL';
             state.activeBets[betId] = {
                 id: betId, user, symbol, duration: Number(duration),
-                amount: ethers.formatUnits(amount, 6), // Arc USDC uses 6 decimals
+                amount: ethers.formatUnits(amount, 18), // Arc Native USDC uses 18 decimals
                 direction: Number(direction),
                 entryPrice: (Number(entryPrice) / 100000000).toFixed(4),
                 timestamp: Number(timestamp),
@@ -769,7 +769,7 @@ class ArcKeeper {
 
             // Update Stats
             state.stats.totalTrades = (state.stats.totalTrades || 0) + 1;
-            const amtNum = parseFloat(ethers.formatUnits(amount, 6)); // Arc USDC uses 6 decimals
+            const amtNum = parseFloat(ethers.formatUnits(amount, 18)); // Arc Native USDC uses 18 decimals
             state.stats.volume = (state.stats.volume || 0) + amtNum;
 
             saveState();
@@ -883,7 +883,7 @@ class ArcKeeper {
                     const bal = await this.provider.getBalance(this.wallet.address);
 
                     if (bal < requiredGas) {
-                        console.error(`🔴 [GAS_FAILURE] Keeper has ${ethers.formatUnits(bal, 6)} ARC, but needs ~${ethers.formatUnits(requiredGas, 6)} ARC for settlement safety.`);
+                        console.error(`🔴 [GAS_FAILURE] Keeper has ${ethers.formatUnits(bal, 18)} ARC, but needs ~${ethers.formatUnits(requiredGas, 18)} ARC for settlement safety.`);
                         bet.processing = false;
                         this.settlementQueue.push(bet);
                         return;

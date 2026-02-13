@@ -211,7 +211,7 @@ export default function UserApp() {
         const rpcToUse = failCount % 2 === 0 ? ARC_RPC : ARC_RPC_BACKUP;
         const provider = new ethers.JsonRpcProvider(rpcToUse, undefined, { staticNetwork: true });
         const balWei = await provider.getBalance(address);
-        const bal = parseFloat(ethers.formatUnits(balWei, 6)); // Arc USDC uses 6 decimals
+        const bal = parseFloat(ethers.formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
 
         if (isMounted) {
           // console.log(`✅ [BALANCE] RPC (${rpcToUse}) balance:`, bal);
@@ -885,7 +885,7 @@ export default function UserApp() {
     if (!evmSessionWallet) return;
     try {
       const balanceWei = await evmSessionWallet.provider.getBalance(evmSessionWallet.address);
-      const bal = parseFloat(ethers.formatUnits(balanceWei, 6)); // Arc USDC uses 6 decimals
+      const bal = parseFloat(ethers.formatUnits(balanceWei, 18)); // Arc Native USDC uses 18 decimals
       setSessionBalance(bal);
     } catch (err) {
       console.error("❌ [SESSION BALANCE] Fetch failed:", err);
@@ -1423,9 +1423,16 @@ export default function UserApp() {
         if (paraWagmiConnector) {
           try {
             await connectAsync({ connector: paraWagmiConnector });
+            // Wait a moment for Wagmi to register the connection
+            await new Promise(r => setTimeout(r, 1000));
           } catch (reconnectErr) {
             console.error("❌ [REFILL] Re-sync failed:", reconnectErr);
+            notify("Wallet connection sync failed. Please reconnect.", "error");
+            return;
           }
+        } else {
+          notify("Arc connector not found. Please refresh.", "error");
+          return;
         }
       }
 
@@ -1459,7 +1466,7 @@ export default function UserApp() {
 
         const hash = await sendTransactionAsync({
           to: evmSessionWallet.address,
-          value: parseUnits(amtNum.toFixed(6), 6), // Arc USDC uses 6 decimals
+          value: parseUnits(amtNum.toFixed(18), 18), // Arc Native USDC uses 18 decimals
           chainId: 5042002
         });
 
@@ -1473,7 +1480,7 @@ export default function UserApp() {
             console.log("💸 [REFILL] Sending fee to treasury...", { fee, to: ARC_CONTRACT_ADDRESS });
             const tx = await evmSessionWallet.sendTransaction({
               to: ARC_CONTRACT_ADDRESS,
-              value: parseUnits(fee.toFixed(6), 6), // Arc USDC uses 6 decimals
+              value: parseUnits(fee.toFixed(18), 18), // Arc Native USDC uses 18 decimals
             });
             console.log("📤 [REFILL] Fee tx broadcasted:", tx.hash);
             await tx.wait();
@@ -1516,7 +1523,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee, balance, updateEvmSessionBal, isExecuting, chainId, switchChain, refetchEvmBalance]);
+  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee, balance, updateEvmSessionBal, isExecuting, chainId, switchChainAsync, refetchEvmBalance, isWagmiConnected, connectors, connectAsync]);
 
   const handleWithdraw = useCallback(async (amt) => {
     // console.log("🔵 [WITHDRAW] Starting withdrawal process...");
@@ -1601,7 +1608,7 @@ export default function UserApp() {
       console.log("💸 [WITHDRAW] Sending fee to contract...", { fee, to: ARC_CONTRACT_ADDRESS });
       const feeTx = await evmSessionWallet.sendTransaction({
         to: ARC_CONTRACT_ADDRESS,
-        value: parseUnits(fee.toFixed(6), 6), // Arc USDC uses 6 decimals
+        value: parseUnits(fee.toFixed(18), 18), // Arc Native USDC uses 18 decimals
       });
       console.log("📤 [WITHDRAW] Fee tx broadcasted:", feeTx.hash);
 
@@ -1613,7 +1620,7 @@ export default function UserApp() {
       console.log("💸 [WITHDRAW] Sending net amount to main wallet...", { netAmt, to: address });
       const sweepTx = await evmSessionWallet.sendTransaction({
         to: address,
-        value: parseUnits(netAmt.toFixed(6), 6), // Arc USDC uses 6 decimals
+        value: parseUnits(netAmt.toFixed(18), 18), // Arc Native USDC uses 18 decimals
       });
       console.log("📤 [WITHDRAW] Sweep tx broadcasted:", sweepTx.hash);
 
@@ -1636,7 +1643,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal, isExecuting, chainId, switchChain, refetchEvmBalance]);
+  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal, isExecuting, chainId, switchChainAsync, refetchEvmBalance]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
