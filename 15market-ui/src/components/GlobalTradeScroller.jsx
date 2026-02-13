@@ -98,7 +98,7 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
 
     return (
         <div
-            className={`w-full h-9 flex items-center overflow-hidden relative transition-all duration-500 rounded-none ${isLight
+            className={`w-screen h-9 flex items-center overflow-hidden relative transition-all duration-500 rounded-none left-1/2 -translate-x-1/2 ${isLight
                 ? 'border-y-2 border-[#3CB371]/30 shadow-[0_0_15px_rgba(60,179,113,0.1)]'
                 : 'glass-panel border-white/5'
                 }`}

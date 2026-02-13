@@ -1709,7 +1709,7 @@ export default function UserApp() {
       </header>
 
       {/* Full-width scroller - edge to edge */}
-      <div className="w-full mb-4 lg:mb-10">
+      <div className="w-screen mb-4 lg:mb-10 overflow-hidden">
         <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
       </div>
 
