@@ -521,13 +521,12 @@ export default function UserApp() {
 
       // 1. Pyth Sources (Multiple Hermers endpoints for redundancy)
       if (activeMarket.pythId) {
-        const pythIds = [activeMarket.pythId];
-        const pythIdStr = activeMarket.pythId.replace('0x', '');
+        const pythIdClean = activeMarket.pythId.replace('0x', '');
 
         // Try both v2 latest with/without 0x and beta
         sources.push({
           name: "pyth",
-          url: `https://hermes.pyth.network/v2/updates/price/latest?ids=${activeMarket.pythId}`,
+          url: `https://hermes.pyth.network/v2/updates/price/latest?ids=${pythIdClean}`,
           parse: d => {
             const p = d.parsed?.[0]?.price;
             return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
@@ -536,7 +535,7 @@ export default function UserApp() {
 
         sources.push({
           name: "pyth-bench",
-          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids=${activeMarket.pythId.replace('0x', '')}`,
+          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids=${pythIdClean}`,
           parse: d => {
             const p = d.parsed?.[0]?.price;
             return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
@@ -577,7 +576,7 @@ export default function UserApp() {
 
       const pricePromises = sources.map(async (src) => {
         try {
-          const res = await fetch(`${src.url}${src.url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
+          const res = await fetch(src.url, {
             signal: controller.signal,
             headers: { 'Cache-Control': 'no-cache' }
           });
@@ -1220,7 +1219,7 @@ export default function UserApp() {
           BigInt(duration),
           BigInt(entryPriceParams),
           Number(assetId),
-          address, // New: Explicit reward recipient (Main Wallet)
+          evmSessionWallet.address, // Correct: Reward goes back to Auto-signer
           {
             value: amountWei,
             gasLimit: 600000n,

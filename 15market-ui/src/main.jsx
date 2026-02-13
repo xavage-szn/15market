@@ -13,6 +13,31 @@ import { wagmiConfig } from './wagmiConfig';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './paraClient';
 
+// --- CONSOLE LOG CLEANER & SDK ERROR SUPPRESSOR ---
+// Silence known non-critical third-party SDK errors to keep logs clean for platform operations.
+(function silenceSDKNoise() {
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  const suppressedErrors = [
+    "TypeError: Cannot read properties of undefined (reading 'includes')", // Para SDK Storage Listener bug
+    "violates the document's Content Security Policy", // CSP noise
+    "hermes.pyth.network/v2/updates/price/latest", // Pyth redundancy failures
+    "benchmarks.pyth.network/v1/updates/price/latest" // Pyth redundancy failures
+  ];
+
+  console.error = (...args) => {
+    const msg = args[0]?.toString() || "";
+    if (suppressedErrors.some(sub => msg.includes(sub))) return;
+    originalError.apply(console, args);
+  };
+
+  console.warn = (...args) => {
+    const msg = args[0]?.toString() || "";
+    if (suppressedErrors.some(sub => msg.includes(sub))) return;
+    originalWarn.apply(console, args);
+  };
+})();
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
