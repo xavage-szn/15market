@@ -193,56 +193,7 @@ export default function UserApp() {
     }
   });
 
-  // Main Wallet Balance Sync - ROBUST DUAL-PATH FETCHING WITH RPC FALLBACK
-  const fetchBalance = useCallback(async () => {
-    if (!isConnected || !address) {
-      setBalance(0);
-      return;
-    }
 
-    // Method 1: Wagmi Balance (Reactive)
-    if (evmBalance) {
-      const bal = parseFloat(evmBalance.formatted);
-      setBalance(bal);
-    }
-
-    // Method 2: Manual RPC Fallback
-    try {
-      const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-      const balWei = await provider.getBalance(address);
-      const bal = parseFloat(ethers.formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
-
-      setBalance(prev => {
-        if (Math.abs(prev - bal) > 0.0001) return bal;
-        return prev;
-      });
-    } catch (e) {
-      // Quiet fail for background polling
-    }
-  }, [isConnected, address, evmBalance]);
-
-  // Global Refresh Trigger (Exposed for events)
-  const triggerGlobalRefresh = useCallback(() => {
-    console.log("🔄 [REFRESH] Triggering global balance sync...");
-    fetchBalance();
-    if (refetchEvmBalance) refetchEvmBalance();
-    if (updateEvmSessionBal) updateEvmSessionBal();
-  }, [fetchBalance, refetchEvmBalance, updateEvmSessionBal]);
-
-  // Aggressive Refresh (Multi-stage update)
-  const aggressiveRefresh = useCallback(() => {
-    triggerGlobalRefresh();
-    setTimeout(triggerGlobalRefresh, 2000);
-    setTimeout(triggerGlobalRefresh, 5000);
-    setTimeout(triggerGlobalRefresh, 10000);
-    setTimeout(triggerGlobalRefresh, 15000);
-  }, [triggerGlobalRefresh]);
-
-  useEffect(() => {
-    const interval = setInterval(fetchBalance, 10000);
-    fetchBalance();
-    return () => clearInterval(interval);
-  }, [fetchBalance]);
 
   // Network Enforcement with loop protection
   const lastSwitchTime = useRef(0);
@@ -915,6 +866,57 @@ export default function UserApp() {
     const interval = setInterval(updateEvmSessionBal, 5000);
     return () => clearInterval(interval);
   }, [evmSessionWallet, updateEvmSessionBal]);
+
+  // Main Wallet Balance Sync - ROBUST DUAL-PATH FETCHING WITH RPC FALLBACK
+  const fetchBalance = useCallback(async () => {
+    if (!isConnected || !address) {
+      setBalance(0);
+      return;
+    }
+
+    // Method 1: Wagmi Balance (Reactive)
+    if (evmBalance) {
+      const bal = parseFloat(evmBalance.formatted);
+      setBalance(bal);
+    }
+
+    // Method 2: Manual RPC Fallback
+    try {
+      const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
+      const balWei = await provider.getBalance(address);
+      const bal = parseFloat(ethers.formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
+
+      setBalance(prev => {
+        if (Math.abs(prev - bal) > 0.0001) return bal;
+        return prev;
+      });
+    } catch (e) {
+      // Quiet fail for background polling
+    }
+  }, [isConnected, address, evmBalance]);
+
+  // Global Refresh Trigger (Exposed for events)
+  const triggerGlobalRefresh = useCallback(() => {
+    console.log("🔄 [REFRESH] Triggering global balance sync...");
+    fetchBalance();
+    if (refetchEvmBalance) refetchEvmBalance();
+    if (updateEvmSessionBal) updateEvmSessionBal();
+  }, [fetchBalance, refetchEvmBalance, updateEvmSessionBal]);
+
+  // Aggressive Refresh (Multi-stage update)
+  const aggressiveRefresh = useCallback(() => {
+    triggerGlobalRefresh();
+    setTimeout(triggerGlobalRefresh, 2000);
+    setTimeout(triggerGlobalRefresh, 5000);
+    setTimeout(triggerGlobalRefresh, 10000);
+    setTimeout(triggerGlobalRefresh, 15000);
+  }, [triggerGlobalRefresh]);
+
+  useEffect(() => {
+    const interval = setInterval(fetchBalance, 10000);
+    fetchBalance();
+    return () => clearInterval(interval);
+  }, [fetchBalance]);
 
 
 
