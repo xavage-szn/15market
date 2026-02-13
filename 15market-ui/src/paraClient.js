@@ -10,6 +10,12 @@ export const paraEnv = Environment.BETA;
 export const para = new Para(paraEnv, paraApiKey, {
     appName: "15market",
     walletConnectProjectId: projectId || "4aebd2ef806c541b6aaf003da2930c58",
+    walletConnectMetadata: {
+        name: "15market",
+        description: "Trade Assets on Arc",
+        url: "https://15market.online",
+        icons: ["https://15market.online/logo.png"]
+    },
     defaultChainId: "eip155:5042002",
     chains: [{
         chainId: "eip155:5042002",

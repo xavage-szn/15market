@@ -17,7 +17,15 @@ export function AppParaProvider({ children }) {
             externalWalletConfig={{
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],
-                walletConnect: { projectId: activeProjectId },
+                walletConnect: {
+                    projectId: activeProjectId,
+                    metadata: {
+                        name: "15market",
+                        description: "Trade Assets on Arc",
+                        url: "https://15market.online",
+                        icons: ["https://15market.online/logo.png"]
+                    }
+                },
                 evmConnector: {
                     config: {
                         chains: [arcTestnet, sepolia],

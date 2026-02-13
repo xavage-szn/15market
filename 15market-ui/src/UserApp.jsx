@@ -1178,12 +1178,12 @@ export default function UserApp() {
       }
 
       const tradeId = Date.now();
-      const dirVal = (direction === "buy" || direction === "UP") ? 0 : 1;
+      const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0; // Match Contract: 1=UP, 0=DOWN
       const entryPriceParams = Math.floor(activePrice * 100000000);
       let txHash;
 
       // Arc Trade logic (EVM)
-      const amountWei = parseUnits(amount.toString(), 6); // Arc USDC uses 6 decimals
+      const amountWei = parseUnits(amount.toString(), 18); // Arc Native USDC uses 18 decimals
       const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
       const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
 
@@ -1191,7 +1191,7 @@ export default function UserApp() {
         console.log("✅ [TRADE] Using AUTO-SIGNER (Session Wallet)");
         const feePercent = 0.001; // 0.1% Auto-Signer Fee
         const signerFee = Number(amount) * feePercent;
-        const feeWei = parseUnits(signerFee.toFixed(6), 6); // Arc USDC uses 6 decimals
+        const feeWei = parseUnits(signerFee.toFixed(18), 18); // Arc Native USDC uses 18 decimals
 
         notify(`Auto-signing on Arc (0.1% fee: ${signerFee.toFixed(4)} USDC)...`, "success");
         const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });

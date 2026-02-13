@@ -9,7 +9,15 @@ export const wagmiConfig = createConfig({
     chains: [arcTestnet, sepolia],
     connectors: [
         injected(),
-        walletConnect({ projectId: "4aebd2ef806c541b6aaf003da2930c58" }),
+        walletConnect({
+            projectId: "4aebd2ef806c541b6aaf003da2930c58",
+            metadata: {
+                name: "15market",
+                description: "Trade Assets on Arc",
+                url: "https://15market.online",
+                icons: ["https://15market.online/logo.png"]
+            }
+        }),
         paraConnector({ para, queryClient, appName: '15market' }),
     ],
     transports: {

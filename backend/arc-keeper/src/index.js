@@ -741,7 +741,7 @@ class ArcKeeper {
                         owner: user,
                         amount: ethers.formatUnits(amount, 18), // Arc Native USDC uses 18 decimals
                         currency: "USDC",
-                        direction: Number(direction) === 0 ? "UP" : "DOWN",
+                        direction: Number(direction) === 1 ? "UP" : "DOWN",
                         entryPrice: (Number(entryPrice) / 100000000).toFixed(4),
                         exitPrice: (Number(betStruct.settlementPrice) / 100000000).toFixed(4),
                         timestamp: Number(timestamp) * 1000,
@@ -849,7 +849,7 @@ class ArcKeeper {
                                 owner: bet.user,
                                 amount: bet.amount,
                                 currency: "USDC",
-                                direction: Number(bet.direction) === 0 ? "UP" : "DOWN",
+                                direction: Number(bet.direction) === 1 ? "UP" : "DOWN",
                                 entryPrice: bet.entryPrice,
                                 exitPrice: exitP,
                                 timestamp: Number(bet.timestamp) * 1000,
@@ -866,8 +866,8 @@ class ArcKeeper {
                     console.warn(`⚠️ [STATUS_CHECK_FAILED] #${bet.id}: ${statusErr.message}`);
                 }
 
-                const isWin = (Number(bet.direction) === 0 && exitPrice > bet.entryPrice) ||
-                    (Number(bet.direction) === 1 && exitPrice < bet.entryPrice);
+                const isWin = (Number(bet.direction) === 1 && exitPrice > bet.entryPrice) ||
+                    (Number(bet.direction) === 0 && exitPrice < bet.entryPrice);
 
                 try {
                     const priceParam = BigInt(Math.floor(exitPrice * 100000000));
@@ -936,7 +936,7 @@ class ArcKeeper {
                                 owner: bet.user,
                                 amount: bet.amount,
                                 currency: "USDC",
-                                direction: Number(bet.direction) === 0 ? "UP" : "DOWN",
+                                direction: Number(bet.direction) === 1 ? "UP" : "DOWN",
                                 entryPrice: bet.entryPrice,
                                 exitPrice,
                                 timestamp: Number(bet.timestamp) * 1000,
@@ -1019,7 +1019,7 @@ setInterval(() => {
                     owner: bet.user,
                     amount: bet.amount,
                     currency: "USDC",
-                    direction: Number(bet.direction) === 0 ? "UP" : "DOWN",
+                    direction: Number(bet.direction) === 1 ? "UP" : "DOWN",
                     entryPrice: bet.entryPrice,
                     exitPrice: "0.00", // Unknown exit price
                     timestamp: Number(bet.timestamp) * 1000,
