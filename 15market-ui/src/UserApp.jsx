@@ -211,7 +211,7 @@ export default function UserApp() {
         const rpcToUse = failCount % 2 === 0 ? ARC_RPC : ARC_RPC_BACKUP;
         const provider = new ethers.JsonRpcProvider(rpcToUse, undefined, { staticNetwork: true });
         const balWei = await provider.getBalance(address);
-        const bal = parseFloat(ethers.formatUnits(balWei, 18));
+        const bal = parseFloat(ethers.formatUnits(balWei, 6)); // Arc USDC uses 6 decimals
 
         if (isMounted) {
           // console.log(`✅ [BALANCE] RPC (${rpcToUse}) balance:`, bal);
@@ -533,9 +533,10 @@ export default function UserApp() {
 
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xffb26477e64e100806440db74f762a40788d7734bcc991d798150495f5431682', binance: 'ETHUSDT', kraken: 'ETHUSD' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f8dc41b5e', binance: 'BTCUSDT', kraken: 'XBTUSD' },
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT', kraken: 'ETHUSD' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT', kraken: 'XBTUSD' },
       { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
+      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x0000000000000000000000000000000000000000000000000000000000000000', binance: 'MONUSDT' },
     ];
 
     const saved = localStorage.getItem('15market_listed_tokens');
@@ -621,6 +622,29 @@ export default function UserApp() {
       clearInterval(poller);
     };
   }, [activeMarket.id, network]);
+
+  // Handle market changes from UI (persist to localStorage and sync with keeper)
+  const handleMarketChange = useCallback(async (newMarket) => {
+    if (!newMarket || newMarket.id === activeMarket.id) return;
+
+    console.log(`🎯 User switched market to: ${newMarket.symbol}`);
+    localStorage.setItem('15market_active_token_id', newMarket.id);
+    setActiveMarket(newMarket);
+
+    // Sync with keeper
+    try {
+      await fetch(`${KEEPER_URL_ARC}/active-market`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeId: newMarket.id })
+      });
+    } catch (e) {
+      console.warn('Failed to sync market change with keeper:', e.message);
+    }
+
+    // Trigger price fetch for new market
+    setTimeout(() => fetchCurrentPrice(), 100);
+  }, [activeMarket.id, fetchCurrentPrice]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -756,10 +780,8 @@ export default function UserApp() {
   const updateEvmSessionBal = useCallback(async () => {
     if (!evmSessionWallet) return;
     try {
-      // console.log("💰 [SESSION BALANCE] Fetching session wallet balance...");
       const balanceWei = await evmSessionWallet.provider.getBalance(evmSessionWallet.address);
-      const bal = parseFloat(ethers.formatEther(balanceWei));
-      // console.log("✅ [SESSION BALANCE] Updated");
+      const bal = parseFloat(ethers.formatUnits(balanceWei, 6)); // Arc USDC uses 6 decimals
       setSessionBalance(bal);
     } catch (err) {
       console.error("❌ [SESSION BALANCE] Fetch failed:", err);
@@ -1250,7 +1272,7 @@ export default function UserApp() {
             // Wait for chain state to propagate
             await new Promise(r => setTimeout(r, 2000));
 
-            // Re-check after switch attempt
+            // Re-check after attempt
             // Note: chainId from hook might not update instantly, but writeContractAsync will use the target chainId
           } catch (switchErr) {
             console.error("❌ [TRADE] Network switch failed:", switchErr);
@@ -1407,6 +1429,19 @@ export default function UserApp() {
         return;
       }
 
+      // 🛡️ [ROBUSTNESS] Ensure Wagmi is connected
+      if (!isWagmiConnected) {
+        console.warn("⚠️ [REFILL] Wagmi not connected. Attempting re-sync...");
+        const paraWagmiConnector = connectors.find(c => c.id === 'para');
+        if (paraWagmiConnector) {
+          try {
+            await connectAsync({ connector: paraWagmiConnector });
+          } catch (reconnectErr) {
+            console.error("❌ [REFILL] Re-sync failed:", reconnectErr);
+          }
+        }
+      }
+
       // 🛡️ [NETWORK] Enforce Arc Testnet
       if (chainId !== 5042002) {
         console.log("🌐 [REFILL] Network mismatch. Current:", chainId, "Target: 5042002");
@@ -1437,7 +1472,7 @@ export default function UserApp() {
 
         const hash = await sendTransactionAsync({
           to: evmSessionWallet.address,
-          value: parseEther(amtNum.toFixed(18)),
+          value: parseUnits(amtNum.toFixed(6), 6), // Arc USDC uses 6 decimals
           chainId: 5042002
         });
 
@@ -1451,7 +1486,7 @@ export default function UserApp() {
             console.log("💸 [REFILL] Sending fee to treasury...", { fee, to: ARC_CONTRACT_ADDRESS });
             const tx = await evmSessionWallet.sendTransaction({
               to: ARC_CONTRACT_ADDRESS,
-              value: parseEther(fee.toFixed(18)),
+              value: parseUnits(fee.toFixed(6), 6), // Arc USDC uses 6 decimals
             });
             console.log("📤 [REFILL] Fee tx broadcasted:", tx.hash);
             await tx.wait();
@@ -1579,7 +1614,7 @@ export default function UserApp() {
       console.log("💸 [WITHDRAW] Sending fee to contract...", { fee, to: ARC_CONTRACT_ADDRESS });
       const feeTx = await evmSessionWallet.sendTransaction({
         to: ARC_CONTRACT_ADDRESS,
-        value: parseEther(fee.toFixed(18)),
+        value: parseUnits(fee.toFixed(6), 6), // Arc USDC uses 6 decimals
       });
       console.log("📤 [WITHDRAW] Fee tx broadcasted:", feeTx.hash);
 
@@ -1591,7 +1626,7 @@ export default function UserApp() {
       console.log("💸 [WITHDRAW] Sending net amount to main wallet...", { netAmt, to: address });
       const sweepTx = await evmSessionWallet.sendTransaction({
         to: address,
-        value: parseEther(netAmt.toFixed(18)),
+        value: parseUnits(netAmt.toFixed(6), 6), // Arc USDC uses 6 decimals
       });
       console.log("📤 [WITHDRAW] Sweep tx broadcasted:", sweepTx.hash);
 
@@ -1724,7 +1759,7 @@ export default function UserApp() {
                 : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
               borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
             }}>
-            <CustomChart symbol={activeMarket.binance} theme={theme} network={network} currentPrice={price} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={setActiveMarket} activeTrades={activeTrades} />
+            <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
           </div>
 
           {/* Terminal - 50/50 split on desktop and mobile */}

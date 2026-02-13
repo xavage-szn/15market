@@ -455,11 +455,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             <h2 className="text-[14px] lg:text-lg font-black text-white tracking-widest uppercase flex items-center gap-2">{symbol.replace('USDT', '')}/USDC</h2>
                             <ChevronDown size={14} className={`text-[#3CB371] transition-transform duration-300 ${isSelectorOpen ? 'rotate-180' : ''}`} />
                         </div>
-
-                        {/* Live Price Tag */}
-                        <div className={`px-3 py-1 rounded-lg border text-sm font-black tracking-tighter ${parseFloat(currentPrice) > 0 ? 'bg-[#3CB371]/20 border-[#3CB371]/30 text-[#3CB371]' : 'bg-white/5 border-white/10 text-white'}`}>
-                            {parseFloat(currentPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-                        </div>
                     </div>
                 </div>
 
