@@ -194,52 +194,55 @@ export default function UserApp() {
   });
 
   // Main Wallet Balance Sync - ROBUST DUAL-PATH FETCHING WITH RPC FALLBACK
-  useEffect(() => {
-    let isMounted = true;
-    let failCount = 0;
+  const fetchBalance = useCallback(async () => {
+    if (!isConnected || !address) {
+      setBalance(0);
+      return;
+    }
 
-    const fetchBalance = async () => {
-      if (!isConnected || !address) {
-        setBalance(0);
-        return;
-      }
+    // Method 1: Wagmi Balance (Reactive)
+    if (evmBalance) {
+      const bal = parseFloat(evmBalance.formatted);
+      setBalance(bal);
+    }
 
-      // Method 1: Wagmi Balance (Reactive)
-      if (evmBalance) {
-        const bal = parseFloat(evmBalance.formatted);
-        if (isMounted) setBalance(bal);
-      }
+    // Method 2: Manual RPC Fallback
+    try {
+      const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
+      const balWei = await provider.getBalance(address);
+      const bal = parseFloat(ethers.formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
 
-      // Method 2: Manual RPC Fallback
-      try {
-        const rpcToUse = failCount % 2 === 0 ? ARC_RPC : ARC_RPC_BACKUP;
-        const provider = new ethers.JsonRpcProvider(rpcToUse, undefined, { staticNetwork: true });
-        const balWei = await provider.getBalance(address);
-        const bal = parseFloat(ethers.formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
-
-        if (isMounted) {
-          // console.log(`✅ [BALANCE] RPC (${rpcToUse}) balance:`, bal);
-          setBalance(prev => {
-            // Only update if difference is significant to avoid jitter
-            if (Math.abs(prev - bal) > 0.0001) return bal;
-            return prev;
-          });
-        }
-        failCount = 0;
-      } catch (e) {
-        console.error("❌ [BALANCE] RPC Fetch failed:", e.message);
-        failCount++;
-      }
-    };
-
-    const interval = setInterval(fetchBalance, 6000);
-    fetchBalance();
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
+      setBalance(prev => {
+        if (Math.abs(prev - bal) > 0.0001) return bal;
+        return prev;
+      });
+    } catch (e) {
+      // Quiet fail for background polling
+    }
   }, [isConnected, address, evmBalance]);
+
+  // Global Refresh Trigger (Exposed for events)
+  const triggerGlobalRefresh = useCallback(() => {
+    console.log("🔄 [REFRESH] Triggering global balance sync...");
+    fetchBalance();
+    if (refetchEvmBalance) refetchEvmBalance();
+    if (updateEvmSessionBal) updateEvmSessionBal();
+  }, [fetchBalance, refetchEvmBalance, updateEvmSessionBal]);
+
+  // Aggressive Refresh (Multi-stage update)
+  const aggressiveRefresh = useCallback(() => {
+    triggerGlobalRefresh();
+    setTimeout(triggerGlobalRefresh, 2000);
+    setTimeout(triggerGlobalRefresh, 5000);
+    setTimeout(triggerGlobalRefresh, 10000);
+    setTimeout(triggerGlobalRefresh, 15000);
+  }, [triggerGlobalRefresh]);
+
+  useEffect(() => {
+    const interval = setInterval(fetchBalance, 10000);
+    fetchBalance();
+    return () => clearInterval(interval);
+  }, [fetchBalance]);
 
   // Network Enforcement with loop protection
   const lastSwitchTime = useRef(0);
@@ -1389,17 +1392,10 @@ export default function UserApp() {
 
           if (won) {
             notify(`Arc Trade WON! +${formattedPayout} USDC`, "success");
-            // INSTANT BALANCE REFRESH
-            if (normalizedUser === mainAddr) {
-              refetchEvmBalance();
-            } else if (normalizedUser === sessionAddr) {
-              updateEvmSessionBal();
-            }
+            aggressiveRefresh();
           } else {
             notify(`Arc Trade LOST. Price: $${priceUSD}`, "error");
-            // Even on loss, refresh to reflect stake removal if it was pending
-            if (normalizedUser === mainAddr) refetchEvmBalance();
-            else updateEvmSessionBal();
+            aggressiveRefresh();
           }
         }
       });
