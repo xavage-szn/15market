@@ -546,6 +546,110 @@ export default function UserApp() {
     return listed.find(t => t.id === activeId) || listed[0];
   });
 
+  // Shared Price Fetch Logic
+  const priceRef = useRef(price);
+  useEffect(() => { priceRef.current = price; }, [price]);
+
+  const fetchCurrentPrice = useCallback(async () => {
+    try {
+      const sources = [];
+
+      // 1. Pyth Sources (Multiple Hermers endpoints for redundancy)
+      if (activeMarket.pythId) {
+        const pythIds = [activeMarket.pythId];
+        const pythIdStr = activeMarket.pythId.replace('0x', '');
+
+        // Try both v2 latest with/without 0x and beta
+        sources.push({
+          name: "pyth",
+          url: `https://hermes.pyth.network/v2/updates/price/latest?ids=${activeMarket.pythId}`,
+          parse: d => {
+            const p = d.parsed?.[0]?.price;
+            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+          }
+        });
+
+        sources.push({
+          name: "pyth-bench",
+          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids=${activeMarket.pythId.replace('0x', '')}`,
+          parse: d => {
+            const p = d.parsed?.[0]?.price;
+            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+          }
+        });
+      }
+
+      // 2. MEXC Source (Proxied)
+      if (activeMarket.binance) {
+        sources.push({ name: "mexc", url: `/api-mexc/api/v3/ticker/price?symbol=${activeMarket.binance}`, parse: d => parseFloat(d.price) });
+      }
+
+      // 3. Kraken Source (Direct API - no proxy needed, no geo-restrictions)
+      if (activeMarket.kraken) {
+        sources.push({
+          name: "kraken",
+          url: `https://api.kraken.com/0/public/Ticker?pair=${activeMarket.kraken}`,
+          parse: d => {
+            const k = Object.keys(d.result || {})[0];
+            return k ? parseFloat(d.result[k].c[0]) : null;
+          }
+        });
+      }
+
+      // If no secondary sources, we might need a DEX fallback or DexScreener
+      if (sources.length === 0 && activeMarket.mint) {
+        sources.push({
+          name: "jup",
+          url: `https://price.jup.ag/v4/price?ids=${activeMarket.mint}`,
+          parse: d => d.data[activeMarket.mint]?.price
+        });
+      }
+
+      if (sources.length === 0) return null;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+      const pricePromises = sources.map(async (src) => {
+        try {
+          const res = await fetch(`${src.url}${src.url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+          const data = await res.json();
+          const val = src.parse(data);
+          if (!val || isNaN(val)) throw new Error("Invalid");
+          return val;
+        } catch (e) { throw e; }
+      });
+
+      const fastestPrice = await Promise.any(pricePromises);
+      clearTimeout(timeoutId);
+
+      if (fastestPrice > 0) {
+        setPrice(fastestPrice.toFixed(4));
+        setIsLoading(false);
+        return fastestPrice;
+      }
+    } catch (err) {
+      // Don't let total API failure block the UI forever
+      staticPriceFails.current = (staticPriceFails.current || 0) + 1;
+      if (staticPriceFails.current > 3) setIsLoading(false);
+    }
+    return null;
+  }, [activeMarket]);
+
+  useEffect(() => {
+    let active = true;
+    const loop = async () => {
+      if (!active) return;
+      await fetchCurrentPrice();
+      if (active) setTimeout(loop, 300);
+    };
+    loop();
+    return () => { active = false; };
+  }, [fetchCurrentPrice]);
+
   // Sync Market Changes (Across Ports via Keeper)
   useEffect(() => {
     const syncMarket = async () => {
@@ -940,123 +1044,6 @@ export default function UserApp() {
     if (activeBal > 0) setSliderValue(Math.min((val / activeBal) * 100, 100));
     else setSliderValue(0);
   }, [activeBal]);
-
-  // Shared Price Fetch Logic
-  const priceRef = useRef(price);
-  useEffect(() => { priceRef.current = price; }, [price]);
-
-  const fetchCurrentPrice = async () => {
-    try {
-      const sources = [];
-
-      // 1. Pyth Sources (Multiple Hermers endpoints for redundancy)
-      if (activeMarket.pythId) {
-        const pythIds = [activeMarket.pythId];
-        const pythIdStr = activeMarket.pythId.replace('0x', '');
-
-        // Try both v2 latest with/without 0x and beta
-        sources.push({
-          name: "pyth",
-          url: `https://hermes.pyth.network/v2/updates/price/latest?ids=${activeMarket.pythId}`,
-          parse: d => {
-            const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
-          }
-        });
-
-        sources.push({
-          name: "pyth-bench",
-          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids=${activeMarket.pythId.replace('0x', '')}`,
-          parse: d => {
-            const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
-          }
-        });
-      }
-
-      // 2. MEXC Source (Proxied)
-      if (activeMarket.binance) {
-        sources.push({ name: "mexc", url: `/api-mexc/api/v3/ticker/price?symbol=${activeMarket.binance}`, parse: d => parseFloat(d.price) });
-      }
-
-      // 3. Kraken Source (Direct API - no proxy needed, no geo-restrictions)
-      if (activeMarket.kraken) {
-        sources.push({
-          name: "kraken",
-          url: `https://api.kraken.com/0/public/Ticker?pair=${activeMarket.kraken}`,
-          parse: d => {
-            const k = Object.keys(d.result || {})[0];
-            return k ? parseFloat(d.result[k].c[0]) : null;
-          }
-        });
-      }
-
-      // If no secondary sources, we might need a DEX fallback or DexScreener
-      if (sources.length === 0 && activeMarket.mint) {
-        sources.push({
-          name: "jup",
-          url: `https://price.jup.ag/v4/price?ids=${activeMarket.mint}`,
-          parse: d => d.data[activeMarket.mint]?.price
-        });
-      }
-
-      if (sources.length === 0) return null;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500);
-
-      const pricePromises = sources.map(async (src) => {
-        try {
-          const res = await fetch(`${src.url}${src.url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
-            signal: controller.signal,
-            headers: { 'Cache-Control': 'no-cache' }
-          });
-          const data = await res.json();
-          const val = src.parse(data);
-          if (!val || isNaN(val)) throw new Error("Invalid");
-          return val;
-        } catch (e) { throw e; }
-      });
-
-      const fastestPrice = await Promise.any(pricePromises);
-      clearTimeout(timeoutId);
-
-      if (fastestPrice > 0) {
-        setPrice(fastestPrice.toFixed(4));
-        setIsLoading(false);
-        return fastestPrice;
-      }
-    } catch (err) {
-      // Don't let total API failure block the UI forever
-      staticPriceFails.current = (staticPriceFails.current || 0) + 1;
-      if (staticPriceFails.current > 3) setIsLoading(false);
-    }
-    return null;
-  };
-
-  useEffect(() => {
-    let active = true;
-    const loop = async () => {
-      if (!active) return;
-      await fetchCurrentPrice();
-      if (active) setTimeout(loop, 300);
-    };
-    loop();
-    return () => { active = false; };
-  }, [activeMarket.id]);
-
-  // Sync Loader
-  useEffect(() => {
-    // Simple fallback loader
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 3000);
-
-    // Attempt to hydrate price in background
-    if (parseFloat(price) <= 0) fetchCurrentPrice();
-
-    return () => clearTimeout(timer);
-  }, []);
 
   // Countdown Timer - Purely based on time, not price updates
   useEffect(() => {
