@@ -576,7 +576,7 @@ class ArcKeeper {
 
     getAbi() {
         return [
-            "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId) external payable",
+            "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
             "function settleBet(uint256 _betId, uint256 _exitPrice) external",
             "function bets(uint256) view returns (uint256 id, address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 timestamp, uint256 duration, uint8 marketId, uint256 settlementPrice, bool settled, bool won)",
             "event BetPlaced(uint256 indexed id, address indexed user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 duration, uint256 timestamp, uint8 marketId)",
@@ -627,10 +627,15 @@ class ArcKeeper {
             console.log(`🔢 Initial Nonce: ${this.nonce}`);
 
             // SPEED OPTIMIZATION: Faster polling and evaluation
-            setInterval(() => this.pollEvents(), 30000); // Baseline sync
+            setInterval(() => this.pollEvents(), 5000); // 5s sync (Very fast for 'instant' feel)
             setInterval(() => this.evaluateBets(), 1000); // Check expiry every second
             setInterval(() => this.processSettlementQueue(), 500); // Check settlement queue every 0.5s
             setInterval(() => this.checkBalance(), 60000);
+
+            // PROACTIVE NONCE RESYNC: Ensure nonce doesn't drift
+            setInterval(async () => {
+                this.nonce = await this.callWithRetry(() => this.provider.getTransactionCount(this.wallet.address, "pending"), "PERIODIC_NONCE_SYNC");
+            }, 300000); // Every 5 minutes
 
             // COMPREHENSIVE DISCOVERY: Look back 5000 blocks for missed bets
             const currentBlock = await this.callWithRetry(() => this.provider.getBlockNumber(), "GET_INITIAL_BLOCK");
@@ -786,8 +791,10 @@ class ArcKeeper {
             } catch (e) { }
 
             // Report to logs
-            console.log(`📥 Tracked Bet #${betId} (${symbol})`);
-        } catch (e) { }
+            console.log(`📥 [INGEST] Bet #${betId} | User: ${user.slice(0, 10)}... | Amount: ${state.activeBets[betId].amount} ARC | Asset: ${symbol}`);
+        } catch (e) {
+            console.error(`❌ [INGEST_FAILED] Bet #${betId}: ${e.message}`);
+        }
     }
 
     async evaluateBets() {
@@ -964,7 +971,8 @@ class ArcKeeper {
                     bet.processing = false;
                     this.settlementQueue.push(bet);
                     // Reset nonce synchronization on error to prevent spiral
-                    this.nonce = await this.callWithRetry(() => this.wallet.getNonce(), "RESYNC_NONCE");
+                    // Resync nonce using 'pending' to avoid stuck tx
+                    this.nonce = await this.callWithRetry(() => this.provider.getTransactionCount(this.wallet.address, "pending"), "RESYNC_NONCE");
                 }
             });
 

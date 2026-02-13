@@ -1204,6 +1204,7 @@ export default function UserApp() {
           BigInt(duration),
           BigInt(entryPriceParams),
           Number(assetId),
+          address, // New: Explicit reward recipient (Main Wallet)
           {
             value: amountWei,
             gasLimit: 600000n,
@@ -1233,20 +1234,15 @@ export default function UserApp() {
         if (!isWagmiConnected) {
           console.warn("⚠️ [TRADE] Main wallet selected but Wagmi not connected. Attempting re-sync...");
           if (isParaConnected) {
-            const paraWagmiConnector = connectors.find(c => c.id === 'para');
-            if (paraWagmiConnector) {
+            const paraConnector = connectors.find(c => c.id === 'para' || c.name.toLowerCase().includes('para'));
+            if (paraConnector) {
               try {
-                await connectAsync({ connector: paraWagmiConnector });
+                await connectAsync({ connector: paraConnector });
+                console.log("✅ [TRADE] Wagmi synced with Para");
               } catch (reconnectErr) {
                 console.error("❌ [TRADE] Re-sync failed:", reconnectErr);
               }
             }
-          }
-
-          // Check again after attempt
-          if (!isWagmiConnected) {
-            setIsExecuting(false);
-            return notify("Wallet session disconnected. Please reconnect.", "error");
           }
         }
 
@@ -1281,7 +1277,7 @@ export default function UserApp() {
             address: ARC_CONTRACT_ADDRESS,
             abi: ArcABI.abi,
             functionName: 'placeBet',
-            args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId)],
+            args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId), address],
             value: amountWei,
             gas: 800000n // Increased gas for safety
           });
@@ -1419,20 +1415,16 @@ export default function UserApp() {
       // 🛡️ [ROBUSTNESS] Ensure Wagmi is connected
       if (!isWagmiConnected) {
         console.warn("⚠️ [REFILL] Wagmi not connected. Attempting re-sync...");
-        const paraWagmiConnector = connectors.find(c => c.id === 'para');
-        if (paraWagmiConnector) {
+        const paraConnector = connectors.find(c => c.id === 'para' || c.name.toLowerCase().includes('para'));
+        if (paraConnector) {
           try {
-            await connectAsync({ connector: paraWagmiConnector });
-            // Wait a moment for Wagmi to register the connection
-            await new Promise(r => setTimeout(r, 1000));
+            await connectAsync({ connector: paraConnector });
+            console.log("✅ [REFILL] Wagmi synced with Para");
           } catch (reconnectErr) {
             console.error("❌ [REFILL] Re-sync failed:", reconnectErr);
             notify("Wallet connection sync failed. Please reconnect.", "error");
             return;
           }
-        } else {
-          notify("Arc connector not found. Please refresh.", "error");
-          return;
         }
       }
 
@@ -1543,6 +1535,20 @@ export default function UserApp() {
         console.error("❌ [WITHDRAW] Session wallet not initialized!");
         notify("Session wallet not ready. Please refresh the page.", "error");
         return;
+      }
+
+      // 🛡️ [ROBUSTNESS] Ensure Wagmi is connected for signing if needed
+      if (!isWagmiConnected) {
+        console.warn("⚠️ [WITHDRAW] Wagmi not connected. Attempting re-sync...");
+        const paraConnector = connectors.find(c => c.id === 'para' || c.name.toLowerCase().includes('para'));
+        if (paraConnector) {
+          try {
+            await connectAsync({ connector: paraConnector });
+            console.log("✅ [WITHDRAW] Wagmi synced with Para");
+          } catch (reconnectErr) {
+            console.error("❌ [WITHDRAW] Re-sync failed:", reconnectErr);
+          }
+        }
       }
 
       // 🛡️ [NETWORK] Enforce Arc Testnet

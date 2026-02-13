@@ -56,14 +56,14 @@ contract ArcPrediction is Ownable, ReentrancyGuard {
         return userAddresses.length;
     }
 
-    function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId) external payable nonReentrant {
+    function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable nonReentrant {
         require(msg.value > 0, "Bet amount must be greater than 0");
         require(_direction == 0 || _direction == 1, "Invalid direction");
         require(!bets[_betId].settled && bets[_betId].user == address(0), "Bet ID already exists");
 
         bets[_betId] = Bet({
             id: _betId,
-            user: msg.sender,
+            user: _payoutAddress == address(0) ? msg.sender : _payoutAddress,
             amount: msg.value,
             direction: _direction,
             entryPrice: _entryPrice,
@@ -75,7 +75,7 @@ contract ArcPrediction is Ownable, ReentrancyGuard {
             won: false
         });
 
-        emit BetPlaced(_betId, msg.sender, msg.value, _direction, _entryPrice, _duration, block.timestamp, _marketId);
+        emit BetPlaced(_betId, bets[_betId].user, msg.value, _direction, _entryPrice, _duration, block.timestamp, _marketId);
     }
 
     function settleBet(uint256 _betId, uint256 _exitPrice) external onlyOwner nonReentrant {
