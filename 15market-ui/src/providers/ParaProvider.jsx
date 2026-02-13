@@ -16,7 +16,7 @@ export function AppParaProvider({ children }) {
             }}
             externalWalletConfig={{
                 appName: "15market",
-                wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "BACKPACK", "HAHA", "OKX", "RABBY", "SAFE"],
+                wallets: ["WALLETCONNECT"],
                 walletConnect: {
                     projectId: activeProjectId,
                     metadata: {
@@ -37,6 +37,7 @@ export function AppParaProvider({ children }) {
                 oAuthMethods: [],
                 disableEmailLogin: true,
                 disablePhoneLogin: true,
+                disableSocialLogin: true,
                 authLayout: ["EXTERNAL:FULL"],
                 recoverySecretStepEnabled: true,
                 onRampTestMode: true,

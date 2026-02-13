@@ -16,6 +16,10 @@ export const para = new Para(paraEnv, paraApiKey, {
         url: "https://15market.online",
         icons: ["https://15market.online/logo.png"]
     },
+    oAuthMethods: [],
+    disableEmailLogin: true,
+    disablePhoneLogin: true,
+    disableSocialLogin: true,
     defaultChainId: "eip155:5042002",
     chains: [{
         chainId: "eip155:5042002",
