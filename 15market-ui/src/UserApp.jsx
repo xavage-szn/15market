@@ -161,19 +161,28 @@ export default function UserApp() {
   const { connect, connectAsync, connectors } = useConnect();
 
   // SYNC PARA WITH WAGMI: Ensure Para session is known to Wagmi
-  const isSyncingRef = useRef(false);
+  // We use a more robust check to prevent double-modal or infinite loops on mobile
+  const syncAttempted = useRef(false);
   useEffect(() => {
-    if (isParaConnected && !isWagmiConnected && !isSyncingRef.current) {
-      const paraWagmiConnector = connectors.find(c => c.id === 'para');
-      if (paraWagmiConnector) {
-        console.log("🔗 [WAGMI SYNC] Connecting Para session to Wagmi...");
-        isSyncingRef.current = true;
-        connect({ connector: paraWagmiConnector }, {
-          onSettled: () => { isSyncingRef.current = false; }
-        });
-      } else {
-        console.warn("⚠️ [WAGMI SYNC] Para connector not found in Wagmi config");
-      }
+    const paraWagmiConnector = connectors.find(c => c.id === 'para');
+    if (isParaConnected && !isWagmiConnected && paraWagmiConnector && !syncAttempted.current) {
+      console.log("🔗 [WAGMI SYNC] Syncing Para session with Wagmi...");
+      syncAttempted.current = true;
+      connect({ connector: paraWagmiConnector }, {
+        onSettled: () => {
+          // Keep it true for this session unless disconnect happens
+          console.log("✅ [WAGMI SYNC] Sync complete");
+        },
+        onError: (err) => {
+          console.error("❌ [WAGMI SYNC] Sync failed:", err);
+          syncAttempted.current = false; // Allow retry on failure
+        }
+      });
+    }
+
+    // Reset sync flag if Para disconnects
+    if (!isParaConnected) {
+      syncAttempted.current = false;
     }
   }, [isParaConnected, isWagmiConnected, connectors, connect]);
 

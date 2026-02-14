@@ -16,7 +16,7 @@ export function AppParaProvider({ children }) {
             }}
             externalWalletConfig={{
                 appName: "15market",
-                wallets: ["WALLETCONNECT"],
+                wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "RABBY"],
                 walletConnect: {
                     projectId: activeProjectId,
                     metadata: {

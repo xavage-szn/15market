@@ -10,25 +10,37 @@ export const UnifiedWalletButton = ({ theme }) => {
     const isConnected = isParaConnected || isWagmiConnected;
     const address = paraAddress || wagmiAddress;
     const { data: paraWallet } = useWallet();
+    const [isConnecting, setIsConnecting] = React.useState(false);
 
     const displayAddress = address || paraWallet?.address || wagmiAddress;
     const isWrongNetwork = isConnected && chainId !== 5042002;
     const currentColor = isWrongNetwork ? '#FF4444' : '#3CB371';
 
     // Determine if we should allow clicking to open Para modal
-    const handleClick = () => {
-        if (!isConnected) {
-            // Priority: Direct Injected Connection for Rabby/MetaMask on Mobile
-            const isRabby = window.ethereum?.isRabby;
-            const isMetaMask = window.ethereum?.isMetaMask;
-            const injectedConnector = connectors.find(c => c.id === 'injected');
+    const handleClick = async () => {
+        if (isConnecting) return;
 
-            if ((isRabby || isMetaMask) && injectedConnector) {
-                console.log("🔌 [WALLET] Triggering direct injected connection...");
-                connect({ connector: injectedConnector });
-            } else {
-                // Default to Para Modal for all other cases (email, social, or desktop browser wallets)
-                openModal();
+        if (!isConnected) {
+            setIsConnecting(true);
+            try {
+                // Priority: Direct Injected Connection for Rabby/MetaMask on Mobile
+                const isRabby = window.ethereum?.isRabby;
+                const isMetaMask = window.ethereum?.isMetaMask;
+                const injectedConnector = connectors.find(c => c.id === 'injected');
+
+                if ((isRabby || isMetaMask) && injectedConnector) {
+                    console.log("🔌 [WALLET] Triggering direct injected connection...");
+                    connect({ connector: injectedConnector });
+                } else {
+                    // Default to Para Modal for all other cases (email, social, or desktop browser wallets)
+                    console.log("📂 [WALLET] Opening Para Modal...");
+                    await openModal();
+                }
+            } catch (err) {
+                console.error("Connect failed:", err);
+            } finally {
+                // Keep the button locked for 2s to prevent mobile double-taps
+                setTimeout(() => setIsConnecting(false), 2000);
             }
         } else if (isParaConnected) {
             openModal();
