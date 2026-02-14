@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
 import { useAccount as useWagmiAccount, useChainId, useConnect } from "wagmi";
 
@@ -10,7 +11,7 @@ export const UnifiedWalletButton = ({ theme }) => {
     const isConnected = isParaConnected || isWagmiConnected;
     const address = paraAddress || wagmiAddress;
     const { data: paraWallet } = useWallet();
-    const [isConnecting, setIsConnecting] = React.useState(false);
+    const [isConnecting, setIsConnecting] = useState(false);
 
     const displayAddress = address || paraWallet?.address || wagmiAddress;
     const isWrongNetwork = isConnected && chainId !== 5042002;
