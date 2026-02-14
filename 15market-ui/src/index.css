@@ -15,7 +15,8 @@ body {
   background-size: 32px 32px;
   /* Deeper black for high contrast */
   overscroll-behavior: none !important;
-  font-family: 'Inter', sans-serif;
+  /* Professional font stack similar to Calibre */
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;

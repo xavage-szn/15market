@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppKit } from '@reown/appkit/react';
-import { useAccount } from 'wagmi';
+import { useAccount, useSwitchChain } from 'wagmi';
 import { publicClient } from "../paraClient";
 import { formatEther } from "viem";
 
 export const UnifiedWalletButton = ({ theme }) => {
+    const navigate = useNavigate();
     const { open } = useAppKit();
-    const { address, isConnected } = useAccount();
+    const { address, isConnected, chainId: connectedChainId } = useAccount();
+    const { switchChain } = useSwitchChain();
     const [isConnecting, setIsConnecting] = useState(false);
     const [chainId, setChainId] = useState(null);
 
-    // Fetch chainId directly from the provider or default
+    // Auto-switch to Arc network when connected to wrong network
     useEffect(() => {
         const getChain = async () => {
             try {
@@ -22,6 +25,20 @@ export const UnifiedWalletButton = ({ theme }) => {
         };
         getChain();
     }, []);
+
+    // Auto-switch to Arc network and navigate to trade page
+    useEffect(() => {
+        if (isConnected && connectedChainId) {
+            if (connectedChainId !== 5042002) {
+                console.log("🔄 [WALLET] Wrong network detected, auto-switching to Arc...");
+                switchChain({ chainId: 5042002 });
+            } else {
+                console.log("✅ [WALLET] Connected to Arc network, navigating to trade page...");
+                // Navigate to trade page after successful connection
+                setTimeout(() => navigate('/'), 500);
+            }
+        }
+    }, [isConnected, connectedChainId, switchChain, navigate]);
 
     const displayAddress = address;
     const isWrongNetwork = isConnected && chainId !== 5042002;
