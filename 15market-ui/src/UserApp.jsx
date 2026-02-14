@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useAccount } from "wagmi";
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
@@ -149,13 +149,12 @@ export default function UserApp() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const { isConnected, address } = useParaAccount();
-  const { data: paraWallet } = useWallet();
+  const { isConnected, address } = useAccount();
 
   // Debug connection state transitions
   useEffect(() => {
     if (isConnected) {
-      console.log("🔐 [AUTH STATE] Para Connected", {
+      console.log("🔐 [AUTH STATE] Wallet Connected", {
         isConnected,
         address,
         paraWalletAddress: paraWallet?.address

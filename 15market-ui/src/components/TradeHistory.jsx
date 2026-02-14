@@ -1,5 +1,4 @@
 import React, { memo, useState, useMemo } from 'react';
-import { useModal } from "@getpara/react-sdk";
 import { Lock, Share2 } from 'lucide-react';
 
 const TradeHistoryComponent = ({
@@ -9,8 +8,6 @@ const TradeHistoryComponent = ({
     theme,
     wallet
 }) => {
-    const { openModal } = useModal();
-
     // Combined address source
     const address = wallet?.address;
     // We are connected if the wallet object says so, OR if we have a valid address string

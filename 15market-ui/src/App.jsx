@@ -2,14 +2,11 @@ import React, { useMemo } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import UserApp from "./UserApp";
 import CampaignPage from "./components/CampaignPage";
-
-// Reown & Wagmi cleaned up - Using GetPara native provider
-import { useWallet } from "@getpara/react-sdk";
+import { useAccount } from "wagmi";
 
 // Wrapper component to access hooks
 function AppContent() {
-  const { data: wallet } = useWallet();
-  const address = wallet?.address;
+  const { address } = useAccount();
   // Use local storage for network preference, default to arc
   const network = useMemo(() => localStorage.getItem("15market_network") || "arc", []);
 

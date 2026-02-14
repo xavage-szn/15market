@@ -1,11 +1,10 @@
-import { useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useAccount } from "wagmi";
 import { publicClient } from "../paraClient";
 import { formatUnits } from "viem";
+import { useState, useEffect, useCallback } from "react";
 
 export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
-    const { isConnected, address: paraAddress } = useParaAccount();
-    const { data: paraWallet } = useWallet();
-    const address = paraAddress || paraWallet?.address;
+    const { isConnected, address } = useAccount();
     const [internalBalance, setInternalBalance] = useState(0);
 
     // Sync balance with the override passed from UserApp (robust fetch)
