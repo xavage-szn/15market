@@ -1,11 +1,13 @@
 import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
 import { projectId, PARA_API_KEY } from "../constants";
-import { para, queryClient, paraOptions, Environment } from "../paraClient";
+import { para, queryClient, Environment } from "../paraClient";
 
 /**
  * AppParaProvider - Unified GetPara Provider
- * Strictly follows the user's requested branding and configuration structure.
+ * 
+ * This component strictly implements the user's requested configuration 
+ * while resolving the 'disableAutoSessionKeepAlive' crash.
  */
 export function AppParaProvider({ children }) {
     return (
@@ -15,7 +17,7 @@ export function AppParaProvider({ children }) {
             paraClientConfig={{
                 env: Environment.BETA,
                 apiKey: PARA_API_KEY,
-                appName: "15market",
+                // Explicitly including sessionConfig here as well
                 sessionConfig: {
                     disableAutoSessionKeepAlive: false
                 }
