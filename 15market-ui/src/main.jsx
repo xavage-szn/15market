@@ -7,8 +7,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
-import { AppParaProvider } from './providers/ParaProvider';
+import { WagmiProvider } from 'wagmi';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { config } from './wagmiConfig';
 import { queryClient } from './paraClient';
 
 // --- CONSOLE LOG CLEANER & SDK ERROR SUPPRESSOR ---
@@ -95,13 +96,13 @@ class ErrorBoundary extends React.Component {
 const Root = () => {
   return (
     <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <AppParaProvider>
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
           <ErrorBoundary>
             <App />
           </ErrorBoundary>
-        </AppParaProvider>
-      </QueryClientProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
     </React.StrictMode>
   );
 };

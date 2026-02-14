@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\Users\\HP\\Documents\\15market\\arc_prediction\\contracts\\ArcPrediction.sol": {
-      "lastModificationDate": 1769840560212,
-      "contentHash": "5bc64393adfb64a45df8707ba4a99cef",
+      "lastModificationDate": 1770957760948,
+      "contentHash": "5d6b530a02a578b7ac52ac0edae938b3",
       "sourceName": "contracts/ArcPrediction.sol",
       "solcConfig": {
         "version": "0.8.20",

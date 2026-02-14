@@ -144,13 +144,7 @@ redis.connect()
         console.error('⚠️ WARNING: Running in LOCAL MODE - data will NOT sync across instances!');
     });
 
-function saveState() {
-    try {
-        fs.writeFileSync(STORAGE_FILE, JSON.stringify(state, null, 2));
-    } catch (e) {
-        console.error("Save failed:", e.message);
-    }
-}
+
 
 
 // --- EXPRESS ---

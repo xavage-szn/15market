@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
+import { useAppKit } from '@reown/appkit/react';
+import { useAccount } from 'wagmi';
 import { publicClient } from "../paraClient";
 import { formatEther } from "viem";
 
 export const UnifiedWalletButton = ({ theme }) => {
-    const { openModal } = useModal();
-    const { isConnected, address } = useParaAccount();
-    const { data: paraWallet } = useWallet();
+    const { open } = useAppKit();
+    const { address, isConnected } = useAccount();
     const [isConnecting, setIsConnecting] = useState(false);
     const [chainId, setChainId] = useState(null);
 
@@ -23,20 +23,20 @@ export const UnifiedWalletButton = ({ theme }) => {
         getChain();
     }, []);
 
-    const displayAddress = address || paraWallet?.address;
+    const displayAddress = address;
     const isWrongNetwork = isConnected && chainId !== 5042002;
     const currentColor = isWrongNetwork ? '#FF4444' : '#3CB371';
 
-    // Determine if we should allow clicking to open Para modal
+    // Open Reown modal
     const handleClick = async () => {
         if (isConnecting) return;
 
-        console.log("🖱️ [WALLET BUTTON] Clicked (Para)", { isConnected, isConnecting, address });
+        console.log("🖱️ [WALLET BUTTON] Clicked (Reown)", { isConnected, isConnecting, address });
 
         setIsConnecting(true);
         try {
-            console.log("📂 [WALLET] Opening Para Modal...");
-            await openModal();
+            console.log("📂 [WALLET] Opening Reown Modal...");
+            await open();
         } catch (err) {
             console.error("Connect failed:", err);
         } finally {
