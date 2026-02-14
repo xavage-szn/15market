@@ -645,6 +645,19 @@ class ArcKeeper {
             this.nonce = await this.callWithRetry(() => this.wallet.getNonce(), "INIT_NONCE");
             console.log(`🔢 Initial Nonce: ${this.nonce}`);
 
+            // OWNER VERIFICATION
+            try {
+                const owner = await this.callWithRetry(() => this.contract.owner(), "CHECK_OWNER");
+                console.log(`👤 Contract Owner: ${owner}`);
+                if (owner.toLowerCase() === this.wallet.address.toLowerCase()) {
+                    console.log("✅ Keeper IS the authorized owner.");
+                } else {
+                    console.warn(`❌ [WARNING] Keeper (${this.wallet.address}) is NOT the owner. Settlement will fail!`);
+                }
+            } catch (ownerErr) {
+                console.warn("⚠️ Could not verify owner status:", ownerErr.message);
+            }
+
             // SPEED OPTIMIZATION: Faster polling and evaluation
             setInterval(() => this.pollEvents(), 5000); // 5s sync (Very fast for 'instant' feel)
             setInterval(() => this.evaluateBets(), 1000); // Check expiry every second
@@ -739,8 +752,15 @@ class ArcKeeper {
                     const events = await this.callWithRetry(
                         () => this.contract.queryFilter(filter, i, to), "POLL_CHUNK"
                     );
-                    for (const e of events) await this.ingestBet(e, false);
-                } catch (e) { }
+                    // Parallel ingestion with individual catch to avoid total failure
+                    await Promise.all(events.map(e =>
+                        this.ingestBet(e, false).catch(err => {
+                            console.error(`❌ [INGEST_FAILED] Trade #${e.args.id}:`, err.message);
+                        })
+                    ));
+                } catch (e) {
+                    console.error(`❌ [POLL_FAILED] Chunk ${i}-${to}:`, e.message);
+                }
             }
 
             this.lastCheckedBlock = currentBlock;
@@ -819,10 +839,10 @@ class ArcKeeper {
     async evaluateBets() {
         const now = Date.now() / 1000;
         for (const [id, bet] of Object.entries(state.activeBets)) {
-            // STUCK PROCESSING GUARD: Reset if stuck > 45s
+            // STUCK PROCESSING GUARD: Reset if stuck > 120s (Allow more time for slow testnet)
             if (bet.processing) {
-                if (bet.processingStartedAt && (now - bet.processingStartedAt > 45)) {
-                    console.warn(`⚠️ [STUCK] Bet #${bet.id} stuck in processing > 45s. Resetting.`);
+                if (bet.processingStartedAt && (now - bet.processingStartedAt > 120)) {
+                    console.warn(`⚠️ [STUCK] Bet #${bet.id} stuck in processing > 120s. Resetting.`);
                     bet.processing = false;
                     bet.processingStartedAt = 0;
                 }
@@ -849,8 +869,12 @@ class ArcKeeper {
             const priceMap = {};
 
             await Promise.all(uniqueSymbols.map(async s => {
-                const verdict = await pricing.getResultVerdict(0, s); // 0 because we just want reliable price
-                priceMap[s] = verdict.price;
+                try {
+                    const verdict = await pricing.getResultVerdict(0, s);
+                    priceMap[s] = verdict.price;
+                } catch (priceErr) {
+                    console.error(`❌ [PRICE_FETCH] Failed for ${s}:`, priceErr.message);
+                }
             }));
 
             const txPromises = batch.map(async (bet) => {
@@ -908,8 +932,11 @@ class ArcKeeper {
                     const priorityFee = feeData.maxPriorityFeePerGas ? (feeData.maxPriorityFeePerGas * 130n / 100n) : 2000000000n;
                     const maxFee = feeData.maxFeePerGas ? (feeData.maxFeePerGas * 120n / 100n) : undefined;
 
-                    const requiredGas = 1500000n * (maxFee || feeData.gasPrice || 20000000000n);
+                    const activeGasPrice = maxFee || feeData.gasPrice || 20000000000n;
+                    const requiredGas = 1500000n * activeGasPrice;
                     const bal = await this.provider.getBalance(this.wallet.address);
+
+                    console.log(`⛽ [GAS] Req: ${ethers.formatUnits(requiredGas, 18)} | Current: ${ethers.formatUnits(bal, 18)} | Nonce: ${useNonce}`);
 
                     if (bal < requiredGas) {
                         console.error(`🔴 [GAS_FAILURE] Keeper has ${ethers.formatUnits(bal, 18)} ARC, but needs ~${ethers.formatUnits(requiredGas, 18)} ARC for settlement safety.`);
@@ -919,7 +946,7 @@ class ArcKeeper {
                     }
 
                     const tx = await this.callWithRetry(() =>
-                        this.contract.settleBet(bet.id, priceParam, {
+                        this.contract.settleBet(BigInt(bet.id), priceParam, {
                             nonce: useNonce,
                             gasLimit: 1500000,
                             maxPriorityFeePerGas: priorityFee,

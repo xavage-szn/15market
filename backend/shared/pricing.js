@@ -46,6 +46,9 @@ class PricingService {
         const c = configs[symbol] || configs['BTC'];
         const sources = [];
 
+        // Clean Pyth ID if present (Hermes V2 prefers no 0x)
+        const pythId = c.pyth && c.pyth.startsWith('0x') ? c.pyth.slice(2) : c.pyth;
+
         // Priority 1: CEX Feeds (Real-Time)
         if (c.mexc) sources.push({ name: "MEXC", url: `https://api.mexc.com/api/v3/ticker/price?symbol=${c.mexc}`, parse: d => parseFloat(d.price) });
         if (c.kraken) sources.push({ name: "KRAKEN", url: `https://api.kraken.com/0/public/Ticker?pair=${c.kraken}`, parse: d => { const k = Object.keys(d.result || {})[0]; return k ? parseFloat(d.result[k].c[0]) : null; } });
@@ -55,7 +58,7 @@ class PricingService {
         if (c.gecko) sources.push({ name: "GECKO", url: `https://api.coingecko.com/api/v3/simple/price?ids=${c.gecko}&vs_currencies=usd`, parse: d => d[c.gecko]?.usd });
 
         // Priority 3: On-Chain Oracle (Fallback)
-        if (c.pyth) sources.push({ name: "PYTH", url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${c.pyth}`, parse: d => { const p = d.parsed?.[0]?.price; return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null; } });
+        if (pythId) sources.push({ name: "PYTH", url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${pythId}`, parse: d => { const p = d.parsed?.[0]?.price; return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null; } });
 
         return sources;
     }
