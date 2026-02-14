@@ -14,14 +14,6 @@ export function AppParaProvider({ children }) {
         <ParaProvider
             paraClient={para}
             queryClient={queryClient}
-            paraClientConfig={{
-                env: Environment.BETA,
-                apiKey: PARA_API_KEY,
-                appName: "15market",
-                sessionConfig: {
-                    disableAutoSessionKeepAlive: false
-                }
-            }}
             externalWalletConfig={{
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "RAINBOW", "COINBASE", "ZERION", "RABBY", "OKX", "HAHA"],
