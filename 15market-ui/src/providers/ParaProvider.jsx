@@ -14,49 +14,12 @@ export function AppParaProvider({ children }) {
             config={{
                 appName: "15market",
             }}
-            externalWalletConfig={{
-                appName: "15market",
-                wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "ZERION", "COINBASE", "RAINBOW", "RABBY"],
-                walletConnect: {
-                    projectId: activeProjectId,
-                    metadata: {
-                        name: "15market",
-                        description: "Trade Assets on Arc",
-                        url: "https://15market.online",
-                        icons: ["https://15market.online/logo.png"]
-                    }
-                },
-                evmConnector: {
-                    config: {
-                        chains: [arcTestnet, sepolia],
-                        defaultChainId: arcTestnet.id,
-                    },
-                },
-            }}
             paraModalConfig={{
                 oAuthMethods: [],
                 disableEmailLogin: true,
                 disablePhoneLogin: true,
                 disableSocialLogin: true,
                 authLayout: ["EXTERNAL:FULL"],
-                recoverySecretStepEnabled: true,
-                onRampTestMode: true,
-                defaultChainId: "eip155:5042002",
-                preferredChainId: "eip155:5042002",
-                chains: [
-                    {
-                        chainId: "eip155:5042002",
-                        chainName: "Arc Testnet",
-                        nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-                        rpcUrls: [ARC_RPC]
-                    },
-                    {
-                        chainId: "eip155:11155111",
-                        chainName: "Sepolia",
-                        nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
-                        rpcUrls: ["https://rpc2.sepolia.org"]
-                    }
-                ],
             }}
         >
             {children}
