@@ -158,6 +158,23 @@ export default function UserApp() {
   const address = useMemo(() => {
     return paraAddress || wagmiAddress || paraWallet?.address;
   }, [paraAddress, wagmiAddress, paraWallet]);
+
+  // Debug connection state transitions
+  useEffect(() => {
+    if (isConnected || isParaConnected || isWagmiConnected) {
+      console.log("🔐 [AUTH STATE]", {
+        isConnected,
+        isParaConnected,
+        isWagmiConnected,
+        address,
+        paraAddress,
+        wagmiAddress,
+        paraWalletAddress: paraWallet?.address,
+        wagmiConnector: wagmiConnector?.id
+      });
+    }
+  }, [isConnected, isParaConnected, isWagmiConnected, address, paraAddress, wagmiAddress, paraWallet, wagmiConnector]);
+
   const { connect, connectAsync, connectors } = useConnect();
 
   // SYNC PARA WITH WAGMI: Ensure Para session is known to Wagmi
@@ -219,7 +236,19 @@ export default function UserApp() {
     }
   }, [isConnected, chainId, switchChain]);
 
-  const authenticated = isConnected;
+  // Sticky Authentication: Prevent flicker on sync or chain switch
+  const [authenticated, setAuthenticated] = useState(false);
+  useEffect(() => {
+    if (isConnected) {
+      setAuthenticated(true);
+    } else {
+      // Small delay before dropping to prevent bounce on sync/switch
+      const timer = setTimeout(() => {
+        if (!isConnected) setAuthenticated(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected]);
 
   const wallet = useMemo(() => {
     if (!isConnected || !address) return { connected: false };

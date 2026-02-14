@@ -21,6 +21,8 @@ export const UnifiedWalletButton = ({ theme }) => {
     const handleClick = async () => {
         if (isConnecting) return;
 
+        console.log("🖱️ [WALLET BUTTON] Clicked", { isConnected, isParaConnected, isWagmiConnected, isConnecting });
+
         if (!isConnected) {
             setIsConnecting(true);
             try {
@@ -32,10 +34,10 @@ export const UnifiedWalletButton = ({ theme }) => {
                 // Keep the button locked for 2s to prevent mobile double-taps
                 setTimeout(() => setIsConnecting(false), 2000);
             }
-        } else if (isParaConnected) {
-            openModal();
         } else {
-            console.log("Connect status: Already connected via", wagmiConnector?.name);
+            // If already connected, still allow opening modal for session management/switching
+            console.log("📂 [WALLET] Opening Para Modal (Already connected)...");
+            openModal();
         }
     };
 
