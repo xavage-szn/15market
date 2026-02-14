@@ -50,7 +50,7 @@ const ASSET_MAP = {
 
 // --- STATE ---
 const STORAGE_FILE = path.resolve(__dirname, '../storage.json');
-const state = {
+let state = {
     listings: [
         { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
         { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' }
@@ -70,23 +70,42 @@ const state = {
     }
 };
 
+const saveState = () => {
+    try {
+        const tempFile = `${STORAGE_FILE}.tmp`;
+        fs.writeFileSync(tempFile, JSON.stringify(state, null, 2));
+        fs.renameSync(tempFile, STORAGE_FILE);
+    } catch (e) {
+        console.error("❌ [STORAGE] Save failed:", e);
+    }
+};
+
 try {
     if (fs.existsSync(STORAGE_FILE)) {
-        const saved = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf8'));
-        state = { ...state, ...saved };
+        const raw = fs.readFileSync(STORAGE_FILE, 'utf8');
+        if (raw && raw.trim().length > 0) {
+            const saved = JSON.parse(raw);
+            state = { ...state, ...saved };
 
-        // Reset processing flags on restart
-        let resetCount = 0;
-        for (const id in state.activeBets) {
-            if (state.activeBets[id].processing) {
-                state.activeBets[id].processing = false;
-                resetCount++;
+            // Sync with Redis to ensure we have latest listings etc
+            syncRedis();
+
+            let resetCount = 0;
+            for (const id in state.activeBets) {
+                if (state.activeBets[id].processing) {
+                    state.activeBets[id].processing = false;
+                    resetCount++;
+                }
             }
+            if (resetCount > 0) console.log(`🔄 [STATE] Reset ${resetCount} stuck 'processing' bets.`);
         }
-        if (resetCount > 0) console.log(`🔄 [STATE] Reset ${resetCount} stuck 'processing' bets.`);
     }
 } catch (e) {
-    console.error("Failed to load storage:", e.message);
+    console.error("⚠️ [STATE] Load failed (corrupted?), starting fresh:", e.message);
+    // If corrupted, rename to .bak for inspection
+    if (fs.existsSync(STORAGE_FILE)) {
+        fs.renameSync(STORAGE_FILE, `${STORAGE_FILE}.${Date.now()}.bak`);
+    }
 }
 
 // --- REDIS SYNC LOGIC ---
@@ -1020,8 +1039,12 @@ setInterval(() => {
 
     Object.keys(state.activeBets).forEach(betId => {
         const bet = state.activeBets[betId];
-        // Remove bets that expired more than 2 minutes ago
-        if (bet.expiry && now > bet.expiry + 120) {
+
+        // IMPORTANT: Never cleanup a bet currently being processed
+        if (bet.processing) return;
+
+        // Remove bets that expired more than 5 minutes ago (generous for network lag)
+        if (bet.expiry && now > bet.expiry + 300) {
             console.warn(`🧹 [CLEANUP] Removing stale bet #${betId} (expired ${Math.floor(now - bet.expiry)}s ago)`);
 
             // Move to history if not already there

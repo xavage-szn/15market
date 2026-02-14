@@ -857,13 +857,19 @@ export default function UserApp() {
   const updateEvmSessionBal = useCallback(async () => {
     if (!evmSessionWallet) return;
     try {
-      const balanceWei = await evmSessionWallet.provider.getBalance(evmSessionWallet.address);
-      const bal = parseFloat(ethers.formatUnits(balanceWei, 18)); // Arc Native USDC uses 18 decimals
-      setSessionBalance(bal);
+      // console.log("🔄 [SESSION] Syncing balance...");
+      const provider = evmSessionWallet.provider;
+      const balanceWei = await provider.getBalance(evmSessionWallet.address);
+      const bal = parseFloat(ethers.formatUnits(balanceWei, 18));
+
+      if (bal !== sessionBalance) {
+        console.log(`💰 [SESSION] Balance updated: ${sessionBalance} -> ${bal}`);
+        setSessionBalance(bal);
+      }
     } catch (err) {
       console.error("❌ [SESSION BALANCE] Fetch failed:", err);
     }
-  }, [evmSessionWallet]);
+  }, [evmSessionWallet, sessionBalance]);
 
   // Update Session Balance - Polling (Arc)
   useEffect(() => {
@@ -913,12 +919,17 @@ export default function UserApp() {
 
   // Aggressive Refresh (Multi-stage update)
   const aggressiveRefresh = useCallback(() => {
+    console.log("🚀 [REFRESH] Starting multi-stage balance sync...");
     triggerGlobalRefresh();
-    setTimeout(triggerGlobalRefresh, 2000);
-    setTimeout(triggerGlobalRefresh, 5000);
-    setTimeout(triggerGlobalRefresh, 10000);
-    setTimeout(triggerGlobalRefresh, 15000);
-  }, [triggerGlobalRefresh]);
+    // 5 stages of refresh to catch the chain update
+    [1000, 3000, 7000, 12000, 20000].forEach(delay => {
+      setTimeout(() => {
+        triggerGlobalRefresh();
+        // Force refetch main balance explicitly
+        if (refetchEvmBalance) refetchEvmBalance();
+      }, delay);
+    });
+  }, [triggerGlobalRefresh, refetchEvmBalance]);
 
   useEffect(() => {
     const interval = setInterval(fetchBalance, 10000);
