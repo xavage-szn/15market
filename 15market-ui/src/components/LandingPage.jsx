@@ -93,7 +93,7 @@ export const LandingPage = () => {
             <div className="absolute inset-0 bg-radial-gradient from-[#3CB371]/5 to-transparent pointer-events-none z-0" />
 
             {/* Navigation */}
-            <nav className="relative z-[100] flex items-center justify-between px-6 py-4 md:px-12 md:py-8 glass-nav shrink-0">
+            <nav className="relative z-[100] flex items-center justify-between px-6 py-4 md:px-12 md:py-8 shrink-0">
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
