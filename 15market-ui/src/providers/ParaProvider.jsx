@@ -1,16 +1,24 @@
 import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
-import { projectId, ARC_RPC, PARA_API_KEY } from "../constants";
+import { projectId, PARA_API_KEY } from "../constants";
 import { para, queryClient, paraOptions, Environment } from "../paraClient";
 
+/**
+ * AppParaProvider - Unified GetPara Provider
+ * Strictly follows the user's requested branding and configuration structure.
+ */
 export function AppParaProvider({ children }) {
     return (
         <ParaProvider
             paraClient={para}
+            queryClient={queryClient}
             paraClientConfig={{
                 env: Environment.BETA,
                 apiKey: PARA_API_KEY,
-                ...paraOptions
+                appName: "15market",
+                sessionConfig: {
+                    disableAutoSessionKeepAlive: false
+                }
             }}
             externalWalletConfig={{
                 appName: "15market",
@@ -27,7 +35,6 @@ export function AppParaProvider({ children }) {
                 recoverySecretStepEnabled: true,
                 onRampTestMode: true,
             }}
-            queryClient={queryClient}
         >
             {children}
         </ParaProvider>

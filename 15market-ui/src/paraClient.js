@@ -4,7 +4,7 @@ import { PARA_API_KEY, projectId } from "./constants";
 
 export { Environment };
 
-// Shared Para configuration to ensure consistency across Wagmi and React SDK
+// Shared Para configuration - Unified for Modal and SDK
 export const paraOptions = {
     appName: "15market",
     logo: "https://15market.online/logo.png",
@@ -21,7 +21,12 @@ export const paraOptions = {
     }
 };
 
-// Unified Para instance for Wagmi integration
+// Defensive Initialization
 export const para = new Para(Environment.BETA, PARA_API_KEY, paraOptions);
+
+// Force sessionConfig presence to prevent SDK crashes
+if (para && para.config && !para.config.sessionConfig) {
+    para.config.sessionConfig = { disableAutoSessionKeepAlive: false };
+}
 
 export const queryClient = new QueryClient();
