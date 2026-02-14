@@ -1,12 +1,17 @@
 import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
 import { projectId, ARC_RPC, PARA_API_KEY } from "../constants";
-import { para, queryClient } from "../paraClient";
+import { para, queryClient, paraOptions } from "../paraClient";
 
 export function AppParaProvider({ children }) {
     return (
         <ParaProvider
             paraClient={para}
+            paraClientConfig={{
+                env: Environment.BETA,
+                apiKey: PARA_API_KEY,
+                ...paraOptions
+            }}
             externalWalletConfig={{
                 appName: "15market",
                 wallets: ["METAMASK", "PHANTOM", "WALLETCONNECT", "RAINBOW", "COINBASE", "ZERION", "RABBY", "OKX", "HAHA"],
