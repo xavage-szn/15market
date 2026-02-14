@@ -4,8 +4,8 @@ import { defineChain } from 'viem'
 // 1. Arc Network Selection
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS || "0xd8F519179d16Fb4B791Cd12eF027bD29ABeBC71e";
 export const ARC_USDC_ADDRESS = import.meta.env.VITE_ARC_USDC_ADDRESS || "0x3600000000000000000000000000000000000000";
-export const ARC_RPC = import.meta.env.VITE_ARC_RPC || "https://rpc.testnet.arc.network";
-export const ARC_RPC_BACKUP = "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1";
+export const ARC_RPC = "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1";
+export const ARC_RPC_BACKUP = "https://rpc.testnet.arc.network";
 // 2. Keeper Configuration
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
