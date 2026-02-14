@@ -95,13 +95,13 @@ class ErrorBoundary extends React.Component {
 const Root = () => {
   return (
     <React.StrictMode>
-      <AppParaProvider>
-        <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <AppParaProvider>
           <ErrorBoundary>
             <App />
           </ErrorBoundary>
-        </QueryClientProvider>
-      </AppParaProvider>
+        </AppParaProvider>
+      </QueryClientProvider>
     </React.StrictMode>
   );
 };
