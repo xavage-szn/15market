@@ -8,8 +8,6 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { AppParaProvider } from './providers/ParaProvider';
-import { WagmiProvider } from 'wagmi';
-import { wagmiConfig } from './wagmiConfig';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './paraClient';
 
@@ -97,13 +95,13 @@ class ErrorBoundary extends React.Component {
 const Root = () => {
   return (
     <React.StrictMode>
-      <WagmiProvider config={wagmiConfig}>
+      <AppParaProvider>
         <QueryClientProvider client={queryClient}>
           <ErrorBoundary>
             <App />
           </ErrorBoundary>
         </QueryClientProvider>
-      </WagmiProvider>
+      </AppParaProvider>
     </React.StrictMode>
   );
 };

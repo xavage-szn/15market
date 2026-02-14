@@ -1,36 +1,33 @@
-import { useEffect, useState } from "react";
 import { useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { useBalance, useAccount as useWagmiAccount } from "wagmi";
+import { publicClient } from "../paraClient";
+import { formatUnits } from "viem";
 
 export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
-    const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
-    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+    const { isConnected, address: paraAddress } = useParaAccount();
     const { data: paraWallet } = useWallet();
-    const address = paraAddress || wagmiAddress || paraWallet?.address;
-    const isConnected = isParaConnected || isWagmiConnected;
+    const address = paraAddress || paraWallet?.address;
     const [internalBalance, setInternalBalance] = useState(0);
 
     // Sync balance with the override passed from UserApp (robust fetch)
     const balance = (typeof balanceOverride === 'number') ? balanceOverride : internalBalance;
 
-    const { data: evmBalance, refetch: refetchEvm } = useBalance({
-        address: address,
-        chainId: 5042002,
-        query: { enabled: isConnected && !balanceOverride }
-    });
-
-    useEffect(() => {
-        if (evmBalance && !balanceOverride) {
-            setInternalBalance(parseFloat(evmBalance.formatted));
+    const refetchEvm = useCallback(async () => {
+        if (!address || balanceOverride !== undefined) return;
+        try {
+            const b = await publicClient.getBalance({ address });
+            setInternalBalance(parseFloat(formatUnits(b, 18)));
+        } catch (e) {
+            console.error("WalletBalance fetch error:", e);
         }
-    }, [evmBalance, balanceOverride]);
+    }, [address, balanceOverride]);
 
     useEffect(() => {
-        if (isConnected) {
-            const interval = setInterval(() => refetchEvm(), 5000);
+        refetchEvm();
+        if (isConnected && !balanceOverride) {
+            const interval = setInterval(refetchEvm, 10000);
             return () => clearInterval(interval);
         }
-    }, [isConnected, refetchEvm]);
+    }, [isConnected, refetchEvm, balanceOverride]);
 
     if (!isConnected) return null;
 

@@ -11,11 +11,11 @@ import {
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
-import { useWriteContract, useBalance, useSendTransaction, useSignMessage, useWatchContractEvent, useChainId, useSwitchChain, useAccount as useWagmiAccount, useConnect, useConfig } from "wagmi";
-import { parseEther, parseUnits } from "viem";
+import { parseEther, parseUnits, formatUnits } from "viem";
 // Solana imports removed
 import ArcABI from "./abi/ArcPrediction.json";
 import * as ethers from "ethers";
+import { publicClient } from "./paraClient";
 
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
@@ -149,92 +149,50 @@ export default function UserApp() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
-  const { isConnected: isWagmiConnected, address: wagmiAddress, connector: wagmiConnector } = useWagmiAccount();
+  const { isConnected, address } = useParaAccount();
   const { data: paraWallet } = useWallet();
-
-  const isConnected = isParaConnected || isWagmiConnected;
-  // Robust address resolution across all possible states
-  const address = useMemo(() => {
-    return paraAddress || wagmiAddress || paraWallet?.address;
-  }, [paraAddress, wagmiAddress, paraWallet]);
 
   // Debug connection state transitions
   useEffect(() => {
-    if (isConnected || isParaConnected || isWagmiConnected) {
-      console.log("🔐 [AUTH STATE]", {
+    if (isConnected) {
+      console.log("🔐 [AUTH STATE] Para Connected", {
         isConnected,
-        isParaConnected,
-        isWagmiConnected,
         address,
-        paraAddress,
-        wagmiAddress,
-        paraWalletAddress: paraWallet?.address,
-        wagmiConnector: wagmiConnector?.id
+        paraWalletAddress: paraWallet?.address
       });
     }
-  }, [isConnected, isParaConnected, isWagmiConnected, address, paraAddress, wagmiAddress, paraWallet, wagmiConnector]);
+  }, [isConnected, address, paraWallet]);
 
-  const { connect, connectAsync, connectors } = useConnect();
+  const [evmBalance, setEvmBalance] = useState("0");
 
-  // SYNC PARA WITH WAGMI: Ensure Para session is known to Wagmi
-  // We use a more robust check to prevent double-modal or infinite loops on mobile
-  const syncAttempted = useRef(false);
+  // Custom balance fetcher (Replaces Wagmi useBalance)
+  const refetchEvmBalance = useCallback(async () => {
+    if (!address) return;
+    try {
+      const b = await publicClient.getBalance({ address });
+      setEvmBalance(formatUnits(b, 18));
+    } catch (e) {
+      console.error("Failed to fetch balance:", e);
+    }
+  }, [address]);
+
   useEffect(() => {
-    const paraWagmiConnector = connectors.find(c => c.id === 'para');
-    if (isParaConnected && wagmiConnector?.id !== 'para' && paraWagmiConnector && !syncAttempted.current) {
-      console.log("🔗 [WAGMI SYNC] Syncing Para session with Wagmi...");
-      syncAttempted.current = true;
-      connect({ connector: paraWagmiConnector }, {
-        onSettled: () => {
-          // Keep it true for this session unless disconnect happens
-          console.log("✅ [WAGMI SYNC] Sync complete");
-        },
-        onError: (err) => {
-          console.error("❌ [WAGMI SYNC] Sync failed:", err);
-          syncAttempted.current = false; // Allow retry on failure
-        }
-      });
-    }
+    refetchEvmBalance();
+    const interval = setInterval(refetchEvmBalance, 10000);
+    return () => clearInterval(interval);
+  }, [refetchEvmBalance]);
 
-    // Reset sync flag if Para disconnects
-    if (!isParaConnected) {
-      syncAttempted.current = false;
-    }
-  }, [isParaConnected, wagmiConnector, connectors, connect]);
-
-  const { writeContractAsync } = useWriteContract();
-  const { sendTransactionAsync } = useSendTransaction();
-  const { signMessageAsync } = useSignMessage();
-
-  const chainId = useChainId();
-  const { switchChain, switchChainAsync } = useSwitchChain();
-
-  const { data: evmBalance, refetch: refetchEvmBalance } = useBalance({
-    address: address,
-    chainId: 5042002,
-    query: {
-      enabled: !!address && address.startsWith('0x'),
-      refetchInterval: 10000
-    }
-  });
-
-
-
-  // Network Enforcement with loop protection
-  const lastSwitchTime = useRef(0);
+  // Network Detection
+  const [chainId, setChainId] = useState(null);
   useEffect(() => {
-    const now = Date.now();
-    if (isConnected && chainId && chainId !== 5042002 && (now - lastSwitchTime.current > 10000)) {
-      console.warn(`⚠️ [NETWORK] Correct chain required (Current: ${chainId}, Required: 5042002). Prompting switch...`);
-      lastSwitchTime.current = now;
+    const checkChain = async () => {
       try {
-        switchChain({ chainId: 5042002 });
-      } catch (err) {
-        console.error("❌ [NETWORK] Switch failed:", err);
-      }
-    }
-  }, [isConnected, chainId, switchChain]);
+        const id = await publicClient.getChainId();
+        setChainId(id);
+      } catch (e) { }
+    };
+    checkChain();
+  }, []);
 
   // Sticky Authentication: Prevent flicker on sync or chain switch
   const [authenticated, setAuthenticated] = useState(false);
@@ -242,7 +200,6 @@ export default function UserApp() {
     if (isConnected) {
       setAuthenticated(true);
     } else {
-      // Small delay before dropping to prevent bounce on sync/switch
       const timer = setTimeout(() => {
         if (!isConnected) setAuthenticated(false);
       }, 2000);
@@ -271,15 +228,14 @@ export default function UserApp() {
             const encoded = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
             return await paraWallet.signMessage(encoded);
           }
-          // Fallback to Wagmi
-          return await signMessageAsync({ message: msg });
+          throw new Error("Para wallet not ready for signing");
         }
       };
     } catch (e) {
       console.error("Wallet wrapper error:", e);
       return { connected: false };
     }
-  }, [isConnected, address, paraWallet, signMessageAsync]);
+  }, [isConnected, address, paraWallet]);
 
   const { open: openPara } = useModal();
   const login = () => openPara();
@@ -910,24 +866,23 @@ export default function UserApp() {
     return () => clearInterval(interval);
   }, [evmSessionWallet, updateEvmSessionBal]);
 
-  // Main Wallet Balance Sync - ROBUST DUAL-PATH FETCHING WITH RPC FALLBACK
+  // Main Wallet Balance Sync - ROBUST DUAL-PATH FETCHING WITH PARA CLIENT
   const fetchBalance = useCallback(async () => {
     if (!isConnected || !address) {
       setBalance(0);
       return;
     }
 
-    // Method 1: Wagmi Balance (Reactive)
+    // Method 1: Para Balance (Reactive via evmBalance state)
     if (evmBalance) {
-      const bal = parseFloat(evmBalance.formatted);
+      const bal = parseFloat(evmBalance);
       setBalance(bal);
     }
 
-    // Method 2: Manual RPC Fallback
+    // Method 2: Manual RPC Fallback (Using publicClient)
     try {
-      const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-      const balWei = await provider.getBalance(address);
-      const bal = parseFloat(ethers.formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
+      const balWei = await publicClient.getBalance({ address });
+      const bal = parseFloat(formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
 
       setBalance(prev => {
         if (Math.abs(prev - bal) > 0.0001) return bal;
@@ -1292,65 +1247,41 @@ export default function UserApp() {
           }
         }, 100);
       } else {
-        console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required)");
+        console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required via Para)");
 
-        // 🛡️ [ROBUSTNESS] Ensure Wagmi is connected
-        if (!isWagmiConnected) {
-          console.warn("⚠️ [TRADE] Main wallet selected but Wagmi not connected. Attempting re-sync...");
-          if (isParaConnected) {
-            const paraConnector = connectors.find(c => c.id === 'para' || c.name.toLowerCase().includes('para'));
-            if (paraConnector) {
-              try {
-                await connectAsync({ connector: paraConnector });
-                console.log("✅ [TRADE] Wagmi synced with Para");
-              } catch (reconnectErr) {
-                console.error("❌ [TRADE] Re-sync failed:", reconnectErr);
-              }
-            }
-          }
-        }
-
-        // 🛡️ [STRICT ENFORCEMENT] Ensure Correct Chain (Arc Testnet 5042002)
+        // 🛡️ [NETWORK] Enforce Arc Testnet 5042002
         if (chainId !== 5042002) {
           console.log("🌐 [TRADE] Network mismatch detected. Current:", chainId, "Required: 5042002");
-          notify("Switching to Arc Network...", "info");
-          try {
-            await switchChainAsync({ chainId: 5042002 });
-            // Wait for chain state to propagate
-            await new Promise(r => setTimeout(r, 2000));
-
-            // Re-check after attempt
-            // Note: chainId from hook might not update instantly, but writeContractAsync will use the target chainId
-          } catch (switchErr) {
-            console.error("❌ [TRADE] Network switch failed:", switchErr);
-            setIsExecuting(false);
-            return notify("Please switch your wallet to Arc Testnet (Chain 5042002)", "error");
-          }
+          notify("Please switch your wallet to Arc Testnet (Chain 5042002)", "info");
         }
 
         console.log("📝 [TRADE] Main wallet trade params prepared");
-
         notify(`Confirm on Arc...`, "success");
 
         try {
+          // Initialize viem wallet client with Para provider
+          const { createWalletClient, custom } = await import("viem");
+          const paraProvider = await para.getProvider();
+          const walletClient = createWalletClient({
+            chain: arcTestnet,
+            transport: custom(paraProvider)
+          });
 
-          // console.log("📝 [TRADE] Executing via writeContractAsync...");
-
-          const hash = await writeContractAsync({
-            chainId: 5042002, // Explicitly force the target chain
+          const hash = await walletClient.writeContract({
             address: ARC_CONTRACT_ADDRESS,
             abi: ArcABI.abi,
             functionName: 'placeBet',
             args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId), address],
             value: amountWei,
-            gas: 800000n // Increased gas for safety
+            account: address,
+            gas: 800000n
           });
+
           txHash = hash;
           console.log("📤 [TRADE] Main wallet tx successful:", txHash);
         } catch (mainWalletError) {
           console.error("❌ [TRADE] Main wallet error detail:", mainWalletError.message);
 
-          // Specific error handling for users
           if (mainWalletError.message?.includes("user rejected")) {
             notify("Transaction rejected in wallet", "error");
           } else if (mainWalletError.message?.includes("insufficient funds")) {
@@ -1358,7 +1289,6 @@ export default function UserApp() {
           } else {
             notify(`Trade failed: ${mainWalletError.shortMessage || "Transaction error"}`, "error");
           }
-
           throw mainWalletError;
         }
       }
@@ -1410,47 +1340,50 @@ export default function UserApp() {
     }
   };
 
-  // Arc Settlement Listener
-  useWatchContractEvent({
-    address: ARC_CONTRACT_ADDRESS,
-    abi: ArcABI.abi,
-    eventName: 'BetSettled',
-    onLogs(logs) {
-      logs.forEach(log => {
-        const { id, user: betUser, settlementPrice, won, payout } = log.args;
-        const normalizedUser = betUser?.toLowerCase();
-        const mainAddr = address?.toLowerCase();
-        const sessionAddr = evmSessionWallet?.address?.toLowerCase();
+  // Arc Settlement Listener (Native Viem Watcher)
+  useEffect(() => {
+    const unwatch = publicClient.watchContractEvent({
+      address: ARC_CONTRACT_ADDRESS,
+      abi: ArcABI.abi,
+      eventName: 'BetSettled',
+      onLogs(logs) {
+        logs.forEach(log => {
+          const { id, user: betUser, settlementPrice, won, payout } = log.args;
+          const normalizedUser = betUser?.toLowerCase();
+          const mainAddr = address?.toLowerCase();
+          const sessionAddr = evmSessionWallet?.address?.toLowerCase();
 
-        if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
-          const betId = id.toString();
-          const finalStatus = won ? "WON" : "LOST";
-          const priceUSD = (Number(settlementPrice) / 100000000).toFixed(4);
-          const formattedPayout = (Number(payout) / 10 ** 18).toFixed(4);
+          if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
+            const betId = id.toString();
+            const finalStatus = won ? "WON" : "LOST";
+            const priceUSD = (Number(settlementPrice) / 100000000).toFixed(4);
+            const formattedPayout = (Number(payout) / 10 ** 18).toFixed(4);
 
-          const updateTrade = (t) => {
-            const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
-              (t.nonce && t.nonce.toString() === betId);
-            if (isMatch) {
-              return { ...t, status: finalStatus, settlementPrice: priceUSD, payout: formattedPayout };
+            const updateTrade = (t) => {
+              const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+                (t.nonce && t.nonce.toString() === betId);
+              if (isMatch) {
+                return { ...t, status: finalStatus, settlementPrice: priceUSD, payout: formattedPayout };
+              }
+              return t;
+            };
+
+            setTradeHistory(prev => prev.map(updateTrade));
+            setActiveTrades(prev => prev.map(updateTrade));
+
+            if (won) {
+              notify(`Arc Trade WON! +${formattedPayout} USDC`, "success");
+              aggressiveRefresh();
+            } else {
+              notify(`Arc Trade LOST. Price: $${priceUSD}`, "error");
+              aggressiveRefresh();
             }
-            return t;
-          };
-
-          setTradeHistory(prev => prev.map(updateTrade));
-          setActiveTrades(prev => prev.map(updateTrade));
-
-          if (won) {
-            notify(`Arc Trade WON! +${formattedPayout} USDC`, "success");
-            aggressiveRefresh();
-          } else {
-            notify(`Arc Trade LOST. Price: $${priceUSD}`, "error");
-            aggressiveRefresh();
           }
-        }
-      });
-    },
-  });
+        });
+      },
+    });
+    return () => unwatch();
+  }, [address, evmSessionWallet, notify, aggressiveRefresh]);
 
 
 
@@ -1469,40 +1402,22 @@ export default function UserApp() {
         return;
       }
 
-      // 🛡️ [ROBUSTNESS] Ensure Wagmi is connected
-      if (!isWagmiConnected) {
-        console.warn("⚠️ [REFILL] Wagmi not connected. Attempting re-sync...");
-        const paraConnector = connectors.find(c => c.id === 'para' || c.name.toLowerCase().includes('para'));
-        if (paraConnector) {
-          try {
-            await connectAsync({ connector: paraConnector });
-            console.log("✅ [REFILL] Wagmi synced with Para");
-          } catch (reconnectErr) {
-            console.error("❌ [REFILL] Re-sync failed:", reconnectErr);
-            notify("Wallet connection sync failed. Please reconnect.", "error");
-            return;
-          }
-        }
+      if (!address || !evmSessionWallet) {
+        console.error("❌ [REFILL] Wallet not connected");
+        notify("Connect Arc wallet for refill", "error");
+        return;
       }
 
       // 🛡️ [NETWORK] Enforce Arc Testnet
       if (chainId !== 5042002) {
-        console.log("🌐 [REFILL] Network mismatch. Current:", chainId, "Target: 5042002");
-        notify("Switching to Arc network...", "info");
-        try {
-          await switchChainAsync({ chainId: 5042002 });
-          await new Promise(r => setTimeout(r, 2000));
-        } catch (swErr) {
-          return notify("Please switch to Arc Network to deposit", "error");
-        }
+        notify("Please switch to Arc Network to deposit", "info");
       }
 
-      // console.log("✅ [REFILL] Wallets ready");
-
-      // Check main wallet balance
-      if (balance < amtNum) {
-        console.error("❌ [REFILL] Insufficient balance in main wallet");
-        notify(`Insufficient balance. You have ${balance.toFixed(4)} USDC`, "error");
+      // 🛡️ [BALANCE] Use updated balance
+      const currentBal = parseFloat(evmBalance);
+      if (currentBal < amtNum) {
+        console.error("❌ [REFILL] Insufficient status balance");
+        notify(`Insufficient status balance. You have ${currentBal.toFixed(4)} USDC`, "error");
         return;
       }
 
@@ -1510,19 +1425,31 @@ export default function UserApp() {
       notify(`Initiating Refill (${amtNum} USDC)...`, "success");
 
       try {
-        // Send FULL amount to Session Wallet from Main
-        // console.log("💸 [REFILL] Sending to session wallet...");
-
-        const hash = await sendTransactionAsync({
-          to: evmSessionWallet.address,
-          value: parseUnits(amtNum.toFixed(18), 18), // Arc Native USDC uses 18 decimals
-          chainId: 5042002
+        const { createWalletClient, custom } = await import("viem");
+        const paraProvider = await para.getProvider();
+        const walletClient = createWalletClient({
+          chain: arcTestnet,
+          transport: custom(paraProvider)
         });
 
-        console.log("📤 [REFILL] Main tx broadcasted:", hash);
-        notify("Refill broadcasted. Processing fee in background...", "info");
+        const hash = await walletClient.sendTransaction({
+          to: evmSessionWallet.address,
+          value: parseUnits(amtNum.toFixed(18), 18),
+          account: address
+        });
 
-        // Let the session wallet send the fee to Treasury after it receives funds
+        console.log("📤 [REFILL] tx successful:", hash);
+        notify("Refill Transaction Broadcasted", "success");
+
+        // Wait for refill to land
+        publicClient.waitForTransactionReceipt({ hash }).then(() => {
+          console.log("✅ [REFILL] Confirmed");
+          notify("Refill Confirmed!", "success");
+          setTimeout(() => {
+            updateEvmSessionBal();
+            refetchEvmBalance();
+          }, 2000);
+        });
         // This keeps user experience to just ONE signature
         setTimeout(async () => {
           try {
@@ -1572,7 +1499,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, sendTransactionAsync, notify, recordFee, balance, updateEvmSessionBal, isExecuting, chainId, switchChainAsync, refetchEvmBalance, isWagmiConnected, connectors, connectAsync]);
+  }, [evmSessionWallet, address, notify, recordFee, balance, updateEvmSessionBal, isExecuting, chainId, refetchEvmBalance]);
 
   const handleWithdraw = useCallback(async (amt) => {
     // console.log("🔵 [WITHDRAW] Starting withdrawal process...");
@@ -1594,30 +1521,9 @@ export default function UserApp() {
         return;
       }
 
-      // 🛡️ [ROBUSTNESS] Ensure Wagmi is connected for signing if needed
-      if (!isWagmiConnected) {
-        console.warn("⚠️ [WITHDRAW] Wagmi not connected. Attempting re-sync...");
-        const paraConnector = connectors.find(c => c.id === 'para' || c.name.toLowerCase().includes('para'));
-        if (paraConnector) {
-          try {
-            await connectAsync({ connector: paraConnector });
-            console.log("✅ [WITHDRAW] Wagmi synced with Para");
-          } catch (reconnectErr) {
-            console.error("❌ [WITHDRAW] Re-sync failed:", reconnectErr);
-          }
-        }
-      }
-
       // 🛡️ [NETWORK] Enforce Arc Testnet
       if (chainId !== 5042002) {
-        console.log("🌐 [WITHDRAW] Network mismatch. Current:", chainId, "Target: 5042002");
-        notify("Switching to Arc network...", "info");
-        try {
-          await switchChain({ chainId: 5042002 });
-          await new Promise(r => setTimeout(r, 2000));
-        } catch (swErr) {
-          return notify("Please switch to Arc Network to withdraw", "error");
-        }
+        notify("Please switch to Arc Network to withdraw", "info");
       }
 
       // console.log("✅ [WITHDRAW] Session wallet exists");
@@ -1706,7 +1612,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal, isExecuting, chainId, switchChainAsync, refetchEvmBalance]);
+  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal, isExecuting, chainId, refetchEvmBalance]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">

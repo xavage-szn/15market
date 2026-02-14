@@ -1,19 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { useAccount as useWagmiAccount, useChainId, useConnect } from "wagmi";
+import { publicClient } from "../paraClient";
+import { formatEther } from "viem";
 
 export const UnifiedWalletButton = ({ theme }) => {
     const { openModal } = useModal();
-    const { isConnected: isParaConnected, address: paraAddress } = useParaAccount();
-    const { isConnected: isWagmiConnected, address: wagmiAddress, connector: wagmiConnector } = useWagmiAccount();
-    const { connect, connectors } = useConnect();
-    const chainId = useChainId();
-    const isConnected = isParaConnected || isWagmiConnected;
-    const address = paraAddress || wagmiAddress;
+    const { isConnected, address } = useParaAccount();
     const { data: paraWallet } = useWallet();
     const [isConnecting, setIsConnecting] = useState(false);
+    const [chainId, setChainId] = useState(null);
 
-    const displayAddress = address || paraWallet?.address || wagmiAddress;
+    // Fetch chainId directly from the provider or default
+    useEffect(() => {
+        const getChain = async () => {
+            try {
+                const chain = await publicClient.getChainId();
+                setChainId(chain);
+            } catch (e) {
+                console.warn("Failed to fetch chainId", e);
+            }
+        };
+        getChain();
+    }, []);
+
+    const displayAddress = address || paraWallet?.address;
     const isWrongNetwork = isConnected && chainId !== 5042002;
     const currentColor = isWrongNetwork ? '#FF4444' : '#3CB371';
 
@@ -21,23 +31,17 @@ export const UnifiedWalletButton = ({ theme }) => {
     const handleClick = async () => {
         if (isConnecting) return;
 
-        console.log("🖱️ [WALLET BUTTON] Clicked", { isConnected, isParaConnected, isWagmiConnected, isConnecting });
+        console.log("🖱️ [WALLET BUTTON] Clicked (Para)", { isConnected, isConnecting, address });
 
-        if (!isConnected) {
-            setIsConnecting(true);
-            try {
-                console.log("📂 [WALLET] Opening Para Modal...");
-                await openModal();
-            } catch (err) {
-                console.error("Connect failed:", err);
-            } finally {
-                // Keep the button locked for 2s to prevent mobile double-taps
-                setTimeout(() => setIsConnecting(false), 2000);
-            }
-        } else {
-            // If already connected, still allow opening modal for session management/switching
-            console.log("📂 [WALLET] Opening Para Modal (Already connected)...");
-            openModal();
+        setIsConnecting(true);
+        try {
+            console.log("📂 [WALLET] Opening Para Modal...");
+            await openModal();
+        } catch (err) {
+            console.error("Connect failed:", err);
+        } finally {
+            // Keep the button locked for 2s to prevent mobile double-taps
+            setTimeout(() => setIsConnecting(false), 2000);
         }
     };
 
@@ -65,14 +69,14 @@ export const UnifiedWalletButton = ({ theme }) => {
             style={{
                 backgroundColor: theme === 'light' ? `${currentColor}08` : `${currentColor}15`,
                 borderColor: theme === 'light' ? `${currentColor}20` : `${currentColor}30`,
-                cursor: (isParaConnected || !isConnected) ? 'pointer' : 'default'
+                cursor: 'pointer'
             }}
         >
             <div className="relative">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg relative"
                     style={{ backgroundColor: currentColor }}
                 >
-                    {isWrongNetwork ? '!' : (displayAddress?.slice(0, 1) || (wagmiConnector?.name?.slice(0, 1)) || 'W')}
+                    {isWrongNetwork ? '!' : (displayAddress?.slice(0, 1) || 'P')}
                     {isWrongNetwork && (
                         <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-ping" />
                     )}

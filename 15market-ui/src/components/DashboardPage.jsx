@@ -22,7 +22,6 @@ import MessagingSystem from "./MessagingSystem";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
 import { useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { useWriteContract, useAccount as useWagmiAccount } from "wagmi";
 import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC } from "../constants";
 import { parseEther } from "viem";
@@ -36,12 +35,9 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
     onViewReceipt
 }) => {
     const isLight = theme === 'light';
-    const { isConnected: isParaConnected } = useParaAccount();
-    const { isConnected: isWagmiConnected, address: wagmiAddress } = useWagmiAccount();
+    const { isConnected, address: paraAddress } = useParaAccount();
     const { data: paraWallet } = useWallet();
-    const address = paraWallet?.address || wagmiAddress;
-    const isConnected = isParaConnected || isWagmiConnected;
-    const { writeContractAsync } = useWriteContract();
+    const address = paraAddress || paraWallet?.address;
 
     const [activeTab, setActiveTab] = useState("overview"); // overview, profile, community
     const [stats, setStats] = useState({

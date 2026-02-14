@@ -1,6 +1,7 @@
 import Para, { Environment } from "@getpara/web-sdk";
 import { QueryClient } from "@tanstack/react-query";
-import { PARA_API_KEY } from "./constants";
+import { createPublicClient, http } from "viem";
+import { arcTestnet, PARA_API_KEY, ARC_RPC } from "./constants";
 
 export { Environment };
 
@@ -18,6 +19,12 @@ const paraConfig = {
 };
 
 export const para = new Para(Environment.BETA, PARA_API_KEY, paraConfig);
+
+// Public client for contract and balance reads (Replaces Wagmi hooks)
+export const publicClient = createPublicClient({
+    chain: arcTestnet,
+    transport: http(ARC_RPC)
+});
 
 // Defensive property injection to ensure SDK internals find what they need
 if (para && !para.config) {
