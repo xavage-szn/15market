@@ -6,8 +6,8 @@ import { para, queryClient, Environment } from "../paraClient";
 /**
  * AppParaProvider - Unified GetPara Provider
  * 
- * This component strictly implements the user's requested configuration 
- * while resolving the 'disableAutoSessionKeepAlive' crash.
+ * Implements the user's requested UI configuration snippet while 
+ * maintaining the shared 'para' instance for Wagmi stability.
  */
 export function AppParaProvider({ children }) {
     return (
@@ -17,7 +17,7 @@ export function AppParaProvider({ children }) {
             paraClientConfig={{
                 env: Environment.BETA,
                 apiKey: PARA_API_KEY,
-                // Explicitly including sessionConfig here as well
+                appName: "15market",
                 sessionConfig: {
                     disableAutoSessionKeepAlive: false
                 }

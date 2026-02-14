@@ -1,27 +1,27 @@
 import Para, { Environment } from "@getpara/web-sdk";
 import { QueryClient } from "@tanstack/react-query";
-import { PARA_API_KEY, projectId } from "./constants";
+import { PARA_API_KEY } from "./constants";
 
 export { Environment };
 
 /**
  * paraClient.js
  * 
- * We initialize the Para instance with explicit sessionConfig to prevent 
- * the 'disableAutoSessionKeepAlive' crash during SDK initialization.
+ * Centralized Para instance for the entire application.
+ * Initialized with explicit session configuration to prevent SDK crashes.
  */
-export const para = new Para(Environment.BETA, PARA_API_KEY, {
+const paraConfig = {
     appName: "15market",
     sessionConfig: {
         disableAutoSessionKeepAlive: false
     }
-});
+};
 
-// Deep set properties to ensure they are available to both web-sdk and react-sdk internals
-if (para) {
-    if (!para.config) para.config = {};
-    para.config.sessionConfig = { disableAutoSessionKeepAlive: false };
-    para.sessionConfig = { disableAutoSessionKeepAlive: false };
+export const para = new Para(Environment.BETA, PARA_API_KEY, paraConfig);
+
+// Defensive property injection to ensure SDK internals find what they need
+if (para && !para.config) {
+    para.config = paraConfig;
 }
 
 export const queryClient = new QueryClient();
