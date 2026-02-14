@@ -156,11 +156,10 @@ export default function UserApp() {
     if (isConnected) {
       console.log("🔐 [AUTH STATE] Wallet Connected", {
         isConnected,
-        address,
-        paraWalletAddress: paraWallet?.address
+        address
       });
     }
-  }, [isConnected, address, paraWallet]);
+  }, [isConnected, address]);
 
   const [evmBalance, setEvmBalance] = useState("0");
 
@@ -215,29 +214,24 @@ export default function UserApp() {
         address: address,
         publicKey: null,
         signTransaction: async (tx) => {
-          if (paraWallet?.signTransaction) return await paraWallet.signTransaction(tx);
-          throw new Error("signTransaction not supported for this provider. Use writeContract for EVM.");
+          throw new Error("signTransaction not supported. Use writeContract for EVM transactions.");
         },
         signAllTransactions: async (txs) => {
-          if (paraWallet?.signAllTransactions) return await paraWallet.signAllTransactions(txs);
-          throw new Error("signAllTransactions not supported for this provider.");
+          throw new Error("signAllTransactions not supported.");
         },
         signMessage: async (msg) => {
-          if (paraWallet?.signMessage) {
-            const encoded = typeof msg === 'string' ? new TextEncoder().encode(msg) : msg;
-            return await paraWallet.signMessage(encoded);
-          }
-          throw new Error("Para wallet not ready for signing");
+          throw new Error("signMessage not supported. Use Wagmi signing methods.");
         }
       };
     } catch (e) {
       console.error("Wallet wrapper error:", e);
       return { connected: false };
     }
-  }, [isConnected, address, paraWallet]);
+  }, [isConnected, address]);
 
-  const { open: openPara } = useModal();
-  const login = () => openPara();
+  const login = () => {
+    console.warn("login() called but Para SDK is removed. Use UnifiedWalletButton instead.");
+  };
 
   const user = useMemo(() => {
     if (isConnected && address) return { wallet: { address } };
