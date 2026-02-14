@@ -1,7 +1,7 @@
 import { ParaProvider } from "@getpara/react-sdk";
 import "@getpara/react-sdk/styles.css";
 import { projectId, ARC_RPC, PARA_API_KEY } from "../constants";
-import { para, queryClient, paraOptions } from "../paraClient";
+import { para, queryClient, paraOptions, Environment } from "../paraClient";
 
 export function AppParaProvider({ children }) {
     return (
