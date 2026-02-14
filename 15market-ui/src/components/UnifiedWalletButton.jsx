@@ -24,19 +24,8 @@ export const UnifiedWalletButton = ({ theme }) => {
         if (!isConnected) {
             setIsConnecting(true);
             try {
-                // Priority: Direct Injected Connection for Rabby/MetaMask on Mobile
-                const isRabby = window.ethereum?.isRabby;
-                const isMetaMask = window.ethereum?.isMetaMask;
-                const injectedConnector = connectors.find(c => c.id === 'injected');
-
-                if ((isRabby || isMetaMask) && injectedConnector) {
-                    console.log("🔌 [WALLET] Triggering direct injected connection...");
-                    connect({ connector: injectedConnector });
-                } else {
-                    // Default to Para Modal for all other cases (email, social, or desktop browser wallets)
-                    console.log("📂 [WALLET] Opening Para Modal...");
-                    await openModal();
-                }
+                console.log("📂 [WALLET] Opening Para Modal...");
+                await openModal();
             } catch (err) {
                 console.error("Connect failed:", err);
             } finally {

@@ -1,36 +1,10 @@
 import Para, { Environment } from "@getpara/web-sdk";
 import { QueryClient } from "@tanstack/react-query";
-import { projectId, ARC_RPC } from "./constants";
+import { PARA_API_KEY } from "./constants";
 
 export { Environment };
 
-export const paraApiKey = import.meta.env.VITE_PARA_API_KEY || "beta_d86df4100fa75b359939af58f0f43abb";
-export const paraEnv = Environment.BETA;
-
-export const para = new Para(paraEnv, paraApiKey, {
-    appName: "15market",
-    walletConnectProjectId: projectId || "4aebd2ef806c541b6aaf003da2930c58",
-    walletConnectMetadata: {
-        name: "15market",
-        description: "Trade Assets on Arc",
-        url: "https://15market.online",
-        icons: ["https://15market.online/logo.png"]
-    },
-    oAuthMethods: [],
-    disableEmailLogin: true,
-    disablePhoneLogin: true,
-    disableSocialLogin: true,
-    defaultChainId: "eip155:5042002",
-    chains: [{
-        chainId: "eip155:5042002",
-        chainName: "Arc Testnet",
-        nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-        rpcUrls: [ARC_RPC]
-    }],
-    sessionConfig: {
-        disableAutoSessionKeepAlive: false
-    }
-});
+// Minimal Para instance for Wagmi integration
+export const para = new Para(Environment.BETA, PARA_API_KEY);
 
 export const queryClient = new QueryClient();
-
