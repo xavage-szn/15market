@@ -1242,11 +1242,7 @@ export default function UserApp() {
       } else {
         console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required via Para)");
 
-        // 🛡️ [NETWORK] Enforce Arc Testnet 5042002
-        if (chainId !== 5042002) {
-          console.log("🌐 [TRADE] Network mismatch detected. Current:", chainId, "Required: 5042002");
-          notify("Please switch your wallet to Arc Testnet (Chain 5042002)", "info");
-        }
+
 
         console.log("📝 [TRADE] Main wallet trade params prepared");
         notify(`Confirm on Arc...`, "success");
@@ -1402,9 +1398,7 @@ export default function UserApp() {
       }
 
       // 🛡️ [NETWORK] Enforce Arc Testnet
-      if (chainId !== 5042002) {
-        notify("Please switch to Arc Network to deposit", "info");
-      }
+
 
       // 🛡️ [BALANCE] Use updated balance
       const currentBal = parseFloat(evmBalance);
@@ -1514,10 +1508,7 @@ export default function UserApp() {
         return;
       }
 
-      // 🛡️ [NETWORK] Enforce Arc Testnet
-      if (chainId !== 5042002) {
-        notify("Please switch to Arc Network to withdraw", "info");
-      }
+
 
       // console.log("✅ [WITHDRAW] Session wallet exists");
 

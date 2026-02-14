@@ -35,8 +35,7 @@ export const UnifiedWalletButton = ({ theme }) => {
     }, [isConnected, connectedChainId, navigate]);
 
     const displayAddress = address;
-    const isWrongNetwork = isConnected && chainId !== 5042002;
-    const currentColor = isWrongNetwork ? '#FF4444' : '#3CB371';
+    const currentColor = '#3CB371';
 
     // Open Reown modal
     const handleClick = async () => {
@@ -87,14 +86,11 @@ export const UnifiedWalletButton = ({ theme }) => {
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg relative"
                     style={{ backgroundColor: currentColor }}
                 >
-                    {isWrongNetwork ? '!' : (displayAddress?.slice(0, 1) || 'P')}
-                    {isWrongNetwork && (
-                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-ping" />
-                    )}
+                    {(displayAddress?.slice(0, 1) || 'P')}
                 </div>
             </div>
-            <span className={`text-xs font-black font-mono hidden lg:block ${theme === 'light' ? 'text-black' : 'text-white'} ${isWrongNetwork ? 'text-[#FF4444]' : ''}`}>
-                {isWrongNetwork ? 'SWITCH NETWORK' : `${displayAddress?.slice(0, 4)}...${displayAddress?.slice(-4)}`}
+            <span className={`text-xs font-black font-mono hidden lg:block ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                {`${displayAddress?.slice(0, 4)}...${displayAddress?.slice(-4)}`}
             </span>
         </button>
     );
