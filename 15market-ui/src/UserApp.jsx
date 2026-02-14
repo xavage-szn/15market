@@ -1727,7 +1727,7 @@ export default function UserApp() {
               sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
               theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
               refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId} switchChain={switchChain}
+              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
               evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
               activeMarket={activeMarket}
               maintenanceMode={platformSettings.maintenanceMode}
