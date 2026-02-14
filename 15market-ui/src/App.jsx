@@ -4,7 +4,6 @@ import UserApp from "./UserApp";
 import CampaignPage from "./components/CampaignPage";
 
 // Reown & Wagmi cleaned up - Using GetPara native provider
-import { AppParaProvider } from './providers/ParaProvider'
 import { useWallet } from "@getpara/react-sdk";
 
 // Wrapper component to access hooks
@@ -24,10 +23,8 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppParaProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </AppParaProvider>
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   );
 }

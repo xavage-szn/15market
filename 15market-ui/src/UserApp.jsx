@@ -165,7 +165,7 @@ export default function UserApp() {
   const syncAttempted = useRef(false);
   useEffect(() => {
     const paraWagmiConnector = connectors.find(c => c.id === 'para');
-    if (isParaConnected && !isWagmiConnected && paraWagmiConnector && !syncAttempted.current) {
+    if (isParaConnected && wagmiConnector?.id !== 'para' && paraWagmiConnector && !syncAttempted.current) {
       console.log("🔗 [WAGMI SYNC] Syncing Para session with Wagmi...");
       syncAttempted.current = true;
       connect({ connector: paraWagmiConnector }, {
@@ -184,7 +184,7 @@ export default function UserApp() {
     if (!isParaConnected) {
       syncAttempted.current = false;
     }
-  }, [isParaConnected, isWagmiConnected, connectors, connect]);
+  }, [isParaConnected, wagmiConnector, connectors, connect]);
 
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
