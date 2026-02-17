@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAccount } from "wagmi";
+import { useAccount, useWalletClient } from "wagmi";
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
@@ -43,11 +43,12 @@ import { ThemeToggle } from "./components/ThemeToggle";
 
 
 export default function UserApp() {
+  const { data: walletClient } = useWalletClient();
   const [price, setPrice] = useState("0.00");
   const staticPriceFails = useRef(0);
   const [amount, setAmount] = useState("");
   const [sliderValue, setSliderValue] = useState(0);
-  const [balance, setBalance] = useState(0);
+  // const [balance, setBalance] = useState(0); // Removed in favor of evmBalance/sessionBalance logic
   const [direction, setDirection] = useState(null);
   const [tradeHistory, setTradeHistory] = useState(() => {
     try {
@@ -1240,7 +1241,7 @@ export default function UserApp() {
           }
         }, 100);
       } else {
-        console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required via Para)");
+        console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required via Wallet)");
 
 
 
@@ -1248,13 +1249,9 @@ export default function UserApp() {
         notify(`Confirm on Arc...`, "success");
 
         try {
-          // Initialize viem wallet client with Para provider
-          const { createWalletClient, custom } = await import("viem");
-          const paraProvider = await para.getProvider();
-          const walletClient = createWalletClient({
-            chain: arcTestnet,
-            transport: custom(paraProvider)
-          });
+          if (!walletClient) {
+            throw new Error("Wallet not connected or client unavailable");
+          }
 
           const hash = await walletClient.writeContract({
             address: ARC_CONTRACT_ADDRESS,
@@ -1412,12 +1409,7 @@ export default function UserApp() {
       notify(`Initiating Refill (${amtNum} USDC)...`, "success");
 
       try {
-        const { createWalletClient, custom } = await import("viem");
-        const paraProvider = await para.getProvider();
-        const walletClient = createWalletClient({
-          chain: arcTestnet,
-          transport: custom(paraProvider)
-        });
+        if (!walletClient) throw new Error("Wallet not connected");
 
         const hash = await walletClient.sendTransaction({
           to: evmSessionWallet.address,
@@ -1657,7 +1649,7 @@ export default function UserApp() {
         {/* Desktop Controls */}
         <div className="hidden lg:flex items-center gap-3">
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <WalletBalance network={network} theme={theme} balanceOverride={balance} sessionMode={sessionMode} />
+          <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
 
           {uiVersion === 'v1' && (
             <>

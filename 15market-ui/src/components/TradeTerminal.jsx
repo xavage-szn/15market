@@ -83,17 +83,38 @@ const TradeTerminalComponent = ({
 
                     {showManagement && (
                         <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                            <div className="flex items-center justify-between bg-black/20 rounded-lg p-1.5">
-                                <span className="text-[6px] lg:text-[8px] font-black opacity-40 text-white uppercase ml-1">Refill Amount</span>
-                                <div className="flex items-center gap-1">
-                                    <input
-                                        type="number"
-                                        value={refillAmount}
-                                        onChange={(e) => setRefillAmount(e.target.value)}
-                                        className="w-10 lg:w-16 bg-transparent text-[8px] lg:text-xs font-black text-white outline-none px-1 text-right"
-                                        placeholder="0.1"
+                            {/* Brand Refill Input */}
+                            <div className={`mt-1 flex items-center gap-1.5 p-1.5 rounded-lg border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
+                                <input
+                                    type="number"
+                                    value={refillAmount}
+                                    onChange={(e) => setRefillAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    className={`w-full bg-transparent text-[9px] lg:text-xs font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
+                                />
+                                <div className={`px-1 py-0.5 rounded text-[5px] lg:text-[6px] font-black uppercase tracking-tight ${isLight ? 'bg-black/10 text-black/60' : 'bg-white/10 text-white/60'}`}>
+                                    USDC
+                                </div>
+                            </div>
+
+                            {/* Refill Slider */}
+                            <div className="relative pt-1 pb-2 px-1">
+                                <div className="relative h-1 rounded-full overflow-hidden bg-white/10">
+                                    <div
+                                        className="absolute inset-y-0 left-0 bg-[#3CB371] transition-all duration-150"
+                                        style={{ width: `${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}%` }}
                                     />
-                                    <span className="text-[6px] lg:text-[8px] font-black opacity-40 text-white uppercase mr-1">USDC</span>
+                                    <input
+                                        type="range" min="0" max="100" step="1"
+                                        value={Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}
+                                        onChange={(e) => balance > 0 && setRefillAmount(((balance * e.target.value) / 100).toFixed(4))}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    />
+                                </div>
+                                <div className="flex justify-between mt-1 opacity-40">
+                                    <span className="text-[5px] font-mono">0%</span>
+                                    <span className="text-[5px] font-mono">50%</span>
+                                    <span className="text-[5px] font-mono">100%</span>
                                 </div>
                             </div>
 
