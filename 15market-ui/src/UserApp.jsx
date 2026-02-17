@@ -181,6 +181,21 @@ export default function UserApp() {
     return () => clearInterval(interval);
   }, [refetchEvmBalance]);
 
+  // DERIVED BALANCE STATE (Fix for ReferenceError)
+  const balance = useMemo(() => parseFloat(evmBalance || "0"), [evmBalance]);
+
+  // Compatibility wrapper for legacy setBalance calls
+  const setBalance = useCallback((val) => {
+    if (typeof val === 'function') {
+      setEvmBalance(prev => {
+        const num = parseFloat(prev || "0");
+        return val(num).toString();
+      });
+    } else {
+      setEvmBalance(val.toString());
+    }
+  }, []);
+
   // Network Detection
   const [chainId, setChainId] = useState(null);
   useEffect(() => {
@@ -199,9 +214,7 @@ export default function UserApp() {
     if (isConnected) {
       setAuthenticated(true);
     } else {
-      const timer = setTimeout(() => {
-        if (!isConnected) setAuthenticated(false);
-      }, 2000);
+      const timer = setTimeout(() => setAuthenticated(false), 2000); // 2s grace
       return () => clearTimeout(timer);
     }
   }, [isConnected]);
@@ -860,40 +873,12 @@ export default function UserApp() {
     return () => clearInterval(interval);
   }, [evmSessionWallet, updateEvmSessionBal]);
 
-  // Main Wallet Balance Sync - ROBUST DUAL-PATH FETCHING WITH PARA CLIENT
-  const fetchBalance = useCallback(async () => {
-    if (!isConnected || !address) {
-      setBalance(0);
-      return;
-    }
-
-    // Method 1: Para Balance (Reactive via evmBalance state)
-    if (evmBalance) {
-      const bal = parseFloat(evmBalance);
-      setBalance(bal);
-    }
-
-    // Method 2: Manual RPC Fallback (Using publicClient)
-    try {
-      const balWei = await publicClient.getBalance({ address });
-      const bal = parseFloat(formatUnits(balWei, 18)); // Arc Native USDC uses 18 decimals
-
-      setBalance(prev => {
-        if (Math.abs(prev - bal) > 0.0001) return bal;
-        return prev;
-      });
-    } catch (e) {
-      // Quiet fail for background polling
-    }
-  }, [isConnected, address, evmBalance]);
-
   // Global Refresh Trigger (Exposed for events)
   const triggerGlobalRefresh = useCallback(() => {
     console.log("🔄 [REFRESH] Triggering global balance sync...");
-    fetchBalance();
-    if (refetchEvmBalance) refetchEvmBalance();
+    refetchEvmBalance();
     if (updateEvmSessionBal) updateEvmSessionBal();
-  }, [fetchBalance, refetchEvmBalance, updateEvmSessionBal]);
+  }, [refetchEvmBalance, updateEvmSessionBal]);
 
   // Aggressive Refresh (Multi-stage update)
   const aggressiveRefresh = useCallback(() => {
@@ -908,12 +893,6 @@ export default function UserApp() {
       }, delay);
     });
   }, [triggerGlobalRefresh, refetchEvmBalance]);
-
-  useEffect(() => {
-    const interval = setInterval(fetchBalance, 10000);
-    fetchBalance();
-    return () => clearInterval(interval);
-  }, [fetchBalance]);
 
 
 
@@ -1110,10 +1089,20 @@ export default function UserApp() {
           optimisticStatus = isWin ? "WON" : "LOST";
         }
 
+        let optimisticPayout = "0.0000";
+        if (optimisticStatus === "WON") {
+          let multiplier = 1.98;
+          if (trade.duration <= 5) multiplier = 6.98;
+          else if (trade.duration <= 10) multiplier = 4.98;
+
+          optimisticPayout = (parseFloat(trade.amount) * multiplier).toFixed(4);
+        }
+
         const updatePayload = {
           ...trade,
           status: optimisticStatus,
           settlementPrice: capturedPrice.toFixed(4),
+          payout: optimisticPayout,
           optimistic: true // Marker so we know it's not final settled yet
         };
 
