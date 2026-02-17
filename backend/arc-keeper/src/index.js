@@ -35,7 +35,7 @@ console.error = (...args) => logger.error(args.map(a => typeof a === 'object' ? 
 const ARC_RPC_LIST = [
     process.env.ARC_RPC || "https://rpc.testnet.arc.network",
     "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1",
-    "wss://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
+    "https://arc-testnet.drpc.org"
 ];
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
@@ -592,6 +592,7 @@ class ArcKeeper {
             "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
             "function settleBet(uint256 _betId, uint256 _exitPrice) external",
             "function bets(uint256) view returns (uint256 id, address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 timestamp, uint256 duration, uint8 marketId, uint256 settlementPrice, bool settled, bool won)",
+            "function owner() view returns (address)",
             "event BetPlaced(uint256 indexed id, address indexed user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 duration, uint256 timestamp, uint8 marketId)",
             "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
         ];
@@ -653,7 +654,7 @@ class ArcKeeper {
             }
 
             // SPEED OPTIMIZATION: Faster polling and evaluation
-            setInterval(() => this.pollEvents(), 5000); // 5s sync (Very fast for 'instant' feel)
+            setInterval(() => this.pollEvents(), 2000); // 2s sync (Very fast for 'instant' feel)
             setInterval(() => this.evaluateBets(), 1000); // Check expiry every second
             setInterval(() => this.processSettlementQueue(), 500); // Check settlement queue every 0.5s
             setInterval(() => this.checkBalance(), 60000);
