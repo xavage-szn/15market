@@ -254,10 +254,13 @@ export default function UserApp() {
   // Periodic Universal Sync (Fix for Cross-Device Inconsistency)
   useEffect(() => {
     if (address) {
-      const interval = setInterval(() => triggerGlobalRefresh(false), 8000);
+      const interval = setInterval(() => {
+        triggerGlobalRefresh(false);
+        fetchMyProfile(); // Also refresh profile to catch session address updates from other devices
+      }, 4000); // 4s for faster cross-device sync
       return () => clearInterval(interval);
     }
-  }, [address, triggerGlobalRefresh]);
+  }, [address, triggerGlobalRefresh, fetchMyProfile]);
 
   const notify = useCallback((message, type = 'success') => {
     setToast({ message, type });
@@ -1014,6 +1017,22 @@ export default function UserApp() {
 
         try {
           const wallet = new ethers.Wallet(privateKey, provider);
+
+          // CROSS-DEVICE RECONCILIATION:
+          // If the profile has a different session address, discard the local legacy key
+          // and auto-recover the deterministic one.
+          if (userProfile?.sessionWalletAddress && wallet.address.toLowerCase() !== userProfile.sessionWalletAddress.toLowerCase()) {
+            console.log("⚠️ [RECONCILE] Local session wallet doesn't match profile. Forcing recovery...");
+            localStorage.removeItem(storageKey);
+            setEvmSessionWallet(null);
+            setSessionMode(false);
+            if (walletClient && !autoRecoveryAttempted.current) {
+              autoRecoveryAttempted.current = true;
+              setTimeout(() => initializeSessionWallet(), 1500);
+            }
+            return;
+          }
+
           setEvmSessionWallet(wallet);
           setIsSessionSynced(true);
           setSessionMode(true); // Auto-enable if ready
