@@ -58,8 +58,54 @@ app.get('/active-market', (req, res) => {
 });
 
 app.get('/trades/:address', async (req, res) => {
-    // For now, return empty or implement a DB check
-    res.json([]);
+    try {
+        const addr = req.params.address.toLowerCase();
+        const profile = await redis.getProfile(addr);
+
+        // Collect all linked addresses (main + session)
+        const addresses = [addr];
+        if (profile && profile.sessionWalletAddress) {
+            const sessionAddr = profile.sessionWalletAddress.toLowerCase();
+            if (sessionAddr !== addr && !addresses.includes(sessionAddr)) {
+                addresses.push(sessionAddr);
+            }
+        }
+        // Also check if this IS a session address pointing to a main
+        const mainAddr = await redis.getMainAddressForSession(addr);
+        if (mainAddr && !addresses.includes(mainAddr)) {
+            addresses.push(mainAddr);
+            // Also get the main profile's session address for completeness
+            const mainProfile = await redis.getProfile(mainAddr);
+            if (mainProfile && mainProfile.sessionWalletAddress) {
+                const sAddr = mainProfile.sessionWalletAddress.toLowerCase();
+                if (!addresses.includes(sAddr)) addresses.push(sAddr);
+            }
+        }
+
+        // Fetch history from all linked addresses
+        const historyPromises = addresses.map(a => redis.client.get(`history:${a}`));
+        const historyData = await Promise.all(historyPromises);
+
+        let allHistory = [];
+        historyData.forEach(d => {
+            if (d) {
+                try {
+                    const parsed = JSON.parse(d);
+                    if (Array.isArray(parsed)) allHistory = allHistory.concat(parsed);
+                } catch (e) { }
+            }
+        });
+
+        // De-duplicate by trade id and sort by timestamp desc
+        const unique = Array.from(new Map(allHistory.map(item => [item.id || item.tx, item])).values())
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+            .slice(0, 100);
+
+        res.json(unique);
+    } catch (e) {
+        console.error('[Server] Error fetching trades:', e);
+        res.json([]);
+    }
 });
 
 app.get('/active-bets/:address', async (req, res) => {

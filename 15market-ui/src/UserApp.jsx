@@ -397,7 +397,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [address, walletClient, notify, updateEvmSessionBal]);
+  }, [address, walletClient, notify, updateEvmSessionBal, userProfile]);
 
   const toggleSessionMode = () => {
     if (!sessionMode) {
@@ -583,7 +583,7 @@ export default function UserApp() {
     // Poll for updates every 5 seconds
     const interval = setInterval(fetchTradeHistory, 5000);
     return () => clearInterval(interval);
-  }, [address, isConnected, network]);
+  }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
 
   useEffect(() => {
     localStorage.setItem("15market_autosigner_fees", JSON.stringify(autoSignerFees));
@@ -965,11 +965,15 @@ export default function UserApp() {
   }, []);
 
   // Session Wallet Initialization - DETERMINISTIC RECOVERY
+  // FIX: Auto-recover the deterministic key on new devices instead of blocking
+  const autoRecoveryAttempted = useRef(false);
 
   useEffect(() => {
     if (!address || !profileChecked) {
-      // WAIT until we've checked the backend profile before deciding if we need setup
-      if (!address) setIsSignerInitializing(false);
+      if (!address) {
+        setIsSignerInitializing(false);
+        autoRecoveryAttempted.current = false;
+      }
       return;
     }
 
@@ -979,15 +983,27 @@ export default function UserApp() {
       const privateKey = localStorage.getItem(storageKey);
 
       if (!privateKey) {
-        // No local key.
         if (!userProfile?.username && !userProfile?.sessionWalletAddress) {
           // NEW USER: Let them onboard first, don't block
           setIsSignerInitializing(false);
         } else {
-          // REGISTERED USER: But missing key on this device
-          setIsSignerInitializing(true);
+          // REGISTERED USER on a new device: Auto-recover the deterministic key
+          // Instead of blocking the UI, silently trigger the wallet signature flow
+          // The key is deterministic (derived from wallet signature), so re-signing
+          // the same message produces the exact same session wallet address.
+          console.log("🔄 [AUTO-RECOVERY] Registered user on new device, auto-recovering session key...");
+          setIsSignerInitializing(false); // Don't block the UI
           setEvmSessionWallet(null);
           setSessionMode(false);
+
+          // Auto-trigger recovery if walletClient is available and we haven't tried yet
+          if (walletClient && !autoRecoveryAttempted.current) {
+            autoRecoveryAttempted.current = true;
+            // Small delay to let the UI settle
+            setTimeout(() => {
+              initializeSessionWallet();
+            }, 1500);
+          }
         }
       } else {
         // Key found, load it
@@ -1002,17 +1018,30 @@ export default function UserApp() {
           setIsSessionSynced(true);
           setSessionMode(true); // Auto-enable if ready
 
-          // SYNC BALANCE IMMEDIATELY: Ensure mobile knows the desktop balance
+          // Sync session wallet address to profile if not already there
+          if (userProfile && !userProfile.sessionWalletAddress) {
+            const updatedProfile = { ...userProfile, sessionWalletAddress: wallet.address };
+            setUserProfile(updatedProfile);
+            localStorage.setItem(`15market_profile_${addrLower}`, JSON.stringify(updatedProfile));
+            fetch(`${KEEPER_URL_ARC}/sync-profile`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ address, profile: updatedProfile })
+            }).catch(e => console.warn("Failed to sync session wallet to backend:", e));
+          }
+
+          // SYNC BALANCE IMMEDIATELY: Ensure all devices see the same balance
           setTimeout(() => updateEvmSessionBal(true), 500);
         } catch (e) {
           console.error("Session wallet restore failed", e);
-          setIsSignerInitializing(true);
+          // Don't block UI, just log. User can manually toggle auto-signer.
+          setIsSignerInitializing(false);
         }
       }
     };
 
     checkAndDerive();
-  }, [address, profileChecked, userProfile]);
+  }, [address, profileChecked, userProfile, walletClient, initializeSessionWallet]);
 
   // NOTE: The actual "creation" now happens via handleSyncSession which we will rename/auto-trigger
   // We need to auto-trigger the sync if the user toggles session mode and has no key.

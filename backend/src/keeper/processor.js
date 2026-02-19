@@ -55,7 +55,17 @@ class TradeProcessor {
         // Push to global history immediately so scroller shows activity
         await redis.pushHistory(historyItem).catch(() => { });
         // Push to user-specific history for cross-device consistency
-        await redis.pushUserHistory(tradeData.user, historyItem).catch(() => { });
+        const userAddr = tradeData.user?.toLowerCase();
+        await redis.pushUserHistory(userAddr, historyItem).catch(() => { });
+
+        // CROSS-DEVICE FIX: Also push to the main wallet's history if this is a session wallet trade
+        try {
+            const mainAddr = await redis.getMainAddressForSession(userAddr);
+            if (mainAddr && mainAddr !== userAddr) {
+                await redis.pushUserHistory(mainAddr, historyItem).catch(() => { });
+                console.log(`[Processor] 🔗 Also pushed trade ${tradeData.id} history to main wallet ${mainAddr}`);
+            }
+        } catch (e) { }
     }
 
     async processSettlements() {
@@ -131,7 +141,14 @@ class TradeProcessor {
                         // Push to global history for the live scroller
                         await redis.pushHistory(finalizedItem).catch(() => { });
                         // Update user-specific history
-                        await redis.pushUserHistory(trade.user, finalizedItem).catch(() => { });
+                        const tradeUserAddr = trade.user?.toLowerCase();
+                        await redis.pushUserHistory(tradeUserAddr, finalizedItem).catch(() => { });
+
+                        // CROSS-DEVICE FIX: Also push settlement to main wallet's history
+                        const linkedMainAddr = await redis.getMainAddressForSession(tradeUserAddr).catch(() => null);
+                        if (linkedMainAddr && linkedMainAddr !== tradeUserAddr) {
+                            await redis.pushUserHistory(linkedMainAddr, finalizedItem).catch(() => { });
+                        }
 
                         // STICKY PROFILE UPDATE: Update global stats for the user
                         // We always update the profile of the "parent" wallet if we can find it
