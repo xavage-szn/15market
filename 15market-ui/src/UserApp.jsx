@@ -178,32 +178,64 @@ export default function UserApp() {
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
+  // 1. Core Balance Fetchers
   const refetchEvmBalance = useCallback(async (force = false) => {
     if (!address) return;
-
-    // SKIP REFRESH if we recently traded or won (< 8 seconds ago) 
-    // to prevent the optimistic payout from being overwritten by old on-chain balance
-    // UNLESS we are forcing an update (e.g. after a settlement event)
-    if (!force && Date.now() - lastTradeTimeRef.current < 8000) {
-      // console.log("💰 [BALANCE_SYNC] Fetch skipped (Throttled)");
-      return;
-    }
+    if (!force && Date.now() - lastTradeTimeRef.current < 8000) return;
 
     try {
       const b = await publicClient.getBalance({ address });
       const formatted = formatUnits(b, 18);
-
-      // Only Log if it actually changed to reduce noise
-      if (formatted !== evmBalance) {
-        console.log(`💰 [BALANCE_SYNC] ${address.slice(0, 6)}...: ${formatted} USDC`);
-        setEvmBalance(formatted);
-      }
-    } catch (e) {
-      console.warn("💰 [BALANCE_SYNC] Retrying fetch due to RPC lag...");
-      // Silent retry happens on next interval
-    }
+      if (formatted !== evmBalance) setEvmBalance(formatted);
+    } catch (e) { }
   }, [address, evmBalance]);
 
+  const updateEvmSessionBal = useCallback(async (force = false) => {
+    if (!evmSessionWallet) return;
+    if (!force && Date.now() - lastTradeTimeRef.current < 10000) return;
+
+    try {
+      const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
+      const bal = parseFloat(formatUnits(balanceWei, 18));
+      if (bal !== sessionBalance) setSessionBalance(bal);
+    } catch (err) { }
+  }, [evmSessionWallet, sessionBalance]);
+
+  const triggerGlobalRefresh = useCallback((force = false) => {
+    refetchEvmBalance(force);
+    updateEvmSessionBal(force);
+  }, [refetchEvmBalance, updateEvmSessionBal]);
+
+  // 2. Authoritative Profile & History Sync
+  const fetchMyProfile = useCallback(async () => {
+    if (!address) return;
+    try {
+      const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
+      if (res.ok) {
+        const userData = await res.json();
+        const { profile, history, transactions } = userData;
+        if (profile && (profile.username || profile.totalTrades > 0)) {
+          setUserProfile(profile);
+          setShowOnboarding(false);
+          if (history) {
+            setTradeHistory(history);
+            setActiveTrades(history.filter(t => ["PENDING", "RESOLVING"].includes(t.status)));
+          }
+          if (transactions) setTransactionHistory(transactions);
+          localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
+        }
+      }
+    } catch (e) { } finally { setProfileChecked(true); }
+  }, [address]);
+
+  // 3. Aggressive Logic
+  const aggressiveRefresh = useCallback(() => {
+    triggerGlobalRefresh(true);
+    [100, 500, 1500, 3000, 6000, 12000].forEach(delay => setTimeout(() => triggerGlobalRefresh(true), delay));
+    [2000, 8000].forEach(delay => setTimeout(fetchMyProfile, delay));
+  }, [triggerGlobalRefresh, fetchMyProfile]);
+
+  // 4. Derived State
   const displayEvmBalance = useMemo(() => {
     let bal = parseFloat(evmBalance || "0");
     if (isNaN(bal)) bal = 0;
@@ -211,58 +243,13 @@ export default function UserApp() {
     return Math.max(0, bal);
   }, [evmBalance, pendingStakes]);
 
-  // Initial balance sync (Main + Session)
-  useEffect(() => {
-    if (address) {
-      triggerGlobalRefresh(true); // Immediate fetch on address change
-    }
-  }, [address, triggerGlobalRefresh]);
-
-  // DERIVED BALANCE STATE (Fix for ReferenceError)
   const balance = useMemo(() => parseFloat(displayEvmBalance || "0"), [displayEvmBalance]);
 
+  // 5. Lifecycle Effects
+  useEffect(() => {
+    if (address) triggerGlobalRefresh(true);
+  }, [address, triggerGlobalRefresh]);
 
-
-  const updateEvmSessionBal = useCallback(async (force = false) => {
-    if (!evmSessionWallet) return;
-
-    // SKIP REFRESH if we just traded (< 10 seconds ago) to allow chain to catch up
-    // UNLESS we are forcing an update (e.g. after a win or refill)
-    if (!force && Date.now() - lastTradeTimeRef.current < 10000) {
-      return;
-    }
-
-    try {
-      const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
-      const bal = parseFloat(formatUnits(balanceWei, 18));
-
-      if (bal !== sessionBalance) {
-        console.log(`🔑 [SESSION_BAL] Wallet: ${evmSessionWallet.address.slice(0, 6)}... | Balance: ${bal} USDC`);
-        setSessionBalance(bal);
-      }
-    } catch (err) {
-      console.warn("❌ [SESSION BALANCE] Fetch failed, will retry...");
-    }
-  }, [evmSessionWallet, sessionBalance]);
-
-  // Global Refresh Trigger (Exposed for events)
-  const triggerGlobalRefresh = useCallback((force = false) => {
-    // console.log("🔄 [REFRESH] Triggering global balance sync...");
-    refetchEvmBalance(force);
-    if (updateEvmSessionBal) updateEvmSessionBal(force);
-  }, [refetchEvmBalance, updateEvmSessionBal]);
-
-  // Aggressive Refresh (Multi-stage update)
-  const aggressiveRefresh = useCallback(() => {
-    console.log("🚀 [REFRESH] Starting hyper-aggressive balance sync...");
-    triggerGlobalRefresh(true); // Initial forced fetch
-    // Ultra-fast stages to catch the update nearly instantly
-    [100, 500, 1500, 3000, 6000, 12000].forEach(delay => {
-      setTimeout(() => {
-        triggerGlobalRefresh(true);
-      }, delay);
-    });
-  }, [triggerGlobalRefresh]);
 
   // Periodic Universal Sync (Fix for Cross-Device Inconsistency)
   useEffect(() => {
@@ -356,12 +343,14 @@ export default function UserApp() {
       notify("Please sign to link your Auto-Signer...", "info");
 
       // key specific to this wallet address
-      const storageKey = `15market_session_key_${address.toLowerCase()}`;
+      const addrLower = address.toLowerCase();
+      const storageKey = `15market_session_key_${addrLower}`;
       let privateKey = localStorage.getItem(storageKey);
 
       if (!privateKey) {
         // Deterministic key generation from signature
-        const message = `Authorize 15market Universal Session Wallet\n\nMain Wallet: ${address}\n\nThis will link your Auto-Signer balance across all devices.`;
+        // ENSURE address is lowercased in message for cross-device consistency
+        const message = `Authorize 15market Universal Session Wallet\n\nMain Wallet: ${addrLower}\n\nThis will link your Auto-Signer balance across all devices.`;
         const sig = await walletClient.signMessage({ message, account: address });
 
         // Use the signature as entropy for a deterministic private key
@@ -512,8 +501,12 @@ export default function UserApp() {
 
     const fetchTradeHistory = async () => {
       try {
-        const addressesToFetch = [address];
-        if (evmSessionWallet?.address) addressesToFetch.push(evmSessionWallet.address);
+        const addressesToFetch = [address.toLowerCase()];
+        if (evmSessionWallet?.address) addressesToFetch.push(evmSessionWallet.address.toLowerCase());
+        if (userProfile?.sessionWalletAddress) {
+          const sAddr = userProfile.sessionWalletAddress.toLowerCase();
+          if (!addressesToFetch.includes(sAddr)) addressesToFetch.push(sAddr);
+        }
 
         const fetchPromises = addressesToFetch.map(async (addr) => {
           const [resT, resA] = await Promise.all([
@@ -981,7 +974,8 @@ export default function UserApp() {
     }
 
     const checkAndDerive = async () => {
-      const storageKey = `15market_session_key_${address.toLowerCase()}`;
+      const addrLower = address.toLowerCase();
+      const storageKey = `15market_session_key_${addrLower}`;
       const privateKey = localStorage.getItem(storageKey);
 
       if (!privateKey) {
@@ -1034,79 +1028,25 @@ export default function UserApp() {
     if (!isConnected || !address) {
       setUserProfile(null);
       setProfileChecked(false);
-      setShowOnboarding(false); // Only false if not connected at all
+      setShowOnboarding(false);
       return;
     }
 
-    // MANDATORY RESET: Assume onboarding is needed until proven otherwise
     setShowOnboarding(true);
 
-    // OPTIMISTIC UI: Check cache for verified profile
     const cachedProfile = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
     if (cachedProfile) {
       try {
         const parsed = JSON.parse(cachedProfile);
-        // Check if username and TOS exist (X linking is optional now)
         if (parsed.username && parsed.tosAccepted) {
           setUserProfile(parsed);
-          setShowOnboarding(false); // UNLOCK
+          setShowOnboarding(false);
         }
       } catch (e) { }
     }
 
-    // AUTHORITATIVE CHECK: Always verify with Redis (source of truth)
-    const fetchMyProfile = async () => {
-      try {
-        const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
-        if (res.ok) {
-          const profile = await res.json();
-
-          // REQUIREMENT: Onboarding is reserved ONLY for users who have NEVER interacted before.
-          // If profile exists with data OR has a trade history, we skip onboarding.
-          const hasTraded = profile && profile.totalTrades > 0;
-          const isRegistered = profile && profile.username && profile.tosAccepted;
-
-          if (isRegistered || hasTraded) {
-            // User is verified OR a returning participant - allow access
-            setUserProfile(profile);
-            setShowOnboarding(false);
-
-            // Only cache fully registered profiles to prevent prompt on refresh
-            if (isRegistered) {
-              localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
-            }
-          } else {
-            // New user with no profile and no trades - SHOW ONBOARDING
-            setUserProfile(profile || null);
-            setShowOnboarding(true);
-            localStorage.removeItem(`15market_profile_${address.toLowerCase()}`);
-          }
-        } else {
-          // API error - safer to assume not verified, but don't block if we have a cache
-          const cached = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
-          if (cached) {
-            try { setUserProfile(JSON.parse(cached)); } catch (e) { setShowOnboarding(true); }
-            setShowOnboarding(false);
-          } else {
-            setShowOnboarding(true);
-          }
-        }
-      } catch (err) {
-        console.error("Profile verification failed:", err);
-        // On error, only show onboarding if no cache exists to prevent blocking on network flickers
-        const cached = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
-        if (cached) {
-          try { setUserProfile(JSON.parse(cached)); } catch (e) { setShowOnboarding(true); }
-          setShowOnboarding(false);
-        } else {
-          setShowOnboarding(true);
-        }
-      } finally {
-        setProfileChecked(true);
-      }
-    };
     fetchMyProfile();
-  }, [isConnected, address]);
+  }, [isConnected, address, fetchMyProfile]);
 
   const handleOnboardingComplete = async (onboardingData) => {
     // OPTIMISTIC: Close modal immediately to avoid "stuck" feeling
@@ -1615,6 +1555,13 @@ export default function UserApp() {
         };
         setTransactionHistory(prev => [newTx, ...prev]);
 
+        // SYNC TRANSACTION TO CLOUD
+        fetch(`${KEEPER_URL_ARC}/push-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, transaction: newTx })
+        }).catch(e => console.warn("Failed to sync tx to cloud:", e));
+
       } catch (evmErr) {
         notify(`Refill failed: ${evmErr.message}`, "error");
       }
@@ -1694,6 +1641,13 @@ export default function UserApp() {
       };
 
       setTransactionHistory(prev => [newTx, ...prev]);
+
+      // SYNC WITHDRAWAL TO CLOUD
+      fetch(`${KEEPER_URL_ARC}/push-tx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, transaction: newTx })
+      }).catch(e => console.warn("Failed to sync withdrawal to cloud:", e));
 
       setTimeout(() => {
         updateEvmSessionBal(true);

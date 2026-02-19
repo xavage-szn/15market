@@ -110,7 +110,18 @@ class RedisService {
 
     async saveProfile(address, profileData) {
         try {
-            await this.client.set(`profile:${address.toLowerCase()}`, JSON.stringify(profileData));
+            const addr = address.toLowerCase();
+            await this.client.set(`profile:${addr}`, JSON.stringify(profileData));
+
+            // If this profile has a session wallet, link it back to the main address
+            // This allows the keeper to update the main profile when a session trade settles
+            if (profileData.sessionWalletAddress) {
+                const sessionAddr = profileData.sessionWalletAddress.toLowerCase();
+                if (sessionAddr !== addr) {
+                    await this.client.set(`session_to_main:${sessionAddr}`, addr);
+                    console.log(`[Redis] 🔗 Linked session ${sessionAddr} to main ${addr}`);
+                }
+            }
             return true;
         } catch (e) {
             console.error(`[Redis] ❌ Failed to save profile for ${address}:`, e.message);
@@ -118,12 +129,116 @@ class RedisService {
         }
     }
 
+    async getMainAddressForSession(sessionAddress) {
+        try {
+            return await this.client.get(`session_to_main:${sessionAddress.toLowerCase()}`);
+        } catch (e) {
+            return null;
+        }
+    }
+
     async getProfile(address) {
         try {
             const data = await this.client.get(`profile:${address.toLowerCase()}`);
-            return data ? JSON.parse(data) : null;
+            if (!data) return null;
+            return JSON.parse(data);
         } catch (e) {
             console.error(`[Redis] ❌ Failed to get profile for ${address}:`, e.message);
+            return null;
+        }
+    }
+
+    async pushUserHistory(address, trade) {
+        try {
+            const key = `history:${address.toLowerCase()}`;
+            const data = await this.client.get(key);
+            let history = data ? JSON.parse(data) : [];
+
+            // Add to front
+            history.unshift(trade);
+            // Keep last 50
+            if (history.length > 50) history = history.slice(0, 50);
+
+            await this.client.set(key, JSON.stringify(history));
+        } catch (e) {
+            console.error(`[Redis] ❌ Failed to push user history for ${address}:`, e.message);
+        }
+    }
+
+    async pushUserTransaction(address, tx) {
+        try {
+            const key = `txs:${address.toLowerCase()}`;
+            const data = await this.client.get(key);
+            let txs = data ? JSON.parse(data) : [];
+
+            txs.unshift(tx);
+            if (txs.length > 50) txs = txs.slice(0, 50);
+
+            await this.client.set(key, JSON.stringify(txs));
+        } catch (e) {
+            console.error(`[Redis] ❌ Failed to push user tx for ${address}:`, e.message);
+        }
+    }
+
+    async getUserData(address) {
+        try {
+            const addr = address.toLowerCase();
+            const profile = await this.getProfile(addr);
+
+            // Collect all relevant addresses (main + session if exists)
+            const addresses = [addr];
+            if (profile && profile.sessionWalletAddress) {
+                const sessionAddr = profile.sessionWalletAddress.toLowerCase();
+                if (sessionAddr !== addr) {
+                    addresses.push(sessionAddr);
+                }
+            }
+
+            // Fetch history and txs for all linked addresses
+            const historyPromises = addresses.map(a => this.client.get(`history:${a}`));
+            const txsPromises = addresses.map(a => this.client.get(`txs:${a}`));
+
+            const [historyData, txsData] = await Promise.all([
+                Promise.all(historyPromises),
+                Promise.all(txsPromises)
+            ]);
+
+            let allHistory = [];
+            historyData.forEach(d => {
+                if (d) {
+                    try {
+                        const parsed = JSON.parse(d);
+                        if (Array.isArray(parsed)) allHistory = allHistory.concat(parsed);
+                    } catch (e) { }
+                }
+            });
+
+            let allTxs = [];
+            txsData.forEach(d => {
+                if (d) {
+                    try {
+                        const parsed = JSON.parse(d);
+                        if (Array.isArray(parsed)) allTxs = allTxs.concat(parsed);
+                    } catch (e) { }
+                }
+            });
+
+            // De-duplicate and sort by timestamp
+            const uniqueHistory = Array.from(new Map(allHistory.map(item => [item.id || item.tx, item])).values())
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                .slice(0, 100);
+
+            const uniqueTxs = Array.from(new Map(allTxs.map(item => [item.id || item.tx, item])).values())
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                .slice(0, 50);
+
+            return {
+                profile: profile || { address: addr, totalTrades: 0, totalWins: 0, totalLosses: 0, totalVolume: "0.00" },
+                history: uniqueHistory,
+                transactions: uniqueTxs
+            };
+        } catch (e) {
+            console.error(`[Redis] ❌ Failed to get user data for ${address}:`, e.message);
             return null;
         }
     }

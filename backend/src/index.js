@@ -85,10 +85,8 @@ app.get('/profile', async (req, res) => {
     const { address } = req.query;
     if (!address) return res.status(400).json({ error: 'Missing address' });
 
-    const profile = await redis.getProfile(address);
-    if (!profile) return res.json({ address, totalTrades: 0, totalWins: 0, totalLosses: 0, totalVolume: "0.00" });
-
-    res.json(profile);
+    const userData = await redis.getUserData(address);
+    res.json(userData);
 });
 
 app.post('/sync-profile', async (req, res) => {
@@ -97,6 +95,14 @@ app.post('/sync-profile', async (req, res) => {
 
     const success = await redis.saveProfile(address, profile);
     res.json({ success });
+});
+
+app.post('/push-tx', async (req, res) => {
+    const { address, transaction } = req.body;
+    if (!address || !transaction) return res.status(400).json({ error: 'Missing address or transaction' });
+
+    await redis.pushUserTransaction(address, transaction);
+    res.json({ success: true });
 });
 
 // CRITICAL: Frontend pings this after every trade to register it for settlement

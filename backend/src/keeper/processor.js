@@ -46,12 +46,16 @@ class TradeProcessor {
         await redis.setTrade(tradeData.id.toString(), tradeData);
         console.log(`[Processor] Trade ${tradeData.id} registered. Expires at ${new Date(tradeData.expiry).toISOString()}`);
 
-        // Push to global history immediately so scroller shows activity
-        await redis.pushHistory({
+        const historyItem = {
             ...tradeData,
             status: 'PENDING',
             timestamp: Date.now()
-        }).catch(() => { });
+        };
+
+        // Push to global history immediately so scroller shows activity
+        await redis.pushHistory(historyItem).catch(() => { });
+        // Push to user-specific history for cross-device consistency
+        await redis.pushUserHistory(tradeData.user, historyItem).catch(() => { });
     }
 
     async processSettlements() {
@@ -117,13 +121,34 @@ class TradeProcessor {
                         await blockchain.settleBet(trade.id, scaledPrice);
                         logToFile(`✅ Settled trade ${trade.id} for ${trade.user}. Price: ${currentPrice}. Win: ${isWin}`);
 
-                        // Push to global history for the live scroller
-                        await redis.pushHistory({
+                        const finalizedItem = {
                             ...trade,
                             status: isWin ? 'WON' : 'LOST',
                             settlementPrice: currentPrice,
                             settledAt: Date.now()
-                        }).catch(() => { });
+                        };
+
+                        // Push to global history for the live scroller
+                        await redis.pushHistory(finalizedItem).catch(() => { });
+                        // Update user-specific history
+                        await redis.pushUserHistory(trade.user, finalizedItem).catch(() => { });
+
+                        // STICKY PROFILE UPDATE: Update global stats for the user
+                        // We always update the profile of the "parent" wallet if we can find it
+                        try {
+                            const mainAddr = await redis.getMainAddressForSession(trade.user) || trade.user;
+                            const userProfile = await redis.getProfile(mainAddr);
+                            if (userProfile) {
+                                userProfile.totalTrades = (userProfile.totalTrades || 0) + 1;
+                                if (isWin) userProfile.totalWins = (userProfile.totalWins || 0) + 1;
+                                else userProfile.totalLosses = (userProfile.totalLosses || 0) + 1;
+                                userProfile.totalVolume = (parseFloat(userProfile.totalVolume || "0") + parseFloat(trade.amount)).toFixed(2);
+                                await redis.saveProfile(mainAddr, userProfile);
+                                console.log(`[Processor] 🎯 Updated stats for ${mainAddr} (Linked from ${trade.user === mainAddr ? 'self' : trade.user})`);
+                            }
+                        } catch (e) {
+                            console.warn(`[Processor] Failed to update profile stats for ${trade.user}:`, e.message);
+                        }
 
                         await redis.delTrade(trade.id.toString());
 
@@ -149,8 +174,15 @@ class TradeProcessor {
 
     async getActiveTradesForUser(address) {
         try {
+            const addr = address.toLowerCase();
+            const profile = await redis.getProfile(addr);
+            const addresses = [addr];
+            if (profile && profile.sessionWalletAddress) {
+                addresses.push(profile.sessionWalletAddress.toLowerCase());
+            }
+
             const trades = await redis.getAllActiveTrades();
-            return trades.filter(t => t.user?.toLowerCase() === address.toLowerCase());
+            return trades.filter(t => addresses.includes(t.user?.toLowerCase()));
         } catch (e) {
             console.error('[Processor] Error fetching user trades:', e);
             return [];
