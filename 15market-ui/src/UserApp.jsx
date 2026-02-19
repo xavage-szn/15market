@@ -1832,8 +1832,6 @@ export default function UserApp() {
                   evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                   activeMarket={activeMarket}
                   maintenanceMode={platformSettings.maintenanceMode}
-                  onSyncSession={handleSyncSession}
-                  isSessionSynced={isSessionSynced}
                 />
               </div>
 
