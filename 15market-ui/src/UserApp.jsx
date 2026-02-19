@@ -167,36 +167,46 @@ export default function UserApp() {
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
-  const refetchEvmBalance = useCallback(async () => {
+  const refetchEvmBalance = useCallback(async (isInitial = false) => {
     if (!address) return;
 
-    // SKIP REFRESH if we recently traded or won (< 12 seconds ago) 
+    // SKIP REFRESH if we recently traded or won (< 8 seconds ago) 
     // to prevent the optimistic payout from being overwritten by old on-chain balance
-    if (Date.now() - lastTradeTimeRef.current < 12000) {
+    // Unless it's the very first fetch on login
+    if (!isInitial && Date.now() - lastTradeTimeRef.current < 8000) {
       return;
     }
 
     try {
       const b = await publicClient.getBalance({ address });
       const formatted = formatUnits(b, 18);
-      console.log(`💰 [BALANCE_SYNC] Address: ${address} | Raw: ${b.toString()} | Formatted: ${formatted}`);
-      setEvmBalance(formatted);
+
+      // Only Log if it actually changed to reduce noise
+      if (formatted !== evmBalance) {
+        console.log(`💰 [BALANCE_SYNC] ${address.slice(0, 6)}...: ${formatted} USDC`);
+        setEvmBalance(formatted);
+      }
     } catch (e) {
-      console.error("refetchEvmBalance fail:", e);
+      console.warn("💰 [BALANCE_SYNC] Retrying fetch due to RPC lag...");
+      // Silent retry happens on next interval
     }
-  }, [address]);
+  }, [address, evmBalance]);
 
   const displayEvmBalance = useMemo(() => {
-    let bal = parseFloat(evmBalance);
-    Object.values(pendingStakes).forEach(amt => { bal -= amt; });
+    let bal = parseFloat(evmBalance || "0");
+    if (isNaN(bal)) bal = 0;
+    Object.values(pendingStakes || {}).forEach(amt => { bal -= (amt || 0); });
     return Math.max(0, bal);
   }, [evmBalance, pendingStakes]);
 
+  // Initial and periodic balance sync
   useEffect(() => {
-    refetchEvmBalance();
-    const interval = setInterval(refetchEvmBalance, 10000);
-    return () => clearInterval(interval);
-  }, [refetchEvmBalance]);
+    if (address) {
+      refetchEvmBalance(true); // Immediate fetch on address change
+      const interval = setInterval(() => refetchEvmBalance(false), 8000);
+      return () => clearInterval(interval);
+    }
+  }, [address, refetchEvmBalance]);
 
   // DERIVED BALANCE STATE (Fix for ReferenceError)
   const balance = useMemo(() => parseFloat(displayEvmBalance || "0"), [displayEvmBalance]);

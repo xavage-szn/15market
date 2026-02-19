@@ -3,14 +3,17 @@ import { defineChain } from 'viem'
 
 // ARC TESTNET
 export const ARC_CHAIN_ID = 5042002;
-// export const ARC_RPC = "https://rpc-test-1.arc.market";
-export const ARC_RPC = "https://5042002.rpc.thirdweb.com";
+export const ARC_RPCS = [
+    "https://5042002.rpc.thirdweb.com",
+    "https://rpc.testnet.arc.network",
+    "https://rpc-test-1.arc.market"
+];
+export const ARC_RPC = ARC_RPCS[0];
 export const ARC_EXPLORER = "https://explorer-test-1.arc.market";
-// export const ARC_CONTRACT_ADDRESS = "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8"; // OLD
 export const ARC_CONTRACT_ADDRESS = "0x345014899b42bF9034D9475760609e64B1433A6a"; // NEW V2
 export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
-export const ARC_RPC_BACKUP = "https://rpc.testnet.arc.network";
-export const ARC_RPC_THIRDWEB = "https://5042002.rpc.thirdweb.com";
+export const ARC_RPC_BACKUP = ARC_RPCS[1];
+export const ARC_RPC_THIRDWEB = ARC_RPCS[0];
 // 2. Keeper Configuration
 const isLocal = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' ||

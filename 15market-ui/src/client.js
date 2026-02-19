@@ -1,8 +1,8 @@
-import { createPublicClient, http } from "viem";
-import { arcTestnet, ARC_RPC } from "./constants";
+import { createPublicClient, http, fallback } from "viem";
+import { arcTestnet, ARC_RPCS } from "./constants";
 
-// Public client for contract and balance reads
+// Public client for contract and balance reads with multi-RPC fallback
 export const publicClient = createPublicClient({
     chain: arcTestnet,
-    transport: http(ARC_RPC)
+    transport: fallback(ARC_RPCS.map(url => http(url)))
 });
