@@ -1,23 +1,22 @@
-# Build from the /backend directory
+# Build from the /backend directory context
 FROM node:20-slim
 
 WORKDIR /app
 
-# Copy shared utils (relative to backend/)
-COPY backend/shared ./shared
+# Copy package files
+COPY backend/package*.json ./
 
-# Copy keeper code (relative to backend/)
-COPY backend/arc-keeper ./arc-keeper
-
-# Install shared dependencies
-WORKDIR /app/shared
+# Install dependencies
 RUN npm install
 
-# Install keeper dependencies
-WORKDIR /app/arc-keeper
-RUN npm install
+# Copy source code
+COPY backend/src ./src
 
-# Expose port
+# Copy environment file (though usually injected at runtime, useful for default builds)
+COPY backend/.env ./
+
+# Expose port (Backend defaults to 3012, but previous Dockerfile used 3010)
+ENV PORT=3010
 EXPOSE 3010
 
 # Start
