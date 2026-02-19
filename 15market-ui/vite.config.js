@@ -41,37 +41,9 @@ export default defineConfig({
     })
   ],
   resolve: {
-    dedupe: ['react', 'react-dom', '@tanstack/react-query'],
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Mock unnecessary Cosmos dependency from Para SDK
-      "graz": path.resolve(__dirname, "./src/utils/mock-module.js"),
-      "@cosmjs/amino": path.resolve(__dirname, "./src/utils/mock-module.js"),
-      "@cosmjs/stargate": path.resolve(__dirname, "./src/utils/mock-module.js"),
-      "@cosmjs/proto-signing": path.resolve(__dirname, "./src/utils/mock-module.js"),
     },
-  },
-  optimizeDeps: {
-    exclude: [
-      '@getpara/solana-wallet-connectors',
-      '@getpara/cosmjs-v0-integration',
-      'graz',
-      '@cosmjs/amino',
-      '@cosmjs/stargate',
-      '@cosmjs/proto-signing'
-    ]
-  },
-  build: {
-    rollupOptions: {
-      external: [
-        '@getpara/solana-wallet-connectors',
-        '@getpara/cosmjs-v0-integration',
-        'graz',
-        '@cosmjs/amino',
-        '@cosmjs/stargate',
-        '@cosmjs/proto-signing'
-      ]
-    }
   },
   server: {
     port: 3000,

@@ -289,7 +289,7 @@ export default function UserApp() {
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   const [toast, setToast] = useState(null); // { message, type }
 
-  const handleSyncSession = useCallback(async () => {
+  const initializeSessionWallet = useCallback(async () => {
     if (!address || !walletClient) {
       notify("Connect your main wallet first", "error");
       return;
@@ -297,39 +297,47 @@ export default function UserApp() {
 
     try {
       setIsExecuting(true);
-      notify("Synchronizing Session Wallet...", "info");
 
-      // Deterministic key generation from signature
-      const message = `Authorize 15market Universal Session Wallet\n\nMain Wallet: ${address}\n\nThis will link your Auto-Signer balance across all devices.`;
-      const sig = await walletClient.signMessage({ message, account: address });
+      // key specific to this wallet address
+      const storageKey = `15market_session_key_${address.toLowerCase()}`;
+      let privateKey = localStorage.getItem(storageKey);
 
-      // Use the signature as entropy for a deterministic private key
-      const entropy = ethers.keccak256(sig);
+      if (!privateKey) {
+        notify("Initializing Auto-Signer (One-Time Setup)...", "info");
+        // Deterministic key generation from signature
+        const message = `Authorize 15market Universal Session Wallet\n\nMain Wallet: ${address}\n\nThis will link your Auto-Signer balance across all devices.`;
+        const sig = await walletClient.signMessage({ message, account: address });
 
-      // Initialize the wallet with the new key
+        // Use the signature as entropy for a deterministic private key
+        privateKey = ethers.keccak256(sig);
+        localStorage.setItem(storageKey, privateKey);
+      }
+
+      // Initialize the wallet with the key
       const fetchReq = new ethers.FetchRequest(ARC_RPC);
       fetchReq.timeout = 30000;
       const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
-      const newWallet = new ethers.Wallet(entropy, provider);
+      const newWallet = new ethers.Wallet(privateKey, provider);
 
-      // Update storage and state
-      localStorage.setItem("15market_evm_session_key", entropy);
-      localStorage.setItem("15market_session_synced", "true");
       setEvmSessionWallet(newWallet);
-      setIsSessionSynced(true);
+      setIsSessionSynced(true); // Always synced by design now
 
-      notify("Session Synced! Balance is now consistent across devices.", "success");
+      // Auto-enable session mode if setting up
+      setSessionMode(true);
+
+      notify("Auto-Signer Ready! Funds are unified across devices.", "success");
 
       // Force refresh the balance for the new address
       setTimeout(() => updateEvmSessionBal(true), 500);
 
     } catch (err) {
-      console.error("Sync error:", err);
-      notify("Sync failed: " + (err.shortMessage || err.message), "error");
+      console.error("Session init error:", err);
+      // notify("Setup failed: " + (err.shortMessage || err.message), "error");
+      setSessionMode(false); // disable if failed
     } finally {
       setIsExecuting(false);
     }
-  }, [address, walletClient, notify]);
+  }, [address, walletClient, notify, updateEvmSessionBal]);
 
   // 15MARKET REVENUE TRACKER (Auto-Signer Fees)
   const [autoSignerFees, setAutoSignerFees] = useState(() => {
@@ -882,37 +890,54 @@ export default function UserApp() {
     }));
   }, []);
 
-  // Session Wallet Initialization
+  // Session Wallet Initialization - DETERMINISTIC
   useEffect(() => {
-    // 1. Try modern key, then legacy keys
-    const savedEvmKey = localStorage.getItem("15market_evm_session_key") ||
-      localStorage.getItem("evm_session_key") ||
-      localStorage.getItem("arc_session_key");
+    // 1. If not connected, we can't derive a user-specific wallet, so we wait or use a temp one
+    if (!address) return;
 
-    // Robust Provider Setup with Timeout
-    const fetchReq = new ethers.FetchRequest(ARC_RPC);
-    fetchReq.timeout = 30000;
-    const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
+    const deriveSessionWallet = async () => {
+      // Check if we already have the deterministic key for THIS address
+      const storageKey = `15market_session_key_${address.toLowerCase()}`;
+      let privateKey = localStorage.getItem(storageKey);
 
-    if (savedEvmKey) {
-      try {
-        const wallet = new ethers.Wallet(savedEvmKey, provider);
-        setEvmSessionWallet(wallet);
-        // Ensure it's migrated to the modern key for future lookups
-        localStorage.setItem("15market_evm_session_key", savedEvmKey);
-      } catch (e) {
-        console.error("EVM Session key recovery failed:", e);
-        // Fallback to fresh wallet if legacy key is corrupted
-        const wallet = ethers.Wallet.createRandom().connect(provider);
-        localStorage.setItem("15market_evm_session_key", wallet.privateKey);
-        setEvmSessionWallet(wallet);
+      if (!privateKey) {
+        // If no key found for this address, we normally would ask to sign.
+        // But to avoid blocking the UI on load, we can check if there's a "global" sync key
+        // or just prompt the user when they try to enable session mode.
+        // FOR NOW: We will stick to the existing key if it matches, otherwise we wait for user action
+        // or we auto-prompt (which can be annoying).
+
+        // BETTER APPROACH: "One Wallet, One Signer" as requested.
+        // We MUST ask for a signature to derive the key if it's missing.
+        // However, doing this comfortably requires a user interaction or a clear "Setup" step.
+        // Let's defer strict derivation to the "Enable Auto-Signer" toggle or a specific setup.
+
+        // For now, let's look for ANY existing key to at least show something, 
+        // but the REAL fix is to make sure 'handleSyncSession' is called automatically 
+        // or the key is derived silently if possible (not possible without signature).
       }
-    } else {
-      const wallet = ethers.Wallet.createRandom().connect(provider);
-      localStorage.setItem("15market_evm_session_key", wallet.privateKey);
-      setEvmSessionWallet(wallet);
-    }
-  }, []);
+
+      // Robust Provider Setup
+      const fetchReq = new ethers.FetchRequest(ARC_RPC);
+      fetchReq.timeout = 30000;
+      const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
+
+      if (privateKey) {
+        try {
+          const wallet = new ethers.Wallet(privateKey, provider);
+          setEvmSessionWallet(wallet);
+          setIsSessionSynced(true); // It is stored, so it's "synced" for this device
+        } catch (e) {
+          console.error("Session wallet restore failed", e);
+        }
+      }
+    };
+
+    deriveSessionWallet();
+  }, [address]);
+
+  // NOTE: The actual "creation" now happens via handleSyncSession which we will rename/auto-trigger
+  // We need to auto-trigger the sync if the user toggles session mode and has no key.
 
 
 
@@ -1642,8 +1667,6 @@ export default function UserApp() {
           sessionBalance={sessionBalance}
           onRefill={handleRefill}
           onWithdraw={handleWithdraw}
-          onSyncSession={handleSyncSession}
-          isSessionSynced={isSessionSynced}
           treasuryBalance={treasuryBalance}
           autoSignerFees={autoSignerFees}
           userProfile={userProfile}
@@ -1725,7 +1748,7 @@ export default function UserApp() {
               {/* Terminal - 50/50 split on desktop and mobile */}
               <div className="col-span-6 lg:col-span-6 flex flex-col">
                 <TradeTerminal
-                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
+                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
                   sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
                   setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
                   sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}

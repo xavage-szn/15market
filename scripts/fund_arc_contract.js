@@ -2,7 +2,7 @@ const { ethers } = require("ethers");
 require("dotenv").config();
 
 const ARC_RPC = "https://rpc.testnet.arc.network";
-const CONTRACT_ADDRESS = "0x2E8DC6aBd23fC5CCB75940C8D389D9DDB21eDb31";
+const CONTRACT_ADDRESS = "0x345014899b42bF9034D9475760609e64B1433A6a";
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 async function main() {

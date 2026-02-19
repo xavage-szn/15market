@@ -23,8 +23,6 @@ const TradeTerminalComponent = ({
     setRefillAmount,
     onRefill,
     onWithdraw,
-    onSyncSession,
-    isSessionSynced,
 }) => {
     const isLight = theme === 'light';
     const [showManagement, setShowManagement] = React.useState(false);
@@ -44,12 +42,9 @@ const TradeTerminalComponent = ({
                     <div className="flex items-center gap-1 lg:gap-2">
                         <div className="flex flex-col">
                             <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
-                            {!isSessionSynced && (
-                                <span className="text-[4px] lg:text-[5px] font-black uppercase text-[#3CB371]">Local</span>
-                            )}
                         </div>
                         <button
-                            onClick={() => setSessionMode(!sessionMode)}
+                            onClick={() => setSessionMode()}
                             title={sessionMode ? `Auto-Signer Active (${sessionBalance.toFixed(4)} USDC) - Click to use Main Wallet` : "Auto-Signer Inactive - Click to activate"}
                             className={`w-5 border lg:w-8 h-2.5 lg:h-4 rounded-full relative transition-all duration-300 cursor-pointer hover:opacity-80 ${sessionMode ? 'bg-[#3CB371] border-transparent' : (isLight ? 'bg-black/10 border-black/10' : 'bg-white/10 border-white/10')}`}
                         >
@@ -75,14 +70,6 @@ const TradeTerminalComponent = ({
                         <div className="flex flex-col">
                             <div className="flex items-center gap-2">
                                 <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
-                                {!isSessionSynced && (
-                                    <button
-                                        onClick={onSyncSession}
-                                        className="text-[5px] lg:text-[7px] font-black uppercase text-[#3CB371] underline hover:opacity-70 transition-opacity"
-                                    >
-                                        Sync for All Devices
-                                    </button>
-                                )}
                             </div>
                             <span className="text-[8px] lg:text-sm font-mono font-black text-[#3CB371]">
                                 ${Number(sessionBalance).toFixed(4)} USDC

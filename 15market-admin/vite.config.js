@@ -19,32 +19,14 @@ export default defineConfig({
         dedupe: ['react', 'react-dom', '@tanstack/react-query'],
         alias: {
             "@": path.resolve(__dirname, "./src"),
-            "graz": path.resolve(__dirname, "./src/utils/mock-module.js"),
-            "@cosmjs/amino": path.resolve(__dirname, "./src/utils/mock-module.js"),
-            "@cosmjs/stargate": path.resolve(__dirname, "./src/utils/mock-module.js"),
-            "@cosmjs/proto-signing": path.resolve(__dirname, "./src/utils/mock-module.js"),
         },
     },
     optimizeDeps: {
-        exclude: [
-            '@getpara/solana-wallet-connectors',
-            '@getpara/cosmjs-v0-integration',
-            'graz',
-            '@cosmjs/amino',
-            '@cosmjs/stargate',
-            '@cosmjs/proto-signing'
-        ]
+        exclude: []
     },
     build: {
         rollupOptions: {
-            external: [
-                '@getpara/solana-wallet-connectors',
-                '@getpara/cosmjs-v0-integration',
-                'graz',
-                '@cosmjs/amino',
-                '@cosmjs/stargate',
-                '@cosmjs/proto-signing'
-            ]
+            external: []
         }
     },
     server: {

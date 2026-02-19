@@ -1,32 +1,33 @@
-const { ethers } = require("ethers");
-require("dotenv").config();
+const { ethers } = require('ethers');
 
-const ARC_RPC = "https://rpc.testnet.arc.network";
-const CONTRACT_ADDRESS = "0x2E8DC6aBd23fC5CCB75940C8D389D9DDB21eDb31";
+const ARC_RPC = "https://5042002.rpc.thirdweb.com";
+const CONTRACT_ADDRESS = "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8";
 
-async function main() {
+async function getSuccessfulBets() {
     const provider = new ethers.JsonRpcProvider(ARC_RPC);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, [
+        "event BetPlaced(uint256 indexed id, address indexed user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 duration, uint256 timestamp, uint8 marketId)"
+    ], provider);
 
-    console.log(`🔍 Checking recent activity for contract: ${CONTRACT_ADDRESS}`);
+    console.log("Fetching recent successful bets...");
+    const filter = contract.filters.BetPlaced();
+    const currentBlock = await provider.getBlockNumber();
 
-    // Get the latest block
-    const latestBlock = await provider.getBlockNumber();
-    console.log(`📦 Latest Block: ${latestBlock}`);
+    try {
+        const events = await contract.queryFilter(filter, currentBlock - 5000, currentBlock);
+        console.log(`Found ${events.length} successful bets.`);
 
-    // Check events
-    const abi = ["event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"];
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, provider);
-
-    const filter = contract.filters.BetSettled();
-    const events = await contract.queryFilter(filter, latestBlock - 500); // Check last 500 blocks
-
-    console.log(`📜 Found ${events.length} settlement events in last 500 blocks:`);
-    events.forEach(event => {
-        const { id, user, settlementPrice, won, payout } = event.args;
-        console.log(`  - Bet ${id}: User ${user} | Won: ${won} | Payout: ${ethers.formatEther(payout)} USDC`);
-        console.log(`    TX: ${event.transactionHash}`);
-    });
-
+        if (events.length > 0) {
+            const last = events[events.length - 1];
+            console.log("Last Successful Bet:");
+            console.log(`  ID: ${last.args.id.toString()}`);
+            console.log(`  Amount: ${ethers.formatEther(last.args.amount)}`);
+            console.log(`  Direction: ${last.args.direction}`);
+            console.log(`  Market ID: ${last.args.marketId}`);
+        }
+    } catch (e) {
+        console.error("Error fetching events:", e.message);
+    }
 }
 
-main().catch(console.error);
+getSuccessfulBets();
