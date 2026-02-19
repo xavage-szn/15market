@@ -5,6 +5,7 @@ require('dotenv').config();
 const processor = require('./keeper/processor');
 const blockchain = require('./services/blockchain');
 const pricing = require('./services/pricing');
+const redis = require('./services/redis');
 
 const app = express();
 const PORT = process.env.PORT || 3012;
@@ -78,6 +79,24 @@ app.get('/history', async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+app.get('/profile', async (req, res) => {
+    const { address } = req.query;
+    if (!address) return res.status(400).json({ error: 'Missing address' });
+
+    const profile = await redis.getProfile(address);
+    if (!profile) return res.json({ address, totalTrades: 0, totalWins: 0, totalLosses: 0, totalVolume: "0.00" });
+
+    res.json(profile);
+});
+
+app.post('/sync-profile', async (req, res) => {
+    const { address, profile } = req.body;
+    if (!address || !profile) return res.status(400).json({ error: 'Missing address or profile' });
+
+    const success = await redis.saveProfile(address, profile);
+    res.json({ success });
 });
 
 // CRITICAL: Frontend pings this after every trade to register it for settlement

@@ -107,6 +107,26 @@ class RedisService {
         }
         return this.historyCache;
     }
+
+    async saveProfile(address, profileData) {
+        try {
+            await this.client.set(`profile:${address.toLowerCase()}`, JSON.stringify(profileData));
+            return true;
+        } catch (e) {
+            console.error(`[Redis] ❌ Failed to save profile for ${address}:`, e.message);
+            return false;
+        }
+    }
+
+    async getProfile(address) {
+        try {
+            const data = await this.client.get(`profile:${address.toLowerCase()}`);
+            return data ? JSON.parse(data) : null;
+        } catch (e) {
+            console.error(`[Redis] ❌ Failed to get profile for ${address}:`, e.message);
+            return null;
+        }
+    }
 }
 
 module.exports = new RedisService();

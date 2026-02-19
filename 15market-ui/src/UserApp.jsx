@@ -373,6 +373,19 @@ export default function UserApp() {
       setIsSessionSynced(true); // Always synced by design now
       setSessionMode(true);
 
+      // PERSIST TO BACKEND: Link this session address to the profile
+      if (userProfile) {
+        const updatedProfile = { ...userProfile, sessionWalletAddress: newWallet.address };
+        setUserProfile(updatedProfile);
+        localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(updatedProfile));
+
+        fetch(`${KEEPER_URL_ARC}/sync-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, profile: updatedProfile })
+        }).catch(e => console.warn("Failed to sync session wallet to backend:", e));
+      }
+
       // UNBLOCK UI
       setIsSignerInitializing(false);
 
@@ -955,8 +968,9 @@ export default function UserApp() {
   // Session Wallet Initialization - DETERMINISTIC RECOVERY
 
   useEffect(() => {
-    if (!address) {
-      setIsSignerInitializing(false);
+    if (!address || !profileChecked) {
+      // WAIT until we've checked the backend profile before deciding if we need setup
+      if (!address) setIsSignerInitializing(false);
       return;
     }
 
@@ -965,10 +979,16 @@ export default function UserApp() {
       const privateKey = localStorage.getItem(storageKey);
 
       if (!privateKey) {
-        // FORCE INITIALIZATION: No key found for this address
-        setIsSignerInitializing(true);
-        setEvmSessionWallet(null);
-        setSessionMode(false);
+        // No local key.
+        if (!userProfile?.username && !userProfile?.sessionWalletAddress) {
+          // NEW USER: Let them onboard first, don't block
+          setIsSignerInitializing(false);
+        } else {
+          // REGISTERED USER: But missing key on this device
+          setIsSignerInitializing(true);
+          setEvmSessionWallet(null);
+          setSessionMode(false);
+        }
       } else {
         // Key found, load it
         setIsSignerInitializing(false);
@@ -983,14 +1003,13 @@ export default function UserApp() {
           setSessionMode(true); // Auto-enable if ready
         } catch (e) {
           console.error("Session wallet restore failed", e);
-          // If restore fails (corrupt key?), force re-init
           setIsSignerInitializing(true);
         }
       }
     };
 
     checkAndDerive();
-  }, [address]);
+  }, [address, profileChecked, userProfile]);
 
   // NOTE: The actual "creation" now happens via handleSyncSession which we will rename/auto-trigger
   // We need to auto-trigger the sync if the user toggles session mode and has no key.
@@ -1096,8 +1115,13 @@ export default function UserApp() {
       totalVolume: "0.00"
     };
 
-    setUserProfile(localProfile);
-    localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(localProfile));
+    const finalProfile = {
+      ...localProfile,
+      sessionWalletAddress: evmSessionWallet?.address || ""
+    };
+
+    setUserProfile(finalProfile);
+    localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(finalProfile));
 
     try {
       // Sync with backend in background
@@ -1106,16 +1130,18 @@ export default function UserApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           address,
-          username: onboardingData.username,
-          xHandle: onboardingData.twitterHandle,
-          xProfileImage: onboardingData.twitterImage || "",
-          discordHandle: "",
-          tosAccepted: onboardingData.tosAccepted
+          profile: finalProfile
         })
       });
 
       if (!res.ok) console.warn("Background profile sync failed");
       else notify("Welcome to 15market, " + onboardingData.username, "success");
+
+      // After onboarding is fully synced, trigger the Auto-Signer setup
+      // This will ensure the burner is linked to the profile we just created
+      setTimeout(() => {
+        initializeSessionWallet();
+      }, 1000);
 
     } catch (err) {
       console.error("Profile sync failed:", err);
@@ -1706,10 +1732,13 @@ export default function UserApp() {
           </div>
 
           <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">
-            Secure Auto-Signer Setup
+            {userProfile?.sessionWalletAddress ? "Restore Auto-Signer" : "Secure Auto-Signer Setup"}
           </h2>
           <p className="text-white/40 text-xs font-medium leading-relaxed mb-8">
-            To ensure maximum security and cross-device synchronization, you must sign a one-time authorization to link your Main Wallet to your Auto-Signer.
+            {userProfile?.sessionWalletAddress
+              ? `We've detected an existing Auto-Signer linked to your wallet (${userProfile.sessionWalletAddress.slice(0, 6)}...). Please sign to restore access on this device.`
+              : "To ensure maximum security and cross-device synchronization, you must sign a one-time authorization to link your Main Wallet to your Auto-Signer."
+            }
           </p>
 
           <button
