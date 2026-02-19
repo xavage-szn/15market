@@ -45,7 +45,7 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
         return 1.98;
     };
 
-    const currency = 'USDC';
+    const currency = trade.currency || (trade.network === 'arc' ? 'USDC' : 'SOL');
     const multiplier = getMultiplier(trade.duration || 15);
     const totalPayout = trade.payout ? parseFloat(trade.payout) : (parseFloat(trade.amount) * multiplier);
     // User wants '1.98x profit' to reflect the gross payout amount (+1.98) instead of net gain (+0.98)
@@ -113,7 +113,9 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
                                 <div className="flex justify-between items-end border-b border-black/5 pb-1.5">
                                     <div className="flex flex-col">
                                         <span className="text-[9px] opacity-40 font-black">ASSET_PAIR</span>
-                                        <span className="text-base font-black tracking-tighter">SOL // USDT</span>
+                                        <span className="text-base font-black tracking-tighter">
+                                            {trade.symbol ? `${trade.symbol.toUpperCase()} // USD` : 'ETH // USD'}
+                                        </span>
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <span className="text-[9px] opacity-40 font-black">EXECUTION</span>

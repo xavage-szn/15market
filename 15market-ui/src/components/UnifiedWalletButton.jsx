@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppKit } from '@reown/appkit/react';
 import { useAccount } from 'wagmi';
-import { publicClient } from "../paraClient";
+import { publicClient } from "../client";
 import { formatEther } from "viem";
 
 export const UnifiedWalletButton = ({ theme }) => {

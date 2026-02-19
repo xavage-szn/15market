@@ -69,7 +69,7 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
 
                             let isWinning = false;
                             if (current > 0) {
-                                isWinning = isLong ? (current >= entry) : (current <= entry);
+                                isWinning = isLong ? (current > entry) : (current < entry);
                             }
 
                             const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;

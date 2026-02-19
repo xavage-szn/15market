@@ -15,7 +15,7 @@ import { parseEther, parseUnits, formatUnits } from "viem";
 // Solana imports removed
 import ArcABI from "./abi/ArcPrediction.json";
 import * as ethers from "ethers";
-import { publicClient } from "./paraClient";
+import { publicClient } from "./client";
 
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
@@ -68,6 +68,7 @@ export default function UserApp() {
   const activeTrade = activeTrades[0] || null; // For backward compatibility in some components
   const [isLoading, setIsLoading] = useState(true);
   const loadingTimeoutRef = useRef(null);
+  const lastTradeTimeRef = useRef(0);
 
   // Safety Timeout: Ensure app always loads even if price feed is slow
   useEffect(() => {
@@ -163,17 +164,33 @@ export default function UserApp() {
   }, [isConnected, address]);
 
   const [evmBalance, setEvmBalance] = useState("0");
+  const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
   const refetchEvmBalance = useCallback(async () => {
     if (!address) return;
+
+    // SKIP REFRESH if we recently traded or won (< 12 seconds ago) 
+    // to prevent the optimistic payout from being overwritten by old on-chain balance
+    if (Date.now() - lastTradeTimeRef.current < 12000) {
+      return;
+    }
+
     try {
       const b = await publicClient.getBalance({ address });
-      setEvmBalance(formatUnits(b, 18));
+      const formatted = formatUnits(b, 18);
+      console.log(`💰 [BALANCE_SYNC] Address: ${address} | Raw: ${b.toString()} | Formatted: ${formatted}`);
+      setEvmBalance(formatted);
     } catch (e) {
-      console.error("Failed to fetch balance:", e);
+      console.error("refetchEvmBalance fail:", e);
     }
   }, [address]);
+
+  const displayEvmBalance = useMemo(() => {
+    let bal = parseFloat(evmBalance);
+    Object.values(pendingStakes).forEach(amt => { bal -= amt; });
+    return Math.max(0, bal);
+  }, [evmBalance, pendingStakes]);
 
   useEffect(() => {
     refetchEvmBalance();
@@ -182,7 +199,7 @@ export default function UserApp() {
   }, [refetchEvmBalance]);
 
   // DERIVED BALANCE STATE (Fix for ReferenceError)
-  const balance = useMemo(() => parseFloat(evmBalance || "0"), [evmBalance]);
+  const balance = useMemo(() => parseFloat(displayEvmBalance || "0"), [displayEvmBalance]);
 
   // Compatibility wrapper for legacy setBalance calls
   const setBalance = useCallback((val) => {
@@ -222,29 +239,15 @@ export default function UserApp() {
   const wallet = useMemo(() => {
     if (!isConnected || !address) return { connected: false };
 
-    try {
-      return {
-        connected: true,
-        address: address,
-        publicKey: null,
-        signTransaction: async (tx) => {
-          throw new Error("signTransaction not supported. Use writeContract for EVM transactions.");
-        },
-        signAllTransactions: async (txs) => {
-          throw new Error("signAllTransactions not supported.");
-        },
-        signMessage: async (msg) => {
-          throw new Error("signMessage not supported. Use Wagmi signing methods.");
-        }
-      };
-    } catch (e) {
-      console.error("Wallet wrapper error:", e);
-      return { connected: false };
-    }
+    return {
+      connected: true,
+      address: address,
+      publicKey: null
+    };
   }, [isConnected, address]);
 
   const login = () => {
-    console.warn("login() called but Para SDK is removed. Use UnifiedWalletButton instead.");
+    console.log("Connect via wallet button");
   };
 
   const user = useMemo(() => {
@@ -266,6 +269,9 @@ export default function UserApp() {
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
   const [sessionBalance, setSessionBalance] = useState(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
+
+
+
   const [isExecuting, setIsExecuting] = useState(false);
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [treasuryBalance, setTreasuryBalance] = useState(0);
@@ -476,10 +482,10 @@ export default function UserApp() {
   const navigate = useNavigate();
 
 
-  // Stale wallet cleanup replaced with Para SDK's internal handling
   useEffect(() => {
-    // Para handles its own session persistence, no manual cleanup needed here
-  }, []); // Run once on mount
+    // Session persistence handled by Reown/Wagmi
+  }, []);
+  // Run once on mount
 
   // Auto-Switch logic removed 
 
@@ -520,14 +526,14 @@ export default function UserApp() {
     try {
       const sources = [];
 
-      // 1. Pyth Sources (Multiple Hermers endpoints for redundancy)
+      // 1. Pyth Sources (Multiple Hermes endpoints for redundancy)
       if (activeMarket.pythId) {
-        const pythIdClean = activeMarket.pythId.replace('0x', '');
+        const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
 
-        // Try both v2 latest with/without 0x and beta
+        // Hermes v2 expects ids[] array syntax and full 0x hex
         sources.push({
           name: "pyth",
-          url: `https://hermes.pyth.network/v2/updates/price/latest?ids=${pythIdClean}`,
+          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
           parse: d => {
             const p = d.parsed?.[0]?.price;
             return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
@@ -536,7 +542,7 @@ export default function UserApp() {
 
         sources.push({
           name: "pyth-bench",
-          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids=${pythIdClean}`,
+          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids[]=${fullPythId}`,
           parse: d => {
             const p = d.parsed?.[0]?.price;
             return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
@@ -848,14 +854,21 @@ export default function UserApp() {
 
   const updateEvmSessionBal = useCallback(async () => {
     if (!evmSessionWallet) return;
+
+    // SKIP REFRESH if we just traded (< 12 seconds ago) to allow chain to catch up
+    // This prevents the optimistic debit from being overwritten by old on-chain balance
+    if (Date.now() - lastTradeTimeRef.current < 12000) {
+      return;
+    }
+
     try {
-      // console.log("🔄 [SESSION] Syncing balance...");
       const provider = evmSessionWallet.provider;
       const balanceWei = await provider.getBalance(evmSessionWallet.address);
       const bal = parseFloat(ethers.formatUnits(balanceWei, 18));
 
+      console.log(`🔑 [SESSION_BAL] Wallet: ${evmSessionWallet.address} | Balance: ${bal} ARC`);
+
       if (bal !== sessionBalance) {
-        console.log(`💰 [SESSION] Balance updated: ${sessionBalance} -> ${bal}`);
         setSessionBalance(bal);
       }
     } catch (err) {
@@ -882,13 +895,12 @@ export default function UserApp() {
 
   // Aggressive Refresh (Multi-stage update)
   const aggressiveRefresh = useCallback(() => {
-    console.log("🚀 [REFRESH] Starting multi-stage balance sync...");
+    console.log("🚀 [REFRESH] Starting hyper-aggressive balance sync...");
     triggerGlobalRefresh();
-    // 5 stages of refresh to catch the chain update
-    [1000, 3000, 7000, 12000, 20000].forEach(delay => {
+    // Ultra-fast stages to catch the update nearly instantly
+    [100, 500, 1500, 3000, 6000, 12000].forEach(delay => {
       setTimeout(() => {
         triggerGlobalRefresh();
-        // Force refetch main balance explicitly
         if (refetchEvmBalance) refetchEvmBalance();
       }, delay);
     });
@@ -1084,8 +1096,8 @@ export default function UserApp() {
         if (capturedPrice > 0) {
           const entry = parseFloat(trade.entryPrice);
           const isWin = trade.direction === "buy" || trade.direction === "UP"
-            ? (capturedPrice >= entry)
-            : (capturedPrice <= entry);
+            ? (capturedPrice > entry)
+            : (capturedPrice < entry);
           optimisticStatus = isWin ? "WON" : "LOST";
         }
 
@@ -1158,7 +1170,6 @@ export default function UserApp() {
   const executeTrade = async () => {
     if (isExecuting) return;
 
-    // Check Kill Switch
     if (platformSettings.tradingHalted) {
       return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
     }
@@ -1167,11 +1178,27 @@ export default function UserApp() {
     if (!activePrice || activePrice <= 0) return;
     if (!direction) return notify("Select UP or DOWN first", "error");
     if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
-    if (Number(amount) < parseFloat(minStake)) return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
 
-    // console.log("🎯 [TRADE] Initiating trade...");
+    const currentBal = sessionMode ? sessionBalance : balance;
+    if (parseFloat(amount) > currentBal) {
+      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. Balance: ${currentBal.toFixed(4)}`, "error");
+    }
+
+    if (Number(amount) < parseFloat(minStake)) {
+      return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
+    }
 
     setIsExecuting(true);
+    let txHash;
+    // Generate truly unique bet ID to prevent collisions
+    // Use: timestamp (ms) + random (0-999999) + last 4 chars of address
+    const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
+    const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
+    const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
+    const entryPriceParams = Math.floor(activePrice * 100000000);
+    const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
+    const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
+
     try {
       if (!isConnected) {
         notify("Please connect wallet first", "error");
@@ -1179,26 +1206,18 @@ export default function UserApp() {
         return;
       }
 
-      const tradeId = Date.now();
-      const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0; // Match Contract: 1=UP, 0=DOWN
-      const entryPriceParams = Math.floor(activePrice * 100000000);
-      let txHash;
-
-      // Arc Trade logic (EVM)
-      const amountWei = parseUnits(amount.toString(), 18); // Arc Native USDC uses 18 decimals
-      const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
-      const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
+      const amountWei = parseUnits(parseFloat(amount).toFixed(18), 18);
 
       if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
-        console.log("✅ [TRADE] Using AUTO-SIGNER (Session Wallet)");
-        const feePercent = 0.001; // 0.1% Auto-Signer Fee
+        console.log("✅ [TRADE] Using AUTO-SIGNER");
+        const feePercent = 0.001;
         const signerFee = Number(amount) * feePercent;
-        const feeWei = parseUnits(signerFee.toFixed(18), 18); // Arc Native USDC uses 18 decimals
+        const feeWei = parseUnits(signerFee.toFixed(18), 18);
 
-        notify(`Auto-signing on Arc (0.1% fee: ${signerFee.toFixed(4)} USDC)...`, "success");
+        notify(`Auto-signing (0.1% fee: ${signerFee.toFixed(4)} USDC)...`, "success");
         const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-        const wallet = new ethers.Wallet(evmSessionWallet.privateKey, provider);
-        const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, wallet);
+        const walletObj = new ethers.Wallet(evmSessionWallet.privateKey, provider);
+        const contract = new ethers.Contract(ARC_CONTRACT_ADDRESS, ArcABI.abi, walletObj);
 
         const tx = await contract.placeBet(
           BigInt(tradeId),
@@ -1206,67 +1225,63 @@ export default function UserApp() {
           BigInt(duration),
           BigInt(entryPriceParams),
           Number(assetId),
-          evmSessionWallet.address, // Correct: Reward goes back to Auto-signer
-          {
-            value: amountWei,
-            gasLimit: 600000n,
-          }
+          evmSessionWallet.address,
+          { value: amountWei, gasLimit: 600000n }
         );
         txHash = tx.hash;
         console.log("📤 [TRADE] Auto-signed tx:", txHash);
 
-        // Take fee from session wallet to treasury
+        const receipt = await tx.wait();
+        console.log("✅ [TRADE] Transaction confirmed:", receipt.hash);
+        updateEvmSessionBal();
+
         setTimeout(async () => {
           try {
-            await wallet.sendTransaction({
+            await walletObj.sendTransaction({
               to: ARC_CONTRACT_ADDRESS,
               value: feeWei,
               gasLimit: 50000n
             });
             recordFee('arc', signerFee);
-            console.log("✅ [TRADE] Auto-signer fee collected:", signerFee);
           } catch (feeErr) {
-            console.error("Signer fee failed:", feeErr);
+            console.error("Fee failure:", feeErr);
           }
         }, 100);
       } else {
-        console.log("📝 [TRADE] Using MAIN WALLET (Manual signature required via Wallet)");
-
-
-
-        console.log("📝 [TRADE] Main wallet trade params prepared");
+        console.log("📝 [TRADE] Using MAIN WALLET");
         notify(`Confirm on Arc...`, "success");
 
-        try {
-          if (!walletClient) {
-            throw new Error("Wallet not connected or client unavailable");
-          }
+        if (!walletClient) throw new Error("Wallet not connected");
 
-          const hash = await walletClient.writeContract({
-            address: ARC_CONTRACT_ADDRESS,
-            abi: ArcABI.abi,
-            functionName: 'placeBet',
-            args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId), address],
-            value: amountWei,
-            account: address,
-            gas: 800000n
-          });
+        const hash = await walletClient.writeContract({
+          address: ARC_CONTRACT_ADDRESS,
+          abi: ArcABI.abi,
+          functionName: 'placeBet',
+          args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId), address],
+          value: amountWei,
+          account: address,
+          gas: 800000n
+        });
 
-          txHash = hash;
-          console.log("📤 [TRADE] Main wallet tx successful:", txHash);
-        } catch (mainWalletError) {
-          console.error("❌ [TRADE] Main wallet error detail:", mainWalletError.message);
+        txHash = hash;
+        lastTradeTimeRef.current = Date.now();
+        setPendingStakes(prev => ({ ...prev, [hash]: parseFloat(amount) }));
 
-          if (mainWalletError.message?.includes("user rejected")) {
-            notify("Transaction rejected in wallet", "error");
-          } else if (mainWalletError.message?.includes("insufficient funds")) {
-            notify("Insufficient funds for trade + gas", "error");
-          } else {
-            notify(`Trade failed: ${mainWalletError.shortMessage || "Transaction error"}`, "error");
-          }
-          throw mainWalletError;
-        }
+        console.log("📤 [TRADE] Main wallet tx:", txHash);
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        console.log("✅ [TRADE] Main wallet tx confirmed:", receipt.transactionHash);
+
+        // Remove from pending and re-fetch
+        setPendingStakes(prev => {
+          const next = { ...prev };
+          delete next[hash];
+          return next;
+        });
+
+        setTimeout(refetchEvmBalance, 1000);
+        setTimeout(refetchEvmBalance, 5000);
       }
+
       notify(`Arc Trade Executed!`, "success");
 
       if (sessionMode) {
@@ -1274,23 +1289,50 @@ export default function UserApp() {
         const signerFee = Number(amount) * feePercent;
         setSessionBalance(prev => Math.max(0, prev - parseFloat(amount) - signerFee));
       } else {
-        setBalance(prev => Math.max(0, prev - parseFloat(amount)));
+        // refetchEvmBalance already handled the main wallet balance update 
+        // after receipt in line 1259. No need for optimistic setBalance here 
+        // as it might cause the 'bounce' effect if not perfectly synced.
+        console.log("💎 [TRADE] Main balance refetched after receipt.");
       }
+
+      lastTradeTimeRef.current = Date.now();
 
       const activeUserAddr = (sessionMode && sessionBalance >= (Number(amount) + 0.001)) ? evmSessionWallet.address : (address || user?.wallet?.address);
       const newTrade = {
         id: tradeId, direction, amount: Number(amount).toFixed(4), entryPrice: activePrice.toFixed(4),
         timestamp: Date.now(), status: "PENDING", tx: txHash, nonce: tradeId,
-        userPublicKey: activeUserAddr, owner: activeUserAddr, duration, network: network, startTime: Date.now()
+        userPublicKey: activeUserAddr, owner: activeUserAddr, duration, network: network, startTime: Date.now(),
+        symbol: activeMarket?.symbol || 'ETH',
+        currency: network === 'arc' ? 'USDC' : 'SOL'
       };
       setTradeHistory(prev => [newTrade, ...prev]);
       setActiveTrades(prev => [newTrade, ...prev]);
+
+      const newTx = {
+        id: `trade_${tradeId}`,
+        type: 'TRADE',
+        amount: Number(amount).toFixed(4),
+        timestamp: Date.now(),
+        tx: txHash,
+        network: 'arc',
+        symbol: activeMarket?.symbol || 'ETH',
+        currency: network === 'arc' ? 'USDC' : 'SOL'
+      };
+      setTransactionHistory(prev => {
+        const updated = [newTx, ...prev];
+        localStorage.setItem("15market_transactions_v1", JSON.stringify(updated.slice(0, 50)));
+        return updated;
+      });
       setDirection(null);
       setAmount("");
       setTimeLeft(duration);
       setTimerActive(true);
 
+      triggerGlobalRefresh();
+      setTimeout(triggerGlobalRefresh, 3000);
+
       const PING_URL = KEEPER_URL_ARC;
+      console.log(`📡 [PING] Sending to ${PING_URL}/trade-ping`, newTrade);
       fetch(`${PING_URL}/trade-ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1306,16 +1348,26 @@ export default function UserApp() {
           duration: duration,
           symbol: activeMarket.symbol
         })
-      }).catch(() => { });
+      })
+        .then(res => res.json())
+        .then(data => console.log('✅ [PING] Response:', data))
+        .catch((err) => { console.error('❌ [PING] Failed:', err.message); });
+
     } catch (err) {
-      console.error("Arc Trade Error:", err);
-      notify("Trade failed: " + (err.shortMessage || err.message), "error");
+      console.error("❌ [TRADE_FAILED]", err);
+      if (err.message?.includes("user rejected")) {
+        notify("Transaction rejected", "error");
+      } else if (err.message?.includes("insufficient funds")) {
+        notify("Insufficient funds", "error");
+      } else {
+        notify(`Trade failed: ${err.message}`, "error");
+      }
     } finally {
       setIsExecuting(false);
     }
   };
 
-  // Arc Settlement Listener (Native Viem Watcher)
+  // Arc Settlement Listener
   useEffect(() => {
     const unwatch = publicClient.watchContractEvent({
       address: ARC_CONTRACT_ADDRESS,
@@ -1331,8 +1383,8 @@ export default function UserApp() {
           if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
             const betId = id.toString();
             const finalStatus = won ? "WON" : "LOST";
-            const priceUSD = (Number(settlementPrice) / 100000000).toFixed(4);
-            const formattedPayout = (Number(payout) / 10 ** 18).toFixed(4);
+            const priceUSD = parseFloat(formatUnits(settlementPrice, 8)).toFixed(4);
+            const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(4);
 
             const updateTrade = (t) => {
               const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
@@ -1348,9 +1400,21 @@ export default function UserApp() {
 
             if (won) {
               notify(`Arc Trade WON! +${formattedPayout} USDC`, "success");
+              const payoutVal = parseFloat(formattedPayout);
+
+              // Set the lock timer so refreshes don't overwrite this win
+              lastTradeTimeRef.current = Date.now();
+
+              if (normalizedUser === mainAddr) {
+                setBalance(prev => prev + payoutVal);
+              } else if (normalizedUser === sessionAddr) {
+                setSessionBalance(prev => prev + payoutVal);
+              }
               aggressiveRefresh();
             } else {
               notify(`Arc Trade LOST. Price: $${priceUSD}`, "error");
+              // Even on loss, we might want a short lock to see the deduction
+              lastTradeTimeRef.current = Date.now();
               aggressiveRefresh();
             }
           }
@@ -1360,37 +1424,22 @@ export default function UserApp() {
     return () => unwatch();
   }, [address, evmSessionWallet, notify, aggressiveRefresh]);
 
-
-
   const handleRefill = useCallback(async (amt) => {
-    // console.log("🔵 [REFILL] Starting refill process...");
     if (isExecuting) return;
 
     try {
       const amtNum = parseFloat(amt);
-      const feePercent = 0.01; // 1% Protocol Fee
+      const feePercent = 0.01;
       const fee = amtNum * feePercent;
 
       if (!address || !evmSessionWallet) {
-        console.error("❌ [REFILL] Wallet not connected");
         notify("Connect Arc wallet for refill", "error");
         return;
       }
 
-      if (!address || !evmSessionWallet) {
-        console.error("❌ [REFILL] Wallet not connected");
-        notify("Connect Arc wallet for refill", "error");
-        return;
-      }
-
-      // 🛡️ [NETWORK] Enforce Arc Testnet
-
-
-      // 🛡️ [BALANCE] Use updated balance
       const currentBal = parseFloat(evmBalance);
       if (currentBal < amtNum) {
-        console.error("❌ [REFILL] Insufficient status balance");
-        notify(`Insufficient status balance. You have ${currentBal.toFixed(4)} USDC`, "error");
+        notify(`Insufficient balance. You have ${currentBal.toFixed(4)} USDC`, "error");
         return;
       }
 
@@ -1406,40 +1455,30 @@ export default function UserApp() {
           account: address
         });
 
-        console.log("📤 [REFILL] tx successful:", hash);
         notify("Refill Transaction Broadcasted", "success");
 
-        // Wait for refill to land
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
-          console.log("✅ [REFILL] Confirmed");
           notify("Refill Confirmed!", "success");
           setTimeout(() => {
             updateEvmSessionBal();
             refetchEvmBalance();
           }, 2000);
         });
-        // This keeps user experience to just ONE signature
+
         setTimeout(async () => {
           try {
-            console.log("💸 [REFILL] Sending fee to treasury...", { fee, to: ARC_CONTRACT_ADDRESS });
             const tx = await evmSessionWallet.sendTransaction({
               to: ARC_CONTRACT_ADDRESS,
-              value: parseUnits(fee.toFixed(18), 18), // Arc Native USDC uses 18 decimals
+              value: parseUnits(fee.toFixed(18), 18),
             });
-            console.log("📤 [REFILL] Fee tx broadcasted:", tx.hash);
             await tx.wait();
-            console.log("✅ [REFILL] Fee tx confirmed");
             recordFee('arc', fee);
             notify(`System Fee of ${fee.toFixed(4)} USDC processed.`, "info");
           } catch (feeErr) {
-            console.error("❌ [REFILL] Delayed fee payment failed:", feeErr);
+            console.error("Delayed fee failure:", feeErr);
           }
-        }, 5000); // Increased delay to allow main tx to confirm or at least be broadcasted
+        }, 5000);
 
-        notify(`Refill Success!`, "success");
-        console.log("🎉 [REFILL] Refill complete!");
-
-        // Record locally
         const newTx = {
           id: `dep_${Date.now()}`,
           type: 'DEPOSIT',
@@ -1448,136 +1487,92 @@ export default function UserApp() {
           tx: hash,
           network: 'arc'
         };
-        setTransactionHistory(prev => {
-          const updated = [newTx, ...prev];
-          localStorage.setItem("15market_transactions_v1", JSON.stringify(updated.slice(0, 50)));
-          return updated;
-        });
+        setTransactionHistory(prev => [newTx, ...prev]);
 
-        // Refresh balance
-        setTimeout(() => {
-          updateEvmSessionBal();
-          refetchEvmBalance();
-        }, 3000);
       } catch (evmErr) {
-        console.error("❌ [REFILL] EVM Error:", evmErr);
-        const msg = evmErr.shortMessage || evmErr.message || "EVM Error";
-        notify(`Refill failed: ${msg}`, "error");
+        notify(`Refill failed: ${evmErr.message}`, "error");
       }
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, recordFee, balance, updateEvmSessionBal, isExecuting, chainId, refetchEvmBalance]);
+  }, [evmSessionWallet, address, notify, recordFee, evmBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
   const handleWithdraw = useCallback(async (amt) => {
-    // console.log("🔵 [WITHDRAW] Starting withdrawal process...");
     if (isExecuting) return;
 
     try {
-      // Step 1: Validate amount
       const amtNum = parseFloat(amt);
       if (isNaN(amtNum) || amtNum <= 0) {
-        console.error("❌ [WITHDRAW] Invalid amount:", amt);
         notify("Invalid withdrawal amount", "error");
         return;
       }
 
-      // Step 2: Check session wallet exists
       if (!evmSessionWallet) {
-        console.error("❌ [WITHDRAW] Session wallet not initialized!");
-        notify("Session wallet not ready. Please refresh the page.", "error");
+        notify("Session wallet not ready", "error");
         return;
       }
 
-
-
-      // console.log("✅ [WITHDRAW] Session wallet exists");
-
-      // Step 3: Check session balance
       if (sessionBalance < amtNum) {
-        console.error("❌ [WITHDRAW] Insufficient balance");
         notify(`Insufficient balance. You have ${sessionBalance.toFixed(4)} USDC`, "error");
         return;
       }
 
-      const fee = amtNum * 0.01; // 1% Fee
-      const gasBuffer = 0.005; // Leave 0.005 for gas
+      const fee = amtNum * 0.01;
+      const gasBuffer = 0.005;
       const netAmt = amtNum - fee - gasBuffer;
 
-      console.log("💰 [WITHDRAW] Calculated amounts:", { amtNum, fee, gasBuffer, netAmt });
-
       if (netAmt <= 0) {
-        console.error("❌ [WITHDRAW] Net amount too low after fees");
         notify("Amount too low after fees/gas", "error");
         return;
       }
 
-      // Step 4: Check wallet connection
-      if (!address) {
-        console.error("❌ [WITHDRAW] No wallet address");
-        notify("Identity Error: Connect your wallet", "error");
+      if (!address || !walletClient) {
+        notify("Connect your wallet", "error");
         return;
       }
 
       setIsExecuting(true);
+      notify("Sign the withdrawal authorization...", "info");
 
-      // Step 5: Request signature
-      notify("Sign the withdrawal authorization in your wallet...", "info");
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: SECURE SCAN SWEEP\nAMOUNT: ${amt} USDC\nWALLET: ${address}\nTIMESTAMP: ${Date.now()}`;
 
-      console.log("📝 [WITHDRAW] Requesting signature...");
       try {
-        await wallet.signMessage(authMsg);
-        console.log("✅ [WITHDRAW] Signature received");
+        await walletClient.signMessage({ message: authMsg, account: address });
+        console.log("✅ [WITHDRAW] Authorized");
       } catch (sigErr) {
-        console.error("❌ [WITHDRAW] Signature rejected:", sigErr);
         notify("Signature rejected", "error");
         setIsExecuting(false);
         return;
       }
 
-      notify(`Charging 1% Protocol Fee (${fee.toFixed(4)} USDC)...`, "info");
+      notify(`Charging 1% Fee (${fee.toFixed(4)} USDC)...`, "info");
 
-      // Step 6: Send fee to contract
-      console.log("💸 [WITHDRAW] Sending fee to contract...", { fee, to: ARC_CONTRACT_ADDRESS });
       const feeTx = await evmSessionWallet.sendTransaction({
         to: ARC_CONTRACT_ADDRESS,
-        value: parseUnits(fee.toFixed(18), 18), // Arc Native USDC uses 18 decimals
+        value: parseUnits(fee.toFixed(18), 18),
       });
-      console.log("📤 [WITHDRAW] Fee tx broadcasted:", feeTx.hash);
-
-      notify("Processing protocol fee...", "info");
       await feeTx.wait();
-      console.log("✅ [WITHDRAW] Fee tx confirmed");
 
-      // Step 7: Send net amount to main wallet
-      console.log("💸 [WITHDRAW] Sending net amount to main wallet...", { netAmt, to: address });
+      notify("Processing sweep...", "info");
       const sweepTx = await evmSessionWallet.sendTransaction({
         to: address,
-        value: parseUnits(netAmt.toFixed(18), 18), // Arc Native USDC uses 18 decimals
+        value: parseUnits(netAmt.toFixed(18), 18),
       });
-      console.log("📤 [WITHDRAW] Sweep tx broadcasted:", sweepTx.hash);
-
-      notify("Sweep broadcasted. Waiting for confirmation...", "info");
       await sweepTx.wait();
-      console.log("✅ [WITHDRAW] Sweep tx confirmed");
 
       recordFee('arc', fee);
       notify("Arc Withdrawal Successful!", "success");
-      console.log("🎉 [WITHDRAW] Withdrawal complete!");
 
-      // Refresh balance
       setTimeout(() => {
         updateEvmSessionBal();
         refetchEvmBalance();
       }, 2000);
     } catch (e) {
-      console.error("❌ [WITHDRAW] Error:", e);
       notify("Withdrawal failed: " + (e.shortMessage || e.message), "error");
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, recordFee, wallet, sessionBalance, updateEvmSessionBal, isExecuting, chainId, refetchEvmBalance]);
+  }, [evmSessionWallet, address, notify, recordFee, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
@@ -1594,268 +1589,275 @@ export default function UserApp() {
     </div>
   );
 
-  if (!authenticated) return <LandingPage />;
-
-  if (view === "dashboard") return (
-    <DashboardPage
-      onBack={() => setView("trading")}
-      wallet={wallet}
-      sessionBalance={sessionBalance}
-      onRefill={handleRefill}
-      onWithdraw={handleWithdraw}
-      treasuryBalance={treasuryBalance}
-      autoSignerFees={autoSignerFees}
-      userProfile={userProfile}
-      theme={theme}
-      evmSessionWallet={evmSessionWallet}
-      transactionHistory={transactionHistory}
-      onViewReceipt={(tx) => {
-        setSelectedTransaction(tx);
-        setIsTransactionReceiptOpen(true);
-      }}
-    />
+  if (!authenticated) return (
+    <div className={themeClass}>
+      <LandingPage />
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+      </AnimatePresence>
+    </div>
   );
 
-
-
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`min-h-screen font-sans flex flex-col items-center px-2 lg:px-6 py-4 lg:py-10 overflow-x-hidden ${themeClass}`}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`min-h-screen font-sans flex flex-col items-center overflow-x-hidden ${themeClass}`}
       style={{
         color: theme === 'light' ? '#1f2937' : '#ffffff',
         transition: "color 0.3s ease"
       }}>
 
-      <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="logo" className={`h-20 sm:h-24 lg:h-32 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
-        </div>
-
-        {/* Desktop Nav */}
-        <div className="hidden lg:flex items-center gap-12">
-          {/* Dashboard/Trading links removed from navbar per request */}
-        </div>
-
-        {/* Desktop Controls */}
-        <div className="hidden lg:flex items-center gap-3">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
-
-          {uiVersion === 'v1' && (
-            <>
-              <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
-                style={{
-                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                }}>
-                <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-              </button>
-            </>
-          )}
-
-          <UnifiedWalletButton theme={theme} />
-        </div>
-
-        {/* Mobile Controls */}
-        <div className="flex lg:hidden items-center gap-2">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-
-          <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
-            style={{
-              backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-              borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-            }}>
-            <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-          </button>
-
-          <UnifiedWalletButton theme={theme} />
-        </div>
-      </header>
-
-      {/* Full-width scroller - edge to edge */}
-      <div className="w-screen mb-4 lg:mb-10 overflow-hidden">
-        <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
-      </div>
-
-      <div className="w-full max-w-7xl flex flex-col items-center">
-        <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
-          {/* Chart - Responsive - Full width */}
-          <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
-            style={{
-              background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
-              boxShadow: theme === 'light'
-                ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
-                : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
-            }}>
-            <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
-          </div>
-
-          {/* Terminal - 50/50 split on desktop and mobile */}
-          <div className="col-span-6 lg:col-span-6 flex flex-col">
-            <TradeTerminal
-              activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
-              sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-              setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-              sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-              theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-              refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-              evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-              activeMarket={activeMarket}
-              maintenanceMode={platformSettings.maintenanceMode}
-            />
-          </div>
-
-          {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
-          <div className="col-span-6 lg:col-span-6 flex flex-col">
-            <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
-              <LiveExecution
-                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                theme={theme} currentNetwork={network}
-              />
-            </div>
-          </div>
-        </div>
-
-        <TradeHistory
-          wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-          tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-          setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-          GREEN={GREEN} CORAL={CORAL}
-          evmSessionWallet={evmSessionWallet}
-          theme={theme} currentNetwork={network}
-        />
-        {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
-        <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
-          {winnerBanner && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border !border-white/5 relative`}
-              style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
-            >
-              <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                <Trophy size={80} />
-              </div>
-              <div className="flex items-center gap-4 lg:gap-8 relative z-10">
-                <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
-                  <Trophy size={32} className="text-yellow-500" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 truncate max-w-[100px] lg:max-w-none">{winnerBanner.owner}</span>
-                  </div>
-                  <h3 className="text-lg lg:text-xl font-black text-white tracking-tighter uppercase">
-                    Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
-                  </h3>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
-            <motion.div
-              key={camp.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
-            >
-              <div className="flex items-center gap-6">
-                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[#3CB371]">
-                  <Trophy size={24} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">{camp.title}</h3>
-                  <div className="flex flex-wrap items-center gap-4 mt-1">
-                    <div className="flex items-center gap-1.5 text-[10px] font-black text-white/40 uppercase tracking-widest">
-                      <Calendar size={12} />
-                      Ends {new Date(camp.endTime).toLocaleString()}
-                    </div>
-                    <div className="w-1 h-1 bg-white/10 rounded-full" />
-                    <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
-                      Prize: {camp.prize || 'Pride'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => navigate(`/campaign/${camp.id}`)}
-                className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
-                  ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
-                  : 'bg-white text-black hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.3)]'
-                  }`}
-              >
-                {enrollments[camp.id] ? (
-                  <>
-                    <CheckCircle size={14} />
-                    View Leaderboard
-                  </>
-                ) : (
-                  <>
-                    View Campaign Details
-                    <ChevronRight size={14} />
-                  </>
-                )}
-              </button>
-            </motion.div>
-          ))}
-        </div>
-
-
-
-        <ProfileModal
-          isOpen={isProfileOpen}
-          onClose={() => setIsProfileOpen(false)}
+      {view === "dashboard" ? (
+        <DashboardPage
+          onBack={() => setView("trading")}
           wallet={wallet}
+          sessionBalance={sessionBalance}
+          onRefill={handleRefill}
+          onWithdraw={handleWithdraw}
+          treasuryBalance={treasuryBalance}
+          autoSignerFees={autoSignerFees}
           userProfile={userProfile}
+          theme={theme}
+          evmSessionWallet={evmSessionWallet}
           transactionHistory={transactionHistory}
           onViewReceipt={(tx) => {
             setSelectedTransaction(tx);
             setIsTransactionReceiptOpen(true);
           }}
         />
-        <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
+      ) : (
+        <div className="w-full flex flex-col items-center px-2 lg:px-6 py-4 lg:py-10">
+          <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
+            <div className="flex items-center gap-4">
+              <img src="/logo.png" alt="logo" className={`h-20 sm:h-24 lg:h-32 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+            </div>
+
+            {/* Desktop Nav */}
+            <div className="hidden lg:flex items-center gap-12">
+              {/* Dashboard/Trading links removed from navbar per request */}
+            </div>
+
+            {/* Desktop Controls */}
+            <div className="hidden lg:flex items-center gap-3">
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
+
+              {uiVersion === 'v1' && (
+                <>
+                  <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+                    style={{
+                      backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                      borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                    }}>
+                    <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                  </button>
+                </>
+              )}
+
+              <UnifiedWalletButton theme={theme} />
+            </div>
+
+            {/* Mobile Controls */}
+            <div className="flex lg:hidden items-center gap-2">
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+
+              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+                style={{
+                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                }}>
+                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+              </button>
+
+              <UnifiedWalletButton theme={theme} />
+            </div>
+          </header>
+
+          {/* Full-width scroller - edge to edge */}
+          <div className="w-screen mb-4 lg:mb-10 overflow-hidden">
+            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
+          </div>
+
+          <div className="w-full max-w-7xl flex flex-col items-center">
+            <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
+              {/* Chart - Responsive - Full width */}
+              <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
+                style={{
+                  background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+                  boxShadow: theme === 'light'
+                    ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                    : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
+                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
+                }}>
+                <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+              </div>
+
+              {/* Terminal - 50/50 split on desktop and mobile */}
+              <div className="col-span-6 lg:col-span-6 flex flex-col">
+                <TradeTerminal
+                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={setSessionMode} price={price}
+                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                  refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                  activeMarket={activeMarket}
+                  maintenanceMode={platformSettings.maintenanceMode}
+                />
+              </div>
+
+              {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
+              <div className="col-span-6 lg:col-span-6 flex flex-col">
+                <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
+                  <LiveExecution
+                    activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                    setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                    theme={theme} currentNetwork={network}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <TradeHistory
+              wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+              tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+              GREEN={GREEN} CORAL={CORAL}
+              evmSessionWallet={evmSessionWallet}
+              theme={theme} currentNetwork={network}
+            />
+            {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
+            <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
+              {winnerBanner && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border !border-white/5 relative`}
+                  style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
+                >
+                  <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                    <Trophy size={80} />
+                  </div>
+                  <div className="flex items-center gap-4 lg:gap-8 relative z-10">
+                    <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                      <Trophy size={32} className="text-yellow-500" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 truncate max-w-[100px] lg:max-w-none">{winnerBanner.owner}</span>
+                      </div>
+                      <h3 className="text-lg lg:text-xl font-black text-white tracking-tighter uppercase">
+                        Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
+                      </h3>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
+                <motion.div
+                  key={camp.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
+                >
+                  <div className="flex items-center gap-6">
+                    <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[#3CB371]">
+                      <Trophy size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-white uppercase tracking-tight">{camp.title}</h3>
+                      <div className="flex flex-wrap items-center gap-4 mt-1">
+                        <div className="flex items-center gap-1.5 text-[10px] font-black text-white/40 uppercase tracking-widest">
+                          <Calendar size={12} />
+                          Ends {new Date(camp.endTime).toLocaleString()}
+                        </div>
+                        <div className="w-1 h-1 bg-white/10 rounded-full" />
+                        <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
+                          Prize: {camp.prize || 'Pride'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => navigate(`/campaign/${camp.id}`)}
+                    className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
+                      ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
+                      : 'bg-white text-black hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.3)]'
+                      }`}
+                  >
+                    {enrollments[camp.id] ? (
+                      <>
+                        <CheckCircle size={14} />
+                        View Leaderboard
+                      </>
+                    ) : (
+                      <>
+                        View Campaign Details
+                        <ChevronRight size={14} />
+                      </>
+                    )}
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
 
 
-        <AnimatePresence>
-          {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
-        </AnimatePresence>
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        wallet={wallet}
+        userProfile={userProfile}
+        transactionHistory={transactionHistory}
+        onViewReceipt={(tx) => {
+          setSelectedTransaction(tx);
+          setIsTransactionReceiptOpen(true);
+        }}
+      />
+      <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
 
-        <OnboardingModal
-          isOpen={showOnboarding}
-          onComplete={handleOnboardingComplete}
-          address={address}
-          network={network}
-          existingProfile={userProfile}
-          theme={theme}
+
+
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+      </AnimatePresence>
+
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onComplete={handleOnboardingComplete}
+        address={address}
+        network={network}
+        existingProfile={userProfile}
+        theme={theme}
+      />
+
+      {/* Footer */}
+      <footer className="w-full max-w-7xl mt-24 mb-10 flex items-center justify-center gap-6 opacity-60 hover:opacity-100 transition-opacity" style={{ fontFamily: 'Arial, sans-serif' }}>
+        <img
+          src="/logo.png"
+          alt="15market"
+          className="h-14 lg:h-18 w-auto opacity-80"
         />
-
-        {/* Footer */}
-        <footer className="w-full max-w-7xl mt-24 mb-10 flex items-center justify-center gap-6 opacity-60 hover:opacity-100 transition-opacity" style={{ fontFamily: 'Arial, sans-serif' }}>
-          <img
-            src="/logo.png"
-            alt="15market"
-            className="h-14 lg:h-18 w-auto opacity-80"
-          />
-          <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
-          <span className={`text-xs md:text-sm font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-            © 2026 15market
-          </span>
-          <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
-          <span className={`text-xs md:text-sm font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-            Built by 15labs
-          </span>
-        </footer>
-        <TransactionReceiptModal
-          isOpen={isTransactionReceiptOpen}
-          onClose={() => setIsTransactionReceiptOpen(false)}
-          transaction={selectedTransaction}
-        />
-      </div>
+        <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
+        <span className={`text-xs md:text-sm font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+          © 2026 15market
+        </span>
+        <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
+        <span className={`text-xs md:text-sm font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+          Built by 15labs
+        </span>
+      </footer>
+      <TransactionReceiptModal
+        isOpen={isTransactionReceiptOpen}
+        onClose={() => setIsTransactionReceiptOpen(false)}
+        transaction={selectedTransaction}
+      />
     </motion.div>
   );
 }

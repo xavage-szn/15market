@@ -136,7 +136,7 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                             <motion.div
                                 className="flex items-center gap-24 whitespace-nowrap pl-24 lg:pl-32"
                                 animate={{ x: ["0%", "-50%"] }}
-                                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+                                transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
                             >
                                 {[...Array(8)].map((_, i) => (
                                     <div key={i} className="flex items-center gap-4 lg:gap-6">
@@ -155,7 +155,7 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                 <motion.div
                     animate={{ x: ["0%", "-50%"] }}
                     className="flex items-center gap-6 lg:gap-10 whitespace-nowrap pl-40 lg:pl-52"
-                    transition={{ x: { duration: 60, repeat: Infinity, ease: "linear" } }}
+                    transition={{ x: { duration: 160, repeat: Infinity, ease: "linear" } }}
                 >
                     {repeatedHistory.map((event, i) => (
                         <div key={`${event.id}-${i}`}
@@ -188,12 +188,11 @@ const GlobalTradeScrollerComponent = ({ theme }) => {
                             <div className={`w-px h-4 lg:h-6 mx-0.5 lg:mx-1 ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
 
                             <div className="flex flex-col items-end">
-                                <div className="flex items-baseline gap-0.5 lg:gap-1">
-                                    <span className={`text-[10px] lg:text-xs font-black ${isLight ? 'text-black' : 'text-white'}`}>{event.amount}</span>
-                                    <span className="text-[6px] lg:text-[8px] font-bold opacity-40">USDC</span>
-                                </div>
-                                <span className={`text-[8px] lg:text-[9px] font-black ${event.direction === "UP" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
-                                    {event.direction === "UP" ? "CALL ▲" : "PUT ▼"}
+                                <span className={`text-[8px] lg:text-[10px] font-black uppercase tracking-widest ${event.status === "WON" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                    {event.status || "WAITING"}
+                                </span>
+                                <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
+                                    {event.symbol} {event.direction === "UP" ? "UP" : "DOWN"}
                                 </span>
                             </div>
                         </div>

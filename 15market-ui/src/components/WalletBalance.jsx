@@ -1,5 +1,5 @@
 import { useAccount } from "wagmi";
-import { publicClient } from "../paraClient";
+import { publicClient } from "../client";
 import { formatUnits } from "viem";
 import { useState, useEffect, useCallback } from "react";
 

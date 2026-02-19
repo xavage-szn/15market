@@ -10,7 +10,9 @@ import './index.css';
 import { WagmiProvider } from 'wagmi';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { config } from './wagmiConfig';
-import { queryClient } from './paraClient';
+import { QueryClient } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 // --- CONSOLE LOG CLEANER & SDK ERROR SUPPRESSOR ---
 // Silence known non-critical third-party SDK errors to keep logs clean for platform operations.

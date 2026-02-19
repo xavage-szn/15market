@@ -38,12 +38,16 @@ export const TransactionReceiptModal = ({ isOpen, onClose, transaction }) => {
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-md bg-black/30">
+            <div
+                onClick={onClose}
+                className="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-md bg-black/30 cursor-pointer"
+            >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="relative max-w-sm w-full"
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative max-w-sm w-full cursor-default"
                 >
                     <div
                         ref={cardRef}
@@ -99,10 +103,18 @@ export const TransactionReceiptModal = ({ isOpen, onClose, transaction }) => {
                                             {transaction.type}
                                         </span>
                                     </div>
+                                    {transaction.type === 'TRADE' && (
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[9px] opacity-40 font-black">ASSET_PAIR</span>
+                                            <span className="text-base font-black tracking-tighter">
+                                                {transaction.symbol ? `${transaction.symbol.toUpperCase()} // USD` : 'ETH // USD'}
+                                            </span>
+                                        </div>
+                                    )}
                                     <div className="flex flex-col items-end">
                                         <span className="text-[9px] opacity-40 font-black">AMOUNT</span>
                                         <span className="font-black text-lg">
-                                            {isDeposit ? '+' : '-'}{transaction.amount} USDC
+                                            {isDeposit ? '+' : '-'}{transaction.amount} {transaction.currency || (transaction.network === 'arc' ? 'USDC' : 'SOL')}
                                         </span>
                                     </div>
                                 </div>

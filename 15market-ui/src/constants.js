@@ -1,19 +1,29 @@
 // Network Constants & Chain Definitions
 import { defineChain } from 'viem'
 
-// 1. Arc Network Selection
-export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS || "0xd8F519179d16Fb4B791Cd12eF027bD29ABeBC71e";
-export const ARC_USDC_ADDRESS = import.meta.env.VITE_ARC_USDC_ADDRESS || "0x3600000000000000000000000000000000000000";
-export const ARC_RPC = "https://rpc.testnet.arc.network";
-export const ARC_RPC_BACKUP = "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1";
+// ARC TESTNET
+export const ARC_CHAIN_ID = 5042002;
+// export const ARC_RPC = "https://rpc-test-1.arc.market";
+export const ARC_RPC = "https://5042002.rpc.thirdweb.com";
+export const ARC_EXPLORER = "https://explorer-test-1.arc.market";
+// export const ARC_CONTRACT_ADDRESS = "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8"; // OLD
+export const ARC_CONTRACT_ADDRESS = "0x345014899b42bF9034D9475760609e64B1433A6a"; // NEW V2
+export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
+export const ARC_RPC_BACKUP = "https://rpc.testnet.arc.network";
 export const ARC_RPC_THIRDWEB = "https://5042002.rpc.thirdweb.com";
 // 2. Keeper Configuration
-const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const isLocal = typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname.startsWith('10.'));
 
-const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? "http://localhost:3010" : "https://api.15market.online");
+const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? "http://localhost:3012" : "https://api.15market.online");
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
 
-export const KEEPER_URL_ARC = isLocal ? "http://localhost:3010" : (import.meta.env.VITE_KEEPER_URL_ARC || `${KEEPER_URL}/arc`);
+// If we are local, prioritize localhost:3012 for the Arc keeper unless explicitly overridden
+export const KEEPER_URL_ARC = isLocal ? "http://localhost:3012" : (import.meta.env.VITE_KEEPER_URL_ARC || `${KEEPER_URL}/arc`);
+console.log(`🌐 [Config] Keeper URL: ${KEEPER_URL_ARC}`);
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 
 // 2. Project ID
