@@ -63,7 +63,7 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                         </motion.div>
                     ) : (
                         activeTrades.map((trade) => {
-                            const isLong = trade.direction === "UP";
+                            const isLong = trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
                             const entry = parseFloat(trade.entryPrice);
                             const current = parseFloat(currentPrice || price);
 

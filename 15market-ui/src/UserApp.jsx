@@ -528,8 +528,8 @@ export default function UserApp() {
           // Normalized trades from backend
           const backendAll = backendAllRaw.map(t => ({
             ...t,
-            // Normalize direction: 1 -> UP, 0 -> DOWN (matches Contract mapping)
-            direction: typeof t.direction === 'number' ? (t.direction === 1 ? "UP" : "DOWN") : t.direction,
+            // Normalize direction: handle numbers (1/0), strings ("1"/"0"), or existing "UP"/"DOWN"
+            direction: (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy") ? "UP" : "DOWN",
             status: t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING"),
             owner: t.owner || t.user || t.userPublicKey || t.userAddress
           }));
@@ -1192,9 +1192,8 @@ export default function UserApp() {
 
         if (capturedPrice > 0) {
           const entry = parseFloat(trade.entryPrice);
-          const isWin = trade.direction === "buy" || trade.direction === "UP"
-            ? (capturedPrice > entry)
-            : (capturedPrice < entry);
+          const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+          const isWin = isUpTrade ? (capturedPrice > entry) : (capturedPrice < entry);
           optimisticStatus = isWin ? "WON" : "LOST";
         }
 

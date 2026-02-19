@@ -36,7 +36,7 @@ export const PnLModal = ({ isOpen, onClose, trade }) => {
 
     // Trust the backend status - it now comes from the authoritative on-chain result
     const isWon = trade.status === "WON";
-    const isUp = trade.direction === "buy" || trade.direction === "UP";
+    const isUp = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
     // Calculate profit based on duration multiplier
     const getMultiplier = (duration) => {

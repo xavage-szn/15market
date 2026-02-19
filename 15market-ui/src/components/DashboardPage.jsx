@@ -169,7 +169,7 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
             .map((t, i) => ({
                 name: i,
                 amount: parseFloat(t.amount),
-                type: t.direction === "UP" ? 1 : -1
+                type: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? 1 : -1
             }));
     }, [stats.recentTrades]);
 
@@ -290,8 +290,8 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                 ) : stats.recentTrades.map((t, i) => (
                                                     <div key={i} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-gray-50 border-gray-100' : 'bg-white/[0.02] border-white/5'} border`}>
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-lg ${t.direction === "UP" ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
-                                                                {t.direction === "UP" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                                            <div className={`p-2 rounded-lg ${(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
+                                                                {(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                                             </div>
                                                             <div>
                                                                 <div className="text-[10px] font-bold">{t.user?.slice(0, 6) || "Trader"}</div>

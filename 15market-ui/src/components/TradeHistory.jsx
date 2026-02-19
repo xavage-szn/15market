@@ -60,8 +60,11 @@ const TradeHistoryComponent = ({
                                 ? 'bg-[#f8fafc] border-black/5 shadow-md hover:shadow-lg hover:border-black/10'
                                 : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
                                 <div className="flex items-center gap-2 lg:gap-4">
-                                    <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{ background: t.direction === "UP" ? `rgba(59, 130, 246, 0.2)` : `rgba(255, 127, 80, 0.2)`, color: t.direction === "UP" ? '#3CB371' : '#FF7F50' }}>
-                                        {t.direction?.toUpperCase()}
+                                    <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{
+                                        background: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? `rgba(59, 130, 246, 0.2)` : `rgba(255, 127, 80, 0.2)`,
+                                        color: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? '#3CB371' : '#FF7F50'
+                                    }}>
+                                        {String(t.direction || "").toUpperCase()}
                                     </div>
                                     <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-black/90' : 'text-white/90'}`}>{t.amount} USDC</div>
                                 </div>
