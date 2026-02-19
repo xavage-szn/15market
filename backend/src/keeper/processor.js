@@ -2,6 +2,14 @@ const { ethers } = require('ethers');
 const blockchain = require('../services/blockchain');
 const pricing = require('../services/pricing');
 const redis = require('../services/redis');
+const fs = require('fs');
+const path = require('path');
+
+const LOG_FILE = path.join(__dirname, '..', '..', 'settlement_activity.log');
+function logToFile(msg) {
+    const entry = `[${new Date().toISOString()}] ${msg}\n`;
+    fs.appendFileSync(LOG_FILE, entry);
+}
 
 class TradeProcessor {
     constructor() {
@@ -49,6 +57,9 @@ class TradeProcessor {
     async processSettlements() {
         if (this.isProcessing) return;
 
+        // Ensure shared log exists
+        if (!fs.existsSync(LOG_FILE)) fs.writeFileSync(LOG_FILE, 'Log started\n');
+
         // Skip if blockchain is not ready yet
         if (!blockchain.providerReady) {
             return;
@@ -75,6 +86,7 @@ class TradeProcessor {
 
             if (toSettle.length > 0) {
                 console.log(`[Processor] 🚀 Found ${toSettle.length} trades to settle!`);
+                logToFile(`Found ${toSettle.length} trades to settle.`);
 
                 await Promise.allSettled(toSettle.map(async (trade) => {
                     try {
@@ -103,6 +115,7 @@ class TradeProcessor {
                         console.log(`[Processor] Outcome for ${trade.id}: ${isWin ? 'WON' : 'LOST'} (Entry: ${entry.toFixed(4)}, Exit: ${currentPrice.toFixed(4)}, Dir: ${trade.direction} -> ${isUp ? 'UP' : 'DOWN'})`);
 
                         await blockchain.settleBet(trade.id, scaledPrice);
+                        logToFile(`✅ Settled trade ${trade.id} for ${trade.user}. Price: ${currentPrice}. Win: ${isWin}`);
 
                         // Push to global history for the live scroller
                         await redis.pushHistory({
@@ -116,6 +129,7 @@ class TradeProcessor {
 
                         console.log(`[Processor] ✅ Successfully settled trade ${trade.id}`);
                     } catch (e) {
+                        logToFile(`❌ Error settling trade ${trade.id}: ${e.message}`);
                         console.error(`[Processor] ❌ Error settling trade ${trade.id}:`, e.message);
                         // If already settled on-chain, remove from Redis to avoid infinite retry
                         const alreadySettled = e.message?.includes('already settled') || e.message?.includes('Bet already settled');

@@ -49,8 +49,12 @@ class RedisService {
     async setTrade(betId, tradeData) {
         // Update RAM immediately (Speed!)
         this.memoryCache.set(betId.toString(), tradeData);
-        // Persist to Redis in background (Safety)
-        this.client.set(`trade:${betId}`, JSON.stringify(tradeData)).catch(() => { });
+        // Persist to Redis (Safety)
+        try {
+            await this.client.set(`trade:${betId}`, JSON.stringify(tradeData));
+        } catch (err) {
+            console.error(`[Redis] ❌ Failed to set trade ${betId}:`, err.message);
+        }
     }
 
     async getTrade(betId) {

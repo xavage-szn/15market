@@ -167,13 +167,14 @@ export default function UserApp() {
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
-  const refetchEvmBalance = useCallback(async (isInitial = false) => {
+  const refetchEvmBalance = useCallback(async (force = false) => {
     if (!address) return;
 
     // SKIP REFRESH if we recently traded or won (< 8 seconds ago) 
     // to prevent the optimistic payout from being overwritten by old on-chain balance
-    // Unless it's the very first fetch on login
-    if (!isInitial && Date.now() - lastTradeTimeRef.current < 8000) {
+    // UNLESS we are forcing an update (e.g. after a settlement event)
+    if (!force && Date.now() - lastTradeTimeRef.current < 8000) {
+      // console.log("💰 [BALANCE_SYNC] Fetch skipped (Throttled)");
       return;
     }
 
@@ -958,7 +959,7 @@ export default function UserApp() {
     if (!evmSessionWallet) return;
 
     // SKIP REFRESH if we just traded (< 10 seconds ago) to allow chain to catch up
-    // Unless we are forcing an update (e.g. after a refill)
+    // UNLESS we are forcing an update (e.g. after a win or refill)
     if (!force && Date.now() - lastTradeTimeRef.current < 10000) {
       return;
     }
@@ -987,24 +988,23 @@ export default function UserApp() {
   }, [evmSessionWallet, updateEvmSessionBal]);
 
   // Global Refresh Trigger (Exposed for events)
-  const triggerGlobalRefresh = useCallback(() => {
-    console.log("🔄 [REFRESH] Triggering global balance sync...");
-    refetchEvmBalance();
-    if (updateEvmSessionBal) updateEvmSessionBal();
+  const triggerGlobalRefresh = useCallback((force = false) => {
+    // console.log("🔄 [REFRESH] Triggering global balance sync...");
+    refetchEvmBalance(force);
+    if (updateEvmSessionBal) updateEvmSessionBal(force);
   }, [refetchEvmBalance, updateEvmSessionBal]);
 
   // Aggressive Refresh (Multi-stage update)
   const aggressiveRefresh = useCallback(() => {
     console.log("🚀 [REFRESH] Starting hyper-aggressive balance sync...");
-    triggerGlobalRefresh();
+    triggerGlobalRefresh(true); // Initial forced fetch
     // Ultra-fast stages to catch the update nearly instantly
     [100, 500, 1500, 3000, 6000, 12000].forEach(delay => {
       setTimeout(() => {
-        triggerGlobalRefresh();
-        if (refetchEvmBalance) refetchEvmBalance();
+        triggerGlobalRefresh(true);
       }, delay);
     });
-  }, [triggerGlobalRefresh, refetchEvmBalance]);
+  }, [triggerGlobalRefresh]);
 
 
 
@@ -1218,6 +1218,21 @@ export default function UserApp() {
           optimistic: true // Marker so we know it's not final settled yet
         };
 
+        // INSTANT WALLET BALANCE UPDATE (Optimistic)
+        // This is what makes it feel "Instant" while the chain catches up
+        if (optimisticStatus === "WON" && !trade.balanceApplied) {
+          const payoutNum = parseFloat(optimisticPayout);
+          const userAddr = trade.userPublicKey?.toLowerCase() || trade.owner?.toLowerCase();
+
+          if (userAddr === address?.toLowerCase()) {
+            setBalance(prev => prev + payoutNum);
+          } else if (userAddr === evmSessionWallet?.address?.toLowerCase()) {
+            setSessionBalance(prev => prev + payoutNum);
+          }
+          updatePayload.balanceApplied = true;
+          console.log(`🚀 [OPTIMISTIC_PAYOUT] Applied +${payoutNum} to ${userAddr === address?.toLowerCase() ? 'Main' : 'Session'} Wallet`);
+        }
+
         // Instant UI Update
         setActiveTrades(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
         setTradeHistory(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
@@ -1325,7 +1340,7 @@ export default function UserApp() {
           BigInt(duration),
           BigInt(entryPriceParams),
           Number(assetId),
-          address, // STICKY: Always send winnings to MAIN WALLET for safety
+          evmSessionWallet.address, // Correctly send winnings back to the session wallet
           { value: amountWei, gasLimit: 400000n }
         );
         txHash = tx.hash;
@@ -1491,22 +1506,27 @@ export default function UserApp() {
             setActiveTrades(prev => prev.map(updateTrade));
 
             if (won) {
-              notify(`Arc Trade WON! +${formattedPayout} USDC`, "success");
+              notify(`Trade WON! +${formattedPayout} USDC`, "success");
               const payoutVal = parseFloat(formattedPayout);
 
-              // Set the lock timer so refreshes don't overwrite this win
-              lastTradeTimeRef.current = Date.now();
+              // Update relevant local state ONLY if not already optimistically applied
+              // We check both the trade in history and the trade in activeTrades
+              const existingTrade = tradeHistory.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
 
-              if (normalizedUser === mainAddr) {
-                setBalance(prev => prev + payoutVal);
-              } else if (normalizedUser === sessionAddr) {
-                setSessionBalance(prev => prev + payoutVal);
+              if (!existingTrade?.balanceApplied) {
+                if (normalizedUser === mainAddr) {
+                  setBalance(prev => prev + payoutVal);
+                } else if (normalizedUser === sessionAddr) {
+                  setSessionBalance(prev => prev + payoutVal);
+                }
               }
+
+              // Force background fetches to confirm real chain state
+              lastTradeTimeRef.current = Date.now() - 7000;
               aggressiveRefresh();
             } else {
-              notify(`Arc Trade LOST. Price: $${priceUSD}`, "error");
-              // Even on loss, we might want a short lock to see the deduction
-              lastTradeTimeRef.current = Date.now();
+              notify(`Trade LOST. Price: $${priceUSD}`, "error");
+              lastTradeTimeRef.current = Date.now() - 7000;
               aggressiveRefresh();
             }
           }
@@ -1514,7 +1534,7 @@ export default function UserApp() {
       },
     });
     return () => unwatch();
-  }, [address, evmSessionWallet, notify, aggressiveRefresh]);
+  }, [address, evmSessionWallet, notify, aggressiveRefresh, updateEvmSessionBal, refetchEvmBalance]);
 
   const handleRefill = useCallback(async (amt) => {
     if (isExecuting) return;
