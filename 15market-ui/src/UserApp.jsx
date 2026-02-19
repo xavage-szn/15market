@@ -1610,13 +1610,29 @@ export default function UserApp() {
       }
 
       notify("Processing sweep...", "info");
-      const sweepTx = await evmSessionWallet.sendTransaction({
+
+      // Ensure we are using the correct provider for the session wallet
+      const tx = {
         to: address,
         value: parseUnits(netAmt.toFixed(18), 18),
-      });
+      };
+
+      const sweepTx = await evmSessionWallet.sendTransaction(tx);
       await sweepTx.wait();
 
       notify("Arc Withdrawal Successful!", "success");
+
+      // Record transaction
+      const newTx = {
+        id: `withdraw-${Date.now()}`,
+        type: "WITHDRAW",
+        amount: amtNum.toFixed(4),
+        timestamp: Date.now(),
+        tx: sweepTx.hash,
+        network: 'arc'
+      };
+
+      setTransactionHistory(prev => [newTx, ...prev]);
 
       setTimeout(() => {
         updateEvmSessionBal(true);
@@ -1627,7 +1643,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, recordFee, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
+  }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
