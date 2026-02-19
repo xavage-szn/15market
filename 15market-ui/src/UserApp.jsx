@@ -165,6 +165,17 @@ export default function UserApp() {
 
   const [evmBalance, setEvmBalance] = useState("0");
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
+  const [sessionMode, setSessionMode] = useState(false);
+  const [evmSessionWallet, setEvmSessionWallet] = useState(null);
+  const [sessionBalance, setSessionBalance] = useState(0);
+  const [refillAmount, setRefillAmount] = useState("0.1");
+  const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
+  const [isSignerInitializing, setIsSignerInitializing] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
+  const [treasuryBalance, setTreasuryBalance] = useState(0);
+  const [toast, setToast] = useState(null); // { message, type }
+  const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
   const refetchEvmBalance = useCallback(async (force = false) => {
@@ -211,6 +222,57 @@ export default function UserApp() {
 
   // DERIVED BALANCE STATE (Fix for ReferenceError)
   const balance = useMemo(() => parseFloat(displayEvmBalance || "0"), [displayEvmBalance]);
+
+
+
+  const updateEvmSessionBal = useCallback(async (force = false) => {
+    if (!evmSessionWallet) return;
+
+    // SKIP REFRESH if we just traded (< 10 seconds ago) to allow chain to catch up
+    // UNLESS we are forcing an update (e.g. after a win or refill)
+    if (!force && Date.now() - lastTradeTimeRef.current < 10000) {
+      return;
+    }
+
+    try {
+      const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
+      const bal = parseFloat(formatUnits(balanceWei, 18));
+
+      if (bal !== sessionBalance) {
+        console.log(`🔑 [SESSION_BAL] Wallet: ${evmSessionWallet.address.slice(0, 6)}... | Balance: ${bal} USDC`);
+        setSessionBalance(bal);
+      }
+    } catch (err) {
+      console.warn("❌ [SESSION BALANCE] Fetch failed, will retry...");
+    }
+  }, [evmSessionWallet, sessionBalance]);
+
+  // Global Refresh Trigger (Exposed for events)
+  const triggerGlobalRefresh = useCallback((force = false) => {
+    // console.log("🔄 [REFRESH] Triggering global balance sync...");
+    refetchEvmBalance(force);
+    if (updateEvmSessionBal) updateEvmSessionBal(force);
+  }, [refetchEvmBalance, updateEvmSessionBal]);
+
+  // Aggressive Refresh (Multi-stage update)
+  const aggressiveRefresh = useCallback(() => {
+    console.log("🚀 [REFRESH] Starting hyper-aggressive balance sync...");
+    triggerGlobalRefresh(true); // Initial forced fetch
+    // Ultra-fast stages to catch the update nearly instantly
+    [100, 500, 1500, 3000, 6000, 12000].forEach(delay => {
+      setTimeout(() => {
+        triggerGlobalRefresh(true);
+      }, delay);
+    });
+  }, [triggerGlobalRefresh]);
+
+  const notify = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+  }, []);
+
+  const closeToast = useCallback(() => {
+    setToast(null);
+  }, []);
 
   // Compatibility wrapper for legacy setBalance calls
   const setBalance = useCallback((val) => {
@@ -275,21 +337,7 @@ export default function UserApp() {
 
   const themeClass = "theme-arc";
 
-  // Session Wallet State
-  const [sessionMode, setSessionMode] = useState(false);
-  const [evmSessionWallet, setEvmSessionWallet] = useState(null);
-  const [sessionBalance, setSessionBalance] = useState(0);
-  const [refillAmount, setRefillAmount] = useState("0.1");
-  const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
-  const [isSignerInitializing, setIsSignerInitializing] = useState(false);
 
-
-
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
-  const [treasuryBalance, setTreasuryBalance] = useState(0);
-  const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
-  const [toast, setToast] = useState(null); // { message, type }
 
   const initializeSessionWallet = useCallback(async () => {
     if (!address || !walletClient) {
@@ -552,13 +600,7 @@ export default function UserApp() {
     }
   };
 
-  const notify = useCallback((message, type = 'success') => {
-    setToast({ message, type });
-  }, []);
 
-  const closeToast = useCallback(() => {
-    setToast(null);
-  }, []);
 
   const navigate = useNavigate();
 
@@ -955,56 +997,7 @@ export default function UserApp() {
 
 
 
-  const updateEvmSessionBal = useCallback(async (force = false) => {
-    if (!evmSessionWallet) return;
 
-    // SKIP REFRESH if we just traded (< 10 seconds ago) to allow chain to catch up
-    // UNLESS we are forcing an update (e.g. after a win or refill)
-    if (!force && Date.now() - lastTradeTimeRef.current < 10000) {
-      return;
-    }
-
-    try {
-      const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
-      const bal = parseFloat(formatUnits(balanceWei, 18));
-
-      if (bal !== sessionBalance) {
-        console.log(`🔑 [SESSION_BAL] Wallet: ${evmSessionWallet.address.slice(0, 6)}... | Balance: ${bal} USDC`);
-        setSessionBalance(bal);
-      }
-    } catch (err) {
-      console.warn("❌ [SESSION BALANCE] Fetch failed, will retry...");
-    }
-  }, [evmSessionWallet, sessionBalance]);
-
-  // Update Session Balance - Polling (Arc)
-  useEffect(() => {
-    if (!evmSessionWallet) return;
-
-    updateEvmSessionBal();
-    // Poll every 5s for Arc Session balance
-    const interval = setInterval(updateEvmSessionBal, 5000);
-    return () => clearInterval(interval);
-  }, [evmSessionWallet, updateEvmSessionBal]);
-
-  // Global Refresh Trigger (Exposed for events)
-  const triggerGlobalRefresh = useCallback((force = false) => {
-    // console.log("🔄 [REFRESH] Triggering global balance sync...");
-    refetchEvmBalance(force);
-    if (updateEvmSessionBal) updateEvmSessionBal(force);
-  }, [refetchEvmBalance, updateEvmSessionBal]);
-
-  // Aggressive Refresh (Multi-stage update)
-  const aggressiveRefresh = useCallback(() => {
-    console.log("🚀 [REFRESH] Starting hyper-aggressive balance sync...");
-    triggerGlobalRefresh(true); // Initial forced fetch
-    // Ultra-fast stages to catch the update nearly instantly
-    [100, 500, 1500, 3000, 6000, 12000].forEach(delay => {
-      setTimeout(() => {
-        triggerGlobalRefresh(true);
-      }, delay);
-    });
-  }, [triggerGlobalRefresh]);
 
 
 
