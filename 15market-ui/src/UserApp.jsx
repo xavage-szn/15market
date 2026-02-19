@@ -280,6 +280,7 @@ export default function UserApp() {
   const [sessionBalance, setSessionBalance] = useState(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
   const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
+  const [isSignerInitializing, setIsSignerInitializing] = useState(false);
 
 
 
@@ -297,13 +298,13 @@ export default function UserApp() {
 
     try {
       setIsExecuting(true);
+      notify("Please sign to link your Auto-Signer...", "info");
 
       // key specific to this wallet address
       const storageKey = `15market_session_key_${address.toLowerCase()}`;
       let privateKey = localStorage.getItem(storageKey);
 
       if (!privateKey) {
-        notify("Initializing Auto-Signer (One-Time Setup)...", "info");
         // Deterministic key generation from signature
         const message = `Authorize 15market Universal Session Wallet\n\nMain Wallet: ${address}\n\nThis will link your Auto-Signer balance across all devices.`;
         const sig = await walletClient.signMessage({ message, account: address });
@@ -321,11 +322,12 @@ export default function UserApp() {
 
       setEvmSessionWallet(newWallet);
       setIsSessionSynced(true); // Always synced by design now
-
-      // Auto-enable session mode if setting up
       setSessionMode(true);
 
-      notify("Auto-Signer Ready! Funds are unified across devices.", "success");
+      // UNBLOCK UI
+      setIsSignerInitializing(false);
+
+      notify("Auto-Signer Successfully Linked!", "success");
 
       // Force refresh the balance for the new address
       setTimeout(() => updateEvmSessionBal(true), 500);
@@ -334,6 +336,7 @@ export default function UserApp() {
       console.error("Session init error:", err);
       // notify("Setup failed: " + (err.shortMessage || err.message), "error");
       setSessionMode(false); // disable if failed
+      // We do NOT unblock here, so user must retry or reload
     } finally {
       setIsExecuting(false);
     }
@@ -907,16 +910,25 @@ export default function UserApp() {
   }, []);
 
   // Session Wallet Initialization - DETERMINISTIC RECOVERY
-  useEffect(() => {
-    if (!address) return;
 
-    const deriveSessionWallet = async () => {
-      // Check if we already have the deterministic key for THIS address
+  useEffect(() => {
+    if (!address) {
+      setIsSignerInitializing(false);
+      return;
+    }
+
+    const checkAndDerive = async () => {
       const storageKey = `15market_session_key_${address.toLowerCase()}`;
       const privateKey = localStorage.getItem(storageKey);
 
-      if (privateKey) {
-        // Robust Provider Setup
+      if (!privateKey) {
+        // FORCE INITIALIZATION: No key found for this address
+        setIsSignerInitializing(true);
+        setEvmSessionWallet(null);
+        setSessionMode(false);
+      } else {
+        // Key found, load it
+        setIsSignerInitializing(false);
         const fetchReq = new ethers.FetchRequest(ARC_RPC);
         fetchReq.timeout = 30000;
         const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
@@ -925,13 +937,16 @@ export default function UserApp() {
           const wallet = new ethers.Wallet(privateKey, provider);
           setEvmSessionWallet(wallet);
           setIsSessionSynced(true);
+          setSessionMode(true); // Auto-enable if ready
         } catch (e) {
           console.error("Session wallet restore failed", e);
+          // If restore fails (corrupt key?), force re-init
+          setIsSignerInitializing(true);
         }
       }
     };
 
-    deriveSessionWallet();
+    checkAndDerive();
   }, [address]);
 
   // NOTE: The actual "creation" now happens via handleSyncSession which we will rename/auto-trigger
@@ -1666,6 +1681,38 @@ export default function UserApp() {
       </AnimatePresence>
     </div>
   );
+
+  if (isSignerInitializing) {
+    return (
+      <div className={`${themeClass} fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center`}>
+        <div className="max-w-md w-full bg-[#0D0D0D] border border-[#3CB371]/20 rounded-3xl p-8 relative overflow-hidden shadow-[0_0_100px_rgba(60,179,113,0.1)]">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 pointer-events-none" />
+
+          <div className="w-16 h-16 rounded-full bg-[#3CB371]/10 flex items-center justify-center mx-auto mb-6 border border-[#3CB371]/20">
+            <Shield className="w-8 h-8 text-[#3CB371] animate-pulse" />
+          </div>
+
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">
+            Secure Auto-Signer Setup
+          </h2>
+          <p className="text-white/40 text-xs font-medium leading-relaxed mb-8">
+            To ensure maximum security and cross-device synchronization, you must sign a one-time authorization to link your Main Wallet to your Auto-Signer.
+          </p>
+
+          <button
+            onClick={initializeSessionWallet}
+            disabled={isExecuting}
+            className="w-full py-4 rounded-xl bg-[#3CB371] hover:brightness-110 active:scale-[0.98] transition-all text-white font-black uppercase tracking-widest text-sm shadow-[0_10px_40px_-10px_#3CB371]"
+          >
+            {isExecuting ? "Signing..." : "Initialize & Link Wallet"}
+          </button>
+          <AnimatePresence>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`min-h-screen font-sans flex flex-col items-center overflow-x-hidden ${themeClass}`}
