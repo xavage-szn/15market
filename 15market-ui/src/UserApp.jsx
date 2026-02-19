@@ -841,18 +841,29 @@ export default function UserApp() {
 
   // Session Wallet Initialization
   useEffect(() => {
-    // EVM Session Wallet
-    const savedEvmKey = localStorage.getItem("15market_evm_session_key");
+    // 1. Try modern key, then legacy keys
+    const savedEvmKey = localStorage.getItem("15market_evm_session_key") ||
+      localStorage.getItem("evm_session_key") ||
+      localStorage.getItem("arc_session_key");
 
     // Robust Provider Setup with Timeout
     const fetchReq = new ethers.FetchRequest(ARC_RPC);
-    fetchReq.timeout = 30000; // 30s timeout for slow public RPC
+    fetchReq.timeout = 30000;
     const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
+
     if (savedEvmKey) {
       try {
         const wallet = new ethers.Wallet(savedEvmKey, provider);
         setEvmSessionWallet(wallet);
-      } catch (e) { console.error("EVM Session key failed:", e); }
+        // Ensure it's migrated to the modern key for future lookups
+        localStorage.setItem("15market_evm_session_key", savedEvmKey);
+      } catch (e) {
+        console.error("EVM Session key recovery failed:", e);
+        // Fallback to fresh wallet if legacy key is corrupted
+        const wallet = ethers.Wallet.createRandom().connect(provider);
+        localStorage.setItem("15market_evm_session_key", wallet.privateKey);
+        setEvmSessionWallet(wallet);
+      }
     } else {
       const wallet = ethers.Wallet.createRandom().connect(provider);
       localStorage.setItem("15market_evm_session_key", wallet.privateKey);
@@ -1233,27 +1244,19 @@ export default function UserApp() {
           BigInt(duration),
           BigInt(entryPriceParams),
           Number(assetId),
-          evmSessionWallet.address,
-          { value: amountWei, gasLimit: 600000n }
+          address, // STICKY: Always send winnings to MAIN WALLET for safety
+          { value: amountWei, gasLimit: 400000n }
         );
         txHash = tx.hash;
         console.log("📤 [TRADE] Auto-signed tx:", txHash);
 
         const receipt = await tx.wait();
         console.log("✅ [TRADE] Transaction confirmed:", receipt.hash);
-        updateEvmSessionBal();
 
-        setTimeout(async () => {
-          try {
-            await walletObj.sendTransaction({
-              to: ARC_CONTRACT_ADDRESS,
-              value: feeWei,
-              gasLimit: 50000n
-            });
-            recordFee('arc', signerFee);
-          } catch (feeErr) {
-            console.error("Fee failure:", feeErr);
-          }
+        // Immediate balance sync
+        setTimeout(() => {
+          updateEvmSessionBal(true);
+          refetchEvmBalance(true);
         }, 100);
       } else {
         console.log("📝 [TRADE] Using MAIN WALLET");
@@ -1473,20 +1476,6 @@ export default function UserApp() {
           }, 2000);
         });
 
-        setTimeout(async () => {
-          try {
-            const tx = await evmSessionWallet.sendTransaction({
-              to: ARC_CONTRACT_ADDRESS,
-              value: parseUnits(fee.toFixed(18), 18),
-            });
-            await tx.wait();
-            recordFee('arc', fee);
-            notify(`System Fee of ${fee.toFixed(4)} USDC processed.`, "info");
-          } catch (feeErr) {
-            console.error("Delayed fee failure:", feeErr);
-          }
-        }, 5000);
-
         const newTx = {
           id: `dep_${Date.now()}`,
           type: 'DEPOSIT',
@@ -1525,12 +1514,11 @@ export default function UserApp() {
         return;
       }
 
-      const fee = amtNum * 0.01;
       const gasBuffer = 0.005;
-      const netAmt = amtNum - fee - gasBuffer;
+      const netAmt = amtNum - gasBuffer;
 
       if (netAmt <= 0) {
-        notify("Amount too low after fees/gas", "error");
+        notify("Amount too low for gas", "error");
         return;
       }
 
@@ -1553,14 +1541,6 @@ export default function UserApp() {
         return;
       }
 
-      notify(`Charging 1% Fee (${fee.toFixed(4)} USDC)...`, "info");
-
-      const feeTx = await evmSessionWallet.sendTransaction({
-        to: ARC_CONTRACT_ADDRESS,
-        value: parseUnits(fee.toFixed(18), 18),
-      });
-      await feeTx.wait();
-
       notify("Processing sweep...", "info");
       const sweepTx = await evmSessionWallet.sendTransaction({
         to: address,
@@ -1568,12 +1548,11 @@ export default function UserApp() {
       });
       await sweepTx.wait();
 
-      recordFee('arc', fee);
       notify("Arc Withdrawal Successful!", "success");
 
       setTimeout(() => {
-        updateEvmSessionBal();
-        refetchEvmBalance();
+        updateEvmSessionBal(true);
+        refetchEvmBalance(true);
       }, 2000);
     } catch (e) {
       notify("Withdrawal failed: " + (e.shortMessage || e.message), "error");
