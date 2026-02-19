@@ -279,6 +279,7 @@ export default function UserApp() {
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
   const [sessionBalance, setSessionBalance] = useState(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
+  const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
 
 
 
@@ -287,6 +288,48 @@ export default function UserApp() {
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   const [toast, setToast] = useState(null); // { message, type }
+
+  const handleSyncSession = useCallback(async () => {
+    if (!address || !walletClient) {
+      notify("Connect your main wallet first", "error");
+      return;
+    }
+
+    try {
+      setIsExecuting(true);
+      notify("Synchronizing Session Wallet...", "info");
+
+      // Deterministic key generation from signature
+      const message = `Authorize 15market Universal Session Wallet\n\nMain Wallet: ${address}\n\nThis will link your Auto-Signer balance across all devices.`;
+      const sig = await walletClient.signMessage({ message, account: address });
+
+      // Use the signature as entropy for a deterministic private key
+      const entropy = ethers.keccak256(sig);
+
+      // Initialize the wallet with the new key
+      const fetchReq = new ethers.FetchRequest(ARC_RPC);
+      fetchReq.timeout = 30000;
+      const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
+      const newWallet = new ethers.Wallet(entropy, provider);
+
+      // Update storage and state
+      localStorage.setItem("15market_evm_session_key", entropy);
+      localStorage.setItem("15market_session_synced", "true");
+      setEvmSessionWallet(newWallet);
+      setIsSessionSynced(true);
+
+      notify("Session Synced! Balance is now consistent across devices.", "success");
+
+      // Force refresh the balance for the new address
+      setTimeout(() => updateEvmSessionBal(true), 500);
+
+    } catch (err) {
+      console.error("Sync error:", err);
+      notify("Sync failed: " + (err.shortMessage || err.message), "error");
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [address, walletClient, notify]);
 
   // 15MARKET REVENUE TRACKER (Auto-Signer Fees)
   const [autoSignerFees, setAutoSignerFees] = useState(() => {
@@ -1599,6 +1642,8 @@ export default function UserApp() {
           sessionBalance={sessionBalance}
           onRefill={handleRefill}
           onWithdraw={handleWithdraw}
+          onSyncSession={handleSyncSession}
+          isSessionSynced={isSessionSynced}
           treasuryBalance={treasuryBalance}
           autoSignerFees={autoSignerFees}
           userProfile={userProfile}
@@ -1690,6 +1735,8 @@ export default function UserApp() {
                   evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                   activeMarket={activeMarket}
                   maintenanceMode={platformSettings.maintenanceMode}
+                  onSyncSession={handleSyncSession}
+                  isSessionSynced={isSessionSynced}
                 />
               </div>
 

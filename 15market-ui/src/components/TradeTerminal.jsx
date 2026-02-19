@@ -23,6 +23,8 @@ const TradeTerminalComponent = ({
     setRefillAmount,
     onRefill,
     onWithdraw,
+    onSyncSession,
+    isSessionSynced,
 }) => {
     const isLight = theme === 'light';
     const [showManagement, setShowManagement] = React.useState(false);
@@ -40,7 +42,12 @@ const TradeTerminalComponent = ({
                     </div>
 
                     <div className="flex items-center gap-1 lg:gap-2">
-                        <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
+                        <div className="flex flex-col">
+                            <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
+                            {!isSessionSynced && (
+                                <span className="text-[4px] lg:text-[5px] font-black uppercase text-[#3CB371]">Local</span>
+                            )}
+                        </div>
                         <button
                             onClick={() => setSessionMode(!sessionMode)}
                             title={sessionMode ? `Auto-Signer Active (${sessionBalance.toFixed(4)} USDC) - Click to use Main Wallet` : "Auto-Signer Inactive - Click to activate"}
@@ -66,7 +73,17 @@ const TradeTerminalComponent = ({
                 <div className={`p-2 lg:p-3 rounded-xl border flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300 ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col">
-                            <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
+                                {!isSessionSynced && (
+                                    <button
+                                        onClick={onSyncSession}
+                                        className="text-[5px] lg:text-[7px] font-black uppercase text-[#3CB371] underline hover:opacity-70 transition-opacity"
+                                    >
+                                        Sync for All Devices
+                                    </button>
+                                )}
+                            </div>
                             <span className="text-[8px] lg:text-sm font-mono font-black text-[#3CB371]">
                                 ${Number(sessionBalance).toFixed(4)} USDC
                             </span>
@@ -136,7 +153,7 @@ const TradeTerminalComponent = ({
                             </div>
                             <div className="flex items-center justify-center gap-1 opacity-20">
                                 <div className="w-1 h-1 rounded-full bg-[#3CB371]" />
-                                <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>1% Protocol Fee applies</span>
+                                <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Zero Fees Applied</span>
                             </div>
                         </div>
                     )}

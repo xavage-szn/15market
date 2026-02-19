@@ -26,7 +26,7 @@ import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC } from "../constants";
 import { parseEther } from "viem";
 
-export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance,
+export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, onSyncSession, isSessionSynced, treasuryBalance,
     autoSignerFees,
     userProfile,
     theme,
@@ -397,7 +397,14 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                 <Zap size={18} />
                                             </div>
                                             <div>
-                                                <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-700' : 'text-white/80'}`}>Auto-Signer Module</h4>
+                                                <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-700' : 'text-white/80'} flex items-center gap-2`}>
+                                                    Auto-Signer Module
+                                                    {isSessionSynced ? (
+                                                        <span className="text-[8px] bg-[#3CB371]/20 text-[#3CB371] px-1.5 py-0.5 rounded border border-[#3CB371]/30">SYNCHRONIZED</span>
+                                                    ) : (
+                                                        <span className="text-[8px] bg-white/10 text-white/40 px-1.5 py-0.5 rounded border border-white/10">LOCAL ONLY</span>
+                                                    )}
+                                                </h4>
                                                 <p className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'} font-bold uppercase`}>
                                                     {evmSessionWallet ? `Active: ${evmSessionWallet.address.slice(0, 6)}...${evmSessionWallet.address.slice(-4)}` : "Initializing..."}
                                                 </p>
@@ -405,14 +412,14 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         </div>
                                         <div className="text-right flex flex-col items-end">
                                             <div className="text-xl font-black text-[#3CB371] tabular-nums">{(sessionBalance || 0).toFixed(4)} USDC</div>
-                                            <div className="flex items-center gap-2">
-                                                <div className={`text-[9px] ${isLight ? 'text-gray-400' : 'text-white/20'} font-black uppercase tracking-tighter`}>Current Balance</div>
-                                                {autoSignerFees > 0 && (
-                                                    <div className="text-[8px] font-black text-[#3CB371]/60 uppercase tracking-tighter">
-                                                        • Fees: {autoSignerFees.toFixed(4)}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            {!isSessionSynced && (
+                                                <button
+                                                    onClick={onSyncSession}
+                                                    className="text-[8px] font-black text-white/40 uppercase underline hover:text-[#3CB371] transition-colors"
+                                                >
+                                                    Sync Across Devices
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
