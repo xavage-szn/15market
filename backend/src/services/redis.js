@@ -154,8 +154,16 @@ class RedisService {
             const data = await this.client.get(key);
             let history = data ? JSON.parse(data) : [];
 
-            // Add to front
+            // De-duplicate: if trade.id exists, update it or remove old one
+            const tradeId = trade.id || trade.tx;
+            if (tradeId) {
+                // Filter out the old version if it exists
+                history = history.filter(t => (t.id || t.tx) !== tradeId);
+            }
+
+            // Add to front (most recent)
             history.unshift(trade);
+
             // Keep last 50
             if (history.length > 50) history = history.slice(0, 50);
 

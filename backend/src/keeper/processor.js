@@ -14,6 +14,7 @@ function logToFile(msg) {
 class TradeProcessor {
     constructor() {
         this.isProcessing = false;
+        this.settlingIds = new Set();
     }
 
     async init() {
@@ -32,8 +33,8 @@ class TradeProcessor {
             }
         });
 
-        // Start settlement loop every second
-        setInterval(() => this.processSettlements(), 1000);
+        // Start settlement loop every 500ms for high responsiveness
+        setInterval(() => this.processSettlements(), 500);
     }
 
     async registerTrade(tradeData) {
@@ -91,11 +92,8 @@ class TradeProcessor {
 
             const toSettle = activeTrades.filter(t => {
                 const isReady = now >= t.expiry;
-                if (!isReady && activeTrades.length < 5) {
-                    // Log progress for a few trades to avoid spamming
-                    // console.log(`[Processor] Trade ${t.id} ready in ${Math.round((t.expiry - now) / 1000)}s`);
-                }
-                return isReady;
+                const isNotSettling = !this.settlingIds.has(t.id.toString());
+                return isReady && isNotSettling;
             });
 
             if (toSettle.length > 0) {
@@ -103,6 +101,8 @@ class TradeProcessor {
                 logToFile(`Found ${toSettle.length} trades to settle.`);
 
                 await Promise.allSettled(toSettle.map(async (trade) => {
+                    const tradeId = trade.id.toString();
+                    this.settlingIds.add(tradeId);
                     try {
                         const ID_ASSET_MAP = { 0: 'BTC', 1: 'ETH', 2: 'MON', 3: 'JUP', 4: 'XRP', 5: 'SOL' };
                         // Use symbol directly if available (from trade-ping), else fall back to marketId map
@@ -179,6 +179,8 @@ class TradeProcessor {
                             console.log(`[Processor] Trade ${trade.id} already settled on-chain, removing from Redis.`);
                             await redis.delTrade(trade.id.toString());
                         }
+                    } finally {
+                        this.settlingIds.delete(trade.id.toString());
                     }
                 }));
             }

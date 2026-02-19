@@ -96,8 +96,19 @@ app.get('/trades/:address', async (req, res) => {
             }
         });
 
-        // De-duplicate by trade id and sort by timestamp desc
-        const unique = Array.from(new Map(allHistory.map(item => [item.id || item.tx, item])).values())
+        // De-duplicate by trade id with priority for settled status
+        const uniqueMap = new Map();
+        allHistory.forEach(item => {
+            const id = item.id || item.tx || item.nonce || item.id;
+            if (!id) return;
+            const existing = uniqueMap.get(id);
+            // Prioritize settled status or newer timestamp
+            if (!existing || (existing.status === 'PENDING' && item.status !== 'PENDING') || (!existing.status && item.status)) {
+                uniqueMap.set(id, item);
+            }
+        });
+
+        const unique = Array.from(uniqueMap.values())
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
             .slice(0, 100);
 

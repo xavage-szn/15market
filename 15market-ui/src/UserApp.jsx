@@ -218,8 +218,22 @@ export default function UserApp() {
           setUserProfile(profile);
           setShowOnboarding(false);
           if (history) {
-            setTradeHistory(history);
-            setActiveTrades(history.filter(t => ["PENDING", "RESOLVING"].includes(t.status)));
+            // Robust de-duplication: prioritize settled status
+            const mergeTrades = (trades) => {
+              const map = new Map();
+              trades.forEach(t => {
+                const id = t.id || t.tx || t.nonce;
+                const existing = map.get(id);
+                if (!existing || (existing.status === 'PENDING' && t.status !== 'PENDING')) {
+                  map.set(id, t);
+                }
+              });
+              return Array.from(map.values()).sort((a, b) => b.timestamp - a.timestamp);
+            };
+
+            const uniqueHistory = mergeTrades(history);
+            setTradeHistory(uniqueHistory);
+            setActiveTrades(uniqueHistory.filter(t => ["PENDING", "RESOLVING"].includes(t.status)));
           }
           if (transactions) setTransactionHistory(transactions);
           localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
@@ -257,7 +271,7 @@ export default function UserApp() {
       const interval = setInterval(() => {
         triggerGlobalRefresh(false);
         fetchMyProfile(); // Also refresh profile to catch session address updates from other devices
-      }, 4000); // 4s for faster cross-device sync
+      }, 2500); // 2.5s for faster cross-device sync
       return () => clearInterval(interval);
     }
   }, [address, triggerGlobalRefresh, fetchMyProfile]);
@@ -1355,20 +1369,20 @@ export default function UserApp() {
           BigInt(duration),
           BigInt(entryPriceParams),
           Number(assetId),
-          evmSessionWallet.address, // Correctly send winnings back to the session wallet
+          evmSessionWallet.address,
           { value: amountWei, gasLimit: 400000n }
         );
         txHash = tx.hash;
-        console.log("📤 [TRADE] Auto-signed tx:", txHash);
+        console.log("📤 [TRADE] Auto-signed tx SENT:", txHash);
 
-        const receipt = await tx.wait();
-        console.log("✅ [TRADE] Transaction confirmed:", receipt.hash);
-
-        // Immediate balance sync
-        setTimeout(() => {
+        // NON-BLOCKING: Handle confirmation in background
+        tx.wait().then(receipt => {
+          console.log("✅ [TRADE] Auto-signed tx confirmed:", receipt.hash);
           updateEvmSessionBal(true);
           refetchEvmBalance(true);
-        }, 100);
+        });
+
+        // Continue immediately to UI update
       } else {
         console.log("📝 [TRADE] Using MAIN WALLET");
         notify(`Confirm on Arc...`, "success");
@@ -1388,20 +1402,18 @@ export default function UserApp() {
         txHash = hash;
         lastTradeTimeRef.current = Date.now();
         setPendingStakes(prev => ({ ...prev, [hash]: parseFloat(amount) }));
+        console.log("📤 [TRADE] Main wallet tx SENT:", txHash);
 
-        console.log("📤 [TRADE] Main wallet tx:", txHash);
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        console.log("✅ [TRADE] Main wallet tx confirmed:", receipt.transactionHash);
-
-        // Remove from pending and re-fetch
-        setPendingStakes(prev => {
-          const next = { ...prev };
-          delete next[hash];
-          return next;
+        // NON-BLOCKING: Background wait
+        publicClient.waitForTransactionReceipt({ hash }).then(receipt => {
+          console.log("✅ [TRADE] Main wallet tx confirmed:", receipt.transactionHash);
+          setPendingStakes(prev => {
+            const next = { ...prev };
+            delete next[hash];
+            return next;
+          });
+          setTimeout(refetchEvmBalance, 1000);
         });
-
-        setTimeout(refetchEvmBalance, 1000);
-        setTimeout(refetchEvmBalance, 5000);
       }
 
       notify(`Arc Trade Executed!`, "success");
@@ -1410,25 +1422,36 @@ export default function UserApp() {
         const feePercent = 0.001;
         const signerFee = Number(amount) * feePercent;
         setSessionBalance(prev => Math.max(0, prev - parseFloat(amount) - signerFee));
-      } else {
-        // refetchEvmBalance already handled the main wallet balance update 
-        // after receipt in line 1259. No need for optimistic setBalance here 
-        // as it might cause the 'bounce' effect if not perfectly synced.
-        console.log("💎 [TRADE] Main balance refetched after receipt.");
       }
 
       lastTradeTimeRef.current = Date.now();
 
-      const activeUserAddr = (sessionMode && sessionBalance >= (Number(amount) + 0.001)) ? evmSessionWallet.address : (address || user?.wallet?.address);
+      const activeUserAddr = (sessionMode && sessionBalance >= (Number(amount) + 0.005)) ? evmSessionWallet.address : (address);
       const newTrade = {
-        id: tradeId, direction, amount: Number(amount).toFixed(4), entryPrice: activePrice.toFixed(4),
-        timestamp: Date.now(), status: "PENDING", tx: txHash, nonce: tradeId,
-        userPublicKey: activeUserAddr, owner: activeUserAddr, duration, network: network, startTime: Date.now(),
+        id: tradeId,
+        direction: (dirVal === 1 ? "UP" : "DOWN"),
+        amount: Number(amount).toFixed(4),
+        entryPrice: activePrice.toFixed(4),
+        timestamp: Date.now(),
+        status: "PENDING",
+        tx: txHash,
+        nonce: tradeId,
+        userPublicKey: activeUserAddr,
+        owner: activeUserAddr,
+        duration,
+        network: "arc",
+        startTime: Date.now(),
         symbol: activeMarket?.symbol || 'ETH',
-        currency: network === 'arc' ? 'USDC' : 'SOL'
       };
-      setTradeHistory(prev => [newTrade, ...prev]);
-      setActiveTrades(prev => [newTrade, ...prev]);
+
+      // Update local state immediately
+      const dedupeAndAdd = (prev, item) => {
+        const filtered = prev.filter(t => (t.id || t.tx || t.nonce) !== (item.id || item.tx || item.nonce));
+        return [item, ...filtered];
+      };
+
+      setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
+      setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
 
       const newTx = {
         id: `trade_${tradeId}`,
