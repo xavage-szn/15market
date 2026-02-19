@@ -339,6 +339,22 @@ export default function UserApp() {
     }
   }, [address, walletClient, notify, updateEvmSessionBal]);
 
+  const toggleSessionMode = () => {
+    if (!sessionMode) {
+      // Trying to ENABLE
+      if (!evmSessionWallet) {
+        // Need to initialize (one-time signature)
+        initializeSessionWallet();
+      } else {
+        setSessionMode(true);
+        notify("Auto-Signer Activated", "success");
+      }
+    } else {
+      setSessionMode(false);
+      notify("Switched to Main Wallet", "info");
+    }
+  };
+
   // 15MARKET REVENUE TRACKER (Auto-Signer Fees)
   const [autoSignerFees, setAutoSignerFees] = useState(() => {
     const saved = localStorage.getItem("15market_autosigner_fees");
