@@ -890,43 +890,25 @@ export default function UserApp() {
     }));
   }, []);
 
-  // Session Wallet Initialization - DETERMINISTIC
+  // Session Wallet Initialization - DETERMINISTIC RECOVERY
   useEffect(() => {
-    // 1. If not connected, we can't derive a user-specific wallet, so we wait or use a temp one
     if (!address) return;
 
     const deriveSessionWallet = async () => {
       // Check if we already have the deterministic key for THIS address
       const storageKey = `15market_session_key_${address.toLowerCase()}`;
-      let privateKey = localStorage.getItem(storageKey);
-
-      if (!privateKey) {
-        // If no key found for this address, we normally would ask to sign.
-        // But to avoid blocking the UI on load, we can check if there's a "global" sync key
-        // or just prompt the user when they try to enable session mode.
-        // FOR NOW: We will stick to the existing key if it matches, otherwise we wait for user action
-        // or we auto-prompt (which can be annoying).
-
-        // BETTER APPROACH: "One Wallet, One Signer" as requested.
-        // We MUST ask for a signature to derive the key if it's missing.
-        // However, doing this comfortably requires a user interaction or a clear "Setup" step.
-        // Let's defer strict derivation to the "Enable Auto-Signer" toggle or a specific setup.
-
-        // For now, let's look for ANY existing key to at least show something, 
-        // but the REAL fix is to make sure 'handleSyncSession' is called automatically 
-        // or the key is derived silently if possible (not possible without signature).
-      }
-
-      // Robust Provider Setup
-      const fetchReq = new ethers.FetchRequest(ARC_RPC);
-      fetchReq.timeout = 30000;
-      const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
+      const privateKey = localStorage.getItem(storageKey);
 
       if (privateKey) {
+        // Robust Provider Setup
+        const fetchReq = new ethers.FetchRequest(ARC_RPC);
+        fetchReq.timeout = 30000;
+        const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
+
         try {
           const wallet = new ethers.Wallet(privateKey, provider);
           setEvmSessionWallet(wallet);
-          setIsSessionSynced(true); // It is stored, so it's "synced" for this device
+          setIsSessionSynced(true);
         } catch (e) {
           console.error("Session wallet restore failed", e);
         }
