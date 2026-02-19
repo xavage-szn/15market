@@ -211,14 +211,12 @@ export default function UserApp() {
     return Math.max(0, bal);
   }, [evmBalance, pendingStakes]);
 
-  // Initial and periodic balance sync
+  // Initial balance sync (Main + Session)
   useEffect(() => {
     if (address) {
-      refetchEvmBalance(true); // Immediate fetch on address change
-      const interval = setInterval(() => refetchEvmBalance(false), 8000);
-      return () => clearInterval(interval);
+      triggerGlobalRefresh(true); // Immediate fetch on address change
     }
-  }, [address, refetchEvmBalance]);
+  }, [address, triggerGlobalRefresh]);
 
   // DERIVED BALANCE STATE (Fix for ReferenceError)
   const balance = useMemo(() => parseFloat(displayEvmBalance || "0"), [displayEvmBalance]);
@@ -265,6 +263,14 @@ export default function UserApp() {
       }, delay);
     });
   }, [triggerGlobalRefresh]);
+
+  // Periodic Universal Sync (Fix for Cross-Device Inconsistency)
+  useEffect(() => {
+    if (address) {
+      const interval = setInterval(() => triggerGlobalRefresh(false), 8000);
+      return () => clearInterval(interval);
+    }
+  }, [address, triggerGlobalRefresh]);
 
   const notify = useCallback((message, type = 'success') => {
     setToast({ message, type });
@@ -1001,6 +1007,9 @@ export default function UserApp() {
           setEvmSessionWallet(wallet);
           setIsSessionSynced(true);
           setSessionMode(true); // Auto-enable if ready
+
+          // SYNC BALANCE IMMEDIATELY: Ensure mobile knows the desktop balance
+          setTimeout(() => updateEvmSessionBal(true), 500);
         } catch (e) {
           console.error("Session wallet restore failed", e);
           setIsSignerInitializing(true);
