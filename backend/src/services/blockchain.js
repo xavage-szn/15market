@@ -20,10 +20,10 @@ dns.lookup = (hostname, options, callback) => {
 };
 
 const RPC_ENDPOINTS = [
-    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1",
     "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
-    "https://rpc-test-1.arc.market"
+    "https://rpc-test-1.arc.market",
+    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
 ];
 
 async function createProvider() {
@@ -32,7 +32,7 @@ async function createProvider() {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 10000; // 10 second timeout
+            fetchReq.timeout = 15000; // 15 second timeout
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, { staticNetwork: true });

@@ -81,9 +81,9 @@ class RedisService {
         // Add to the beginning of the list
         this.historyCache.unshift(normalizedTrade);
 
-        // Keep only top 50 items
-        if (this.historyCache.length > 50) {
-            this.historyCache = this.historyCache.slice(0, 50);
+        // Keep only top 100 items
+        if (this.historyCache.length > 100) {
+            this.historyCache = this.historyCache.slice(0, 100);
         }
 
         // Persist to Redis

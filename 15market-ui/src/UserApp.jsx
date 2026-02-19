@@ -862,27 +862,25 @@ export default function UserApp() {
 
 
 
-  const updateEvmSessionBal = useCallback(async () => {
+  const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!evmSessionWallet) return;
 
-    // SKIP REFRESH if we just traded (< 12 seconds ago) to allow chain to catch up
-    // This prevents the optimistic debit from being overwritten by old on-chain balance
-    if (Date.now() - lastTradeTimeRef.current < 12000) {
+    // SKIP REFRESH if we just traded (< 10 seconds ago) to allow chain to catch up
+    // Unless we are forcing an update (e.g. after a refill)
+    if (!force && Date.now() - lastTradeTimeRef.current < 10000) {
       return;
     }
 
     try {
-      const provider = evmSessionWallet.provider;
-      const balanceWei = await provider.getBalance(evmSessionWallet.address);
-      const bal = parseFloat(ethers.formatUnits(balanceWei, 18));
-
-      console.log(`🔑 [SESSION_BAL] Wallet: ${evmSessionWallet.address} | Balance: ${bal} ARC`);
+      const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
+      const bal = parseFloat(formatUnits(balanceWei, 18));
 
       if (bal !== sessionBalance) {
+        console.log(`🔑 [SESSION_BAL] Wallet: ${evmSessionWallet.address.slice(0, 6)}... | Balance: ${bal} USDC`);
         setSessionBalance(bal);
       }
     } catch (err) {
-      console.error("❌ [SESSION BALANCE] Fetch failed:", err);
+      console.warn("❌ [SESSION BALANCE] Fetch failed, will retry...");
     }
   }, [evmSessionWallet, sessionBalance]);
 
@@ -1470,8 +1468,8 @@ export default function UserApp() {
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Refill Confirmed!", "success");
           setTimeout(() => {
-            updateEvmSessionBal();
-            refetchEvmBalance();
+            updateEvmSessionBal(true); // Forced update
+            refetchEvmBalance(true);     // Forced update
           }, 2000);
         });
 

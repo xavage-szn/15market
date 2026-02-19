@@ -37,6 +37,13 @@ class TradeProcessor {
         }
         await redis.setTrade(tradeData.id.toString(), tradeData);
         console.log(`[Processor] Trade ${tradeData.id} registered. Expires at ${new Date(tradeData.expiry).toISOString()}`);
+
+        // Push to global history immediately so scroller shows activity
+        await redis.pushHistory({
+            ...tradeData,
+            status: 'PENDING',
+            timestamp: Date.now()
+        }).catch(() => { });
     }
 
     async processSettlements() {
