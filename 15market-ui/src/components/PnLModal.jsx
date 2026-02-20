@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X } from 'lucide-react';
 import { Stamp } from './Stamp';
 
-export const PnLModal = ({ isOpen, onClose, trade }) => {
+export function PnLModal({ isOpen, onClose, trade }) {
     const cardRef = useRef(null);
 
     if (!trade || !isOpen) return null;

@@ -3,7 +3,7 @@ import { toPng } from 'html-to-image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, ExternalLink } from 'lucide-react';
 
-export const TransactionReceiptModal = ({ isOpen, onClose, transaction }) => {
+export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
     const cardRef = useRef(null);
 
     if (!transaction || !isOpen) return null;

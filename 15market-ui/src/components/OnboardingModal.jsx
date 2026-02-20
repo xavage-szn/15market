@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, User, AlertTriangle, CheckCircle, ChevronRight, Scale, MessageSquare, Zap, Receipt, TrendingUp, TrendingDown, Lock } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-export const OnboardingModal = ({ isOpen, onComplete, address, network, existingProfile, theme }) => {
+export function OnboardingModal({ isOpen, onComplete, address, network, existingProfile, theme }) {
     const isLight = theme === 'light';
 
     const [step, setStep] = useState(() => {

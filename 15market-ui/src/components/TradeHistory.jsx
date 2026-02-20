@@ -1,13 +1,13 @@
 import React, { memo, useState, useMemo } from 'react';
 import { Lock, Share2 } from 'lucide-react';
 
-const TradeHistoryComponent = ({
+function TradeHistoryComponent({
     tradeHistory,
     setSelectedPnLTrade,
     setIsPnLOpen,
     theme,
     wallet
-}) => {
+}) {
     // Combined address source
     const address = wallet?.address;
     // We are connected if the wallet object says so, OR if we have a valid address string

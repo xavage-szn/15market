@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi';
 import { publicClient } from "../client";
 import { formatEther } from "viem";
 
-export const UnifiedWalletButton = ({ theme }) => {
+export function UnifiedWalletButton({ theme }) {
     const navigate = useNavigate();
     const { open } = useAppKit();
     const { address, isConnected, chainId: connectedChainId } = useAccount();

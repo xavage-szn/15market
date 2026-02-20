@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const Stamp = ({ status, size = 'md', isWon: forcedIsWon }) => {
+export function Stamp({ status, size = 'md', isWon: forcedIsWon }) {
     // Priority: forcedIsWon prop > status === 'WON'
     const isWon = forcedIsWon !== undefined ? forcedIsWon : status === 'WON';
     const color = isWon ? '#059669' : '#dc2626';

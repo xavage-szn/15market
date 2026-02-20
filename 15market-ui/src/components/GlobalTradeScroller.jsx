@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Radio } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-const GlobalTradeScrollerComponent = ({ theme }) => {
+function GlobalTradeScrollerComponent({ theme }) {
     const [history, setHistory] = useState(() => {
         try {
             const saved = localStorage.getItem("15market_global_history_v2");

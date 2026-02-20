@@ -3,7 +3,7 @@ import { publicClient } from "../client";
 import { formatUnits } from "viem";
 import { useState, useEffect, useCallback } from "react";
 
-export const WalletBalance = ({ theme, balanceOverride, sessionMode }) => {
+export function WalletBalance({ theme, balanceOverride, sessionMode }) {
     const { isConnected, address } = useAccount();
     const [internalBalance, setInternalBalance] = useState(0);
 

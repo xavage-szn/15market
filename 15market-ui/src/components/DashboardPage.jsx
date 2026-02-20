@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { ethers } from "ethers";
+import * as ethers from "ethers";
 import { motion } from "framer-motion";
 import {
     Activity,
@@ -26,14 +26,14 @@ import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC } from "../constants";
 import { parseEther } from "viem";
 
-export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance,
+export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance,
     autoSignerFees,
     userProfile,
     theme,
     evmSessionWallet,
     transactionHistory,
     onViewReceipt
-}) => {
+}) {
     const isLight = theme === 'light';
     const { isConnected, address } = useAccount();
 
@@ -607,26 +607,30 @@ export const DashboardPage = ({ onBack, sessionBalance, onRefill, onWithdraw, tr
     );
 };
 
-const NavTab = ({ active, id, label, icon, onClick, isLight }) => (
-    <button
-        onClick={() => onClick(id)}
-        className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${active === id
-            ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37150]'
-            : `${isLight ? 'text-gray-400 hover:text-gray-900 hover:bg-gray-200' : 'text-white/40 hover:text-white hover:bg-white/5'}`
-            }`}
-    >
-        {icon}
-        {label}
-    </button>
-);
+function NavTab({ active, id, label, icon, onClick, isLight }) {
+    return (
+        <button
+            onClick={() => onClick(id)}
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${active === id
+                ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37150]'
+                : `${isLight ? 'text-gray-400 hover:text-gray-900 hover:bg-gray-200' : 'text-white/40 hover:text-white hover:bg-white/5'}`
+                }`}
+        >
+            {icon}
+            {label}
+        </button>
+    );
+}
 
-const StatCard = ({ label, value, sub, icon, highlight, isLight }) => (
-    <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : `${isLight ? 'bg-white border-gray-100' : 'bg-[#111] border-white/5'}`}`}>
-        <div className="flex justify-between items-start mb-4">
-            <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-gray-400' : 'text-white/40'}`}>{label}</div>
-            <div className={`p-2 ${isLight ? 'bg-gray-50' : 'bg-white/5'} rounded-lg`}>{icon}</div>
+function StatCard({ label, value, sub, icon, highlight, isLight }) {
+    return (
+        <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : `${isLight ? 'bg-white border-gray-100' : 'bg-[#111] border-white/5'}`}`}>
+            <div className="flex justify-between items-start mb-4">
+                <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-gray-400' : 'text-white/40'}`}>{label}</div>
+                <div className={`p-2 ${isLight ? 'bg-gray-50' : 'bg-white/5'} rounded-lg`}>{icon}</div>
+            </div>
+            <div className={`text-xl md:text-2xl font-black mb-1 tracking-tighter ${isLight ? 'text-gray-900' : 'text-white'}`}>{value}</div>
+            <div className={`text-[8px] md:text-[10px] font-bold ${isLight ? 'text-gray-300' : 'text-white/20'} uppercase`}>{sub}</div>
         </div>
-        <div className={`text-xl md:text-2xl font-black mb-1 tracking-tighter ${isLight ? 'text-gray-900' : 'text-white'}`}>{value}</div>
-        <div className={`text-[8px] md:text-[10px] font-bold ${isLight ? 'text-gray-300' : 'text-white/20'} uppercase`}>{sub}</div>
-    </div>
-);
+    );
+}

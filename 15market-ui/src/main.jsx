@@ -95,7 +95,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-const Root = () => {
+function Root() {
   return (
     <React.StrictMode>
       <WagmiProvider config={config}>
@@ -107,6 +107,6 @@ const Root = () => {
       </WagmiProvider>
     </React.StrictMode>
   );
-};
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);

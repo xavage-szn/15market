@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Shield, Clock, Activity, ArrowRight, MousePointer2 } from 'lucide-react';
 import { UnifiedWalletButton } from './UnifiedWalletButton';
 
-const NeuralPulseBackground = () => {
+function NeuralPulseBackground() {
     const canvasRef = useRef(null);
 
     useEffect(() => {
@@ -83,7 +83,7 @@ const NeuralPulseBackground = () => {
     );
 };
 
-export const LandingPage = () => {
+export function LandingPage() {
     const primaryColor = '#3CB371';
 
     return (
@@ -208,21 +208,25 @@ export const LandingPage = () => {
     );
 };
 
-const NavLink = ({ label }) => (
-    <a href="#" className="text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-[#3CB371] transition-colors">
-        {label}
-    </a>
-);
+function NavLink({ label }) {
+    return (
+        <a href="#" className="text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-[#3CB371] transition-colors">
+            {label}
+        </a>
+    );
+}
 
-const FeatureItem = ({ icon, text }) => (
-    <div className="flex items-center gap-3 group whitespace-nowrap">
-        <div className="p-2 rounded-xl bg-white/5 text-[#3CB371] border border-white/5 group-hover:border-[#3CB371]/30 transition-all">
-            {icon}
+function FeatureItem({ icon, text }) {
+    return (
+        <div className="flex items-center gap-3 group whitespace-nowrap">
+            <div className="p-2 rounded-xl bg-white/5 text-[#3CB371] border border-white/5 group-hover:border-[#3CB371]/30 transition-all">
+                {icon}
+            </div>
+            <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/30 group-hover:text-white transition-colors">
+                    {text}
+                </span>
+            </div>
         </div>
-        <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-white/30 group-hover:text-white transition-colors">
-                {text}
-            </span>
-        </div>
-    </div>
-);
+    );
+}

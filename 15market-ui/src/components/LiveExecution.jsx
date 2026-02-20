@@ -2,14 +2,14 @@ import React, { memo, useState, useEffect } from 'react';
 import { Share2, X } from 'lucide-react';
 import { Stamp } from './Stamp';
 
-const LiveExecutionComponent = ({
+function LiveExecutionComponent({
     activeTrades = [],
     setActiveTrades,
     price,
     setSelectedPnLTrade,
     setIsPnLOpen,
     theme
-}) => {
+}) {
     const [, setTick] = useState(0);
     const isLight = theme === 'light';
 

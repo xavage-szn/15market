@@ -16,7 +16,7 @@ const ROLES = {
     LISTER: '15listers'
 };
 
-const MessagingSystem = ({ wallet, connection, isOpen, onClose, isAdminView = false, adminRole = null, embedded = false, userProfile = null }) => {
+function MessagingSystem({ wallet, connection, isOpen, onClose, isAdminView = false, adminRole = null, embedded = false, userProfile = null }) {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const messagesEndRef = useRef(null);

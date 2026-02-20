@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Trophy, Calendar, Gift, Users, TrendingUp, Award, Clock, Target } from 'lucide-react';
 import { KEEPER_URL } from '../constants';
 
-const CampaignPage = ({ address, network }) => {
+function CampaignPage({ address, network }) {
     const { campaignId } = useParams();
     const navigate = useNavigate();
     const [campaign, setCampaign] = useState(null);
@@ -309,14 +309,16 @@ const CampaignPage = ({ address, network }) => {
     );
 };
 
-const StatBox = ({ icon, label, value, color, isNetwork }) => (
-    <div className="bg-[#0d0d0d] border border-white/5 p-6 rounded-[24px] relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-4 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
-            {React.cloneElement(icon, { size: 40 })}
+function StatBox({ icon, label, value, color, isNetwork }) {
+    return (
+        <div className="bg-[#0d0d0d] border border-white/5 p-6 rounded-[24px] relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
+                {React.cloneElement(icon, { size: 40 })}
+            </div>
+            <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2">{label}</p>
+            <p className={`text-2xl font-black ${color} ${isNetwork ? 'uppercase' : ''}`}>{value}</p>
         </div>
-        <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2">{label}</p>
-        <p className={`text-2xl font-black ${color} ${isNetwork ? 'uppercase' : ''}`}>{value}</p>
-    </div>
-);
+    );
+}
 
 export default CampaignPage;

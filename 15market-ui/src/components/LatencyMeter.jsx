@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Zap, Globe, Cpu, Activity } from "lucide-react";
 
-export const LatencyMeter = ({ currentNetwork = 'arc' }) => {
+export function LatencyMeter({ currentNetwork = 'arc' }) {
     const [rpcLatency, setRpcLatency] = useState(0);
     const [priceLatency, setPriceLatency] = useState(0);
     const [status, setStatus] = useState("OPTIMAL");

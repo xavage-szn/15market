@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Sun, Moon } from 'lucide-react';
 
-export const ThemeToggle = ({ theme, onToggle }) => {
+export function ThemeToggle({ theme, onToggle }) {
     const isDark = theme === 'dark';
 
     return (

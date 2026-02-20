@@ -4,7 +4,7 @@ import { KEEPER_URL_ARC } from '../constants';
 
 import { Zap, Shield } from 'lucide-react';
 
-export const ProfileModal = ({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt }) => {
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");

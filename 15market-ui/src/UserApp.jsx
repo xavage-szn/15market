@@ -339,7 +339,7 @@ export default function UserApp() {
   }, [isConnected, address]);
 
   const GREEN = "#3CB371";
-  const CORAL = "#3CB371";
+  const CORAL = "#FF4444";
 
   useEffect(() => {
     localStorage.setItem("15market_network", "arc");

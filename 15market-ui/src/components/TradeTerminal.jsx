@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 
-const TradeTerminalComponent = ({
+function TradeTerminalComponent({
     sessionMode,
     setSessionMode,
     price,
@@ -23,7 +23,7 @@ const TradeTerminalComponent = ({
     setRefillAmount,
     onRefill,
     onWithdraw,
-}) => {
+}) {
     const isLight = theme === 'light';
     const [showManagement, setShowManagement] = React.useState(false);
 
