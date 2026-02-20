@@ -349,6 +349,7 @@ export default function UserApp() {
 
 
 
+  // Initialize Server-Side Session Wallet (Stateless & Secure)
   const initializeSessionWallet = useCallback(async () => {
     if (!address || !walletClient) {
       notify("Connect your main wallet first", "error");
@@ -357,40 +358,42 @@ export default function UserApp() {
 
     try {
       setIsExecuting(true);
-      notify("Please sign to link your Auto-Signer...", "info");
+      notify("Authorizing Auto-Signer...", "info");
 
-      // key specific to this wallet address
-      const addrLower = address.toLowerCase();
-      const storageKey = `15market_session_key_${addrLower}`;
-      let privateKey = localStorage.getItem(storageKey);
+      // 1. Sign Auth Message (Identity Proof)
+      // This signature can be verified by backend if needed, but the backend derives wallet 
+      // primarily from the user address to ensure cross-device consistency.
+      const message = `Authorize 15market Auto-Signer for ${address.toLowerCase()}`;
+      const sig = await walletClient.signMessage({ message, account: address });
 
-      if (!privateKey) {
-        // Deterministic key generation from signature
-        // ENSURE address is lowercased in message for cross-device consistency
-        const message = `Authorize 15market Universal Session Wallet\n\nMain Wallet: ${addrLower}\n\nThis will link your Auto-Signer balance across all devices.`;
-        const sig = await walletClient.signMessage({ message, account: address });
+      // 2. Request Session Wallet from Backend
+      const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, signature: sig })
+      });
 
-        // Use the signature as entropy for a deterministic private key
-        privateKey = ethers.keccak256(sig);
-        localStorage.setItem(storageKey, privateKey);
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Backend init failed");
       }
 
-      // Initialize the wallet with the key
-      const fetchReq = new ethers.FetchRequest(ARC_RPC);
-      fetchReq.timeout = 30000;
-      const provider = new ethers.JsonRpcProvider(fetchReq, { chainId: 5042002, name: 'arc-testnet' }, { staticNetwork: true });
-      const newWallet = new ethers.Wallet(privateKey, provider);
+      const data = await res.json();
 
-      setEvmSessionWallet(newWallet);
-      setIsSessionSynced(true); // Always synced by design now
+      // 3. Update State (No Private Keys on Device!)
+      const sessionObj = { address: data.sessionAddress, isRemote: true };
+      setEvmSessionWallet(sessionObj);
+      setSessionBalance(parseFloat(data.balance));
+      setIsSessionSynced(true);
       setSessionMode(true);
 
-      // PERSIST TO BACKEND: Link this session address to the profile
-      if (userProfile) {
-        const updatedProfile = { ...userProfile, sessionWalletAddress: newWallet.address };
-        setUserProfile(updatedProfile);
-        localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(updatedProfile));
+      // Persist public info only
+      localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
 
+      // Update Profile Sync
+      if (userProfile) {
+        const updatedProfile = { ...userProfile, sessionWalletAddress: data.sessionAddress };
+        setUserProfile(updatedProfile);
         fetch(`${KEEPER_URL_ARC}/sync-profile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -398,37 +401,38 @@ export default function UserApp() {
         }).catch(e => console.warn("Failed to sync session wallet to backend:", e));
       }
 
-      // UNBLOCK UI
       setIsSignerInitializing(false);
-
-      notify("Auto-Signer Successfully Linked!", "success");
-
-      // Force refresh the balance for the new address
-      setTimeout(() => updateEvmSessionBal(true), 500);
+      notify("Auto-Signer Activated (Server-Managed)", "success");
 
     } catch (err) {
       console.error("Session init error:", err);
-      // notify("Setup failed: " + (err.shortMessage || err.message), "error");
-      setSessionMode(false); // disable if failed
-      // We do NOT unblock here, so user must retry or reload
+      notify("Setup failed: " + (err.message), "error");
+      setSessionMode(false);
     } finally {
       setIsExecuting(false);
     }
-  }, [address, walletClient, notify, updateEvmSessionBal, userProfile]);
+  }, [address, walletClient, notify, userProfile]);
 
   const toggleSessionMode = () => {
-    if (!sessionMode) {
-      // Trying to ENABLE
-      if (!evmSessionWallet) {
-        // Need to initialize (one-time signature)
-        initializeSessionWallet();
-      } else {
-        setSessionMode(true);
-        notify("Auto-Signer Activated", "success");
-      }
-    } else {
+    if (sessionMode) {
       setSessionMode(false);
       notify("Switched to Main Wallet", "info");
+    } else {
+      // Trying to ENABLE
+      // If we have an address in state or local storage, use it. Otherwise init.
+      const storedAddr = localStorage.getItem(`15market_session_addr_${address?.toLowerCase()}`);
+      if (evmSessionWallet?.address || storedAddr) {
+        if (!evmSessionWallet) {
+          // Restore object from storage
+          setEvmSessionWallet({ address: storedAddr, isRemote: true });
+          // Balance will update via poll
+        }
+        setSessionMode(true);
+        notify("Auto-Signer Activated", "success");
+      } else {
+        // Need to initialize
+        initializeSessionWallet();
+      }
     }
   };
 
@@ -448,9 +452,187 @@ export default function UserApp() {
       } catch (e) { }
     };
     fetchTreasury();
-    const interval = setInterval(fetchTreasury, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    // ... existing ...
+  }, []); // Keeping original dep array
+
+  // Execute trade
+  const executeTrade = async () => {
+    if (isExecuting) return;
+
+    if (platformSettings.tradingHalted) {
+      return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
+    }
+
+    let activePrice = parseFloat(price);
+    if (!activePrice || activePrice <= 0) return;
+    if (!direction) return notify("Select UP or DOWN first", "error");
+    if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
+
+    const currentBal = sessionMode ? sessionBalance : balance;
+    if (parseFloat(amount) > currentBal) {
+      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. Balance: ${currentBal.toFixed(4)}`, "error");
+    }
+
+    if (Number(amount) < parseFloat(minStake)) {
+      return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
+    }
+
+    setIsExecuting(true);
+    let txHash;
+    // Generate truly unique bet ID
+    const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
+    const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
+    const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
+    const entryPriceParams = Math.floor(activePrice * 100000000);
+    const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
+    const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
+
+    try {
+      if (!isConnected) {
+        notify("Please connect wallet first", "error");
+        setIsExecuting(false);
+        return;
+      }
+
+      const amountWei = parseUnits(parseFloat(amount).toFixed(18), 18);
+
+      if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
+        console.log("✅ [TRADE] Using REMOTE AUTO-SIGNER");
+        notify(`Auto-signing via Cloud...`, "success");
+
+        const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address: address,
+            tradeParams: {
+              id: tradeId.toString(),
+              direction: dirVal,
+              duration: Number(duration),
+              entryPrice: entryPriceParams.toString(),
+              marketId: assetId,
+              amount: amount
+            }
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Auto-Signer trade failed");
+        }
+
+        const data = await res.json();
+        txHash = data.txHash;
+        console.log("📤 [TRADE] Remote tx SENT:", txHash);
+
+      } else {
+        console.log("📝 [TRADE] Using MAIN WALLET");
+        notify(`Confirm on Arc...`, "success");
+
+        if (!walletClient) throw new Error("Wallet not connected");
+
+        const hash = await walletClient.writeContract({
+          address: ARC_CONTRACT_ADDRESS,
+          abi: ArcABI.abi,
+          functionName: 'placeBet',
+          args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId), address],
+          value: amountWei,
+          account: address,
+          gas: 800000n
+        });
+
+        txHash = hash;
+        console.log("📤 [TRADE] Main wallet tx SENT:", txHash);
+
+        // Optimistic pending stake
+        setPendingStakes(prev => ({ ...prev, [hash]: parseFloat(amount) }));
+
+        // Background Wait
+        publicClient.waitForTransactionReceipt({ hash }).then(receipt => {
+          console.log("✅ [TRADE] Confirmed:", receipt.transactionHash);
+          setPendingStakes(prev => {
+            const next = { ...prev };
+            delete next[hash];
+            return next;
+          });
+          setTimeout(refetchEvmBalance, 1000);
+        });
+      }
+
+      // --- Common Post-Trade Logic ---
+      notify(`Arc Trade Executed!`, "success");
+
+      if (sessionMode) {
+        // Optimistic Balance Update
+        const feePercent = 0.001;
+        const signerFee = Number(amount) * feePercent;
+        setSessionBalance(prev => Math.max(0, prev - parseFloat(amount) - signerFee));
+      }
+
+      lastTradeTimeRef.current = Date.now();
+
+      const activeUserAddr = (sessionMode) ? (evmSessionWallet?.address || address) : address;
+
+      const newTrade = {
+        id: tradeId,
+        direction: (dirVal === 1 ? "UP" : "DOWN"),
+        amount: Number(amount).toFixed(4),
+        entryPrice: activePrice.toFixed(4),
+        timestamp: Date.now(),
+        status: "PENDING",
+        tx: txHash,
+        nonce: tradeId,
+        userPublicKey: activeUserAddr,
+        owner: activeUserAddr,
+        duration,
+        network: "arc",
+        startTime: Date.now(),
+        symbol: activeMarket?.symbol || 'ETH',
+      };
+
+      // Helper to prevent dupes
+      const dedupeAndAdd = (prev, item) => {
+        const filtered = prev.filter(t => (t.id || t.tx || t.nonce) !== (item.id || item.tx || item.nonce));
+        return [item, ...filtered];
+      };
+
+      setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
+      setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
+
+      // Register with Backend immediately (Ping)
+      fetch(`${KEEPER_URL_ARC}/trade-ping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tradeId,
+          address: activeUserAddr, // associate with the wallet that made the trade
+          amount: Number(amount).toFixed(4),
+          direction: dirVal,
+          duration,
+          entryPrice: activePrice.toFixed(4),
+          symbol: activeMarket?.symbol || 'ETH',
+          network: 'arc'
+        })
+      }).catch(e => console.warn("Trade ping failed:", e));
+
+      // Transaction History
+      const newTx = {
+        id: `trade_${tradeId}`,
+        type: 'TRADE',
+        amount: Number(amount).toFixed(4),
+        timestamp: Date.now(),
+        hash: txHash,
+        status: 'PENDING'
+      };
+      setTransactionHistory(prev => [newTx, ...prev]);
+
+    } catch (err) {
+      console.error("Execute Trade Error:", err);
+      notify("Trade Failed: " + (err.shortMessage || err.message), "error");
+    } finally {
+      setIsExecuting(false);
+    }
+  };
 
   const [platformSettings, setPlatformSettings] = useState(() => {
     try {
