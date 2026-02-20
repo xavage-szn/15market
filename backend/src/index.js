@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const { ethers } = require('ethers');
 require('dotenv').config();
 
 const processor = require('./keeper/processor');
@@ -12,6 +13,25 @@ const PORT = process.env.PORT || 3012;
 
 app.use(cors());
 app.use(express.json());
+
+// Helper to normalize legacy exaggerated numbers
+const normalizeTrade = (t) => {
+    if (!t) return t;
+    // Normalize Amount: if > 1M, assume it's in Wei (18 decimals)
+    if (t.amount && Number(t.amount) > 1000000) {
+        try {
+            t.amount = ethers.formatEther(t.amount.toString());
+        } catch (e) { }
+    }
+    // Normalize Entry/Exit Prices: if > 100M, assume it's scaled by 1e8
+    if (t.entryPrice && Number(t.entryPrice) > 100000000) {
+        t.entryPrice = (Number(t.entryPrice) / 1e8).toFixed(4);
+    }
+    if (t.settlementPrice && Number(t.settlementPrice) > 100000000) {
+        t.settlementPrice = (Number(t.settlementPrice) / 1e8).toFixed(4);
+    }
+    return t;
+};
 
 // Log every request and handle optional /arc prefix
 app.use((req, res, next) => {
@@ -110,7 +130,8 @@ app.get('/trades/:address', async (req, res) => {
 
         const unique = Array.from(uniqueMap.values())
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-            .slice(0, 100);
+            .slice(0, 100)
+            .map(normalizeTrade);
 
         res.json(unique);
     } catch (e) {
@@ -122,7 +143,7 @@ app.get('/trades/:address', async (req, res) => {
 app.get('/active-bets/:address', async (req, res) => {
     // Filter active trades from Redis for this user
     const trades = await processor.getActiveTradesForUser(req.params.address);
-    res.json(trades);
+    res.json(trades.map(normalizeTrade));
 });
 
 app.get('/campaigns', (req, res) => {
