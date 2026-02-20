@@ -164,6 +164,22 @@ app.get('/profile', async (req, res) => {
     if (!address) return res.status(400).json({ error: 'Missing address' });
 
     const userData = await redis.getUserData(address);
+    if (userData) {
+        // Normalize History & Transactions
+        if (userData.history) userData.history = userData.history.map(normalizeTrade);
+        if (userData.transactions) userData.transactions = userData.transactions.map(normalizeTrade);
+
+        // Normalize Profile Metrics (Volume)
+        if (userData.profile && userData.profile.totalVolume) {
+            const vol = Number(userData.profile.totalVolume);
+            // If volume is cosmically large (> 1 Quadrillion), it's definitely Wei contamination
+            if (vol > 1000000000000000) {
+                try {
+                    userData.profile.totalVolume = ethers.formatEther(userData.profile.totalVolume.toString());
+                } catch (e) { }
+            }
+        }
+    }
     res.json(userData);
 });
 
