@@ -22,7 +22,19 @@ class PricingService {
 
         if (config.mexc) sources.push({ name: "MEXC", url: `https://api.mexc.com/api/v3/ticker/price?symbol=${config.mexc}`, parse: d => parseFloat(d.price) });
         if (config.binance) sources.push({ name: "BINANCE", url: `https://api.binance.com/api/v3/ticker/price?symbol=${config.binance}`, parse: d => parseFloat(d.price) });
-        if (config.pyth) sources.push({ name: "PYTH", url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${config.pyth}`, parse: d => { const p = d.parsed?.[0]?.price; return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null; } });
+        if (config.pyth) {
+            sources.push({
+                name: "PYTH",
+                url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${config.pyth}`,
+                parse: (d) => {
+                    const parsed = d.parsed?.[0]?.price;
+                    if (!parsed) return null;
+                    // Pyth returns price as integer (e.g., 9652500000) and expo (e.g., -8)
+                    // We need to convert this to float: 9652500000 * 10^-8 = 96.525
+                    return parseFloat(parsed.price) * Math.pow(10, parsed.expo);
+                }
+            });
+        }
 
         return sources;
     }

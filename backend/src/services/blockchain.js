@@ -99,12 +99,17 @@ class BlockchainService {
         this.contract.on("BetPlaced", async (id, user, amount, direction, entryPrice, duration, timestamp, marketId, event) => {
             try {
                 if (this.onBetPlacedCallback) {
+                    let normalizedEntry = Number(entryPrice);
+                    if (normalizedEntry > 100000000) {
+                        normalizedEntry = normalizedEntry / 1e8;
+                    }
+
                     this.onBetPlacedCallback({
                         id: id.toString(),
                         user: user,
-                        amount: amount.toString(),
+                        amount: ethers.formatEther(amount), // Convert Wei to Ether
                         direction: Number(direction), // 1 or 0
-                        entryPrice: entryPrice.toString(),
+                        entryPrice: normalizedEntry.toFixed(4),
                         duration: Number(duration),
                         timestamp: Number(timestamp),
                         marketId: Number(marketId),

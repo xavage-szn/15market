@@ -175,16 +175,22 @@ app.post('/trade-ping', async (req, res) => {
         const SYMBOL_TO_MARKET_ID = { 'BTC': 0, 'ETH': 1, 'MON': 2, 'JUP': 3, 'XRP': 4, 'SOL': 5 };
         const marketId = SYMBOL_TO_MARKET_ID[symbol?.toUpperCase()] ?? 0;
 
+        let normalizedEntry = Number(entryPrice);
+        if (normalizedEntry > 100000000) {
+            normalizedEntry = normalizedEntry / 1e8;
+        }
+
         const tradeData = {
             id: id.toString(),
             user: address,
-            amount: amount,
+            amount: Number(amount).toFixed(4), // Force normal float string
             direction: direction,
             duration: Number(duration),
+            entryPrice: normalizedEntry.toFixed(4),
             marketId: marketId,
             symbol: symbol || 'BTC',
             network: network || 'arc',
-            expiry: expiry ? expiry * 1000 : Date.now() + (Number(duration) * 1000), // expiry from frontend is unix seconds
+            expiry: (expiry ? Number(expiry) * 1000 : Date.now() + (Number(duration) * 1000)), // expiry from frontend is unix seconds
             registeredAt: Date.now()
         };
 
