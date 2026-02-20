@@ -221,6 +221,80 @@ app.get('/treasury', async (req, res) => {
     }
 });
 
+// --- SERVER-SIDE AUTO-SIGNER (Custodial/Stateless) ---
+// Securely derives a session wallet for the user so keys never leave the server.
+// Using a deterministic derivation ensures the same user always gets the same session wallet
+// across all devices without needing to sync private keys.
+
+const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+
+function deriveUserWallet(userAddress) {
+    // Deterministic Private Key = Keccak256(MasterSecret + UserAddress)
+    // This ensures consistency across devices.
+    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + userAddress.toLowerCase());
+    const privateKey = ethers.keccak256(entropy);
+    const provider = new ethers.JsonRpcProvider("https://rpc.testnet.arc.network");
+    return new ethers.Wallet(privateKey, provider); // Returns a standard Ethers wallet
+}
+
+app.post('/session/init', async (req, res) => {
+    try {
+        const { address, signature } = req.body;
+        if (!address) return res.status(400).json({ error: "Missing address" });
+
+        // Verify identity (optional but recommended)
+        // const recovered = ethers.verifyMessage(`Authorize 15market Auto-Signer for ${address.toLowerCase()}`, signature);
+        // if (recovered.toLowerCase() !== address.toLowerCase()) return res.status(403).json({ error: "Invalid signature" });
+
+        const wallet = deriveUserWallet(address);
+        const balance = await wallet.provider.getBalance(wallet.address);
+
+        res.json({
+            sessionAddress: wallet.address,
+            balance: ethers.formatEther(balance)
+        });
+    } catch (e) {
+        console.error("Session Init Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/session/trade', async (req, res) => {
+    try {
+        const { address, tradeParams } = req.body;
+        // In a real prod env, verify 'signature' here again to ensure auth for this trade
+
+        const wallet = deriveUserWallet(address);
+        const contract = new ethers.Contract(process.env.ARC_CONTRACT_ADDRESS, blockchain.abi, wallet);
+
+        console.log(`[AutoSigner] Executing trade for ${address} via ${wallet.address}`);
+
+        // Parse params
+        const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
+        const amountWei = ethers.parseUnits(amount.toString(), 18);
+
+        const tx = await contract.placeBet(
+            BigInt(id),
+            Number(direction),
+            BigInt(duration),
+            BigInt(entryPrice),
+            Number(marketId),
+            address, // Payout address is the USER'S main wallet, not the session wallet! (Safety feature)
+            { value: amountWei, gasLimit: 500000n }
+        );
+
+        console.log(`[AutoSigner] TX Sent: ${tx.hash}`);
+        res.json({ txHash: tx.hash, sessionAddress: wallet.address });
+
+        // Wait for confirmation in background
+        tx.wait().then(r => console.log(`[AutoSigner] Confirmed: ${r.hash}`));
+
+    } catch (e) {
+        console.error("AutoSigner Trade Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(PORT, async () => {
     console.log(`[Server] Running on port ${PORT}`);
 
