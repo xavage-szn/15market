@@ -383,25 +383,44 @@ app.post('/session/withdraw', async (req, res) => {
         const { address, amount, signature } = req.body;
         if (!address || !amount) return res.status(400).json({ error: "Missing params" });
 
+        // Normalise to 6dp string to avoid floating-point precision issues (e.g. 0.49500000000000004)
+        const cleanAmount = parseFloat(amount).toFixed(6);
+
         // derive session wallet
         const wallet = deriveUserWallet(address);
-        const amountWei = ethers.parseUnits(amount.toString(), 18);
 
-        console.log(`[AutoSigner] Sweeping ${amount} USDC from ${wallet.address} to main ${address}`);
+        // Check session wallet has enough balance before attempting
+        const sessionBal = await wallet.provider.getBalance(wallet.address);
+        const amountWei = ethers.parseUnits(cleanAmount, 18);
+        const estimatedGas = ethers.parseUnits("0.005", 18); // 0.005 USDC buffer for gas
+        if (sessionBal < amountWei + estimatedGas) {
+            const available = parseFloat(ethers.formatEther(sessionBal)).toFixed(6);
+            console.error(`[AutoSigner] Insufficient session balance: ${available} USDC (need ${cleanAmount})`);
+            return res.status(400).json({ error: `Insufficient session wallet balance. Available: ${available} USDC` });
+        }
 
-        const tx = await wallet.sendTransaction({
+        console.log(`[AutoSigner] Sweeping ${cleanAmount} USDC from ${wallet.address} to main ${address}`);
+
+        // Wrap sendTransaction in a 20s timeout — Arc RPC can hang indefinitely without this
+        const txPromise = wallet.sendTransaction({
             to: address,
             value: amountWei,
             gasLimit: 100000n
         });
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("RPC timeout: Arc network did not respond within 20s")), 20000)
+        );
+
+        const tx = await Promise.race([txPromise, timeoutPromise]);
 
         console.log(`[AutoSigner] Sweep TX Sent: ${tx.hash}`);
         res.json({ success: true, txHash: tx.hash });
 
-        tx.wait().then(r => console.log(`[AutoSigner] Sweep Confirmed: ${r.hash}`));
+        tx.wait().then(r => console.log(`[AutoSigner] Sweep Confirmed: ${r.hash}`))
+            .catch(e => console.error(`[AutoSigner] Sweep confirmation error:`, e.message));
 
     } catch (e) {
-        console.error("AutoSigner Sweep Error:", e);
+        console.error("AutoSigner Sweep Error:", e.message);
         res.status(500).json({ error: e.message });
     }
 });

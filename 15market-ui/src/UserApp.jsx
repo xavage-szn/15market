@@ -1706,15 +1706,32 @@ export default function UserApp() {
 
       notify("Processing sweep...", "info");
 
-      const res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address,
-          amount: netAmt,
-          signature: "authorized"
-        })
-      });
+      // Fix floating-point precision before sending (e.g. 0.49500000000000004 → "0.495000")
+      const cleanNetAmt = parseFloat(netAmt.toFixed(6));
+
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 25000); // 25s max
+
+      let res;
+      try {
+        res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            address,
+            amount: cleanNetAmt,
+            signature: "authorized"
+          })
+        });
+      } catch (fetchErr) {
+        if (fetchErr.name === 'AbortError') {
+          throw new Error("Network timeout — Arc RPC may be congested. Try again in a moment.");
+        }
+        throw fetchErr;
+      } finally {
+        clearTimeout(fetchTimeout);
+      }
 
       if (!res.ok) {
         const errData = await res.json();
