@@ -1578,11 +1578,18 @@ export default function UserApp() {
 
     try {
       const amtNum = parseFloat(amt);
-      const feePercent = 0.01;
-      const fee = amtNum * feePercent;
+      if (isNaN(amtNum) || amtNum <= 0) {
+        notify("Invalid deposit amount", "error");
+        return;
+      }
 
       if (!address || !evmSessionWallet) {
         notify("Connect Arc wallet for refill", "error");
+        return;
+      }
+
+      if (!walletClient) {
+        notify("Wallet client not ready — please reconnect your wallet", "error");
         return;
       }
 
@@ -1593,24 +1600,22 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
-      notify(`Initiating Refill (${amtNum} USDC)...`, "success");
+      notify(`Confirm deposit of ${amtNum.toFixed(4)} USDC in your wallet...`, "info");
 
       try {
-        if (!walletClient) throw new Error("Wallet not connected");
-
         const hash = await walletClient.sendTransaction({
           to: evmSessionWallet.address,
-          value: parseUnits(amtNum.toFixed(18), 18),
+          value: parseEther(amtNum.toFixed(6)),
           account: address
         });
 
-        notify("Refill Transaction Broadcasted", "success");
+        notify("Deposit Transaction Broadcasted!", "success");
 
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
-          notify("Refill Confirmed!", "success");
+          notify("Deposit Confirmed!", "success");
           setTimeout(() => {
-            updateEvmSessionBal(true); // Forced update
-            refetchEvmBalance(true);     // Forced update
+            updateEvmSessionBal(true);
+            refetchEvmBalance(true);
           }, 2000);
         });
 
@@ -1624,20 +1629,19 @@ export default function UserApp() {
         };
         setTransactionHistory(prev => [newTx, ...prev]);
 
-        // SYNC TRANSACTION TO CLOUD
         fetch(`${KEEPER_URL_ARC}/push-tx`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address, transaction: newTx })
-        }).catch(e => console.warn("Failed to sync tx to cloud:", e));
+        }).catch(e => console.warn("Failed to sync deposit to cloud:", e));
 
       } catch (evmErr) {
-        notify(`Refill failed: ${evmErr.message}`, "error");
+        notify(`Deposit failed: ${evmErr.shortMessage || evmErr.message}`, "error");
       }
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, recordFee, evmBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
+  }, [evmSessionWallet, address, notify, evmBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
   const handleWithdraw = useCallback(async (amt) => {
     if (isExecuting) return;
@@ -1654,6 +1658,11 @@ export default function UserApp() {
         return;
       }
 
+      if (!address) {
+        notify("Connect your wallet", "error");
+        return;
+      }
+
       if (sessionBalance < amtNum) {
         notify(`Insufficient balance. You have ${sessionBalance.toFixed(4)} USDC`, "error");
         return;
@@ -1667,12 +1676,34 @@ export default function UserApp() {
         return;
       }
 
-      if (!address || !walletClient) {
-        notify("Connect your wallet", "error");
+      setIsExecuting(true);
+      notify("Sign to authorize withdrawal...", "info");
+
+      // Require user to sign an authorization message.
+      // Use walletClient (wagmi) first, fall back to window.ethereum for robustness
+      // (wagmi walletClient can go stale after prior transactions)
+      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
+      try {
+        if (walletClient) {
+          await walletClient.signMessage({ message: authMsg, account: address });
+        } else if (window.ethereum) {
+          // Fallback: direct ethereum provider sign (works even when wagmi client is stale)
+          const msgHex = '0x' + Array.from(new TextEncoder().encode(authMsg)).map(b => b.toString(16).padStart(2, '0')).join('');
+          await window.ethereum.request({ method: 'personal_sign', params: [msgHex, address] });
+        } else {
+          throw new Error("No wallet available to sign");
+        }
+        console.log("✅ [WITHDRAW] User authorized");
+      } catch (sigErr) {
+        if (sigErr.code === 4001 || sigErr.message?.includes('rejected') || sigErr.message?.includes('denied')) {
+          notify("Withdrawal cancelled by user", "error");
+        } else {
+          notify("Signature failed: " + (sigErr.shortMessage || sigErr.message), "error");
+        }
+        setIsExecuting(false);
         return;
       }
 
-      setIsExecuting(true);
       notify("Processing sweep...", "info");
 
       const res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
@@ -1681,7 +1712,7 @@ export default function UserApp() {
         body: JSON.stringify({
           address,
           amount: netAmt,
-          signature: "authorized" // Real sig can be verified on backend if needed
+          signature: "authorized"
         })
       });
 
@@ -1695,7 +1726,6 @@ export default function UserApp() {
 
       notify("Arc Withdrawal Successful!", "success");
 
-      // Record transaction
       const newTx = {
         id: `withdraw-${Date.now()}`,
         type: "WITHDRAW",
@@ -1707,7 +1737,6 @@ export default function UserApp() {
 
       setTransactionHistory(prev => [newTx, ...prev]);
 
-      // SYNC WITHDRAWAL TO CLOUD
       fetch(`${KEEPER_URL_ARC}/push-tx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1723,7 +1752,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance]);
+  }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
