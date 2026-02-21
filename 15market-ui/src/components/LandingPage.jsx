@@ -108,19 +108,9 @@ export function LandingPage() {
                 <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="hidden md:flex items-center gap-8"
                 >
-                    <div className="flex items-center gap-6">
-                        <NavLink label="Protocol" />
-                        <NavLink label="Markets" />
-                        <NavLink label="Docs" />
-                    </div>
-                    <div className="h-6 w-[1px] bg-white/10" />
                     <UnifiedWalletButton />
                 </motion.div>
-                <div className="md:hidden">
-                    <UnifiedWalletButton />
-                </div>
             </nav>
 
             {/* Hero Main */}
