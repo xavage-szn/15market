@@ -181,7 +181,6 @@ export default function UserApp() {
   // 1. Core Balance Fetchers
   const refetchEvmBalance = useCallback(async (force = false) => {
     if (!address) return;
-    if (!force && Date.now() - lastTradeTimeRef.current < 8000) return;
 
     try {
       const b = await publicClient.getBalance({ address });
@@ -192,7 +191,6 @@ export default function UserApp() {
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!evmSessionWallet) return;
-    if (!force && Date.now() - lastTradeTimeRef.current < 10000) return;
 
     try {
       const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
@@ -232,6 +230,19 @@ export default function UserApp() {
             };
 
             const backendAll = mergeTrades(history);
+
+            // Reactive Balance Sync: If any trade has settled since last check, force refresh
+            setActiveTrades(prev => {
+              const hasSettled = backendAll.some(bt =>
+                bt.status !== "PENDING" && bt.status !== "RESOLVING" &&
+                prev.some(p => String(p.id || p.tx) === String(bt.id || bt.tx) && (p.status === "PENDING" || p.status === "RESOLVING"))
+              );
+              if (hasSettled) {
+                console.log("💰 [BALANCE] Trade settlement detected. Forcing balance refresh.");
+                triggerGlobalRefresh(true);
+              }
+              return prev;
+            });
 
             // 1. Authoritative History Update (Functional Merge)
             setTradeHistory(prev => {
