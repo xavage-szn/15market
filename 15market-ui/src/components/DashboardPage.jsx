@@ -79,7 +79,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
         }
 
         fetchMetrics();
-        const interval = setInterval(fetchMetrics, 5000); // Poll every 5s
+        const interval = setInterval(fetchMetrics, 2000); // Poll every 2s for real-time feel
         return () => clearInterval(interval);
     }, [address]);
 
@@ -149,7 +149,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                 ...prev,
                 marketSentiment: total > 0 ? ((bulls / total) * 100).toFixed(0) : 50,
                 marketAvgStake: total > 0 ? (totalStake / total).toFixed(3) : "0.000",
-                marketTotalVol: vol.toFixed(2),
+                marketTotalVol: vol.toFixed(3),
                 bullsInfo: bulls,
                 bearsInfo: bears,
                 recentTrades: history.slice(0, 50)
@@ -406,7 +406,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                             </div>
                                         </div>
                                         <div className="text-right flex flex-col items-end">
-                                            <div className="text-xl font-black text-[#3CB371] tabular-nums">{(sessionBalance || 0).toFixed(4)} USDC</div>
+                                            <div className="text-xl font-black text-[#3CB371] tabular-nums">{(sessionBalance || 0).toFixed(3)} USDC</div>
                                         </div>
                                     </div>
 
@@ -421,7 +421,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                         if (isNaN(amt) || amt <= 0) return;
                                                         setModalConfig({
                                                             title: "Confirm Refill",
-                                                            message: `Deposit ${amt.toFixed(4)} USDC to auto-signer?\n\nA 1% protocol fee (${(amt * 0.01).toFixed(4)} USDC) will be added to the treasury.`,
+                                                            message: `Deposit ${amt.toFixed(3)} USDC to auto-signer?\n\nA 1% protocol fee (${(amt * 0.01).toFixed(3)} USDC) will be added to the treasury.`,
                                                             onConfirm: () => onRefill(amt),
                                                             confirmText: "Refill Now",
                                                             type: 'confirm'
@@ -443,8 +443,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                         if (isNaN(amt) || amt <= 0) return;
                                                         setModalConfig({
                                                             title: "Confirm Withdrawal",
-                                                            message: `Withdraw ${amt.toFixed(4)} USDC to your main wallet?\n\nProtocol Fee (1%) will be deducted.`,
-                                                            onConfirm: () => onWithdraw(amt.toFixed(4)),
+                                                            message: `Withdraw ${amt.toFixed(3)} USDC to your main wallet?\n\nProtocol Fee (1%) will be deducted.`,
+                                                            onConfirm: () => onWithdraw(amt.toFixed(3)),
                                                             confirmText: "Sweep Now",
                                                             type: 'confirm'
                                                         });

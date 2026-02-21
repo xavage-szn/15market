@@ -25,10 +25,10 @@ const normalizeTrade = (t) => {
     }
     // Normalize Entry/Exit Prices: if > 100M, assume it's scaled by 1e8
     if (t.entryPrice && Number(t.entryPrice) > 100000000) {
-        t.entryPrice = (Number(t.entryPrice) / 1e8).toFixed(4);
+        t.entryPrice = (Number(t.entryPrice) / 1e8).toFixed(3);
     }
     if (t.settlementPrice && Number(t.settlementPrice) > 100000000) {
-        t.settlementPrice = (Number(t.settlementPrice) / 1e8).toFixed(4);
+        t.settlementPrice = (Number(t.settlementPrice) / 1e8).toFixed(3);
     }
     return t;
 };
@@ -169,14 +169,42 @@ app.get('/profile', async (req, res) => {
         if (userData.history) userData.history = userData.history.map(normalizeTrade);
         if (userData.transactions) userData.transactions = userData.transactions.map(normalizeTrade);
 
-        // Normalize Profile Metrics (Volume)
-        if (userData.profile && userData.profile.totalVolume) {
-            const vol = Number(userData.profile.totalVolume);
-            // If volume is cosmically large (> 1 Quadrillion), it's definitely Wei contamination
-            if (vol > 1000000000000000) {
-                try {
-                    userData.profile.totalVolume = ethers.formatEther(userData.profile.totalVolume.toString());
-                } catch (e) { }
+        // ACCURATE STATS: Compute from actual trade history instead of trusting stored counters
+        // This prevents inflated numbers from double-settlements or bugs
+        if (userData.history && userData.history.length > 0) {
+            // Deduplicate by trade ID to prevent double-counting
+            const uniqueTrades = new Map();
+            for (const t of userData.history) {
+                const tradeId = t.id || t.tx;
+                if (tradeId && (t.status === 'WON' || t.status === 'LOST')) {
+                    // Keep the most recent version of each trade
+                    if (!uniqueTrades.has(tradeId) || (t.settledAt || t.timestamp || 0) > (uniqueTrades.get(tradeId).settledAt || uniqueTrades.get(tradeId).timestamp || 0)) {
+                        uniqueTrades.set(tradeId, t);
+                    }
+                }
+            }
+
+            const settledTrades = Array.from(uniqueTrades.values());
+            const wins = settledTrades.filter(t => t.status === 'WON').length;
+            const losses = settledTrades.filter(t => t.status === 'LOST').length;
+            const totalTrades = settledTrades.length;
+
+            // Calculate volume from normalized amounts
+            let totalVolume = 0;
+            for (const t of settledTrades) {
+                let amt = parseFloat(t.amount || 0);
+                if (amt > 1000000) {
+                    try { amt = parseFloat(ethers.formatEther(t.amount.toString())); } catch (e) { }
+                }
+                totalVolume += amt;
+            }
+
+            // Override stored profile stats with computed values
+            if (userData.profile) {
+                userData.profile.totalTrades = totalTrades;
+                userData.profile.totalWins = wins;
+                userData.profile.totalLosses = losses;
+                userData.profile.totalVolume = totalVolume.toFixed(3);
             }
         }
     }
@@ -223,7 +251,7 @@ app.post('/trade-ping', async (req, res) => {
             amount: Number(amount).toFixed(4), // Force normal float string
             direction: direction,
             duration: Number(duration),
-            entryPrice: normalizedEntry.toFixed(4),
+            entryPrice: normalizedEntry.toFixed(3),
             marketId: marketId,
             symbol: symbol || 'BTC',
             network: network || 'arc',
@@ -346,6 +374,34 @@ app.post('/session/trade', async (req, res) => {
 
     } catch (e) {
         console.error("AutoSigner Trade Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/session/withdraw', async (req, res) => {
+    try {
+        const { address, amount, signature } = req.body;
+        if (!address || !amount) return res.status(400).json({ error: "Missing params" });
+
+        // derive session wallet
+        const wallet = deriveUserWallet(address);
+        const amountWei = ethers.parseUnits(amount.toString(), 18);
+
+        console.log(`[AutoSigner] Sweeping ${amount} USDC from ${wallet.address} to main ${address}`);
+
+        const tx = await wallet.sendTransaction({
+            to: address,
+            value: amountWei,
+            gasLimit: 100000n
+        });
+
+        console.log(`[AutoSigner] Sweep TX Sent: ${tx.hash}`);
+        res.json({ success: true, txHash: tx.hash });
+
+        tx.wait().then(r => console.log(`[AutoSigner] Sweep Confirmed: ${r.hash}`));
+
+    } catch (e) {
+        console.error("AutoSigner Sweep Error:", e);
         res.status(500).json({ error: e.message });
     }
 });

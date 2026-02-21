@@ -558,7 +558,7 @@ export default function UserApp() {
 
     const currentBal = sessionMode ? sessionBalance : balance;
     if (parseFloat(amount) > currentBal) {
-      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. Balance: ${currentBal.toFixed(4)}`, "error");
+      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. Balance: ${currentBal.toFixed(3)}`, "error");
     }
 
     if (Number(amount) < parseFloat(minStake)) {
@@ -572,8 +572,8 @@ export default function UserApp() {
     const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
     const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
     const entryPriceParams = Math.floor(activePrice * 100000000);
-    const ASSET_ID_MAP = { 'sol': 5, 'btc': 0, 'eth': 1, 'mon': 2, 'jup': 3, 'xrp': 4 };
-    const assetId = ASSET_ID_MAP[activeMarket?.id] || 0;
+    const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 }; // Synchronized with backend
+    const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
 
     try {
       if (!isConnected) {
@@ -584,8 +584,15 @@ export default function UserApp() {
 
       const amountWei = parseUnits(parseFloat(amount).toFixed(18), 18);
 
-      if (sessionMode && sessionBalance >= (Number(amount) + 0.005)) {
-        console.log("✅ [TRADE] Using REMOTE AUTO-SIGNER");
+      if (sessionMode) {
+        // SESSION MODE: Always use auto-signer, never fall through to main wallet
+        if (sessionBalance < (Number(amount) + 0.005)) {
+          notify(`Insufficient Auto-Signer balance. You have ${sessionBalance.toFixed(3)} USDC. Deposit more or switch to Main Wallet.`, "error");
+          setIsExecuting(false);
+          return;
+        }
+
+        console.log("✅ [TRADE] Using REMOTE AUTO-SIGNER — payout stays in session wallet");
         notify(`Auto-signing via Cloud...`, "success");
 
         const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
@@ -611,9 +618,10 @@ export default function UserApp() {
 
         const data = await res.json();
         txHash = data.txHash;
-        console.log("📤 [TRADE] Remote tx SENT:", txHash);
+        console.log("📤 [TRADE] Remote tx SENT:", txHash, "Payout to session wallet:", data.sessionAddress || evmSessionWallet?.address);
 
       } else {
+        // MAIN WALLET MODE: User directly signs, payout goes to main wallet
         console.log("📝 [TRADE] Using MAIN WALLET");
         notify(`Confirm on Arc...`, "success");
 
@@ -659,7 +667,8 @@ export default function UserApp() {
 
       lastTradeTimeRef.current = Date.now();
 
-      const activeUserAddr = (sessionMode) ? (evmSessionWallet?.address || address) : address;
+      // CRITICAL: If sessionMode is true, ALWAYS use session wallet. If it's null, we shouldn't be here (caught above), but we force it to ensure no payout goes to main by accident.
+      const activeUserAddr = (sessionMode) ? (evmSessionWallet?.address) : address;
 
       const now = Date.now();
       const expiryMs = now + (duration * 1000);
@@ -667,8 +676,8 @@ export default function UserApp() {
       const newTrade = {
         id: tradeId,
         direction: (dirVal === 1 ? "UP" : "DOWN"),
-        amount: Number(amount).toFixed(4),
-        entryPrice: activePrice.toFixed(4),
+        amount: Number(amount).toFixed(3),
+        entryPrice: activePrice.toFixed(3),
         timestamp: now,
         status: "PENDING",
         tx: txHash,
@@ -680,6 +689,7 @@ export default function UserApp() {
         startTime: now,
         expiryMs: expiryMs,
         symbol: activeMarket?.symbol || 'ETH',
+        isSessionTrade: sessionMode, // Track which wallet mode placed this trade
       };
 
       // Helper to prevent dupes
@@ -698,10 +708,10 @@ export default function UserApp() {
         body: JSON.stringify({
           id: tradeId,
           address: activeUserAddr, // associate with the wallet that made the trade
-          amount: Number(amount).toFixed(4),
+          amount: Number(amount).toFixed(3),
           direction: dirVal,
           duration,
-          entryPrice: activePrice.toFixed(4),
+          entryPrice: activePrice.toFixed(3),
           symbol: activeMarket?.symbol || 'ETH',
           network: 'arc',
           expiryMs: expiryMs
@@ -712,7 +722,7 @@ export default function UserApp() {
       const newTx = {
         id: `trade_${tradeId}`,
         type: 'TRADE',
-        amount: Number(amount).toFixed(4),
+        amount: Number(amount).toFixed(3),
         timestamp: Date.now(),
         hash: txHash,
         status: 'PENDING'
@@ -1326,35 +1336,37 @@ export default function UserApp() {
     }
   }, [activeTrades]);
 
-  // Result Resolution - Polling for all pending trades
+  // Result Resolution - HIGH SPEED polling for instant settlement feel
   useEffect(() => {
-    const checkAndResolve = async () => {
+    const checkAndResolve = () => {
       const now = Date.now();
       const pendingTrades = activeTrades.filter(t => t.status === "PENDING" || t.status === "RESOLVING");
 
       for (const trade of pendingTrades) {
         const start = trade.startTime || (trade.nonce > 1000000000000 ? trade.nonce : Math.floor(trade.nonce / 100) * 1000);
-        const elapsed = (now - start) / 1000;
-        if (elapsed < trade.duration) continue;
+        const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
+        if (now < expiryMs) continue; // Not yet expired
         if (resolvingInProgress.current.has(trade.id)) continue;
 
         resolvingInProgress.current.add(trade.id);
 
-        // Optimistic Resolution
+        // Capture the current live price for instant result
         let capturedPrice = parseFloat(priceRef.current);
         if (trade.status === "RESOLVING" && trade.settlementPrice) {
           capturedPrice = parseFloat(trade.settlementPrice);
         }
 
-        // Determine result immediately (Client-Side Optimism)
-        // If price is valid, we show the result instantly rather than "Resolving..."
-        // The chain will confirm later, but this feels "Instant"
-        let optimisticStatus = "RESOLVING";
+        // RULE: Truncate to 3 decimal places (floor) for win/loss determination
+        // If price doesn't move by at least 0.001 past entry, it's a LOSS
+        const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
+
+        let optimisticStatus = "LOST"; // Default to LOST (safer than WON)
 
         if (capturedPrice > 0) {
-          const entry = parseFloat(trade.entryPrice);
+          const entry3dp = truncTo3dp(parseFloat(trade.entryPrice));
+          const exit3dp = truncTo3dp(capturedPrice);
           const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
-          const isWin = isUpTrade ? (capturedPrice > entry) : (capturedPrice < entry);
+          const isWin = isUpTrade ? (exit3dp > entry3dp) : (exit3dp < entry3dp);
           optimisticStatus = isWin ? "WON" : "LOST";
         }
 
@@ -1364,63 +1376,55 @@ export default function UserApp() {
           if (trade.duration <= 5) multiplier = 6.98;
           else if (trade.duration <= 10) multiplier = 4.98;
 
-          optimisticPayout = (parseFloat(trade.amount) * multiplier).toFixed(4);
+          optimisticPayout = (parseFloat(trade.amount) * multiplier).toFixed(3);
         }
 
         const updatePayload = {
           ...trade,
           status: optimisticStatus,
-          settlementPrice: capturedPrice.toFixed(4),
+          settlementPrice: capturedPrice.toFixed(3),
           payout: optimisticPayout,
-          optimistic: true // Marker so we know it's not final settled yet
+          optimistic: true,
+          settledAt: now
         };
 
-        // INSTANT WALLET BALANCE UPDATE (Optimistic)
-        // This is what makes it feel "Instant" while the chain catches up
+        // INSTANT WALLET BALANCE CREDIT: Use address comparison for reliability
         if (optimisticStatus === "WON" && !trade.balanceApplied) {
           const payoutNum = parseFloat(optimisticPayout);
-          const userAddr = trade.userPublicKey?.toLowerCase() || trade.owner?.toLowerCase();
+          const tradeOwner = (trade.owner || trade.userPublicKey || trade.user || "").toLowerCase();
+          const sessionAddr = evmSessionWallet?.address?.toLowerCase();
+          const mainAddr = address?.toLowerCase();
 
-          if (userAddr === address?.toLowerCase()) {
-            setBalance(prev => prev + payoutNum);
-          } else if (userAddr === evmSessionWallet?.address?.toLowerCase()) {
+          if (sessionAddr && tradeOwner === sessionAddr) {
             setSessionBalance(prev => prev + payoutNum);
+            console.log(`⚡ [INSTANT] +${payoutNum} credited to SESSION wallet (${tradeOwner})`);
+            updatePayload.balanceApplied = true;
+          } else if (mainAddr && tradeOwner === mainAddr) {
+            setBalance(prev => prev + payoutNum);
+            console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet (${tradeOwner})`);
+            updatePayload.balanceApplied = true;
           }
-          updatePayload.balanceApplied = true;
-          console.log(`🚀 [OPTIMISTIC_PAYOUT] Applied +${payoutNum} to ${userAddr === address?.toLowerCase() ? 'Main' : 'Session'} Wallet`);
         }
 
-        // Instant UI Update
+        // Instant UI Update - show result immediately
         setActiveTrades(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
         setTradeHistory(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
 
-        // Trigger background settlement verification/payout
-        resolveBet(trade, capturedPrice);
-      }
-    };
-
-    const resolveBet = async (capturedTrade, capturedPrice) => {
-      try {
-        // Arc resolution is handled via on-chain events (useWatchContractEvent)
-        // and background keeper settlement.
-        // We just need to manage the local resolving lock.
-
+        // Release resolving lock after a safety period (chain will confirm in background)
         setTimeout(() => {
-          if (resolvingInProgress.current.has(capturedTrade.id)) {
-            resolvingInProgress.current.delete(capturedTrade.id);
-          }
-        }, 35000); // Expiry safety
-      } catch (err) {
-        console.error("Resolution loop crash:", err);
-        resolvingInProgress.current.delete(capturedTrade.id);
+          resolvingInProgress.current.delete(trade.id);
+        }, 30000);
       }
     };
 
-    const interval = setInterval(checkAndResolve, 1000); // 1s is plenty for resolution check
+    // HIGH SPEED: Check every 200ms for near-instant resolution
+    const interval = setInterval(checkAndResolve, 200);
+    // Also run immediately on mount/update
+    checkAndResolve();
     return () => clearInterval(interval);
-  }, [activeTrades, wallet.publicKey]); // Removed price from dependency array
+  }, [activeTrades, address, evmSessionWallet, sessionMode]);
 
-  // Safety Cleanup: Insures terminal is never stuck in processing state
+  // Safety Cleanup: Remove finalized trades after showing result
   useEffect(() => {
     const finalStatuses = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"];
     const toRemove = activeTrades.filter(t => finalStatuses.includes(t.status));
@@ -1428,7 +1432,7 @@ export default function UserApp() {
     if (toRemove.length > 0) {
       const timer = setTimeout(() => {
         setActiveTrades(prev => prev.filter(t => !finalStatuses.includes(t.status)));
-      }, 3500);
+      }, 4500); // Show result for 4.5s so user can see payout
       return () => clearTimeout(timer);
     }
   }, [activeTrades]);
@@ -1439,7 +1443,9 @@ export default function UserApp() {
 
 
 
-  // Arc Settlement Listener
+  // Arc Settlement Listener — with dedup to prevent double-crediting
+  const processedSettlements = useRef(new Set());
+
   useEffect(() => {
     const unwatch = publicClient.watchContractEvent({
       address: ARC_CONTRACT_ADDRESS,
@@ -1454,15 +1460,35 @@ export default function UserApp() {
 
           if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
             const betId = id.toString();
+
+            // 🛑 DEDUP: Skip if we already processed this exact settlement event
+            const eventKey = `${betId}_${log.transactionHash}`;
+            if (processedSettlements.current.has(eventKey)) {
+              console.log(`⏭️ [DEDUP] Already processed settlement for bet ${betId}, skipping.`);
+              return;
+            }
+            processedSettlements.current.add(eventKey);
+
+            // Auto-cleanup old entries after 5 minutes
+            setTimeout(() => processedSettlements.current.delete(eventKey), 5 * 60 * 1000);
+
             const finalStatus = won ? "WON" : "LOST";
-            const priceUSD = parseFloat(formatUnits(settlementPrice, 8)).toFixed(4);
-            const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(4);
+            const priceUSD = parseFloat(formatUnits(settlementPrice, 8)).toFixed(3);
+            const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(3);
 
             const updateTrade = (t) => {
               const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
-                (t.nonce && t.nonce.toString() === betId);
+                (t.nonce && t.nonce.toString() === betId) ||
+                (t.id && t.id.toString() === betId);
               if (isMatch) {
-                return { ...t, status: finalStatus, settlementPrice: priceUSD, payout: formattedPayout };
+                return {
+                  ...t,
+                  status: finalStatus,
+                  settlementPrice: priceUSD,
+                  payout: formattedPayout,
+                  chainConfirmed: true,
+                  balanceApplied: t.balanceApplied || false // Preserve existing flag
+                };
               }
               return t;
             };
@@ -1474,19 +1500,23 @@ export default function UserApp() {
               notify(`Trade WON! +${formattedPayout} USDC`, "success");
               const payoutVal = parseFloat(formattedPayout);
 
-              // Update relevant local state ONLY if not already optimistically applied
-              // We check both the trade in history and the trade in activeTrades
+              // Update balance ONLY if not already optimistically applied
               const existingTrade = tradeHistory.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
+              const existingActive = activeTrades.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
+              const alreadyApplied = existingTrade?.balanceApplied || existingActive?.balanceApplied;
 
-              if (!existingTrade?.balanceApplied) {
-                if (normalizedUser === mainAddr) {
-                  setBalance(prev => prev + payoutVal);
-                } else if (normalizedUser === sessionAddr) {
+              if (!alreadyApplied) {
+                if (normalizedUser === sessionAddr) {
                   setSessionBalance(prev => prev + payoutVal);
+                  console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to SESSION wallet`);
+                } else if (normalizedUser === mainAddr) {
+                  setBalance(prev => prev + payoutVal);
+                  console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to MAIN wallet`);
                 }
+              } else {
+                console.log(`⏭️ [CHAIN_CONFIRM] Balance already applied for bet ${betId}, skipping credit.`);
               }
 
-              // Force background fetches to confirm real chain state
               lastTradeTimeRef.current = Date.now() - 7000;
               aggressiveRefresh();
             } else {
@@ -1616,14 +1646,23 @@ export default function UserApp() {
 
       notify("Processing sweep...", "info");
 
-      // Ensure we are using the correct provider for the session wallet
-      const tx = {
-        to: address,
-        value: parseUnits(netAmt.toFixed(18), 18),
-      };
+      const res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address,
+          amount: netAmt,
+          signature: "authorized" // Real sig can be verified on backend if needed
+        })
+      });
 
-      const sweepTx = await evmSessionWallet.sendTransaction(tx);
-      await sweepTx.wait();
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Sweep failed");
+      }
+
+      const data = await res.json();
+      const sweepHash = data.txHash;
 
       notify("Arc Withdrawal Successful!", "success");
 
@@ -1633,7 +1672,7 @@ export default function UserApp() {
         type: "WITHDRAW",
         amount: amtNum.toFixed(4),
         timestamp: Date.now(),
-        tx: sweepTx.hash,
+        tx: sweepHash,
         network: 'arc'
       };
 
@@ -1791,7 +1830,7 @@ export default function UserApp() {
 
           {/* Full-width scroller - edge to edge */}
           <div className="w-screen mb-4 lg:mb-10 overflow-hidden">
-            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} />
+            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} activeTrades={activeTrades} tradeHistory={tradeHistory} />
           </div>
 
           <div className="w-full max-w-7xl flex flex-col items-center">

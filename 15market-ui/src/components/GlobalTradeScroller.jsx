@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useRef, memo, useMemo } from 'react';
+import React, { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Radio } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-function GlobalTradeScrollerComponent({ theme }) {
+function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory = [] }) {
     const [history, setHistory] = useState(() => {
         try {
             const saved = localStorage.getItem("15market_global_history_v2");
@@ -12,10 +12,11 @@ function GlobalTradeScrollerComponent({ theme }) {
     });
     const [profiles, setProfiles] = useState({});
     const [activeBroadcast, setActiveBroadcast] = useState(null);
+    const lastFetchRef = useRef(0);
 
     const truncate = (str) => str ? `${str.slice(0, 4)}...${str.slice(-4)}` : "";
 
-    const fetchGlobalData = async () => {
+    const fetchGlobalData = useCallback(async () => {
         try {
             const arcRes = await fetch(`${KEEPER_URL_ARC}/history`);
             if (arcRes.ok) {
@@ -24,8 +25,10 @@ function GlobalTradeScrollerComponent({ theme }) {
                     arcData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                     const finalHistory = arcData.slice(0, 100);
 
-                    // Only update if history actually changed to prevent animation resets
-                    if (JSON.stringify(finalHistory) !== JSON.stringify(history)) {
+                    // Only update if history actually changed
+                    const newJson = JSON.stringify(finalHistory.map(h => h.id));
+                    const oldJson = JSON.stringify(history.map(h => h.id));
+                    if (newJson !== oldJson) {
                         setHistory(finalHistory);
                         localStorage.setItem("15market_global_history_v2", JSON.stringify(finalHistory));
                     }
@@ -55,14 +58,16 @@ function GlobalTradeScrollerComponent({ theme }) {
                     }
                 }
             }
+            lastFetchRef.current = Date.now();
         } catch (err) {
             console.error("Global Scroller Sync Error:", err);
         }
-    };
+    }, []); // No deps to prevent re-creating, uses refs
 
     useEffect(() => {
         fetchGlobalData();
-        const interval = setInterval(fetchGlobalData, 5000);
+        // REAL-TIME: Poll every 2 seconds for near-instant scroller updates
+        const interval = setInterval(fetchGlobalData, 2000);
 
         const checkBroadcast = () => {
             try {
@@ -91,12 +96,41 @@ function GlobalTradeScrollerComponent({ theme }) {
         };
     }, []);
 
+    // Merge local active/settled trades into the scroller for INSTANT visibility
+    const mergedHistory = useMemo(() => {
+        // Start with backend history
+        const existingIds = new Set(history.map(h => h.id?.toString()));
+        let merged = [...history];
+
+        // Add any recently settled or active trades that aren't in the backend history yet
+        const localTrades = [...(tradeHistory || []), ...(activeTrades || [])];
+        for (const t of localTrades) {
+            if (t.id && !existingIds.has(t.id.toString()) && t.status !== "PENDING") {
+                merged.push({
+                    id: t.id?.toString(),
+                    owner: t.userPublicKey || t.owner || '',
+                    amount: t.amount,
+                    direction: t.direction,
+                    symbol: t.symbol || 'ETH',
+                    status: t.status,
+                    timestamp: t.timestamp || Date.now(),
+                    network: 'arc'
+                });
+                existingIds.add(t.id.toString());
+            }
+        }
+
+        // Sort by timestamp descending and limit
+        merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return merged.slice(0, 100);
+    }, [history, activeTrades, tradeHistory]);
+
     const repeatedHistory = useMemo(() => {
-        if (!history || history.length === 0) return [];
-        let list = [...history];
-        while (list.length < 40) { list = [...list, ...history]; }
+        if (!mergedHistory || mergedHistory.length === 0) return [];
+        let list = [...mergedHistory];
+        while (list.length < 40) { list = [...list, ...mergedHistory]; }
         return [...list, ...list];
-    }, [history]);
+    }, [mergedHistory]);
 
     const isLight = theme === 'light';
 
@@ -188,11 +222,11 @@ function GlobalTradeScrollerComponent({ theme }) {
                             <div className={`w-px h-4 lg:h-6 mx-0.5 lg:mx-1 ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
 
                             <div className="flex flex-col items-end">
-                                <span className={`text-[8px] lg:text-[10px] font-black uppercase tracking-widest ${event.status === "WON" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
-                                    {event.status || "WAITING"}
+                                <span className={`text-[8px] lg:text-[10px] font-black uppercase tracking-widest ${event.status === "WON" ? "text-[#3CB371]" : event.status === "LOST" ? "text-[#FF7F50]" : "text-white/40"}`}>
+                                    {event.status || "LIVE"}
                                 </span>
                                 <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {event.symbol} {event.direction === "UP" ? "UP" : "DOWN"}
+                                    {event.symbol} {event.direction === "UP" || event.direction === 1 || String(event.direction) === "1" ? "UP" : "DOWN"}
                                 </span>
                             </div>
                         </div>

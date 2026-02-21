@@ -88,6 +88,12 @@ class RedisService {
             timestamp: trade.timestamp || Date.now()
         };
 
+        // 🛑 DEDUP: Remove existing entry with same ID before adding
+        const tradeId = normalizedTrade.id || normalizedTrade.tx;
+        if (tradeId) {
+            this.historyCache = this.historyCache.filter(t => (t.id || t.tx) !== tradeId);
+        }
+
         // Add to the beginning of the list
         this.historyCache.unshift(normalizedTrade);
 
