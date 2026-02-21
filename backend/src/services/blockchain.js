@@ -64,6 +64,7 @@ class BlockchainService {
         this.wallet = null;
         this.contract = null;
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
+        this.currentNonce = null;
 
         this.abi = [
             "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
@@ -139,29 +140,79 @@ class BlockchainService {
 
     async settleBet(betId, exitPrice) {
         await this._ensureReady();
-        try {
-            const tx = await this.contract.settleBet(betId, ethers.parseUnits(exitPrice.toString(), 0));
-            console.log(`[Blockchain] Settling bet ${betId} at price ${exitPrice}. TX: ${tx.hash}`);
-            const receipt = await tx.wait();
 
-            // CRITICAL: ethers v6 tx.wait() can return a receipt with status=0 (reverted)
-            // without throwing. We MUST check this explicitly, otherwise the processor
-            // will think the settlement succeeded and delete the trade from Redis,
-            // causing users to never receive their winnings.
+        // Manual Nonce Management to prevent "nonce too low" errors during parallel settlement
+        if (this.currentNonce === null) {
+            this.currentNonce = await this.provider.getTransactionCount(this.wallet.address, 'pending');
+            console.log(`[Blockchain] Initialized nonce at ${this.currentNonce}`);
+        }
+
+        const nonce = this.currentNonce++;
+
+        try {
+            // Get current gas price and add 10% for priority
+            const feeData = await this.provider.getFeeData();
+            const gasPrice = feeData.gasPrice ? (feeData.gasPrice * BigInt(110) / BigInt(100)) : undefined;
+
+            console.log(`[Blockchain] 🛰️ Sending settlement for bet ${betId} (Nonce: ${nonce}, Gas: ${gasPrice ? ethers.formatUnits(gasPrice, 'gwei') : 'auto'} gwei)`);
+
+            const tx = await this.contract.settleBet(betId, ethers.parseUnits(exitPrice.toString(), 0), {
+                nonce: nonce,
+                gasPrice: gasPrice,
+                gasLimit: 800000n
+            });
+
+            console.log(`[Blockchain] 🚀 TX Sent: ${tx.hash} for bet ${betId}`);
+
+            // Wait for confirmation with a 60s timeout
+            const receipt = await Promise.race([
+                tx.wait(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Confirmation Timeout")), 60000))
+            ]);
+
             if (!receipt || receipt.status === 0) {
-                throw new Error(`Transaction reverted on-chain for bet ${betId}. TX: ${tx.hash}`);
+                // If the transaction reverted, we check the reason
+                throw new Error(`Transaction reverted on-chain for bet ${betId}. Status: ${receipt?.status}`);
             }
 
-            console.log(`[Blockchain] ✅ TX confirmed on-chain for bet ${betId}. Status: ${receipt.status}`);
+            console.log(`[Blockchain] ✅ Confirmed: ${receipt.hash} (Status: ${receipt.status})`);
             return receipt;
         } catch (e) {
-            console.error(`[Blockchain] Failed to settle bet ${betId}:`, e.message);
+            // If we get a nonce-related error, we reset the nonce cache for the next attempt
+            if (e.message.includes('nonce') || e.message.includes('underpriced') || e.message.includes('already been used')) {
+                console.warn(`[Blockchain] ️ Nonce/Gas error detected. Resetting nonce cache. Error: ${e.message}`);
+                this.currentNonce = null;
+            }
+
+            // Re-throw if it's not a "Already settled" error (which is technically a success from the keeper's perspective)
+            if (e.message.includes('already settled')) {
+                console.log(`[Blockchain] ℹ️ Bet ${betId} was already settled. Treating as success.`);
+                return { status: 1, alreadySettled: true };
+            }
+
             throw e;
         }
     }
 
     onBetPlaced(callback) {
         this.onBetPlacedCallback = callback;
+    }
+
+    async getCurrentBlock() {
+        await this._ensureReady();
+        return await this.provider.getBlockNumber();
+    }
+
+    async getPastEvents(eventName, fromBlock) {
+        await this._ensureReady();
+        try {
+            console.log(`[Blockchain] 🔍 Scanning past events: ${eventName} from block ${fromBlock}`);
+            const events = await this.contract.queryFilter(eventName, fromBlock);
+            return events;
+        } catch (e) {
+            console.error(`[Blockchain] ❌ Error querying past events ${eventName}:`, e.message);
+            return [];
+        }
     }
 }
 

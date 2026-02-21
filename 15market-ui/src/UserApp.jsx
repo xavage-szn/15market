@@ -233,7 +233,20 @@ export default function UserApp() {
 
             const uniqueHistory = mergeTrades(history);
             setTradeHistory(uniqueHistory);
-            setActiveTrades(uniqueHistory.filter(t => ["PENDING", "RESOLVING"].includes(t.status)));
+
+            // Apply ghost protection to active trades from history (5s grace)
+            const now = Date.now();
+            const GHOST_GRACE = 5000;
+            const filteredActive = uniqueHistory.filter(t => {
+              if (!["PENDING", "RESOLVING"].includes(t.status)) return false;
+
+              const expiry = t.expiry || ((t.timestamp || t.startTime || now) + (t.duration * 1000));
+              const normExpiry = expiry > 1000000000000 ? expiry : expiry * 1000;
+              const isPastGrace = now > (normExpiry + GHOST_GRACE);
+
+              return !isPastGrace;
+            });
+            setActiveTrades(filteredActive);
           }
           if (transactions) setTransactionHistory(transactions);
           localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
@@ -736,8 +749,16 @@ export default function UserApp() {
           // Merge backend trades with local trades to prevent flickering/overwriting
           setTradeHistory(prev => {
             const merged = [...backendAll];
+            const now = Date.now();
+            const FIFTEEN_MINS = 15 * 60 * 1000;
+
             prev.forEach(local => {
-              if (!merged.find(m => String(m.id) === String(local.id))) {
+              const knownByBackend = merged.find(m => String(m.id) === String(local.id));
+              const localTime = (local.timestamp || local.startTime || now);
+              const normalizedTime = localTime > 1000000000000 ? localTime : localTime * 1000;
+              const isFresh = (now - normalizedTime) < FIFTEEN_MINS;
+
+              if (!knownByBackend && (local.status === "PENDING" ? isFresh : true)) {
                 merged.push(local);
               }
             });
@@ -759,17 +780,32 @@ export default function UserApp() {
           setActiveTrades(prev => {
             const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status));
             const updatedActive = [...backendActive];
-            // Keep local trades ONLY if backend doesn't know about them at all
-            prev.forEach(local => {
-              // Check if this local trade exists in the FULL backend list (history + active)
-              // If backend knows about it (in any state), don't keep local stale copy
-              const knownByBackend = backendAll.find(b => String(b.id) === String(local.id));
+            const now = Date.now();
+            const GHOST_GRACE = 5000; // 5 seconds after expiry
 
-              if (!knownByBackend && local.status === "PENDING") {
+            // Keep local trades ONLY if backend doesn't know about them at all AND they are fresh
+            prev.forEach(local => {
+              const localId = String(local.id || local.tx || local.nonce);
+              const knownByBackend = backendAll.find(b => String(b.id || b.tx || b.nonce) === localId);
+
+              const expiry = local.expiry || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
+              const normExpiry = expiry > 1000000000000 ? expiry : expiry * 1000;
+              const isPastGrace = now > (normExpiry + GHOST_GRACE);
+
+              // If it's a pending trade NOT on backend, only keep if < 5s past expiry
+              if (!knownByBackend && local.status === "PENDING" && !isPastGrace) {
                 updatedActive.push(local);
               }
             });
-            return updatedActive;
+
+            // Final dedupe by ID
+            const seen = new Set();
+            return updatedActive.filter(t => {
+              const id = String(t.id || t.tx || t.nonce);
+              if (seen.has(id)) return false;
+              seen.add(id);
+              return true;
+            });
           });
         }
       } catch (e) {

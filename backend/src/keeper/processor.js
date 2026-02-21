@@ -49,6 +49,96 @@ class TradeProcessor {
 
         // Start settlement loop every 1000ms (slowed down from 500ms to reduce load)
         setInterval(() => this.processSettlements(), 1000);
+
+        // Run recovery scan after a short delay to allow provider to settle
+        setTimeout(() => this.recoverUnsettledTrades(), 5000);
+
+        // Start periodic zombie check every 5 minutes
+        setInterval(() => this.performZombieCheck(), 5 * 60 * 1000);
+    }
+
+    async recoverUnsettledTrades() {
+        console.log('[Processor] 🛡️ Starting settlement recovery scan...');
+        try {
+            const currentBlock = await blockchain.getCurrentBlock();
+            // Scan last ~2 hours (approx 2400 blocks if 3s block time, or 7200 if 1s)
+            // Arc Testnet is fast, so let's scan last 10,000 blocks to be safe
+            const fromBlock = Math.max(0, currentBlock - 10000);
+
+            const [placedEvents, settledEvents] = await Promise.all([
+                blockchain.getPastEvents("BetPlaced", fromBlock),
+                blockchain.getPastEvents("BetSettled", fromBlock)
+            ]);
+
+            const settledIds = new Set(settledEvents.map(e => e.args.id.toString()));
+            console.log(`[Processor] Recovery: Found ${placedEvents.length} placements and ${settledEvents.length} settlements in scan range.`);
+
+            let recoveredCount = 0;
+            for (const event of placedEvents) {
+                const tradeId = event.args.id.toString();
+                if (!settledIds.has(tradeId)) {
+                    const existing = await redis.getTrade(tradeId);
+                    if (!existing) {
+                        const tradeData = {
+                            id: tradeId,
+                            user: event.args.user,
+                            amount: ethers.formatEther(event.args.amount),
+                            direction: Number(event.args.direction),
+                            duration: Number(event.args.duration),
+                            entryPrice: (Number(event.args.entryPrice) / 1e8).toFixed(4),
+                            timestamp: Number(event.args.timestamp) * 1000,
+                            expiry: (Number(event.args.timestamp) + Number(event.args.duration)) * 1000,
+                            recovered: true
+                        };
+                        await redis.setTrade(tradeId, tradeData);
+                        recoveredCount++;
+                    }
+                }
+            }
+
+            if (recoveredCount > 0) {
+                console.log(`[Processor] 🛡️ Recovery complete: Restored ${recoveredCount} unsettled trades from blockchain!`);
+                logToFile(`🛡️ Recovery scan restored ${recoveredCount} unsettled trades.`);
+            } else {
+                console.log('[Processor] 🛡️ Recovery complete: No missed trades found.');
+            }
+        } catch (e) {
+            console.error('[Processor] ❌ Recovery scan failed:', e.message);
+        }
+    }
+
+    async performZombieCheck() {
+        console.log('[Processor] 🧟 Running periodic zombie trade check...');
+        try {
+            const activeTrades = await redis.getAllActiveTrades();
+            const now = Date.now();
+
+            // Check trades that are more than 10 minutes past their expiry
+            const potentialZombies = activeTrades.filter(t => now > (t.expiry + 10 * 60 * 1000));
+
+            if (potentialZombies.length === 0) return;
+
+            console.log(`[Processor] 🧟 Found ${potentialZombies.length} potential zombies. Verifying on-chain...`);
+
+            for (const trade of potentialZombies) {
+                try {
+                    // Check actual contract state
+                    const onChainBet = await blockchain.contract.bets(trade.id);
+                    if (onChainBet.settled) {
+                        console.log(`[Processor] 🧟 Zombie ${trade.id} is actually settled on-chain. Cleaning up.`);
+                        await redis.delTrade(trade.id.toString());
+                    } else if (now > (trade.expiry + 60 * 60 * 1000)) {
+                        // If it's more than 1 hour old and still not settled, it might be a dead trade
+                        // but we keep it for now unless explicitly asked to purge
+                        console.warn(`[Processor] ⚠️ Trade ${trade.id} is >1hr old and still unsettled on-chain.`);
+                    }
+                } catch (err) {
+                    console.error(`[Processor] ❌ Failed to verify zombie ${trade.id}:`, err.message);
+                }
+            }
+        } catch (e) {
+            console.error('[Processor] ❌ Zombie check failed:', e.message);
+        }
     }
 
     async registerTrade(tradeData) {
@@ -115,12 +205,12 @@ class TradeProcessor {
                 console.log(`[Processor] 🚀 Found ${toSettle.length} trades to settle!`);
                 logToFile(`Found ${toSettle.length} trades to settle.`);
 
-                // Limit concurrency to 5 settlements at a time to prevent RPC nonce issues
+                // Limit concurrency to 5 settlements at a time (now sequential within batch for nonce safety)
                 const BATCH_SIZE = 5;
                 for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
                     const batch = toSettle.slice(i, i + BATCH_SIZE);
 
-                    await Promise.allSettled(batch.map(async (trade) => {
+                    for (const trade of batch) {
                         const tradeId = trade.id.toString();
                         this.settlingIds.add(tradeId);
                         try {
@@ -130,28 +220,21 @@ class TradeProcessor {
 
                             const currentPrice = await pricing.getPrice(symbol);
 
-                            // Log treasury balance periodically, not every trade
-                            // const treasuryBal = await blockchain.getNativeBalance(blockchain.contractAddress);
                             console.log(`[Processor] Settling ${trade.id} (${symbol}) at price ${currentPrice}`);
 
                             // Contract expects price with 8 decimals as uint256
-                            // Use BigInt-safe rounding to avoid floating-point precision errors
                             const scaledPrice = BigInt(Math.round(currentPrice * 1e8));
 
                             let entry = parseFloat(trade.entryPrice);
-                            // Normalize entry price: if it's huge (scaled 8 decimals), convert to float
-                            if (entry > 1000000000) {
-                                entry = entry / 1e8;
-                            }
+                            if (entry > 1000000000) entry = entry / 1e8;
 
-                            // Support both string 'UP'/'buy' and numeric 1/0 from on-chain events
                             const isUp = trade.direction === 'UP' || trade.direction === 'buy' || trade.direction === 1 || trade.direction === '1';
                             const isWin = isUp ? (currentPrice > entry) : (currentPrice < entry);
 
                             console.log(`[Processor] Outcome for ${trade.id}: ${isWin ? 'WON' : 'LOST'} (Entry: ${entry.toFixed(4)}, Exit: ${currentPrice.toFixed(4)}, Dir: ${trade.direction} -> ${isUp ? 'UP' : 'DOWN'})`);
 
-                            await blockchain.settleBet(trade.id, scaledPrice);
-                            logToFile(`✅ Settled trade ${trade.id} for ${trade.user}. Price: ${currentPrice}. Win: ${isWin}`);
+                            const result = await blockchain.settleBet(trade.id, scaledPrice);
+                            logToFile(`✅ Settled trade ${trade.id} for ${trade.user}. Price: ${currentPrice}. Win: ${isWin}${result.alreadySettled ? ' (Already Settled)' : ''}`);
 
                             const finalizedItem = {
                                 ...trade,
@@ -160,19 +243,17 @@ class TradeProcessor {
                                 settledAt: Date.now()
                             };
 
-                            // Push to global history for the live scroller
+                            // Update history and profile
                             await redis.pushHistory(finalizedItem).catch(() => { });
-                            // Update user-specific history
                             const tradeUserAddr = trade.user?.toLowerCase();
                             await redis.pushUserHistory(tradeUserAddr, finalizedItem).catch(() => { });
 
-                            // CROSS-DEVICE FIX: Also push settlement to main wallet's history
                             const linkedMainAddr = await redis.getMainAddressForSession(tradeUserAddr).catch(() => null);
                             if (linkedMainAddr && linkedMainAddr !== tradeUserAddr) {
                                 await redis.pushUserHistory(linkedMainAddr, finalizedItem).catch(() => { });
                             }
 
-                            // STICKY PROFILE UPDATE: Update global stats for the user
+                            // STICKY PROFILE UPDATE
                             try {
                                 const mainAddr = await redis.getMainAddressForSession(trade.user) || trade.user;
                                 const userProfile = await redis.getProfile(mainAddr);
@@ -194,21 +275,24 @@ class TradeProcessor {
                             logToFile(`❌ Error settling trade ${trade.id}: ${e.message}`);
                             console.error(`[Processor] ❌ Error settling trade ${trade.id}:`, e.message);
 
-                            // 🛑 CRITICAL FIX: Aggressive cleanup of failed trades
-                            // If we get ANY revert from the contract, it means the trade is invalid or already settled.
-                            // We MUST remove it from Redis to prevent infinite loops.
                             const errorMsg = e.message?.toLowerCase() || "";
-                            if (errorMsg.includes('revert') || errorMsg.includes('settled') || errorMsg.includes('invalid')) {
-                                console.log(`[Processor] 🗑️ Trade ${trade.id} reverted/invalid/settled. Removing from Redis to break loop.`);
+
+                            // Aggressive Retry: Only remove if settled or definitely invalid.
+                            // Keep in Redis for treasury/gas/network errors so it retries every tick.
+                            const shouldPurge = errorMsg.includes('already settled') ||
+                                errorMsg.includes('invalid') ||
+                                (errorMsg.includes('revert') && !errorMsg.includes('treasury') && !errorMsg.includes('balance'));
+
+                            if (shouldPurge) {
+                                console.log(`[Processor] 🗑️ Trade ${trade.id} appears settled/invalid. Removing from Redis.`);
                                 await redis.delTrade(trade.id.toString());
                             } else {
-                                // For network errors (timeouts, etc), we allow a retry, but we could add a retry counter here in the future
-                                console.warn(`[Processor] ⚠️ Network/Transient error for ${trade.id}. Will retry next tick.`);
+                                console.warn(`[Processor] ⚠️ Settlement retry active for ${trade.id}: ${e.message.slice(0, 100)}`);
                             }
                         } finally {
                             this.settlingIds.delete(trade.id.toString());
                         }
-                    }));
+                    }
                 }
             }
         } catch (e) {

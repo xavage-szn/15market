@@ -21,14 +21,20 @@ class RedisService {
 
     async syncFromRedis() {
         try {
+            console.log('[Redis] 🔃 Syncing from Redis...');
+            // Clear RAM cache to ensure consistency with Redis state
+            this.memoryCache.clear();
+
             // Sync active trades
             const keys = await this.client.keys('trade:*');
             if (keys.length > 0) {
                 const trades = await this.client.mget(keys);
                 trades.forEach((t, i) => {
                     if (t) {
-                        const trade = JSON.parse(t);
-                        this.memoryCache.set(keys[i].replace('trade:', ''), trade);
+                        try {
+                            const trade = JSON.parse(t);
+                            this.memoryCache.set(keys[i].replace('trade:', ''), trade);
+                        } catch (e) { }
                     }
                 });
             }
@@ -38,7 +44,7 @@ class RedisService {
             this.historyCache = historyData ? JSON.parse(historyData) : [];
 
             this.isInitialized = true;
-            console.log(`[Redis] 🏎️ Cache Synced: ${this.memoryCache.size} trades, ${this.historyCache.length} history items in RAM`);
+            console.log(`[Redis] 🏎️ Cache Synced: ${this.memoryCache.size} active trades, ${this.historyCache.length} history items in RAM`);
         } catch (e) {
             console.warn('[Redis] Sync failed, using memory only:', e.message);
             this.historyCache = this.historyCache || [];

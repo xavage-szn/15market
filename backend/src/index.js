@@ -240,6 +240,24 @@ app.post('/trade-ping', async (req, res) => {
     }
 });
 
+// Debug & Admin Endpoints
+app.get('/debug/cache', async (req, res) => {
+    const activeTrades = await redis.getAllActiveTrades();
+    res.json({
+        activeCount: activeTrades.length,
+        memoryCacheSize: redis.memoryCache.size,
+        historyCacheSize: redis.historyCache?.length || 0,
+        keys: Array.from(redis.memoryCache.keys()),
+        trades: activeTrades
+    });
+});
+
+app.post('/admin/sync-cache', async (req, res) => {
+    // In production, you'd check process.env.ADMIN_TOKEN here
+    await redis.syncFromRedis();
+    res.json({ success: true, message: 'RAM cache re-synced from Redis' });
+});
+
 app.get('/price/:symbol', async (req, res) => {
     const price = await pricing.getPrice(req.params.symbol.toUpperCase());
     res.json({ symbol: req.params.symbol, price });
