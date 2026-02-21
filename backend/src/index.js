@@ -311,13 +311,74 @@ app.get('/treasury', async (req, res) => {
 
 const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
 
-function deriveUserWallet(userAddress) {
+// Multi-RPC list — Thirdweb first (most reliable), then fallbacks
+const SESSION_RPCS = [
+    "https://5042002.rpc.thirdweb.com",      // Thirdweb (primary — most reliable)
+    "https://rpc.testnet.arc.network",        // Arc official
+    "https://rpc-test-1.arc.market",          // Arc backup
+    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1" // Alchemy
+];
+
+// Cached session provider — reused across all auto-signer calls
+let sessionProvider = null;
+let sessionProviderHealthy = true;
+let sessionProviderLastCheck = 0;
+
+async function getSessionProvider() {
+    const now = Date.now();
+    // Re-probe if unhealthy or hasn't been checked in 60s
+    if (sessionProvider && sessionProviderHealthy && (now - sessionProviderLastCheck < 60000)) {
+        return sessionProvider;
+    }
+
+    const { FetchRequest } = ethers;
+    const network = ethers.Network.from(5042002);
+
+    for (const rpc of SESSION_RPCS) {
+        try {
+            console.log(`[AutoSigner] Trying RPC: ${rpc}`);
+            const fetchReq = new FetchRequest(rpc);
+            fetchReq.timeout = 12000;
+            const provider = new ethers.JsonRpcProvider(fetchReq, network, { staticNetwork: true });
+
+            // Fast liveness check
+            await Promise.race([
+                provider.getBlockNumber(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+            ]);
+
+            console.log(`[AutoSigner] ✅ Using RPC: ${rpc}`);
+            sessionProvider = provider;
+            sessionProviderHealthy = true;
+            sessionProviderLastCheck = Date.now();
+            return provider;
+        } catch (e) {
+            console.warn(`[AutoSigner] ⚠️ RPC failed: ${rpc} — ${e.message}`);
+        }
+    }
+
+    // All RPCs failed — reuse last known provider as last resort
+    if (sessionProvider) {
+        console.warn('[AutoSigner] ❌ All RPCs failed, reusing last known provider');
+        sessionProviderHealthy = false;
+        return sessionProvider;
+    }
+
+    // Absolute last resort: try Thirdweb without liveness check
+    console.warn('[AutoSigner] ❌ No cached provider, falling back to Thirdweb without check');
+    const fetchReq = new FetchRequest(SESSION_RPCS[0]);
+    fetchReq.timeout = 15000;
+    sessionProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
+    return sessionProvider;
+}
+
+async function deriveUserWallet(userAddress) {
     // Deterministic Private Key = Keccak256(MasterSecret + UserAddress)
     // This ensures consistency across devices.
     const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + userAddress.toLowerCase());
     const privateKey = ethers.keccak256(entropy);
-    const provider = new ethers.JsonRpcProvider("https://rpc.testnet.arc.network");
-    return new ethers.Wallet(privateKey, provider); // Returns a standard Ethers wallet
+    const provider = await getSessionProvider();
+    return new ethers.Wallet(privateKey, provider);
 }
 
 app.post('/session/init', async (req, res) => {
@@ -329,7 +390,7 @@ app.post('/session/init', async (req, res) => {
         // const recovered = ethers.verifyMessage(`Authorize 15market Auto-Signer for ${address.toLowerCase()}`, signature);
         // if (recovered.toLowerCase() !== address.toLowerCase()) return res.status(403).json({ error: "Invalid signature" });
 
-        const wallet = deriveUserWallet(address);
+        const wallet = await deriveUserWallet(address);
         const balance = await wallet.provider.getBalance(wallet.address);
 
         res.json({
@@ -347,7 +408,7 @@ app.post('/session/trade', async (req, res) => {
         const { address, tradeParams } = req.body;
         // In a real prod env, verify 'signature' here again to ensure auth for this trade
 
-        const wallet = deriveUserWallet(address);
+        const wallet = await deriveUserWallet(address);
         const contract = new ethers.Contract(process.env.ARC_CONTRACT_ADDRESS, blockchain.abi, wallet);
 
         console.log(`[AutoSigner] Executing trade for ${address} via ${wallet.address}`);
@@ -386,8 +447,8 @@ app.post('/session/withdraw', async (req, res) => {
         // Normalise to 6dp string to avoid floating-point precision issues (e.g. 0.49500000000000004)
         const cleanAmount = parseFloat(amount).toFixed(6);
 
-        // derive session wallet
-        const wallet = deriveUserWallet(address);
+        // derive session wallet using the robust multi-RPC provider
+        const wallet = await deriveUserWallet(address);
 
         // Check session wallet has enough balance before attempting
         const sessionBal = await wallet.provider.getBalance(wallet.address);
@@ -401,17 +462,33 @@ app.post('/session/withdraw', async (req, res) => {
 
         console.log(`[AutoSigner] Sweeping ${cleanAmount} USDC from ${wallet.address} to main ${address}`);
 
-        // Wrap sendTransaction in a 20s timeout — Arc RPC can hang indefinitely without this
-        const txPromise = wallet.sendTransaction({
-            to: address,
-            value: amountWei,
-            gasLimit: 100000n
-        });
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("RPC timeout: Arc network did not respond within 20s")), 20000)
-        );
-
-        const tx = await Promise.race([txPromise, timeoutPromise]);
+        // Wrap sendTransaction in a 30s timeout with RPC fallback on timeout
+        let tx;
+        try {
+            const txPromise = wallet.sendTransaction({
+                to: address,
+                value: amountWei,
+                gasLimit: 100000n
+            });
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("RPC timeout")), 30000)
+            );
+            tx = await Promise.race([txPromise, timeoutPromise]);
+        } catch (rpcErr) {
+            // If the primary provider timed out or failed, force a provider re-probe and retry once
+            console.warn(`[AutoSigner] ⚠️ Withdraw attempt failed (${rpcErr.message}). Forcing RPC re-probe and retrying...`);
+            sessionProviderHealthy = false; // Force getSessionProvider to re-probe
+            const retryWallet = await deriveUserWallet(address);
+            const txPromise = retryWallet.sendTransaction({
+                to: address,
+                value: amountWei,
+                gasLimit: 100000n
+            });
+            const retryTimeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("RPC timeout after retry: Arc network unresponsive")), 30000)
+            );
+            tx = await Promise.race([txPromise, retryTimeout]);
+        }
 
         console.log(`[AutoSigner] Sweep TX Sent: ${tx.hash}`);
         res.json({ success: true, txHash: tx.hash });

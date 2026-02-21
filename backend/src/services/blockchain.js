@@ -20,8 +20,8 @@ dns.lookup = (hostname, options, callback) => {
 };
 
 const RPC_ENDPOINTS = [
+    "https://5042002.rpc.thirdweb.com",      // Thirdweb (most reliable)
     "https://rpc.testnet.arc.network",
-    "https://5042002.rpc.thirdweb.com",
     "https://rpc-test-1.arc.market",
     "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
 ];
