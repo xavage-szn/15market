@@ -247,26 +247,40 @@ export default function UserApp() {
               return merged.sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
             });
 
-            // 2. Authoritative Active Trades Update (Unified Ghost Logic)
+            // 2. Authoritative Active Trades Update (Monotonic Status & Smooth Timers)
             setActiveTrades(prev => {
               const now = Date.now();
               const GHOST_GRACE = 5000;
 
-              const backendActive = backendAll.filter(t => {
-                if (!["PENDING", "RESOLVING"].includes(t.status)) return false;
-                const exp = t.expiry || ((t.timestamp || t.startTime || now) + (t.duration * 1000));
-                const normExp = exp > 1000000000000 ? exp : exp * 1000;
-                return now <= (normExp + GHOST_GRACE);
+              const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status)).map(t => {
+                const startTime = (t.timestamp || t.startTime || now);
+                const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
+                const expMs = t.expiryMs || (normStart + (t.duration * 1000));
+                return { ...t, startTime: normStart, expiryMs: expMs };
               });
 
-              const updatedActive = [...backendActive];
+              const updatedActive = [];
+
+              // Process backend items first, but respect local "RESOLVING" status improvement
+              backendActive.forEach(bt => {
+                const local = prev.find(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce));
+                let finalStatus = bt.status;
+                if (local && local.status === "RESOLVING" && bt.status === "PENDING") {
+                  finalStatus = "RESOLVING";
+                }
+
+                if (now <= (bt.expiryMs + GHOST_GRACE)) {
+                  updatedActive.push({ ...bt, status: finalStatus });
+                }
+              });
+
+              // Add local-only items
               prev.forEach(local => {
                 const localId = String(local.id || local.tx || local.nonce);
-                if (!backendAll.find(b => String(b.id || b.tx || b.nonce) === localId)) {
-                  const exp = local.expiry || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
-                  const normExp = exp > 1000000000000 ? exp : exp * 1000;
-                  if (local.status === "PENDING" && now <= (normExp + GHOST_GRACE)) {
-                    updatedActive.push(local);
+                if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
+                  const localExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
+                  if (local.status === "PENDING" && now <= (localExp + GHOST_GRACE)) {
+                    updatedActive.push({ ...local, expiryMs: localExp });
                   }
                 }
               });
@@ -618,12 +632,15 @@ export default function UserApp() {
 
       const activeUserAddr = (sessionMode) ? (evmSessionWallet?.address || address) : address;
 
+      const now = Date.now();
+      const expiryMs = now + (duration * 1000);
+
       const newTrade = {
         id: tradeId,
         direction: (dirVal === 1 ? "UP" : "DOWN"),
         amount: Number(amount).toFixed(4),
         entryPrice: activePrice.toFixed(4),
-        timestamp: Date.now(),
+        timestamp: now,
         status: "PENDING",
         tx: txHash,
         nonce: tradeId,
@@ -631,7 +648,8 @@ export default function UserApp() {
         owner: activeUserAddr,
         duration,
         network: "arc",
-        startTime: Date.now(),
+        startTime: now,
+        expiryMs: expiryMs,
         symbol: activeMarket?.symbol || 'ETH',
       };
 
@@ -656,7 +674,8 @@ export default function UserApp() {
           duration,
           entryPrice: activePrice.toFixed(4),
           symbol: activeMarket?.symbol || 'ETH',
-          network: 'arc'
+          network: 'arc',
+          expiryMs: expiryMs
         })
       }).catch(e => console.warn("Trade ping failed:", e));
 
@@ -808,30 +827,41 @@ export default function UserApp() {
             return sorted;
           });
 
-          // Standardized Active Trade Reconciliation (Ghost Protected)
+          // Standardized Active Trade Reconciliation (Flicker-Free)
           setActiveTrades(prev => {
             const now = Date.now();
             const GHOST_GRACE = 5000;
 
-            // Filter backend results - hide stale PENDING even if backend returns them
-            const backendActive = backendAll.filter(t => {
-              if (!["PENDING", "RESOLVING"].includes(t.status)) return false;
-              const exp = t.expiry || ((t.timestamp || t.startTime || now) + (t.duration * 1000));
-              const normExp = exp > 1000000000000 ? exp : exp * 1000;
-              return now <= (normExp + GHOST_GRACE);
+            const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status)).map(t => {
+              const startTime = (t.timestamp || t.startTime || now);
+              const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
+              const expiryMs = t.expiryMs || (normStart + (t.duration * 1000));
+              return { ...t, startTime: normStart, expiryMs };
             });
 
-            const updatedActive = [...backendActive];
+            const updatedActive = [];
+
+            // Merge with local states, prioritizing "RESOLVING" to prevent regression/flashing
+            backendActive.forEach(bt => {
+              const local = prev.find(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce));
+              let finalStatus = bt.status;
+              if (local && local.status === "RESOLVING" && bt.status === "PENDING") {
+                finalStatus = "RESOLVING";
+              }
+
+              if (now <= (bt.expiryMs + GHOST_GRACE)) {
+                updatedActive.push({ ...bt, status: finalStatus });
+              }
+            });
+
+            // Keep local-only PENDING trades that are still valid (not expired)
             prev.forEach(local => {
               const localId = String(local.id || local.tx || local.nonce);
-              const knownByBackend = backendAll.find(b => String(b.id || b.tx || b.nonce) === localId);
-
-              const expiry = local.expiry || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
-              const normExpiry = expiry > 1000000000000 ? expiry : expiry * 1000;
-              const isPastGrace = now > (normExpiry + GHOST_GRACE);
-
-              if (!knownByBackend && local.status === "PENDING" && !isPastGrace) {
-                updatedActive.push(local);
+              if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
+                const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
+                if (local.status === "PENDING" && now <= (normExp + GHOST_GRACE)) {
+                  updatedActive.push({ ...local, expiryMs: normExp });
+                }
               }
             });
 

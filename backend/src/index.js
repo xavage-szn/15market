@@ -203,7 +203,7 @@ app.post('/push-tx', async (req, res) => {
 app.post('/trade-ping', async (req, res) => {
     console.log(`[TradePing] Received request: ${JSON.stringify(req.body)}`);
     try {
-        const { id, address, amount, direction, duration, entryPrice, expiry, symbol, network } = req.body;
+        const { id, address, amount, direction, duration, entryPrice, expiry, expiryMs, symbol, network } = req.body;
 
         if (!id || !address) {
             return res.status(400).json({ error: 'Missing id or address' });
@@ -227,7 +227,7 @@ app.post('/trade-ping', async (req, res) => {
             marketId: marketId,
             symbol: symbol || 'BTC',
             network: network || 'arc',
-            expiry: (expiry ? Number(expiry) * 1000 : Date.now() + (Number(duration) * 1000)), // expiry from frontend is unix seconds
+            expiry: (expiryMs ? Number(expiryMs) : (expiry ? Number(expiry) * 1000 : Date.now() + (Number(duration) * 1000))),
             registeredAt: Date.now()
         };
 

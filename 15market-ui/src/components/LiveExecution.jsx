@@ -44,10 +44,10 @@ function LiveExecutionComponent({
                         const now = Date.now();
                         // Safety check for start time
                         const start = trade.startTime || (trade.nonce > 1000000000000 ? trade.nonce : Math.floor(trade.nonce / 100) * 1000) || now;
-                        const elapsed = Math.floor((now - start) / 1000);
                         const duration = trade.duration || 30;
-                        const timeLeft = Math.max(0, duration - elapsed);
-                        const isResolving = trade.status === "RESOLVING" || (timeLeft === 0 && trade.status === "PENDING");
+                        const expiryMs = trade.expiryMs || (start + (duration * 1000));
+                        const timeLeft = Math.max(0, Math.floor((expiryMs - now) / 1000));
+                        const isResolving = trade.status === "RESOLVING" || (timeLeft === 0 && (trade.status === "PENDING" || !trade.status));
                         const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
 
                         const entryPriceVal = parseFloat(trade.entryPrice);
