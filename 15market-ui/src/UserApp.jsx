@@ -176,6 +176,7 @@ export default function UserApp() {
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
+  const lastSettlementCreditTime = useRef(0); // Cooldown: prevents polling from overwriting optimistic balance credits
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
   // 1. Core Balance Fetchers
@@ -192,10 +193,22 @@ export default function UserApp() {
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!evmSessionWallet) return;
 
+    // COOLDOWN: Don't overwrite optimistic balance with stale on-chain data
+    // during the 12s window after a settlement credit was applied.
+    // This prevents the "flash" where winnings appear then vanish before on-chain confirms.
+    const msSinceLastCredit = Date.now() - lastSettlementCreditTime.current;
+    if (!force && msSinceLastCredit < 12000) {
+      console.log(`⏳ [SESSION_BAL] Skipping poll — settlement cooldown active (${Math.round(msSinceLastCredit / 1000)}s/12s)`);
+      return;
+    }
+
     try {
       const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
       const bal = parseFloat(formatUnits(balanceWei, 18));
-      if (bal !== sessionBalance) setSessionBalance(bal);
+      if (bal !== sessionBalance) {
+        setSessionBalance(bal);
+        console.log(`💰 [SESSION_BAL] On-chain balance: ${bal.toFixed(4)} USDC`);
+      }
     } catch (err) { }
   }, [evmSessionWallet, sessionBalance]);
 
@@ -242,9 +255,17 @@ export default function UserApp() {
         const matchIdx = merged.findIndex(m => String(m.id || m.tx || m.nonce) === localId);
 
         if (matchIdx !== -1) {
+          // Preserve local-only flags that backend doesn't know about
+          const preservedFields = {};
+          if (local.balanceApplied) preservedFields.balanceApplied = true;
+          if (local.isSessionTrade !== undefined) preservedFields.isSessionTrade = local.isSessionTrade;
+          if (local.optimistic) preservedFields.optimistic = true;
+
           // Keep internal "RESOLVING" status if backend is still PENDING
           if (merged[matchIdx].status === "PENDING" && local.status === "RESOLVING") {
-            merged[matchIdx] = { ...merged[matchIdx], status: "RESOLVING" };
+            merged[matchIdx] = { ...merged[matchIdx], ...preservedFields, status: "RESOLVING" };
+          } else {
+            merged[matchIdx] = { ...merged[matchIdx], ...preservedFields };
           }
         } else {
           // Not in backend, keep local if fresh
@@ -1395,11 +1416,14 @@ export default function UserApp() {
           const sessionAddr = evmSessionWallet?.address?.toLowerCase();
           const mainAddr = address?.toLowerCase();
 
-          if (sessionAddr && tradeOwner === sessionAddr) {
+          if (sessionAddr && (tradeOwner === sessionAddr || trade.isSessionTrade)) {
+            // SESSION TRADE WIN: Credit stays in session wallet
             setSessionBalance(prev => prev + payoutNum);
+            lastSettlementCreditTime.current = Date.now(); // Activate cooldown
             console.log(`⚡ [INSTANT] +${payoutNum} credited to SESSION wallet (${tradeOwner})`);
             updatePayload.balanceApplied = true;
           } else if (mainAddr && tradeOwner === mainAddr) {
+            // MAIN WALLET TRADE WIN: Credit goes to main wallet
             setBalance(prev => prev + payoutNum);
             console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet (${tradeOwner})`);
             updatePayload.balanceApplied = true;
@@ -1504,18 +1528,36 @@ export default function UserApp() {
               const existingTrade = tradeHistory.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
               const existingActive = activeTrades.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
               const alreadyApplied = existingTrade?.balanceApplied || existingActive?.balanceApplied;
+              const isSessionTrade = existingTrade?.isSessionTrade || existingActive?.isSessionTrade;
 
               if (!alreadyApplied) {
-                if (normalizedUser === sessionAddr) {
+                if (normalizedUser === sessionAddr || (isSessionTrade && sessionAddr)) {
+                  // SESSION TRADE: Winnings stay in session wallet
                   setSessionBalance(prev => prev + payoutVal);
-                  console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to SESSION wallet`);
+                  lastSettlementCreditTime.current = Date.now(); // Activate cooldown
+                  console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to SESSION wallet (bet ${betId})`);
                 } else if (normalizedUser === mainAddr) {
+                  // MAIN WALLET TRADE: Winnings go to main wallet
                   setBalance(prev => prev + payoutVal);
-                  console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to MAIN wallet`);
+                  console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to MAIN wallet (bet ${betId})`);
                 }
               } else {
                 console.log(`⏭️ [CHAIN_CONFIRM] Balance already applied for bet ${betId}, skipping credit.`);
               }
+
+              // Delayed refresh: Wait for on-chain payout to confirm, then read real balance
+              // This is the authoritative balance refresh that catches the actual payout
+              setTimeout(() => {
+                if (normalizedUser === sessionAddr || isSessionTrade) {
+                  updateEvmSessionBal(true); // Force read on-chain session balance
+                } else {
+                  refetchEvmBalance(true); // Force read on-chain main balance
+                }
+              }, 3000);
+              setTimeout(() => {
+                updateEvmSessionBal(true);
+                refetchEvmBalance(true);
+              }, 8000);
 
               lastTradeTimeRef.current = Date.now() - 7000;
               aggressiveRefresh();
