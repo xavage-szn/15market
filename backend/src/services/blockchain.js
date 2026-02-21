@@ -65,6 +65,9 @@ class BlockchainService {
         this.contract = null;
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
         this.currentNonce = null;
+        this.nonceLock = false;
+        this.lastGasUpdate = 0;
+        this.cachedGasPrice = null;
 
         this.abi = [
             "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
@@ -141,33 +144,49 @@ class BlockchainService {
     async settleBet(betId, exitPrice) {
         await this._ensureReady();
 
-        // Manual Nonce Management to prevent "nonce too low" errors during parallel settlement
+        // Manual Nonce Management with locking
         if (this.currentNonce === null) {
-            this.currentNonce = await this.provider.getTransactionCount(this.wallet.address, 'pending');
-            console.log(`[Blockchain] Initialized nonce at ${this.currentNonce}`);
+            if (this.nonceLock) {
+                // Wait for existing lock
+                while (this.nonceLock) await new Promise(r => setTimeout(r, 50));
+            } else {
+                this.nonceLock = true;
+                try {
+                    this.currentNonce = await this.provider.getTransactionCount(this.wallet.address, 'pending');
+                    console.log(`[Blockchain] Initialized nonce at ${this.currentNonce}`);
+                } finally {
+                    this.nonceLock = false;
+                }
+            }
         }
 
         const nonce = this.currentNonce++;
 
         try {
-            // Get current gas price and add 10% for priority
-            const feeData = await this.provider.getFeeData();
-            const gasPrice = feeData.gasPrice ? (feeData.gasPrice * BigInt(110) / BigInt(100)) : undefined;
+            // Gas caching for high-speed batches (1s TTL)
+            const now = Date.now();
+            if (!this.cachedGasPrice || (now - this.lastGasUpdate > 1000)) {
+                const feeData = await this.provider.getFeeData();
+                this.cachedGasPrice = feeData.gasPrice;
+                this.lastGasUpdate = now;
+            }
+            const baseGas = this.cachedGasPrice || 1000000000n; // 1 Gwei fallback
+            const gasPrice = (baseGas * BigInt(125)) / BigInt(100); // 25% priority for high speed
 
-            console.log(`[Blockchain] 🛰️ Sending settlement for bet ${betId} (Nonce: ${nonce}, Gas: ${gasPrice ? ethers.formatUnits(gasPrice, 'gwei') : 'auto'} gwei)`);
+            console.log(`[Blockchain] ⚡ Parallel Sending (Nonce: ${nonce}, Gas: ${gasPrice ? ethers.formatUnits(gasPrice, 'gwei') : 'auto'} gwei) - Bet ${betId}`);
 
             const tx = await this.contract.settleBet(betId, ethers.parseUnits(exitPrice.toString(), 0), {
                 nonce: nonce,
                 gasPrice: gasPrice,
-                gasLimit: 800000n
+                gasLimit: 1000000n // Increased limit for complex settlements
             });
 
             console.log(`[Blockchain] 🚀 TX Sent: ${tx.hash} for bet ${betId}`);
 
-            // Wait for confirmation with a 60s timeout
+            // Wait for confirmation with a 30s timeout (High performance expectation)
             const receipt = await Promise.race([
                 tx.wait(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Confirmation Timeout")), 60000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Confirmation Timeout")), 30000))
             ]);
 
             if (!receipt || receipt.status === 0) {

@@ -42,13 +42,13 @@ class TradeProcessor {
                 await redis.setTrade(trade.id.toString(), {
                     ...trade,
                     id: trade.id.toString(),
-                    expiry: Date.now() + (Number(trade.duration) * 1000)
+                    expiry: (Number(trade.timestamp) + Number(trade.duration)) * 1000
                 });
             }
         });
 
-        // Start settlement loop every 1000ms (slowed down from 500ms to reduce load)
-        setInterval(() => this.processSettlements(), 1000);
+        // Start settlement loop every 500ms for high-performance parallel processing
+        setInterval(() => this.processSettlements(), 500);
 
         // Run recovery scan after a short delay to allow provider to settle
         setTimeout(() => this.recoverUnsettledTrades(), 5000);
@@ -86,6 +86,7 @@ class TradeProcessor {
                             direction: Number(event.args.direction),
                             duration: Number(event.args.duration),
                             entryPrice: (Number(event.args.entryPrice) / 1e8).toFixed(4),
+                            marketId: Number(event.args.marketId),
                             timestamp: Number(event.args.timestamp) * 1000,
                             expiry: (Number(event.args.timestamp) + Number(event.args.duration)) * 1000,
                             recovered: true
@@ -205,16 +206,20 @@ class TradeProcessor {
                 console.log(`[Processor] 🚀 Found ${toSettle.length} trades to settle!`);
                 logToFile(`Found ${toSettle.length} trades to settle.`);
 
-                // Limit concurrency to 5 settlements at a time (now sequential within batch for nonce safety)
-                const BATCH_SIZE = 5;
+                // HIGH PERFORMANCE: Fire entire batch in parallel without blocking the loop
+                const BATCH_SIZE = 100; // Even larger batch for extreme throughput
                 for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
                     const batch = toSettle.slice(i, i + BATCH_SIZE);
+                    console.log(`[Processor] ⚡ Firing ${batch.length} settlements in parallel...`);
 
-                    for (const trade of batch) {
+                    // We do NOT 'await' this map so the next tick can start immediately
+                    // But we use the returned promises to manage settlingIds
+                    batch.forEach(async (trade) => {
                         const tradeId = trade.id.toString();
+                        if (this.settlingIds.has(tradeId)) return;
                         this.settlingIds.add(tradeId);
                         try {
-                            const ID_ASSET_MAP = { 0: 'BTC', 1: 'ETH', 2: 'MON', 3: 'JUP', 4: 'XRP', 5: 'SOL' };
+                            const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
                             // Use symbol directly if available (from trade-ping), else fall back to marketId map
                             const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
 
@@ -234,7 +239,8 @@ class TradeProcessor {
                             console.log(`[Processor] Outcome for ${trade.id}: ${isWin ? 'WON' : 'LOST'} (Entry: ${entry.toFixed(4)}, Exit: ${currentPrice.toFixed(4)}, Dir: ${trade.direction} -> ${isUp ? 'UP' : 'DOWN'})`);
 
                             const result = await blockchain.settleBet(trade.id, scaledPrice);
-                            logToFile(`✅ Settled trade ${trade.id} for ${trade.user}. Price: ${currentPrice}. Win: ${isWin}${result.alreadySettled ? ' (Already Settled)' : ''}`);
+                            const payoutTarget = trade.user || trade.owner || 'Unknown';
+                            logToFile(`✅ Settled trade ${trade.id} for ${trade.user}. Price: ${currentPrice}. Win: ${isWin}. Payout directed to: ${payoutTarget}${result.alreadySettled ? ' (Already Settled)' : ''}`);
 
                             const finalizedItem = {
                                 ...trade,
@@ -292,8 +298,8 @@ class TradeProcessor {
                         } finally {
                             this.settlingIds.delete(trade.id.toString());
                         }
-                    }
-                }
+                    }); // End forEach (async)
+                } // End batch loop
             }
         } catch (e) {
             console.error('[Processor] Settlement loop error:', e);

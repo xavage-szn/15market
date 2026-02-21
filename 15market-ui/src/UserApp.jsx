@@ -205,6 +205,113 @@ export default function UserApp() {
   }, [refetchEvmBalance, updateEvmSessionBal]);
 
   // 2. Authoritative Profile & History Sync
+  // 2. Authoritative Profile & History Sync (Unified Reconciler)
+  const reconcileTrades = useCallback((backendAllRaw) => {
+    if (!backendAllRaw) return;
+
+    // 1. Normalize backend trades
+    const backendAll = backendAllRaw.map(t => ({
+      ...t,
+      direction: (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy") ? "UP" : "DOWN",
+      status: t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING"),
+      owner: t.owner || t.user || t.userPublicKey || t.userAddress
+    }));
+
+    // 2. Reactive Balance Sync: If any trade settled since last view, force refresh
+    setActiveTrades(prev => {
+      const hasSettled = backendAll.some(bt =>
+        bt.status !== "PENDING" && bt.status !== "RESOLVING" &&
+        prev.some(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce) && (p.status === "PENDING" || p.status === "RESOLVING"))
+      );
+      if (hasSettled) {
+        console.log("💰 [BALANCE] Settlement detected. Refetching...");
+        triggerGlobalRefresh(true);
+        setTimeout(() => triggerGlobalRefresh(true), 1500); // 2nd pass for RPC safety
+      }
+      return prev;
+    });
+
+    // 3. Update History (Dedupe & Merge)
+    setTradeHistory(prev => {
+      const merged = [...backendAll];
+      const now = Date.now();
+      const FIFTEEN_MINS = 15 * 60 * 1000;
+
+      prev.forEach(local => {
+        const localId = String(local.id || local.tx || local.nonce);
+        const matchIdx = merged.findIndex(m => String(m.id || m.tx || m.nonce) === localId);
+
+        if (matchIdx !== -1) {
+          // Keep internal "RESOLVING" status if backend is still PENDING
+          if (merged[matchIdx].status === "PENDING" && local.status === "RESOLVING") {
+            merged[matchIdx] = { ...merged[matchIdx], status: "RESOLVING" };
+          }
+        } else {
+          // Not in backend, keep local if fresh
+          const localTime = (local.timestamp || local.startTime || now);
+          const normLocal = localTime > 1000000000000 ? localTime : localTime * 1000;
+          const isFresh = (now - normLocal) < FIFTEEN_MINS;
+          if (local.status === "PENDING" ? isFresh : true) {
+            merged.push(local);
+          }
+        }
+      });
+
+      const sorted = merged.sort((a, b) => {
+        const timeA = (a.timestamp || a.startTime || 0);
+        const timeB = (b.timestamp || b.startTime || 0);
+        const normA = timeA > 1000000000000 ? timeA : timeA * 1000;
+        const normB = timeB > 1000000000000 ? timeB : timeB * 1000;
+        return normB - normA;
+      });
+      return sorted.slice(0, 100);
+    });
+
+    // 4. Update Active Trades (Monotonic Status)
+    setActiveTrades(prev => {
+      const now = Date.now();
+      const GHOST_GRACE = 5000;
+
+      const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status)).map(t => {
+        const startTime = (t.timestamp || t.startTime || now);
+        const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
+        const expiryMs = t.expiryMs || (normStart + (t.duration * 1000));
+        return { ...t, startTime: normStart, expiryMs };
+      });
+
+      const updatedActive = [];
+
+      backendActive.forEach(bt => {
+        const local = prev.find(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce));
+        let finalStatus = bt.status;
+        if (local && local.status === "RESOLVING" && bt.status === "PENDING") {
+          finalStatus = "RESOLVING";
+        }
+        if (now <= (bt.expiryMs + GHOST_GRACE)) {
+          updatedActive.push({ ...bt, status: finalStatus });
+        }
+      });
+
+      prev.forEach(local => {
+        const localId = String(local.id || local.tx || local.nonce);
+        if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
+          const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
+          if (local.status === "PENDING" && now <= (normExp + GHOST_GRACE)) {
+            updatedActive.push({ ...local, expiryMs: normExp });
+          }
+        }
+      });
+
+      const seen = new Set();
+      return updatedActive.filter(t => {
+        const mid = String(t.id || t.tx || t.nonce);
+        if (seen.has(mid)) return false;
+        seen.add(mid);
+        return true;
+      });
+    });
+  }, [triggerGlobalRefresh]);
+
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
     try {
@@ -212,105 +319,16 @@ export default function UserApp() {
       if (res.ok) {
         const userData = await res.json();
         const { profile, history, transactions } = userData;
-        if (profile && (profile.username || profile.totalTrades > 0)) {
+        if (profile) {
           setUserProfile(profile);
           setShowOnboarding(false);
-          if (history) {
-            // Robust de-duplication: prioritize settled status
-            const mergeTrades = (trades) => {
-              const map = new Map();
-              trades.forEach(t => {
-                const id = t.id || t.tx || t.nonce;
-                const existing = map.get(id);
-                if (!existing || (existing.status === 'PENDING' && t.status !== 'PENDING')) {
-                  map.set(id, t);
-                }
-              });
-              return Array.from(map.values()).sort((a, b) => b.timestamp - a.timestamp);
-            };
-
-            const backendAll = mergeTrades(history);
-
-            // Reactive Balance Sync: If any trade has settled since last check, force refresh
-            setActiveTrades(prev => {
-              const hasSettled = backendAll.some(bt =>
-                bt.status !== "PENDING" && bt.status !== "RESOLVING" &&
-                prev.some(p => String(p.id || p.tx) === String(bt.id || bt.tx) && (p.status === "PENDING" || p.status === "RESOLVING"))
-              );
-              if (hasSettled) {
-                console.log("💰 [BALANCE] Trade settlement detected. Forcing balance refresh.");
-                triggerGlobalRefresh(true);
-              }
-              return prev;
-            });
-
-            // 1. Authoritative History Update (Functional Merge)
-            setTradeHistory(prev => {
-              const merged = [...backendAll];
-              const now = Date.now();
-              prev.forEach(local => {
-                if (!merged.find(m => String(m.id || m.tx) === String(local.id || local.tx))) {
-                  const localTime = (local.timestamp || local.startTime || now);
-                  const normLocal = localTime > 1000000000000 ? localTime : localTime * 1000;
-                  if (now - normLocal < 900000) merged.push(local);
-                }
-              });
-              return merged.sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
-            });
-
-            // 2. Authoritative Active Trades Update (Monotonic Status & Smooth Timers)
-            setActiveTrades(prev => {
-              const now = Date.now();
-              const GHOST_GRACE = 5000;
-
-              const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status)).map(t => {
-                const startTime = (t.timestamp || t.startTime || now);
-                const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
-                const expMs = t.expiryMs || (normStart + (t.duration * 1000));
-                return { ...t, startTime: normStart, expiryMs: expMs };
-              });
-
-              const updatedActive = [];
-
-              // Process backend items first, but respect local "RESOLVING" status improvement
-              backendActive.forEach(bt => {
-                const local = prev.find(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce));
-                let finalStatus = bt.status;
-                if (local && local.status === "RESOLVING" && bt.status === "PENDING") {
-                  finalStatus = "RESOLVING";
-                }
-
-                if (now <= (bt.expiryMs + GHOST_GRACE)) {
-                  updatedActive.push({ ...bt, status: finalStatus });
-                }
-              });
-
-              // Add local-only items
-              prev.forEach(local => {
-                const localId = String(local.id || local.tx || local.nonce);
-                if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
-                  const localExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
-                  if (local.status === "PENDING" && now <= (localExp + GHOST_GRACE)) {
-                    updatedActive.push({ ...local, expiryMs: localExp });
-                  }
-                }
-              });
-
-              const seen = new Set();
-              return updatedActive.filter(t => {
-                const id = String(t.id || t.tx || t.nonce);
-                if (seen.has(id)) return false;
-                seen.add(id);
-                return true;
-              });
-            });
-          }
-          if (transactions) setTransactionHistory(transactions);
           localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
         }
+        if (history) reconcileTrades(history);
+        if (transactions) setTransactionHistory(transactions);
       }
     } catch (e) { } finally { setProfileChecked(true); }
-  }, [address]);
+  }, [address, reconcileTrades]);
 
   // 3. Aggressive Logic
   const aggressiveRefresh = useCallback(() => {
@@ -775,115 +793,11 @@ export default function UserApp() {
 
     const fetchTradeHistory = async () => {
       try {
-        const addressesToFetch = [address.toLowerCase()];
-        if (evmSessionWallet?.address) addressesToFetch.push(evmSessionWallet.address.toLowerCase());
-        if (userProfile?.sessionWalletAddress) {
-          const sAddr = userProfile.sessionWalletAddress.toLowerCase();
-          if (!addressesToFetch.includes(sAddr)) addressesToFetch.push(sAddr);
-        }
-
-        const fetchPromises = addressesToFetch.map(async (addr) => {
-          const [resT, resA] = await Promise.all([
-            fetch(`${KEEPER_URL_ARC}/trades/${addr}`),
-            fetch(`${KEEPER_URL_ARC}/active-bets/${addr}`)
-          ]);
-          if (resT.ok && resA.ok) {
-            const t = await resT.json();
-            const a = await resA.json();
-            return [...t, ...a];
-          }
-          return [];
-        });
-
-        const results = await Promise.all(fetchPromises);
-        const backendAllRaw = results.flat();
-
-        if (backendAllRaw.length >= 0) {
-          // Normalized trades from backend
-          const backendAll = backendAllRaw.map(t => ({
-            ...t,
-            // Normalize direction: handle numbers (1/0), strings ("1"/"0"), or existing "UP"/"DOWN"
-            direction: (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy") ? "UP" : "DOWN",
-            status: t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING"),
-            owner: t.owner || t.user || t.userPublicKey || t.userAddress
-          }));
-
-          // Merge backend trades with local trades to prevent flickering/overwriting
-          setTradeHistory(prev => {
-            const merged = [...backendAll];
-            const now = Date.now();
-            const FIFTEEN_MINS = 15 * 60 * 1000;
-
-            prev.forEach(local => {
-              const knownByBackend = merged.find(m => String(m.id) === String(local.id));
-              const localTime = (local.timestamp || local.startTime || now);
-              const normalizedTime = localTime > 1000000000000 ? localTime : localTime * 1000;
-              const isFresh = (now - normalizedTime) < FIFTEEN_MINS;
-
-              if (!knownByBackend && (local.status === "PENDING" ? isFresh : true)) {
-                merged.push(local);
-              }
-            });
-            // Sort merged history by timestamp descending, normalizing s vs ms
-            const sorted = merged.sort((a, b) => {
-              const timeA = (a.timestamp || a.startTime || 0);
-              const timeB = (b.timestamp || b.startTime || 0);
-              const normA = timeA > 1000000000000 ? timeA : timeA * 1000;
-              const normB = timeB > 1000000000000 ? timeB : timeB * 1000;
-              return normB - normA;
-            });
-
-            // Save full merged history for this address
-            localStorage.setItem("15market_history_v1", JSON.stringify(sorted.slice(0, 100)));
-            return sorted;
-          });
-
-          // Standardized Active Trade Reconciliation (Flicker-Free)
-          setActiveTrades(prev => {
-            const now = Date.now();
-            const GHOST_GRACE = 5000;
-
-            const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status)).map(t => {
-              const startTime = (t.timestamp || t.startTime || now);
-              const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
-              const expiryMs = t.expiryMs || (normStart + (t.duration * 1000));
-              return { ...t, startTime: normStart, expiryMs };
-            });
-
-            const updatedActive = [];
-
-            // Merge with local states, prioritizing "RESOLVING" to prevent regression/flashing
-            backendActive.forEach(bt => {
-              const local = prev.find(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce));
-              let finalStatus = bt.status;
-              if (local && local.status === "RESOLVING" && bt.status === "PENDING") {
-                finalStatus = "RESOLVING";
-              }
-
-              if (now <= (bt.expiryMs + GHOST_GRACE)) {
-                updatedActive.push({ ...bt, status: finalStatus });
-              }
-            });
-
-            // Keep local-only PENDING trades that are still valid (not expired)
-            prev.forEach(local => {
-              const localId = String(local.id || local.tx || local.nonce);
-              if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
-                const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
-                if (local.status === "PENDING" && now <= (normExp + GHOST_GRACE)) {
-                  updatedActive.push({ ...local, expiryMs: normExp });
-                }
-              }
-            });
-
-            const seen = new Set();
-            return updatedActive.filter(t => {
-              const id = String(t.id || t.tx || t.nonce);
-              if (seen.has(id)) return false;
-              seen.add(id);
-              return true;
-            });
-          });
+        const addr = address.toLowerCase();
+        const res = await fetch(`${KEEPER_URL_ARC}/trades/${addr}`);
+        if (res.ok) {
+          const backendAllRaw = await res.json();
+          reconcileTrades(backendAllRaw);
         }
       } catch (e) {
         console.error("Failed to fetch trade history:", e);

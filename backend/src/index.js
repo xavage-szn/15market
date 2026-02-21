@@ -209,7 +209,7 @@ app.post('/trade-ping', async (req, res) => {
             return res.status(400).json({ error: 'Missing id or address' });
         }
 
-        const SYMBOL_TO_MARKET_ID = { 'BTC': 0, 'ETH': 1, 'MON': 2, 'JUP': 3, 'XRP': 4, 'SOL': 5 };
+        const SYMBOL_TO_MARKET_ID = { 'ETH': 0, 'BTC': 1, 'SOL': 2, 'MON': 3, 'JUP': 4, 'XRP': 5 };
         const marketId = SYMBOL_TO_MARKET_ID[symbol?.toUpperCase()] ?? 0;
 
         let normalizedEntry = Number(entryPrice);
@@ -334,11 +334,11 @@ app.post('/session/trade', async (req, res) => {
             BigInt(duration),
             BigInt(entryPrice),
             Number(marketId),
-            address, // Payout address is the USER'S main wallet, not the session wallet! (Safety feature)
+            wallet.address, // Payout goes back to session wallet so balance actually increases for continued trading
             { value: amountWei, gasLimit: 500000n }
         );
 
-        console.log(`[AutoSigner] TX Sent: ${tx.hash}`);
+        console.log(`[AutoSigner] TX Sent: ${tx.hash} (Payout directed to ${wallet.address})`);
         res.json({ txHash: tx.hash, sessionAddress: wallet.address });
 
         // Wait for confirmation in background
