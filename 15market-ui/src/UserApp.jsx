@@ -1673,19 +1673,6 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
-      notify("Sign the withdrawal authorization...", "info");
-
-      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: SECURE SCAN SWEEP\nAMOUNT: ${amt} USDC\nWALLET: ${address}\nTIMESTAMP: ${Date.now()}`;
-
-      try {
-        await walletClient.signMessage({ message: authMsg, account: address });
-        console.log("✅ [WITHDRAW] Authorized");
-      } catch (sigErr) {
-        notify("Signature rejected", "error");
-        setIsExecuting(false);
-        return;
-      }
-
       notify("Processing sweep...", "info");
 
       const res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
@@ -1736,7 +1723,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
+  }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance]);
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
