@@ -253,26 +253,45 @@ app.post('/session/trade', async (req, res) => {
         const { address, tradeParams } = req.body;
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
+        if (!address) throw new Error("Main wallet address required");
         logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id} for ${address}`);
-        const { wallet, address: sessionAddr, nonce } = await deriveUserWallet(address);
 
+        const { wallet, address: sessionAddr, nonce } = await deriveUserWallet(address);
+        const provider = wallet.provider;
+
+        // 1. Balance Check
         if (!amount || isNaN(amount)) throw new Error("Invalid trade amount");
         const amountWei = ethers.parseUnits(amount.toString(), 18);
+        const balance = await provider.getBalance(sessionAddr);
 
-        const feeData = await wallet.provider.getFeeData();
-        const gasPrice = (feeData.gasPrice * 135n) / 100n;
+        // Estimating gas (roughly 500k-800k)
+        const feeData = await provider.getFeeData();
+        const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("10", "gwei")) * 150n / 100n;
+        const totalNeeded = amountWei + (gasPrice * 800000n);
+
+        if (balance < totalNeeded) {
+            throw new Error(`Insufficient session balance. Have ${ethers.formatEther(balance)}, need ${ethers.formatEther(totalNeeded)} (Amount + Gas)`);
+        }
 
         logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC)`);
 
+        // Use the user's MAIN address as the payout address, not the session wallet
         const tx = await wallet.sendTransaction({
             to: process.env.ARC_CONTRACT_ADDRESS,
             data: blockchain.contract.interface.encodeFunctionData("placeBet", [
-                BigInt(id), Number(direction), BigInt(duration), BigInt(entryPrice), Number(marketId), sessionAddr
+                BigInt(id),
+                Number(direction),
+                BigInt(duration),
+                BigInt(entryPrice),
+                Number(marketId),
+                address // Payout goes to MAIN wallet
             ]),
             value: amountWei,
-            gasPrice,
+            gasPrice: feeData.gasPrice ? gasPrice : undefined,
+            maxFeePerGas: feeData.maxFeePerGas ? (feeData.maxFeePerGas * 150n / 100n) : undefined,
+            maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ? (feeData.maxPriorityFeePerGas * 150n / 100n) : undefined,
             gasLimit: 800000n,
-            type: 0,
+            type: feeData.maxFeePerGas ? 2 : 0,
             nonce: nonce,
             chainId: 5042002
         });
@@ -280,7 +299,8 @@ app.post('/session/trade', async (req, res) => {
         // Register in memory store for settlement tracking
         const tradeData = {
             id: id.toString(),
-            user: sessionAddr,
+            user: address, // Track by main address for UI consistency
+            sessionUser: sessionAddr,
             amount: amount,
             direction: direction,
             duration: duration,

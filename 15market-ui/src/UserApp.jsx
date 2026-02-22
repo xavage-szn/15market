@@ -1450,8 +1450,9 @@ export default function UserApp() {
               const isSessionWin = normalizedUser === sessionAddr || (isSessionTrade && sessionAddr);
 
               if (!alreadyApplied) {
-                // Immediate optimistic credit so user sees the win right away
-                if (isSessionWin) {
+                // Determine which wallet balance to update based on the event's user address
+                // (Matches the 'payoutAddress' logic in the backend and frontend)
+                if (normalizedUser === sessionAddr) {
                   setSessionBalance(prev => prev + payoutVal);
                   console.log(`⚡ [WIN] +${payoutVal} optimistically credited to SESSION wallet (bet ${betId})`);
                 } else if (normalizedUser === mainAddr) {
