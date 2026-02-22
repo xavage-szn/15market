@@ -176,6 +176,11 @@ export default function UserApp() {
   const [toast, setToast] = useState(null); // { message, type }
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   const lastOptimisticActionTime = useRef(0); // Protects optimistic balance from stale polling
+  const tradeHistoryRef = useRef([]);
+  const activeTradesRef = useRef([]);
+
+  useEffect(() => { tradeHistoryRef.current = tradeHistory; }, [tradeHistory]);
+  useEffect(() => { activeTradesRef.current = activeTrades; }, [activeTrades]);
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
   // 1. Core Balance Fetchers
@@ -675,11 +680,15 @@ export default function UserApp() {
       notify("Confirming Stake...", "pending");
       console.log(`⏳ [SYNC] Waiting for stake deduction... Hash: ${txHash}`);
 
-      await publicClient.waitForTransactionReceipt({
+      const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
         confirmations: 1,
         timeout: 45000
       });
+
+      if (receipt.status !== 'success' && receipt.status !== 1) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
 
       // ONLY AFTER SUCCESSFUL DEBIT (Confirmed on-chain)
       console.log(`📉 [SUCCESS] Stake ${amtNum} verified as debited.`);
@@ -1432,8 +1441,8 @@ export default function UserApp() {
               const payoutVal = parseFloat(formattedPayout);
 
               // Update balance ONLY if not already optimistically applied
-              const existingTrade = tradeHistory.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
-              const existingActive = activeTrades.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
+              const existingTrade = tradeHistoryRef.current.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
+              const existingActive = activeTradesRef.current.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
               const alreadyApplied = existingTrade?.balanceApplied || existingActive?.balanceApplied;
               const isSessionTrade = existingTrade?.isSessionTrade || existingActive?.isSessionTrade;
 
