@@ -11,13 +11,15 @@ class PricingService {
         this.httpAgent = new (require('http').Agent)({ keepAlive: true, maxSockets: 20 });
         this.httpsAgent = new (require('https').Agent)({ keepAlive: true, maxSockets: 20 });
         this.axiosInstance = axios.create({
-            timeout: 1500, // Reduced from 2s
+            timeout: 5000, // Increased from 1.5s for stability
             httpAgent: this.httpAgent,
             httpsAgent: this.httpsAgent,
         });
     }
 
     getSources(symbol) {
+        // Log source requests
+        console.log(`[Pricing] 🔍 Gathering sources for ${symbol}`);
         const configs = {
             'BTC': { binance: "BTCUSDT", mexc: "BTCUSDT", pyth: "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43" },
             'ETH': { binance: "ETHUSDT", mexc: "ETHUSDT", pyth: "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace" },
@@ -59,10 +61,16 @@ class PricingService {
             try {
                 const sources = this.getSources(symbol);
                 const pricePromises = sources.map(async s => {
-                    const res = await this.axiosInstance.get(s.url);
-                    const p = s.parse(res.data);
-                    if (!p || isNaN(p)) throw new Error('Invalid price');
-                    return p;
+                    try {
+                        const res = await this.axiosInstance.get(s.url);
+                        const p = s.parse(res.data);
+                        if (!p || isNaN(p)) throw new Error('Invalid price');
+                        console.log(`[Pricing] ✅ ${s.name} returned ${p} for ${symbol}`);
+                        return p;
+                    } catch (e) {
+                        console.warn(`[Pricing] ❌ ${s.name} failed for ${symbol}: ${e.message}`);
+                        throw e;
+                    }
                 });
 
                 const fastestPrice = await Promise.any(pricePromises);
@@ -70,7 +78,7 @@ class PricingService {
                 return fastestPrice;
             } catch (e) {
                 if (this.cache[symbol]) {
-                    console.warn(`[Pricing] ⚠️ All sources failed for ${symbol}, using cache.`);
+                    console.warn(`[Pricing] ⚠️ All sources failed for ${symbol}, using cache: ${this.cache[symbol].price}`);
                     return this.cache[symbol].price;
                 }
                 console.error(`[Pricing] ❌ All sources failed for ${symbol} and no cache.`);

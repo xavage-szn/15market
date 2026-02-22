@@ -182,18 +182,23 @@ export default function UserApp() {
   const refetchEvmBalance = useCallback(async (force = false) => {
     if (!address) return;
 
-    // COOLDOWN: Don't overwrite optimistic winnings with stale on-chain data
-    const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
-    if (!force && msSinceLastCredit < 60000) {
-      return;
-    }
-
     try {
       const b = await publicClient.getBalance({ address });
       const formatted = formatUnits(b, 18);
+      const newBalNum = parseFloat(formatted);
+      const currBalNum = parseFloat(evmBalance || "0");
+
+      // COOLDOWN: Don't overwrite winnings with stale on-chain data
+      // UNLESS the new balance is significantly higher (meaning payout arrived)
+      const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
+      const isHigher = newBalNum > (currBalNum + 0.0001); // Small buffer
+
+      if (!force && msSinceLastCredit < 60000 && !isHigher) {
+        return;
+      }
 
       // Final re-check before applying to state (race condition guard)
-      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force) return;
+      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force && !isHigher) return;
 
       if (formatted !== evmBalance) {
         setEvmBalance(formatted);
@@ -204,19 +209,22 @@ export default function UserApp() {
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!evmSessionWallet) return;
 
-    // COOLDOWN: Don't overwrite optimistic balance with stale on-chain data
-    // during the 30s window after a settlement credit was applied.
-    const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
-    if (!force && msSinceLastCredit < 60000) {
-      return;
-    }
-
     try {
       const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
       const bal = parseFloat(formatUnits(balanceWei, 18));
+      const currBal = sessionBalance;
+
+      // COOLDOWN: Don't overwrite optimistic balance with stale on-chain data
+      // UNLESS the new balance is significantly higher (meaning payout arrived)
+      const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
+      const isHigher = bal > (currBal + 0.0001);
+
+      if (!force && msSinceLastCredit < 60000 && !isHigher) {
+        return;
+      }
 
       // Final re-check before applying to state (race condition guard)
-      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force) return;
+      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force && !isHigher) return;
 
       if (bal !== sessionBalance) {
         setSessionBalance(bal);
@@ -376,9 +384,9 @@ export default function UserApp() {
   }, [address, reconcileTrades]);
 
   // 3. Aggressive Logic (Optimized: fewer redundant refreshes)
-  const aggressiveRefresh = useCallback(() => {
-    triggerGlobalRefresh(true);
-    [500, 2000, 5000].forEach(delay => setTimeout(() => triggerGlobalRefresh(true), delay));
+  const aggressiveRefresh = useCallback((force = false) => {
+    triggerGlobalRefresh(force);
+    [500, 2000, 5000].forEach(delay => setTimeout(() => triggerGlobalRefresh(force), delay));
     [1500, 4000].forEach(delay => setTimeout(fetchMyProfile, delay));
   }, [triggerGlobalRefresh, fetchMyProfile]);
 
@@ -1189,75 +1197,7 @@ export default function UserApp() {
 
 
 
-  // Fetch current user profile - STRICT REDIS VERIFICATION
-  useEffect(() => {
-    if (!isConnected || !address) {
-      setUserProfile(null);
-      setProfileChecked(false);
-      setShowOnboarding(false);
-      return;
-    }
 
-    setShowOnboarding(true);
-
-    const cachedProfile = localStorage.getItem(`15market_profile_${address.toLowerCase()}`);
-    if (cachedProfile) {
-      try {
-        const parsed = JSON.parse(cachedProfile);
-        if (parsed.username && parsed.tosAccepted) {
-          setUserProfile(parsed);
-          setShowOnboarding(false);
-        }
-      } catch (e) { }
-    }
-
-    fetchMyProfile();
-  }, [isConnected, address, fetchMyProfile]);
-
-  const handleOnboardingComplete = async (onboardingData) => {
-    // OPTIMISTIC: Close modal immediately to avoid "stuck" feeling
-    setShowOnboarding(false);
-
-    // Create local profile immediately
-    const localProfile = {
-      username: onboardingData.username,
-      xHandle: onboardingData.twitterHandle || "",
-      xProfileImage: onboardingData.twitterImage || "",
-      tosAccepted: onboardingData.tosAccepted,
-      totalTrades: 0,
-      totalWins: 0,
-      totalLosses: 0,
-      totalVolume: "0.00"
-    };
-
-    const finalProfile = {
-      ...localProfile,
-      sessionWalletAddress: evmSessionWallet?.address || ""
-    };
-
-    setUserProfile(finalProfile);
-    localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(finalProfile));
-
-    try {
-      // Sync with backend in background
-      const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address,
-          profile: finalProfile
-        })
-      });
-
-      if (!res.ok) console.warn("Background profile sync failed");
-      else notify("Welcome to 15market, " + onboardingData.username, "success");
-
-      // NO AUTO-INIT: User must explicitly enable Auto-Signer via the toggle.
-
-    } catch (err) {
-      console.error("Profile sync failed:", err);
-    }
-  };
 
   // Slider / amount handlers - active balance aware
   const activeBal = useMemo(() => {
@@ -1493,11 +1433,12 @@ export default function UserApp() {
                 if (normalizedUser === sessionAddr || (isSessionTrade && sessionAddr)) {
                   // SESSION TRADE: Winnings stay in session wallet
                   setSessionBalance(prev => prev + payoutVal);
-                  lastSettlementCreditTime.current = Date.now(); // Activate cooldown
+                  lastOptimisticActionTime.current = Date.now(); // Activate cooldown
                   console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to SESSION wallet (bet ${betId})`);
                 } else if (normalizedUser === mainAddr) {
                   // MAIN WALLET TRADE: Winnings go to main wallet
                   setBalance(prev => prev + payoutVal);
+                  lastOptimisticActionTime.current = Date.now(); // Activate cooldown
                   console.log(`⚡ [CHAIN_CONFIRM] +${payoutVal} credited to MAIN wallet (bet ${betId})`);
                 }
               } else {
@@ -1508,18 +1449,18 @@ export default function UserApp() {
               // This is the authoritative balance refresh that catches the actual payout
               setTimeout(() => {
                 if (normalizedUser === sessionAddr || isSessionTrade) {
-                  updateEvmSessionBal(true); // Force read on-chain session balance
+                  updateEvmSessionBal(false);
                 } else {
-                  refetchEvmBalance(true); // Force read on-chain main balance
+                  refetchEvmBalance(false);
                 }
               }, 3000);
               setTimeout(() => {
-                updateEvmSessionBal(true);
-                refetchEvmBalance(true);
+                updateEvmSessionBal(false);
+                refetchEvmBalance(false);
               }, 6000);
               setTimeout(() => {
-                updateEvmSessionBal(true);
-                refetchEvmBalance(true);
+                updateEvmSessionBal(false);
+                refetchEvmBalance(false);
               }, 12000);
 
               lastTradeTimeRef.current = Date.now() - 7000;
