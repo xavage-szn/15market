@@ -5,8 +5,8 @@ import { arcTestnet, projectId } from './constants';
 /**
  * Wagmi Configuration for Reown AppKit
  * 
- * Provides wallet connectivity using Reown (official WalletConnect solution)
- * Supports Arc testnet with MetaMask, WalletConnect, and other EVM wallets
+ * Single-network config: Arc Testnet only.
+ * Auto-switches wallets to Arc Testnet on connect.
  */
 
 // Create Wagmi adapter for Reown
@@ -15,10 +15,11 @@ export const wagmiAdapter = new WagmiAdapter({
     projectId
 });
 
-// Initialize Reown AppKit
+// Initialize Reown AppKit — Arc Testnet ONLY
 createAppKit({
     adapters: [wagmiAdapter],
     networks: [arcTestnet],
+    defaultNetwork: arcTestnet,
     projectId,
     metadata: {
         name: '15market',
@@ -27,8 +28,13 @@ createAppKit({
         icons: ['https://15market.online/logo.png']
     },
     features: {
-        analytics: false
-    }
+        analytics: false,
+        swaps: false,
+        onramp: false,
+        emailShowWallets: false,
+    },
+    allowUnsupportedChain: false,
+    enableNetworkSwitch: false,
 });
 
 // Export Wagmi config for WagmiProvider

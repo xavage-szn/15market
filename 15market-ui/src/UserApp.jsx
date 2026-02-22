@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
@@ -22,7 +22,7 @@ import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 
 import MessagingSystem from "./components/MessagingSystem";
-import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP } from "./constants";
+import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID } from "./constants";
 
 
 
@@ -150,17 +150,16 @@ export default function UserApp() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, chainId: connectedChainId } = useAccount();
+  const { switchChain } = useSwitchChain();
 
-  // Debug connection state transitions
+  // Auto-switch to Arc Testnet if wallet is on the wrong network
   useEffect(() => {
-    if (isConnected) {
-      console.log("🔐 [AUTH STATE] Wallet Connected", {
-        isConnected,
-        address
-      });
+    if (isConnected && connectedChainId && connectedChainId !== ARC_CHAIN_ID) {
+      console.log(`🔄 [NETWORK] Auto-switching from chain ${connectedChainId} to Arc Testnet (${ARC_CHAIN_ID})`);
+      switchChain?.({ chainId: ARC_CHAIN_ID });
     }
-  }, [isConnected, address]);
+  }, [isConnected, connectedChainId, switchChain]);
 
   const [evmBalance, setEvmBalance] = useState("0");
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount

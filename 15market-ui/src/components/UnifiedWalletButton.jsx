@@ -1,35 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppKit } from '@reown/appkit/react';
-import { useAccount } from 'wagmi';
+import { useAccount, useSwitchChain } from 'wagmi';
 import { publicClient } from "../client";
 import { formatEther } from "viem";
+import { ARC_CHAIN_ID } from "../constants";
 
 export function UnifiedWalletButton({ theme }) {
     const navigate = useNavigate();
     const { open } = useAppKit();
     const { address, isConnected, chainId: connectedChainId } = useAccount();
+    const { switchChain } = useSwitchChain();
     const [isConnecting, setIsConnecting] = useState(false);
-    const [chainId, setChainId] = useState(null);
 
-    // Auto-switch to Arc network when connected to wrong network
+    // Auto-switch to Arc Testnet if wallet is on any other network
     useEffect(() => {
-        const getChain = async () => {
-            try {
-                const chain = await publicClient.getChainId();
-                setChainId(chain);
-            } catch (e) {
-                console.warn("Failed to fetch chainId", e);
-            }
-        };
-        getChain();
-    }, []);
+        if (isConnected && connectedChainId && connectedChainId !== ARC_CHAIN_ID) {
+            console.log(`🔄 [NETWORK] Wallet on chain ${connectedChainId}, auto-switching to Arc Testnet (${ARC_CHAIN_ID})...`);
+            switchChain?.({ chainId: ARC_CHAIN_ID });
+        }
+    }, [isConnected, connectedChainId, switchChain]);
 
-    // Navigate to trade page after connection
+    // Navigate to trade page after connection on correct chain
     useEffect(() => {
-        if (isConnected && connectedChainId) {
-            console.log("✅ [WALLET] Connected to network, navigating to trade page...");
-            // Navigate to trade page after successful connection
+        if (isConnected && connectedChainId === ARC_CHAIN_ID) {
+            console.log("✅ [WALLET] Connected to Arc Testnet, navigating to trade page...");
             setTimeout(() => navigate('/'), 500);
         }
     }, [isConnected, connectedChainId, navigate]);
