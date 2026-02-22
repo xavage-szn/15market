@@ -10,7 +10,7 @@ export const ARC_RPCS = [
 ];
 export const ARC_RPC = ARC_RPCS[0];
 export const ARC_EXPLORER = "https://explorer-test-1.arc.market";
-export const ARC_CONTRACT_ADDRESS = "0x345014899b42bF9034D9475760609e64B1433A6a"; // NEW V2
+export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS || "0x345014899b42bF9034D9475760609e64B1433A6a"; // NEW V2
 export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
 export const ARC_RPC_BACKUP = ARC_RPCS[1];
 export const ARC_RPC_THIRDWEB = ARC_RPCS[0];
@@ -21,11 +21,11 @@ const isLocal = typeof window !== 'undefined' &&
         window.location.hostname.startsWith('192.168.') ||
         window.location.hostname.startsWith('10.'));
 
-const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? "http://127.0.0.1:3013" : "https://api.15market.online");
+const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? "http://127.0.0.1:3010" : "https://api.15market.online");
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
 
-// If we are local, prioritize 127.0.0.1:3013 for the Arc keeper unless explicitly overridden
-export const KEEPER_URL_ARC = import.meta.env.VITE_KEEPER_URL_ARC || (isLocal ? "http://127.0.0.1:3013" : `${KEEPER_URL}/arc`);
+// If we are local, prioritize 127.0.0.1:3010 for the Arc keeper unless explicitly overridden
+export const KEEPER_URL_ARC = import.meta.env.VITE_KEEPER_URL_ARC || (isLocal ? "http://127.0.0.1:3010" : `${KEEPER_URL}/arc`);
 console.log(`🌐 [Config] Keeper URL: ${KEEPER_URL_ARC}`);
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 

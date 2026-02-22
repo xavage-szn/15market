@@ -17,7 +17,7 @@ function logToFile(msg) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3013;
+const PORT = process.env.PORT || 3010;
 
 app.use(cors());
 app.use(express.json());
