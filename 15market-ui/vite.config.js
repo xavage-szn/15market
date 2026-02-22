@@ -57,6 +57,11 @@ export default defineConfig({
         target: 'https://api.mexc.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-mexc/, '')
+      },
+      '/arc-api': {
+        target: 'http://127.0.0.1:3013',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/arc-api/, '')
       }
     }
   }

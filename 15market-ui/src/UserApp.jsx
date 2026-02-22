@@ -24,7 +24,6 @@ import { DashboardPage } from "./components/DashboardPage";
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP } from "./constants";
 
-import { OnboardingModal } from "./components/OnboardingModal";
 
 
 
@@ -80,10 +79,10 @@ export default function UserApp() {
     }, 5000); // 5 seconds max loading
     return () => clearTimeout(loadingTimeoutRef.current);
   }, [isLoading]);
+
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false); // SITE IS OPEN BY DEFAULT
   const [transactionHistory, setTransactionHistory] = useState(() => {
     try {
       const saved = localStorage.getItem("15market_transactions_v1");
@@ -176,17 +175,29 @@ export default function UserApp() {
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
-  const lastSettlementCreditTime = useRef(0); // Cooldown: prevents polling from overwriting optimistic balance credits
+  const lastOptimisticActionTime = useRef(0); // Protects optimistic balance from stale polling
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
   // 1. Core Balance Fetchers
   const refetchEvmBalance = useCallback(async (force = false) => {
     if (!address) return;
 
+    // COOLDOWN: Don't overwrite optimistic winnings with stale on-chain data
+    const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
+    if (!force && msSinceLastCredit < 60000) {
+      return;
+    }
+
     try {
       const b = await publicClient.getBalance({ address });
       const formatted = formatUnits(b, 18);
-      if (formatted !== evmBalance) setEvmBalance(formatted);
+
+      // Final re-check before applying to state (race condition guard)
+      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force) return;
+
+      if (formatted !== evmBalance) {
+        setEvmBalance(formatted);
+      }
     } catch (e) { }
   }, [address, evmBalance]);
 
@@ -194,17 +205,19 @@ export default function UserApp() {
     if (!evmSessionWallet) return;
 
     // COOLDOWN: Don't overwrite optimistic balance with stale on-chain data
-    // during the 25s window after a settlement credit was applied.
-    // This prevents the "flash" where winnings appear then vanish before on-chain confirms.
-    const msSinceLastCredit = Date.now() - lastSettlementCreditTime.current;
-    if (!force && msSinceLastCredit < 25000) {
-      console.log(`⏳ [SESSION_BAL] Skipping poll — settlement cooldown active (${Math.round(msSinceLastCredit / 1000)}s/25s)`);
+    // during the 30s window after a settlement credit was applied.
+    const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
+    if (!force && msSinceLastCredit < 60000) {
       return;
     }
 
     try {
       const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
       const bal = parseFloat(formatUnits(balanceWei, 18));
+
+      // Final re-check before applying to state (race condition guard)
+      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force) return;
+
       if (bal !== sessionBalance) {
         setSessionBalance(bal);
         console.log(`💰 [SESSION_BAL] On-chain balance: ${bal.toFixed(4)} USDC`);
@@ -237,9 +250,9 @@ export default function UserApp() {
         prev.some(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce) && (p.status === "PENDING" || p.status === "RESOLVING"))
       );
       if (hasSettled) {
-        console.log("💰 [BALANCE] Settlement detected. Refetching...");
-        triggerGlobalRefresh(true);
-        setTimeout(() => triggerGlobalRefresh(true), 1500); // 2nd pass for RPC safety
+        console.log("💰 [BALANCE] Settlement detected. Refreshing (respecting guard)...");
+        triggerGlobalRefresh(false); // DON'T force, respect the 30s guard
+        setTimeout(() => triggerGlobalRefresh(false), 1500);
       }
       return prev;
     });
@@ -305,17 +318,29 @@ export default function UserApp() {
       backendActive.forEach(bt => {
         const local = prev.find(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce));
         let finalStatus = bt.status;
-        if (local && local.status === "RESOLVING" && bt.status === "PENDING") {
-          finalStatus = "RESOLVING";
+
+        // Monotonic Status Hierarchy: WON/LOST > RESOLVING > PENDING
+        if (local) {
+          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1 };
+          if (statusOrder[local.status] > statusOrder[bt.status]) {
+            finalStatus = local.status;
+          }
         }
+
         if (now <= (bt.expiryMs + GHOST_GRACE)) {
-          updatedActive.push({ ...bt, status: finalStatus });
+          updatedActive.push({ ...bt, status: finalStatus, optimistic: (local?.optimistic || false) });
         }
       });
 
       prev.forEach(local => {
         const localId = String(local.id || local.tx || local.nonce);
         if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
+          // If it's a locally resolved trade, keep it until the history sync confirms it
+          if (["WON", "LOST"].includes(local.status)) {
+            updatedActive.push(local);
+            return;
+          }
+
           const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
           if (local.status === "PENDING" && now <= (normExp + GHOST_GRACE)) {
             updatedActive.push({ ...local, expiryMs: normExp });
@@ -342,7 +367,6 @@ export default function UserApp() {
         const { profile, history, transactions } = userData;
         if (profile) {
           setUserProfile(profile);
-          setShowOnboarding(false);
           localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
         }
         if (history) reconcileTrades(history);
@@ -374,13 +398,13 @@ export default function UserApp() {
   }, [address, triggerGlobalRefresh]);
 
 
-  // Periodic Universal Sync (Optimized: 5s instead of 2.5s to reduce load)
+  // Periodic Universal Sync (Optimized for Instant Pulse Mode)
   useEffect(() => {
     if (address) {
       const interval = setInterval(() => {
         triggerGlobalRefresh(false);
         fetchMyProfile();
-      }, 5000); // 5s — sufficient for cross-device sync
+      }, 2000); // 2s — matches backend pulse speed
       return () => clearInterval(interval);
     }
   }, [address, triggerGlobalRefresh, fetchMyProfile]);
@@ -586,69 +610,52 @@ export default function UserApp() {
       return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
     }
 
-    setIsExecuting(true);
-    let txHash;
-    // Generate truly unique bet ID
+    // setIsExecuting(true); // REMOVED global block for burst mode
+
+    // Generate truly unique bet ID immediately
     const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
     const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
     const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
     const entryPriceParams = Math.floor(activePrice * 100000000);
-    const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 }; // Synchronized with backend
+    const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 };
     const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
+    const activeUserAddr = (sessionMode && evmSessionWallet) ? evmSessionWallet.address : address;
+    const now = Date.now();
+    const expiryMs = now + (duration * 1000);
+    const amtNum = parseFloat(amount);
+
+    setIsExecuting(true);
+    notify("Processing Trade...", "info");
 
     try {
       if (!isConnected) {
-        notify("Please connect wallet first", "error");
-        setIsExecuting(false);
-        return;
+        throw new Error("Please connect wallet first");
       }
 
       const amountWei = parseUnits(parseFloat(amount).toFixed(18), 18);
+      let txHash;
 
+      // CORE: No optimistic updates. Wait for BROADCAST success.
       if (sessionMode) {
-        // SESSION MODE: Always use auto-signer, never fall through to main wallet
-        if (sessionBalance < (Number(amount) + 0.005)) {
-          notify(`Insufficient Auto-Signer balance. You have ${sessionBalance.toFixed(3)} USDC. Deposit more or switch to Main Wallet.`, "error");
-          setIsExecuting(false);
-          return;
-        }
-
-        console.log("✅ [TRADE] Using REMOTE AUTO-SIGNER — payout stays in session wallet");
-        notify(`Auto-signing via Cloud...`, "success");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
         const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
-            address: address,
-            tradeParams: {
-              id: tradeId.toString(),
-              direction: dirVal,
-              duration: Number(duration),
-              entryPrice: entryPriceParams.toString(),
-              marketId: assetId,
-              amount: amount
-            }
+            address,
+            tradeParams: { id: tradeId.toString(), direction: dirVal, duration: Number(duration), entryPrice: entryPriceParams.toString(), marketId: assetId, amount }
           })
         });
-
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Auto-Signer trade failed");
-        }
-
+        clearTimeout(timeoutId);
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Trade failed");
         txHash = data.txHash;
-        console.log("📤 [TRADE] Remote tx SENT:", txHash, "Payout to session wallet:", data.sessionAddress || evmSessionWallet?.address);
-
       } else {
-        // MAIN WALLET MODE: User directly signs, payout goes to main wallet
-        console.log("📝 [TRADE] Using MAIN WALLET");
-        notify(`Confirm on Arc...`, "success");
-
         if (!walletClient) throw new Error("Wallet not connected");
-
-        const hash = await walletClient.writeContract({
+        txHash = await walletClient.writeContract({
           address: ARC_CONTRACT_ADDRESS,
           abi: ArcABI.abi,
           functionName: 'placeBet',
@@ -657,42 +664,14 @@ export default function UserApp() {
           account: address,
           gas: 800000n
         });
-
-        txHash = hash;
-        console.log("📤 [TRADE] Main wallet tx SENT:", txHash);
-
-        // Optimistic pending stake
-        setPendingStakes(prev => ({ ...prev, [hash]: parseFloat(amount) }));
-
-        // Background Wait
-        publicClient.waitForTransactionReceipt({ hash }).then(receipt => {
-          console.log("✅ [TRADE] Confirmed:", receipt.transactionHash);
-          setPendingStakes(prev => {
-            const next = { ...prev };
-            delete next[hash];
-            return next;
-          });
-          setTimeout(refetchEvmBalance, 1000);
-        });
       }
 
-      // --- Common Post-Trade Logic ---
-      notify(`Arc Trade Executed!`, "success");
+      // ONLY AFTER SUCCESSFUL DEBIT (Broadcast accepted)
+      console.log(`📉 [SUCCESS] Stake ${amtNum} debited. Hash: ${txHash}`);
 
-      if (sessionMode) {
-        // Optimistic Balance Update
-        const feePercent = 0.001;
-        const signerFee = Number(amount) * feePercent;
-        setSessionBalance(prev => Math.max(0, prev - parseFloat(amount) - signerFee));
-      }
-
-      lastTradeTimeRef.current = Date.now();
-
-      // CRITICAL: If sessionMode is true, ALWAYS use session wallet. If it's null, we shouldn't be here (caught above), but we force it to ensure no payout goes to main by accident.
-      const activeUserAddr = (sessionMode) ? (evmSessionWallet?.address) : address;
-
-      const now = Date.now();
-      const expiryMs = now + (duration * 1000);
+      // Update balance
+      if (sessionMode) setSessionBalance(prev => prev - amtNum);
+      else setBalance(prev => prev - amtNum);
 
       const newTrade = {
         id: tradeId,
@@ -710,50 +689,18 @@ export default function UserApp() {
         startTime: now,
         expiryMs: expiryMs,
         symbol: activeMarket?.symbol || 'ETH',
-        isSessionTrade: sessionMode, // Track which wallet mode placed this trade
+        isSessionTrade: sessionMode,
       };
 
-      // Helper to prevent dupes
-      const dedupeAndAdd = (prev, item) => {
-        const filtered = prev.filter(t => (t.id || t.tx || t.nonce) !== (item.id || item.tx || item.nonce));
-        return [item, ...filtered];
-      };
-
+      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (t.id || t.tx) !== (item.id || item.tx))];
       setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
 
-      // Register with Backend immediately (Ping)
-      fetch(`${KEEPER_URL_ARC}/trade-ping`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: tradeId,
-          address: activeUserAddr, // associate with the wallet that made the trade
-          amount: Number(amount).toFixed(3),
-          direction: dirVal,
-          duration,
-          entryPrice: activePrice.toFixed(3),
-          symbol: activeMarket?.symbol || 'ETH',
-          network: 'arc',
-          isSessionTrade: sessionMode, // Add this to the ping
-          expiryMs: expiryMs
-        })
-      }).catch(e => console.warn("Trade ping failed:", e));
-
-      // Transaction History
-      const newTx = {
-        id: `trade_${tradeId}`,
-        type: 'TRADE',
-        amount: Number(amount).toFixed(3),
-        timestamp: Date.now(),
-        hash: txHash,
-        status: 'PENDING'
-      };
-      setTransactionHistory(prev => [newTx, ...prev]);
+      notify("Trade Executed!", "success");
 
     } catch (err) {
-      console.error("Execute Trade Error:", err);
-      notify("Trade Failed: " + (err.shortMessage || err.message), "error");
+      console.error("Trade execution failed:", err);
+      notify(`Trade Failed: ${err.message}`, "error");
     } finally {
       setIsExecuting(false);
     }
@@ -829,8 +776,8 @@ export default function UserApp() {
 
     fetchTradeHistory();
 
-    // Poll for updates every 8 seconds (reduced from 5s — settlements take >5s anyway)
-    const interval = setInterval(fetchTradeHistory, 8000);
+    fetchTradeHistory();
+    const interval = setInterval(fetchTradeHistory, 3000); // Poll every 3s for fast result sync
     return () => clearInterval(interval);
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
 
@@ -905,6 +852,8 @@ export default function UserApp() {
   // Shared Price Fetch Logic
   const priceRef = useRef(price);
   useEffect(() => { priceRef.current = price; }, [price]);
+
+  const cleanupTimers = useRef({});
 
   const fetchCurrentPrice = useCallback(async () => {
     try {
@@ -1356,12 +1305,10 @@ export default function UserApp() {
       const pendingTrades = activeTrades.filter(t => t.status === "PENDING" || t.status === "RESOLVING");
 
       for (const trade of pendingTrades) {
-        const start = trade.startTime || (trade.nonce > 1000000000000 ? trade.nonce : Math.floor(trade.nonce / 100) * 1000);
+        const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
         const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
         if (now < expiryMs) continue; // Not yet expired
         if (resolvingInProgress.current.has(trade.id)) continue;
-
-        resolvingInProgress.current.add(trade.id);
 
         // Capture the current live price for instant result
         let capturedPrice = parseFloat(priceRef.current);
@@ -1369,19 +1316,20 @@ export default function UserApp() {
           capturedPrice = parseFloat(trade.settlementPrice);
         }
 
+        if (capturedPrice <= 0) continue; // Try again next frame (retry resolution)
+
         // RULE: Truncate to 3 decimal places (floor) for win/loss determination
-        // If price doesn't move by at least 0.001 past entry, it's a LOSS
         const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
 
-        let optimisticStatus = "LOST"; // Default to LOST (safer than WON)
+        let optimisticStatus = "LOST";
+        const entry3dp = truncTo3dp(parseFloat(trade.entryPrice));
+        const exit3dp = truncTo3dp(capturedPrice);
+        const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+        const isWin = isUpTrade ? (exit3dp > entry3dp) : (exit3dp < entry3dp);
+        optimisticStatus = isWin ? "WON" : "LOST";
 
-        if (capturedPrice > 0) {
-          const entry3dp = truncTo3dp(parseFloat(trade.entryPrice));
-          const exit3dp = truncTo3dp(capturedPrice);
-          const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
-          const isWin = isUpTrade ? (exit3dp > entry3dp) : (exit3dp < entry3dp);
-          optimisticStatus = isWin ? "WON" : "LOST";
-        }
+        // NOW we lock it — we actually have a result
+        resolvingInProgress.current.add(trade.id);
 
         let optimisticPayout = "0.0000";
         if (optimisticStatus === "WON") {
@@ -1411,12 +1359,13 @@ export default function UserApp() {
           if (sessionAddr && (tradeOwner === sessionAddr || trade.isSessionTrade)) {
             // SESSION TRADE WIN: Credit stays in session wallet
             setSessionBalance(prev => prev + payoutNum);
-            lastSettlementCreditTime.current = Date.now(); // Activate cooldown
+            lastOptimisticActionTime.current = Date.now(); // Activate guard
             console.log(`⚡ [INSTANT] +${payoutNum} credited to SESSION wallet (${tradeOwner})`);
             updatePayload.balanceApplied = true;
           } else if (mainAddr && tradeOwner === mainAddr) {
             // MAIN WALLET TRADE WIN: Credit goes to main wallet
             setBalance(prev => prev + payoutNum);
+            lastOptimisticActionTime.current = Date.now(); // Activate guard
             console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet (${tradeOwner})`);
             updatePayload.balanceApplied = true;
           }
@@ -1426,13 +1375,19 @@ export default function UserApp() {
         setActiveTrades(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
         setTradeHistory(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
 
+        // CALL BACKEND TO SETTLE ON CHAIN
+        fetch(`${KEEPER_URL_ARC}/settle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: trade.id })
+        }).catch(e => console.error("Settlement trigger fail:", e));
+
         // Release resolving lock after a safety period (chain will confirm in background)
         setTimeout(() => {
           resolvingInProgress.current.delete(trade.id);
-        }, 30000);
+        }, 15000);
       }
     };
-
     // HIGH SPEED: Check every 200ms for near-instant resolution
     const interval = setInterval(checkAndResolve, 200);
     // Also run immediately on mount/update
@@ -1443,14 +1398,26 @@ export default function UserApp() {
   // Safety Cleanup: Remove finalized trades after showing result
   useEffect(() => {
     const finalStatuses = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"];
-    const toRemove = activeTrades.filter(t => finalStatuses.includes(t.status));
+    const finished = activeTrades.filter(t => finalStatuses.includes(t.status));
 
-    if (toRemove.length > 0) {
-      const timer = setTimeout(() => {
-        setActiveTrades(prev => prev.filter(t => !finalStatuses.includes(t.status)));
-      }, 4500); // Show result for 4.5s so user can see payout
-      return () => clearTimeout(timer);
-    }
+    finished.forEach(trade => {
+      const tid = trade.id || trade.tx || trade.nonce;
+      if (tid && !cleanupTimers.current[tid]) {
+        // Start a removal timer ONLY if one doesn't exist for this specific trade
+        cleanupTimers.current[tid] = setTimeout(() => {
+          setActiveTrades(prev => prev.filter(t => (t.id || t.tx || t.nonce) !== tid));
+          delete cleanupTimers.current[tid];
+        }, 3500); // 3.5 seconds of glory on screen
+      }
+    });
+
+    return () => {
+      // Cleanup orphan timers if list empties
+      if (activeTrades.length === 0) {
+        Object.values(cleanupTimers.current).forEach(clearTimeout);
+        cleanupTimers.current = {};
+      }
+    };
   }, [activeTrades]);
 
 
@@ -2055,15 +2022,6 @@ export default function UserApp() {
       <AnimatePresence>
         {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
       </AnimatePresence>
-
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onComplete={handleOnboardingComplete}
-        address={address}
-        network={network}
-        existingProfile={userProfile}
-        theme={theme}
-      />
 
       {/* Footer */}
       <footer className="w-full max-w-7xl mt-24 mb-10 flex items-center justify-center gap-6 opacity-60 hover:opacity-100 transition-opacity" style={{ fontFamily: 'Arial, sans-serif' }}>

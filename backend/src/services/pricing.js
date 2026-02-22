@@ -49,36 +49,32 @@ class PricingService {
 
     async getPrice(symbol = 'BTC') {
         const now = Date.now();
-
-        // ===== FASTEST PATH: Return cached if fresh (< 500ms) =====
         if (this.cache[symbol] && (now - this.cache[symbol].time < 500)) {
             return this.cache[symbol].price;
         }
 
-        // ===== DEDUP: If already fetching, await the same promise =====
         if (this.fetching[symbol]) return this.fetching[symbol];
 
         this.fetching[symbol] = (async () => {
             try {
                 const sources = this.getSources(symbol);
-
-                // ===== RACE PATTERN: Return the FASTEST source =====
-                // Don't wait for all — return first valid response
                 const pricePromises = sources.map(async s => {
                     const res = await this.axiosInstance.get(s.url);
-                    const price = s.parse(res.data);
-                    if (!price || isNaN(price)) throw new Error('Invalid price');
-                    return price;
+                    const p = s.parse(res.data);
+                    if (!p || isNaN(p)) throw new Error('Invalid price');
+                    return p;
                 });
 
-                // Use Promise.any — returns the first successful result
                 const fastestPrice = await Promise.any(pricePromises);
-
                 this.cache[symbol] = { price: fastestPrice, time: Date.now() };
                 return fastestPrice;
             } catch (e) {
-                // All sources failed — return stale cache
-                return this.cache[symbol]?.price || 0;
+                if (this.cache[symbol]) {
+                    console.warn(`[Pricing] ⚠️ All sources failed for ${symbol}, using cache.`);
+                    return this.cache[symbol].price;
+                }
+                console.error(`[Pricing] ❌ All sources failed for ${symbol} and no cache.`);
+                return 0;
             } finally {
                 delete this.fetching[symbol];
             }

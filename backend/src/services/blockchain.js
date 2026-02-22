@@ -26,24 +26,29 @@ const RPC_ENDPOINTS = [
     "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
 ];
 
-async function createProvider() {
-    console.log(`[Blockchain] Initializing provider with ${RPC_ENDPOINTS.length} endpoints...`);
-    for (const rpc of RPC_ENDPOINTS) {
+async function createProvider(blockchainService) {
+    const currentRpcs = blockchainService?.lastGoodRpc
+        ? [blockchainService.lastGoodRpc, ...RPC_ENDPOINTS.filter(r => r !== blockchainService.lastGoodRpc)]
+        : RPC_ENDPOINTS;
+
+    console.log(`[Blockchain] Initializing provider with ${currentRpcs.length} endpoints...`);
+    for (const rpc of currentRpcs) {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 10000; // 10 second timeout (reduced from 15s)
+            fetchReq.timeout = 7000;
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, { staticNetwork: true });
 
-            // Race getBlockNumber against an 8s timeout
+            // Race getBlockNumber against a 5s timeout
             const block = await Promise.race([
                 provider.getBlockNumber(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
             ]);
 
             console.log(`[Blockchain] ✅ Connected to RPC: ${rpc} (Block: ${block})`);
+            if (blockchainService) blockchainService.lastGoodRpc = rpc;
             return provider;
         } catch (e) {
             console.warn(`[Blockchain] ⚠️ RPC failed: ${rpc} — ${e.message}`);
@@ -53,8 +58,7 @@ async function createProvider() {
     console.warn('[Blockchain] ❌ All RPCs failed, using first as fallback');
     const fallbackReq = new FetchRequest(RPC_ENDPOINTS[0]);
     fallbackReq.timeout = 15000;
-    const networkFallback = ethers.Network.from(5042002);
-    return new ethers.JsonRpcProvider(fallbackReq, networkFallback, { staticNetwork: true });
+    return new ethers.JsonRpcProvider(fallbackReq, ethers.Network.from(5042002), { staticNetwork: true });
 }
 
 class BlockchainService {
@@ -64,6 +68,7 @@ class BlockchainService {
         this.wallet = null;
         this.contract = null;
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
+        this.lastGoodRpc = null; // Sticky RPC for keeper
 
         // ===== HIGH-SPEED NONCE QUEUE =====
         // Instead of a simple lock, we use a queue-based approach
@@ -98,7 +103,7 @@ class BlockchainService {
     }
 
     async _init() {
-        this.provider = await createProvider();
+        this.provider = await createProvider(this);
         this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
         this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
         this.providerReady = true;
@@ -267,27 +272,17 @@ class BlockchainService {
             const tx = await this.contract.settleBet(betId, ethers.parseUnits(exitPrice.toString(), 0), {
                 nonce: nonce,
                 gasPrice: gasPrice,
-                gasLimit: 500000n // Reduced from 1M — settlements don't need that much
+                gasLimit: 400000n,
+                type: 0, // Force Legacy
+                chainId: 5042002
             });
 
             console.log(`[Blockchain] 🚀 TX Sent: ${tx.hash} for bet ${betId}`);
 
-            // Track in background — DON'T await confirmation here
+            // Track in background via Map — tracker handles receipt
             this.pendingTxs.set(tx.hash, { betId: betId.toString(), sentAt: Date.now() });
 
-            // Start background wait but don't block the caller
-            tx.wait(1).then(receipt => {
-                if (receipt && receipt.status === 1) {
-                    console.log(`[Blockchain] ✅ Confirmed: ${receipt.hash} (Status: ${receipt.status})`);
-                    this.confirmedTxs.add(betId.toString());
-                }
-                this.pendingTxs.delete(tx.hash);
-            }).catch(e => {
-                console.warn(`[Blockchain] ⚠️ Confirmation error for ${tx.hash}: ${e.message}`);
-                this.pendingTxs.delete(tx.hash);
-            });
-
-            // Return immediately with the TX hash — settlement is in-flight
+            // Return immediately with the TX hash — NO WAIT
             return { hash: tx.hash, status: 1 };
 
         } catch (e) {
