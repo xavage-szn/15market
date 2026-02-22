@@ -641,10 +641,9 @@ export default function UserApp() {
       const amountWei = parseUnits(parseFloat(amount).toFixed(18), 18);
       let txHash;
 
-      // CORE: No optimistic updates. Wait for BROADCAST success.
       if (sessionMode) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
           method: 'POST',
@@ -672,10 +671,21 @@ export default function UserApp() {
         });
       }
 
-      // ONLY AFTER SUCCESSFUL DEBIT (Broadcast accepted)
-      console.log(`📉 [SUCCESS] Stake ${amtNum} debited. Hash: ${txHash}`);
+      // WAIT FOR CONFIRMATION (Ensure Stake is Debited)
+      notify("Confirming Stake...", "pending");
+      console.log(`⏳ [SYNC] Waiting for stake deduction... Hash: ${txHash}`);
 
-      // Update balance
+      await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        confirmations: 1,
+        timeout: 45000
+      });
+
+      // ONLY AFTER SUCCESSFUL DEBIT (Confirmed on-chain)
+      console.log(`📉 [SUCCESS] Stake ${amtNum} verified as debited.`);
+      lastOptimisticActionTime.current = Date.now();
+
+      // Update local balance state immediately
       if (sessionMode) setSessionBalance(prev => prev - amtNum);
       else setBalance(prev => prev - amtNum);
 
@@ -684,7 +694,7 @@ export default function UserApp() {
         direction: (dirVal === 1 ? "UP" : "DOWN"),
         amount: Number(amount).toFixed(3),
         entryPrice: activePrice.toFixed(3),
-        timestamp: now,
+        timestamp: Date.now(),
         status: "PENDING",
         tx: txHash,
         nonce: tradeId,
@@ -692,8 +702,8 @@ export default function UserApp() {
         owner: activeUserAddr,
         duration,
         network: "arc",
-        startTime: now,
-        expiryMs: expiryMs,
+        startTime: Date.now(),
+        expiryMs: Date.now() + (duration * 1000),
         symbol: activeMarket?.symbol || 'ETH',
         isSessionTrade: sessionMode,
       };
