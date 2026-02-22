@@ -5,25 +5,42 @@ class RedisService {
     constructor() {
         this.client = new Redis(process.env.REDIS_URL, {
             retryStrategy: (times) => Math.min(times * 50, 2000),
-            maxRetriesPerRequest: 3
+            maxRetriesPerRequest: 3,
+            // ===== CONNECTION POOL OPTIMIZATION =====
+            enableReadyCheck: false,      // Skip CLUSTER INFO check
+            lazyConnect: false,           // Connect immediately
+            keepAlive: 10000,             // TCP keepalive every 10s
         });
 
         // Use a local Map for lightning-fast reads
         this.memoryCache = new Map();
         this.isInitialized = false;
 
+        // ===== USER INDEX: Map user address -> Set of trade IDs =====
+        // This avoids scanning ALL trades when querying per-user
+        this.userTradeIndex = new Map();
+
+        // ===== WRITE BATCHING =====
+        // Queue writes and flush in batches for lower Redis round-trips
+        this.writeQueue = [];
+        this.isFlushingQueue = false;
+        this.FLUSH_INTERVAL = 100; // Flush every 100ms
+
         this.client.on('error', (err) => console.error('[Redis] ⚠️ Connection Error:', err.message));
         this.client.on('connect', () => {
             console.log('[Redis] ✅ Connected');
             this.syncFromRedis();
         });
+
+        // Start batch flush interval
+        setInterval(() => this._flushWriteQueue(), this.FLUSH_INTERVAL);
     }
 
     async syncFromRedis() {
         try {
             console.log('[Redis] 🔃 Syncing from Redis...');
-            // Clear RAM cache to ensure consistency with Redis state
             this.memoryCache.clear();
+            this.userTradeIndex.clear();
 
             // Sync active trades
             const keys = await this.client.keys('trade:*');
@@ -33,7 +50,17 @@ class RedisService {
                     if (t) {
                         try {
                             const trade = JSON.parse(t);
-                            this.memoryCache.set(keys[i].replace('trade:', ''), trade);
+                            const tradeId = keys[i].replace('trade:', '');
+                            this.memoryCache.set(tradeId, trade);
+
+                            // Build user index
+                            const userAddr = trade.user?.toLowerCase();
+                            if (userAddr) {
+                                if (!this.userTradeIndex.has(userAddr)) {
+                                    this.userTradeIndex.set(userAddr, new Set());
+                                }
+                                this.userTradeIndex.get(userAddr).add(tradeId);
+                            }
                         } catch (e) { }
                     }
                 });
@@ -44,7 +71,7 @@ class RedisService {
             this.historyCache = historyData ? JSON.parse(historyData) : [];
 
             this.isInitialized = true;
-            console.log(`[Redis] 🏎️ Cache Synced: ${this.memoryCache.size} active trades, ${this.historyCache.length} history items in RAM`);
+            console.log(`[Redis] 🏎️ Cache Synced: ${this.memoryCache.size} active trades, ${this.historyCache.length} history items`);
         } catch (e) {
             console.warn('[Redis] Sync failed, using memory only:', e.message);
             this.historyCache = this.historyCache || [];
@@ -52,63 +79,123 @@ class RedisService {
         }
     }
 
-    async setTrade(betId, tradeData) {
-        // Update RAM immediately (Speed!)
-        this.memoryCache.set(betId.toString(), tradeData);
-        // Persist to Redis (Safety)
+    // ===== BATCH WRITE QUEUE =====
+    _queueWrite(key, value) {
+        this.writeQueue.push({ type: 'set', key, value });
+    }
+
+    _queueDelete(key) {
+        this.writeQueue.push({ type: 'del', key });
+    }
+
+    async _flushWriteQueue() {
+        if (this.isFlushingQueue || this.writeQueue.length === 0) return;
+        this.isFlushingQueue = true;
+
         try {
-            await this.client.set(`trade:${betId}`, JSON.stringify(tradeData));
-        } catch (err) {
-            console.error(`[Redis] ❌ Failed to set trade ${betId}:`, err.message);
+            // Drain the queue
+            const batch = this.writeQueue.splice(0, this.writeQueue.length);
+            if (batch.length === 0) return;
+
+            // Use Redis pipeline for atomic batched writes
+            const pipeline = this.client.pipeline();
+            for (const op of batch) {
+                if (op.type === 'set') {
+                    pipeline.set(op.key, op.value);
+                } else if (op.type === 'del') {
+                    pipeline.del(op.key);
+                }
+            }
+            await pipeline.exec();
+        } catch (e) {
+            console.error('[Redis] ❌ Batch write failed:', e.message);
+        } finally {
+            this.isFlushingQueue = false;
         }
     }
 
+    async setTrade(betId, tradeData) {
+        const id = betId.toString();
+        // Update RAM immediately
+        this.memoryCache.set(id, tradeData);
+
+        // Update user index
+        const userAddr = tradeData.user?.toLowerCase();
+        if (userAddr) {
+            if (!this.userTradeIndex.has(userAddr)) {
+                this.userTradeIndex.set(userAddr, new Set());
+            }
+            this.userTradeIndex.get(userAddr).add(id);
+        }
+
+        // Queue Redis write (batched)
+        this._queueWrite(`trade:${id}`, JSON.stringify(tradeData));
+    }
+
     async getTrade(betId) {
-        // Serve from RAM (Instant)
         return this.memoryCache.get(betId.toString()) || null;
     }
 
     async delTrade(betId) {
-        this.memoryCache.delete(betId.toString());
-        this.client.del(`trade:${betId}`).catch(() => { });
+        const id = betId.toString();
+        const trade = this.memoryCache.get(id);
+
+        // Remove from user index
+        if (trade) {
+            const userAddr = trade.user?.toLowerCase();
+            if (userAddr && this.userTradeIndex.has(userAddr)) {
+                this.userTradeIndex.get(userAddr).delete(id);
+            }
+        }
+
+        this.memoryCache.delete(id);
+        this._queueDelete(`trade:${id}`);
     }
 
     async getAllActiveTrades() {
-        // Return from RAM (0ms latency)
         return Array.from(this.memoryCache.values());
+    }
+
+    // ===== FAST: Get trades for specific user from index =====
+    async getActiveTradesForUser(address) {
+        const addr = address.toLowerCase();
+        const tradeIds = this.userTradeIndex.get(addr);
+        if (!tradeIds || tradeIds.size === 0) return [];
+
+        const trades = [];
+        for (const id of tradeIds) {
+            const trade = this.memoryCache.get(id);
+            if (trade) trades.push(trade);
+        }
+        return trades;
     }
 
     async pushHistory(trade) {
         if (!this.historyCache) this.historyCache = [];
 
-        // Normalize 'user' to 'owner' for frontend compatibility
         const normalizedTrade = {
             ...trade,
             owner: trade.owner || trade.user,
             timestamp: trade.timestamp || Date.now()
         };
 
-        // 🛑 DEDUP: Remove existing entry with same ID before adding
         const tradeId = normalizedTrade.id || normalizedTrade.tx;
         if (tradeId) {
             this.historyCache = this.historyCache.filter(t => (t.id || t.tx) !== tradeId);
         }
 
-        // Add to the beginning of the list
         this.historyCache.unshift(normalizedTrade);
 
-        // Keep only top 100 items
         if (this.historyCache.length > 100) {
             this.historyCache = this.historyCache.slice(0, 100);
         }
 
-        // Persist to Redis
-        this.client.set('global_history', JSON.stringify(this.historyCache)).catch(() => { });
+        // Queue history write (batched)
+        this._queueWrite('global_history', JSON.stringify(this.historyCache));
     }
 
     async getHistory() {
         if (!this.historyCache || this.historyCache.length === 0) {
-            // Seed with realistic small-stake trades for the scroller
             return [
                 { id: 'seed1', owner: '0x4c8C0fb7333E3ab1594e69c0F5F751150502C28C', amount: '2.50', direction: 'UP', symbol: 'BTC', status: 'WON', timestamp: Date.now() - 300000 },
                 { id: 'seed2', owner: '0xE920de29a9E2285Ead0c443Fde3be493c470fa5c', amount: '0.10', direction: 'DOWN', symbol: 'ETH', status: 'LOST', timestamp: Date.now() - 600000 },
@@ -123,14 +210,12 @@ class RedisService {
     async saveProfile(address, profileData) {
         try {
             const addr = address.toLowerCase();
-            await this.client.set(`profile:${addr}`, JSON.stringify(profileData));
+            this._queueWrite(`profile:${addr}`, JSON.stringify(profileData));
 
-            // If this profile has a session wallet, link it back to the main address
-            // This allows the keeper to update the main profile when a session trade settles
             if (profileData.sessionWalletAddress) {
                 const sessionAddr = profileData.sessionWalletAddress.toLowerCase();
                 if (sessionAddr !== addr) {
-                    await this.client.set(`session_to_main:${sessionAddr}`, addr);
+                    this._queueWrite(`session_to_main:${sessionAddr}`, addr);
                     console.log(`[Redis] 🔗 Linked session ${sessionAddr} to main ${addr}`);
                 }
             }
@@ -166,20 +251,16 @@ class RedisService {
             const data = await this.client.get(key);
             let history = data ? JSON.parse(data) : [];
 
-            // De-duplicate: if trade.id exists, update it or remove old one
             const tradeId = trade.id || trade.tx;
             if (tradeId) {
-                // Filter out the old version if it exists
                 history = history.filter(t => (t.id || t.tx) !== tradeId);
             }
 
-            // Add to front (most recent)
             history.unshift(trade);
 
-            // Keep last 50
             if (history.length > 50) history = history.slice(0, 50);
 
-            await this.client.set(key, JSON.stringify(history));
+            this._queueWrite(key, JSON.stringify(history));
         } catch (e) {
             console.error(`[Redis] ❌ Failed to push user history for ${address}:`, e.message);
         }
@@ -194,7 +275,7 @@ class RedisService {
             txs.unshift(tx);
             if (txs.length > 50) txs = txs.slice(0, 50);
 
-            await this.client.set(key, JSON.stringify(txs));
+            this._queueWrite(key, JSON.stringify(txs));
         } catch (e) {
             console.error(`[Redis] ❌ Failed to push user tx for ${address}:`, e.message);
         }
@@ -205,7 +286,6 @@ class RedisService {
             const addr = address.toLowerCase();
             const profile = await this.getProfile(addr);
 
-            // Collect all relevant addresses (main + session if exists)
             const addresses = [addr];
             if (profile && profile.sessionWalletAddress) {
                 const sessionAddr = profile.sessionWalletAddress.toLowerCase();
@@ -214,36 +294,37 @@ class RedisService {
                 }
             }
 
-            // Fetch history and txs for all linked addresses
-            const historyPromises = addresses.map(a => this.client.get(`history:${a}`));
-            const txsPromises = addresses.map(a => this.client.get(`txs:${a}`));
-
-            const [historyData, txsData] = await Promise.all([
-                Promise.all(historyPromises),
-                Promise.all(txsPromises)
-            ]);
+            // Fetch history and txs for all linked addresses using pipeline
+            const pipeline = this.client.pipeline();
+            for (const a of addresses) {
+                pipeline.get(`history:${a}`);
+                pipeline.get(`txs:${a}`);
+            }
+            const results = await pipeline.exec();
 
             let allHistory = [];
-            historyData.forEach(d => {
-                if (d) {
+            let allTxs = [];
+
+            for (let i = 0; i < addresses.length; i++) {
+                const historyResult = results[i * 2];
+                const txsResult = results[i * 2 + 1];
+
+                if (historyResult && historyResult[1]) {
                     try {
-                        const parsed = JSON.parse(d);
+                        const parsed = JSON.parse(historyResult[1]);
                         if (Array.isArray(parsed)) allHistory = allHistory.concat(parsed);
                     } catch (e) { }
                 }
-            });
 
-            let allTxs = [];
-            txsData.forEach(d => {
-                if (d) {
+                if (txsResult && txsResult[1]) {
                     try {
-                        const parsed = JSON.parse(d);
+                        const parsed = JSON.parse(txsResult[1]);
                         if (Array.isArray(parsed)) allTxs = allTxs.concat(parsed);
                     } catch (e) { }
                 }
-            });
+            }
 
-            // De-duplicate and sort by timestamp
+            // De-duplicate and sort
             const uniqueHistory = Array.from(new Map(allHistory.map(item => [item.id || item.tx, item])).values())
                 .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
                 .slice(0, 100);

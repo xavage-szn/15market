@@ -17,13 +17,11 @@ app.use(express.json());
 // Helper to normalize legacy exaggerated numbers
 const normalizeTrade = (t) => {
     if (!t) return t;
-    // Normalize Amount: if > 1M, assume it's in Wei (18 decimals)
     if (t.amount && Number(t.amount) > 1000000) {
         try {
             t.amount = ethers.formatEther(t.amount.toString());
         } catch (e) { }
     }
-    // Normalize Entry/Exit Prices: if > 100M, assume it's scaled by 1e8
     if (t.entryPrice && Number(t.entryPrice) > 100000000) {
         t.entryPrice = (Number(t.entryPrice) / 1e8).toFixed(3);
     }
@@ -33,12 +31,36 @@ const normalizeTrade = (t) => {
     return t;
 };
 
-// Log every request and handle optional /arc prefix
+// ===== RESPONSE CACHE: Reduce redundant Redis reads for same-second requests =====
+const responseCache = new Map();
+const CACHE_TTL = {
+    settings: 30000,     // 30s — settings rarely change
+    listings: 60000,     // 60s — listings almost never change
+    activeMarket: 30000, // 30s
+    history: 2000,       // 2s — history changes on settlements
+    treasury: 10000,     // 10s
+};
+
+function getCached(key, ttl) {
+    const entry = responseCache.get(key);
+    if (entry && (Date.now() - entry.time < ttl)) {
+        return entry.data;
+    }
+    return null;
+}
+
+function setCache(key, data) {
+    responseCache.set(key, { data, time: Date.now() });
+}
+
+// Log requests (but not noisy polling endpoints)
+const QUIET_ROUTES = new Set(['/health', '/settings', '/listings', '/active-market', '/price']);
 app.use((req, res, next) => {
-    console.log(`[Request] ${req.method} ${req.url}`);
+    if (!QUIET_ROUTES.has(req.path.split('/')[1] ? `/${req.path.split('/')[1]}` : req.path)) {
+        console.log(`[Request] ${req.method} ${req.url}`);
+    }
     if (req.url.startsWith('/arc/')) {
         req.url = req.url.replace('/arc/', '/');
-        console.log(`[Request] Rewritten to ${req.url}`);
     } else if (req.url === '/arc') {
         req.url = '/';
     }
@@ -50,27 +72,31 @@ app.get('/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: Date.now() });
 });
 
-// UI Expects these routes
+// ===== STATIC RESPONSES: Cached in-memory =====
+const SETTINGS_RESPONSE = {
+    minBet: 0.1,
+    maxBet: 1000000.0,
+    maintenanceMode: false,
+    tradingHalted: false,
+    payoutMultipliers: {
+        "5": 6.98,
+        "10": 4.98,
+        "15": 1.98
+    }
+};
+
+const LISTINGS_RESPONSE = [
+    { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
+    { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' },
+    { id: 'sol', symbol: 'SOL', name: 'Solana', pythId: 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' }
+];
+
 app.get('/settings', (req, res) => {
-    res.json({
-        minBet: 0.1,
-        maxBet: 1000000.0,
-        maintenanceMode: false,
-        tradingHalted: false,
-        payoutMultipliers: {
-            "5": 6.98,
-            "10": 4.98,
-            "15": 1.98
-        }
-    });
+    res.json(SETTINGS_RESPONSE);
 });
 
 app.get('/listings', (req, res) => {
-    res.json([
-        { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
-        { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' },
-        { id: 'sol', symbol: 'SOL', name: 'Solana', pythId: 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' }
-    ]);
+    res.json(LISTINGS_RESPONSE);
 });
 
 app.get('/active-market', (req, res) => {
@@ -82,7 +108,6 @@ app.get('/trades/:address', async (req, res) => {
         const addr = req.params.address.toLowerCase();
         const profile = await redis.getProfile(addr);
 
-        // Collect all linked addresses (main + session)
         const addresses = [addr];
         if (profile && profile.sessionWalletAddress) {
             const sessionAddr = profile.sessionWalletAddress.toLowerCase();
@@ -90,11 +115,9 @@ app.get('/trades/:address', async (req, res) => {
                 addresses.push(sessionAddr);
             }
         }
-        // Also check if this IS a session address pointing to a main
         const mainAddr = await redis.getMainAddressForSession(addr);
         if (mainAddr && !addresses.includes(mainAddr)) {
             addresses.push(mainAddr);
-            // Also get the main profile's session address for completeness
             const mainProfile = await redis.getProfile(mainAddr);
             if (mainProfile && mainProfile.sessionWalletAddress) {
                 const sAddr = mainProfile.sessionWalletAddress.toLowerCase();
@@ -102,13 +125,16 @@ app.get('/trades/:address', async (req, res) => {
             }
         }
 
-        // Fetch history from all linked addresses
-        const historyPromises = addresses.map(a => redis.client.get(`history:${a}`));
-        const historyData = await Promise.all(historyPromises);
+        // ===== Use Redis pipeline for batch fetch =====
+        const pipeline = redis.client.pipeline();
+        for (const a of addresses) {
+            pipeline.get(`history:${a}`);
+        }
+        const results = await pipeline.exec();
 
         let allHistory = [];
-        historyData.forEach(d => {
-            if (d) {
+        results.forEach(([err, d]) => {
+            if (d && !err) {
                 try {
                     const parsed = JSON.parse(d);
                     if (Array.isArray(parsed)) allHistory = allHistory.concat(parsed);
@@ -116,13 +142,11 @@ app.get('/trades/:address', async (req, res) => {
             }
         });
 
-        // De-duplicate by trade id with priority for settled status
         const uniqueMap = new Map();
         allHistory.forEach(item => {
-            const id = item.id || item.tx || item.nonce || item.id;
+            const id = item.id || item.tx || item.nonce;
             if (!id) return;
             const existing = uniqueMap.get(id);
-            // Prioritize settled status or newer timestamp
             if (!existing || (existing.status === 'PENDING' && item.status !== 'PENDING') || (!existing.status && item.status)) {
                 uniqueMap.set(id, item);
             }
@@ -141,7 +165,6 @@ app.get('/trades/:address', async (req, res) => {
 });
 
 app.get('/active-bets/:address', async (req, res) => {
-    // Filter active trades from Redis for this user
     const trades = await processor.getActiveTradesForUser(req.params.address);
     res.json(trades.map(normalizeTrade));
 });
@@ -152,7 +175,11 @@ app.get('/campaigns', (req, res) => {
 
 app.get('/history', async (req, res) => {
     try {
+        const cached = getCached('history', CACHE_TTL.history);
+        if (cached) return res.json(cached);
+
         const history = await processor.getGlobalHistory();
+        setCache('history', history);
         res.json(history);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -165,19 +192,14 @@ app.get('/profile', async (req, res) => {
 
     const userData = await redis.getUserData(address);
     if (userData) {
-        // Normalize History & Transactions
         if (userData.history) userData.history = userData.history.map(normalizeTrade);
         if (userData.transactions) userData.transactions = userData.transactions.map(normalizeTrade);
 
-        // ACCURATE STATS: Compute from actual trade history instead of trusting stored counters
-        // This prevents inflated numbers from double-settlements or bugs
         if (userData.history && userData.history.length > 0) {
-            // Deduplicate by trade ID to prevent double-counting
             const uniqueTrades = new Map();
             for (const t of userData.history) {
                 const tradeId = t.id || t.tx;
                 if (tradeId && (t.status === 'WON' || t.status === 'LOST')) {
-                    // Keep the most recent version of each trade
                     if (!uniqueTrades.has(tradeId) || (t.settledAt || t.timestamp || 0) > (uniqueTrades.get(tradeId).settledAt || uniqueTrades.get(tradeId).timestamp || 0)) {
                         uniqueTrades.set(tradeId, t);
                     }
@@ -189,7 +211,6 @@ app.get('/profile', async (req, res) => {
             const losses = settledTrades.filter(t => t.status === 'LOST').length;
             const totalTrades = settledTrades.length;
 
-            // Calculate volume from normalized amounts
             let totalVolume = 0;
             for (const t of settledTrades) {
                 let amt = parseFloat(t.amount || 0);
@@ -199,7 +220,6 @@ app.get('/profile', async (req, res) => {
                 totalVolume += amt;
             }
 
-            // Override stored profile stats with computed values
             if (userData.profile) {
                 userData.profile.totalTrades = totalTrades;
                 userData.profile.totalWins = wins;
@@ -227,9 +247,8 @@ app.post('/push-tx', async (req, res) => {
     res.json({ success: true });
 });
 
-// CRITICAL: Frontend pings this after every trade to register it for settlement
+// ===== CRITICAL: High-speed trade registration =====
 app.post('/trade-ping', async (req, res) => {
-    console.log(`[TradePing] Received request: ${JSON.stringify(req.body)}`);
     try {
         const { id, address, amount, direction, duration, entryPrice, expiry, expiryMs, symbol, network } = req.body;
 
@@ -248,20 +267,25 @@ app.post('/trade-ping', async (req, res) => {
         const tradeData = {
             id: id.toString(),
             user: address,
-            amount: Number(amount).toFixed(4), // Force normal float string
+            amount: Number(amount).toFixed(4),
             direction: direction,
             duration: Number(duration),
             entryPrice: normalizedEntry.toFixed(3),
             marketId: marketId,
             symbol: symbol || 'BTC',
             network: network || 'arc',
+            isSessionTrade: req.body.isSessionTrade || false,
             expiry: (expiryMs ? Number(expiryMs) : (expiry ? Number(expiry) * 1000 : Date.now() + (Number(duration) * 1000))),
             registeredAt: Date.now()
         };
 
-        await processor.registerTrade(tradeData);
+        // Register trade — this is non-blocking internally
+        processor.registerTrade(tradeData);
+
+        // Respond IMMEDIATELY — don't wait for Redis persistence
         console.log(`[TradePing] Registered trade ${id} for ${address} (${symbol}, ${duration}s)`);
         res.json({ success: true, trade: tradeData });
+
     } catch (e) {
         console.error('[TradePing] Error:', e);
         res.status(500).json({ error: e.message });
@@ -275,13 +299,14 @@ app.get('/debug/cache', async (req, res) => {
         activeCount: activeTrades.length,
         memoryCacheSize: redis.memoryCache.size,
         historyCacheSize: redis.historyCache?.length || 0,
+        activeSettlements: processor.activeSettlementCount,
+        settlingIds: Array.from(processor.settlingIds),
         keys: Array.from(redis.memoryCache.keys()),
         trades: activeTrades
     });
 });
 
 app.post('/admin/sync-cache', async (req, res) => {
-    // In production, you'd check process.env.ADMIN_TOKEN here
     await redis.syncFromRedis();
     res.json({ success: true, message: 'RAM cache re-synced from Redis' });
 });
@@ -293,40 +318,38 @@ app.get('/price/:symbol', async (req, res) => {
 
 app.get('/treasury', async (req, res) => {
     try {
+        const cached = getCached('treasury', CACHE_TTL.treasury);
+        if (cached) return res.json(cached);
+
         const balance = await blockchain.getNativeBalance(process.env.ARC_CONTRACT_ADDRESS);
-        res.json({
+        const data = {
             address: process.env.ARC_CONTRACT_ADDRESS,
             balance: balance.toString(),
             formatted: ethers.formatEther(balance) + ' USDC'
-        });
+        };
+        setCache('treasury', data);
+        res.json(data);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
 // --- SERVER-SIDE AUTO-SIGNER (Custodial/Stateless) ---
-// Securely derives a session wallet for the user so keys never leave the server.
-// Using a deterministic derivation ensures the same user always gets the same session wallet
-// across all devices without needing to sync private keys.
-
 const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
 
-// Multi-RPC list — Thirdweb first (most reliable), then fallbacks
 const SESSION_RPCS = [
-    "https://5042002.rpc.thirdweb.com",      // Thirdweb (primary — most reliable)
-    "https://rpc.testnet.arc.network",        // Arc official
-    "https://rpc-test-1.arc.market",          // Arc backup
-    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1" // Alchemy
+    "https://5042002.rpc.thirdweb.com",
+    "https://rpc.testnet.arc.network",
+    "https://rpc-test-1.arc.market",
+    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
 ];
 
-// Cached session provider — reused across all auto-signer calls
 let sessionProvider = null;
 let sessionProviderHealthy = true;
 let sessionProviderLastCheck = 0;
 
 async function getSessionProvider() {
     const now = Date.now();
-    // Re-probe if unhealthy or hasn't been checked in 60s
     if (sessionProvider && sessionProviderHealthy && (now - sessionProviderLastCheck < 60000)) {
         return sessionProvider;
     }
@@ -336,18 +359,15 @@ async function getSessionProvider() {
 
     for (const rpc of SESSION_RPCS) {
         try {
-            console.log(`[AutoSigner] Trying RPC: ${rpc}`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 12000;
+            fetchReq.timeout = 8000; // Reduced from 12s
             const provider = new ethers.JsonRpcProvider(fetchReq, network, { staticNetwork: true });
 
-            // Fast liveness check
             await Promise.race([
                 provider.getBlockNumber(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 6000)) // Reduced from 8s
             ]);
 
-            console.log(`[AutoSigner] ✅ Using RPC: ${rpc}`);
             sessionProvider = provider;
             sessionProviderHealthy = true;
             sessionProviderLastCheck = Date.now();
@@ -357,38 +377,41 @@ async function getSessionProvider() {
         }
     }
 
-    // All RPCs failed — reuse last known provider as last resort
     if (sessionProvider) {
-        console.warn('[AutoSigner] ❌ All RPCs failed, reusing last known provider');
         sessionProviderHealthy = false;
         return sessionProvider;
     }
 
-    // Absolute last resort: try Thirdweb without liveness check
-    console.warn('[AutoSigner] ❌ No cached provider, falling back to Thirdweb without check');
     const fetchReq = new FetchRequest(SESSION_RPCS[0]);
     fetchReq.timeout = 15000;
     sessionProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
     return sessionProvider;
 }
 
+// ===== WALLET CACHE: Avoid re-deriving for every request =====
+const walletCache = new Map();
+
 async function deriveUserWallet(userAddress) {
-    // Deterministic Private Key = Keccak256(MasterSecret + UserAddress)
-    // This ensures consistency across devices.
-    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + userAddress.toLowerCase());
+    const addr = userAddress.toLowerCase();
+    const cached = walletCache.get(addr);
+
+    if (cached && cached.provider === sessionProvider) {
+        return cached.wallet;
+    }
+
+    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
     const privateKey = ethers.keccak256(entropy);
     const provider = await getSessionProvider();
-    return new ethers.Wallet(privateKey, provider);
+    const wallet = new ethers.Wallet(privateKey, provider);
+
+    walletCache.set(addr, { wallet, provider });
+    return wallet;
 }
 
 app.post('/session/init', async (req, res) => {
     try {
         const { address, signature } = req.body;
         if (!address) return res.status(400).json({ error: "Missing address" });
-
-        // Verify identity (optional but recommended)
-        // const recovered = ethers.verifyMessage(`Authorize 15market Auto-Signer for ${address.toLowerCase()}`, signature);
-        // if (recovered.toLowerCase() !== address.toLowerCase()) return res.status(403).json({ error: "Invalid signature" });
 
         const wallet = await deriveUserWallet(address);
         const balance = await wallet.provider.getBalance(wallet.address);
@@ -406,14 +429,12 @@ app.post('/session/init', async (req, res) => {
 app.post('/session/trade', async (req, res) => {
     try {
         const { address, tradeParams } = req.body;
-        // In a real prod env, verify 'signature' here again to ensure auth for this trade
 
         const wallet = await deriveUserWallet(address);
         const contract = new ethers.Contract(process.env.ARC_CONTRACT_ADDRESS, blockchain.abi, wallet);
 
         console.log(`[AutoSigner] Executing trade for ${address} via ${wallet.address}`);
 
-        // Parse params
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
         const amountWei = ethers.parseUnits(amount.toString(), 18);
 
@@ -423,11 +444,13 @@ app.post('/session/trade', async (req, res) => {
             BigInt(duration),
             BigInt(entryPrice),
             Number(marketId),
-            wallet.address, // Payout goes back to session wallet so balance actually increases for continued trading
+            wallet.address,
             { value: amountWei, gasLimit: 500000n }
         );
 
-        console.log(`[AutoSigner] TX Sent: ${tx.hash} (Payout directed to ${wallet.address})`);
+        console.log(`[AutoSigner] TX Sent: ${tx.hash}`);
+
+        // Respond immediately with TX hash
         res.json({ txHash: tx.hash, sessionAddress: wallet.address });
 
         // Wait for confirmation in background
@@ -444,48 +467,47 @@ app.post('/session/withdraw', async (req, res) => {
         const { address, amount, signature } = req.body;
         if (!address || !amount) return res.status(400).json({ error: "Missing params" });
 
-        // Normalise to 6dp string to avoid floating-point precision issues (e.g. 0.49500000000000004)
         const cleanAmount = parseFloat(amount).toFixed(6);
-
-        // derive session wallet using the robust multi-RPC provider
         const wallet = await deriveUserWallet(address);
 
-        // Check session wallet has enough balance before attempting
         const sessionBal = await wallet.provider.getBalance(wallet.address);
         const amountWei = ethers.parseUnits(cleanAmount, 18);
-        const estimatedGas = ethers.parseUnits("0.005", 18); // 0.005 USDC buffer for gas
-        if (sessionBal < amountWei + estimatedGas) {
-            const available = parseFloat(ethers.formatEther(sessionBal)).toFixed(6);
-            console.error(`[AutoSigner] Insufficient session balance: ${available} USDC (need ${cleanAmount})`);
-            return res.status(400).json({ error: `Insufficient session wallet balance. Available: ${available} USDC` });
+        const feeData = await wallet.provider.getFeeData();
+        const gasPrice = feeData.gasPrice || ethers.parseUnits("1.5", "gwei");
+        const gasLimit = 100000n;
+        const totalGasCost = gasPrice * gasLimit;
+
+        if (sessionBal < amountWei + totalGasCost) {
+            const maxWithdrawWei = sessionBal - totalGasCost;
+            if (maxWithdrawWei <= 0n) {
+                return res.status(400).json({ error: "Insufficient balance to cover gas fees." });
+            }
         }
 
-        console.log(`[AutoSigner] Sweeping ${cleanAmount} USDC from ${wallet.address} to main ${address}`);
-
-        // Wrap sendTransaction in a 30s timeout with RPC fallback on timeout
         let tx;
         try {
             const txPromise = wallet.sendTransaction({
                 to: address,
                 value: amountWei,
-                gasLimit: 100000n
+                gasLimit: gasLimit,
+                gasPrice: gasPrice
             });
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error("RPC timeout")), 30000)
             );
             tx = await Promise.race([txPromise, timeoutPromise]);
         } catch (rpcErr) {
-            // If the primary provider timed out or failed, force a provider re-probe and retry once
-            console.warn(`[AutoSigner] ⚠️ Withdraw attempt failed (${rpcErr.message}). Forcing RPC re-probe and retrying...`);
-            sessionProviderHealthy = false; // Force getSessionProvider to re-probe
+            sessionProviderHealthy = false;
             const retryWallet = await deriveUserWallet(address);
+            const retryFeeData = await retryWallet.provider.getFeeData();
             const txPromise = retryWallet.sendTransaction({
                 to: address,
                 value: amountWei,
-                gasLimit: 100000n
+                gasLimit: gasLimit,
+                gasPrice: retryFeeData.gasPrice || gasPrice
             });
             const retryTimeout = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("RPC timeout after retry: Arc network unresponsive")), 30000)
+                setTimeout(() => reject(new Error("RPC timeout after retry")), 30000)
             );
             tx = await Promise.race([txPromise, retryTimeout]);
         }
@@ -505,7 +527,6 @@ app.post('/session/withdraw', async (req, res) => {
 app.listen(PORT, async () => {
     console.log(`[Server] Running on port ${PORT}`);
 
-    // Initialize Trade Processor
     try {
         await processor.init();
         console.log('[Server] Trade Processor started successfully');

@@ -194,11 +194,11 @@ export default function UserApp() {
     if (!evmSessionWallet) return;
 
     // COOLDOWN: Don't overwrite optimistic balance with stale on-chain data
-    // during the 12s window after a settlement credit was applied.
+    // during the 25s window after a settlement credit was applied.
     // This prevents the "flash" where winnings appear then vanish before on-chain confirms.
     const msSinceLastCredit = Date.now() - lastSettlementCreditTime.current;
-    if (!force && msSinceLastCredit < 12000) {
-      console.log(`⏳ [SESSION_BAL] Skipping poll — settlement cooldown active (${Math.round(msSinceLastCredit / 1000)}s/12s)`);
+    if (!force && msSinceLastCredit < 25000) {
+      console.log(`⏳ [SESSION_BAL] Skipping poll — settlement cooldown active (${Math.round(msSinceLastCredit / 1000)}s/25s)`);
       return;
     }
 
@@ -351,11 +351,11 @@ export default function UserApp() {
     } catch (e) { } finally { setProfileChecked(true); }
   }, [address, reconcileTrades]);
 
-  // 3. Aggressive Logic
+  // 3. Aggressive Logic (Optimized: fewer redundant refreshes)
   const aggressiveRefresh = useCallback(() => {
     triggerGlobalRefresh(true);
-    [100, 500, 1500, 3000, 6000, 12000].forEach(delay => setTimeout(() => triggerGlobalRefresh(true), delay));
-    [2000, 8000].forEach(delay => setTimeout(fetchMyProfile, delay));
+    [500, 2000, 5000].forEach(delay => setTimeout(() => triggerGlobalRefresh(true), delay));
+    [1500, 4000].forEach(delay => setTimeout(fetchMyProfile, delay));
   }, [triggerGlobalRefresh, fetchMyProfile]);
 
   // 4. Derived State
@@ -374,13 +374,13 @@ export default function UserApp() {
   }, [address, triggerGlobalRefresh]);
 
 
-  // Periodic Universal Sync (Fix for Cross-Device Inconsistency)
+  // Periodic Universal Sync (Optimized: 5s instead of 2.5s to reduce load)
   useEffect(() => {
     if (address) {
       const interval = setInterval(() => {
         triggerGlobalRefresh(false);
-        fetchMyProfile(); // Also refresh profile to catch session address updates from other devices
-      }, 2500); // 2.5s for faster cross-device sync
+        fetchMyProfile();
+      }, 5000); // 5s — sufficient for cross-device sync
       return () => clearInterval(interval);
     }
   }, [address, triggerGlobalRefresh, fetchMyProfile]);
@@ -735,6 +735,7 @@ export default function UserApp() {
           entryPrice: activePrice.toFixed(3),
           symbol: activeMarket?.symbol || 'ETH',
           network: 'arc',
+          isSessionTrade: sessionMode, // Add this to the ping
           expiryMs: expiryMs
         })
       }).catch(e => console.warn("Trade ping failed:", e));
@@ -765,7 +766,7 @@ export default function UserApp() {
     } catch (e) { return { minBet: 1.0, maxBet: 1000000.0, maintenanceMode: false, tradingHalted: false }; }
   });
 
-  // Sync settings across tabs and periodically
+  // Sync settings across tabs (Optimized: 5s instead of 1s, relies on storage events for real-time)
   useEffect(() => {
     const syncSettings = () => {
       try {
@@ -774,40 +775,31 @@ export default function UserApp() {
       } catch (e) { }
     };
     window.addEventListener('storage', syncSettings);
-    const interval = setInterval(syncSettings, 1000);
+    const interval = setInterval(syncSettings, 5000);
     return () => {
       window.removeEventListener('storage', syncSettings);
       clearInterval(interval);
     };
   }, []);
 
-  // Sync settings with Backend (Keeper)
+  // Sync settings with Backend (Keeper) — Merged into syncMarket effect to avoid duplicate polling
+  // Settings are now fetched inside the syncMarket effect below (every 5s) which already fetches /settings
   useEffect(() => {
     const fetchRemoteSettings = async () => {
       try {
-        const primaryUrl = KEEPER_URL_ARC;
-        let res = await fetch(`${primaryUrl}/settings`);
-
+        const res = await fetch(`${KEEPER_URL_ARC}/settings`);
         if (res && res.ok) {
           const remoteSettings = await res.json();
-          console.log("📡 [SETTINGS_SYNC] Received remote settings:", remoteSettings);
-          // Update local state if different
           if (JSON.stringify(remoteSettings) !== JSON.stringify(platformSettings)) {
             setPlatformSettings(remoteSettings);
             localStorage.setItem('15market_citadel_settings', JSON.stringify(remoteSettings));
-            // Dispatch event for other components listening to storage
             window.dispatchEvent(new Event('storage'));
           }
-        } else {
-          console.warn(`⚠️ [SETTINGS_SYNC] Failed fetch from both keepers. Status: ${res?.status}`);
         }
-      } catch (e) {
-        console.warn("Settings sync failed:", e);
-      }
+      } catch (e) { /* Will retry next cycle */ }
     };
-
-    fetchRemoteSettings(); // Initial fetch
-    const settingsInterval = setInterval(fetchRemoteSettings, 2000); // Poll every 2s for instant updates
+    fetchRemoteSettings();
+    const settingsInterval = setInterval(fetchRemoteSettings, 15000); // 15s — settings rarely change
     return () => clearInterval(settingsInterval);
   }, []);
 
@@ -837,8 +829,8 @@ export default function UserApp() {
 
     fetchTradeHistory();
 
-    // Poll for updates every 5 seconds
-    const interval = setInterval(fetchTradeHistory, 5000);
+    // Poll for updates every 8 seconds (reduced from 5s — settlements take >5s anyway)
+    const interval = setInterval(fetchTradeHistory, 8000);
     return () => clearInterval(interval);
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
 
@@ -1557,7 +1549,11 @@ export default function UserApp() {
               setTimeout(() => {
                 updateEvmSessionBal(true);
                 refetchEvmBalance(true);
-              }, 8000);
+              }, 6000);
+              setTimeout(() => {
+                updateEvmSessionBal(true);
+                refetchEvmBalance(true);
+              }, 12000);
 
               lastTradeTimeRef.current = Date.now() - 7000;
               aggressiveRefresh();
@@ -1668,7 +1664,7 @@ export default function UserApp() {
         return;
       }
 
-      const gasBuffer = 0.005;
+      const gasBuffer = 0.01;
       const netAmt = amtNum - gasBuffer;
 
       if (netAmt <= 0) {
