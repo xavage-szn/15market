@@ -188,17 +188,16 @@ export default function UserApp() {
       const newBalNum = parseFloat(formatted);
       const currBalNum = parseFloat(evmBalance || "0");
 
-      // COOLDOWN: Don't overwrite winnings with stale on-chain data
-      // UNLESS the new balance is significantly higher (meaning payout arrived)
       const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
       const isHigher = newBalNum > (currBalNum + 0.0001); // Small buffer
 
-      if (!force && msSinceLastCredit < 60000 && !isHigher) {
+      // Guard: Only ignore STALE HIGHER balances during cooldown
+      if (!force && msSinceLastCredit < 60000 && isHigher) {
         return;
       }
 
       // Final re-check before applying to state (race condition guard)
-      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force && !isHigher) return;
+      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force && isHigher) return;
 
       if (formatted !== evmBalance) {
         setEvmBalance(formatted);
@@ -214,17 +213,16 @@ export default function UserApp() {
       const bal = parseFloat(formatUnits(balanceWei, 18));
       const currBal = sessionBalance;
 
-      // COOLDOWN: Don't overwrite optimistic balance with stale on-chain data
-      // UNLESS the new balance is significantly higher (meaning payout arrived)
       const msSinceLastCredit = Date.now() - lastOptimisticActionTime.current;
       const isHigher = bal > (currBal + 0.0001);
 
-      if (!force && msSinceLastCredit < 60000 && !isHigher) {
+      // Guard: Only ignore STALE HIGHER balances during cooldown
+      if (!force && msSinceLastCredit < 60000 && isHigher) {
         return;
       }
 
       // Final re-check before applying to state (race condition guard)
-      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force && !isHigher) return;
+      if (Date.now() - lastOptimisticActionTime.current < 60000 && !force && isHigher) return;
 
       if (bal !== sessionBalance) {
         setSessionBalance(bal);
@@ -499,7 +497,7 @@ export default function UserApp() {
 
     try {
       setIsExecuting(true);
-      notify("Authorizing Auto-Signer...", "info");
+      notify("Authorizing Auto-Signer...", "pending");
 
       // 1. Sign Auth Message (Identity Proof)
       // This signature can be verified by backend if needed, but the backend derives wallet 
@@ -557,7 +555,7 @@ export default function UserApp() {
   const toggleSessionMode = () => {
     if (sessionMode) {
       setSessionMode(false);
-      notify("Switched to Main Wallet", "info");
+      notify("Switched to Main Wallet", "success");
     } else {
       // Trying to ENABLE
       // If we have an address in state or local storage, use it. Otherwise init.
@@ -633,7 +631,7 @@ export default function UserApp() {
     const amtNum = parseFloat(amount);
 
     setIsExecuting(true);
-    notify("Processing Trade...", "info");
+    notify("Processing Trade...", "pending");
 
     try {
       if (!isConnected) {
@@ -1504,7 +1502,7 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
-      notify(`Confirm deposit of ${amtNum.toFixed(4)} USDC in your wallet...`, "info");
+      notify(`Confirm deposit of ${amtNum.toFixed(4)} USDC in your wallet...`, "pending");
 
       try {
         const hash = await walletClient.sendTransaction({
@@ -1581,7 +1579,7 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
-      notify("Sign to authorize withdrawal...", "info");
+      notify("Sign to authorize withdrawal...", "pending");
 
       // Require user to sign an authorization message.
       // Use walletClient (wagmi) first, fall back to window.ethereum for robustness
@@ -1608,7 +1606,7 @@ export default function UserApp() {
         return;
       }
 
-      notify("Processing sweep...", "info");
+      notify("Processing sweep...", "pending");
 
       // Fix floating-point precision before sending (e.g. 0.49500000000000004 → "0.495000")
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
@@ -1826,8 +1824,8 @@ export default function UserApp() {
                 <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
               </div>
 
-              {/* Terminal - 50/50 split on desktop and mobile */}
-              <div className="col-span-6 lg:col-span-6 flex flex-col">
+              {/* Terminal - Responsive split */}
+              <div className="col-span-12 lg:col-span-6 flex flex-col">
                 <TradeTerminal
                   activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
                   sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
@@ -1842,8 +1840,8 @@ export default function UserApp() {
                 />
               </div>
 
-              {/* Live Execution - Primary Active Bets Feed (Equal width and height with Terminal) */}
-              <div className="col-span-6 lg:col-span-6 flex flex-col">
+              {/* Live Execution - Primary Active Bets Feed */}
+              <div className="col-span-12 lg:col-span-6 flex flex-col">
                 <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
                   <LiveExecution
                     activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
@@ -1955,6 +1953,7 @@ export default function UserApp() {
           setSelectedTransaction(tx);
           setIsTransactionReceiptOpen(true);
         }}
+        notify={notify}
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
 

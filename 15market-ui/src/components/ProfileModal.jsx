@@ -4,7 +4,7 @@ import { KEEPER_URL_ARC } from '../constants';
 
 import { Zap, Shield } from 'lucide-react';
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt }) {
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -52,10 +52,11 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
     const handleSave = async () => {
         if (!address) {
-            alert("Please connect your wallet first.");
+            notify("Please connect your wallet first.", "error");
             return;
         }
         setIsSaving(true);
+        notify("Syncing Profile...", "pending");
         try {
             const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {
                 method: 'POST',
@@ -70,13 +71,13 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
             if (!res.ok) throw new Error("Failed to save profile on backend.");
 
-            alert("Profile synced successfully!");
+            notify("Profile synced successfully!", "success");
             onClose();
             // Trigger a refresh in UserApp if possible, or assume UserApp polling will catch it
-            window.location.reload(); // Simple way to refresh app state for now, or we could add an onUpdate callback prop
+            setTimeout(() => window.location.reload(), 1500);
         } catch (err) {
             console.error("Save profile error:", err);
-            alert("Failed to save profile: " + err.message);
+            notify("Failed to save profile: " + err.message, "error");
         } finally {
             setIsSaving(false);
         }
@@ -113,7 +114,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
             window.location.href = url;
         } catch (e) {
             console.error("X Auth Failed:", e);
-            alert("Could not initiate X login.");
+            notify("Could not initiate X login.", "error");
             setIsVerifyingX(false);
         }
     };

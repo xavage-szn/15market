@@ -61,12 +61,11 @@ const LISTINGS_RESPONSE = [
 app.get('/settings', (req, res) => res.json(SETTINGS_RESPONSE));
 app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
 
-// ===== DECENTRALIZED HISTORY (Fetch from Chain) =====
-app.get('/history/:address?', async (req, res) => {
+// Helper for history (Shared between /history and /profile)
+const getHistoryFor = async (address) => {
     try {
-        const { address } = req.params;
         const currentBlock = await blockchain.getCurrentBlock();
-        const fromBlock = Math.max(0, currentBlock - 10000); // Last 10k blocks
+        const fromBlock = Math.max(0, currentBlock - 500000); // Extended range for history sync
 
         const [placed, settled] = await Promise.all([
             blockchain.getPastEvents("BetPlaced", fromBlock),
@@ -104,26 +103,54 @@ app.get('/history/:address?', async (req, res) => {
             trades = trades.filter(t => t.user.toLowerCase() === addr);
         }
 
-        res.json(trades.sort((a, b) => b.timestamp - a.timestamp));
+        return trades.sort((a, b) => b.timestamp - a.timestamp);
     } catch (e) {
-        console.error('[History] Error:', e);
-        res.json([]);
+        console.error('[History Helper] Error:', e);
+        return [];
     }
+};
+
+// ===== HISTORY ENDPOINT =====
+app.get('/history/:address?', async (req, res) => {
+    const { address } = req.params;
+    const trades = await getHistoryFor(address);
+    res.json(trades);
 });
 
 // Redirect /history for global feed
-app.get('/history', async (req, res) => req.url = '/history/', app);
-
-app.get('/active-bets/:address', async (req, res) => {
-    // Return from in-memory active trades
-    const addr = req.params.address.toLowerCase();
-    const active = await redis.getAllActiveTrades();
-    res.json(active.filter(t => t.user.toLowerCase() === addr).map(normalizeTrade));
+app.get('/history', async (req, res) => {
+    const trades = await getHistoryFor();
+    res.json(trades);
 });
 
-// ===== ONBOARDING REMOVED (Stateless Profile) =====
-app.get('/profile', (req, res) => {
-    res.json({ profile: { username: 'Trader', avatar: '' }, stats: { totalTrades: 0, totalWins: 0 } });
+// ===== PROFILE ENDPOINT (Unified Sync) =====
+app.get('/profile', async (req, res) => {
+    try {
+        const { address } = req.query;
+        if (!address) return res.status(400).json({ error: 'Address required' });
+
+        const history = await getHistoryFor(address);
+
+        // Stats calculation
+        const stats = {
+            totalTrades: history.length,
+            totalWins: history.filter(t => t.status === 'WON').length,
+            totalVolume: history.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0).toFixed(2)
+        };
+
+        res.json({
+            profile: {
+                username: `Trader_${address.slice(2, 6)}`,
+                avatar: ``,
+                address: address
+            },
+            stats,
+            history: history,
+            transactions: [] // TODO: Implement if needed
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // ===== SETTLEMENT TRIGGER (Frontend calls this when timer hits 0) =====

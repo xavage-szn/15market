@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Trophy, Calendar, Gift, Users, TrendingUp, Award, Clock, Target } from 'lucide-react';
 import { KEEPER_URL } from '../constants';
+import Toast from './Toast';
+import { AnimatePresence } from 'framer-motion';
 
 function CampaignPage({ address, network }) {
     const { campaignId } = useParams();
@@ -11,6 +13,8 @@ function CampaignPage({ address, network }) {
     const [isEnrolled, setIsEnrolled] = useState(false);
     const [enrolling, setEnrolling] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState('');
+    const [toast, setToast] = useState(null);
+    const notify = (message, type = 'success') => setToast({ message, type });
 
     useEffect(() => {
         const fetchCampaignData = async () => {
@@ -78,11 +82,12 @@ function CampaignPage({ address, network }) {
 
     const handleEnroll = async () => {
         if (!address) {
-            alert('Please connect your wallet first');
+            notify('Please connect your wallet first', 'error');
             return;
         }
 
         setEnrolling(true);
+        notify('Enrolling in campaign...', 'pending');
         try {
             const res = await fetch(`${KEEPER_URL}/enroll`, {
                 method: 'POST',
@@ -92,11 +97,11 @@ function CampaignPage({ address, network }) {
 
             if (res.ok) {
                 setIsEnrolled(true);
-                alert('Successfully enrolled in the campaign!');
+                notify('Successfully enrolled in the campaign!', 'success');
             }
         } catch (error) {
             console.error('Enrollment failed:', error);
-            alert('Failed to enroll. Please try again.');
+            notify('Failed to enroll. Please try again.', 'error');
         } finally {
             setEnrolling(false);
         }
@@ -305,6 +310,10 @@ function CampaignPage({ address, network }) {
                     </div>
                 )}
             </div>
+
+            <AnimatePresence>
+                {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+            </AnimatePresence>
         </div>
     );
 };
