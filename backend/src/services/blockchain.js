@@ -123,34 +123,59 @@ class BlockchainService {
         console.log(`[Blockchain] Ready. Wallet: ${this.wallet.address}`);
     }
 
-    _setupListeners() {
+    async _startEventPolling() {
         if (!this.contract) return;
-        console.log('[Blockchain] 🛰️ Subscribing to on-chain BetPlaced events...');
+        let lastLoggedBlock = await this.provider.getBlockNumber();
+        console.log(`[Blockchain] 🛰️ Starting robust event polling from block ${lastLoggedBlock}...`);
 
-        this.contract.on("BetPlaced", async (id, user, amount, direction, entryPrice, duration, timestamp, marketId, event) => {
+        setInterval(async () => {
             try {
-                if (this.onBetPlacedCallback) {
-                    let normalizedEntry = Number(entryPrice);
-                    if (normalizedEntry > 100000000) {
-                        normalizedEntry = normalizedEntry / 1e8;
-                    }
+                const currentBlock = await this.provider.getBlockNumber();
+                if (currentBlock <= lastLoggedBlock) return;
 
-                    this.onBetPlacedCallback({
-                        id: id.toString(),
-                        user: user,
-                        amount: ethers.formatEther(amount),
-                        direction: Number(direction),
-                        entryPrice: normalizedEntry.toFixed(4),
-                        duration: Number(duration),
-                        timestamp: Number(timestamp),
-                        marketId: Number(marketId),
-                        transactionHash: event.log.transactionHash
-                    });
+                // Scan recent blocks for BetPlaced events
+                const events = await this.contract.queryFilter("BetPlaced", lastLoggedBlock + 1, currentBlock);
+
+                for (const event of events) {
+                    try {
+                        const [id, user, amount, direction, entryPrice, duration, timestamp, marketId] = event.args;
+
+                        if (this.onBetPlacedCallback) {
+                            let normalizedEntry = Number(entryPrice);
+                            if (normalizedEntry > 100000000) {
+                                normalizedEntry = normalizedEntry / 1e8;
+                            }
+
+                            this.onBetPlacedCallback({
+                                id: id.toString(),
+                                user: user,
+                                amount: ethers.formatEther(amount),
+                                direction: Number(direction),
+                                entryPrice: normalizedEntry.toFixed(4),
+                                duration: Number(duration),
+                                timestamp: Number(timestamp),
+                                marketId: Number(marketId),
+                                transactionHash: event.transactionHash
+                            });
+                        }
+                    } catch (innerError) {
+                        console.error('[Blockchain] Event processing error:', innerError.message);
+                    }
                 }
+
+                lastLoggedBlock = currentBlock;
             } catch (e) {
-                console.error('[Blockchain] Event listener error:', e.message);
+                // If query fails (e.g. range too large or RPC down), just log and retry next tick
+                if (!e.message.includes("timeout")) {
+                    console.warn('[Blockchain] Event poll warning:', e.message);
+                }
             }
-        });
+        }, 5000); // Poll every 5 seconds
+    }
+
+    _setupListeners() {
+        // Switch to polling for better stability on public RPCs
+        this._startEventPolling();
     }
 
     async _ensureReady() {

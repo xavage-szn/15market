@@ -276,7 +276,7 @@ app.post('/session/trade', async (req, res) => {
         logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC)`);
 
         // Use the user's MAIN address as the payout address, not the session wallet
-        const tx = await wallet.sendTransaction({
+        const txArgs = {
             to: process.env.ARC_CONTRACT_ADDRESS,
             data: blockchain.contract.interface.encodeFunctionData("placeBet", [
                 BigInt(id),
@@ -287,14 +287,21 @@ app.post('/session/trade', async (req, res) => {
                 address // Payout goes to MAIN wallet
             ]),
             value: amountWei,
-            gasPrice: feeData.gasPrice ? gasPrice : undefined,
-            maxFeePerGas: feeData.maxFeePerGas ? (feeData.maxFeePerGas * 150n / 100n) : undefined,
-            maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ? (feeData.maxPriorityFeePerGas * 150n / 100n) : undefined,
             gasLimit: 800000n,
-            type: feeData.maxFeePerGas ? 2 : 0,
             nonce: nonce,
             chainId: 5042002
-        });
+        };
+
+        if (feeData.maxFeePerGas) {
+            txArgs.maxFeePerGas = (feeData.maxFeePerGas * 150n / 100n);
+            txArgs.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 150n / 100n);
+            txArgs.type = 2;
+        } else {
+            txArgs.gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 150n / 100n;
+            txArgs.type = 0;
+        }
+
+        const tx = await wallet.sendTransaction(txArgs);
 
         // Register in memory store for settlement tracking
         const tradeData = {
