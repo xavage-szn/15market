@@ -261,6 +261,52 @@ app.post('/session/trade', async (req, res) => {
     }
 });
 
+app.post('/session/withdraw', async (req, res) => {
+    try {
+        const { address, amount } = req.body;
+        if (!address) return res.status(400).json({ error: 'Missing main address' });
+
+        logToFile(`[WITHDRAW] 💸 Request from ${address} for ${amount} USDC`);
+        const { wallet, address: sessionAddr, nonce } = await deriveUserWallet(address);
+
+        const balance = await wallet.provider.getBalance(sessionAddr);
+        const amountWei = amount ? ethers.parseUnits(amount.toString(), 18) : balance;
+
+        if (balance < amountWei) {
+            return res.status(400).json({ error: `Insufficient session balance: ${ethers.formatEther(balance)} USDC` });
+        }
+
+        const feeData = await wallet.provider.getFeeData();
+        const gasPrice = (feeData.gasPrice * 150n) / 100n; // 50% bump for speed
+        const gasLimit = 21000n;
+        const gasCost = gasLimit * gasPrice;
+
+        // Ensure we don't drain gas money
+        const sweepAmt = amountWei > (balance - gasCost) ? (balance - gasCost) : amountWei;
+
+        if (sweepAmt <= 0n) {
+            return res.status(400).json({ error: "Balance too low for gas" });
+        }
+
+        logToFile(`[WITHDRAW] 🚀 Sweeping ${ethers.formatEther(sweepAmt)} USDC from ${sessionAddr} to ${address}`);
+
+        const tx = await wallet.sendTransaction({
+            to: address,
+            value: sweepAmt,
+            gasPrice,
+            gasLimit,
+            nonce,
+            type: 0,
+            chainId: 5042002
+        });
+
+        res.json({ success: true, txHash: tx.hash });
+    } catch (e) {
+        logToFile(`[WITHDRAW] ❌ Error: ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Fast & Decentralized running on port ${PORT}`);
     processor.init();
