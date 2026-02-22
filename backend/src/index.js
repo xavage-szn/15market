@@ -58,6 +58,32 @@ const LISTINGS_RESPONSE = [
     { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' }
 ];
 
+// --- SESSION LOGIC (Deterministic Session Wallets) ---
+const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+const SESSION_RPCS = [
+    "https://5042002.rpc.thirdweb.com",
+    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
+];
+let sessionProvider = null;
+async function getSessionProvider() {
+    if (sessionProvider) return sessionProvider;
+    const provider = new ethers.JsonRpcProvider(SESSION_RPCS[0], 5042002, { staticNetwork: true });
+    sessionProvider = provider;
+    return provider;
+}
+
+async function deriveUserWallet(userAddress) {
+    if (!userAddress) return null;
+    const addr = userAddress.toLowerCase();
+    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
+    const privateKey = ethers.keccak256(entropy);
+    const provider = await getSessionProvider();
+    const wallet = new ethers.Wallet(privateKey, provider);
+    const nonce = await provider.getTransactionCount(wallet.address, 'pending');
+    await redis.saveSessionMapping(wallet.address, addr);
+    return { wallet, address: wallet.address, nonce };
+}
+
 app.get('/settings', (req, res) => res.json(SETTINGS_RESPONSE));
 app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
 
@@ -100,7 +126,15 @@ const getHistoryFor = async (address) => {
 
         if (address) {
             const addr = address.toLowerCase();
-            trades = trades.filter(t => t.user.toLowerCase() === addr);
+            const { address: sessionAddr } = await deriveUserWallet(addr);
+            const sessionLower = sessionAddr.toLowerCase();
+
+            trades = trades.filter(t =>
+                t.user.toLowerCase() === addr ||
+                t.user.toLowerCase() === sessionLower
+            );
+
+            logToFile(`[History Sync] Merged ${trades.length} trades for ${addr} (Main) + ${sessionLower} (Session)`);
         }
 
         return trades.sort((a, b) => b.timestamp - a.timestamp);
@@ -203,44 +237,15 @@ app.get('/treasury', async (req, res) => {
     res.json({ balance: balance.toString(), formatted: ethers.formatEther(balance) + ' USDC' });
 });
 
-// --- SESSION LOGIC (Remains for speed, but stateless) ---
-const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-
-const SESSION_RPCS = [
-    "https://5042002.rpc.thirdweb.com",
-    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
-];
-
-let sessionProvider = null;
-let lastGoodRpc = null;
-
-async function getSessionProvider() {
-    if (sessionProvider) return sessionProvider;
-    const rpc = lastGoodRpc || SESSION_RPCS[0];
-    const provider = new ethers.JsonRpcProvider(rpc, 5042002, { staticNetwork: true });
-    sessionProvider = provider;
-    return provider;
-}
-
-async function deriveUserWallet(userAddress) {
-    const addr = userAddress.toLowerCase();
-    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
-    const privateKey = ethers.keccak256(entropy);
-    const provider = await getSessionProvider();
-    const wallet = new ethers.Wallet(privateKey, provider);
-    const nonce = await provider.getTransactionCount(wallet.address, 'pending');
-
-    // Save mapping in memory
-    await redis.saveSessionMapping(wallet.address, addr);
-
-    return { wallet, address: wallet.address, nonce };
-}
-
 app.post('/session/init', async (req, res) => {
-    const { address } = req.body;
-    const { wallet, address: sessionAddr } = await deriveUserWallet(address);
-    const balance = await wallet.provider.getBalance(sessionAddr);
-    res.json({ sessionAddress: sessionAddr, balance: ethers.formatEther(balance) });
+    try {
+        const { address } = req.body;
+        const { wallet, address: sessionAddr } = await deriveUserWallet(address);
+        const balance = await wallet.provider.getBalance(sessionAddr);
+        res.json({ sessionAddress: sessionAddr, balance: ethers.formatEther(balance) });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.post('/session/trade', async (req, res) => {
@@ -248,26 +253,31 @@ app.post('/session/trade', async (req, res) => {
         const { address, tradeParams } = req.body;
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
-        logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id}`);
+        logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id} for ${address}`);
         const { wallet, address: sessionAddr, nonce } = await deriveUserWallet(address);
-        const amountWei = ethers.parseUnits(amount.toString(), 18);
 
-        const contract = new ethers.Contract(process.env.ARC_CONTRACT_ADDRESS, blockchain.abi, wallet);
-        const txRequest = await contract.placeBet.populateTransaction(
-            BigInt(id), Number(direction), BigInt(duration), BigInt(entryPrice), Number(marketId), sessionAddr,
-            { value: amountWei, nonce: nonce, gasLimit: 800000n }
-        );
+        if (!amount || isNaN(amount)) throw new Error("Invalid trade amount");
+        const amountWei = ethers.parseUnits(amount.toString(), 18);
 
         const feeData = await wallet.provider.getFeeData();
         const gasPrice = (feeData.gasPrice * 135n) / 100n;
 
-        const signedTx = await wallet.signTransaction({ ...txRequest, gasPrice, type: 0, chainId: 5042002 });
-        const txHash = ethers.keccak256(signedTx);
+        logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC)`);
 
-        // FIRE AND FORGET BROADCAST
-        wallet.provider.broadcastTransaction(signedTx).catch(e => logToFile(`❌ Broadcast fail: ${e.message}`));
+        const tx = await wallet.sendTransaction({
+            to: process.env.ARC_CONTRACT_ADDRESS,
+            data: blockchain.contract.interface.encodeFunctionData("placeBet", [
+                BigInt(id), Number(direction), BigInt(duration), BigInt(entryPrice), Number(marketId), sessionAddr
+            ]),
+            value: amountWei,
+            gasPrice,
+            gasLimit: 800000n,
+            type: 0,
+            nonce: nonce,
+            chainId: 5042002
+        });
 
-        // Register in session memory
+        // Register in memory store for settlement tracking
         const tradeData = {
             id: id.toString(),
             user: sessionAddr,
@@ -277,11 +287,12 @@ app.post('/session/trade', async (req, res) => {
             entryPrice: (Number(entryPrice) / 1e8).toFixed(4),
             marketId: marketId,
             expiry: Date.now() + (duration * 1000),
-            txHash: txHash
+            txHash: tx.hash
         };
         await redis.setTrade(id, tradeData);
 
-        res.json({ success: true, txHash });
+        logToFile(`[SESSION_TRADE] ✅ Sent: ${tx.hash}`);
+        res.json({ success: true, txHash: tx.hash });
     } catch (e) {
         logToFile(`[SESSION_TRADE] ❌ Error: ${e.message}`);
         res.status(500).json({ error: e.message });
