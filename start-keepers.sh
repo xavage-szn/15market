@@ -5,5 +5,5 @@ echo "🚀 Starting 15market Standalone Keeper (ARC)..."
 
 # 1. Start Arc Keeper (Port 3010)
 echo "--- Launching Arc Keeper ---"
-cd /app/backend/arc-keeper
-node src/index.js
+cd /app/backend
+npm start

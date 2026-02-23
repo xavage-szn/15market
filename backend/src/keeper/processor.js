@@ -93,14 +93,15 @@ class TradeProcessor {
                 console.warn(`[Processor] Could not check contract balance: ${balError.message}`);
             }
 
-            // Mark as settled in memory immediately
-            this.markSettled(tradeId);
-            await redis.delTrade(tradeId);
-
             // Execute on-chain
             const result = await blockchain.settleBet(trade.id, scaledPrice);
             if (result) {
                 logToFile(`✅ Settlement TX for ${tradeId} broadcasted: ${result.hash}`);
+
+                // ONLY delete after successful broadcast
+                this.markSettled(tradeId);
+                await redis.delTrade(tradeId);
+
                 // If it was already settled, we track it
                 if (result.alreadySettled) {
                     console.log(`[Processor] Bet ${tradeId} was already settled on-chain.`);

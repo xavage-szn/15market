@@ -1,6 +1,7 @@
 const { ethers, FetchRequest } = require('ethers');
 const dns = require('dns');
 require('dotenv').config();
+const nonceManager = require('./nonceManager');
 
 // Apply DNS Patch for Arc RPC resolution issues
 const originalLookup = dns.lookup;
@@ -20,10 +21,10 @@ dns.lookup = (hostname, options, callback) => {
 };
 
 const RPC_ENDPOINTS = [
-    "https://5042002.rpc.thirdweb.com",      // Thirdweb (most reliable)
+    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1",
+    "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
-    "https://rpc-test-1.arc.market",
-    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
+    "https://rpc-test-1.arc.market"
 ];
 
 async function createProvider(blockchainService) {
@@ -68,23 +69,15 @@ class BlockchainService {
         this.wallet = null;
         this.contract = null;
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
-        this.lastGoodRpc = null; // Sticky RPC for keeper
-
-        // ===== HIGH-SPEED NONCE QUEUE =====
-        // Instead of a simple lock, we use a queue-based approach
-        // Each settlement request gets a nonce from the queue without blocking others
-        this.currentNonce = null;
-        this.nonceInitializing = false;
-        this.nonceInitPromise = null;
+        this.lastGoodRpc = null;
 
         // ===== GAS CACHE =====
         this.lastGasUpdate = 0;
         this.cachedGasPrice = null;
-        this.GAS_CACHE_TTL = 2000; // 2s TTL for gas price cache
+        this.GAS_CACHE_TTL = 2000;
 
         // ===== TX CONFIRMATION TRACKING =====
-        // Track pending TXs for monitoring without blocking
-        this.pendingTxs = new Map(); // txHash -> { betId, sentAt }
+        this.pendingTxs = new Map();
         this.confirmedTxs = new Set();
 
         this.abi = [
@@ -96,7 +89,6 @@ class BlockchainService {
             "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
         ];
 
-        // Initialize async - handle errors to prevent process crash
         this._init().catch(e => {
             console.error('[Blockchain] ❌ Critical Initialization Error:', e.message);
         });
@@ -108,16 +100,8 @@ class BlockchainService {
         this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
         this.providerReady = true;
 
-        // Pre-warm the nonce
-        this._initNonce();
-
-        // Pre-warm the gas price
         this._refreshGasPrice();
-
-        // Auto-setup listeners once contract is ready
         this._setupListeners();
-
-        // Start background confirmation tracker
         this._startConfirmationTracker();
 
         console.log(`[Blockchain] Ready. Wallet: ${this.wallet.address}`);
@@ -133,7 +117,6 @@ class BlockchainService {
                 const currentBlock = await this.provider.getBlockNumber();
                 if (currentBlock <= lastLoggedBlock) return;
 
-                // Scan recent blocks for BetPlaced events
                 const events = await this.contract.queryFilter("BetPlaced", lastLoggedBlock + 1, currentBlock);
 
                 for (const event of events) {
@@ -165,22 +148,19 @@ class BlockchainService {
 
                 lastLoggedBlock = currentBlock;
             } catch (e) {
-                // If query fails (e.g. range too large or RPC down), just log and retry next tick
-                if (!e.message.includes("timeout")) {
+                if (e.message && !e.message.toLowerCase().includes("timeout")) {
                     console.warn('[Blockchain] Event poll warning:', e.message);
                 }
             }
-        }, 5000); // Poll every 5 seconds
+        }, 5000);
     }
 
     _setupListeners() {
-        // Switch to polling for better stability on public RPCs
         this._startEventPolling();
     }
 
     async _ensureReady() {
         if (this.providerReady) return;
-        // Wait up to 10s for init
         for (let i = 0; i < 20; i++) {
             await new Promise(r => setTimeout(r, 500));
             if (this.providerReady) return;
@@ -188,47 +168,15 @@ class BlockchainService {
         throw new Error('Blockchain provider not ready');
     }
 
-    // ===== NONCE MANAGEMENT: Queue-based, non-blocking =====
-    async _initNonce() {
-        if (this.nonceInitializing) return this.nonceInitPromise;
-        this.nonceInitializing = true;
-        this.nonceInitPromise = (async () => {
-            try {
-                this.currentNonce = await this.provider.getTransactionCount(this.wallet.address, 'pending');
-                console.log(`[Blockchain] ⚡ Nonce initialized at ${this.currentNonce}`);
-            } catch (e) {
-                console.error('[Blockchain] Failed to init nonce:', e.message);
-            } finally {
-                this.nonceInitializing = false;
-            }
-        })();
-        return this.nonceInitPromise;
-    }
-
-    // Atomically grab the next nonce (non-blocking for other callers)
-    async _getNextNonce() {
-        if (this.currentNonce === null) {
-            await this._initNonce();
-        }
-        // Atomic increment — JS is single-threaded so this is safe
-        const nonce = this.currentNonce;
-        this.currentNonce++;
-        return nonce;
-    }
-
-    // Reset nonce from chain (called on nonce errors)
     async _resetNonce() {
         console.warn('[Blockchain] ⚠️ Resetting nonce from chain...');
         try {
-            this.currentNonce = await this.provider.getTransactionCount(this.wallet.address, 'pending');
-            console.log(`[Blockchain] ⚡ Nonce reset to ${this.currentNonce}`);
+            await nonceManager.syncWithChain(this.wallet.address, this.provider);
         } catch (e) {
             console.error('[Blockchain] Failed to reset nonce:', e.message);
-            this.currentNonce = null;
         }
     }
 
-    // ===== GAS PRICE CACHING =====
     async _refreshGasPrice() {
         try {
             const feeData = await this.provider.getFeeData();
@@ -242,23 +190,21 @@ class BlockchainService {
     async _getGasPrice() {
         const now = Date.now();
         if (!this.cachedGasPrice || (now - this.lastGasUpdate > this.GAS_CACHE_TTL)) {
-            // Don't block — use cached if available, refresh in background
             if (this.cachedGasPrice) {
-                this._refreshGasPrice(); // fire and forget
+                this._refreshGasPrice();
             } else {
-                await this._refreshGasPrice(); // must wait first time
+                await this._refreshGasPrice();
             }
         }
-        const baseGas = this.cachedGasPrice || 1000000000n; // 1 Gwei fallback
-        return (baseGas * 300n) / 100n; // 3x priority bump for maximum chain prioritization
+        const baseGas = this.cachedGasPrice || 1000000000n;
+        return (baseGas * 300n) / 100n;
     }
 
-    // ===== BACKGROUND CONFIRMATION TRACKER =====
     _startConfirmationTracker() {
         setInterval(async () => {
             if (this.pendingTxs.size === 0) return;
 
-            const staleThreshold = Date.now() - 60000; // 60s timeout
+            const staleThreshold = Date.now() - 60000;
             for (const [txHash, info] of this.pendingTxs) {
                 if (info.sentAt < staleThreshold) {
                     console.warn(`[Blockchain] ⏰ TX ${txHash} (bet ${info.betId}) timed out after 60s`);
@@ -277,18 +223,15 @@ class BlockchainService {
                         }
                         this.pendingTxs.delete(txHash);
                     }
-                } catch (e) {
-                    // Receipt not available yet, will retry next tick
-                }
+                } catch (e) { }
             }
-        }, 3000); // Check every 3s
+        }, 3000);
     }
 
-    // ===== CORE: High-speed settlement =====
     async settleBet(betId, exitPrice) {
         await this._ensureReady();
 
-        const nonce = await this._getNextNonce();
+        const nonce = await nonceManager.getNonce(this.wallet.address, this.provider);
         const gasPrice = await this._getGasPrice();
 
         console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${gasPrice ? ethers.formatUnits(gasPrice, 'gwei') : 'auto'} gwei) - Bet ${betId}`);
@@ -298,20 +241,15 @@ class BlockchainService {
                 nonce: nonce,
                 gasPrice: gasPrice,
                 gasLimit: 400000n,
-                type: 0, // Force Legacy
+                type: 0,
                 chainId: 5042002
             });
 
             console.log(`[Blockchain] 🚀 TX Sent: ${tx.hash} for bet ${betId}`);
-
-            // Track in background via Map — tracker handles receipt
             this.pendingTxs.set(tx.hash, { betId: betId.toString(), sentAt: Date.now() });
-
-            // Return immediately with the TX hash — NO WAIT
             return { hash: tx.hash, status: 1 };
 
         } catch (e) {
-            // If we get a nonce-related error, reset nonce cache
             const msg = e.message?.toLowerCase() || "";
             if (msg.includes('nonce') || msg.includes('underpriced') || msg.includes('already been used') || msg.includes('replacement')) {
                 await this._resetNonce();
@@ -352,13 +290,12 @@ class BlockchainService {
         }
     }
 
-    // Quick check if bet is settled (uses contract read, for processor guards)
     async isBetSettled(betId) {
         try {
             const onChainBet = await this.contract.bets(betId);
             return onChainBet.settled;
         } catch (e) {
-            return false; // If we can't check, assume not settled
+            return false;
         }
     }
 }

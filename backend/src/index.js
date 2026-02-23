@@ -7,6 +7,7 @@ const processor = require('./keeper/processor');
 const blockchain = require('./services/blockchain');
 const pricing = require('./services/pricing');
 const redis = require('./services/redis'); // Now points to MemoryStore
+const nonceManager = require('./services/nonceManager');
 const fs = require('fs');
 const path = require('path');
 
@@ -256,8 +257,9 @@ app.post('/session/trade', async (req, res) => {
         if (!address) throw new Error("Main wallet address required");
         logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id} for ${address}`);
 
-        const { wallet, address: sessionAddr, nonce } = await deriveUserWallet(address);
+        const { wallet, address: sessionAddr } = await deriveUserWallet(address);
         const provider = wallet.provider;
+        const nonce = await nonceManager.getNonce(sessionAddr, provider);
 
         // 1. Balance Check
         if (!amount || isNaN(amount)) throw new Error("Invalid trade amount");
@@ -265,9 +267,10 @@ app.post('/session/trade', async (req, res) => {
         const balance = await provider.getBalance(sessionAddr);
 
         // Estimating gas (roughly 500k-800k)
-        const feeData = await provider.getFeeData();
-        const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("30", "gwei")) * 300n / 100n; // 3x bump for highest prioritization
-        const totalNeeded = amountWei + (gasPrice * 800000n);
+        // Estimating gas
+        const gasPrice = await blockchain._getGasPrice();
+        const gasLimit = 800000n;
+        const totalNeeded = amountWei + (gasPrice * gasLimit);
 
         if (balance < totalNeeded) {
             throw new Error(`Insufficient session balance. Have ${ethers.formatEther(balance)}, need ${ethers.formatEther(totalNeeded)} (Amount + Gas)`);
@@ -283,7 +286,7 @@ app.post('/session/trade', async (req, res) => {
                 BigInt(duration),
                 BigInt(entryPrice),
                 Number(marketId),
-                address // Payout goes to MAIN wallet
+                sessionAddr // Payout goes to SESSION wallet for auto-signer trades
             ]),
             value: amountWei,
             gasLimit: 800000n,
@@ -292,7 +295,7 @@ app.post('/session/trade', async (req, res) => {
         };
 
         // Fee logic - always bump for speed but stay legacy
-        txArgs.gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 300n / 100n;
+        txArgs.gasPrice = gasPrice;
 
         // Try to estimate or call first to catch revert reasons
         try {
@@ -323,6 +326,10 @@ app.post('/session/trade', async (req, res) => {
         res.json({ success: true, txHash: tx.hash });
     } catch (e) {
         logToFile(`[SESSION_TRADE] ❌ Error: ${e.message}`);
+        const { address: sessionAddr } = await deriveUserWallet(req.body.address);
+        if (e.message.includes('nonce') || e.message.includes('already been used')) {
+            await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
+        }
         res.status(500).json({ error: e.message });
     }
 });
@@ -333,7 +340,8 @@ app.post('/session/withdraw', async (req, res) => {
         if (!address) return res.status(400).json({ error: 'Missing main address' });
 
         logToFile(`[WITHDRAW] 💸 Request from ${address} for ${amount} USDC`);
-        const { wallet, address: sessionAddr, nonce } = await deriveUserWallet(address);
+        const { wallet, address: sessionAddr } = await deriveUserWallet(address);
+        const nonce = await nonceManager.getNonce(sessionAddr, wallet.provider);
 
         const balance = await wallet.provider.getBalance(sessionAddr);
         const amountWei = amount ? ethers.parseUnits(amount.toString(), 18) : balance;
