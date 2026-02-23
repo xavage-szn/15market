@@ -11,7 +11,7 @@ class PricingService {
         this.httpAgent = new (require('http').Agent)({ keepAlive: true, maxSockets: 20 });
         this.httpsAgent = new (require('https').Agent)({ keepAlive: true, maxSockets: 20 });
         this.axiosInstance = axios.create({
-            timeout: 5000, // Increased from 1.5s for stability
+            timeout: 10000, // Increased to 10s for better resilience in high-latency environments
             httpAgent: this.httpAgent,
             httpsAgent: this.httpsAgent,
         });
@@ -43,6 +43,16 @@ class PricingService {
                     if (!parsed) return null;
                     return parseFloat(parsed.price) * Math.pow(10, parsed.expo);
                 }
+            });
+        }
+
+        // Add Coinbase as a very reliable secondary source
+        const COINBASE_MAP = { 'BTC': 'BTC-USD', 'ETH': 'ETH-USD', 'SOL': 'SOL-USD' };
+        if (COINBASE_MAP[symbol]) {
+            sources.push({
+                name: "COINBASE",
+                url: `https://api.coinbase.com/v2/prices/${COINBASE_MAP[symbol]}/spot`,
+                parse: d => parseFloat(d.data.amount)
             });
         }
 

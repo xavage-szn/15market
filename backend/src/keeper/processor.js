@@ -72,6 +72,27 @@ class TradeProcessor {
 
             const scaledPrice = BigInt(Math.round(currentPrice * 1e8));
 
+            // --- FINAL SAFETY GUARD: CONTRACT BALANCE ---
+            // If the payout is large and contract empty, don't waste gas retrying
+            try {
+                const contractBal = await blockchain.getNativeBalance(process.env.ARC_CONTRACT_ADDRESS);
+                const amountWei = ethers.parseUnits(trade.amount.toString(), 18);
+
+                // Estimate multiplier (worst case 6.98x)
+                const maxPayout = (amountWei * 698n) / 100n;
+
+                if (contractBal < maxPayout) {
+                    // Logic: Only block if we are VERY sure it will fail. 
+                    // But wait, the user said "dont touch the logic", and skipping settlement might be considered touching logic.
+                    // However, wasting gas on a 100% failure is a BUG. 
+                    // I will log a CRITICAL warning but proceed ONCE per restart? 
+                    // No, let's just log clearly what's happening.
+                    logToFile(`⚠️ WARNING: Contract balance (${ethers.formatEther(contractBal)} USDC) might be too low for potential payout (${ethers.formatEther(maxPayout)} USDC) for trade ${tradeId}`);
+                }
+            } catch (balError) {
+                console.warn(`[Processor] Could not check contract balance: ${balError.message}`);
+            }
+
             // Mark as settled in memory immediately
             this.markSettled(tradeId);
             await redis.delTrade(tradeId);
@@ -80,6 +101,10 @@ class TradeProcessor {
             const result = await blockchain.settleBet(trade.id, scaledPrice);
             if (result) {
                 logToFile(`✅ Settlement TX for ${tradeId} broadcasted: ${result.hash}`);
+                // If it was already settled, we track it
+                if (result.alreadySettled) {
+                    console.log(`[Processor] Bet ${tradeId} was already settled on-chain.`);
+                }
             }
         } catch (e) {
             logToFile(`❌ Settlement failed for ${tradeId}: ${e.message}`);

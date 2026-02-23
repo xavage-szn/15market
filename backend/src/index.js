@@ -275,7 +275,6 @@ app.post('/session/trade', async (req, res) => {
 
         logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC)`);
 
-        // Use the user's MAIN address as the payout address, not the session wallet
         const txArgs = {
             to: process.env.ARC_CONTRACT_ADDRESS,
             data: blockchain.contract.interface.encodeFunctionData("placeBet", [
@@ -289,16 +288,18 @@ app.post('/session/trade', async (req, res) => {
             value: amountWei,
             gasLimit: 800000n,
             nonce: nonce,
-            chainId: 5042002
+            type: 0 // Force Legacy for Arc compatibility
         };
 
-        if (feeData.maxFeePerGas) {
-            txArgs.maxFeePerGas = (feeData.maxFeePerGas * 150n / 100n);
-            txArgs.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 150n / 100n);
-            txArgs.type = 2;
-        } else {
-            txArgs.gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 150n / 100n;
-            txArgs.type = 0;
+        // Fee logic - always bump for speed but stay legacy
+        txArgs.gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 150n / 100n;
+
+        // Try to estimate or call first to catch revert reasons
+        try {
+            await wallet.estimateGas(txArgs);
+        } catch (estError) {
+            logToFile(`[SESSION_TRADE] ⚠️ Dry run failed: ${estError.message}`);
+            // We still proceed if it's just an estimation error, but log it
         }
 
         const tx = await wallet.sendTransaction(txArgs);
@@ -342,7 +343,7 @@ app.post('/session/withdraw', async (req, res) => {
         }
 
         const feeData = await wallet.provider.getFeeData();
-        const gasPrice = (feeData.gasPrice * 150n) / 100n; // 50% bump for speed
+        const gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 150n / 100n; // 50% bump for speed
         const gasLimit = 21000n;
         const gasCost = gasLimit * gasPrice;
 
