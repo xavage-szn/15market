@@ -266,7 +266,7 @@ app.post('/session/trade', async (req, res) => {
 
         // Estimating gas (roughly 500k-800k)
         const feeData = await provider.getFeeData();
-        const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("10", "gwei")) * 150n / 100n;
+        const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("30", "gwei")) * 300n / 100n; // 3x bump for highest prioritization
         const totalNeeded = amountWei + (gasPrice * 800000n);
 
         if (balance < totalNeeded) {
@@ -292,7 +292,7 @@ app.post('/session/trade', async (req, res) => {
         };
 
         // Fee logic - always bump for speed but stay legacy
-        txArgs.gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 150n / 100n;
+        txArgs.gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 300n / 100n;
 
         // Try to estimate or call first to catch revert reasons
         try {
@@ -343,7 +343,7 @@ app.post('/session/withdraw', async (req, res) => {
         }
 
         const feeData = await wallet.provider.getFeeData();
-        const gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 150n / 100n; // 50% bump for speed
+        const gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 300n / 100n; // 3x bump for speed
         const gasLimit = 21000n;
         const gasCost = gasLimit * gasPrice;
 

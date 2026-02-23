@@ -250,7 +250,7 @@ class BlockchainService {
             }
         }
         const baseGas = this.cachedGasPrice || 1000000000n; // 1 Gwei fallback
-        return (baseGas * 125n) / 100n; // 25% priority bump
+        return (baseGas * 300n) / 100n; // 3x priority bump for maximum chain prioritization
     }
 
     // ===== BACKGROUND CONFIRMATION TRACKER =====
