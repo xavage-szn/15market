@@ -280,7 +280,7 @@ app.post('/session/trade', async (req, res) => {
         // 1. Balance Check
         if (!amount || isNaN(amount)) throw new Error("Invalid trade amount");
         const amountWei = ethers.parseUnits(amount.toString(), 18);
-        const balance = await provider.getBalance(sessionAddr);
+        const balance = await wallet.provider.getBalance(sessionAddr);
 
         // Estimating gas (roughly 500k-800k)
         // Estimating gas
