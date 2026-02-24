@@ -248,6 +248,27 @@ app.post('/trade-ping', async (req, res) => {
     }
 });
 
+app.get('/protocol-stats', async (req, res) => {
+    try {
+        const history = await getHistoryFor();
+        const activeTrades = await redis.getAllActiveTrades();
+
+        const totalVolume = history.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+        const uniqueWallets = new Set(history.map(t => t.user.toLowerCase())).size;
+
+        res.json({
+            totalVolume: totalVolume.toFixed(2),
+            wallets: uniqueWallets,
+            activeCount: activeTrades.length,
+            totalTrades: history.length,
+            activeStakes: activeTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0),
+            autoSignerFees: { arc: (totalVolume * 0.01).toFixed(4) } // Estimate 1% fee for display
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/treasury', async (req, res) => {
     const balance = await blockchain.getNativeBalance(process.env.ARC_CONTRACT_ADDRESS);
     res.json({ balance: balance.toString(), formatted: ethers.formatEther(balance) + ' USDC' });

@@ -125,8 +125,8 @@ export function LandingPage() {
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75" />
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3CB371]" />
                     </span>
-                    <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.3em] text-[#3CB371]">
-                        Arc Mainnet Beta Live
+                    <span className="text-[8px] md:text-xs font-black uppercase tracking-[0.3em] text-[#3CB371]">
+                        Arc Mainnet Live
                     </span>
                 </motion.div>
 
@@ -137,7 +137,7 @@ export function LandingPage() {
                     transition={{ duration: 0.8, ease: "easeOut" }}
                     className="mb-8"
                 >
-                    <h1 className="text-huge">
+                    <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-huge font-black tracking-tighter leading-none">
                         THE PRECISION <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3CB371] to-[#48c97f] drop-shadow-[0_0_40px_rgba(60,179,113,0.3)]">
                             MARKET.
