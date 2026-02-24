@@ -45,8 +45,8 @@ class TradeProcessor {
             });
         });
 
-        // 2. Settlement Loop
-        setInterval(() => this.processSettlements(), 1000);
+        // 2. Settlement Loop (Ultra-fast 200ms tick for instant execution)
+        setInterval(() => this.processSettlements(), 200);
 
         // 3. Background History Sync (Backfiller)
         this.runHistoryBackfiller();
@@ -141,8 +141,8 @@ class TradeProcessor {
         const tradeId = trade.id.toString();
         if (this.settlingIds.has(tradeId) || this.settledCache.has(tradeId)) return;
 
-        // Safety Buffer: Only settle if it's been at least 1.5s since expiry
-        if (Date.now() < (trade.expiry + 1500)) return;
+        // Safety Buffer: Only settle if it's been at least 100ms since expiry (strict tightness)
+        if (Date.now() < (trade.expiry + 100)) return;
 
         this.settlingIds.add(tradeId);
         try {

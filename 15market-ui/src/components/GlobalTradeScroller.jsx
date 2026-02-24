@@ -138,14 +138,14 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
         <div
             className={`w-full h-10 lg:h-12 flex items-center overflow-hidden relative transition-all duration-500 rounded-none z-[40] ${isLight
                 ? 'border-y-2 border-[#3CB371]/30 shadow-[0_0_15px_rgba(60,179,113,0.1)]'
-                : 'glass-panel border-white/5'
+                : 'border-y border-white/5 bg-transparent'
                 }`}
             style={{
                 backgroundColor: isLight ? '#FFF8E7' : undefined,
                 boxShadow: isLight ? '0 0 20px rgba(60, 179, 113, 0.1)' : `0 0 15px #3CB37115, inset 0 0 10px #3CB37110`
             }}
         >
-            <div className={`absolute left-0 top-0 bottom-0 px-2 lg:px-4 z-30 flex items-center border-r transition-all duration-300 ${isLight ? 'bg-[#FFF8E7]/95 border-[#3CB371]/10' : 'bg-[#050505]/80 backdrop-blur-md border-white/10'}`}>
+            <div className={`absolute left-0 top-0 bottom-0 px-2 lg:px-4 z-30 flex items-center transition-all duration-300 ${isLight ? 'bg-[#FFF8E7]/95' : 'bg-transparent pl-4'}`}>
                 <div className="flex items-center gap-1.5 lg:gap-2">
                     <div className="relative flex h-1.5 w-1.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75"></span>
@@ -157,7 +157,13 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
                 </div>
             </div>
 
-            <div className="flex-1 h-full flex items-center relative overflow-hidden">
+            <div
+                className="flex-1 h-full flex items-center relative overflow-hidden"
+                style={{
+                    maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+                    WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)'
+                }}
+            >
                 <AnimatePresence mode="wait">
                     {activeBroadcast && (
                         <motion.div
@@ -237,8 +243,6 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
                     ))}
                 </motion.div>
             </div>
-
-            <div className={`absolute right-0 top-0 bottom-0 w-24 lg:w-32 bg-gradient-to-l pointer-events-none z-20 ${isLight ? 'from-[#FFF8E7] to-transparent' : 'from-[#030303] to-transparent'}`} />
         </div>
     );
 };

@@ -47,7 +47,7 @@ function LiveExecutionComponent({
                         const duration = trade.duration || 30;
                         const expiryMs = trade.expiryMs || (start + (duration * 1000));
                         const rawTimeLeft = Math.max(0, (expiryMs - now) / 1000);
-                        const timeLeft = Math.ceil(rawTimeLeft);
+                        const displayTimeLeft = (rawTimeLeft > 0 && rawTimeLeft <= 10) ? rawTimeLeft.toFixed(1) : Math.ceil(rawTimeLeft);
                         const timerExpired = rawTimeLeft <= 0;
                         const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
 
@@ -128,8 +128,8 @@ function LiveExecutionComponent({
                                     }`}>
                                     {!displayFinal ? (
                                         <>
-                                            <div className={`text-lg lg:text-2xl font-black mb-1 tracking-tighter tabular-nums flex items-baseline ${isLight ? 'text-black' : 'text-white'}`}>
-                                                {timeLeft}<span className={`text-[7px] lg:text-[10px] ml-0.5 font-bold italic ${isLight ? 'text-black/20' : 'text-white/10'}`}>s</span>
+                                            <div className={`text-lg lg:text-2xl font-black mb-1 tracking-tighter flex items-baseline ${isLight ? 'text-black' : 'text-white'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
+                                                {displayTimeLeft}<span className={`text-[7px] lg:text-[10px] ml-0.5 font-bold italic ${isLight ? 'text-black/20' : 'text-white/10'}`}>s</span>
                                             </div>
 
                                             <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
