@@ -101,12 +101,22 @@ function TradeTerminalComponent({
                                 </div>
                             </div>
 
-                            {/* Refill Slider */}
-                            <div className="relative pt-1 pb-2 px-1">
-                                <div className="relative h-1 rounded-full overflow-hidden bg-white/10">
+                            {/* Professional Refill Slider */}
+                            <div className="relative pt-3 pb-2 px-1">
+                                <div className="relative h-1 lg:h-1.5">
+                                    <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
                                     <div
-                                        className="absolute inset-y-0 left-0 bg-[#3CB371] transition-all duration-150"
-                                        style={{ width: `${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}%` }}
+                                        className="absolute inset-y-0 left-0 rounded-full transition-all duration-150"
+                                        style={{
+                                            width: `${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}%`,
+                                            background: '#3CB371',
+                                            boxShadow: '0 0 10px rgba(60, 179, 113, 0.4)'
+                                        }}
+                                    />
+                                    {/* Handle marker */}
+                                    <div
+                                        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 lg:w-4 lg:h-4 bg-white rounded-full shadow-md border border-gray-200 pointer-events-none transition-all duration-150"
+                                        style={{ left: `calc(${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}% - 6px)` }}
                                     />
                                     <input
                                         type="range" min="0" max="100" step="1"
@@ -122,18 +132,18 @@ function TradeTerminalComponent({
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2 mt-2">
                                 <button
                                     onClick={() => onRefill(refillAmount)}
                                     disabled={isExecuting}
-                                    className={`py-1.5 lg:py-2 rounded-lg bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                                    className={`py-1.5 lg:py-2 rounded-full bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
                                 >
                                     Deposit
                                 </button>
                                 <button
                                     onClick={() => onWithdraw(refillAmount)}
                                     disabled={isExecuting}
-                                    className={`py-1.5 lg:py-2 rounded-lg border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                                    className={`py-1.5 lg:py-2 rounded-full border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
                                 >
                                     Withdraw
                                 </button>

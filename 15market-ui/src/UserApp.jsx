@@ -261,20 +261,36 @@ export default function UserApp() {
 
     // 3. Absolute Sync: Use backend as source of truth for settled trades
     setTradeHistory(prev => {
-      // Create hash map of backend trades
-      const backendMap = new Map();
-      backendAll.forEach(t => backendMap.set(String(t.id), t));
+      const merged = [];
+      const backendGate = new Set();
 
-      // Merge with local trades that haven't hit backend yet
-      const merged = [...backendAll];
-      const backendGate = new Set(backendAll.map(t => String(t.id)));
+      backendAll.forEach(bt => {
+        const btId = String(bt.id);
+        backendGate.add(btId);
+
+        // Find local copy
+        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
+        if (local) {
+          // Keep local status if it is more "final" than backend
+          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1 };
+          if (statusOrder[local.status] > statusOrder[bt.status]) {
+            merged.push({ ...bt, status: local.status, payout: local.payout });
+          } else {
+            merged.push(bt);
+          }
+        } else {
+          merged.push(bt);
+        }
+      });
 
       prev.forEach(local => {
         const lid = String(local.id || local.tx || local.nonce);
         if (!backendGate.has(lid)) {
-          // Only keep local if it's very fresh (under 10 mins) and PENDING
+          // Keep local trade if it has a final status or if it's very fresh
+          const isFinal = ["WON", "LOST"].includes(local.status);
           const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
-          if (isRecent && local.status === "PENDING") {
+
+          if (isFinal || isRecent) {
             merged.push(local);
           }
         }
