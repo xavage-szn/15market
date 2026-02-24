@@ -23,6 +23,19 @@ const PORT = process.env.PORT || 3010;
 app.use(cors());
 app.use(express.json());
 
+// ===== GLOBAL CRASH PROTECTOR =====
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+    logToFile(`CRITICAL Unhandled Rejection: ${reason?.message || reason}`);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL: Uncaught Exception:', err);
+    logToFile(`CRITICAL Uncaught Exception: ${err.message}`);
+    // Optional: exit if the error is non-recoverable
+    // if (err.message.includes('EBADF')) process.exit(1);
+});
+
 // Helper to normalize legacy exaggerated numbers
 const normalizeTrade = (t) => {
     if (!t) return t;
