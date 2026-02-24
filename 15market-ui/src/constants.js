@@ -21,11 +21,11 @@ const isLocal = typeof window !== 'undefined' &&
         window.location.hostname.startsWith('192.168.') ||
         window.location.hostname.startsWith('10.'));
 
-const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? "http://127.0.0.1:3010" : "https://api.15market.online");
+const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? `http://${window.location.hostname}:3010` : "https://api.15market.online");
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
 
-// If we are local, prioritize 127.0.0.1:3010 for the Arc keeper unless explicitly overridden
-export const KEEPER_URL_ARC = import.meta.env.VITE_KEEPER_URL_ARC || (isLocal ? "http://127.0.0.1:3010" : `${KEEPER_URL}/arc`);
+// If we are local, prioritize current hostname:3010 for the Arc keeper unless explicitly overridden
+export const KEEPER_URL_ARC = import.meta.env.VITE_KEEPER_URL_ARC || (isLocal ? `http://${window.location.hostname}:3010` : `${KEEPER_URL}/arc`);
 console.log(`🌐 [Config] Keeper URL: ${KEEPER_URL_ARC}`);
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
 

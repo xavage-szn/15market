@@ -193,7 +193,7 @@ export default function UserApp() {
 
       // During cooldown, block ALL non-forced polls
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 30000) {
+      if (!force && msSinceLastAction < 5000) {
         return;
       }
 
@@ -213,7 +213,7 @@ export default function UserApp() {
       // CRITICAL: During cooldown, block ALL non-forced polls.
       // This prevents stale on-chain reads from overwriting optimistic debits or winnings.
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 30000) {
+      if (!force && msSinceLastAction < 5000) {
         console.log(`🛡️ [SESSION_BAL] Poll blocked during cooldown (${Math.round(msSinceLastAction / 1000)}s). On-chain: ${bal.toFixed(4)}, Display: ${sessionBalance.toFixed(4)}`);
         return;
       }
@@ -250,9 +250,8 @@ export default function UserApp() {
         prev.some(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce) && (p.status === "PENDING" || p.status === "RESOLVING"))
       );
       if (hasSettled) {
-        console.log("💰 [BALANCE] Settlement detected. Refreshing (respecting guard)...");
-        triggerGlobalRefresh(false); // DON'T force, respect the 30s guard
-        setTimeout(() => triggerGlobalRefresh(false), 1500);
+        console.log("💰 [BALANCE] Settlement detected. Force refreshing balance...");
+        triggerGlobalRefresh(true); // FORCE refresh to show winnings immediately
       }
       return prev;
     });
@@ -631,13 +630,8 @@ export default function UserApp() {
       if (!isConnected) {
         throw new Error("Please connect wallet first");
       }
-
       const amountWei = parseUnits(parseFloat(amount).toFixed(18), 18);
       let txHash;
-
-      // 🔥 IMMEDIATE FIX: Start cooldown NOW before long-running async calls
-      // This prevents stale polling from overwriting the balance during "Confirming Stake..."
-      lastOptimisticActionTime.current = Date.now();
 
       if (sessionMode) {
         const controller = new AbortController();
@@ -669,36 +663,15 @@ export default function UserApp() {
         });
       }
 
-      // WAIT FOR CONFIRMATION (Ensure Stake is Debited)
-      notify("Confirming Stake...", "pending");
-      console.log(`⏳ [SYNC] Waiting for stake deduction... Hash: ${txHash}`);
-
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash: txHash,
-        confirmations: 1,
-        timeout: 45000
-      });
-
-      if (receipt.status !== 'success' && receipt.status !== 1) {
-        throw new Error(`Transaction failed with status: ${receipt.status}`);
-      }
-
-      // ONLY AFTER SUCCESSFUL DEBIT (Confirmed on-chain)
-      console.log(`📉 [SUCCESS] Stake ${amtNum} verified as debited on-chain.`);
+      // 🔥 IMMEDIATE FIX: Start cooldown for 5s to prevent stale poll overwrite
       lastOptimisticActionTime.current = Date.now();
+      setIsExecuting(false); // Release main thread immediately for speed
+      notify("Trade Sent!", "success");
 
-      // Force-read the REAL post-debit balance from chain — single source of truth
-      if (sessionMode && evmSessionWallet) {
-        const postDebitWei = await publicClient.getBalance({ address: evmSessionWallet.address });
-        const postDebitBal = parseFloat(formatUnits(postDebitWei, 18));
-        setSessionBalance(postDebitBal);
-        console.log(`💰 [SESSION_BAL] Post-debit on-chain balance: ${postDebitBal.toFixed(4)} USDC`);
-      } else {
-        const postDebitWei = await publicClient.getBalance({ address });
-        const postDebitFormatted = formatUnits(postDebitWei, 18);
-        setEvmBalance(postDebitFormatted);
-        console.log(`💰 [MAIN_BAL] Post-debit on-chain balance: ${parseFloat(postDebitFormatted).toFixed(4)} USDC`);
-      }
+      // Background Balance Sync (Don't block the timer start)
+      publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 30000 })
+        .then(() => triggerGlobalRefresh(true))
+        .catch(() => { });
 
       const newTrade = {
         id: tradeId,
@@ -723,12 +696,9 @@ export default function UserApp() {
       setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
 
-      notify("Trade Executed!", "success");
-
     } catch (err) {
       console.error("Trade execution failed:", err);
       notify(`Trade Failed: ${err.message}`, "error");
-    } finally {
       setIsExecuting(false);
     }
   };
