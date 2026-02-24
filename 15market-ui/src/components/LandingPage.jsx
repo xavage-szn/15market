@@ -116,19 +116,7 @@ export function LandingPage() {
             {/* Hero Main */}
             <main className="flex-1 flex flex-col items-center justify-center text-center px-6 relative z-10 -mt-12 md:-mt-20">
                 {/* Status Pill */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="inline-flex items-center gap-3 px-4 py-2 rounded-full glass-pill mb-12"
-                >
-                    <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3CB371]" />
-                    </span>
-                    <span className="text-[8px] md:text-xs font-black uppercase tracking-[0.3em] text-[#3CB371]">
-                        Arc Mainnet Live
-                    </span>
-                </motion.div>
+
 
                 {/* Main Headline */}
                 <motion.div
@@ -169,10 +157,7 @@ export function LandingPage() {
                             <UnifiedWalletButton />
                         </div>
 
-                        <p className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#3CB371]/60">
-                            <MousePointer2 size={12} className="animate-bounce" />
-                            Connect any wallet to enter
-                        </p>
+
                     </div>
                 </motion.div>
             </main>
