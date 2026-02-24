@@ -1316,35 +1316,47 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     const handleLogin = async (e) => {
         if (e) e.preventDefault();
+        console.log("🔐 [AdminAuth] Login attempt for user:", loginForm.username);
         setAuthError(null);
 
         if (!isWalletConnected) {
+            console.warn("🔐 [AdminAuth] No wallet connected.");
             notify('error', 'WALLET REQUIRED', 'Connect authorized wallet to proceed.');
             return;
         }
 
         if (!isAuthorizedWallet) {
+            console.warn("🔐 [AdminAuth] Wallet not authorized:", walletAddress);
             notify('error', 'NOT ALLOWED', 'This wallet address is not registered in the administrative directory.');
             return;
         }
 
         if (!currentStaffMember.onboardingComplete) {
+            console.log("🔐 [AdminAuth] Onboarding required for:", walletAddress);
             setIsOnboarding(true);
             return;
         }
 
         try {
-            // Check credentials against our staff database
-            if (loginForm.username === currentStaffMember.username && loginForm.password === currentStaffMember.password) {
+            console.log("🔐 [AdminAuth] Comparing credentials...");
+            console.log("Target User:", currentStaffMember.username);
+            console.log("Input User:", loginForm.username);
+
+            // Check credentials against our staff database - Added trim() for resilience
+            if (loginForm.username.trim() === currentStaffMember.username.trim() &&
+                loginForm.password.trim() === currentStaffMember.password.trim()) {
+
+                console.log("🔐 [AdminAuth] Credentials matched. Initializing session...");
                 setIsLoggedIn(true);
                 setCurrentUser({ username: currentStaffMember.username, role: currentStaffMember.role });
                 notify('success', 'ACCESS GRANTED', 'Citadel Session Initialized.');
             } else {
+                console.warn("🔐 [AdminAuth] Credentials mismatch.");
                 notify('error', 'AUTH FAILED', 'INVALID LOGIN COORDINATES');
                 setAuthError("INVALID AUTHENTICATION COORDINATES");
             }
         } catch (err) {
-            console.error("Login Error:", err);
+            console.error("🔐 [AdminAuth] Login Error:", err);
             notify('error', 'SYSTEM ERROR', err.message);
         }
     };
@@ -1378,6 +1390,43 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     if (!isLoggedIn) {
         return (
             <div className="fixed inset-0 z-[300] bg-[#000] flex items-center justify-center overflow-hidden">
+                {/* Global Notification system (Toast) available even on login screen */}
+                <AnimatePresence>
+                    {notification && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 50, x: '-50%' }}
+                            animate={{ opacity: 1, y: 0, x: '-50%' }}
+                            exit={{ opacity: 0, y: 20, x: '-50%' }}
+                            className="fixed bottom-10 left-1/2 z-[1000] w-full max-w-md"
+                        >
+                            <div className={`mx-4 p-5 rounded-[24px] border backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-start gap-4 ${notification.type === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/30' :
+                                notification.type === 'error' ? 'bg-red-500/10 border-red-500/30' :
+                                    'bg-blue-500/10 border-blue-500/30'
+                                }`}>
+                                <div className={`p-2 rounded-xl ${notification.type === 'success' ? 'bg-[#3CB371]/20' :
+                                    notification.type === 'error' ? 'bg-red-500/20' :
+                                        'bg-blue-500/20'
+                                    }`}>
+                                    {notification.type === 'success' ? <CheckCircle2 className="text-[#3CB371]" size={20} /> :
+                                        notification.type === 'error' ? <ShieldAlert className="text-red-500" size={20} /> :
+                                            <AlertCircle className="text-blue-500" size={20} />}
+                                </div>
+                                <div className="flex-1">
+                                    <h5 className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${notification.type === 'success' ? 'text-[#3CB371]' :
+                                        notification.type === 'error' ? 'text-red-500' :
+                                            'text-blue-500'
+                                        }`}>
+                                        {String(notification.title || '')}
+                                    </h5>
+                                    <p className="text-xs font-bold text-white/70 leading-relaxed uppercase tracking-widest">{String(notification.message || '')}</p>
+                                </div>
+                                <button onClick={() => setNotification(null)} className="text-white/20 hover:text-white transition-colors">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 {/* Animated Background Gradients */}
                 <div className="absolute top-0 -left-1/4 w-1/2 h-full bg-[#3CB371]/10 blur-[160px] animate-pulse" />
                 <div className="absolute bottom-0 -right-1/4 w-1/2 h-full bg-[#3CB371]/5 blur-[160px]" />
