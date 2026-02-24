@@ -1786,7 +1786,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     <GlobalTradeScroller
                         wallet={DISCONNECTED_WALLET}
                         currentNetwork="ARC"
-                        history={filteredTradeHistory}
+                        history={filteredHistory}
                     />
                 </div>
 
