@@ -42,6 +42,8 @@ import { ThemeToggle } from "./components/ThemeToggle";
 
 
 export default function UserApp() {
+  const { isConnected, address, chainId: connectedChainId } = useAccount();
+  const { switchChain } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const [price, setPrice] = useState("0.00");
   const staticPriceFails = useRef(0);
@@ -167,8 +169,6 @@ export default function UserApp() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const { isConnected, address, chainId: connectedChainId } = useAccount();
-  const { switchChain } = useSwitchChain();
 
   // Auto-switch to Arc Testnet if wallet is on the wrong network
   useEffect(() => {
