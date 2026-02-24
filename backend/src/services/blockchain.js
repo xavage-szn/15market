@@ -209,6 +209,7 @@ class BlockchainService {
                 if (info.sentAt < staleThreshold) {
                     console.warn(`[Blockchain] ⏰ TX ${txHash} (bet ${info.betId}) timed out after 60s`);
                     this.pendingTxs.delete(txHash);
+                    if (this.onTxFailedCallback) this.onTxFailedCallback(info.betId.toString());
                     continue;
                 }
 
@@ -218,8 +219,10 @@ class BlockchainService {
                         if (receipt.status === 1) {
                             console.log(`[Blockchain] ✅ Background confirmed: ${txHash} for bet ${info.betId}`);
                             this.confirmedTxs.add(info.betId.toString());
+                            if (this.onTxConfirmedCallback) this.onTxConfirmedCallback(info.betId.toString());
                         } else {
                             console.warn(`[Blockchain] ❌ TX reverted: ${txHash} for bet ${info.betId}`);
+                            if (this.onTxFailedCallback) this.onTxFailedCallback(info.betId.toString());
                         }
                         this.pendingTxs.delete(txHash);
                     }
@@ -271,6 +274,14 @@ class BlockchainService {
 
     onBetPlaced(callback) {
         this.onBetPlacedCallback = callback;
+    }
+
+    onTxConfirmed(callback) {
+        this.onTxConfirmedCallback = callback;
+    }
+
+    onTxFailed(callback) {
+        this.onTxFailedCallback = callback;
     }
 
     async getCurrentBlock() {

@@ -45,6 +45,18 @@ class TradeProcessor {
             });
         });
 
+        // robust lifecycle tracking for reverted/dropped TXs
+        blockchain.onTxConfirmed(async (tradeId) => {
+            logToFile(`✅ Confirmed TX for trade ${tradeId}. Removing from active pipeline.`);
+            await redis.delTrade(tradeId);
+        });
+
+        blockchain.onTxFailed(async (tradeId) => {
+            logToFile(`❌ TX Reverted/Failed for trade ${tradeId}. Re-activating for settlement retry.`);
+            this.settledCache.delete(tradeId.toString());
+            this.settlingIds.delete(tradeId.toString());
+        });
+
         // 2. Settlement Loop (Ultra-fast 200ms tick for instant execution)
         setInterval(() => this.processSettlements(), 200);
 
@@ -200,13 +212,14 @@ class TradeProcessor {
             if (result) {
                 logToFile(`✅ Settlement TX for ${tradeId} broadcasted: ${result.hash}`);
 
-                // ONLY delete after successful broadcast
+                // Pause retries temporarily to wait for receipt
                 this.markSettled(tradeId);
-                await redis.delTrade(tradeId);
+                // DELIVERABLE: We DO NOT delTrade here anymore. We wait for onTxConfirmed callback to handle it.
 
-                // If it was already settled, we track it
+                // If it was already settled cleanly without Tx, remove immediately
                 if (result.alreadySettled) {
                     console.log(`[Processor] Bet ${tradeId} was already settled on-chain.`);
+                    await redis.delTrade(tradeId);
                 }
             }
         } catch (e) {
