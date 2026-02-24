@@ -1086,21 +1086,21 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         const RESERVE_ADDRESS = arcStats.address || 'Scanning...';
 
         const currentStats = {
-            volume: totalVolume.toFixed(2),
+            volume: Number(totalVolume || 0).toFixed(2),
             wallets: totalWallets,
-            activeStakes: finalActiveStake.toFixed(2),
-            totalPlatformFunds: PHYSICAL_TREASURY_BAL.toFixed(2),
+            activeStakes: Number(finalActiveStake || 0).toFixed(2),
+            totalPlatformFunds: Number(PHYSICAL_TREASURY_BAL || 0).toFixed(2),
             activeCount: finalActiveCount,
             unit: 'USDC'
         };
 
         return {
             activeList,
-            totalVolume: totalVolume.toFixed(2),
+            totalVolume: Number(totalVolume || 0).toFixed(2),
             totalWallets,
-            totalActiveStakes: finalActiveStake.toFixed(2),
+            totalActiveStakes: Number(finalActiveStake || 0).toFixed(2),
             currentStats,
-            displayReserve: PHYSICAL_TREASURY_BAL.toFixed(2),
+            displayReserve: Number(PHYSICAL_TREASURY_BAL || 0).toFixed(2),
             reserveAddress: RESERVE_ADDRESS,
             pendingDisputes: activeList.length,
             currencyUnit: 'USDC'
@@ -2550,7 +2550,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                 </td>
                                                                 <td className="px-8 py-6 text-center">
                                                                     <div className="text-xs font-black text-white">{profile.wins} <span className="text-white/20">/</span> {profile.trades}</div>
-                                                                    <div className="text-[9px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{profile.trades > 0 ? ((profile.wins / profile.trades) * 100).toFixed(0) : 0}% WR</div>
+                                                                    <div className="text-[9px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{profile.trades > 0 ? Number((profile.wins / profile.trades) * 100 || 0).toFixed(0) : 0}% WR</div>
                                                                 </td>
                                                                 <td className="px-8 py-6 text-right">
                                                                     <p className="text-xs font-black text-white">{profile.volume} USDC</p>
@@ -2913,8 +2913,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                                             {i === 0 ? '👑' : i + 1}
                                                                                         </td>
                                                                                         <td className="px-6 py-4 text-xs font-mono font-bold text-white/80">{row.address?.slice(0, 8)}...</td>
-                                                                                        <td className="px-6 py-4 text-right text-xs font-bold text-[#3CB371]">{row.winRate.toFixed(1)}%</td>
-                                                                                        <td className="px-6 py-4 text-right text-xs font-bold text-white">{row.pnl > 0 ? '+' : ''}{row.pnl.toFixed(4)}</td>
+                                                                                        <td className="px-6 py-4 text-right text-xs font-bold text-[#3CB371]">{Number(row.winRate || 0).toFixed(1)}%</td>
+                                                                                        <td className="px-6 py-4 text-right text-xs font-bold text-white">{row.pnl > 0 ? '+' : ''}{Number(row.pnl || 0).toFixed(4)}</td>
                                                                                     </tr>
                                                                                 ))}
                                                                                 {leaderboardData.length === 0 && (
