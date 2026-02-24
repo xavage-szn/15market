@@ -681,6 +681,17 @@ export default function UserApp() {
 
       // 🔥 OPTIMISTIC START: release UI immediately once we have a hash
       lastOptimisticActionTime.current = Date.now();
+
+      // OPTIMISTIC DEBIT: Subtract stake immediately for snappy UI
+      if (sessionMode) {
+        setSessionBalance(prev => Math.max(0, prev - amtNum));
+      } else {
+        setEvmBalance(prev => {
+          const current = parseFloat(prev || "0");
+          return Math.max(0, current - amtNum).toString();
+        });
+      }
+
       setIsExecuting(false);
       notify("Trade Broadcasted!", "success");
 
