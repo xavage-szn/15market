@@ -1340,7 +1340,10 @@ export default function UserApp() {
         fetch(`${KEEPER_URL_ARC}/settle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: trade.id })
+          body: JSON.stringify({
+            id: trade.id,
+            exitPrice: capturedPrice
+          })
         }).catch(e => console.error("Settlement trigger fail:", e));
 
         // Release resolving lock after a safety period (chain will confirm in background)

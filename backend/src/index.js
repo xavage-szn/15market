@@ -206,15 +206,15 @@ app.get('/profile', async (req, res) => {
 // ===== SETTLEMENT TRIGGER (Frontend calls this when timer hits 0) =====
 app.post('/settle', async (req, res) => {
     try {
-        const { id } = req.body;
+        const { id, exitPrice } = req.body;
         if (!id) return res.status(400).json({ error: 'Missing bet ID' });
 
-        logToFile(`[SETTLE] 🔔 Received manual settlement request for ${id}`);
+        logToFile(`[SETTLE] 🔔 Received manual settlement request for ${id} (Price: ${exitPrice || 'auto'})`);
 
         // The processor handles the heavy lifting
         const trade = await redis.getTrade(id);
         if (trade) {
-            await processor._settleSingleTrade(trade);
+            await processor._settleSingleTrade(trade, exitPrice);
             res.json({ success: true, message: 'Settlement triggered' });
         } else {
             // If not in memory (e.g. server restart), try to recover from chain then settle

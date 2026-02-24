@@ -57,12 +57,11 @@ class TradeProcessor {
         }
     }
 
-    async _settleSingleTrade(trade) {
+    async _settleSingleTrade(trade, manualPrice = null) {
         const tradeId = trade.id.toString();
         if (this.settlingIds.has(tradeId) || this.settledCache.has(tradeId)) return;
 
         // Safety Buffer: Only settle if it's been at least 1.5s since expiry
-        // This prevents race conditions with block timestamps
         if (Date.now() < (trade.expiry + 1500)) return;
 
         this.settlingIds.add(tradeId);
@@ -71,20 +70,29 @@ class TradeProcessor {
             const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
             const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
 
-            // ATTEMPT 1: Get price EXACTLY at the moment of expiry from our history
-            let settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
-            let logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
+            let settlementPrice = manualPrice;
+            let logMsg = `[Processor] Using MANUAL price from frontend for ${tradeId}`;
 
-            // ATTEMPT 2: Fallback to current price if history is missing
             if (!settlementPrice) {
-                settlementPrice = await pricing.getPrice(symbol);
-                logMsg = `[Processor] Using CURRENT price (fallback) for ${tradeId}`;
+                // ATTEMPT 1: Get price EXACTLY at the moment of expiry from our history
+                settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
+                logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
+
+                // ATTEMPT 2: Fallback to current price if history is missing
+                if (!settlementPrice) {
+                    settlementPrice = await pricing.getPrice(symbol);
+                    logMsg = `[Processor] Using CURRENT price (fallback) for ${tradeId}`;
+                }
             }
 
             if (!settlementPrice || settlementPrice <= 0) throw new Error("Price unavailable");
 
-            logToFile(`${logMsg}: ${settlementPrice}`);
-            const scaledPrice = BigInt(Math.round(settlementPrice * 1e8));
+            // 🔥 CRITICAL: Match Frontend's 3-decimal place truncation rule
+            // This ensures that win/loss determination on-chain matches the UI
+            const finalPrice = Math.floor(Number(settlementPrice) * 1000) / 1000;
+
+            logToFile(`${logMsg}: ${finalPrice} (Raw: ${settlementPrice})`);
+            const scaledPrice = BigInt(Math.round(finalPrice * 1e8));
 
             // --- FINAL SAFETY GUARD: CONTRACT BALANCE ---
             // If the payout is large and contract empty, don't waste gas retrying
