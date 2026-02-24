@@ -634,24 +634,39 @@ export default function UserApp() {
       let txHash;
 
       if (sessionMode) {
+        console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper...`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for mobile stability
 
-        const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            address,
-            tradeParams: { id: tradeId.toString(), direction: dirVal, duration: Number(duration), entryPrice: entryPriceParams.toString(), marketId: assetId, amount }
-          })
-        });
-        clearTimeout(timeoutId);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Trade failed");
-        txHash = data.txHash;
+        try {
+          const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              address,
+              tradeParams: {
+                id: tradeId.toString(),
+                direction: dirVal,
+                duration: Number(duration),
+                entryPrice: entryPriceParams.toString(),
+                marketId: assetId,
+                amount
+              }
+            })
+          });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Session trade failed");
+          txHash = data.txHash;
+          console.log(`✅ [SESSION] Tx Hash: ${txHash}`);
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          throw new Error(fetchErr.name === 'AbortError' ? "Keeper timeout - check network" : fetchErr.message);
+        }
       } else {
         if (!walletClient) throw new Error("Wallet not connected");
+        console.log(`✍️ [MAIN] Requesting contract signature...`);
         txHash = await walletClient.writeContract({
           address: ARC_CONTRACT_ADDRESS,
           abi: ArcABI.abi,
@@ -661,17 +676,23 @@ export default function UserApp() {
           account: address,
           gas: 800000n
         });
+        console.log(`✅ [MAIN] Tx Hash: ${txHash}`);
       }
 
-      // 🔥 IMMEDIATE FIX: Start cooldown for 5s to prevent stale poll overwrite
+      // 🔥 OPTIMISTIC START: release UI immediately once we have a hash
       lastOptimisticActionTime.current = Date.now();
-      setIsExecuting(false); // Release main thread immediately for speed
-      notify("Trade Sent!", "success");
+      setIsExecuting(false);
+      notify("Trade Broadcasted!", "success");
 
-      // Background Balance Sync (Don't block the timer start)
-      publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 30000 })
-        .then(() => triggerGlobalRefresh(true))
-        .catch(() => { });
+      // BACKGROUND: Wait for confirmation to sync balance
+      if (txHash) {
+        publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
+          .then(() => {
+            console.log(`⛓️ [CONFIRMED] Trade stake on-chain confirmed.`);
+            triggerGlobalRefresh(true);
+          })
+          .catch(e => console.warn(`[SYNC] Receipt wait timed out or failed:`, e.message));
+      }
 
       const newTrade = {
         id: tradeId,
@@ -687,18 +708,18 @@ export default function UserApp() {
         duration,
         network: "arc",
         startTime: Date.now(),
-        expiryMs: Date.now() + (duration * 1000),
+        expiryMs: expiryMs,
         symbol: activeMarket?.symbol || 'ETH',
         isSessionTrade: sessionMode,
       };
 
-      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (t.id || t.tx) !== (item.id || item.tx))];
+      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
       setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
 
     } catch (err) {
-      console.error("Trade execution failed:", err);
-      notify(`Trade Failed: ${err.message}`, "error");
+      console.error("❌ Execution Failed:", err);
+      notify(err.message, "error");
       setIsExecuting(false);
     }
   };

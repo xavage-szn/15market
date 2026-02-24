@@ -75,23 +75,22 @@ class PricingService {
                         const res = await this.axiosInstance.get(s.url);
                         const p = s.parse(res.data);
                         if (!p || isNaN(p)) throw new Error('Invalid price');
-                        console.log(`[Pricing] ✅ ${s.name} returned ${p} for ${symbol}`);
                         return p;
-                    } catch (e) {
-                        console.warn(`[Pricing] ❌ ${s.name} failed for ${symbol}: ${e.message}`);
-                        throw e;
-                    }
+                    } catch (e) { throw e; }
                 });
 
                 const fastestPrice = await Promise.any(pricePromises);
-                this.cache[symbol] = { price: fastestPrice, time: Date.now() };
+                const time = Date.now();
+                this.cache[symbol] = { price: fastestPrice, time };
+
+                // Keep history for last 5 minutes (300 seconds)
+                if (!this.history[symbol]) this.history[symbol] = [];
+                this.history[symbol].push({ price: fastestPrice, time });
+                if (this.history[symbol].length > 600) this.history[symbol].shift(); // roughly 5-10 mins of data
+
                 return fastestPrice;
             } catch (e) {
-                if (this.cache[symbol]) {
-                    console.warn(`[Pricing] ⚠️ All sources failed for ${symbol}, using cache: ${this.cache[symbol].price}`);
-                    return this.cache[symbol].price;
-                }
-                console.error(`[Pricing] ❌ All sources failed for ${symbol} and no cache.`);
+                if (this.cache[symbol]) return this.cache[symbol].price;
                 return 0;
             } finally {
                 delete this.fetching[symbol];
@@ -99,6 +98,26 @@ class PricingService {
         })();
 
         return this.fetching[symbol];
+    }
+
+    getHistoricalPrice(symbol, targetTime) {
+        if (!this.history[symbol] || this.history[symbol].length === 0) return null;
+
+        // Find the price entry closest to targetTime
+        let closest = this.history[symbol][0];
+        let minDiff = Math.abs(targetTime - closest.time);
+
+        for (const entry of this.history[symbol]) {
+            const diff = Math.abs(targetTime - entry.time);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closest = entry;
+            }
+        }
+
+        // If the closest entry is more than 10s away, it's not reliable
+        if (minDiff > 10000) return null;
+        return closest.price;
     }
 }
 

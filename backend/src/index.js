@@ -80,9 +80,8 @@ async function deriveUserWallet(userAddress) {
     const privateKey = ethers.keccak256(entropy);
     const provider = await getSessionProvider();
     const wallet = new ethers.Wallet(privateKey, provider);
-    const nonce = await provider.getTransactionCount(wallet.address, 'pending');
-    await redis.saveSessionMapping(wallet.address, addr);
-    return { wallet, address: wallet.address, nonce };
+    // Don't await nonce here, let callers use nonceManager
+    return { wallet, address: wallet.address };
 }
 
 app.get('/settings', (req, res) => res.json(SETTINGS_RESPONSE));
@@ -129,6 +128,9 @@ const getHistoryFor = async (address) => {
             const addr = address.toLowerCase();
             const { address: sessionAddr } = await deriveUserWallet(addr);
             const sessionLower = sessionAddr.toLowerCase();
+
+            // Background save mapping (don't block history sync)
+            redis.saveSessionMapping(sessionLower, addr).catch(() => { });
 
             trades = trades.filter(t =>
                 t.user.toLowerCase() === addr ||
@@ -258,8 +260,9 @@ app.post('/session/trade', async (req, res) => {
         logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id} for ${address}`);
 
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        const provider = wallet.provider;
-        const nonce = await nonceManager.getNonce(sessionAddr, provider);
+        const nonce = await nonceManager.getNonce(sessionAddr, wallet.provider);
+        // Ensure mapping is saved
+        redis.saveSessionMapping(sessionAddr, address).catch(() => { });
 
         // 1. Balance Check
         if (!amount || isNaN(amount)) throw new Error("Invalid trade amount");
