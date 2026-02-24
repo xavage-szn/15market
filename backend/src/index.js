@@ -108,7 +108,7 @@ app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
 const getHistoryFor = async (address) => {
     try {
         const currentBlock = await blockchain.getCurrentBlock();
-        const fromBlock = Math.max(0, currentBlock - 500000); // Extended range for history sync
+        const fromBlock = Math.max(0, currentBlock - 100000); // Extended range for history sync (chunked safely)
 
         const [placed, settled] = await Promise.all([
             blockchain.getPastEvents("BetPlaced", fromBlock),

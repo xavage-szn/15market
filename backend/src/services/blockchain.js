@@ -282,8 +282,18 @@ class BlockchainService {
         await this._ensureReady();
         try {
             console.log(`[Blockchain] 🔍 Scanning past events: ${eventName} from block ${fromBlock}`);
-            const events = await this.contract.queryFilter(eventName, fromBlock);
-            return events;
+            const currentBlock = await this.provider.getBlockNumber();
+            let allEvents = [];
+            let startBlock = fromBlock;
+            const chunk = 10000;
+
+            while (startBlock <= currentBlock) {
+                const endBlock = Math.min(startBlock + chunk - 1, currentBlock);
+                const events = await this.contract.queryFilter(eventName, startBlock, endBlock);
+                allEvents = allEvents.concat(events);
+                startBlock += chunk;
+            }
+            return allEvents;
         } catch (e) {
             console.error(`[Blockchain] ❌ Error querying past events ${eventName}:`, e.message);
             return [];
