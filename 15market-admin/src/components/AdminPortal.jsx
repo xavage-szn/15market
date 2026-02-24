@@ -67,8 +67,8 @@ import {
     Cell
 } from 'recharts';
 import { AdminAuthDB } from '../utils/adminAuthDb';
-import { useModal, useAccount as useParaAccount, useWallet } from "@getpara/react-sdk";
-import { useChainId, useSwitchChain } from 'wagmi';
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { useAppKit } from '@reown/appkit/react';
 
 const ROOT_WALLET = "0x4c8C0fb7333E3ab1594e69c0F5F751150502C28C";
 
@@ -167,15 +167,14 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [securityForm, setSecurityForm] = useState({ username: '', password: '', confirmPassword: '' });
     const [authError, setAuthError] = useState(null);
 
-    // Para & Wallet Integration
-    const { openModal } = useModal();
-    const { data: paraWallet } = useWallet();
-    const { isConnected, address } = useParaAccount();
+    // Reown & Wallet Integration
+    const { open } = useAppKit();
+    const { isConnected, address } = useAccount();
     const chainId = useChainId();
     const { switchChain } = useSwitchChain();
 
-    const walletAddress = (address || paraWallet?.address)?.toString();
-    const isWalletConnected = isConnected || !!walletAddress;
+    const walletAddress = address?.toString();
+    const isWalletConnected = isConnected;
 
     // Enforce Arc Network
     useEffect(() => {
@@ -1411,7 +1410,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 Administrative access requires an authorized wallet connection. Secure your identity to proceed.
                             </p>
                             <button
-                                onClick={() => openModal()}
+                                onClick={() => open()}
                                 className="group relative w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 <div className="absolute inset-0 bg-gradient-to-r from-[#3CB371] to-[#4ADE80] opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -1428,7 +1427,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 </div>
                             </div>
                             <button
-                                onClick={() => openModal()}
+                                onClick={() => open()}
                                 className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] hover:text-white transition-colors"
                             >
                                 Change Identity
@@ -1525,7 +1524,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 <div className="text-center">
                                     <button
                                         type="button"
-                                        onClick={() => openModal()}
+                                        onClick={() => open()}
                                         className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] hover:text-white transition-colors"
                                     >
                                         Switch Wallet

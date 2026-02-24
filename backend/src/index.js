@@ -73,7 +73,11 @@ const LISTINGS_RESPONSE = [
 ];
 
 // --- SESSION LOGIC (Deterministic Session Wallets) ---
-const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
+if (!SESSION_MASTER_SECRET) {
+    console.error("❌ CRITICAL: SESSION_MASTER_SECRET is missing in .env");
+    // In production, we should probably exit, but for now we'll just log loudly
+}
 const SESSION_RPCS = [
     "https://5042002.rpc.thirdweb.com",
     "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"

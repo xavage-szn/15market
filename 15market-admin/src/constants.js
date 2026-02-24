@@ -2,12 +2,12 @@
 import { defineChain } from 'viem'
 
 // Arc Network Constants
-export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS || "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8";
-export const ARC_RPC = import.meta.env.VITE_ARC_RPC || "https://rpc.testnet.arc.network";
+export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
+export const ARC_RPC = import.meta.env.VITE_ARC_RPC;
 
 // Project ID
-export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID || '4aebd2ef806c541b6aaf003da2930c58';
-export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || '15MARKET_ADMIN_SECRET_KEY_2024';
+export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
+export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? "http://localhost:3010" : "https://api.15market.online");
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;

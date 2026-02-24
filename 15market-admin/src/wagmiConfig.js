@@ -1,25 +1,40 @@
-import { arcTestnet, ARC_RPC } from './constants'
-import { sepolia } from 'viem/chains'
-import { injected, walletConnect } from 'wagmi/connectors'
-import { paraConnector } from '@getpara/wagmi-v2-integration'
-import { para, queryClient } from './paraClient'
+import { createAppKit } from '@reown/appkit/react';
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
+import { arcTestnet, ARC_RPC, projectId } from './constants';
 
-import { createConfig, http, createStorage } from 'wagmi'
+/**
+ * Wagmi Configuration for Reown AppKit - Admin Portal
+ * 
+ * Target Network: Arc Testnet only.
+ */
 
-export const wagmiConfig = createConfig({
-    chains: [arcTestnet],
-    multiInjectedProviderDiscovery: false,
-    storage: createStorage({ storage: window.localStorage }),
-    connectors: [
-        injected({ shimDisconnect: true }),
-        walletConnect({ projectId: "4aebd2ef806c541b6aaf003da2930c58" }),
-        paraConnector({ para, queryClient, appName: '15market' }),
-    ],
-    transports: {
-        [arcTestnet.id]: http(ARC_RPC, {
-            timeout: 30000,
-            retryCount: 3,
-            retryDelay: 1000,
-        }),
+// Create Wagmi adapter for Reown
+export const wagmiAdapter = new WagmiAdapter({
+    networks: [arcTestnet],
+    projectId
+});
+
+// Initialize Reown AppKit
+createAppKit({
+    adapters: [wagmiAdapter],
+    networks: [arcTestnet],
+    defaultNetwork: arcTestnet,
+    projectId,
+    metadata: {
+        name: '15market Admin',
+        description: '15market Administrative Control Center',
+        url: 'https://15market.online',
+        icons: ['https://15market.online/logo.png']
     },
-})
+    features: {
+        analytics: false,
+        swaps: false,
+        onramp: false,
+        emailShowWallets: false,
+    },
+    allowUnsupportedChain: false,
+    enableNetworkSwitch: false,
+});
+
+// Export Wagmi config for WagmiProvider
+export const wagmiConfig = wagmiAdapter.wagmiConfig;
