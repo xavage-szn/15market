@@ -341,7 +341,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
         if (isLoggedIn) {
             fetchArcBalance();
-            interval = setInterval(fetchArcBalance, 10000);
+            interval = setInterval(fetchArcBalance, 2000);
         }
         return () => clearInterval(interval);
     }, [isLoggedIn]);
@@ -356,7 +356,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             const now = Date.now() / 1000;
             nowRef.current = now;
             setTick(prev => prev + 1);
-        }, 10000); // OPTIMIZED: Increased from 5s to 10s
+        }, 1000); // 1s tick for real-time expiry checking
         return () => clearInterval(interval);
     }, []);
 
@@ -428,8 +428,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             fetchCampaigns();
-            // OPTIMIZED: Increased from 5s to 15s to prevent UI freezing
-            const interval = setInterval(fetchCampaigns, 15000);
+            const interval = setInterval(fetchCampaigns, 5000);
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchCampaigns]);
@@ -572,8 +571,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 }
                 return filtered;
             });
-            // OPTIMIZED: Increased from 5s to 30s - broadcasts don't need frequent cleanup
-        }, 30000);
+        }, 5000);
         return () => clearInterval(timer);
     }, []);
 
@@ -1029,8 +1027,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             triggerAnalysis();
-            // OPTIMIZED: Increased from 2s to 15s to prevent UI freezing
-            const interval = setInterval(triggerAnalysis, 15000);
+            const interval = setInterval(triggerAnalysis, 2000);
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, triggerAnalysis]);
@@ -1058,8 +1055,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             fetchTradeHistory();
-            // OPTIMIZED: Increased from 15s to 60s to prevent UI freezing
-            const interval = setInterval(fetchTradeHistory, 60000);
+            const interval = setInterval(fetchTradeHistory, 3000);
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchTradeHistory]);
@@ -1790,7 +1786,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     <GlobalTradeScroller
                         wallet={DISCONNECTED_WALLET}
                         currentNetwork="ARC"
-                        history={tradeHistory}
+                        history={filteredTradeHistory}
                     />
                 </div>
 

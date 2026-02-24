@@ -55,15 +55,32 @@ export default function UserApp() {
       return saved ? JSON.parse(saved) : [];
     } catch (e) { return []; }
   });
-  const [timerActive, setTimerActive] = useState(false);
-  const [duration, setDuration] = useState(15);
-  const [timeLeft, setTimeLeft] = useState(15);
+
   const [activeTrades, setActiveTrades] = useState(() => {
     try {
       const saved = localStorage.getItem("15market_history_v1");
       return saved ? JSON.parse(saved).filter(t => ["PENDING", "RESOLVING"].includes(t.status)) : [];
     } catch (e) { return []; }
   }); // Array of active trades
+
+  // Load user specific history when address changes
+  useEffect(() => {
+    if (address) {
+      try {
+        const saved = localStorage.getItem(`15market_history_${address.toLowerCase()}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setTradeHistory(parsed);
+          setActiveTrades(parsed.filter(t => ["PENDING", "RESOLVING"].includes(t.status)));
+        }
+      } catch (e) { }
+    }
+  }, [address]);
+
+  const [timerActive, setTimerActive] = useState(false);
+  const [duration, setDuration] = useState(15);
+  const [timeLeft, setTimeLeft] = useState(15);
+
   const activeTrade = activeTrades[0] || null; // For backward compatibility in some components
   const [isLoading, setIsLoading] = useState(true);
   const loadingTimeoutRef = useRef(null);
@@ -178,8 +195,17 @@ export default function UserApp() {
   const tradeHistoryRef = useRef([]);
   const activeTradesRef = useRef([]);
 
-  useEffect(() => { tradeHistoryRef.current = tradeHistory; }, [tradeHistory]);
-  useEffect(() => { activeTradesRef.current = activeTrades; }, [activeTrades]);
+  useEffect(() => {
+    tradeHistoryRef.current = tradeHistory;
+    if (address && tradeHistory.length > 0) {
+      localStorage.setItem(`15market_history_${address.toLowerCase()}`, JSON.stringify(tradeHistory));
+      localStorage.setItem("15market_history_v1", JSON.stringify(tradeHistory));
+    }
+  }, [tradeHistory, address]);
+
+  useEffect(() => {
+    activeTradesRef.current = activeTrades;
+  }, [activeTrades]);
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
   // 1. Core Balance Fetchers
@@ -786,14 +812,14 @@ export default function UserApp() {
   // Fetch and Index Trade History
   useEffect(() => {
     if (!address || !isConnected) {
-      setTradeHistory([]);
+      // DONT clear it here, because Wagmi takes a moment to reconnect on refresh!
       return;
     }
 
     const fetchTradeHistory = async () => {
       try {
         const addr = address.toLowerCase();
-        const res = await fetch(`${KEEPER_URL_ARC}/trades/${addr}`);
+        const res = await fetch(`${KEEPER_URL_ARC}/history/${addr}`);
         if (res.ok) {
           const backendAllRaw = await res.json();
           reconcileTrades(backendAllRaw);
