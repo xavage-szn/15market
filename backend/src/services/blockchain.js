@@ -278,19 +278,32 @@ class BlockchainService {
         return await this.provider.getBlockNumber();
     }
 
-    async getPastEvents(eventName, fromBlock) {
+    async getPastEvents(eventName, fromBlock, toBlock = null) {
         await this._ensureReady();
         try {
-            console.log(`[Blockchain] 🔍 Scanning past events: ${eventName} from block ${fromBlock}`);
-            const currentBlock = await this.provider.getBlockNumber();
+            const currentBlock = toBlock || await this.provider.getBlockNumber();
+            console.log(`[Blockchain] 🔍 Scanning past events: ${eventName} from block ${fromBlock} to ${currentBlock}`);
             let allEvents = [];
             let startBlock = fromBlock;
-            const chunk = 10000;
+            const chunk = 5000; // Smaller chunk for stability
 
             while (startBlock <= currentBlock) {
                 const endBlock = Math.min(startBlock + chunk - 1, currentBlock);
-                const events = await this.contract.queryFilter(eventName, startBlock, endBlock);
-                allEvents = allEvents.concat(events);
+                let retries = 3;
+                let success = false;
+
+                while (retries > 0 && !success) {
+                    try {
+                        const events = await this.contract.queryFilter(eventName, startBlock, endBlock);
+                        allEvents = allEvents.concat(events);
+                        success = true;
+                    } catch (e) {
+                        retries--;
+                        console.warn(`[Blockchain] ⚠️ Chunk fetch failed for ${eventName} [${startBlock}-${endBlock}]. Retries left: ${retries}. Error: ${e.message}`);
+                        if (retries === 0) throw e;
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                }
                 startBlock += chunk;
             }
             return allEvents;

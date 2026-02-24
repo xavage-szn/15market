@@ -1,11 +1,48 @@
-const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
 
-// IN-MEMORY STORE (Replaces Redis for absolute speed and decentralization)
-// This is stateless in terms of persistence but keeps track of current session state
+const INDEX_FILE = path.join(__dirname, '..', '..', 'trades_index.json');
+
+// IN-MEMORY STORE (Persistent Indexer)
 class MemoryStore {
     constructor() {
         this.activeTrades = new Map();
-        this.sessionWallets = new Map(); // sessionAddr -> mainAddr
+        this.sessionWallets = new Map();
+        this.historicalTrades = new Map(); // id -> trade
+        this.lastScannedBlock = 28000000; // Default safe starting point
+
+        this._loadFromDisk();
+    }
+
+    _loadFromDisk() {
+        try {
+            if (fs.existsSync(INDEX_FILE)) {
+                const data = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'));
+                if (data.historicalTrades) {
+                    Object.entries(data.historicalTrades).forEach(([id, trade]) => {
+                        this.historicalTrades.set(id, trade);
+                    });
+                }
+                if (data.lastScannedBlock) {
+                    this.lastScannedBlock = data.lastScannedBlock;
+                }
+                console.log(`[MemoryStore] Loaded ${this.historicalTrades.size} historical trades from disk.`);
+            }
+        } catch (e) {
+            console.error('[MemoryStore] Failed to load index from disk:', e.message);
+        }
+    }
+
+    async saveToDisk() {
+        try {
+            const data = {
+                historicalTrades: Object.fromEntries(this.historicalTrades),
+                lastScannedBlock: this.lastScannedBlock
+            };
+            fs.writeFileSync(INDEX_FILE, JSON.stringify(data, null, 2));
+        } catch (e) {
+            console.error('[MemoryStore] Failed to save index to disk:', e.message);
+        }
     }
 
     async setTrade(id, data) {
@@ -24,6 +61,23 @@ class MemoryStore {
         return Array.from(this.activeTrades.values());
     }
 
+    // Historical Indexing
+    async addHistoricalTrade(trade) {
+        const id = trade.id.toString();
+        const existing = this.historicalTrades.get(id);
+
+        // Merge or update
+        if (existing) {
+            this.historicalTrades.set(id, { ...existing, ...trade });
+        } else {
+            this.historicalTrades.set(id, trade);
+        }
+    }
+
+    async getFullHistory() {
+        return Array.from(this.historicalTrades.values());
+    }
+
     // Sessions
     async saveSessionMapping(sessionAddr, mainAddr) {
         this.sessionWallets.set(sessionAddr.toLowerCase(), mainAddr.toLowerCase());
@@ -33,14 +87,10 @@ class MemoryStore {
         return this.sessionWallets.get(sessionAddr.toLowerCase());
     }
 
-    // Mock/Stub the rest to avoid crashes in other parts of the code
+    // Compatibility stubs
     async getUserData() { return null; }
     async saveProfile() { return true; }
     async getProfile() { return null; }
-    async pushHistory() { }
-    async pushUserHistory() { }
-    async pushUserTransaction() { }
-    async getHistory() { return []; }
     async syncFromRedis() { }
 }
 

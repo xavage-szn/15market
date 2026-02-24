@@ -107,59 +107,27 @@ app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
 // Helper for history (Shared between /history and /profile)
 const getHistoryFor = async (address) => {
     try {
-        const currentBlock = await blockchain.getCurrentBlock();
-        const fromBlock = Math.max(0, currentBlock - 100000); // Extended range for history sync (chunked safely)
-
-        const [placed, settled] = await Promise.all([
-            blockchain.getPastEvents("BetPlaced", fromBlock),
-            blockchain.getPastEvents("BetSettled", fromBlock)
-        ]);
-
-        const settledMap = new Map();
-        settled.forEach(e => {
-            settledMap.set(e.args.id.toString(), {
-                status: e.args.won ? 'WON' : 'LOST',
-                settlementPrice: (Number(e.args.settlementPrice) / 1e8).toFixed(3),
-                payout: ethers.formatEther(e.args.payout)
-            });
-        });
-
-        let trades = placed.map(e => {
-            const id = e.args.id.toString();
-            const s = settledMap.get(id);
-            return {
-                id,
-                user: e.args.user,
-                amount: ethers.formatEther(e.args.amount),
-                direction: Number(e.args.direction) === 1 ? 'UP' : 'DOWN',
-                duration: Number(e.args.duration),
-                entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(3),
-                timestamp: Number(e.args.timestamp) * 1000,
-                status: s ? s.status : 'PENDING',
-                settlementPrice: s ? s.settlementPrice : null,
-                payout: s ? s.payout : null
-            };
-        });
+        const allTrades = await redis.getFullHistory();
+        let trades = allTrades;
 
         if (address) {
             const addr = address.toLowerCase();
             const { address: sessionAddr } = await deriveUserWallet(addr);
             const sessionLower = sessionAddr.toLowerCase();
 
-            // Background save mapping (don't block history sync)
-            redis.saveSessionMapping(sessionLower, addr).catch(() => { });
-
-            trades = trades.filter(t =>
-                t.user.toLowerCase() === addr ||
-                t.user.toLowerCase() === sessionLower
+            trades = allTrades.filter(t =>
+                t.user?.toLowerCase() === addr ||
+                t.user?.toLowerCase() === sessionLower ||
+                t.owner?.toLowerCase() === addr ||
+                t.owner?.toLowerCase() === sessionLower
             );
 
-            logToFile(`[History Sync] Merged ${trades.length} trades for ${addr} (Main) + ${sessionLower} (Session)`);
+            logToFile(`[History API] Serving ${trades.length} indexed trades for ${addr}`);
         }
 
-        return trades.sort((a, b) => b.timestamp - a.timestamp);
+        return trades.sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
     } catch (e) {
-        console.error('[History Helper] Error:', e);
+        console.error('[History API] Error:', e);
         return [];
     }
 };

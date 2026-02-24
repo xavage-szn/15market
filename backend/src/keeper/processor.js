@@ -25,9 +25,9 @@ class TradeProcessor {
     }
 
     async init() {
-        console.log('[Processor] Initializing Stateless Trade Processor...');
+        console.log('[Processor] Initializing Trade Processor & History Indexer...');
 
-        // Listen for new trades on-chain
+        // 1. Listen for new trades on-chain (Real-time)
         blockchain.onBetPlaced(async (trade) => {
             const existing = await redis.getTrade(trade.id);
             if (!existing) {
@@ -37,10 +37,84 @@ class TradeProcessor {
                 });
                 console.log(`[Processor] 🛰️ Detected on-chain trade ${trade.id}, tracking for settlement.`);
             }
+            // Add to history too
+            await redis.addHistoricalTrade({
+                ...trade,
+                timestamp: trade.timestamp * 1000,
+                status: 'PENDING'
+            });
         });
 
-        // Loop for safety (auto-settles if frontend doesn't call)
+        // 2. Settlement Loop
         setInterval(() => this.processSettlements(), 1000);
+
+        // 3. Background History Sync (Backfiller)
+        this.runHistoryBackfiller();
+    }
+
+    async runHistoryBackfiller() {
+        console.log('[Processor] 📚 Starting history backfiller...');
+
+        const sync = async () => {
+            try {
+                const currentBlock = await blockchain.provider.getBlockNumber();
+                const startBlock = redis.lastScannedBlock;
+
+                if (startBlock >= currentBlock) return;
+
+                // Scan in chunks of 50,000 blocks via blockchain helper
+                // blockchain.js already chunks these internally into 5000 block RPC calls
+                const lookback = 50000;
+                const endBlock = Math.min(startBlock + lookback, currentBlock);
+
+                const [placed, settled] = await Promise.all([
+                    blockchain.getPastEvents("BetPlaced", startBlock, endBlock),
+                    blockchain.getPastEvents("BetSettled", startBlock, endBlock)
+                ]);
+
+                if (placed.length > 0 || settled.length > 0) {
+                    console.log(`[Processor] Found events in [${startBlock}-${endBlock}]: ${placed.length} Placed, ${settled.length} Settled`);
+                }
+
+                const settledMap = new Map();
+                settled.forEach(e => {
+                    settledMap.set(e.args.id.toString(), {
+                        status: e.args.won ? 'WON' : 'LOST',
+                        settlementPrice: (Number(e.args.settlementPrice) / 1e8).toFixed(3),
+                        payout: ethers.formatEther(e.args.payout)
+                    });
+                });
+
+                for (const e of placed) {
+                    const id = e.args.id.toString();
+                    const s = settledMap.get(id);
+                    await redis.addHistoricalTrade({
+                        id,
+                        user: e.args.user,
+                        amount: ethers.formatEther(e.args.amount),
+                        direction: Number(e.args.direction) === 1 ? 'UP' : 'DOWN',
+                        duration: Number(e.args.duration),
+                        entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(3),
+                        timestamp: Number(e.args.timestamp) * 1000,
+                        status: s ? s.status : 'PENDING',
+                        settlementPrice: s ? s.settlementPrice : null,
+                        payout: s ? s.payout : null
+                    });
+                }
+
+                // If we scanned everything up to endBlock successfully
+                redis.lastScannedBlock = endBlock + 1;
+                await redis.saveToDisk();
+
+            } catch (e) {
+                console.error('[Processor] History backfiller error:', e.message);
+            }
+        };
+
+        // Initial burst
+        await sync();
+        // Periodic sync
+        setInterval(sync, 15000);
     }
 
     async processSettlements() {
