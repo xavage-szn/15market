@@ -289,7 +289,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     setMetrics(prev => ({
                         ...prev,
                         totalWallets: data.wallets || 0,
-                        totalVolume: data.totalVolume ? `${Number(data.totalVolume).toFixed(2)} USDC` : '0.00',
+                        totalVolume: data.totalVolume ? `${Number(data.totalVolume || 0).toFixed(2)} USDC` : '0.00',
                         activeUsers: data.activeCount || 0,
                         pendingDisputes: data.pendingDisputes || prev.pendingDisputes || 0,
                         networkHealth: '100% Operational'
@@ -1929,7 +1929,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                         <StatCard
                                             icon={TrendingUp}
                                             label="Protocol Revenue"
-                                            value={`${(autoSignerFees?.arc || 0).toFixed(6)} ${unifiedMetrics.currencyUnit}`}
+                                            value={`${Number(autoSignerFees?.arc || 0).toFixed(6)} ${unifiedMetrics.currencyUnit}`}
                                             trend="REVENUE"
                                             positive={true}
                                         />
@@ -1988,12 +1988,12 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                             </td>
                                                             <td className="px-8 py-5">
                                                                 <div className="flex flex-col">
-                                                                    <span className={`text-[10px] font-black ${trade.direction === 'UP' ? 'text-[#3CB371]' : 'text-red-500'} uppercase tracking-tighter`}>{trade.direction} @ ${parseFloat(trade.entryPrice || 0).toFixed(4)}</span>
+                                                                    <span className={`text-[10px] font-black ${trade.direction === 'UP' ? 'text-[#3CB371]' : 'text-red-500'} uppercase tracking-tighter`}>{trade.direction} @ ${Number(trade.entryPrice || 0).toFixed(4)}</span>
                                                                     <span className="text-[8px] text-white/20 font-bold uppercase tracking-widest mt-0.5">Duration: {trade.duration}s</span>
                                                                 </div>
                                                             </td>
                                                             <td className="px-8 py-5 text-center">
-                                                                <span className="text-[11px] font-black text-white">{parseFloat(trade.amount || 0).toFixed(4)} USDC</span>
+                                                                <span className="text-[11px] font-black text-white">{Number(trade.amount || 0).toFixed(4)} USDC</span>
                                                             </td>
                                                             <td className="px-8 py-5">
                                                                 <div className="flex items-center gap-2">
@@ -3542,7 +3542,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                     <Database size={32} />
                                 </div>
                                 <h3 className="text-xl font-black text-white uppercase tracking-widest">Treasury Control</h3>
-                                <p className="text-xs text-white/20 font-bold mt-1 uppercase">Balance: {arcTreasuryBalance.toFixed(4)} USDC</p>
+                                <p className="text-xs text-white/20 font-bold mt-1 uppercase">Balance: {Number(arcTreasuryBalance || 0).toFixed(4)} USDC</p>
                             </div>
 
                             <div className="space-y-6">
