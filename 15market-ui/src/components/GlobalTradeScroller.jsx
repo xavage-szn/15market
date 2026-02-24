@@ -105,14 +105,14 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
         // Add any recently settled or active trades that aren't in the backend history yet
         const localTrades = [...(tradeHistory || []), ...(activeTrades || [])];
         for (const t of localTrades) {
-            if (t.id && !existingIds.has(t.id.toString()) && t.status !== "PENDING") {
+            if (t.id && !existingIds.has(t.id.toString())) {
                 merged.push({
                     id: t.id?.toString(),
-                    owner: t.userPublicKey || t.owner || '',
+                    owner: t.userPublicKey || t.owner || t.user || '',
                     amount: t.amount,
                     direction: t.direction,
                     symbol: t.symbol || 'ETH',
-                    status: t.status,
+                    status: t.status || "LIVE",
                     timestamp: t.timestamp || Date.now(),
                     network: 'arc'
                 });
@@ -136,7 +136,7 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
 
     return (
         <div
-            className={`w-screen h-9 flex items-center overflow-hidden relative transition-all duration-500 rounded-none left-1/2 -translate-x-1/2 ${isLight
+            className={`w-full h-10 lg:h-12 flex items-center overflow-hidden relative transition-all duration-500 rounded-none z-[40] ${isLight
                 ? 'border-y-2 border-[#3CB371]/30 shadow-[0_0_15px_rgba(60,179,113,0.1)]'
                 : 'glass-panel border-white/5'
                 }`}
