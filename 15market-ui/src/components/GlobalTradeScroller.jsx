@@ -188,14 +188,18 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
 
                 <motion.div
                     animate={{ x: ["0%", "-50%"] }}
-                    className="flex items-center gap-6 lg:gap-10 whitespace-nowrap pl-40 lg:pl-52"
-                    transition={{ x: { duration: 160, repeat: Infinity, ease: "linear" } }}
+                    className="flex items-center gap-4 lg:gap-8 whitespace-nowrap pl-20 lg:pl-40"
+                    transition={{ x: { duration: 45, repeat: Infinity, ease: "linear" } }}
                 >
-                    {repeatedHistory.map((event, i) => (
+                    {repeatedHistory.length === 0 ? (
+                        <div className="flex items-center gap-2 px-6 py-2">
+                            <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Syncing Market Pulse...</span>
+                        </div>
+                    ) : repeatedHistory.map((event, i) => (
                         <div key={`${event.id}-${i}`}
                             className={`flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border transition-all group ${isLight ? 'border-black/[0.05] bg-black/[0.02] hover:bg-black/[0.05]' : 'border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05]'}`}
                             style={{
-                                boxShadow: event.direction === "UP"
+                                boxShadow: event.direction === "UP" || event.direction === 1
                                     ? `0 0 10px rgba(60, 179, 113, 0.15)`
                                     : `0 0 10px rgba(255, 127, 80, 0.15)`
                             }}
@@ -212,7 +216,7 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
 
                             <div className="flex flex-col">
                                 <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>
-                                    ARC • #{event.absIndex || '---'}
+                                    ARC • #{event.id?.slice(-4) || '---'}
                                 </span>
                                 <span className={`text-[8px] lg:text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
                                     {profiles[event.owner]?.username || truncate(event.owner)}
@@ -226,7 +230,7 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
                                     {event.status || "LIVE"}
                                 </span>
                                 <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {event.symbol} {event.direction === "UP" || event.direction === 1 || String(event.direction) === "1" ? "UP" : "DOWN"}
+                                    {event.amount} {event.symbol || 'USDC'} {event.direction === "UP" || event.direction === 1 || String(event.direction) === "1" ? "UP" : "DOWN"}
                                 </span>
                             </div>
                         </div>

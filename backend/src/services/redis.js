@@ -7,9 +7,14 @@ class RedisStore {
     constructor() {
         if (REDIS_URL) {
             console.log('[Redis] Connecting to Redis Cloud...');
-            this.redis = new Redis(REDIS_URL);
+            this.redis = new Redis(REDIS_URL, {
+                retryStrategy: (times) => Math.min(times * 50, 2000),
+                reconnectOnError: (err) => true
+            });
             this.isCloud = true;
             this._lastBlock = 28600000;
+
+            this.redis.ping().then(() => console.log('[Redis] ✅ Cloud Connection Verified')).catch(e => console.error('[Redis] ❌ Connection Failed:', e.message));
         } else {
             console.warn('[Redis] No REDIS_URL found, falling back to local memory.');
             this.redis = null;
@@ -78,8 +83,13 @@ class RedisStore {
         if (this.isCloud) {
             try {
                 const all = await this.redis.hvals('15market_historical_trades');
-                return all.map(t => JSON.parse(t));
+                const trades = all.map(t => JSON.parse(t));
+                if (trades.length === 0) {
+                    console.log("[Redis] ⚠️ History is empty in Cloud. Backfiller might still be running.");
+                }
+                return trades;
             } catch (e) {
+                console.error('[Redis] getFullHistory failed:', e.message);
                 return [];
             }
         }

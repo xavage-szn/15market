@@ -62,10 +62,11 @@ class TradeProcessor {
 
                 if (startBlock >= currentBlock) return;
 
-                // Scan in chunks of 50,000 blocks via blockchain helper
-                // blockchain.js already chunks these internally into 5000 block RPC calls
-                const lookback = 50000;
+                // Scan in chunks of 200k blocks via blockchain helper
+                const lookback = 200000;
                 const endBlock = Math.min(startBlock + lookback, currentBlock);
+
+                console.log(`[Processor] 📚 Syncing history: ${startBlock} -> ${endBlock} (Target: ${currentBlock})`);
 
                 const [placed, settled] = await Promise.all([
                     blockchain.getPastEvents("BetPlaced", startBlock, endBlock),
@@ -104,10 +105,15 @@ class TradeProcessor {
 
                 // If we scanned everything up to endBlock successfully
                 redis.lastScannedBlock = endBlock + 1;
-                await redis.saveToDisk();
+
+                // If we are way behind, run again immediately
+                if (endBlock < currentBlock) {
+                    setTimeout(sync, 1000);
+                }
 
             } catch (e) {
                 console.error('[Processor] History backfiller error:', e.message);
+                setTimeout(sync, 10000); // Wait longer on error
             }
         };
 

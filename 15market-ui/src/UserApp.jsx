@@ -51,31 +51,15 @@ export default function UserApp() {
   const [sliderValue, setSliderValue] = useState(0);
   // const [balance, setBalance] = useState(0); // Removed in favor of evmBalance/sessionBalance logic
   const [direction, setDirection] = useState(null);
-  const [tradeHistory, setTradeHistory] = useState(() => {
-    try {
-      const saved = localStorage.getItem("15market_history_v1");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) { return []; }
-  });
+  const [tradeHistory, setTradeHistory] = useState([]);
 
-  const [activeTrades, setActiveTrades] = useState(() => {
-    try {
-      const saved = localStorage.getItem("15market_history_v1");
-      return saved ? JSON.parse(saved).filter(t => ["PENDING", "RESOLVING"].includes(t.status)) : [];
-    } catch (e) { return []; }
-  }); // Array of active trades
+  const [activeTrades, setActiveTrades] = useState([]); // Array of active trades
 
-  // Load user specific history when address changes
+  // Clear local device history when address changes to ensure unified source sync
   useEffect(() => {
     if (address) {
-      try {
-        const saved = localStorage.getItem(`15market_history_${address.toLowerCase()}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setTradeHistory(parsed);
-          setActiveTrades(parsed.filter(t => ["PENDING", "RESOLVING"].includes(t.status)));
-        }
-      } catch (e) { }
+      setTradeHistory([]);
+      setActiveTrades([]);
     }
   }, [address]);
 
@@ -197,11 +181,7 @@ export default function UserApp() {
 
   useEffect(() => {
     tradeHistoryRef.current = tradeHistory;
-    if (address && tradeHistory.length > 0) {
-      localStorage.setItem(`15market_history_${address.toLowerCase()}`, JSON.stringify(tradeHistory));
-      localStorage.setItem("15market_history_v1", JSON.stringify(tradeHistory));
-    }
-  }, [tradeHistory, address]);
+  }, [tradeHistory]);
 
   useEffect(() => {
     activeTradesRef.current = activeTrades;
@@ -270,60 +250,37 @@ export default function UserApp() {
     }));
 
     // 2. Reactive Balance Sync: If any trade settled since last view, force refresh
-    setActiveTrades(prev => {
-      const hasSettled = backendAll.some(bt =>
-        bt.status !== "PENDING" && bt.status !== "RESOLVING" &&
-        prev.some(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce) && (p.status === "PENDING" || p.status === "RESOLVING"))
-      );
-      if (hasSettled) {
-        console.log("💰 [BALANCE] Settlement detected. Force refreshing balance...");
-        triggerGlobalRefresh(true); // FORCE refresh to show winnings immediately
-      }
-      return prev;
-    });
+    const hasSettled = backendAll.some(bt =>
+      (bt.status === "WON" || bt.status === "LOST") &&
+      activeTradesRef.current.some(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce) && (p.status === "PENDING" || p.status === "RESOLVING"))
+    );
+    if (hasSettled) {
+      console.log("💰 [BALANCE] Settlement detected. Force refreshing balance...");
+      triggerGlobalRefresh(true);
+    }
 
-    // 3. Update History (Dedupe & Merge)
+    // 3. Absolute Sync: Use backend as source of truth for settled trades
     setTradeHistory(prev => {
+      // Create hash map of backend trades
+      const backendMap = new Map();
+      backendAll.forEach(t => backendMap.set(String(t.id), t));
+
+      // Merge with local trades that haven't hit backend yet
       const merged = [...backendAll];
-      const now = Date.now();
-      const FIFTEEN_MINS = 15 * 60 * 1000;
+      const backendGate = new Set(backendAll.map(t => String(t.id)));
 
       prev.forEach(local => {
-        const localId = String(local.id || local.tx || local.nonce);
-        const matchIdx = merged.findIndex(m => String(m.id || m.tx || m.nonce) === localId);
-
-        if (matchIdx !== -1) {
-          // Preserve local-only flags that backend doesn't know about
-          const preservedFields = {};
-          if (local.balanceApplied) preservedFields.balanceApplied = true;
-          if (local.isSessionTrade !== undefined) preservedFields.isSessionTrade = local.isSessionTrade;
-          if (local.optimistic) preservedFields.optimistic = true;
-
-          // Keep internal "RESOLVING" status if backend is still PENDING
-          if (merged[matchIdx].status === "PENDING" && local.status === "RESOLVING") {
-            merged[matchIdx] = { ...merged[matchIdx], ...preservedFields, status: "RESOLVING" };
-          } else {
-            merged[matchIdx] = { ...merged[matchIdx], ...preservedFields };
-          }
-        } else {
-          // Not in backend, keep local if fresh
-          const localTime = (local.timestamp || local.startTime || now);
-          const normLocal = localTime > 1000000000000 ? localTime : localTime * 1000;
-          const isFresh = (now - normLocal) < FIFTEEN_MINS;
-          if (local.status === "PENDING" ? isFresh : true) {
+        const lid = String(local.id || local.tx || local.nonce);
+        if (!backendGate.has(lid)) {
+          // Only keep local if it's very fresh (under 10 mins) and PENDING
+          const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
+          if (isRecent && local.status === "PENDING") {
             merged.push(local);
           }
         }
       });
 
-      const sorted = merged.sort((a, b) => {
-        const timeA = (a.timestamp || a.startTime || 0);
-        const timeB = (b.timestamp || b.startTime || 0);
-        const normA = timeA > 1000000000000 ? timeA : timeA * 1000;
-        const normB = timeB > 1000000000000 ? timeB : timeB * 1000;
-        return normB - normA;
-      });
-      return sorted.slice(0, 100);
+      return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 100);
     });
 
     // 4. Update Active Trades (Monotonic Status)
@@ -1185,10 +1142,7 @@ export default function UserApp() {
     return "0.1"; // 0.1 USDC min stake on Arc
   }, []);
 
-  // Persistence
-  useEffect(() => {
-    localStorage.setItem("15market_history_v1", JSON.stringify(tradeHistory));
-  }, [tradeHistory]);
+  // Persistence handled by unified backend now
 
 
 
@@ -1820,8 +1774,8 @@ export default function UserApp() {
           }}
         />
       ) : (
-        <div className="w-full flex flex-col items-center px-2 lg:px-6 py-4 lg:py-10">
-          <header className="w-full max-w-7xl flex items-center justify-between mb-4 lg:mb-8 relative z-50">
+        <div className="w-full flex flex-col items-center py-4 lg:py-10">
+          <header className="w-full max-w-7xl px-4 lg:px-6 flex items-center justify-between mb-4 lg:mb-8 relative z-50">
             <div className="flex items-center gap-4">
               <img src="/logo.png" alt="logo" className={`h-20 sm:h-24 lg:h-32 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
@@ -1867,12 +1821,12 @@ export default function UserApp() {
             </div>
           </header>
 
-          {/* Full-width scroller - edge to edge */}
-          <div className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mb-4 lg:mb-10 overflow-hidden">
+          {/* Full-width scroller - Truly edge to edge now */}
+          <div className="w-full mb-6 lg:mb-12 overflow-hidden border-y border-white/5 bg-black/20">
             <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} activeTrades={activeTrades} tradeHistory={tradeHistory} />
           </div>
 
-          <div className="w-full max-w-7xl flex flex-col items-center">
+          <div className="w-full max-w-7xl px-4 lg:px-6 flex flex-col items-center">
             <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
               {/* Chart - Responsive - Full width */}
               <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
