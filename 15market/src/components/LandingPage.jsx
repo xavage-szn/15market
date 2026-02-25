@@ -1,3 +1,6 @@
+import { motion } from "framer-motion";
+import { UnifiedWalletButton } from "./UnifiedWalletButton";
+
 const AnimatedIllustrationBackground = () => (
     <div className="absolute inset-0 overflow-hidden z-0 pointer-events-none bg-[#050505]">
         {/* Momentum Waves Illustration */}
