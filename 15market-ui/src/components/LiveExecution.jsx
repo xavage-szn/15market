@@ -45,7 +45,7 @@ function LiveExecutionComponent({
                         const now = Date.now();
                         const start = trade.startTime || (trade.nonce > 1000000000000 ? trade.nonce : Math.floor(trade.nonce / 100) * 1000) || now;
                         const duration = trade.duration || 30;
-                        const expiryMs = trade.expiryMs || (start + (duration * 1000));
+                        const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
                         const rawTimeLeft = Math.max(0, (expiryMs - now) / 1000);
                         const displayTimeLeft = (rawTimeLeft > 0 && rawTimeLeft <= 10) ? rawTimeLeft.toFixed(1) : Math.ceil(rawTimeLeft);
                         const timerExpired = rawTimeLeft <= 0;

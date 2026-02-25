@@ -51,17 +51,40 @@ export default function UserApp() {
   const [sliderValue, setSliderValue] = useState(0);
   // const [balance, setBalance] = useState(0); // Removed in favor of evmBalance/sessionBalance logic
   const [direction, setDirection] = useState(null);
-  const [tradeHistory, setTradeHistory] = useState([]);
+  const loadLocalTrades = (userAddress, isHistory) => {
+    try {
+      if (!userAddress) return [];
+      const key = isHistory ? `15market_history_${userAddress.toLowerCase()}` : `15market_active_${userAddress.toLowerCase()}`;
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  };
 
-  const [activeTrades, setActiveTrades] = useState([]); // Array of active trades
+  const [tradeHistory, setTradeHistory] = useState(() => loadLocalTrades(address, true));
+  const [activeTrades, setActiveTrades] = useState(() => loadLocalTrades(address, false));
 
-  // Clear local device history when address changes to ensure unified source sync
+  const lastAddressRef = useRef(address);
+
+  // Preserve local device history by scooping it to the actively connected wallet address
   useEffect(() => {
-    if (address) {
-      setTradeHistory([]);
-      setActiveTrades([]);
+    if (address && address !== lastAddressRef.current) {
+      setTradeHistory(loadLocalTrades(address, true));
+      setActiveTrades(loadLocalTrades(address, false));
+      lastAddressRef.current = address;
     }
   }, [address]);
+
+  useEffect(() => {
+    if (address && address === lastAddressRef.current) {
+      localStorage.setItem(`15market_history_${address.toLowerCase()}`, JSON.stringify(tradeHistory));
+    }
+  }, [tradeHistory, address]);
+
+  useEffect(() => {
+    if (address && address === lastAddressRef.current) {
+      localStorage.setItem(`15market_active_${address.toLowerCase()}`, JSON.stringify(activeTrades));
+    }
+  }, [activeTrades, address]);
 
   const [timerActive, setTimerActive] = useState(false);
   const [duration, setDuration] = useState(15);
@@ -242,12 +265,28 @@ export default function UserApp() {
     if (!backendAllRaw) return;
 
     // 1. Normalize backend trades
-    const backendAll = backendAllRaw.map(t => ({
-      ...t,
-      direction: (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy") ? "UP" : "DOWN",
-      status: t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING"),
-      owner: t.owner || t.user || t.userPublicKey || t.userAddress
-    }));
+    const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+
+    const backendAll = backendAllRaw.map(t => {
+      const isUpTrade = (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy");
+      let activeStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
+
+      // Enforce PENDING strictly if we're inside the 15s balance cooldown for newly won trades
+      if (activeStatus === "WON" && msSinceLastAction < 15000) {
+        // Only block it if it hasn't already been firmly baked as WON previously 
+        const alreadyFinal = tradeHistoryRef.current.some(p => String(p.id) === String(t.id) && p.status === "WON");
+        if (!alreadyFinal) {
+          activeStatus = "PENDING";
+        }
+      }
+
+      return {
+        ...t,
+        direction: isUpTrade ? "UP" : "DOWN",
+        status: activeStatus,
+        owner: t.owner || t.user || t.userPublicKey || t.userAddress
+      };
+    });
 
     // 2. Reactive Balance Sync: If any trade settled since last view, force refresh
     const hasSettled = backendAll.some(bt =>
@@ -1412,7 +1451,7 @@ export default function UserApp() {
             // Auto-cleanup old entries after 5 minutes
             setTimeout(() => processedSettlements.current.delete(eventKey), 5 * 60 * 1000);
 
-            const finalStatus = won ? "WON" : "LOST";
+            const eventInitialStatus = won ? "PENDING" : "LOST";
             const priceUSD = parseFloat(formatUnits(settlementPrice, 8)).toFixed(3);
             const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(3);
 
@@ -1423,7 +1462,7 @@ export default function UserApp() {
               if (isMatch) {
                 return {
                   ...t,
-                  status: finalStatus,
+                  status: eventInitialStatus,
                   settlementPrice: priceUSD,
                   payout: formattedPayout,
                   chainConfirmed: true,
@@ -1437,31 +1476,35 @@ export default function UserApp() {
             setActiveTrades(prev => prev.map(updateTrade));
 
             if (won) {
-              notify(`Trade WON! +${formattedPayout} USDC`, "success");
-
-              // Determine which wallet was credited
-              const existingTrade = tradeHistoryRef.current.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
-              const existingActive = activeTradesRef.current.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
-              const isSessionTrade = existingTrade?.isSessionTrade || existingActive?.isSessionTrade;
-              const isSessionWin = normalizedUser === sessionAddr || (isSessionTrade && sessionAddr);
-
-              // STABLE BALANCE: Do NOT optimistically credit the payout.
-              // Instead, freeze the current display via cooldown and wait for on-chain confirmation.
-              // This prevents the "flash profit then revert" issue.
               lastOptimisticActionTime.current = Date.now();
 
-              // Progressive on-chain reads — balance will only update once the
-              // payout transaction has actually landed on-chain.
               const forceRead = () => {
                 updateEvmSessionBal(true);
                 refetchEvmBalance(true);
               };
+
+              // Finalize status to WON and notify only when balance reaches them
+              const finalizeWin = () => {
+                setTradeHistory(prev => prev.map(t => {
+                  const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+                    (t.id && t.id.toString() === betId);
+                  return isMatch ? { ...t, status: "WON" } : t;
+                }));
+                setActiveTrades(prev => prev.map(t => {
+                  const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+                    (t.id && t.id.toString() === betId);
+                  return isMatch ? { ...t, status: "WON" } : t;
+                }));
+                notify(`Trade WON! +${formattedPayout} USDC`, "success");
+              };
+
               setTimeout(forceRead, 3000);
               setTimeout(forceRead, 6000);
               setTimeout(forceRead, 10000);
               setTimeout(() => {
                 forceRead();
                 lastOptimisticActionTime.current = 0; // Release cooldown
+                finalizeWin();
               }, 15000);
 
             } else {
