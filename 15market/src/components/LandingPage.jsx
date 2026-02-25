@@ -92,9 +92,21 @@ export function LandingPage() {
                 >
                     <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-tight uppercase max-w-5xl">
                         ACCESS THE <br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#3CB371] to-[#2d8a57] drop-shadow-[0_0_50px_rgba(60,179,113,0.4)]">
+                        <motion.span
+                            animate={{
+                                scale: [1, 1.02, 1],
+                                opacity: [0.8, 1, 0.8],
+                                filter: ["drop-shadow(0 0 20px rgba(60,179,113,0.3))", "drop-shadow(0 0 50px rgba(60,179,113,0.5))", "drop-shadow(0 0 20px rgba(60,179,113,0.3))"]
+                            }}
+                            transition={{
+                                duration: 4,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                            className="inline-block text-transparent bg-clip-text bg-gradient-to-b from-[#3CB371] to-[#2d8a57]"
+                        >
                             MOMENTUM MARKET.
-                        </span>
+                        </motion.span>
                     </h1>
 
                     <motion.div
