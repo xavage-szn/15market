@@ -77,7 +77,7 @@ export function LandingPage() {
                     <img
                         src="/logo.png"
                         alt="15market"
-                        className="h-10 md:h-14 w-auto drop-shadow-[0_0_20px_rgba(60,179,113,0.3)]"
+                        className="h-24 md:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)]"
                     />
                 </motion.div>
             </nav>
