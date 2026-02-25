@@ -154,8 +154,8 @@ function LiveExecutionComponent({
                                             </div>
                                         ) : (
                                             <>
-                                                <div className={`text-2xl lg:text-3xl font-lcd mb-1 tracking-wider flex items-baseline drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] ${isLight ? 'text-black drop-shadow-[0_0_8px_rgba(0,0,0,0.3)]' : 'text-white'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
-                                                    {displayTimeLeft}<span className={`text-[8px] lg:text-[11px] ml-1 font-sans font-black italic opacity-50 ${isLight ? 'text-black/40' : 'text-white/40'}`}>s</span>
+                                                <div className={`text-4xl lg:text-5xl font-matrix mb-1 tracking-[0.2em] flex items-baseline ${isLight ? 'text-black' : 'text-[#3CB371]'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
+                                                    {displayTimeLeft}<span className={`text-[10px] lg:text-[12px] ml-2 font-sans font-black italic opacity-50 ${isLight ? 'text-black/40' : 'text-white/40'}`}>s</span>
                                                 </div>
 
                                                 <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
