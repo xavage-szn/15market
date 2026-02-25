@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Shield, Clock, Activity, ArrowRight, MousePointer2 } from 'lucide-react';
 import { UnifiedWalletButton } from './UnifiedWalletButton';
 
 function NeuralPulseBackground() {
@@ -162,46 +161,13 @@ export function LandingPage() {
                 </motion.div>
             </main>
 
-            {/* Bottom Utility Bar */}
-            <footer className="relative z-20 px-6 py-8 md:py-12 glass-nav">
-                <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div className="flex items-center gap-12 overflow-x-auto no-scrollbar w-full md:w-auto justify-center">
-                        <FeatureItem icon={<Clock size={16} />} text="15s Cycles" />
-                        <FeatureItem icon={<Shield size={16} />} text="Non-Custodial" />
-                        <FeatureItem icon={<Zap size={16} />} text="Instant Settled" />
-                        <FeatureItem icon={<Activity size={16} />} text="Oracle Driven" />
-                    </div>
-
-                    <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-white/20 whitespace-nowrap">
-                        <span>Built on Arc</span>
-                        <div className="h-3 w-[1px] bg-white/10" />
-                        <span>Powered by Pyth</span>
-                    </div>
-                </div>
+            {/* Footer — Trademark Only */}
+            <footer className="relative z-20 px-6 py-6 md:py-8 flex items-center justify-center">
+                <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.3em] text-white/20">
+                    Built by 15Labs
+                </span>
             </footer>
         </div>
     );
 };
 
-function NavLink({ label }) {
-    return (
-        <a href="#" className="text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-[#3CB371] transition-colors">
-            {label}
-        </a>
-    );
-}
-
-function FeatureItem({ icon, text }) {
-    return (
-        <div className="flex items-center gap-3 group whitespace-nowrap">
-            <div className="p-2 rounded-xl bg-white/5 text-[#3CB371] border border-white/5 group-hover:border-[#3CB371]/30 transition-all">
-                {icon}
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/30 group-hover:text-white transition-colors">
-                    {text}
-                </span>
-            </div>
-        </div>
-    );
-}

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Radio } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory = [] }) {
+function GlobalTradeScrollerComponent({ theme }) {
     const [history, setHistory] = useState(() => {
         try {
             const saved = localStorage.getItem("15market_global_history_v2");
@@ -96,37 +96,16 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
         };
     }, []);
 
-    // Merge local active/settled trades into the scroller for INSTANT visibility
+    // Only show fully settled trades — no pending/active trades in the scroller
     const mergedHistory = useMemo(() => {
-        // Start with backend history
-        const existingIds = new Set(history.map(h => h.id?.toString()));
-        let merged = [...history];
-
-        // Add any recently settled or active trades that aren't in the backend history yet
-        const localTrades = [...(tradeHistory || []), ...(activeTrades || [])];
-        for (const t of localTrades) {
-            if (t.id && !existingIds.has(t.id.toString())) {
-                merged.push({
-                    id: t.id?.toString(),
-                    owner: t.userPublicKey || t.owner || t.user || '',
-                    amount: t.amount,
-                    direction: t.direction,
-                    symbol: t.symbol || 'ETH',
-                    status: t.status || "LIVE",
-                    timestamp: t.timestamp || Date.now(),
-                    network: 'arc'
-                });
-                existingIds.add(t.id.toString());
-            }
-        }
-
-        // Filter out pending trades. Only show trades settled as WON or LOST
-        const filtered = merged.filter(t => ["WON", "LOST"].includes(t.status));
+        // Only use backend history as source — do NOT merge activeTrades or local tradeHistory
+        // This ensures only confirmed settled trades (WON/LOST) appear in the scroller
+        const filtered = history.filter(t => ["WON", "LOST"].includes(t.status));
 
         // Sort by timestamp descending and limit
         filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         return filtered.slice(0, 100);
-    }, [history, activeTrades, tradeHistory]);
+    }, [history]);
 
     const repeatedHistory = useMemo(() => {
         if (!mergedHistory || mergedHistory.length === 0) return [];
