@@ -333,14 +333,10 @@ export default function UserApp() {
       prev.forEach(local => {
         const localId = String(local.id || local.tx || local.nonce);
         if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
-          // If it's a locally resolved trade, keep it until the history sync confirms it
-          if (["WON", "LOST"].includes(local.status)) {
-            updatedActive.push(local);
-            return;
-          }
-
           const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
-          if (local.status === "PENDING" && now <= (normExp + GHOST_GRACE)) {
+
+          // Ensure we drop trades from active view after grace period, even if they were WON/LOST
+          if (now <= (normExp + GHOST_GRACE)) {
             updatedActive.push({ ...local, expiryMs: normExp });
           }
         }

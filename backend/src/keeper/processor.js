@@ -133,6 +133,16 @@ class TradeProcessor {
                     });
                 }
 
+                // Update historical trades that were placed in earlier chunks but settled in this chunk
+                for (const [id, s] of settledMap.entries()) {
+                    await redis.addHistoricalTrade({
+                        id,
+                        status: s.status,
+                        settlementPrice: s.settlementPrice,
+                        payout: s.payout
+                    });
+                }
+
                 // If we scanned everything up to endBlock successfully
                 redis.lastScannedBlock = endBlock + 1;
 
@@ -194,8 +204,9 @@ class TradeProcessor {
         const tradeId = trade.id.toString();
         if (this.settlingIds.has(tradeId) || this.settledCache.has(tradeId)) return;
 
-        // Safety Buffer: Only settle if it's been at least 100ms since expiry (strict tightness)
-        if (Date.now() < (trade.expiry + 100)) return;
+        // Safety Buffer: Wait 2000ms after expiry before executing to ensure EVM block timestamp
+        // has fully advanced past the expiry time, preventing "Not expired" smart contract reverts.
+        if (Date.now() < (trade.expiry + 2000)) return;
 
         this.settlingIds.add(tradeId);
         try {
