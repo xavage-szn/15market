@@ -48,6 +48,7 @@ function LiveExecutionComponent({
                         const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
                         const rawTimeLeft = Math.max(0, (expiryMs - now) / 1000);
                         const displayTimeLeft = (rawTimeLeft > 0 && rawTimeLeft <= 10) ? rawTimeLeft.toFixed(1) : Math.ceil(rawTimeLeft);
+                        const isUnconfirmed = trade.confirmed === false;
                         const timerExpired = rawTimeLeft <= 0;
                         const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
 
@@ -66,10 +67,9 @@ function LiveExecutionComponent({
                             : false;
 
                         // If timer expired but status hasn't caught up yet, show instant result
-                        const showInstantResult = timerExpired && !isFinal;
+                        const showInstantResult = timerExpired && !isFinal && !isUnconfirmed;
                         const instantStatus = showInstantResult ? (liveWinning ? "WON" : "LOST") : trade.status;
                         const displayFinal = isFinal || showInstantResult;
-                        const isUnconfirmed = trade.confirmed === false;
 
                         return (
                             <div

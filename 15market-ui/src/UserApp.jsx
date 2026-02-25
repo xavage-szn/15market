@@ -733,7 +733,21 @@ export default function UserApp() {
       if (txHash) {
         publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
           .then(() => {
-            console.log(`⛓️ [CONFIRMED] Trade stake on-chain confirmed.`);
+            console.log(`⛓️ [UI] Trade confirmed on-chain. Resetting timer.`);
+            const confirmTime = Date.now();
+            const updateConfirmed = (prev) => prev.map(t => {
+              if (t.tx === txHash || String(t.id) === String(tradeId)) {
+                return {
+                  ...t,
+                  confirmed: true,
+                  startTime: confirmTime,
+                  expiryMs: confirmTime + (t.duration * 1000)
+                };
+              }
+              return t;
+            });
+            setActiveTrades(updateConfirmed);
+            setTradeHistory(updateConfirmed);
             triggerGlobalRefresh(true);
           })
           .catch(e => console.warn(`[SYNC] Receipt wait timed out or failed:`, e.message));
@@ -1300,7 +1314,7 @@ export default function UserApp() {
       for (const trade of pendingTrades) {
         const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
         const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
-        if (now < expiryMs) continue; // Not yet expired
+        if (now < expiryMs || trade.confirmed === false) continue; // Not yet expired or not yet confirmed on-chain
         if (resolvingInProgress.current.has(trade.id)) continue;
 
         // Capture the current live price for instant result
