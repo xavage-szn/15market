@@ -45,7 +45,7 @@ export function PnLModal({ isOpen, onClose, trade }) {
         return 1.98;
     };
 
-    const currency = trade.currency || (trade.network === 'arc' ? 'USDC' : 'SOL');
+    const currency = trade.currency || (trade.network === 'sol' || trade.network === 'SOL' ? 'SOL' : 'USDC');
     const multiplier = getMultiplier(trade.duration || 15);
     const totalPayout = trade.payout ? parseFloat(trade.payout) : (parseFloat(trade.amount) * multiplier);
     // User wants '1.98x profit' to reflect the gross payout amount (+1.98) instead of net gain (+0.98)
@@ -139,7 +139,7 @@ export function PnLModal({ isOpen, onClose, trade }) {
                                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-dashed border-black/10">
                                     <div className="flex flex-col">
                                         <span className="text-[8px] opacity-40 font-black">SETTLED</span>
-                                        <span className="text-sm font-black italic">{trade.settlementPrice ? `$${trade.settlementPrice}` : 'PENDING'}</span>
+                                        <span className="text-sm font-black italic">{trade.status !== "PENDING" && trade.settlementPrice !== null ? `$${trade.settlementPrice}` : 'PENDING'}</span>
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <span className="text-[8px] opacity-40 font-black">PNL_OUTCOME</span>

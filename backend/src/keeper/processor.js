@@ -129,7 +129,8 @@ class TradeProcessor {
                         timestamp: Number(e.args.timestamp) * 1000,
                         status: s ? s.status : 'PENDING',
                         settlementPrice: s ? s.settlementPrice : null,
-                        payout: s ? s.payout : null
+                        payout: s ? s.payout : null,
+                        tx: e.transactionHash
                     });
                 }
 
@@ -206,7 +207,16 @@ class TradeProcessor {
 
         // Safety Buffer: Wait 2000ms after expiry before executing to ensure EVM block timestamp
         // has fully advanced past the expiry time, preventing "Not expired" smart contract reverts.
-        if (Date.now() < (trade.expiry + 2000)) return;
+        const delayNeeded = (trade.expiry + 2000) - Date.now();
+        if (delayNeeded > 0) {
+            if (manualPrice) {
+                // If frontend provided a synced manual exit price, sleep through the buffer to preserve the price
+                await new Promise(r => setTimeout(r, delayNeeded));
+            } else {
+                // If it's the background loop, skip and let the next cycle pick it up
+                return;
+            }
+        }
 
         this.settlingIds.add(tradeId);
         try {
