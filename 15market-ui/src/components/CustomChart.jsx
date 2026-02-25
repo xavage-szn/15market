@@ -452,7 +452,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 lg:gap-4 px-1">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:border-white/10 pointer-events-auto group" onClick={() => setIsSelectorOpen(!isSelectorOpen)}>
-                            <h2 className="text-[14px] lg:text-lg font-black text-white tracking-widest uppercase flex items-center gap-2">{symbol.replace('USDT', '')}/USDC</h2>
+                            <h2 className="text-[14px] lg:text-lg font-black text-white tracking-widest uppercase flex items-center gap-2">{symbol.replace('USDT', '')}</h2>
                             <ChevronDown size={14} className={`text-[#3CB371] transition-transform duration-300 ${isSelectorOpen ? 'rotate-180' : ''}`} />
                         </div>
                     </div>

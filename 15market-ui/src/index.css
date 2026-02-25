@@ -2,6 +2,7 @@
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/700.css";
 @import "@fontsource/inter/900.css";
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400..900&family=VT323&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -60,6 +61,11 @@ body {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.font-lcd {
+  font-family: 'Share Tech Mono', 'Orbitron', monospace;
+  letter-spacing: 0.05em;
 }
 
 .glass-pill {
