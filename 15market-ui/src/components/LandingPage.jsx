@@ -1,46 +1,68 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { UnifiedWalletButton } from './UnifiedWalletButton';
+const AnimatedIllustrationBackground = () => (
+    <div className="absolute inset-0 overflow-hidden z-0 pointer-events-none bg-[#050505]">
+        {/* Momentum Waves Illustration */}
+        <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+            <defs>
+                <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#3CB371" stopOpacity="0" />
+                    <stop offset="50%" stopColor="#3CB371" stopOpacity="0.5" />
+                    <stop offset="100%" stopColor="#3CB371" stopOpacity="0" />
+                </linearGradient>
+            </defs>
+            {[...Array(6)].map((_, i) => (
+                <motion.path
+                    key={i}
+                    d={`M -100 ${400 + (i * 40)} Q 250 ${300 + (i * 20)} 500 ${400 + (i * 40)} T 1100 ${400 + (i * 40)}`}
+                    stroke="url(#waveGrad)"
+                    strokeWidth="2"
+                    fill="none"
+                    animate={{
+                        d: [
+                            `M -100 ${400 + (i * 40)} Q 250 ${300 + (Math.sin(i) * 50)} 500 ${400 + (i * 40)} T 1100 ${400 + (i * 40)}`,
+                            `M -100 ${410 + (i * 40)} Q 250 ${400 + (Math.cos(i) * 50)} 500 ${390 + (i * 40)} T 1100 ${410 + (i * 40)}`,
+                            `M -100 ${400 + (i * 40)} Q 250 ${300 + (Math.sin(i) * 50)} 500 ${400 + (i * 40)} T 1100 ${400 + (i * 40)}`,
+                        ],
+                    }}
+                    transition={{
+                        duration: 8 + (i * 2),
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+            ))}
+        </svg>
 
-const AuroraBackground = () => (
-    <div className="absolute inset-0 overflow-hidden z-0 pointer-events-none">
-        <motion.div
-            animate={{
-                scale: [1, 1.2, 1],
-                opacity: [0.3, 0.5, 0.3],
-                x: [-100, 100, -100],
-                y: [-50, 50, -50],
-            }}
-            transition={{
-                duration: 20,
-                repeat: Infinity,
-                ease: "linear"
-            }}
-            className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-[#3CB371]/20 blur-[120px]"
-        />
-        <motion.div
-            animate={{
-                scale: [1.2, 1, 1.2],
-                opacity: [0.2, 0.4, 0.2],
-                x: [100, -100, 100],
-                y: [50, -50, 50],
-            }}
-            transition={{
-                duration: 25,
-                repeat: Infinity,
-                ease: "linear"
-            }}
-            className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] rounded-full bg-[#3CB371]/10 blur-[100px]"
-        />
-        <div className="absolute inset-0 bg-[#050505]/40 backdrop-blur-[2px]" />
-        <div className="absolute inset-0 bg-[url('linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)')] bg-[size:5rem_5rem] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_20%,transparent_100%)] opacity-20" />
+        {/* Data Streams */}
+        <div className="absolute inset-0 opacity-20">
+            {[...Array(15)].map((_, i) => (
+                <motion.div
+                    key={i}
+                    initial={{ x: "-10%", y: `${Math.random() * 100}%`, opacity: 0 }}
+                    animate={{
+                        x: "110%",
+                        opacity: [0, 1, 1, 0],
+                    }}
+                    transition={{
+                        duration: 3 + Math.random() * 5,
+                        repeat: Infinity,
+                        delay: Math.random() * 10,
+                        ease: "linear"
+                    }}
+                    className="absolute h-px w-32 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent"
+                />
+            ))}
+        </div>
+
+        {/* Cinematic Vignette & Grain */}
+        <div className="absolute inset-0 bg-radial-vignette pointer-events-none" />
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay" />
     </div>
 );
 
 export function LandingPage() {
     return (
         <div className="h-screen w-screen bg-[#050505] text-white overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30">
-            <AuroraBackground />
+            <AnimatedIllustrationBackground />
 
             {/* Top Navigation - Minimal */}
             <nav className="w-full relative z-50 flex items-center justify-between px-6 py-4 md:px-12 md:py-8 max-w-7xl mx-auto">
