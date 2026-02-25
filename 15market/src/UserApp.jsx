@@ -929,9 +929,7 @@ export default function UserApp() {
     return listed.find(t => t.id === activeId) || listed[0];
   });
 
-  // Shared Price Fetch Logic
-  const priceRef = useRef(price);
-  useEffect(() => { priceRef.current = price; }, [price]);
+
 
   const cleanupTimers = useRef({});
 
