@@ -120,9 +120,12 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
             }
         }
 
+        // Filter out pending trades. Only show trades settled as WON or LOST
+        const filtered = merged.filter(t => ["WON", "LOST"].includes(t.status));
+
         // Sort by timestamp descending and limit
-        merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        return merged.slice(0, 100);
+        filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        return filtered.slice(0, 100);
     }, [history, activeTrades, tradeHistory]);
 
     const repeatedHistory = useMemo(() => {
@@ -144,26 +147,13 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
                 backgroundColor: isLight ? '#FFF8E7' : undefined,
                 boxShadow: isLight ? '0 0 20px rgba(60, 179, 113, 0.1)' : `0 0 15px #3CB37115, inset 0 0 10px #3CB37110`
             }}
+        >            <div
+            className="flex-1 h-full flex items-center relative overflow-hidden"
+            style={{
+                maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+                WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)'
+            }}
         >
-            <div className={`absolute left-0 top-0 bottom-0 px-2 lg:px-4 z-30 flex items-center transition-all duration-300 ${isLight ? 'bg-[#FFF8E7]/95' : 'bg-transparent pl-4'}`}>
-                <div className="flex items-center gap-1.5 lg:gap-2">
-                    <div className="relative flex h-1.5 w-1.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3CB371] opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#3CB371]"></span>
-                    </div>
-                    <span className={`text-[7px] lg:text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap ${isLight ? 'text-black/60' : 'text-white/60'}`}>
-                        Network Live
-                    </span>
-                </div>
-            </div>
-
-            <div
-                className="flex-1 h-full flex items-center relative overflow-hidden"
-                style={{
-                    maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
-                    WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)'
-                }}
-            >
                 <AnimatePresence mode="wait">
                     {activeBroadcast && (
                         <motion.div
@@ -195,7 +185,7 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
                 <motion.div
                     animate={{ x: ["0%", "-50%"] }}
                     className="flex items-center gap-4 lg:gap-8 whitespace-nowrap pl-20 lg:pl-40"
-                    transition={{ x: { duration: 45, repeat: Infinity, ease: "linear" } }}
+                    transition={{ x: { duration: 120, repeat: Infinity, ease: "linear" } }}
                 >
                     {repeatedHistory.length === 0 ? (
                         <div className="flex items-center gap-2 px-6 py-2">
@@ -232,8 +222,8 @@ function GlobalTradeScrollerComponent({ theme, activeTrades = [], tradeHistory =
                             <div className={`w-px h-4 lg:h-6 mx-0.5 lg:mx-1 ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
 
                             <div className="flex flex-col items-end">
-                                <span className={`text-[8px] lg:text-[10px] font-black uppercase tracking-widest ${event.status === "WON" ? "text-[#3CB371]" : event.status === "LOST" ? "text-[#FF7F50]" : "text-white/40"}`}>
-                                    {event.status || "LIVE"}
+                                <span className={`text-[8px] lg:text-[10px] font-black uppercase tracking-widest ${event.status === "WON" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                    {event.status === "WON" ? "WON" : "LOST"}
                                 </span>
                                 <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
                                     {event.amount} {event.symbol || 'USDC'} {event.direction === "UP" || event.direction === 1 || String(event.direction) === "1" ? "UP" : "DOWN"}

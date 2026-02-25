@@ -198,8 +198,9 @@ export default function UserApp() {
       const newBalNum = parseFloat(formatted);
 
       // During cooldown, block ALL non-forced polls
+      // Extended to 15s to prevent balance flicker while awaiting on-chain payout settlement
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 5000) {
+      if (!force && msSinceLastAction < 15000) {
         return;
       }
 
@@ -217,10 +218,9 @@ export default function UserApp() {
       const bal = parseFloat(formatUnits(balanceWei, 18));
 
       // CRITICAL: During cooldown, block ALL non-forced polls.
-      // This prevents stale on-chain reads from overwriting optimistic debits or winnings.
+      // Extended to 15s to prevent balance flicker while awaiting on-chain payout settlement.
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 5000) {
-        console.log(`🛡️ [SESSION_BAL] Poll blocked during cooldown (${Math.round(msSinceLastAction / 1000)}s). On-chain: ${bal.toFixed(4)}, Display: ${sessionBalance.toFixed(4)}`);
+      if (!force && msSinceLastAction < 15000) {
         return;
       }
 
@@ -1441,56 +1441,31 @@ export default function UserApp() {
 
             if (won) {
               notify(`Trade WON! +${formattedPayout} USDC`, "success");
-              const payoutVal = parseFloat(formattedPayout);
 
               // Determine which wallet was credited
               const existingTrade = tradeHistoryRef.current.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
               const existingActive = activeTradesRef.current.find(t => String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()));
-              const alreadyApplied = existingTrade?.balanceApplied || existingActive?.balanceApplied;
               const isSessionTrade = existingTrade?.isSessionTrade || existingActive?.isSessionTrade;
               const isSessionWin = normalizedUser === sessionAddr || (isSessionTrade && sessionAddr);
 
-              if (!alreadyApplied) {
-                // Determine which wallet balance to update based on the event's user address
-                // (Matches the 'payoutAddress' logic in the backend and frontend)
-                if (normalizedUser === sessionAddr) {
-                  setSessionBalance(prev => prev + payoutVal);
-                  console.log(`⚡ [WIN] +${payoutVal} optimistically credited to SESSION wallet (bet ${betId})`);
-                } else if (normalizedUser === mainAddr) {
-                  setEvmBalance(prev => {
-                    const newBal = (parseFloat(prev || "0") + payoutVal);
-                    return newBal.toString();
-                  });
-                  console.log(`⚡ [WIN] +${payoutVal} optimistically credited to MAIN wallet (bet ${betId})`);
-                }
+              // STABLE BALANCE: Do NOT optimistically credit the payout.
+              // Instead, freeze the current display via cooldown and wait for on-chain confirmation.
+              // This prevents the "flash profit then revert" issue.
+              lastOptimisticActionTime.current = Date.now();
 
-                // Activate cooldown to protect optimistic credit from stale polls
-                lastOptimisticActionTime.current = Date.now();
-
-                // Mark as applied to prevent double-credit
-                const markApplied = (t) => {
-                  const isMatch = String(t.id) === betId || (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase());
-                  return isMatch ? { ...t, balanceApplied: true } : t;
-                };
-                setTradeHistory(prev => prev.map(markApplied));
-                setActiveTrades(prev => prev.map(markApplied));
-              }
-
-              // FORCE-read real on-chain balance after payout settles
-              // These bypass the cooldown guard to anchor the definitive balance
-              setTimeout(() => {
-                if (isSessionWin) updateEvmSessionBal(true);
-                else refetchEvmBalance(true);
-              }, 2000);
-              setTimeout(() => {
+              // Progressive on-chain reads — balance will only update once the
+              // payout transaction has actually landed on-chain.
+              const forceRead = () => {
                 updateEvmSessionBal(true);
                 refetchEvmBalance(true);
-              }, 5000);
+              };
+              setTimeout(forceRead, 3000);
+              setTimeout(forceRead, 6000);
+              setTimeout(forceRead, 10000);
               setTimeout(() => {
-                updateEvmSessionBal(true);
-                refetchEvmBalance(true);
-                lastOptimisticActionTime.current = 0; // Clear cooldown
-              }, 10000);
+                forceRead();
+                lastOptimisticActionTime.current = 0; // Release cooldown
+              }, 15000);
 
             } else {
               notify(`Trade LOST. Price: $${priceUSD}`, "error");
