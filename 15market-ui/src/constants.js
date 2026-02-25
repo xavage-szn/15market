@@ -4,8 +4,8 @@ import { defineChain } from 'viem'
 // ARC TESTNET
 export const ARC_CHAIN_ID = 5042002;
 export const ARC_RPCS = [
-    "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
+    "https://5042002.rpc.thirdweb.com",
     "https://rpc-test-1.arc.market"
 ];
 export const ARC_RPC = ARC_RPCS[0];

@@ -36,6 +36,11 @@ createAppKit({
         email: false,
         socials: false,
     },
+    tokens: {
+        5042002: {
+            address: '0x0000000000000000000000000000000000000000',
+        }
+    },
     allowUnsupportedChain: false,
     enableNetworkSwitch: true,
 });
