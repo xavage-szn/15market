@@ -13,15 +13,18 @@ function LiveExecutionComponent({
     const [tick, setTick] = useState(0);
     const isLight = theme === 'light';
 
-    // Fast tick - 200ms for smooth countdown and instant zero detection
+    // Higher frequency clock (100ms) for butter-smooth countdown and precise expiry freezing
     useEffect(() => {
-        const interval = setInterval(() => setTick(t => t + 1), 200);
+        const interval = setInterval(() => setTick(t => t + 1), 100);
         return () => clearInterval(interval);
     }, []);
 
     const removeTrade = (id) => {
         setActiveTrades(prev => prev.filter(t => t.id !== id));
     };
+
+    // Keep track of 'frozen' results to prevent UI flicker during settlement phase
+    const frozenPnL = useRef({}); // tradeId -> { status, exitPrice }
 
     return (
         <div className="flex flex-col gap-3 relative min-h-0 h-full">
@@ -43,11 +46,14 @@ function LiveExecutionComponent({
                 {activeTrades.length > 0 ? (
                     activeTrades.map((trade) => {
                         const now = Date.now();
-                        const start = trade.startTime || (trade.nonce > 1000000000000 ? trade.nonce : Math.floor(trade.nonce / 100) * 1000) || now;
+                        const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000) || now;
                         const duration = trade.duration || 30;
                         const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
                         const rawTimeLeft = Math.max(0, (expiryMs - now) / 1000);
-                        const displayTimeLeft = (rawTimeLeft > 0 && rawTimeLeft <= 10) ? rawTimeLeft.toFixed(1) : Math.ceil(rawTimeLeft);
+
+                        // SMOOTH COUNTDOWN: Always show 1 decimal place below 15s for precision feel
+                        const displayTimeLeft = (rawTimeLeft > 0 && rawTimeLeft <= 15) ? rawTimeLeft.toFixed(1) : Math.ceil(rawTimeLeft);
+
                         const isUnconfirmed = trade.confirmed === false;
                         const timerExpired = rawTimeLeft <= 0;
                         const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
@@ -62,15 +68,28 @@ function LiveExecutionComponent({
                         // INSTANT RESULT: 3dp truncation rule for win/loss
                         const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
                         const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+
+                        // FREEZE LOGIC: Capture result at exactly 0.0s to prevent flicker
+                        if (timerExpired && !isFinal && !isUnconfirmed && !frozenPnL.current[trade.id]) {
+                            const exit3dp = truncTo3dp(currentPriceVal);
+                            const entry3dp = truncTo3dp(entryPriceVal);
+                            const isWin = isUpTrade ? (exit3dp > entry3dp) : (exit3dp < entry3dp);
+                            frozenPnL.current[trade.id] = {
+                                status: isWin ? "WON" : "LOST",
+                                exitPrice: currentPriceVal.toFixed(3)
+                            };
+                            console.log(`❄️ [UI] Froze result for ${trade.id}: ${frozenPnL.current[trade.id].status} @ ${frozenPnL.current[trade.id].exitPrice}`);
+                        }
+
                         const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
                             ? (isUpTrade ? truncTo3dp(currentPriceVal) > truncTo3dp(entryPriceVal) : truncTo3dp(currentPriceVal) < truncTo3dp(entryPriceVal))
                             : false;
 
-                        // If timer expired but status hasn't caught up yet, show instant result
+                        // Use frozen result if available, otherwise fallback to live calculation
                         const showInstantResult = timerExpired && !isFinal && !isUnconfirmed;
-                        const instantStatus = showInstantResult ? (liveWinning ? "WON" : "LOST") : trade.status;
+                        const frozen = frozenPnL.current[trade.id];
+                        const instantStatus = showInstantResult ? (frozen ? frozen.status : (liveWinning ? "WON" : "LOST")) : trade.status;
                         const displayFinal = isFinal || showInstantResult;
-
                         return (
                             <div
                                 key={trade.id}

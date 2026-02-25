@@ -201,6 +201,8 @@ export default function UserApp() {
   const lastOptimisticActionTime = useRef(0); // Protects optimistic balance from stale polling
   const tradeHistoryRef = useRef([]);
   const activeTradesRef = useRef([]);
+  const priceHistoryRef = useRef([]); // [{p, t}] buffer for accurate expiry snapshots
+  const priceRef = useRef("0.00");
 
   useEffect(() => {
     tradeHistoryRef.current = tradeHistory;
@@ -1009,8 +1011,16 @@ export default function UserApp() {
       clearTimeout(timeoutId);
 
       if (fastestPrice > 0) {
-        setPrice(fastestPrice.toFixed(4));
+        const pStr = fastestPrice.toFixed(4);
+        setPrice(pStr);
+        priceRef.current = pStr;
         setIsLoading(false);
+
+        // Record history for precise expiry price retrieval (keep 10s buffer)
+        const now = Date.now();
+        priceHistoryRef.current.push({ p: fastestPrice, t: now });
+        if (priceHistoryRef.current.length > 50) priceHistoryRef.current.shift();
+
         return fastestPrice;
       }
     } catch (err) {
@@ -1317,16 +1327,27 @@ export default function UserApp() {
         if (now < expiryMs || trade.confirmed === false) continue; // Not yet expired or not yet confirmed on-chain
         if (resolvingInProgress.current.has(trade.id)) continue;
 
-        // Capture the current live price for instant result
+        // RULE: Truncate to 3 decimal places (floor) for win/loss determination
+        const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
+
+        // ACCURACY UPGRADE: Find the price in history that was closest to the exact expiryMs
         let capturedPrice = parseFloat(priceRef.current);
+        if (priceHistoryRef.current.length > 0) {
+          const closest = priceHistoryRef.current.reduce((prev, curr) =>
+            Math.abs(curr.t - expiryMs) < Math.abs(prev.t - expiryMs) ? curr : prev
+          );
+          // Only use history if it's within 1s of expiry
+          if (Math.abs(closest.t - expiryMs) < 1000) {
+            capturedPrice = closest.p;
+            console.log(`🎯 [RESOLVER] Precise capture for ${trade.id}: ${capturedPrice} (diff: ${Math.abs(closest.t - expiryMs)}ms)`);
+          }
+        }
+
         if (trade.status === "RESOLVING" && trade.settlementPrice) {
           capturedPrice = parseFloat(trade.settlementPrice);
         }
 
-        if (capturedPrice <= 0) continue; // Try again next frame (retry resolution)
-
-        // RULE: Truncate to 3 decimal places (floor) for win/loss determination
-        const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
+        if (!capturedPrice || capturedPrice <= 0) continue;
 
         let optimisticStatus = "LOST";
         const entry3dp = truncTo3dp(parseFloat(trade.entryPrice));

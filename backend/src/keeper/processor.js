@@ -248,7 +248,7 @@ class TradeProcessor {
             const finalPrice = Math.floor(Number(settlementPrice) * 1000) / 1000;
 
             logToFile(`${logMsg}: ${finalPrice} (Raw: ${settlementPrice})`);
-            const scaledPrice = BigInt(Math.round(finalPrice * 1e8));
+            const scaledPrice = BigInt(Math.floor(finalPrice * 1e8));
 
             // --- FINAL SAFETY GUARD: CONTRACT BALANCE ---
             // If the payout is large and contract empty, don't waste gas retrying
