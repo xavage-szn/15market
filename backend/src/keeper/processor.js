@@ -30,17 +30,35 @@ class TradeProcessor {
         // 1. Listen for new trades on-chain (Real-time)
         blockchain.onBetPlaced(async (trade) => {
             const existing = await redis.getTrade(trade.id);
+            // Use the on-chain timestamp as the true start time
+            // This is when the stake was actually confirmed on-chain
+            const onChainStartMs = trade.timestamp * 1000;
+            const onChainExpiry = onChainStartMs + (trade.duration * 1000);
+
             if (!existing) {
                 await redis.setTrade(trade.id, {
                     ...trade,
-                    expiry: (trade.timestamp + trade.duration) * 1000
+                    startTime: onChainStartMs,
+                    expiry: onChainExpiry
                 });
-                console.log(`[Processor] 🛰️ Detected on-chain trade ${trade.id}, tracking for settlement.`);
+                console.log(`[Processor] 🛰️ Detected on-chain trade ${trade.id}, tracking for settlement. Expiry: ${new Date(onChainExpiry).toISOString()}`);
+            } else {
+                // Update existing trade with confirmed on-chain timing
+                await redis.setTrade(trade.id, {
+                    ...existing,
+                    ...trade,
+                    startTime: onChainStartMs,
+                    expiry: onChainExpiry,
+                    confirmed: true
+                });
+                console.log(`[Processor] 🔄 Updated trade ${trade.id} with on-chain confirmed timing.`);
             }
             // Add to history too
             await redis.addHistoricalTrade({
                 ...trade,
-                timestamp: trade.timestamp * 1000,
+                timestamp: onChainStartMs,
+                startTime: onChainStartMs,
+                expiryMs: onChainExpiry,
                 status: 'PENDING'
             });
         });
@@ -57,8 +75,8 @@ class TradeProcessor {
             this.settlingIds.delete(tradeId.toString());
         });
 
-        // 2. Settlement Loop (Ultra-fast 200ms tick for instant execution)
-        setInterval(() => this.processSettlements(), 200);
+        // 2. Settlement Loop — 500ms tick, sequential processing to prevent nonce collisions
+        this._startSettlementLoop();
 
         // 3. Background History Sync (Backfiller)
         this.runHistoryBackfiller();
@@ -135,17 +153,40 @@ class TradeProcessor {
         setInterval(sync, 15000);
     }
 
+    _startSettlementLoop() {
+        let isProcessing = false;
+        setInterval(async () => {
+            if (isProcessing || !blockchain.providerReady) return;
+            isProcessing = true;
+            try {
+                await this.processSettlements();
+            } finally {
+                isProcessing = false;
+            }
+        }, 500);
+    }
+
     async processSettlements() {
         if (!blockchain.providerReady) return;
         const now = Date.now();
         const activeTrades = await redis.getAllActiveTrades();
 
+        // Only settle trades that have a confirmed on-chain expiry
         const toSettle = activeTrades.filter(t => {
             return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
         });
 
+        // CRITICAL: Process settlements SEQUENTIALLY to prevent nonce collisions
+        // When multiple trades expire at the same time, parallel settlement causes:
+        // 1. Nonce collisions (same nonce used for multiple TXs)
+        // 2. Shared price cache returns same price for different trades  
+        // 3. Some TXs revert silently, leading to incorrect win/loss results
         for (const trade of toSettle) {
-            this._settleSingleTrade(trade);
+            await this._settleSingleTrade(trade);
+            // Small delay between settlements to ensure unique nonce and fresh price
+            if (toSettle.length > 1) {
+                await new Promise(r => setTimeout(r, 300));
+            }
         }
     }
 
@@ -166,14 +207,16 @@ class TradeProcessor {
             let logMsg = `[Processor] Using MANUAL price from frontend for ${tradeId}`;
 
             if (!settlementPrice) {
-                // ATTEMPT 1: Get price EXACTLY at the moment of expiry from our history
-                settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
-                logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
+                // ATTEMPT 1: Get FRESH price from oracle (most accurate for settlement)
+                // Each trade MUST get its own fresh price fetch to avoid shared-cache issues
+                // when multiple trades settle at the same time
+                settlementPrice = await pricing.getPrice(symbol);
+                logMsg = `[Processor] Using FRESH oracle price for ${tradeId}`;
 
-                // ATTEMPT 2: Fallback to current price if history is missing
+                // ATTEMPT 2: Fallback to historical price if fresh fetch failed
                 if (!settlementPrice) {
-                    settlementPrice = await pricing.getPrice(symbol);
-                    logMsg = `[Processor] Using CURRENT price (fallback) for ${tradeId}`;
+                    settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
+                    logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
                 }
             }
 

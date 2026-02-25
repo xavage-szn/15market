@@ -308,7 +308,7 @@ export default function UserApp() {
         const startTime = (t.timestamp || t.startTime || now);
         const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
         const expiryMs = t.expiryMs || (normStart + (t.duration * 1000));
-        return { ...t, startTime: normStart, expiryMs };
+        return { ...t, startTime: normStart, expiryMs, confirmed: true };
       });
 
       const updatedActive = [];
@@ -721,6 +721,7 @@ export default function UserApp() {
         expiryMs: expiryMs,
         symbol: activeMarket?.symbol || 'ETH',
         isSessionTrade: sessionMode,
+        confirmed: false,
       };
 
       const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
