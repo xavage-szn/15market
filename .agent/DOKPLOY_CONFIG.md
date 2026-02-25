@@ -46,12 +46,19 @@ Add these in Dokploy's "Build Arguments" section:
 
 ---
 
-## 3. Frontend UI Service
-*(Assuming a similar Dockerfile to admin in the ui folder)*
+## 3. Frontend UI Service (15market)
+**Build Configuration:**
+- **Build Method**: Dockerfile
+- **Dockerfile Path**: `./15market/Dockerfile`
+- **Context Path**: `./15market`
+
+**Network Configuration:**
+- **Port**: `80` (Exposed)
 
 **Build Arguments:**
 - `VITE_ARC_CONTRACT_ADDRESS`: `0x345014899b42bF9034D9475760609e64B1433A6a`
-- `VITE_KEEPER_URL`: `https://api.15market.online`
+- `VITE_ARC_RPC`: `https://rpc.testnet.arc.network`
+- `VITE_KEEPER_URL_ARC`: `https://api.15market.online`
 - `VITE_REOWN_PROJECT_ID`: `c57ca95b47569778a828d19178114f4d`
 
 ---
