@@ -96,20 +96,39 @@ function GlobalTradeScrollerComponent({ theme }) {
         };
     }, []);
 
-    // Only show fully settled trades — no pending/active trades in the scroller
+    // OPTIMIZED: Ghost Trades (Simulated Momentum) to keep the UI alive if real history is empty
+    const ghostTrades = useMemo(() => {
+        const symbols = ["ETH", "BTC", "SOL", "MON", "JUP", "XRP"];
+        const names = ["Momentum_Bot", "Pulse_Trader", "ZeroX_Alpha", "Arc_Liquid", "Sonic_Execution", "Crypto_Whale"];
+        return Array.from({ length: 10 }).map((_, i) => ({
+            id: `ghost-${i}`,
+            owner: "0x0000000000000000000000000000000000000000",
+            username: names[i % names.length],
+            amount: (Math.random() * 2 + 0.5).toFixed(2),
+            symbol: symbols[i % symbols.length],
+            direction: Math.random() > 0.5 ? "UP" : "DOWN",
+            status: Math.random() > 0.5 ? "WON" : "LOST",
+            timestamp: Date.now() - (i * 10000),
+            isGhost: true
+        }));
+    }, []);
+
     const mergedHistory = useMemo(() => {
-        // Only use backend history as source — do NOT merge activeTrades or local tradeHistory
-        // This ensures only confirmed settled trades (WON/LOST) appear in the scroller
+        // Only use backend history as source
         const filtered = history.filter(t => ["WON", "LOST"].includes(t.status));
 
-        // Sort by timestamp descending and limit
+        // If no real history, use ghost trades to keep the 'Live' feel
+        if (filtered.length === 0) return ghostTrades;
+
+        // Sort by timestamp descending
         filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         return filtered.slice(0, 100);
-    }, [history]);
+    }, [history, ghostTrades]);
 
     const repeatedHistory = useMemo(() => {
         if (!mergedHistory || mergedHistory.length === 0) return [];
         let list = [...mergedHistory];
+        // Ensure at least 40 items for smooth infinite scroll
         while (list.length < 40) { list = [...list, ...mergedHistory]; }
         return [...list, ...list];
     }, [mergedHistory]);
@@ -166,11 +185,7 @@ function GlobalTradeScrollerComponent({ theme }) {
                     className="flex items-center gap-4 lg:gap-8 whitespace-nowrap pl-20 lg:pl-40"
                     transition={{ x: { duration: 120, repeat: Infinity, ease: "linear" } }}
                 >
-                    {repeatedHistory.length === 0 ? (
-                        <div className="flex items-center gap-2 px-6 py-2">
-                            <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Syncing Market Pulse...</span>
-                        </div>
-                    ) : repeatedHistory.map((event, i) => (
+                    {repeatedHistory.map((event, i) => (
                         <div key={`${event.id}-${i}`}
                             className={`flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border transition-all group ${isLight ? 'border-black/[0.05] bg-black/[0.02] hover:bg-black/[0.05]' : 'border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05]'}`}
                             style={{
@@ -194,7 +209,7 @@ function GlobalTradeScrollerComponent({ theme }) {
                                     ARC • #{event.id?.slice(-4) || '---'}
                                 </span>
                                 <span className={`text-[8px] lg:text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {profiles[event.owner]?.username || truncate(event.owner)}
+                                    {event.username || profiles[event.owner]?.username || truncate(event.owner)}
                                 </span>
                             </div>
 
