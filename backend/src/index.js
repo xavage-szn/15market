@@ -208,12 +208,14 @@ app.post('/trade-ping', async (req, res) => {
             amount: amount,
             direction: direction,
             duration: duration,
-            entryPrice: entryPrice,
+            entryPrice: (Number(entryPrice) / 1e8).toFixed(4),
             symbol: symbol || 'BTC',
-            expiry: Date.now() + (duration * 1000)
+            expiry: Date.now() + (duration * 1000),
+            confirmed: true,
+            startTime: Date.now()
         };
         await redis.setTrade(id, tradeData);
-        logToFile(`[PING] Registered trade ${id} for ${address}`);
+        logToFile(`[PING] Registered trade ${id} for ${address} (Price: ${tradeData.entryPrice})`);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -315,6 +317,13 @@ app.post('/session/trade', async (req, res) => {
         }
 
         const tx = await wallet.sendTransaction(txArgs);
+        logToFile(`[SESSION_TRADE] ⛓️ Tx sent: ${tx.hash}, waiting for confirmation...`);
+
+        // WAIT FOR CONFIRMATION (Strict Logic)
+        const receipt = await tx.wait();
+        if (receipt.status !== 1) {
+            throw new Error("Transaction reverted on-chain");
+        }
 
         // Register in memory store for settlement tracking
         const tradeData = {
@@ -327,12 +336,14 @@ app.post('/session/trade', async (req, res) => {
             entryPrice: (Number(entryPrice) / 1e8).toFixed(4),
             marketId: marketId,
             expiry: Date.now() + (duration * 1000),
-            txHash: tx.hash
+            txHash: tx.hash,
+            confirmed: true,
+            startTime: Date.now()
         };
         await redis.setTrade(id, tradeData);
 
-        logToFile(`[SESSION_TRADE] ✅ Sent: ${tx.hash}`);
-        res.json({ success: true, txHash: tx.hash });
+        logToFile(`[SESSION_TRADE] ✅ Confirmed & Registered: ${tx.hash}`);
+        res.json({ success: true, txHash: tx.hash, confirmed: true });
     } catch (e) {
         logToFile(`[SESSION_TRADE] ❌ Error: ${e.message}`);
         const { address: sessionAddr } = await deriveUserWallet(req.body.address);

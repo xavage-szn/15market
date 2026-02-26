@@ -666,9 +666,9 @@ export default function UserApp() {
       let txHash;
 
       if (sessionMode) {
-        console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper...`);
+        console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper (Strict Mode)...`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for mobile stability
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // Increased for strict confirmation wait
 
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
@@ -691,10 +691,42 @@ export default function UserApp() {
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Session trade failed");
           txHash = data.txHash;
-          console.log(`✅ [SESSION] Tx Hash: ${txHash}`);
+          console.log(`✅ [SESSION] Confirmed on-chain: ${txHash}`);
+
+          // FOR SESSION MODE: Backend already waited for confirmation before returning
+          const confirmTime = Date.now();
+          const newTrade = {
+            id: tradeId,
+            direction: (dirVal === 1 ? "UP" : "DOWN"),
+            amount: Number(amount).toFixed(3),
+            entryPrice: activePrice.toFixed(3),
+            timestamp: confirmTime,
+            status: "PENDING",
+            tx: txHash,
+            nonce: tradeId,
+            userPublicKey: activeUserAddr,
+            owner: activeUserAddr,
+            duration,
+            network: "arc",
+            startTime: confirmTime,
+            expiryMs: confirmTime + (duration * 1000),
+            symbol: activeMarket?.symbol || 'ETH',
+            isSessionTrade: true,
+            confirmed: true,
+          };
+
+          const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+          setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
+          setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
+
+          // Deduct balance
+          setSessionBalance(prev => Math.max(0, prev - amtNum));
+          lastOptimisticActionTime.current = Date.now();
+          notify("Trade Started - Countdown Active", "success");
+
         } catch (fetchErr) {
           clearTimeout(timeoutId);
-          throw new Error(fetchErr.name === 'AbortError' ? "Keeper timeout - check network" : fetchErr.message);
+          throw new Error(fetchErr.name === 'AbortError' ? "Confirmation timeout - Check explorer" : fetchErr.message);
         }
       } else {
         if (!walletClient) throw new Error("Wallet not connected");
@@ -708,72 +740,74 @@ export default function UserApp() {
           account: address,
           gas: 800000n
         });
-        console.log(`✅ [MAIN] Tx Hash: ${txHash}`);
-      }
+        console.log(`✅ [MAIN] Broadcasted: ${txHash}. Waiting for verification...`);
+        notify("Verifying Stake on Arc...", "pending");
 
-      // 🔥 OPTIMISTIC START: release UI immediately once we have a hash
-      lastOptimisticActionTime.current = Date.now();
+        // STRICT LOGIC: Wait for receipt BEFORE adding to active view
+        publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
+          .then(async (receipt) => {
+            if (receipt.status !== "success" && receipt.status !== 1) {
+              throw new Error("Transaction failed on-chain");
+            }
 
-      // OPTIMISTIC DEBIT: Subtract stake immediately for snappy UI
-      if (sessionMode) {
-        setSessionBalance(prev => Math.max(0, prev - amtNum));
-      } else {
-        setEvmBalance(prev => {
-          const current = parseFloat(prev || "0");
-          return Math.max(0, current - amtNum).toString();
-        });
+            console.log(`⛓️ [UI] Trade confirmed on-chain. Syncing with backend...`);
+            const confirmTime = Date.now();
+
+            // Notify backend about the main wallet trade (Ensure it settles)
+            fetch(`${KEEPER_URL_ARC}/trade-ping`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: tradeId.toString(),
+                address: address,
+                amount: amount,
+                direction: dirVal,
+                duration: Number(duration),
+                entryPrice: entryPriceParams.toString(),
+                symbol: activeMarket?.symbol || 'ETH'
+              })
+            }).catch(e => console.warn("Trade-ping failed:", e));
+
+            const newTrade = {
+              id: tradeId,
+              direction: (dirVal === 1 ? "UP" : "DOWN"),
+              amount: Number(amount).toFixed(3),
+              entryPrice: activePrice.toFixed(3),
+              timestamp: confirmTime,
+              status: "PENDING",
+              tx: txHash,
+              nonce: tradeId,
+              userPublicKey: address,
+              owner: address,
+              duration,
+              network: "arc",
+              startTime: confirmTime,
+              expiryMs: confirmTime + (duration * 1000),
+              symbol: activeMarket?.symbol || 'ETH',
+              isSessionTrade: false,
+              confirmed: true,
+            };
+
+            const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+            setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
+            setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
+
+            // Optimistic Debit
+            setEvmBalance(prev => {
+              const current = parseFloat(prev || "0");
+              return Math.max(0, current - amtNum).toString();
+            });
+            lastOptimisticActionTime.current = Date.now();
+            triggerGlobalRefresh(true);
+            notify("Trade Confirmed & Started!", "success");
+          })
+          .catch(e => {
+            console.error("Wait for receipt failed:", e);
+            notify("Trade Verification Error", "error");
+          });
       }
 
       setIsExecuting(false);
-      notify("Trade Broadcasted!", "success");
-
-      // BACKGROUND: Wait for confirmation to sync balance
-      if (txHash) {
-        publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
-          .then(() => {
-            console.log(`⛓️ [UI] Trade confirmed on-chain. Resetting timer.`);
-            const confirmTime = Date.now();
-            const updateConfirmed = (prev) => prev.map(t => {
-              if (t.tx === txHash || String(t.id) === String(tradeId)) {
-                return {
-                  ...t,
-                  confirmed: true,
-                  startTime: confirmTime,
-                  expiryMs: confirmTime + (t.duration * 1000)
-                };
-              }
-              return t;
-            });
-            setActiveTrades(updateConfirmed);
-            setTradeHistory(updateConfirmed);
-            triggerGlobalRefresh(true);
-          })
-          .catch(e => console.warn(`[SYNC] Receipt wait timed out or failed:`, e.message));
-      }
-
-      const newTrade = {
-        id: tradeId,
-        direction: (dirVal === 1 ? "UP" : "DOWN"),
-        amount: Number(amount).toFixed(3),
-        entryPrice: activePrice.toFixed(3),
-        timestamp: Date.now(),
-        status: "PENDING",
-        tx: txHash,
-        nonce: tradeId,
-        userPublicKey: activeUserAddr,
-        owner: activeUserAddr,
-        duration,
-        network: "arc",
-        startTime: Date.now(),
-        expiryMs: expiryMs,
-        symbol: activeMarket?.symbol || 'ETH',
-        isSessionTrade: sessionMode,
-        confirmed: false,
-      };
-
-      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
-      setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
-      setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
 
     } catch (err) {
       console.error("❌ Execution Failed:", err);

@@ -147,38 +147,31 @@ function LiveExecutionComponent({
                                         : (isLight ? "bg-black/5 border-black/5" : "bg-white/[0.02] border border-white/5")
                                     }`}>
                                     {!displayFinal ? (
-                                        isUnconfirmed ? (
-                                            <div className="flex flex-col items-center justify-center py-5">
-                                                <div className="w-5 h-5 mb-3 border-2 border-[#3CB371] border-t-transparent rounded-full animate-spin" />
-                                                <span className={`text-[8px] lg:text-[10px] uppercase font-black tracking-widest animate-pulse ${isLight ? 'text-black/50' : 'text-white/50'}`}>Confirming Stake</span>
+                                        <>
+                                            <div className={`text-4xl lg:text-5xl font-matrix mb-1 tracking-[0.2em] flex items-baseline ${isLight ? 'text-black' : 'text-[#3CB371]'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
+                                                {displayTimeLeft}<span className={`text-[10px] lg:text-[12px] ml-2 font-sans font-black italic opacity-50 ${isLight ? 'text-black/40' : 'text-white/40'}`}>s</span>
                                             </div>
-                                        ) : (
-                                            <>
-                                                <div className={`text-4xl lg:text-5xl font-matrix mb-1 tracking-[0.2em] flex items-baseline ${isLight ? 'text-black' : 'text-[#3CB371]'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
-                                                    {displayTimeLeft}<span className={`text-[10px] lg:text-[12px] ml-2 font-sans font-black italic opacity-50 ${isLight ? 'text-black/40' : 'text-white/40'}`}>s</span>
-                                                </div>
 
-                                                <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                                                    <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
-                                                        {liveWinning ? "WIN" : "LOSS"}
-                                                    </span>
-                                                </div>
+                                            <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
+                                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                                    {liveWinning ? "WIN" : "LOSS"}
+                                                </span>
+                                            </div>
 
-                                                <div className="flex items-center gap-1 opacity-60 mb-2 lg:mb-3">
-                                                    <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/30'}`}>Profit:</span>
-                                                    <span className={`text-[8px] lg:text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3CB371' }}>
-                                                        +{potentialProfit}
-                                                    </span>
-                                                </div>
+                                            <div className="flex items-center gap-1 opacity-60 mb-2 lg:mb-3">
+                                                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/30'}`}>Profit:</span>
+                                                <span className={`text-[8px] lg:text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3CB371' }}>
+                                                    +{potentialProfit}
+                                                </span>
+                                            </div>
 
-                                                <div className={`w-full h-1 rounded-full overflow-hidden ${isLight ? 'bg-black/10' : 'bg-white/5'}`}>
-                                                    <div
-                                                        className="h-full bg-[#3CB371] transition-all duration-200 ease-linear shadow-[0_0_15px_#3CB371]"
-                                                        style={{ width: `${(rawTimeLeft / duration) * 100}%` }}
-                                                    />
-                                                </div>
-                                            </>
-                                        )
+                                            <div className={`w-full h-1 rounded-full overflow-hidden ${isLight ? 'bg-black/10' : 'bg-white/5'}`}>
+                                                <div
+                                                    className="h-full bg-[#3CB371] transition-all duration-200 ease-linear shadow-[0_0_15px_#3CB371]"
+                                                    style={{ width: `${(rawTimeLeft / duration) * 100}%` }}
+                                                />
+                                            </div>
+                                        </>
                                     ) : (
                                         <div className="flex flex-col items-center gap-2 w-full">
                                             {/* INSTANT RESULT - No spinner, immediate stamp */}
