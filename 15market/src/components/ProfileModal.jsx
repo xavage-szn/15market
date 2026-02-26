@@ -4,7 +4,7 @@ import { KEEPER_URL_ARC } from '../constants';
 
 import { Zap, Shield } from 'lucide-react';
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify }) {
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, uiVersion = 'v1', setUiVersion }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -238,6 +238,23 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                         LINK X
                                     </button>
                                 )}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">Interface Mode</label>
+                            <div className="flex bg-black border border-white/10 rounded-2xl p-1 gap-1">
+                                <button
+                                    onClick={() => setUiVersion('v1')}
+                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v1' ? 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]' : 'text-white/40 hover:text-white'}`}
+                                >
+                                    Standard V1
+                                </button>
+                                <button
+                                    onClick={() => setUiVersion('v2')}
+                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v2' ? 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]' : 'text-white/40 hover:text-white'}`}
+                                >
+                                    Pro V2
+                                </button>
                             </div>
                         </div>
                     </div>

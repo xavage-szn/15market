@@ -182,6 +182,7 @@ export default function UserApp() {
   }, [isConnected, connectedChainId, switchChain]);
 
   const [evmBalance, setEvmBalance] = useState("0");
+  const balance = useMemo(() => parseFloat(evmBalance || "0"), [evmBalance]);
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
   const [sessionMode, setSessionMode] = useState(false);
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
@@ -637,8 +638,8 @@ export default function UserApp() {
       return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. Balance: ${currentBal.toFixed(3)}`, "error");
     }
 
-    if (Number(amount) < parseFloat(minStake)) {
-      return notify(`Min trade: ${minStake} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
+    if (Number(amount) < parseFloat(platformSettings.minBet)) {
+      return notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
     }
 
     // setIsExecuting(true); // REMOVED global block for burst mode
@@ -1420,7 +1421,10 @@ export default function UserApp() {
             updatePayload.balanceApplied = true;
           } else if (mainAddr && tradeOwner === mainAddr) {
             // MAIN WALLET TRADE WIN: Credit goes to main wallet
-            setBalance(prev => prev + payoutNum);
+            setEvmBalance(prev => {
+              const current = parseFloat(prev || "0");
+              return (current + payoutNum).toFixed(4);
+            });
             lastOptimisticActionTime.current = Date.now(); // Activate guard
             console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet (${tradeOwner})`);
             updatePayload.balanceApplied = true;
@@ -1921,46 +1925,87 @@ export default function UserApp() {
           </div>
 
           <div className="w-full max-w-7xl px-4 lg:px-6 flex flex-col items-center">
-            <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
-              {/* Chart - Responsive - Full width */}
-              <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
-                style={{
-                  background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
-                  boxShadow: theme === 'light'
-                    ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
-                    : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
-                }}>
-                <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
-              </div>
+            {uiVersion === 'v1' ? (
+              <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
+                {/* V1: Chart Full Width, Terminal/Live Below */}
+                <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
+                  style={{
+                    background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+                    boxShadow: theme === 'light'
+                      ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                      : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
+                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
+                  }}>
+                  <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+                </div>
 
-              {/* Terminal - Responsive split */}
-              <div className="col-span-6 flex flex-col">
-                <TradeTerminal
-                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                  refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                  activeMarket={activeMarket}
-                  maintenanceMode={platformSettings.maintenanceMode}
-                />
-              </div>
-
-              {/* Live Execution - Primary Active Bets Feed */}
-              <div className="col-span-6 flex flex-col">
-                <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
-                  <LiveExecution
-                    activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                    setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                    theme={theme} currentNetwork={network}
+                <div className="col-span-12 lg:col-span-6 flex flex-col">
+                  <TradeTerminal
+                    activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                    sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                    setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                    sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                    theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                    refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                    CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                    evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                    activeMarket={activeMarket}
+                    maintenanceMode={platformSettings.maintenanceMode}
                   />
                 </div>
+
+                <div className="col-span-12 lg:col-span-6 flex flex-col">
+                  <div className="glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 h-full flex flex-col">
+                    <LiveExecution
+                      activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                      setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                      theme={theme} currentNetwork={network}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
+                {/* V2: Chart Left (8), Sidebar Right (4) */}
+                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[630px] glass-panel chart-glow`}
+                  style={{
+                    background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+                    boxShadow: theme === 'light'
+                      ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                      : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
+                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
+                  }}>
+                  <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+                </div>
+
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+                  <TradeTerminal
+                    activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                    sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                    setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                    sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                    theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                    refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                    CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                    evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                    activeMarket={activeMarket}
+                    maintenanceMode={platformSettings.maintenanceMode}
+                  />
+
+                  <div className="glass-panel !rounded-2xl p-2 lg:p-4 flex-1 flex flex-col min-h-[300px]">
+                    <div className="flex items-center gap-2 mb-4 px-2">
+                      <div className="w-2 h-2 rounded-full bg-[#3CB371] animate-pulse" />
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Live Terminal</h3>
+                    </div>
+                    <LiveExecution
+                      activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                      setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                      theme={theme} currentNetwork={network}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <TradeHistory
               wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
@@ -2064,6 +2109,8 @@ export default function UserApp() {
           setIsTransactionReceiptOpen(true);
         }}
         notify={notify}
+        uiVersion={uiVersion}
+        setUiVersion={setUiVersion}
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
 
