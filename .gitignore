@@ -41,3 +41,17 @@ secrets.json
 # System
 Thumbs.db
 ehthumbs.db
+
+# Build logs & output files
+build_log*.txt
+payout_result.txt
+diag_output.txt
+output.txt
+deployed_address.txt
+
+# Solana artifacts
+sol_prediction/target/
+sol_prediction/test-ledger/
+
+# Hardhat artifacts cache
+arc_prediction/cache/

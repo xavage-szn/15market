@@ -25,9 +25,6 @@ import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID } from "./constants";
 
 
-
-
-// Memoized Sub-components
 // Memoized Sub-components
 import { TradeTerminal } from "./components/TradeTerminal";
 import { LiveExecution } from "./components/LiveExecution";
@@ -38,7 +35,6 @@ import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
 import CustomChart from './components/CustomChart';
 import Toast from "./components/Toast";
 import { ThemeToggle } from "./components/ThemeToggle";
-
 
 
 export default function UserApp() {

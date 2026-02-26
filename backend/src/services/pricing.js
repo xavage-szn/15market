@@ -18,8 +18,6 @@ class PricingService {
     }
 
     getSources(symbol) {
-        // Log source requests
-        console.log(`[Pricing] 🔍 Gathering sources for ${symbol}`);
         const configs = {
             'BTC': { binance: "BTCUSDT", mexc: "BTCUSDT", pyth: "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43" },
             'ETH': { binance: "ETHUSDT", mexc: "ETHUSDT", pyth: "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace" },
