@@ -182,7 +182,6 @@ export default function UserApp() {
   }, [isConnected, connectedChainId, switchChain]);
 
   const [evmBalance, setEvmBalance] = useState("0");
-  const balance = useMemo(() => parseFloat(evmBalance || "0"), [evmBalance]);
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
   const [sessionMode, setSessionMode] = useState(false);
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
