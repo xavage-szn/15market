@@ -38,10 +38,10 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden bg-transparent">
-            <div className="px-4 py-2.5 flex items-center justify-between border-b border-white/5 bg-white/[0.02]">
+            <div className={`px-4 py-2.5 flex items-center justify-between border-b ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-[#3CB371]/10 bg-black/[0.02]'}`}>
                 <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
-                    <span className={`text-[9px] uppercase font-black tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-gray-500'}`}>
+                    <span className={`text-[9px] uppercase font-black tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-[#3D5A4C]/40'}`}>
                         Engines
                     </span>
                 </div>
@@ -99,16 +99,16 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                                 }
                                             </div>
                                             <div>
-                                                <div className="text-[10px] font-black uppercase tracking-tight text-white">
+                                                <div className={`text-[10px] font-black uppercase tracking-tight ${isDark ? 'text-white' : 'text-[#1A3026]'}`}>
                                                     {isLong ? "CALL" : "PUT"}
                                                 </div>
-                                                <div className="text-[7px] font-bold opacity-30 tracking-widest uppercase">
+                                                <div className={`text-[7px] font-bold tracking-widest uppercase ${isDark ? 'opacity-30 text-white' : 'opacity-40 text-[#3D5A4C]'}`}>
                                                     ARC
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="text-right flex flex-col items-end">
-                                            <div className="text-[10px] font-black tracking-tight text-white/50">
+                                            <div className={`text-[10px] font-black tracking-tight ${isDark ? 'text-white/50' : 'text-[#1A3026]/50'}`}>
                                                 {trade.amount} USDC
                                             </div>
                                             <div className="text-[9px] font-black flex items-center gap-1" style={{ color: statusColor }}>
@@ -136,11 +136,11 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
 
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[7px] font-black uppercase tracking-widest opacity-20 text-white">Entry</span>
-                                            <span className="text-[9px] font-mono font-black text-white/40">${trade.entryPrice}</span>
+                                            <span className={`text-[7px] font-black uppercase tracking-widest opacity-20 ${isDark ? 'text-white' : 'text-[#1A3026]'}`}>Entry</span>
+                                            <span className={`text-[9px] font-mono font-black ${isDark ? 'text-white/40' : 'text-[#1A3026]/40'}`}>${trade.entryPrice}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[7px] font-black uppercase tracking-widest opacity-20 text-white">Now</span>
+                                            <span className={`text-[7px] font-black uppercase tracking-widest opacity-20 ${isDark ? 'text-white' : 'text-[#1A3026]'}`}>Now</span>
                                             <span className="text-[9px] font-mono font-black tabular-nums" style={{ color: statusColor }}>
                                                 ${current.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </span>
@@ -150,7 +150,7 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                     <TradeCountdown expiry={trade.expiry} />
 
                                     {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST') && (
-                                        <div className="absolute inset-0 z-10 backdrop-blur-md bg-black/60 flex flex-col items-center justify-center rounded-xl border border-white/10">
+                                        <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#3CB371]/10'} flex flex-col items-center justify-center rounded-xl border`}>
                                             {trade.status === 'WON' && <div className="flex flex-col items-center text-[#3CB371] scale-90"><Trophy size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span></div>}
                                             {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#FF7F50] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
                                             {trade.status === 'RESOLVING' && (

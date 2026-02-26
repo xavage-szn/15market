@@ -32,7 +32,9 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     theme,
     evmSessionWallet,
     transactionHistory,
-    onViewReceipt
+    onViewReceipt,
+    uiVersion,
+    setUiVersion
 }) {
     const isLight = theme === 'light';
     const { isConnected, address } = useAccount();
@@ -176,8 +178,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`min-h-screen w-full flex flex-col ${isLight ? 'bg-[#f8f9fa] text-gray-900' : 'bg-transparent text-white'}`}>
-            <div className={`sticky top-0 z-40 ${isLight ? 'bg-white border-gray-200' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
+        <div className={`min-h-screen w-full flex flex-col ${isLight ? 'bg-[#EEF9F1] text-[#1A3026]' : 'bg-transparent text-white'}`}>
+            <div className={`sticky top-0 z-40 ${isLight ? 'bg-[#EEF9F1]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
                 <div className="max-w-7xl mx-auto p-4 md:p-6">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
@@ -190,9 +192,9 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             <div>
                                 <h1 className="text-lg md:text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
                                     Command Center
-                                    <span className="text-[8px] md:text-[10px] bg-[#3CB371]/20 text-[#3CB371] px-2 py-0.5 rounded border border-[#3CB371]/30">ARC LIVE</span>
+                                    <span className={`text-[8px] md:text-[10px] ${isLight ? 'bg-[#3CB371]/10 text-[#3CB371] border-[#3CB371]/20' : 'bg-[#3CB371]/20 text-[#3CB371] border-[#3CB371]/30'} px-2 py-0.5 rounded border`}>ARC LIVE</span>
                                 </h1>
-                                <p className={`text-[10px] md:text-xs ${isLight ? 'text-gray-500' : 'text-white/40'} font-bold uppercase tracking-widest hidden md:block`}>
+                                <p className={`text-[10px] md:text-xs ${isLight ? 'text-[#3D5A4C]/60' : 'text-white/40'} font-bold uppercase tracking-widest hidden md:block`}>
                                     {address ? truncate(address) : "Guest View"}
                                 </p>
                             </div>
@@ -247,9 +249,9 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                                    <div className={`lg:col-span-2 ${isLight ? 'bg-white border-gray-200' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 relative overflow-hidden`}>
+                                    <div className={`lg:col-span-2 ${isLight ? 'bg-white border-[#3CB371]/10 shadow-[0_8px_32px_rgba(60,179,113,0.05)]' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 relative overflow-hidden`}>
                                         <div className="flex justify-between items-center mb-6">
-                                            <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-white/40'}`}>Market Activity Pulse</h3>
+                                            <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/40'}`}>Market Activity Pulse</h3>
                                             <div className="flex gap-2">
                                                 <span className="h-2 w-2 rounded-full bg-[#3CB371] animate-pulse" />
                                                 <span className="text-[10px] text-[#3CB371] font-bold">Real-time</span>
@@ -282,8 +284,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                     </div>
 
                                     <div className="flex flex-col gap-6 lg:col-span-2">
-                                        <div className={`${isLight ? 'bg-white border-gray-200' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 flex flex-col h-full`}>
-                                            <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-white/40'} mb-4`}>Recent Signals</h3>
+                                        <div className={`${isLight ? 'bg-white border-[#3CB371]/10 shadow-[0_8px_32px_rgba(60,179,113,0.05)]' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 flex flex-col h-full`}>
+                                            <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/40'} mb-4`}>Recent Signals</h3>
                                             <div className="flex-1 overflow-y-auto space-y-3 max-h-[180px] custom-scrollbar">
                                                 {stats.recentTrades.length === 0 ? (
                                                     <div className={`text-center py-4 ${isLight ? 'text-gray-200' : 'text-white/10'} text-[10px] uppercase font-black`}>No active signals</div>
@@ -311,7 +313,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         )}
 
                         {activeTab === "profile" && (
-                            <div className={`max-w-2xl mx-auto ${isLight ? 'bg-white border-gray-200' : 'bg-[#111] border-white/5'} border rounded-[32px] p-8`}>
+                            <div className={`max-w-2xl mx-auto ${isLight ? 'bg-white border-[#3CB371]/10 shadow-[0_8px_32px_rgba(60,179,113,0.05)]' : 'bg-[#111] border-white/5'} border rounded-[32px] p-8`}>
                                 <div className="flex flex-col items-center mb-8">
                                     <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[2px] mb-4 overflow-hidden">
                                         <div className={`w-full h-full rounded-full ${isLight ? 'bg-gray-50' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
@@ -390,7 +392,36 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                     </div>
                                 </div>
 
-                                <div className={`p-6 ${isLight ? 'bg-white border-gray-200 shadow-sm' : 'bg-black/40 border-white/5'} border rounded-[24px] mb-8`}>
+                                <div className={`p-6 ${isLight ? 'bg-white border-[#3CB371]/20 shadow-sm' : 'bg-black/40 border-white/5'} border rounded-[24px] mb-6`}>
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="p-2 bg-[#3CB371]/10 text-[#3CB371] rounded-lg">
+                                            <Settings size={18} />
+                                        </div>
+                                        <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-700' : 'text-white/80'}`}>Interface Version</h4>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={() => setUiVersion('v1')}
+                                            className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v1'
+                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-[0_0_20px_#3CB37140]'
+                                                : isLight ? 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
+                                        >
+                                            <span className="text-[10px] font-black uppercase tracking-widest">V1 CLASSIC</span>
+                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v1' ? 'text-white/70' : isLight ? 'text-gray-400' : 'text-white/20'}`}>Basic Terminal</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setUiVersion('v2')}
+                                            className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v2'
+                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-[0_0_20px_#3CB37140]'
+                                                : isLight ? 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
+                                        >
+                                            <span className="text-[10px] font-black uppercase tracking-widest">V2 ADVANCED</span>
+                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v2' ? 'text-white/70' : isLight ? 'text-gray-400' : 'text-white/20'}`}>High Speed Execution</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className={`p-6 ${isLight ? 'bg-white border-[#3CB371]/20 shadow-sm' : 'bg-black/40 border-white/5'} border rounded-[24px] mb-8`}>
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center gap-3">
                                             <div className="p-2 bg-orange-500/10 text-orange-500 rounded-lg">
@@ -510,11 +541,11 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
             </div>
 
             {modalConfig && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
+                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-black/20' : 'bg-black/60'} backdrop-blur-sm`}>
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-white border-gray-200' : 'bg-[#0a0a0a] border-white/10'} border rounded-[32px] p-8 shadow-2xl relative overflow-hidden`}
+                        className={`w-full max-w-md ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20 shadow-[0_20px_60px_rgba(60,179,113,0.15)]' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
                     >
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10 flex flex-col items-center text-center">
@@ -556,11 +587,11 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
             )}
 
             {promptConfig && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
+                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-black/20' : 'bg-black/60'} backdrop-blur-sm`}>
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-white border-gray-200' : 'bg-[#0a0a0a] border-white/10'} border rounded-[32px] p-8 shadow-2xl relative overflow-hidden`}
+                        className={`w-full max-w-md ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20 shadow-[0_20px_60px_rgba(60,179,113,0.15)]' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
                     >
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10">

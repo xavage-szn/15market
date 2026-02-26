@@ -16,10 +16,12 @@ const ROLES = {
     LISTER: '15listers'
 };
 
-function MessagingSystem({ wallet, connection, isOpen, onClose, isAdminView = false, adminRole = null, embedded = false, userProfile = null }) {
+function MessagingSystem({ wallet, connection, isOpen, onClose, isAdminView = false, adminRole = null, embedded = false, userProfile = null, theme }) {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const messagesEndRef = useRef(null);
+
+    const isLight = theme === 'light';
 
     // Current User Identity
     const myAddress = isAdminView && adminRole ? adminRole : (wallet?.address || 'GUEST_' + Math.floor(Math.random() * 1000));
@@ -75,43 +77,43 @@ function MessagingSystem({ wallet, connection, isOpen, onClose, isAdminView = fa
         if (addr === ROLES.ADMIN) return 'text-[#3CB371]';
         if (addr === ROLES.MODERATOR) return 'text-[#6366f1]';
         if (addr === ROLES.LISTER) return 'text-[#FF8C00]';
-        return 'text-white';
+        return isLight ? 'text-[#1A3026]' : 'text-white';
     };
 
     const getRoleIcon = (addr) => {
         if (addr === ROLES.ADMIN) return <ShieldCheck size={14} className="text-[#3CB371]" />;
         if (addr === ROLES.MODERATOR) return <Hammer size={14} className="text-[#6366f1]" />;
         if (addr === ROLES.LISTER) return <Hammer size={14} className="text-[#FF8C00]" />;
-        return <User size={14} className="text-white/40" />;
+        return <User size={14} className={isLight ? 'text-black/20' : 'text-white/40'} />;
     };
 
     const content = (
         <div className={embedded
-            ? "w-full h-full bg-[#0D0D0D] border border-white/10 rounded-[32px] flex flex-col overflow-hidden backdrop-blur-md"
-            : "w-[450px] h-[650px] bg-[#0D0D0D] border border-white/10 rounded-[40px] shadow-[0_40px_100px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-2xl"
+            ? `w-full h-full ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20' : 'bg-[#0D0D0D] border-white/10'} border rounded-[32px] flex flex-col overflow-hidden backdrop-blur-md`
+            : `w-[450px] h-[650px] ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20' : 'bg-[#0D0D0D] border-white/10'} border rounded-[40px] shadow-[0_40px_100px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-2xl`
         }>
             {/* Header */}
-            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+            <div className={`p-6 border-b ${isLight ? 'border-[#3CB371]/10' : 'border-white/5'} flex items-center justify-between`}>
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-lg text-[#3CB371]">
                         <MessageSquare size={16} />
                     </div>
                     <div>
-                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Lobby</h3>
-                        <p className="text-[9px] text-white/20 font-bold uppercase tracking-tighter">Public Protocol Discussion</p>
+                        <h3 className={`text-sm font-black uppercase tracking-[0.2em] ${isLight ? 'text-black' : 'text-white'}`}>Lobby</h3>
+                        <p className={`text-[9px] ${isLight ? 'text-black/30' : 'text-white/20'} font-bold uppercase tracking-tighter`}>Public Protocol Discussion</p>
                     </div>
                 </div>
                 {!embedded && (
-                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/20 hover:text-white transition-all">
+                    <button onClick={onClose} className={`p-2 ${isLight ? 'hover:bg-black/5 text-black/20 hover:text-black' : 'hover:bg-white/5 text-white/20 hover:text-white'} rounded-full transition-all`}>
                         <X size={20} />
                     </button>
                 )}
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-black/20">
+            <div className={`flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar ${isLight ? 'bg-black/5' : 'bg-black/20'}`}>
                 {messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
+                    <div className={`h-full flex flex-col items-center justify-center text-center ${isLight ? 'opacity-10' : 'opacity-20'}`}>
                         <MessageSquare size={48} className="mb-4" />
                         <p className="text-xs font-black uppercase tracking-widest">No transmissions found</p>
                         <p className="text-[9px] font-bold">Start the conversation</p>
@@ -121,7 +123,7 @@ function MessagingSystem({ wallet, connection, isOpen, onClose, isAdminView = fa
                         <div key={i} className={`flex flex-col ${m.sender === myAddress ? 'items-end' : 'items-start'}`}>
                             <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-[11px] font-bold shadow-xl ${m.sender === myAddress
                                 ? 'bg-[#3CB371] text-white rounded-tr-none'
-                                : 'bg-white/5 text-white/80 border border-white/5 rounded-tl-none'
+                                : (isLight ? 'bg-white text-black border border-[#3CB371]/10 rounded-tl-none' : 'bg-white/5 text-white/80 border border-white/5 rounded-tl-none')
                                 }`}>
                                 {m.text}
                             </div>
@@ -138,13 +140,13 @@ function MessagingSystem({ wallet, connection, isOpen, onClose, isAdminView = fa
             </div>
 
             {/* Input Area */}
-            <form onSubmit={handleSendMessage} className="p-6 bg-black/40 border-t border-white/5">
+            <form onSubmit={handleSendMessage} className={`p-6 ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-black/40 border-white/5'} border-t`}>
                 <div className="flex gap-3">
                     <input
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}
                         placeholder="Broadcast to lobby..."
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none focus:border-[#3CB371]/40"
+                        className={`flex-1 ${isLight ? 'bg-black/5 border-black/10 text-black placeholder:text-black/30' : 'bg-white/5 border-white/10 text-white'} border rounded-xl px-4 py-3 text-xs font-bold outline-none focus:border-[#3CB371]/40`}
                     />
                     <button
                         type="submit"

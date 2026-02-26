@@ -45,19 +45,19 @@ function TradeHistoryComponent({
                 ${isCompact ? 'h-full flex flex-col p-3' : 'p-4 lg:p-6'} 
                 rounded-2xl border transition-all duration-300 glass-panel
                 ${isLight ? 'static-panel-light !shadow-xl' : 'shadow-2xl'}`}
-                style={{ background: isLight ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
+                style={{ background: isLight ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)' }}
             >
                 <div className="flex items-center justify-between mb-3 lg:mb-4 px-1">
-                    <h3 className={`text-xs lg:text-base font-bold ${isLight ? '!text-black' : 'text-white'}`}>Trade History</h3>
+                    <h3 className={`text-xs lg:text-base font-bold ${isLight ? 'text-[#1A3026]' : 'text-white'}`}>Trade History</h3>
                 </div>
 
                 {filteredTrades.length === 0 ? (
-                    <div className={`${isLight ? 'text-black/40' : 'text-white/40'} py-10 text-center`}>No trades yet for this wallet. Reach for the stars!</div>
+                    <div className={`${isLight ? 'text-[#3D5A4C]/60' : 'text-white/40'} py-10 text-center uppercase text-[10px] font-black tracking-widest`}>No trades yet for this wallet.</div>
                 ) : (
                     <div className="space-y-2">
                         {paginatedTrades.map((t) => (
-                            <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border-2 gap-2 lg:gap-4 transition-all group ${isLight
-                                ? 'bg-[#f8fafc] border-black/5 shadow-md hover:shadow-lg hover:border-black/10'
+                            <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border transition-all group ${isLight
+                                ? 'bg-white border-[#3CB371]/20 shadow-sm hover:shadow-md hover:border-[#3CB371]/40'
                                 : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
                                 <div className="flex items-center gap-2 lg:gap-4">
                                     <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{

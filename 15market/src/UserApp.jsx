@@ -1865,6 +1865,8 @@ export default function UserApp() {
           theme={theme}
           evmSessionWallet={evmSessionWallet}
           transactionHistory={transactionHistory}
+          setUiVersion={setUiVersion}
+          uiVersion={uiVersion}
           onViewReceipt={(tx) => {
             setSelectedTransaction(tx);
             setIsTransactionReceiptOpen(true);
@@ -1919,7 +1921,7 @@ export default function UserApp() {
           </header>
 
           {/* Full-width scroller - Truly edge to edge now */}
-          <div className="w-full mb-6 lg:mb-12 overflow-hidden border-y border-white/5 bg-black/20">
+          <div className={`w-full mb-6 lg:mb-12 overflow-hidden border-y transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
             <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} activeTrades={activeTrades} tradeHistory={tradeHistory} />
           </div>
 
@@ -1968,11 +1970,11 @@ export default function UserApp() {
                 {/* V2: Chart Left (8), Sidebar Right (4) */}
                 <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[630px] glass-panel chart-glow`}
                   style={{
-                    background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+                    background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
                     boxShadow: theme === 'light'
-                      ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                      ? '0 0 40px rgba(60, 179, 113, 0.4), 0 0 25px rgba(60, 179, 113, 0.2), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                       : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
+                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.4)' : `${GREEN}40`
                   }}>
                   <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
                 </div>
@@ -2020,10 +2022,13 @@ export default function UserApp() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border !border-white/5 relative`}
-                  style={{ background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)' }}
+                  className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
+                  style={{
+                    background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
+                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
+                  }}
                 >
-                  <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                  <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'light' ? 'text-black' : 'text-white'}`}>
                     <Trophy size={80} />
                   </div>
                   <div className="flex items-center gap-4 lg:gap-8 relative z-10">
@@ -2032,10 +2037,10 @@ export default function UserApp() {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 truncate max-w-[100px] lg:max-w-none">{winnerBanner.owner}</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
+                        <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
                       </div>
-                      <h3 className="text-lg lg:text-xl font-black text-white tracking-tighter uppercase">
+                      <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
                         Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
                       </h3>
                     </div>
@@ -2110,8 +2115,9 @@ export default function UserApp() {
         notify={notify}
         uiVersion={uiVersion}
         setUiVersion={setUiVersion}
+        theme={theme}
       />
-      <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} />
+      <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
 
 
 

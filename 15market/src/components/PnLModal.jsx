@@ -4,10 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X } from 'lucide-react';
 import { Stamp } from './Stamp';
 
-export function PnLModal({ isOpen, onClose, trade }) {
+export function PnLModal({ isOpen, onClose, trade, theme }) {
     const cardRef = useRef(null);
 
     if (!trade || !isOpen) return null;
+
+    const isLight = theme === 'light';
 
     const handleDownload = async () => {
         if (cardRef.current === null) return;
@@ -53,7 +55,7 @@ export function PnLModal({ isOpen, onClose, trade }) {
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-md bg-black/30">
+            <div className={`fixed inset-0 z-[200] flex items-center justify-center p-6 backdrop-blur-md ${isLight ? 'bg-black/10' : 'bg-black/30'}`}>
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}

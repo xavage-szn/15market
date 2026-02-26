@@ -170,30 +170,32 @@ body {
 /* ===== PREMIUM LIGHT MODE ===== */
 html.light,
 body.light {
-  background-color: #FFF8E7 !important;
-  background-image: radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.04) 1px, transparent 0) !important;
+  background-color: #EEF9F1 !important;
+  /* Very Light Coral Green */
+  background-image: radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.05) 1px, transparent 0) !important;
   background-size: 32px 32px !important;
 }
 
 .light {
   --primary-color: #3CB371;
-  --primary-glow: rgba(60, 179, 113, 0.3);
-  --primary-glow-strong: rgba(60, 179, 113, 0.5);
-  --primary-glow-subtle: rgba(60, 179, 113, 0.15);
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(60, 179, 113, 0.15);
-  --glass-highlight: rgba(60, 179, 113, 0.05);
-  --text-primary: #1a1a1a;
-  --text-secondary: #525252;
-  --text-tertiary: #737373;
+  --primary-glow: rgba(60, 179, 113, 0.4);
+  --primary-glow-strong: rgba(60, 179, 113, 0.6);
+  --primary-glow-subtle: rgba(60, 179, 113, 0.2);
+  --glass-bg: rgba(238, 249, 241, 0.92);
+  --glass-border: rgba(60, 179, 113, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.4);
+  --text-primary: #1A3026;
+  /* Darker green-tinted text */
+  --text-secondary: #3D5A4C;
+  --text-tertiary: #6B8E7D;
 }
 
 /* Light Mode Glass Panels */
 .light .glass-panel {
-  background: rgba(255, 248, 231, 0.9) !important;
-  /* Cream Color */
+  background: rgba(238, 249, 241, 0.9) !important;
+  /* Very Light Coral Green Glass */
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(60, 179, 113, 0.12) !important;
+  border: 1px solid rgba(60, 179, 113, 0.15) !important;
   box-shadow:
     0 4px 24px rgba(60, 179, 113, 0.08),
     0 0 1px rgba(60, 179, 113, 0.2) inset !important;
@@ -208,9 +210,8 @@ body.light {
 
 /* Light Mode Static Panels */
 .light .static-panel-light {
-  background: #FFF8E7 !important;
-  /* Cream Color */
-  border: 1px solid rgba(60, 179, 113, 0.15) !important;
+  background: #EEF9F1 !important;
+  border: 1px solid rgba(60, 179, 113, 0.18) !important;
   box-shadow:
     0 2px 12px rgba(60, 179, 113, 0.06),
     0 0 0 1px rgba(60, 179, 113, 0.08) inset !important;

@@ -4,13 +4,15 @@ import { KEEPER_URL_ARC } from '../constants';
 
 import { Zap, Shield } from 'lucide-react';
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, uiVersion = 'v1', setUiVersion }) {
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, uiVersion = 'v1', setUiVersion, theme }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
     const [metrics, setMetrics] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isVerifyingX, setIsVerifyingX] = useState(false);
+
+    const isLight = theme === 'light';
 
     // wallet prop is the Wagmi/Para wallet object or wrapper. 
     // userProfile is passed from UserApp
@@ -123,19 +125,19 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 backdrop-blur-md bg-black/80">
+            <div className={`fixed inset-0 z-[150] flex items-center justify-center p-6 backdrop-blur-md ${isLight ? 'bg-white/40' : 'bg-black/80'}`}>
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className="w-full max-w-md bg-[#0D0D0D] border border-[#3CB371]/30 rounded-[32px] p-8 shadow-[0_0_50px_rgba(59,130,246,0.15)] relative overflow-hidden"
+                    className={`w-full max-w-md ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/30'} border rounded-[32px] p-8 shadow-[0_0_50px_rgba(60,179,113,0.1)] relative overflow-hidden`}
                 >
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent" />
 
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-4">
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#3CB371] to-black p-[1px] overflow-hidden">
-                                <div className="w-full h-full rounded-2xl bg-[#050505] flex items-center justify-center overflow-hidden">
+                                <div className={`w-full h-full rounded-2xl ${isLight ? 'bg-white' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                     {userProfile?.xProfileImage ? (
                                         <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                     ) : (
@@ -146,56 +148,56 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                 </div>
                             </div>
                             <div className="flex flex-col">
-                                <h3 className="text-xl font-black uppercase tracking-widest text-white">DeGen Account</h3>
-                                <p className="text-[9px] text-white/20 uppercase font-bold tracking-widest mt-1">Identity & Metrics</p>
+                                <h3 className={`text-xl font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-white'}`}>DeGen Account</h3>
+                                <p className={`text-[9px] ${isLight ? 'text-black/40' : 'text-white/20'} uppercase font-bold tracking-widest mt-1`}>Identity & Metrics</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button onClick={onClose} className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors text-white/40">✕</button>
+                            <button onClick={onClose} className={`p-2 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40' : 'bg-white/5 hover:bg-white/10 text-white/40'} transition-colors`}>✕</button>
                         </div>
                     </div>
 
                     {metrics && (
                         <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col justify-center">
+                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
                                 <p className="text-[8px] font-bold text-[#3CB371] uppercase tracking-widest mb-1">Win Rate</p>
                                 <div className="flex items-baseline gap-1">
-                                    <p className="text-2xl font-black text-white">
+                                    <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'}`}>
                                         {metrics.trades > 0 ? ((metrics.wins / metrics.trades) * 100).toFixed(0) : 0}
                                     </p>
-                                    <span className="text-xs font-bold text-white/40">%</span>
+                                    <span className={`text-xs font-bold ${isLight ? 'text-black/40' : 'text-white/40'}`}>%</span>
                                 </div>
-                                <p className="text-[7px] text-white/20 font-bold uppercase mt-1">{metrics.wins} W // {metrics.trades - metrics.wins} L</p>
+                                <p className={`text-[7px] ${isLight ? 'text-black/20' : 'text-white/20'} font-bold uppercase mt-1`}>{metrics.wins} W // {metrics.trades - metrics.wins} L</p>
                             </div>
-                            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col justify-center">
-                                <p className="text-[8px] font-bold text-white/40 uppercase tracking-widest mb-1">Total Volume</p>
+                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
+                                <p className={`text-[8px] font-bold ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-widest mb-1`}>Total Volume</p>
                                 <div className="flex items-baseline gap-1">
-                                    <p className="text-2xl font-black text-white">{metrics.volume}</p>
-                                    <span className="text-xs font-bold text-white/40">USDC</span>
+                                    <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'}`}>{metrics.volume}</p>
+                                    <span className={`text-xs font-bold ${isLight ? 'text-black/40' : 'text-white/40'}`}>USDC</span>
                                 </div>
-                                <p className="text-[7px] text-white/20 font-bold uppercase mt-1">Across {metrics.trades} Trades</p>
+                                <p className={`text-[7px] ${isLight ? 'text-black/20' : 'text-white/20'} font-bold uppercase mt-1`}>Across {metrics.trades} Trades</p>
                             </div>
                         </div>
                     )}
 
                     <div className="mb-6">
-                        <h4 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-3 block">Transaction History</h4>
+                        <h4 className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-3 block`}>Transaction History</h4>
                         <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-2">
                             {(!transactionHistory || transactionHistory.length === 0) ? (
-                                <div className="text-center py-4 text-white/10 text-[9px] uppercase font-black border border-white/5 rounded-xl">No transactions</div>
+                                <div className={`text-center py-4 ${isLight ? 'text-black/10 border-black/5' : 'text-white/10 border-white/5'} text-[9px] uppercase font-black border rounded-xl`}>No transactions</div>
                             ) : transactionHistory.map((tx, i) => (
-                                <div key={tx.id || i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                <div key={tx.id || i} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/[0.02] border-white/5'} border`}>
                                     <div className="flex items-center gap-3">
                                         <div className={`p-1.5 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
                                             {tx.type === "DEPOSIT" ? <Zap size={14} /> : <Shield size={14} />}
                                         </div>
                                         <div>
-                                            <div className="text-[10px] font-black text-white uppercase">{tx.type}</div>
-                                            <div className="text-[8px] text-white/20 font-mono italic">{new Date(tx.timestamp).toLocaleDateString()}</div>
+                                            <div className={`text-[10px] font-black ${isLight ? 'text-black' : 'text-white'} uppercase`}>{tx.type}</div>
+                                            <div className={`text-[8px] ${isLight ? 'text-black/20' : 'text-white/20'} font-mono italic`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
                                         </div>
                                     </div>
                                     <div className="text-right flex flex-col items-end">
-                                        <div className={`text-[11px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : "text-white/80"}`}>
+                                        <div className={`text-[11px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : (isLight ? "text-black/80" : "text-white/80")}`}>
                                             {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount}
                                         </div>
                                         <button
@@ -212,46 +214,47 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                     <div className="space-y-4">
                         <div>
-                            <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">Username (Public)</label>
+                            <label className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-2 block`}>Username (Public)</label>
                             <input
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 placeholder="Anonymous DeGen"
-                                className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-white/10"
+                                className={`w-full ${isLight ? 'bg-white text-black border-black/10' : 'bg-black text-white border-white/10'} border rounded-2xl px-5 py-3.5 text-xs font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-black/20`}
                             />
                         </div>
 
                         <div>
-                            <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">X Handle</label>
+                            <label className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-2 block`}>X Handle</label>
                             <div className="flex gap-2">
                                 <input
                                     value={xHandle}
                                     placeholder="@username"
                                     disabled={true}
-                                    className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-bold opacity-70 outline-none cursor-not-allowed"
+                                    className={`flex-1 ${isLight ? 'bg-white text-black border-black/10' : 'bg-black text-white border-white/10'} border rounded-2xl px-5 py-3.5 text-xs font-bold opacity-70 outline-none cursor-not-allowed`}
                                 />
                                 {!xHandle && (
                                     <button
                                         onClick={handleLinkTwitter}
-                                        className="px-4 rounded-2xl bg-white text-black text-[10px] font-black transition-transform active:scale-95 hover:bg-[#3CB371]"
+                                        className={`px-4 rounded-2xl ${isLight ? 'bg-[#3CB371] text-black' : 'bg-white text-black'} text-[10px] font-black transition-transform active:scale-95 hover:bg-[#3CB371]`}
                                     >
                                         LINK X
                                     </button>
                                 )}
                             </div>
                         </div>
+
                         <div>
-                            <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1 mb-2 block">Interface Mode</label>
-                            <div className="flex bg-black border border-white/10 rounded-2xl p-1 gap-1">
+                            <label className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-2 block`}>Interface Mode</label>
+                            <div className={`flex ${isLight ? 'bg-white border-black/10' : 'bg-black border-white/10'} border rounded-2xl p-1 gap-1`}>
                                 <button
                                     onClick={() => setUiVersion('v1')}
-                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v1' ? 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]' : 'text-white/40 hover:text-white'}`}
+                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v1' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
                                 >
                                     Standard V1
                                 </button>
                                 <button
                                     onClick={() => setUiVersion('v2')}
-                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v2' ? 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]' : 'text-white/40 hover:text-white'}`}
+                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v2' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
                                 >
                                     Pro V2
                                 </button>
@@ -263,7 +266,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className={`w-full bg-[#3CB371] text-black font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
+                            className={`w-full bg-[#3CB371] ${isLight ? 'text-white' : 'text-black'} font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
                         >
                             {isSaving ? "SYNCING..." : "SAVE PROFILE"}
                         </button>
@@ -272,4 +275,4 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
             </div>
         </AnimatePresence>
     );
-};
+}

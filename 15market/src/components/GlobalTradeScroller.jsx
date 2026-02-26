@@ -138,11 +138,10 @@ function GlobalTradeScrollerComponent({ theme }) {
     return (
         <div
             className={`w-full h-10 lg:h-12 flex items-center overflow-hidden relative transition-all duration-500 rounded-none z-[40] ${isLight
-                ? 'border-y-2 border-[#3CB371]/30 shadow-[0_0_15px_rgba(60,179,113,0.1)]'
+                ? 'border-y-2 border-[#3CB371]/20 shadow-[0_0_15px_rgba(60,179,113,0.1)] bg-[#EEF9F1]'
                 : 'border-y border-white/5 bg-transparent'
                 }`}
             style={{
-                backgroundColor: isLight ? '#FFF8E7' : undefined,
                 boxShadow: isLight ? '0 0 20px rgba(60, 179, 113, 0.1)' : `0 0 15px #3CB37115, inset 0 0 10px #3CB37110`
             }}
         >            <div
