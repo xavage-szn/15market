@@ -39,9 +39,34 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         try {
             const apiInterval = getApiInterval(tf);
             const targetCount = 1000;
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
             let url = `/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
 
+            // In production Vercel, relative paths for APIs usually fail without complex proxy config. 
+            // We'll fallback to direct MEXC if the proxy isn't set up.
             const res = await fetch(url);
+
+            // CHECK FOR VERCEL SPA REDIRECT (HTML instead of JSON)
+            const contentType = res.headers.get('content-type');
+            if (contentType && contentType.includes('text/html')) {
+                console.warn("[CHART] Proxy returned HTML. Falling back to direct API fetch.");
+                const directUrl = `https://api.mexc.com/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
+                const directRes = await fetch(directUrl);
+                if (!directRes.ok) return [];
+                const data = await directRes.json();
+                if (!Array.isArray(data)) return [];
+                return data.map(d => ({
+                    time: Math.floor(d[0] / 1000),
+                    open: parseFloat(d[1]),
+                    high: parseFloat(d[2]),
+                    low: parseFloat(d[3]),
+                    close: parseFloat(d[4]),
+                    value: parseFloat(d[4]),
+                    volume: parseFloat(d[5] || 0)
+                }));
+            }
+
             if (!res.ok) return [];
             const data = await res.json();
             if (!Array.isArray(data)) return [];

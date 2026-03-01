@@ -394,7 +394,17 @@ export default function UserApp() {
     try {
       const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
       if (res.ok) {
-        const userData = await res.json();
+        const text = await res.text();
+        let userData;
+        try {
+          userData = JSON.parse(text);
+        } catch (e) {
+          if (text.includes("<html") || text.includes("<!DOCTYPE")) {
+            console.error("[Backend] Proxy error (HTML returned). Check KEEPER_URL.");
+            return;
+          }
+          throw e;
+        }
         const { profile, history, transactions } = userData;
         if (profile) {
           setUserProfile(profile);
@@ -688,7 +698,16 @@ export default function UserApp() {
             })
           });
           clearTimeout(timeoutId);
-          const data = await res.json();
+          const responseText = await res.text();
+          let data;
+          try {
+            data = JSON.parse(responseText);
+          } catch (e) {
+            if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html")) {
+              throw new Error("Backend connection failed (Server returned HTML/404). Check VITE_KEEPER_URL environment variable.");
+            }
+            throw new Error(`Invalid JSON response from backend: ${responseText.slice(0, 100)}`);
+          }
           if (!res.ok) throw new Error(data.error || "Session trade failed");
           txHash = data.txHash;
           console.log(`✅ [SESSION] Confirmed on-chain: ${txHash}`);

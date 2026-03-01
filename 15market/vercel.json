@@ -1,6 +1,10 @@
 {
     "rewrites": [
         {
+            "source": "/api-mexc/(.*)",
+            "destination": "https://api.mexc.com/$1"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
