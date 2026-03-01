@@ -31,7 +31,6 @@ export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 
 // 2. Project ID
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
-export const PARA_API_KEY = import.meta.env.VITE_PARA_API_KEY;
 
 // 3. Chain Definition for Arc
 export const arcTestnet = defineChain({
