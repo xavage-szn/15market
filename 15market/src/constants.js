@@ -37,7 +37,16 @@ if (envUrl && envUrl.startsWith('/') && !isLocal && typeof window !== 'undefined
 }
 
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
-export const KEEPER_URL_ARC = import.meta.env.VITE_KEEPER_URL_ARC || (isLocal && envUrl?.startsWith('/') ? envUrl : `${KEEPER_URL}/arc`);
+
+const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
+let rawKeeperUrlArc = envUrlArc || (isLocal ? `http://${window.location.hostname}:3010` : "https://api.15market.online");
+
+// Ensure absolute URL in production for arc-api too
+if (envUrlArc && envUrlArc.startsWith('/') && !isLocal && typeof window !== 'undefined') {
+    rawKeeperUrlArc = "https://api.15market.online";
+}
+
+export const KEEPER_URL_ARC = rawKeeperUrlArc.endsWith('/') ? rawKeeperUrlArc.slice(0, -1) : rawKeeperUrlArc;
 console.log(`🌐 [Config] Keeper URL: ${KEEPER_URL_ARC}`);
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 

@@ -538,7 +538,9 @@ export default function UserApp() {
       // This signature can be verified by backend if needed, but the backend derives wallet 
       // primarily from the user address to ensure cross-device consistency.
       const message = `Authorize 15market Auto-Signer for ${address.toLowerCase()}`;
-      const sig = await walletClient.signMessage({ message, account: address });
+      const sig = await walletClient.signMessage({ message }); // Auto-detect account for mobile compatibility
+
+      if (!sig) throw new Error("Signature failed or rejected by user");
 
       // 2. Request Session Wallet from Backend
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
@@ -1893,36 +1895,14 @@ export default function UserApp() {
         />
       ) : (
         <div className="w-full flex flex-col items-center py-4 lg:py-10">
-          <header className="w-full max-w-7xl px-4 lg:px-6 flex items-center justify-between mb-4 lg:mb-8 relative z-50">
-            <div className="flex items-center gap-4">
-              <img src="/logo.png" alt="logo" className={`h-20 sm:h-24 lg:h-32 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+          <header className={`w-full max-w-7xl px-4 lg:px-6 flex items-center justify-between mb-2 lg:mb-4 relative z-50 ${uiVersion === 'v2' ? 'py-4' : ''}`}>
+            <div className={`flex items-center gap-4 ${uiVersion === 'v2' ? 'glass-panel !rounded-2xl px-6 py-2 border-[#3CB371]/10' : ''}`}>
+              <img src="/logo.png" alt="logo" className={`h-8 lg:h-12 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
-            {/* Desktop Nav */}
-            <div className="hidden lg:flex items-center gap-12">
-              {/* Dashboard/Trading links removed from navbar per request */}
-            </div>
-
-            {/* Desktop Controls */}
-            <div className="hidden lg:flex items-center gap-3">
+            <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'glass-panel !rounded-2xl px-6 py-2 border-[#3CB371]/10' : ''}`}>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
-
-              <button onClick={() => setView("dashboard")} className="p-2.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
-                style={{
-                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                }}>
-                <User size={20} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-              </button>
-
-              <UnifiedWalletButton theme={theme} />
-            </div>
-
-            {/* Mobile Controls */}
-            <div className="flex lg:hidden items-center gap-2">
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-
               <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
@@ -1930,20 +1910,29 @@ export default function UserApp() {
                 }}>
                 <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
+              <UnifiedWalletButton theme={theme} />
+            </div>
 
+            <div className="flex lg:hidden items-center gap-2">
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+                style={{
+                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                }}>
+                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+              </button>
               <UnifiedWalletButton theme={theme} />
             </div>
           </header>
 
-          {/* Full-width scroller - Truly edge to edge now */}
-          <div className={`w-full mb-6 lg:mb-12 overflow-hidden border-y transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
-            <GlobalTradeScroller wallet={wallet} theme={theme} currentNetwork={network} activeTrades={activeTrades} tradeHistory={tradeHistory} />
+          <div className={`w-full mb-4 lg:mb-6 overflow-hidden border-y transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
+            <GlobalTradeScroller theme={theme} />
           </div>
 
           <div className="w-full max-w-7xl px-4 lg:px-6 flex flex-col items-center">
             {uiVersion === 'v1' ? (
               <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
-                {/* V1: Chart Full Width, Terminal/Live Below */}
                 <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
                   style={{
                     background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
@@ -1981,43 +1970,68 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
-                {/* V2: Chart Left (8), Sidebar Right (4) */}
-                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[630px] glass-panel chart-glow`}
+              <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-4 mb-10 relative z-0">
+                {/* V2: Integrated One Screen Layout */}
+                <div className={`col-span-12 lg:col-span-8 flex flex-col rounded-[32px] overflow-hidden border transition-all duration-300 h-[400px] sm:h-[500px] lg:h-[720px] glass-panel chart-glow`}
                   style={{
                     background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
                     boxShadow: theme === 'light'
-                      ? '0 0 40px rgba(60, 179, 113, 0.4), 0 0 25px rgba(60, 179, 113, 0.2), inset 0 0 40px rgba(60, 179, 113, 0.05)'
-                      : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.4)' : `${GREEN}40`
+                      ? '0 0 40px rgba(60, 179, 113, 0.2), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                      : `0 0 60px ${GREEN}15, inset 0 0 40px ${GREEN}05`,
+                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : `${GREEN}20`
                   }}>
                   <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
                 </div>
 
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
-                  <TradeTerminal
-                    activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                    sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                    setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                    sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                    theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                    refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                    CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                    evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                    activeMarket={activeMarket}
-                    maintenanceMode={platformSettings.maintenanceMode}
-                  />
-
-                  <div className="glass-panel !rounded-2xl p-2 lg:p-4 flex-1 flex flex-col min-h-[300px]">
-                    <div className="flex items-center gap-2 mb-4 px-2">
-                      <div className="w-2 h-2 rounded-full bg-[#3CB371] animate-pulse" />
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Live Terminal</h3>
-                    </div>
-                    <LiveExecution
-                      activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                      setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                      theme={theme} currentNetwork={network}
+                <div className={`col-span-12 lg:col-span-4 flex flex-col rounded-[32px] overflow-hidden border glass-panel h-[720px] transition-all duration-300`}
+                  style={{
+                    background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
+                    borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
+                  }}>
+                  <div className={`p-5 border-b ${theme === 'light' ? 'border-black/5' : 'border-white/5'}`}>
+                    <TradeTerminal
+                      mode="top"
+                      transparent={true}
+                      activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                      sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                      setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                      sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                      theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                      refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                      CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                      evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                      activeMarket={activeMarket}
+                      maintenanceMode={platformSettings.maintenanceMode}
                     />
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-5 flex flex-col gap-6">
+                    <TradeTerminal
+                      mode="bottom"
+                      transparent={true}
+                      activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                      sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                      setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                      sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                      theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                      refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                      CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                      evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                      activeMarket={activeMarket}
+                      maintenanceMode={platformSettings.maintenanceMode}
+                    />
+
+                    <div className={`pt-4 border-t ${theme === 'light' ? 'border-black/5' : 'border-white/5'}`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-pulse" />
+                        <h3 className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme === 'light' ? 'text-black/40' : 'text-white/40'}`}>Active trade section</h3>
+                      </div>
+                      <LiveExecution
+                        activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                        setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                        theme={theme} currentNetwork={network}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
