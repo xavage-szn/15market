@@ -80,7 +80,7 @@ if (!SESSION_MASTER_SECRET) {
 }
 const SESSION_RPCS = [
     "https://5042002.rpc.thirdweb.com",
-    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1"
+    "https://rpc.testnet.arc.network"
 ];
 let sessionProvider = null;
 async function getSessionProvider() {

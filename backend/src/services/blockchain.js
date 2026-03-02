@@ -21,7 +21,6 @@ dns.lookup = (hostname, options, callback) => {
 };
 
 const RPC_ENDPOINTS = [
-    "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1",
     "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
     "https://rpc-test-1.arc.market"
