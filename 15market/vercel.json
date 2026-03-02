@@ -5,6 +5,10 @@
             "destination": "https://api.mexc.com/$1"
         },
         {
+            "source": "/arc-api/(.*)",
+            "destination": "https://api.15market.online/$1"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }

@@ -23,6 +23,17 @@ const PORT = process.env.PORT || 3010;
 app.use(cors());
 app.use(express.json());
 
+// Support both /arc/session/init and /session/init
+app.use((req, res, next) => {
+    if (req.url.startsWith('/arc/')) {
+        req.url = req.url.replace('/arc/', '/');
+    }
+    if (req.url.startsWith('/arc-api/')) {
+        req.url = req.url.replace('/arc-api/', '/');
+    }
+    next();
+});
+
 // ===== GLOBAL CRASH PROTECTOR =====
 process.on('unhandledRejection', (reason, promise) => {
     console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);

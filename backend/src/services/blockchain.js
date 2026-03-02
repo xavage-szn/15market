@@ -217,10 +217,12 @@ class BlockchainService {
                     if (receipt) {
                         if (receipt.status === 1) {
                             console.log(`[Blockchain] ✅ Background confirmed: ${txHash} for bet ${info.betId}`);
+                            logToFile(`[Blockchain] ✅ Background confirmed: ${txHash} for bet ${info.betId}. Block ${receipt.blockNumber}, GasUsed: ${receipt.gasUsed?.toString()}`);
                             this.confirmedTxs.add(info.betId.toString());
                             if (this.onTxConfirmedCallback) this.onTxConfirmedCallback(info.betId.toString());
                         } else {
-                            console.warn(`[Blockchain] ❌ TX reverted: ${txHash} for bet ${info.betId}`);
+                            console.warn(`[Blockchain] ❌ TX reverted on-chain: ${txHash} for bet ${info.betId}`);
+                            logToFile(`[Blockchain] ❌ TX reverted on-chain: ${txHash} for bet ${info.betId}. Possible gas issues or logic fail.`);
                             if (this.onTxFailedCallback) this.onTxFailedCallback(info.betId.toString());
                         }
                         this.pendingTxs.delete(txHash);
@@ -242,7 +244,7 @@ class BlockchainService {
             const tx = await this.contract.settleBet(betId, ethers.parseUnits(exitPrice.toString(), 0), {
                 nonce: nonce,
                 gasPrice: gasPrice,
-                gasLimit: 400000n,
+                gasLimit: 1000000n,
                 type: 0,
                 chainId: 5042002
             });
