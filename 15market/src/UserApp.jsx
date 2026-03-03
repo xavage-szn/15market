@@ -1938,11 +1938,6 @@ export default function UserApp() {
             </div>
           )}
 
-          {uiVersion === 'v2' && (
-            <div className={`w-full max-w-[1600px] mb-2 px-4 lg:px-6 overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
-              <GlobalTradeScroller theme={theme} />
-            </div>
-          )}
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
@@ -1986,7 +1981,11 @@ export default function UserApp() {
             ) : (
               <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-2 relative z-0 h-[calc(100vh-160px)] min-h-[500px]">
                 {/* V2: Integrated One Screen Layout */}
-                <div className="col-span-12 lg:col-span-8 flex flex-col h-full">
+                <div className="col-span-12 lg:col-span-8 flex flex-col gap-2 h-full">
+                  {/* Scroller only above chart in V2 */}
+                  <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
+                    <GlobalTradeScroller theme={theme} />
+                  </div>
                   <div className={`flex-1 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow`}
                     style={{
                       background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
