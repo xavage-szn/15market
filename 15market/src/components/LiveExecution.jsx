@@ -28,7 +28,7 @@ function LiveExecutionComponent({
     const frozenPnL = useRef({}); // tradeId -> { status, exitPrice }
 
     return (
-        <div className="flex flex-col gap-3 relative min-h-0 h-full">
+        <div className="flex flex-col gap-2 relative min-h-0 h-full">
             <div className="flex items-center justify-between px-2 flex-none">
                 <div className="flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
@@ -43,7 +43,7 @@ function LiveExecutionComponent({
                 )}
             </div>
 
-            <div className={`flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3 min-h-0 ${isExpanded ? 'max-h-[500px]' : ''}`}>
+            <div className={`flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2 min-h-0 ${isExpanded ? 'max-h-[400px]' : ''}`}>
                 {activeTrades.length > 0 ? (
                     (() => {
                         const visibleTrades = isExpanded ? activeTrades : [activeTrades[0]];
@@ -103,7 +103,7 @@ function LiveExecutionComponent({
 
                                             return (
                                                 <div
-                                                    className={`rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col relative transition-all duration-300 border ${isLight
+                                                    className={`rounded-xl lg:rounded-2xl p-2 flex flex-col relative transition-all duration-300 border ${isLight
                                                         ? 'bg-white border-[#3CB371]/15 shadow-[0_4px_20px_rgba(60,179,113,0.08)]'
                                                         : 'bg-white/[0.02] border-white/5 shadow-xl'}`}
                                                     style={displayFinal ? {
@@ -113,7 +113,7 @@ function LiveExecutionComponent({
                                                             : '0 0 20px rgba(255, 127, 80, 0.1)'
                                                     } : {}}
                                                 >
-                                                    <div className="flex items-center justify-between mb-3">
+                                                    <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
                                                             <div className={`w-1.5 h-1.5 rounded-full ${displayFinal
                                                                 ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
@@ -135,7 +135,7 @@ function LiveExecutionComponent({
                                                         )}
                                                     </div>
 
-                                                    <div className="grid grid-cols-2 gap-1 lg:gap-2 mb-2 lg:mb-3">
+                                                    <div className="grid grid-cols-2 gap-1 mb-2 lg:mb-2">
                                                         <div className={`p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
                                                             <div className="flex justify-between items-center mb-0.5">
                                                                 <p className={`text-[5px] lg:text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/20'}`}>Entry</p>
@@ -150,7 +150,7 @@ function LiveExecutionComponent({
                                                         </div>
                                                     </div>
 
-                                                    <div className={`rounded-xl flex flex-col items-center justify-center p-3 transition-all duration-300 overflow-hidden relative ${(instantStatus === "WON" || trade.status === "WON") && displayFinal
+                                                    <div className={`rounded-xl flex flex-col items-center justify-center p-2 transition-all duration-300 overflow-hidden relative ${(instantStatus === "WON" || trade.status === "WON") && displayFinal
                                                         ? "bg-[#3CB371]/10 border border-[#3CB371]/20"
                                                         : (instantStatus === "LOST" || trade.status === "LOST") && displayFinal
                                                             ? "bg-[#FF7F50]/10 border border-[#FF7F50]/20"
@@ -158,8 +158,8 @@ function LiveExecutionComponent({
                                                         }`}>
                                                         {!displayFinal ? (
                                                             <>
-                                                                <div className={`text-4xl lg:text-5xl font-matrix mb-1 tracking-[0.2em] flex items-baseline ${isLight ? 'text-black' : 'text-[#3CB371]'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
-                                                                    {displayTimeLeft}<span className={`text-[10px] lg:text-[12px] ml-2 font-sans font-black italic opacity-50 ${isLight ? 'text-black/40' : 'text-white/40'}`}>s</span>
+                                                                <div className={`text-3xl lg:text-4xl font-matrix mb-1 tracking-[0.2em] flex items-baseline ${isLight ? 'text-black' : 'text-[#3CB371]'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
+                                                                    {displayTimeLeft}<span className={`text-[10px] lg:text-[12px] ml-1 font-sans font-black italic opacity-50 ${isLight ? 'text-black/40' : 'text-white/40'}`}>s</span>
                                                                 </div>
 
                                                                 <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
@@ -248,7 +248,7 @@ function LiveExecutionComponent({
                 )}
             </div>
 
-            <div className={`p-2.5 rounded-xl border flex items-center justify-between flex-none ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-white/[0.02] border-white/5'}`}>
+            <div className={`p-2 rounded-xl border flex items-center justify-between flex-none ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-white/[0.02] border-white/5'}`}>
                 <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-lg bg-[#3CB371]/10 flex items-center justify-center text-[10px]">⚡</div>
                     <div>

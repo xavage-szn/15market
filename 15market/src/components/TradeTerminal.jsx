@@ -34,7 +34,7 @@ function TradeTerminalComponent({
     // Mode-specific rendering
     const renderHeader = () => (
         <div className="flex items-center justify-between pointer-events-auto">
-            <div className="flex items-center gap-3 lg:gap-6">
+            <div className="flex items-center gap-2 lg:gap-4">
                 <div className="flex items-center gap-1">
                     <h2 className={`text-[10px] lg:text-lg font-black tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>
                         TERMINAL
@@ -68,7 +68,7 @@ function TradeTerminalComponent({
     );
 
     const renderCallPut = () => (
-        <div className="grid grid-cols-2 gap-1 lg:gap-2 pointer-events-auto">
+        <div className="grid grid-cols-2 gap-1 lg:gap-1.5 pointer-events-auto">
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("UP"); }}
                 disabled={maintenanceMode}
@@ -99,19 +99,19 @@ function TradeTerminalComponent({
     );
 
     const renderTime = () => (
-        <div className="flex flex-col gap-1 lg:gap-2 pointer-events-auto">
+        <div className="flex flex-col gap-1 lg:gap-1.5 pointer-events-auto">
             <div className="flex items-center justify-between px-0.5">
                 <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
                 <span className="text-[6px] lg:text-[8px] font-mono font-bold" style={{ color: '#3CB371' }}>
                     {duration === 5 ? '6.98x' : duration === 10 ? '4.98x' : '1.98x'}
                 </span>
             </div>
-            <div className="grid grid-cols-3 gap-1 lg:gap-2">
+            <div className="grid grid-cols-3 gap-1 lg:gap-1.5">
                 {[15, 10, 5].map(d => (
                     <button
                         key={d}
                         onClick={(e) => { e.stopPropagation(); setDuration(d); }}
-                        className={`flex flex-col items-center justify-center py-1.5 lg:py-3 rounded-xl border transition-all duration-300 active:scale-95 ${duration === d
+                        className={`flex flex-col items-center justify-center py-1.5 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${duration === d
                             ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
                             : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
                             }`}
@@ -124,7 +124,7 @@ function TradeTerminalComponent({
     );
 
     const renderStake = () => (
-        <div className="flex flex-col gap-1 lg:gap-2 pointer-events-auto">
+        <div className="flex flex-col gap-1 lg:gap-1.5 pointer-events-auto">
             <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
                     <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
@@ -144,7 +144,7 @@ function TradeTerminalComponent({
                     Selected: ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1.5 p-1.5 lg:p-2.5 rounded-xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
+            <div className={`flex items-center gap-1.5 p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
                 <input
                     type="number"
                     value={amount}
@@ -181,7 +181,7 @@ function TradeTerminalComponent({
                         }}
                     />
                 </div>
-                <div className="flex justify-between mt-3 px-0.5 relative">
+                <div className="flex justify-between mt-2 px-0.5 relative">
                     {[0, 25, 50, 75, 100].map((pct) => (
                         <div key={pct} className="flex flex-col items-center gap-1.5 relative z-10">
                             <div className={`w-0.5 h-1.5 rounded-full ${pct <= (sliderValue || 0) ? 'bg-[#3CB371]' : (isLight ? 'bg-black/20' : 'bg-white/10')}`} />
@@ -200,7 +200,7 @@ function TradeTerminalComponent({
             id="trade-confirm-button"
             onClick={(e) => { e.stopPropagation(); executeTrade(); }}
             disabled={isExecuting || maintenanceMode}
-            className={`w-full py-2.5 lg:py-3.5 rounded-xl font-black text-[8px] lg:text-[10px] uppercase tracking-[0.2em] lg:tracking-[0.3em] transition-all pointer-events-auto
+            className={`w-full py-2.5 lg:py-3 rounded-xl font-black text-[8px] lg:text-[10px] uppercase tracking-[0.2em] lg:tracking-[0.3em] transition-all pointer-events-auto
             ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "hover:brightness-110 active:scale-[0.99] shadow-xl"}`}
             style={{
                 background: maintenanceMode ? "#333" : (direction === "DOWN" ? '#FF7F50' : '#3CB371'),
@@ -224,7 +224,7 @@ function TradeTerminalComponent({
 
     if (mode === 'bottom') {
         return (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5 lg:gap-3">
                 {renderTime()}
                 {renderStake()}
                 {renderConfirm()}

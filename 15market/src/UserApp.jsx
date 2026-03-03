@@ -1997,14 +1997,14 @@ export default function UserApp() {
                   </div>
                 </div>
 
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-2 h-full min-h-0">
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-1.5 h-full min-h-0">
                   {/* Trading Terminal Box */}
                   <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300`}
                     style={{
                       background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
                     }}>
-                    <div className="p-4 lg:p-6">
+                    <div className="p-3 lg:p-4">
                       <TradeTerminal
                         mode="top"
                         transparent={true}
@@ -2028,7 +2028,7 @@ export default function UserApp() {
                       background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
                     }}>
-                    <div className="p-4 lg:p-6 flex flex-col h-full gap-4">
+                    <div className="p-3 lg:p-4 flex flex-col h-full gap-2">
                       <TradeTerminal
                         mode="bottom"
                         transparent={true}
@@ -2044,7 +2044,7 @@ export default function UserApp() {
                         maintenanceMode={platformSettings.maintenanceMode}
                       />
 
-                      <div className={`pt-4 border-t flex-1 flex flex-col min-h-0 overflow-hidden ${theme === 'light' ? 'border-black/5' : 'border-white/5'}`}>
+                      <div className={`pt-2 border-t flex-1 flex flex-col min-h-0 overflow-hidden ${theme === 'light' ? 'border-black/5' : 'border-white/5'}`}>
                         <div className="flex items-center gap-2 mb-2 shrink-0">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-pulse" />
                           <h3 className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme === 'light' ? 'text-black/40' : 'text-white/40'}`}>Active Trades</h3>
