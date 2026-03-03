@@ -24,6 +24,7 @@ function TradeTerminalComponent({
     setRefillAmount,
     onRefill,
     onWithdraw,
+    transparent = false, // Added default value
 }) {
     const isLight = theme === 'light';
     const [showManagement, setShowManagement] = React.useState(false);
