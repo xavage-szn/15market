@@ -1900,13 +1900,13 @@ export default function UserApp() {
           }}
         />
       ) : (
-        <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-2 lg:py-4 overflow-hidden' : 'py-4 lg:py-10'}`}>
-          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-2 lg:mb-4 relative z-50 ${uiVersion === 'v2' ? 'py-4' : ''}`}>
-            <div className={`flex items-center gap-4 ${uiVersion === 'v2' ? 'px-2 py-2' : ''}`}>
-              <img src="/logo.png" alt="logo" className={`h-8 lg:h-12 w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+        <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-0 lg:py-0 overflow-hidden' : 'py-4 lg:py-10'}`}>
+          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-0 lg:mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-2 lg:py-3' : ''}`}>
+            <div className={`flex items-center gap-4 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-10 lg:h-16' : 'h-8 lg:h-12'} w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
-            <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-2' : ''}`}>
+            <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
               <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
@@ -1938,7 +1938,13 @@ export default function UserApp() {
             </div>
           )}
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[calc(100%-40px)]' : 'max-w-7xl'} px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
+          {uiVersion === 'v2' && (
+            <div className={`w-full max-w-[1600px] mb-2 px-4 lg:px-6 overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
+              <GlobalTradeScroller theme={theme} />
+            </div>
+          )}
+
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
               <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
                 <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
@@ -1978,26 +1984,22 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full max-w-[1600px] grid grid-cols-12 gap-2 lg:gap-4 mb-4 relative z-0 h-[calc(100vh-260px)] min-h-[420px]">
+              <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-2 relative z-0 h-[calc(100vh-160px)] min-h-[500px]">
                 {/* V2: Integrated One Screen Layout */}
-                <div className="col-span-12 lg:col-span-8 flex flex-col gap-2 h-full">
-                  {/* Scroller inside the layout for V2 */}
-                  <div className={`w-full overflow-hidden border rounded-2xl transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
-                    <GlobalTradeScroller theme={theme} />
-                  </div>
+                <div className="col-span-12 lg:col-span-9 flex flex-col h-full">
                   <div className={`flex-1 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow`}
                     style={{
                       background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
-                        ? '0 0 40px rgba(60, 179, 113, 0.2), inset 0 0 40px rgba(60, 179, 113, 0.05)'
-                        : `0 0 60px ${GREEN}15, inset 0 0 40px ${GREEN}05`,
-                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : `${GREEN}20`
+                        ? '0 0 40px rgba(60, 179, 113, 0.1), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                        : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`,
+                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
                     }}>
                     <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
                   </div>
                 </div>
 
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-1.5 h-full min-h-0">
+                <div className="col-span-12 lg:col-span-3 flex flex-col gap-3 h-full min-h-0">
                   {/* Trading Terminal Box */}
                   <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300`}
                     style={{
