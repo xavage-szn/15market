@@ -1986,7 +1986,7 @@ export default function UserApp() {
             ) : (
               <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-2 relative z-0 h-[calc(100vh-160px)] min-h-[500px]">
                 {/* V2: Integrated One Screen Layout */}
-                <div className="col-span-12 lg:col-span-9 flex flex-col h-full">
+                <div className="col-span-12 lg:col-span-8 flex flex-col h-full">
                   <div className={`flex-1 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow`}
                     style={{
                       background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
@@ -1999,14 +1999,14 @@ export default function UserApp() {
                   </div>
                 </div>
 
-                <div className="col-span-12 lg:col-span-3 flex flex-col gap-3 h-full min-h-0">
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-3 h-full min-h-0">
                   {/* Trading Terminal Box */}
-                  <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300`}
+                  <div className={`flex-1 min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300 flex flex-col`}
                     style={{
                       background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
                     }}>
-                    <div className="p-3 lg:p-4">
+                    <div className="p-3 lg:p-4 overflow-y-auto custom-scrollbar">
                       <TradeTerminal
                         transparent={true}
                         activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
