@@ -1900,8 +1900,8 @@ export default function UserApp() {
           }}
         />
       ) : (
-        <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-0 lg:py-0 overflow-hidden' : 'py-4 lg:py-10'}`}>
-          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-0 lg:mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-2 lg:py-3' : ''}`}>
+        <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-0 overflow-hidden mt-[-8px] lg:mt-[-16px]' : 'py-4 lg:py-10'}`}>
+          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-1' : ''}`}>
             <div className={`flex items-center gap-4 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-10 lg:h-16' : 'h-8 lg:h-12'} w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
@@ -1979,7 +1979,7 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-2 relative z-0 h-[calc(100vh-160px)] min-h-[500px]">
+              <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-1 relative z-0 h-[calc(100vh-130px)] min-h-[500px]">
                 {/* V2: Integrated One Screen Layout */}
                 <div className="col-span-12 lg:col-span-8 flex flex-col gap-2 h-full">
                   {/* Scroller only above chart in V2 */}
