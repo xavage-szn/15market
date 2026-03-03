@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 
 function TradeTerminalComponent({
-    mode, // Added mode prop
+    mode,
     sessionMode,
     setSessionMode,
     price,
@@ -24,45 +24,39 @@ function TradeTerminalComponent({
     setRefillAmount,
     onRefill,
     onWithdraw,
-    transparent = false, // Added default value
+    transparent = false,
 }) {
     const isLight = theme === 'light';
     const [showManagement, setShowManagement] = React.useState(false);
 
     const containerClass = transparent ? "" : `w-full h-full p-2 lg:p-5 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-2 lg:gap-4 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
 
-    // Mode-specific rendering
     const renderHeader = () => (
-        <div className="flex items-center justify-between pointer-events-auto">
-            <div className="flex items-center gap-2 lg:gap-4">
+        <div className="flex items-center justify-between pointer-events-auto mb-1">
+            <div className="flex items-center gap-2 lg:gap-3">
                 <div className="flex items-center gap-1">
-                    <h2 className={`text-[10px] lg:text-lg font-black tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>
+                    <h2 className={`text-[10px] lg:text-sm font-black tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>
                         TERMINAL
                     </h2>
                     <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#3CB371', boxShadow: `0 0 10px #3CB371` }} />
                 </div>
 
-                <div className="flex items-center gap-1 lg:gap-2">
-                    <div className="flex flex-col">
-                        <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
-                    </div>
+                <div className="flex items-center gap-1.5">
                     <button
                         onClick={(e) => { e.stopPropagation(); setSessionMode(); }}
-                        title={sessionMode ? `Auto-Signer Active (${sessionBalance.toFixed(4)} USDC) - Click to use Main Wallet` : "Auto-Signer Inactive - Click to activate"}
-                        className={`w-5 border lg:w-8 h-2.5 lg:h-4 rounded-full relative transition-all duration-300 cursor-pointer hover:opacity-80 ${sessionMode ? 'bg-[#3CB371] border-transparent' : (isLight ? 'bg-black/10 border-black/10' : 'bg-white/10 border-white/10')}`}
+                        className={`w-5 lg:w-7 h-2.5 lg:h-3.5 rounded-full relative transition-all duration-300 cursor-pointer ${sessionMode ? 'bg-[#3CB371]' : (isLight ? 'bg-black/10' : 'bg-white/10')}`}
                     >
-                        <div className={`absolute top-0.5 left-0.5 w-1.5 h-1.5 lg:w-3 lg:h-3 rounded-full bg-white transition-all duration-300 shadow-sm ${sessionMode ? 'translate-x-3 lg:translate-x-4' : 'translate-x-0'}`} />
+                        <div className={`absolute top-0.5 left-0.5 w-1.5 lg:w-2.5 h-1.5 lg:h-2.5 rounded-full bg-white transition-all duration-300 ${sessionMode ? 'translate-x-2.5 lg:translate-x-3.5' : 'translate-x-0'}`} />
                     </button>
+                    <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
                 </div>
             </div>
 
             <div className="flex flex-col items-end">
-                <div className="flex flex-col items-end">
-                    <span className="text-[5px] lg:text-[6px] font-black opacity-30 uppercase tracking-widest">Market</span>
-                    <span className="text-[7px] lg:text-[10px] font-mono font-black" style={{ color: '#3CB371' }}>
-                        ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                </div>
+                <span className="text-[5px] lg:text-[6px] font-black opacity-30 uppercase tracking-widest">Market</span>
+                <span className="text-[7px] lg:text-[10px] font-mono font-black text-[#3CB371]">
+                    ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
             </div>
         </div>
     );
@@ -99,7 +93,7 @@ function TradeTerminalComponent({
     );
 
     const renderTime = () => (
-        <div className="flex flex-col gap-1 lg:gap-1.5 pointer-events-auto">
+        <div className="flex flex-col gap-0.5 lg:gap-1 pointer-events-auto">
             <div className="flex items-center justify-between px-0.5">
                 <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
                 <span className="text-[6px] lg:text-[8px] font-mono font-bold" style={{ color: '#3CB371' }}>
@@ -111,12 +105,12 @@ function TradeTerminalComponent({
                     <button
                         key={d}
                         onClick={(e) => { e.stopPropagation(); setDuration(d); }}
-                        className={`flex flex-col items-center justify-center py-1.5 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${duration === d
+                        className={`flex flex-col items-center justify-center py-1 rounded-xl border transition-all duration-300 active:scale-95 ${duration === d
                             ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
                             : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
                             }`}
                     >
-                        <span className="text-[10px] lg:text-base font-black tracking-tighter">{d}s</span>
+                        <span className="text-[10px] lg:text-sm font-black tracking-tighter">{d}s</span>
                     </button>
                 ))}
             </div>
@@ -124,72 +118,27 @@ function TradeTerminalComponent({
     );
 
     const renderStake = () => (
-        <div className="flex flex-col gap-1 lg:gap-1.5 pointer-events-auto">
+        <div className="flex flex-col gap-0.5 lg:gap-1 pointer-events-auto">
             <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                    <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
-                    <div className="flex items-center gap-1.5 ml-2">
-                        <div className="flex items-center gap-1">
-                            <div className={`w-1 h-1 rounded-full ${!sessionMode ? 'bg-[#3CB371] shadow-[0_0_5px_#3CB371]' : 'bg-white/10'}`} />
-                            <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-tighter ${!sessionMode ? 'text-[#3CB371]' : 'opacity-20'}`}>Main: ${balance.toFixed(2)}</span>
-                        </div>
-                        <div className="w-px h-2 bg-white/10" />
-                        <div className="flex items-center gap-1">
-                            <div className={`w-1 h-1 rounded-full ${sessionMode ? 'bg-yellow-400 shadow-[0_0_5px_rgba(250,204,21,0.5)]' : 'bg-white/10'}`} />
-                            <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-tighter ${sessionMode ? 'text-yellow-400' : 'opacity-20'}`}>Auto: ${sessionBalance.toFixed(2)}</span>
-                        </div>
-                    </div>
-                </div>
+                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
                 <span className={`text-[6px] lg:text-[8px] font-bold ${sessionMode ? 'text-yellow-400' : 'text-[#3CB371]'}`}>
-                    Selected: ${(sessionMode ? sessionBalance : balance).toFixed(2)}
+                    ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1.5 p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
+            <div className={`flex items-center gap-1.5 p-1.5 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
                 <input
                     type="number"
                     value={amount}
                     onChange={handleAmountChange}
                     placeholder="0.00"
-                    className={`w-full bg-transparent text-xs lg:text-lg font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
+                    className={`w-full bg-transparent text-xs lg:text-base font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
                 />
-                <div className={`px-1 lg:px-1.5 py-0.5 rounded-md text-[5px] lg:text-[8px] font-black uppercase tracking-tight ${isLight ? 'bg-black/10 text-black/60' : 'bg-white/10 text-white/60'}`}>
-                    USDC
-                </div>
             </div>
-            <div className="relative pt-4 pb-2 px-1">
-                <div className="relative h-1.5 lg:h-2">
+            <div className="relative pt-3 pb-1 px-1">
+                <div className="relative h-1.5">
                     <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
-                    <div
-                        className="absolute inset-y-0 left-0 rounded-full transition-all duration-150"
-                        style={{
-                            width: `${sliderValue || 0}%`,
-                            background: '#3CB371',
-                            boxShadow: '0 0 10px rgba(60, 179, 113, 0.3)'
-                        }}
-                    />
-                    <input
-                        type="range" min="0" max="100" step="1"
-                        value={sliderValue || 0}
-                        onChange={handleSliderChange}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
-                    />
-                    <div
-                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full border-2 border-white shadow-lg pointer-events-none z-20 transition-all duration-150"
-                        style={{
-                            left: `${sliderValue || 0}%`,
-                            backgroundColor: '#3CB371'
-                        }}
-                    />
-                </div>
-                <div className="flex justify-between mt-2 px-0.5 relative">
-                    {[0, 25, 50, 75, 100].map((pct) => (
-                        <div key={pct} className="flex flex-col items-center gap-1.5 relative z-10">
-                            <div className={`w-0.5 h-1.5 rounded-full ${pct <= (sliderValue || 0) ? 'bg-[#3CB371]' : (isLight ? 'bg-black/20' : 'bg-white/10')}`} />
-                            <span className={`text-[6px] lg:text-[8px] font-black tracking-tighter transition-colors ${pct <= (sliderValue || 0) ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/30' : 'text-white/20')}`}>
-                                {pct}%
-                            </span>
-                        </div>
-                    ))}
+                    <div className="absolute inset-y-0 left-0 rounded-full bg-[#3CB371]" style={{ width: `${sliderValue || 0}%` }} />
+                    <input type="range" min="0" max="100" step="1" value={sliderValue || 0} onChange={handleSliderChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30" />
                 </div>
             </div>
         </div>
@@ -212,7 +161,6 @@ function TradeTerminalComponent({
             {maintenanceMode ? "PAUSED" : (isExecuting ? "Wait" : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect")}
         </button>
     );
-
 
     return (
         <div className={containerClass}>
