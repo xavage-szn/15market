@@ -1979,9 +1979,9 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-1 relative z-0 h-[calc(100vh-130px)] min-h-[500px]">
+              <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-0 relative z-0 h-[calc(100vh-70px)] min-h-[500px]">
                 {/* V2: Integrated One Screen Layout */}
-                <div className="col-span-12 lg:col-span-8 flex flex-col gap-2 h-full">
+                <div className="col-span-12 lg:col-span-10 flex flex-col gap-0.5 h-full">
                   {/* Scroller only above chart in V2 */}
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
@@ -1998,7 +1998,7 @@ export default function UserApp() {
                   </div>
                 </div>
 
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-3 h-full min-h-0">
+                <div className="col-span-12 lg:col-span-2 flex flex-col gap-2 h-full min-h-0">
                   {/* Trading Terminal Box */}
                   <div className={`flex-1 min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300 flex flex-col`}
                     style={{
