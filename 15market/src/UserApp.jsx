@@ -1932,11 +1932,13 @@ export default function UserApp() {
             </div>
           </header>
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'mb-2 lg:mb-3' : 'mb-4 lg:mb-6'} overflow-hidden border-y transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
-            <GlobalTradeScroller theme={theme} />
-          </div>
+          {uiVersion === 'v1' && (
+            <div className={`w-full mb-4 lg:mb-6 overflow-hidden border-y transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
+              <GlobalTradeScroller theme={theme} />
+            </div>
+          )}
 
-          <div className="w-full max-w-7xl px-4 lg:px-6 flex flex-col items-center">
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[calc(100%-40px)]' : 'max-w-7xl'} px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
               <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
                 <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
@@ -1976,20 +1978,26 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full max-w-[1600px] grid grid-cols-12 gap-2 lg:gap-4 mb-4 relative z-0 h-[calc(100vh-180px)] min-h-[600px]">
+              <div className="w-full max-w-[1600px] grid grid-cols-12 gap-2 lg:gap-4 mb-2 relative z-0 h-[calc(100vh-140px)] min-h-[500px]">
                 {/* V2: Integrated One Screen Layout */}
-                <div className={`col-span-12 lg:col-span-8 flex flex-col rounded-[32px] overflow-hidden border transition-all duration-300 h-full glass-panel chart-glow`}
-                  style={{
-                    background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
-                    boxShadow: theme === 'light'
-                      ? '0 0 40px rgba(60, 179, 113, 0.2), inset 0 0 40px rgba(60, 179, 113, 0.05)'
-                      : `0 0 60px ${GREEN}15, inset 0 0 40px ${GREEN}05`,
-                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : `${GREEN}20`
-                  }}>
-                  <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+                <div className="col-span-12 lg:col-span-8 flex flex-col gap-2 h-full">
+                  {/* Scroller inside the layout for V2 */}
+                  <div className={`w-full overflow-hidden border rounded-2xl transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
+                    <GlobalTradeScroller theme={theme} />
+                  </div>
+                  <div className={`flex-1 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow`}
+                    style={{
+                      background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
+                      boxShadow: theme === 'light'
+                        ? '0 0 40px rgba(60, 179, 113, 0.2), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                        : `0 0 60px ${GREEN}15, inset 0 0 40px ${GREEN}05`,
+                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : `${GREEN}20`
+                    }}>
+                    <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+                  </div>
                 </div>
 
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 h-full">
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-2 h-full min-h-0">
                   {/* Trading Terminal Box */}
                   <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300`}
                     style={{
@@ -2173,18 +2181,23 @@ export default function UserApp() {
       </AnimatePresence>
 
       {/* Footer */}
-      <footer className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] mt-6 mb-4' : 'max-w-7xl mt-10 mb-6'} flex items-center justify-center gap-6 opacity-60 hover:opacity-100 transition-opacity`} style={{ fontFamily: 'Arial, sans-serif' }}>
-        <img
-          src="/logo.png"
-          alt="15market"
-          className="h-14 lg:h-18 w-auto opacity-80"
-        />
-        <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
-        <span className={`text-xs md:text-sm font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-          © 2026 15market
-        </span>
-        <div className={`w-px h-5 ${theme === 'light' ? 'bg-black/20' : 'bg-white/20'}`}></div>
-        <span className={`text-xs md:text-sm font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+      <footer className={`w-full ${uiVersion === 'v2' ? 'px-8 mt-2 mb-2 lg:mb-4' : 'max-w-7xl mt-10 mb-6 px-4'} flex items-center justify-between gap-6 opacity-60 hover:opacity-100 transition-opacity flex-none`}
+        style={{
+          fontFamily: 'Arial, sans-serif',
+          background: 'transparent'
+        }}>
+        <div className="flex items-center gap-4">
+          <img
+            src="/logo.png"
+            alt="15market"
+            className="h-8 lg:h-10 w-auto opacity-80"
+          />
+          <span className={`text-[8px] lg:text-[10px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+            © 2026 15market
+          </span>
+        </div>
+
+        <span className={`text-[8px] lg:text-[10px] font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
           Built by 15labs
         </span>
       </footer>
