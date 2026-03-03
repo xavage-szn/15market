@@ -543,15 +543,20 @@ export default function UserApp() {
       if (!sig) throw new Error("Signature failed or rejected by user");
 
       // 2. Request Session Wallet from Backend
+      console.log(`📡 [Session] Initializing at: ${KEEPER_URL_ARC}/session/init`);
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address, signature: sig })
+      }).catch(err => {
+        console.error("❌ [Session] Fetch Failed:", err);
+        throw new Error(`Connection to Backend Failed (${KEEPER_URL_ARC})`);
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "Backend init failed");
+        let errData = { error: "Unknown Error" };
+        try { errData = await res.json(); } catch (e) { console.error("Non-JSON Error from Backend:", e); }
+        throw new Error(errData.error || `Backend init failed (${res.status})`);
       }
 
       const data = await res.json();

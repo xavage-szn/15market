@@ -27,32 +27,31 @@ const isLocal = typeof window !== 'undefined' &&
 // 3. Fallback to hardcoded absolute URL for production if ENV is relative or missing.
 
 const envUrl = import.meta.env.VITE_KEEPER_URL;
-let rawKeeperUrl = envUrl || (isLocal ? `http://${window.location.hostname}:3010` : "https://api.15market.online");
+const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 
-// Special case: if ENV is a relative path like /arc-api but we are on Vercel, it will fail unless we are local.
-if (envUrl && envUrl.startsWith('/') && !isLocal && typeof window !== 'undefined') {
-    // In production Vercel, relative paths for APIs fail without proxy config. 
-    // If the user hasn't provided a full URL, we fallback to the last known production domain
-    rawKeeperUrl = "https://api.15market.online";
-}
+// If we are local, and the env variable is missing or pointing to the production domain,
+// we should default to the local backend to prevent "Failed to Fetch" or CORS errors.
+const getBaseUrl = (envValue) => {
+    if (isLocal) {
+        if (!envValue || envValue.includes('api.15market.online') || envValue.startsWith('/')) {
+            return `http://${window.location.hostname}:3010`;
+        }
+    }
+    return envValue || "https://api.15market.online";
+};
+
+const rawKeeperUrl = getBaseUrl(envUrl);
+const rawKeeperUrlArc = getBaseUrl(envUrlArc);
 
 const ensureAbsolute = (url) => {
     if (!url) return url;
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    if (url.startsWith('/') || url.includes('localhost') || isLocal) return url;
+    // Don't modify absolute paths in local dev
+    if (url.startsWith('/') || url.includes('localhost')) return url;
     return `https://${url}`;
 };
 
 export const KEEPER_URL = ensureAbsolute(rawKeeperUrl).endsWith('/') ? ensureAbsolute(rawKeeperUrl).slice(0, -1) : ensureAbsolute(rawKeeperUrl);
-
-const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
-let rawKeeperUrlArc = envUrlArc || (isLocal ? `http://${window.location.hostname}:3010` : "https://api.15market.online");
-
-// Ensure absolute URL in production for arc-api too
-if (envUrlArc && envUrlArc.startsWith('/') && !isLocal && typeof window !== 'undefined') {
-    rawKeeperUrlArc = "https://api.15market.online";
-}
-
 export const KEEPER_URL_ARC = ensureAbsolute(rawKeeperUrlArc).endsWith('/') ? ensureAbsolute(rawKeeperUrlArc).slice(0, -1) : ensureAbsolute(rawKeeperUrlArc);
 console.log(`🌐 [Config] Keeper URL: ${KEEPER_URL_ARC}`);
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
