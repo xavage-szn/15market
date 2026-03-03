@@ -2006,7 +2006,6 @@ export default function UserApp() {
                     }}>
                     <div className="p-3 lg:p-4">
                       <TradeTerminal
-                        mode="top"
                         transparent={true}
                         activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
                         sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
@@ -2028,27 +2027,9 @@ export default function UserApp() {
                       background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
                     }}>
-                    <div className="p-3 lg:p-4 flex flex-col h-full gap-2">
-                      <TradeTerminal
-                        mode="bottom"
-                        transparent={true}
-                        activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                        sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                        setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                        sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                        theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                        refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                        CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                        evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                        activeMarket={activeMarket}
-                        maintenanceMode={platformSettings.maintenanceMode}
-                      />
+                    <div className="p-3 lg:p-4 flex flex-col h-full min-h-0">
 
-                      <div className={`pt-2 border-t flex-1 flex flex-col min-h-0 overflow-hidden ${theme === 'light' ? 'border-black/5' : 'border-white/5'}`}>
-                        <div className="flex items-center gap-2 mb-2 shrink-0">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-pulse" />
-                          <h3 className={`text-[10px] font-black uppercase tracking-[0.2em] ${theme === 'light' ? 'text-black/40' : 'text-white/40'}`}>Active Trades</h3>
-                        </div>
+                      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
                           <LiveExecution
                             activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}

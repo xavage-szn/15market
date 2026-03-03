@@ -213,24 +213,6 @@ function TradeTerminalComponent({
         </button>
     );
 
-    if (mode === 'top') {
-        return (
-            <div className="flex flex-col gap-2 lg:gap-4">
-                {renderHeader()}
-                {renderCallPut()}
-            </div>
-        );
-    }
-
-    if (mode === 'bottom') {
-        return (
-            <div className="flex flex-col gap-1.5 lg:gap-3">
-                {renderTime()}
-                {renderStake()}
-                {renderConfirm()}
-            </div>
-        );
-    }
 
     return (
         <div className={containerClass}>
