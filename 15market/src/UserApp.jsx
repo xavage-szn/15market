@@ -1978,7 +1978,7 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full max-w-[1600px] grid grid-cols-12 gap-2 lg:gap-4 mb-6 relative z-0 h-[calc(100vh-220px)] min-h-[450px]">
+              <div className="w-full max-w-[1600px] grid grid-cols-12 gap-2 lg:gap-4 mb-4 relative z-0 h-[calc(100vh-260px)] min-h-[420px]">
                 {/* V2: Integrated One Screen Layout */}
                 <div className="col-span-12 lg:col-span-8 flex flex-col gap-2 h-full">
                   {/* Scroller inside the layout for V2 */}
@@ -2155,6 +2155,26 @@ export default function UserApp() {
                 </div>
               </>
             )}
+
+            {/* Footer Inside Container for V2 */}
+            {uiVersion === 'v2' && (
+              <footer className="w-full px-8 mt-auto py-4 flex items-center justify-between gap-6 opacity-60 hover:opacity-100 transition-opacity flex-none"
+                style={{
+                  fontFamily: 'Arial, sans-serif',
+                  background: 'none',
+                  backgroundColor: 'transparent'
+                }}>
+                <div className="flex items-center gap-4">
+                  <img src="/logo.png" alt="15market" className="h-8 w-auto opacity-80" />
+                  <span className={`text-[8px] lg:text-[10px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                    © 2026 15market
+                  </span>
+                </div>
+                <span className={`text-[8px] lg:text-[10px] font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+                  Built by 15labs
+                </span>
+              </footer>
+            )}
           </div>
         </div>
       )}
@@ -2184,28 +2204,20 @@ export default function UserApp() {
         {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
       </AnimatePresence>
 
-      {/* Footer */}
-      <footer className={`w-full ${uiVersion === 'v2' ? 'px-8 mt-auto mb-2 lg:mb-4' : 'max-w-7xl mt-10 mb-6 px-4'} flex items-center justify-between gap-6 opacity-80 hover:opacity-100 transition-opacity flex-none bg-transparent`}
-        style={{
-          fontFamily: 'Arial, sans-serif',
-          background: 'transparent !important',
-          backgroundColor: 'transparent !important'
-        }}>
-        <div className="flex items-center gap-4">
-          <img
-            src="/logo.png"
-            alt="15market"
-            className="h-8 lg:h-10 w-auto opacity-80"
-          />
-          <span className={`text-[8px] lg:text-[10px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-            © 2026 15market
+      {uiVersion === 'v1' && (
+        <footer className="w-full max-w-7xl mt-10 mb-6 px-4 flex items-center justify-between gap-6 opacity-60 hover:opacity-100 transition-opacity flex-none"
+          style={{ fontFamily: 'Arial, sans-serif', background: 'transparent', backgroundColor: 'transparent' }}>
+          <div className="flex items-center gap-4">
+            <img src="/logo.png" alt="15market" className="h-10 w-auto opacity-80" />
+            <span className={`text-[10px] md:text-xs font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+              © 2026 15market
+            </span>
+          </div>
+          <span className={`text-[10px] md:text-xs font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+            Built by 15labs
           </span>
-        </div>
-
-        <span className={`text-[8px] lg:text-[10px] font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-          Built by 15labs
-        </span>
-      </footer>
+        </footer>
+      )}
       <TransactionReceiptModal
         isOpen={isTransactionReceiptOpen}
         onClose={() => setIsTransactionReceiptOpen(false)}
