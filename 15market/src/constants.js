@@ -36,7 +36,14 @@ if (envUrl && envUrl.startsWith('/') && !isLocal && typeof window !== 'undefined
     rawKeeperUrl = "https://api.15market.online";
 }
 
-export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
+const ensureAbsolute = (url) => {
+    if (!url) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/') || url.includes('localhost') || isLocal) return url;
+    return `https://${url}`;
+};
+
+export const KEEPER_URL = ensureAbsolute(rawKeeperUrl).endsWith('/') ? ensureAbsolute(rawKeeperUrl).slice(0, -1) : ensureAbsolute(rawKeeperUrl);
 
 const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 let rawKeeperUrlArc = envUrlArc || (isLocal ? `http://${window.location.hostname}:3010` : "https://api.15market.online");
@@ -46,7 +53,7 @@ if (envUrlArc && envUrlArc.startsWith('/') && !isLocal && typeof window !== 'und
     rawKeeperUrlArc = "https://api.15market.online";
 }
 
-export const KEEPER_URL_ARC = rawKeeperUrlArc.endsWith('/') ? rawKeeperUrlArc.slice(0, -1) : rawKeeperUrlArc;
+export const KEEPER_URL_ARC = ensureAbsolute(rawKeeperUrlArc).endsWith('/') ? ensureAbsolute(rawKeeperUrlArc).slice(0, -1) : ensureAbsolute(rawKeeperUrlArc);
 console.log(`🌐 [Config] Keeper URL: ${KEEPER_URL_ARC}`);
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 
