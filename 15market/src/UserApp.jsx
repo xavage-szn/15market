@@ -1085,18 +1085,10 @@ export default function UserApp() {
         const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
 
         // Hermes v2 expects ids[] array syntax and full 0x hex
+        // PRODUCTION FIX: Only use Hermes V2. Benchmark V1 returns 422 errors.
         sources.push({
           name: "pyth",
           url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
-          parse: d => {
-            const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
-          }
-        });
-
-        sources.push({
-          name: "pyth-bench",
-          url: `https://benchmarks.pyth.network/v1/updates/price/latest?ids[]=${fullPythId}`,
           parse: d => {
             const p = d.parsed?.[0]?.price;
             return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;

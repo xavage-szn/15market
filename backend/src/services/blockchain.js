@@ -3,22 +3,10 @@ const dns = require('dns');
 require('dotenv').config();
 const nonceManager = require('./nonceManager');
 
-// Apply DNS Patch for Arc RPC resolution issues
-const originalLookup = dns.lookup;
-dns.lookup = (hostname, options, callback) => {
-    if (typeof options === 'function') {
-        callback = options;
-        options = {};
-    }
-    if (hostname === 'rpc.testnet.arc.network' || hostname === 'rpc-test-1.arc.market') {
-        const ip = '64.130.40.38';
-        if (options && options.all) {
-            return callback(null, [{ address: ip, family: 4 }]);
-        }
-        return callback(null, ip, 4);
-    }
-    return originalLookup(hostname, options, callback);
-};
+// DNS: Using system DNS resolution (no hardcoded IP overrides)
+// The previous static IP patch (64.130.40.38) was causing 502 Bad Gateway on Railway
+// because the Arc RPC node IPs rotate. Let the OS resolve DNS dynamically.
+
 
 const RPC_ENDPOINTS = [
     "https://5042002.rpc.thirdweb.com",

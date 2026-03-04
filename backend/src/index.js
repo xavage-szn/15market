@@ -20,7 +20,20 @@ function logToFile(msg) {
 const app = express();
 const PORT = process.env.PORT || 3010;
 
-app.use(cors());
+// ===== PRODUCTION CORS OVERHAUL (Fixed Preflight Blocks) =====
+app.use((req, res, next) => {
+    // Explicitly allow all origins, methods, and headers for Vercel/Railway compatibility
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+
+    // Immediate success for preflight OPTIONS requests (Critical for 502/CORS fixes)
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+    next();
+});
+
 app.use(express.json());
 
 // Support both /arc/session/init and /session/init
@@ -177,6 +190,10 @@ const getHistoryFor = async (address) => {
         return [];
     }
 };
+
+// Support for historical/missing frontend routes
+app.get('/campaigns', (req, res) => res.json([]));
+app.get('/stats', (req, res) => res.json({ status: 'active', network: 'arc-testnet' }));
 
 // ===== HISTORY ENDPOINT =====
 app.get('/history/:address?', async (req, res) => {
