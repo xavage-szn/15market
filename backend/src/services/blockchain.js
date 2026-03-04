@@ -257,7 +257,7 @@ class BlockchainService {
                 nonce: nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 1000000n,
+                gasLimit: 300000n, // Reduced from 1,000,000n to ensure we don't trigger "insufficient funds" estimation errors
                 type: 2, // EIP-1559
                 chainId: 5042002
             });
