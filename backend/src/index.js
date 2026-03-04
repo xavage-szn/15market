@@ -341,22 +341,28 @@ app.post('/session/trade', async (req, res) => {
         const amountWei = ethers.parseUnits(amount.toString(), 18);
         const balance = await wallet.provider.getBalance(sessionAddr);
 
-        // Estimating gas
-        const fees = await blockchain._getGasPrice();
-        let gasPrice = fees.gasPrice;
+        // Gas estimation - use actual network fees with a modest buffer (NOT the keeper's aggressive settlement fees)
+        const feeData = await wallet.provider.getFeeData();
+        const networkGasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
 
-        // Aggressive floor for session trades to beat pool congestion
-        const minGasPrice = ethers.parseUnits("100", "gwei");
-        if (gasPrice < minGasPrice) gasPrice = minGasPrice;
+        // Session trades: 2x network price with a reasonable floor of 50 gwei
+        const sessionGasPrice = networkGasPrice * 2n;
+        const minSessionGas = ethers.parseUnits("50", "gwei");
+        const effectiveGasPrice = sessionGasPrice > minSessionGas ? sessionGasPrice : minSessionGas;
 
-        const gasLimit = 800000n;
-        const totalNeeded = amountWei + (gasPrice * gasLimit);
+        // Use a tighter gas limit for balance checking (actual usage is ~300-400k)
+        const estimatedGasLimit = 500000n;
+        const gasCostEstimate = effectiveGasPrice * estimatedGasLimit;
+        const totalNeeded = amountWei + gasCostEstimate;
 
         if (balance < totalNeeded) {
             throw new Error(`Insufficient session balance. Have ${ethers.formatEther(balance)}, need ${ethers.formatEther(totalNeeded)} (Amount + Gas)`);
         }
 
-        logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC)`);
+        logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC, Gas: ~${ethers.formatEther(gasCostEstimate)} USDC)`);
+
+        // For the actual TX, use the keeper's gas prices to ensure it gets included quickly
+        const fees = await blockchain._getGasPrice();
 
         const txArgs = {
             to: process.env.ARC_CONTRACT_ADDRESS,
