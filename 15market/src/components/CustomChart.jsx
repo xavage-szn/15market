@@ -21,6 +21,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const [error, setError] = useState(null);
     const isFirstLoad = useRef(true);
 
+    const [showGrid, setShowGrid] = useState(true);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+
     const isDark = theme !== 'light';
     const textColor = isDark ? '#D9D9D9' : '#1f2937';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
@@ -101,8 +105,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 textColor: textColor,
             },
             grid: {
-                vertLines: { color: gridColor },
-                horzLines: { color: gridColor },
+                vertLines: { color: showGrid ? gridColor : 'transparent' },
+                horzLines: { color: showGrid ? gridColor : 'transparent' },
             },
             width: chartContainerRef.current.clientWidth,
             height: chartContainerRef.current.clientHeight,
@@ -234,11 +238,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
         const handleResize = () => {
             if (chartContainerRef.current && chartRef.current) {
-                chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+                chartRef.current.applyOptions({
+                    width: chartContainerRef.current.clientWidth,
+                    height: chartContainerRef.current.clientHeight
+                });
             }
         };
 
-        window.addEventListener('resize', handleResize);
+        const resizeObserver = new ResizeObserver(handleResize);
+        if (chartContainerRef.current) {
+            resizeObserver.observe(chartContainerRef.current);
+        }
 
         let interval;
         if (timeframe !== '1s') {
@@ -254,7 +264,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         }
 
         return () => {
-            window.removeEventListener('resize', handleResize);
+            resizeObserver.disconnect();
             if (interval) clearInterval(interval);
             if (chartRef.current) {
                 chartRef.current.remove();
@@ -265,7 +275,18 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             smaSeriesRef.current = null;
             tradePriceLines.current.clear();
         };
-    }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType]);
+    }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType, showGrid]);
+
+    // Handle Fullscreen Escape
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isFullscreen) {
+                setIsFullscreen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isFullscreen]);
 
     // Live Trade Markers & Price Lines
     useEffect(() => {
@@ -406,8 +427,27 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         });
     }, [activeTrades, currentPrice]);
 
+    const toggleFullscreen = () => {
+        if (!isFullscreen) {
+            const elem = chartContainerRef.current.parentElement.parentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+            }
+            setIsFullscreen(true);
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+            setIsFullscreen(false);
+        }
+    };
+
     return (
-        <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: isDark ? '#0d0d0d' : '#FFF8E7', borderRadius: 'inherit', minHeight: '220px' }}>
+        <div className={`relative w-full h-full ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`} style={{ backgroundColor: isDark ? '#0d0d0d' : '#FFF8E7', borderRadius: isFullscreen ? '0' : 'inherit', minHeight: isFullscreen ? '100vh' : '220px' }}>
             {/* Branded Background Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <img src="/logo.png" alt="15market" style={{
@@ -468,9 +508,52 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         </button>
                     </div>
 
-                    <div className="ml-auto flex items-center gap-2">
-                        <button className="p-2 bg-black/60 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all"><Settings size={16} /></button>
-                        <button className="p-2 bg-black/60 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all"><Maximize2 size={16} /></button>
+                    <div className="ml-auto flex items-center gap-2 relative">
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowSettings(!showSettings)}
+                                className={`p-2 bg-black/60 border border-white/10 rounded-xl transition-all shadow-2xl pointer-events-auto ${showSettings ? 'text-[#3CB371] border-[#3CB371]/50' : 'text-white/60 hover:text-white'}`}
+                            >
+                                <Settings size={16} />
+                            </button>
+
+                            <AnimatePresence>
+                                {showSettings && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                        className="absolute top-12 right-0 w-48 bg-[#0a0a0a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 shadow-2xl z-[110] flex flex-col gap-1 pointer-events-auto"
+                                    >
+                                        <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white/30 border-b border-white/5 mb-1">Chart Settings</div>
+                                        <button
+                                            onClick={() => { setShowGrid(!showGrid); setShowSettings(false); }}
+                                            className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all text-white/80 hover:text-white"
+                                        >
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Show Grid</span>
+                                            <div className={`w-8 h-4 rounded-full relative transition-all ${showGrid ? 'bg-[#3CB371]' : 'bg-white/10'}`}>
+                                                <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${showGrid ? 'translate-x-4' : 'translate-x-0'}`} />
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => { setChartType(chartType === 'candles' ? 'line' : 'candles'); setShowSettings(false); }}
+                                            className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all text-white/80 hover:text-white"
+                                        >
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Candles</span>
+                                            <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : 'bg-white/10'}`}>
+                                                <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${chartType === 'candles' ? 'translate-x-4' : 'translate-x-0'}`} />
+                                            </div>
+                                        </button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                        <button
+                            onClick={toggleFullscreen}
+                            className="p-2 bg-black/60 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all shadow-2xl pointer-events-auto"
+                        >
+                            <Maximize2 size={16} />
+                        </button>
                     </div>
                 </div>
 

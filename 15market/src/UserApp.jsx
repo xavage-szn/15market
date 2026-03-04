@@ -35,6 +35,57 @@ import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
 import CustomChart from './components/CustomChart';
 import Toast from "./components/Toast";
 import { ThemeToggle } from "./components/ThemeToggle";
+import SideHistoryPane from "./components/SideHistoryPane";
+import { Maximize2, RotateCw } from "lucide-react";
+
+/**
+ * Mobile Portrait Lock Component
+ * Shown when a mobile/small screen user is in portrait mode.
+ * Forces landscape orientation for better V2 UI experience.
+ */
+const PortraitPrompt = ({ theme }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center p-8 text-center backdrop-blur-3xl`}
+    style={{
+      background: theme === 'light' ? 'rgba(238, 249, 241, 0.98)' : 'rgba(5, 5, 5, 0.98)'
+    }}
+  >
+    <div className="relative mb-12">
+      <motion.div
+        animate={{ rotate: 90 }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1 }}
+        className="relative"
+      >
+        <div className="w-32 h-20 rounded-2xl border-4 border-[#3CB371]/30 flex items-center justify-center">
+          <div className="w-1 h-8 rounded-full bg-[#3CB371]/20 absolute -right-1" />
+          <div className="w-2 h-2 rounded-full bg-[#3CB371]/20 absolute left-4" />
+        </div>
+      </motion.div>
+      <motion.div
+        animate={{ opacity: [0, 1, 0], x: [20, 0, -20] }}
+        transition={{ duration: 2, repeat: Infinity }}
+        className="absolute -top-8 left-1/2 -translate-x-1/2"
+      >
+        <RotateCw className="w-8 h-8 text-[#3CB371]" />
+      </motion.div>
+    </div>
+
+    <h2 className="text-3xl font-black text-[#3CB371] uppercase tracking-tighter mb-4">
+      Rotate Your Device
+    </h2>
+    <p className="text-white/40 text-sm font-medium max-w-xs leading-relaxed"
+      style={{ color: theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>
+      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#3CB371] font-bold">Landscape</span> to access the Precision V2 Terminal.
+    </p>
+
+    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#3CB371]/10 border border-[#3CB371]/20">
+      <Maximize2 className="w-4 h-4 text-[#3CB371]" />
+      <span className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Desktop Mode Optimization</span>
+    </div>
+  </motion.div>
+);
 
 
 export default function UserApp() {
@@ -105,6 +156,8 @@ export default function UserApp() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
+  const [showManagement, setShowManagement] = useState(false);
+  const [showActiveExpanded, setShowActiveExpanded] = useState(false);
   const [transactionHistory, setTransactionHistory] = useState(() => {
     try {
       const saved = localStorage.getItem("15market_transactions_v1");
@@ -119,6 +172,7 @@ export default function UserApp() {
     } catch (e) { return []; }
   });
   const [isPnLOpen, setIsPnLOpen] = useState(false);
+  const [showSideHistory, setShowSideHistory] = useState(false);
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
   const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
@@ -194,6 +248,27 @@ export default function UserApp() {
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
+
+  // Orientation & Device Detection for V2 Forced Landscape
+  const [isPortrait, setIsPortrait] = useState(
+    typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  const isSmallScreen = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
+  const showPortraitLock = uiVersion === 'v2' && isSmallScreen && isPortrait;
   const lastOptimisticActionTime = useRef(0); // Protects optimistic balance from stale polling
   const tradeHistoryRef = useRef([]);
   const activeTradesRef = useRef([]);
@@ -239,9 +314,9 @@ export default function UserApp() {
       const bal = parseFloat(formatUnits(balanceWei, 18));
 
       // CRITICAL: During cooldown, block ALL non-forced polls.
-      // Extended to 15s to prevent balance flicker while awaiting on-chain payout settlement.
+      // Reduced to 2.5s for near-instant balance reflection on Arc.
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 15000) {
+      if (!force && msSinceLastAction < 2500) {
         return;
       }
 
@@ -269,11 +344,11 @@ export default function UserApp() {
       const isUpTrade = (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy");
       let activeStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
 
-      // Enforce PENDING strictly if we're inside the 15s balance cooldown for newly won trades
-      if (activeStatus === "WON" && msSinceLastAction < 15000) {
-        // Only block it if it hasn't already been firmly baked as WON previously 
-        const alreadyFinal = tradeHistoryRef.current.some(p => String(p.id) === String(t.id) && p.status === "WON");
-        if (!alreadyFinal) {
+      // ⚡ FAST SYNC: Only enforce PENDING if we don't have hard chain data yet
+      if (activeStatus === "WON" && msSinceLastAction < 2500) {
+        // If the backend already says WON and we're just waiting for balance, don't revert to PENDING
+        const alreadyFinal = tradeHistoryRef.current.some(p => String(p.id) === String(t.id) && (p.status === "WON" || p.chainConfirmed));
+        if (!alreadyFinal && !t.chainConfirmed) {
           activeStatus = "PENDING";
         }
       }
@@ -658,6 +733,9 @@ export default function UserApp() {
       return notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
     }
 
+    // Force collapse management when starting a trade
+    setShowManagement(false);
+
     // setIsExecuting(true); // REMOVED global block for burst mode
 
     // Generate truly unique bet ID immediately
@@ -685,7 +763,7 @@ export default function UserApp() {
       if (sessionMode) {
         console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper (Strict Mode)...`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // Increased for strict confirmation wait
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s - Arc testnet block times can be irregular
 
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
@@ -717,9 +795,9 @@ export default function UserApp() {
           }
           if (!res.ok) throw new Error(data.error || "Session trade failed");
           txHash = data.txHash;
-          console.log(`✅ [SESSION] Confirmed on-chain: ${txHash}`);
+          console.log(`✅ [SESSION] Broadcasted: ${txHash}. Verifying in background...`);
 
-          // FOR SESSION MODE: Backend already waited for confirmation before returning
+          // OPTIMISTICALLY add to UI immediately since it's already in the txPool
           const confirmTime = Date.now();
           const newTrade = {
             id: tradeId,
@@ -738,7 +816,7 @@ export default function UserApp() {
             expiryMs: confirmTime + (duration * 1000),
             symbol: activeMarket?.symbol || 'ETH',
             isSessionTrade: true,
-            confirmed: true,
+            confirmed: true, // We treat as confirmed since it's in the pool
           };
 
           const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
@@ -748,11 +826,20 @@ export default function UserApp() {
           // Deduct balance
           setSessionBalance(prev => Math.max(0, prev - amtNum));
           lastOptimisticActionTime.current = Date.now();
-          notify("Trade Started - Countdown Active", "success");
+          notify("Trade Started - Verifying on Arc...", "success");
+
+          // Background verification (Silent check)
+          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
+            .then(() => console.log(`⛓️ [SESSION] Confirmed on-chain: ${txHash}`))
+            .catch(e => console.warn(`⛓️ [SESSION] Receipt check timed out (Network busy):`, e.message));
 
         } catch (fetchErr) {
           clearTimeout(timeoutId);
-          throw new Error(fetchErr.name === 'AbortError' ? "Confirmation timeout - Check explorer" : fetchErr.message);
+          console.error("Session trade error details:", fetchErr);
+          const errMsg = fetchErr.name === 'AbortError'
+            ? "Connection Timeout: Backend didn't respond. Check if server is running."
+            : (fetchErr.message || "Session trade failed. Check backend logs.");
+          throw new Error(errMsg);
         }
       } else {
         if (!walletClient) throw new Error("Wallet not connected");
@@ -1470,10 +1557,10 @@ export default function UserApp() {
           })
         }).catch(e => console.error("Settlement trigger fail:", e));
 
-        // Release resolving lock after a safety period (chain will confirm in background)
+        // Release resolving lock after a safety period
         setTimeout(() => {
           resolvingInProgress.current.delete(trade.id);
-        }, 15000);
+        }, 3000);
       }
     };
     // HIGH SPEED: Check every 200ms for near-instant resolution
@@ -1590,17 +1677,16 @@ export default function UserApp() {
                 notify(`Trade WON! +${formattedPayout} USDC`, "success");
               };
 
+              setTimeout(forceRead, 1000);
               setTimeout(forceRead, 3000);
-              setTimeout(forceRead, 6000);
-              setTimeout(forceRead, 10000);
               setTimeout(() => {
                 forceRead();
                 lastOptimisticActionTime.current = 0; // Release cooldown
                 finalizeWin();
-              }, 15000);
+              }, 4000);
 
             } else {
-              notify(`Trade LOST. Price: $${priceUSD}`, "error");
+              notify(`Trade LOST.`, "error");
               // Force-read balance after loss settlement too 
               setTimeout(() => {
                 updateEvmSessionBal(true);
@@ -1879,6 +1965,8 @@ export default function UserApp() {
         transition: "color 0.3s ease"
       }}>
 
+
+
       {view === "dashboard" ? (
         <DashboardPage
           onBack={() => setView("trading")}
@@ -1900,13 +1988,14 @@ export default function UserApp() {
           }}
         />
       ) : (
-        <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-0 overflow-hidden mt-[-8px] lg:mt-[-16px]' : 'py-4 lg:py-10'}`}>
-          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-1' : ''}`}>
-            <div className={`flex items-center gap-4 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-10 lg:h-16' : 'h-8 lg:h-12'} w-auto drop-shadow-[0_0_40px_var(--primary-glow)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+        <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-0 overflow-hidden' : 'py-4 lg:py-10'}`}>
+          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
+            <div className={`flex items-center transition-all duration-500`}
+              style={{ paddingLeft: uiVersion === 'v2' ? (showSideHistory ? '268px' : '36px') : '0px' }}>
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-14 lg:h-24' : 'h-8 lg:h-12'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
-            <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
+            <div className={`hidden lg:flex landscape:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
               <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
@@ -1919,7 +2008,7 @@ export default function UserApp() {
               <UnifiedWalletButton theme={theme} />
             </div>
 
-            <div className="flex lg:hidden items-center gap-2">
+            <div className="flex lg:hidden landscape:hidden items-center gap-2">
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
@@ -1931,6 +2020,14 @@ export default function UserApp() {
               <UnifiedWalletButton theme={theme} />
             </div>
           </header>
+
+          {/* Global V2 Architectural Separator (Runs across the screen) */}
+          {uiVersion === 'v2' && (
+            <div className="w-full flex flex-col mt-[-15px] mb-[10px] relative z-[60]">
+              <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
+              <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)] mt-[2px]" />
+            </div>
+          )}
 
           {uiVersion === 'v1' && (
             <div className={`w-full mb-4 lg:mb-6 overflow-hidden border-y transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
@@ -1965,6 +2062,7 @@ export default function UserApp() {
                     evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                     activeMarket={activeMarket}
                     maintenanceMode={platformSettings.maintenanceMode}
+                    showManagement={showManagement} setShowManagement={setShowManagement}
                   />
                 </div>
 
@@ -1979,14 +2077,28 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full grid grid-cols-12 gap-3 lg:gap-4 mb-0 relative z-0 h-[calc(100vh-70px)] min-h-[500px]">
+              <div className="w-full flex lg:flex-row landscape:flex-row flex-col gap-3 lg:gap-4 mb-6 relative z-0 h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)] min-h-0">
                 {/* V2: Integrated One Screen Layout */}
-                <div className="col-span-12 lg:col-span-10 flex flex-col gap-0.5 h-full">
+                <div className="w-full lg:w-[70%] landscape:w-[70%] flex flex-col gap-1.5 h-[450px] lg:h-full landscape:h-full transition-all duration-500 relative"
+                  style={{ paddingLeft: showSideHistory ? '268px' : '36px' }}>
+
+                  {uiVersion === 'v2' && (
+                    <SideHistoryPane
+                      isOpen={showSideHistory}
+                      onToggle={() => setShowSideHistory(!showSideHistory)}
+                      tradeHistory={tradeHistory}
+                      theme={theme}
+                      setSelectedPnLTrade={setSelectedPnLTrade}
+                      setIsPnLOpen={setIsPnLOpen}
+                    />
+                  )}
+
+
                   {/* Scroller only above chart in V2 */}
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className={`flex-1 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow`}
+                  <div className="flex-1 min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow"
                     style={{
                       background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
@@ -1998,14 +2110,14 @@ export default function UserApp() {
                   </div>
                 </div>
 
-                <div className="col-span-12 lg:col-span-2 flex flex-col gap-2 h-full min-h-0">
+                <div className={`w-full lg:w-[30%] landscape:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-auto lg:h-full landscape:h-full min-h-0`}>
                   {/* Trading Terminal Box */}
-                  <div className={`flex-1 min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300 flex flex-col`}
+                  <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0' : 'h-auto'} min-h-0`}
                     style={{
                       background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
                     }}>
-                    <div className="p-3 lg:p-4 overflow-y-auto custom-scrollbar">
+                    <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : 'p-3 lg:p-4'} flex flex-col min-h-0`}>
                       <TradeTerminal
                         transparent={true}
                         activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
@@ -2018,32 +2130,34 @@ export default function UserApp() {
                         evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                         activeMarket={activeMarket}
                         maintenanceMode={platformSettings.maintenanceMode}
+                        showManagement={showManagement} setShowManagement={setShowManagement}
                       />
                     </div>
                   </div>
 
                   {/* Active Trade / Controls Box */}
-                  <div className={`flex-1 min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-300 flex flex-col`}
+                  <div className={`flex-1 min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col`}
                     style={{
                       background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
                     }}>
-                    <div className="p-3 lg:p-4 flex flex-col h-full min-h-0">
-
-                      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-                          <LiveExecution
-                            activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                            setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                            theme={theme} currentNetwork={network}
-                          />
-                        </div>
-                      </div>
+                    <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
+                      <LiveExecution
+                        activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                        setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                        theme={theme} currentNetwork={network}
+                        isTruncated={uiVersion === 'v2' && showManagement && !showActiveExpanded}
+                        isExpanded={showActiveExpanded}
+                        setIsExpanded={setShowActiveExpanded}
+                      />
                     </div>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* Forced Orientation Overlay for V2 Mobile */}
+            {showPortraitLock && <PortraitPrompt theme={theme} />}
 
             {uiVersion === 'v1' && (
               <>
@@ -2076,7 +2190,7 @@ export default function UserApp() {
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
                             <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
                           </div>
                           <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
@@ -2138,25 +2252,6 @@ export default function UserApp() {
               </>
             )}
 
-            {/* Footer Inside Container for V2 */}
-            {uiVersion === 'v2' && (
-              <footer className="w-full px-8 mt-auto py-4 flex items-center justify-between gap-6 opacity-60 hover:opacity-100 transition-opacity flex-none"
-                style={{
-                  fontFamily: 'Arial, sans-serif',
-                  background: 'none',
-                  backgroundColor: 'transparent'
-                }}>
-                <div className="flex items-center gap-4">
-                  <img src="/logo.png" alt="15market" className="h-8 w-auto opacity-80" />
-                  <span className={`text-[8px] lg:text-[10px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                    © 2026 15market
-                  </span>
-                </div>
-                <span className={`text-[8px] lg:text-[10px] font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-                  Built by 15labs
-                </span>
-              </footer>
-            )}
           </div>
         </div>
       )}
@@ -2186,20 +2281,18 @@ export default function UserApp() {
         {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
       </AnimatePresence>
 
-      {uiVersion === 'v1' && (
-        <footer className="w-full max-w-7xl mt-10 mb-6 px-4 flex items-center justify-between gap-6 opacity-60 hover:opacity-100 transition-opacity flex-none"
-          style={{ fontFamily: 'Arial, sans-serif', background: 'transparent', backgroundColor: 'transparent' }}>
-          <div className="flex items-center gap-4">
-            <img src="/logo.png" alt="15market" className="h-10 w-auto opacity-80" />
-            <span className={`text-[10px] md:text-xs font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-              © 2026 15market
-            </span>
-          </div>
-          <span className={`text-[10px] md:text-xs font-medium tracking-widest ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-            Built by 15labs
+      <footer className={`${uiVersion === 'v2' ? 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none' : 'w-full max-w-7xl mt-10 mb-6 px-4 py-6 border-t border-white/5'} flex items-center justify-between gap-6 flex-none bg-transparent`}
+        style={{ fontFamily: 'Arial, sans-serif' }}>
+        <div className="flex items-center gap-4 pointer-events-auto">
+          <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
+          <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+            © 2026 15market
           </span>
-        </footer>
-      )}
+        </div>
+        <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+          Built by 15labs
+        </span>
+      </footer>
       <TransactionReceiptModal
         isOpen={isTransactionReceiptOpen}
         onClose={() => setIsTransactionReceiptOpen(false)}

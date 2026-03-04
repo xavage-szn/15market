@@ -25,11 +25,14 @@ function TradeTerminalComponent({
     onRefill,
     onWithdraw,
     transparent = false,
+    showManagement,
+    setShowManagement,
 }) {
     const isLight = theme === 'light';
-    const [showManagement, setShowManagement] = React.useState(false);
 
-    const containerClass = transparent ? "" : `w-full h-full p-2 lg:p-5 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-2 lg:gap-4 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
+    const containerClass = transparent
+        ? "flex flex-col gap-2 lg:gap-3"
+        : `w-full h-full p-2 lg:p-5 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-2 lg:gap-4 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
 
     const renderHeader = () => (
         <div className="flex items-center justify-between pointer-events-auto mb-1">
@@ -49,6 +52,16 @@ function TradeTerminalComponent({
                         <div className={`absolute top-0.5 left-0.5 w-1.5 lg:w-2.5 h-1.5 lg:h-2.5 rounded-full bg-white transition-all duration-300 ${sessionMode ? 'translate-x-2.5 lg:translate-x-3.5' : 'translate-x-0'}`} />
                     </button>
                     <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
+                    {sessionMode && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowManagement(!showManagement); }}
+                            className={`p-0.5 rounded-md transition-all duration-300 ${isLight ? 'hover:bg-black/5' : 'hover:bg-white/5'} ${showManagement ? 'rotate-180' : ''}`}
+                        >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -137,7 +150,11 @@ function TradeTerminalComponent({
             <div className="relative pt-3 pb-1 px-1">
                 <div className="relative h-1.5">
                     <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
-                    <div className="absolute inset-y-0 left-0 rounded-full bg-[#3CB371]" style={{ width: `${sliderValue || 0}%` }} />
+                    <div className="absolute inset-y-0 left-0 rounded-full bg-[#3CB371] transition-all duration-150" style={{ width: `${sliderValue || 0}%`, boxShadow: '0 0 10px rgba(60, 179, 113, 0.4)' }} />
+                    <div
+                        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 lg:w-4 lg:h-4 rounded-full bg-white shadow-lg border-2 border-[#3CB371] pointer-events-none transition-all duration-150 z-20"
+                        style={{ left: `calc(${sliderValue || 0}% - ${(sliderValue || 0) > 50 ? 8 : 6}px)` }}
+                    />
                     <input type="range" min="0" max="100" step="1" value={sliderValue || 0} onChange={handleSliderChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30" />
                 </div>
             </div>
@@ -166,84 +183,70 @@ function TradeTerminalComponent({
         <div className={containerClass}>
             {renderHeader()}
 
-            {sessionMode && (
-                <div className={`p-2 lg:p-3 rounded-xl border flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300 ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
+            {sessionMode && showManagement && (
+                <div className={`px-2 py-1.5 lg:px-3 lg:py-2 rounded-xl border flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-300 ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
-                            </div>
-                            <span className="text-[8px] lg:text-sm font-mono font-black text-[#3CB371]">
+                            <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
+                            <span className="text-[7px] lg:text-xs font-mono font-black text-[#3CB371]">
                                 ${Number(sessionBalance).toFixed(4)} USDC
                             </span>
                         </div>
-                        <button
-                            onClick={() => setShowManagement(!showManagement)}
-                            className={`p-1 rounded-md transition-all ${isLight ? 'hover:bg-black/5' : 'hover:white/5'} ${showManagement ? 'rotate-180' : ''}`}
-                        >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
-                                <path d="m6 9 6 6 6-6" />
-                            </svg>
-                        </button>
                     </div>
 
-                    {showManagement && (
-                        <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                            <div className={`mt-1 flex items-center gap-1.5 p-1.5 rounded-lg border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
-                                <input
-                                    type="number"
-                                    value={refillAmount}
-                                    onChange={(e) => setRefillAmount(e.target.value)}
-                                    placeholder="0.00"
-                                    className={`w-full bg-transparent text-[9px] lg:text-xs font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
-                                />
-                                <div className={`px-1 py-0.5 rounded text-[5px] lg:text-[6px] font-black uppercase tracking-tight ${isLight ? 'bg-black/10 text-black/60' : 'bg-white/10 text-white/60'}`}>
-                                    USDC
-                                </div>
-                            </div>
-
-                            <div className="relative pt-3 pb-2 px-1">
-                                <div className="relative h-1 lg:h-1.5">
-                                    <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
-                                    <div
-                                        className="absolute inset-y-0 left-0 rounded-full transition-all duration-150"
-                                        style={{
-                                            width: `${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}%`,
-                                            background: '#3CB371',
-                                            boxShadow: '0 0 10px rgba(60, 179, 113, 0.4)'
-                                        }}
-                                    />
-                                    <div
-                                        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 lg:w-4 lg:h-4 bg-white rounded-full shadow-md border border-gray-200 pointer-events-none transition-all duration-150"
-                                        style={{ left: `calc(${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}% - 6px)` }}
-                                    />
-                                    <input
-                                        type="range" min="0" max="100" step="1"
-                                        value={Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}
-                                        onChange={(e) => balance > 0 && setRefillAmount(((balance * e.target.value) / 100).toFixed(4))}
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                                <button
-                                    onClick={() => onRefill(refillAmount)}
-                                    disabled={isExecuting}
-                                    className={`py-1.5 lg:py-2 rounded-full bg-[#3CB371] text-white text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
-                                >
-                                    Deposit
-                                </button>
-                                <button
-                                    onClick={() => onWithdraw(refillAmount)}
-                                    disabled={isExecuting}
-                                    className={`py-1.5 lg:py-2 rounded-full border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[9px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
-                                >
-                                    Withdraw
-                                </button>
-                            </div>
+                    <div className={`mt-0.5 flex items-center gap-1 p-1 rounded-lg border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
+                        <input
+                            type="number"
+                            value={refillAmount}
+                            onChange={(e) => setRefillAmount(e.target.value)}
+                            placeholder="0.00"
+                            className={`w-full bg-transparent text-[8px] lg:text-[10px] font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
+                        />
+                        <div className={`px-1 py-0.5 rounded text-[4px] lg:text-[6px] font-black uppercase tracking-tight ${isLight ? 'bg-black/10 text-black/60' : 'bg-white/10 text-white/60'}`}>
+                            USDC
                         </div>
-                    )}
+                    </div>
+
+                    <div className="relative pt-1.5 pb-1 px-1">
+                        <div className="relative h-1 lg:h-1.5">
+                            <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
+                            <div
+                                className="absolute inset-y-0 left-0 rounded-full transition-all duration-150"
+                                style={{
+                                    width: `${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}%`,
+                                    background: '#3CB371',
+                                    boxShadow: '0 0 10px rgba(60, 179, 113, 0.4)'
+                                }}
+                            />
+                            <div
+                                className="absolute top-1/2 -translate-y-1/2 w-2 h-2 lg:w-3 lg:h-3 bg-white rounded-full shadow-md border border-gray-200 pointer-events-none transition-all duration-150"
+                                style={{ left: `calc(${Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}% - 4px)` }}
+                            />
+                            <input
+                                type="range" min="0" max="100" step="1"
+                                value={Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}
+                                onChange={(e) => balance > 0 && setRefillAmount(((balance * e.target.value) / 100).toFixed(4))}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 mt-1">
+                        <button
+                            onClick={() => onRefill(refillAmount)}
+                            disabled={isExecuting}
+                            className={`py-1.5 lg:py-2 rounded-full bg-[#3CB371] text-white text-[7px] lg:text-[8px] font-black uppercase tracking-widest hover:brightness-110 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                        >
+                            Deposit
+                        </button>
+                        <button
+                            onClick={() => onWithdraw(refillAmount)}
+                            disabled={isExecuting}
+                            className={`py-1.5 lg:py-2 rounded-full border border-[#3CB371]/30 text-[#3CB371] text-[7px] lg:text-[8px] font-black uppercase tracking-widest hover:bg-[#3CB371]/10 transition-all ${isExecuting ? 'opacity-50' : ''}`}
+                        >
+                            Withdraw
+                        </button>
+                    </div>
                 </div>
             )}
 

@@ -182,7 +182,7 @@ function GlobalTradeScrollerComponent({ theme }) {
                 <motion.div
                     animate={{ x: ["0%", "-50%"] }}
                     className="flex items-center gap-4 lg:gap-8 whitespace-nowrap pl-20 lg:pl-40"
-                    transition={{ x: { duration: 120, repeat: Infinity, ease: "linear" } }}
+                    transition={{ x: { duration: 240, repeat: Infinity, ease: "linear" } }}
                 >
                     {repeatedHistory.map((event, i) => (
                         <div key={`${event.id}-${i}`}

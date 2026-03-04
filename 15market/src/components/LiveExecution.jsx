@@ -8,10 +8,12 @@ function LiveExecutionComponent({
     price,
     setSelectedPnLTrade,
     setIsPnLOpen,
-    theme
+    theme,
+    isTruncated = false,
+    isExpanded = false,
+    setIsExpanded
 }) {
     const [tick, setTick] = useState(0);
-    const [isExpanded, setIsExpanded] = useState(false);
     const isLight = theme === 'light';
 
     // Higher frequency clock (100ms) for butter-smooth countdown and precise expiry freezing
@@ -24,30 +26,56 @@ function LiveExecutionComponent({
         setActiveTrades(prev => prev.filter(t => t.id !== id));
     };
 
+    // Auto-collapse when only 0-1 trades remain
+    useEffect(() => {
+        if (activeTrades.length <= 1 && isExpanded) {
+            setIsExpanded(false);
+        }
+    }, [activeTrades.length]);
+
     // Keep track of 'frozen' results to prevent UI flicker during settlement phase
     const frozenPnL = useRef({}); // tradeId -> { status, exitPrice }
 
     return (
-        <div className="flex flex-col gap-2 relative min-h-0 h-full">
+        <div className="flex flex-col gap-1 relative min-h-0 h-full">
             <div className="flex items-center justify-between px-2 flex-none">
                 <div className="flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
                     <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
                         ACTIVE TRADES
                     </h4>
+                    {activeTrades.length > 1 && (
+                        <button
+                            onClick={() => setIsExpanded(!isExpanded)}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg transition-all duration-300 ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}
+                        >
+                            <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>
+                                {isExpanded ? 'Collapse' : 'Expand'}
+                            </span>
+                            <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                            </div>
+                        </button>
+                    )}
                 </div>
                 {activeTrades.length > 0 && (
                     <div className="bg-[#3CB371]/10 text-[#3CB371] px-2 py-0.5 rounded-full text-[8px] font-black border border-[#3CB371]/20">
-                        {activeTrades.length} ACTIVE
+                        {!isExpanded && activeTrades.length > 1
+                            ? `+${activeTrades.length - 1} more`
+                            : `${activeTrades.length} ACTIVE`}
                     </div>
                 )}
             </div>
 
-            <div className={`flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2 min-h-0 ${isExpanded ? 'max-h-[400px]' : ''}`}>
+            <div className={`flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-1 min-h-0`}>
                 {activeTrades.length > 0 ? (
                     (() => {
-                        const visibleTrades = isExpanded ? activeTrades : [activeTrades[0]];
-                        const othersCount = activeTrades.length - 1;
+                        // Sort: most recent first
+                        const sorted = [...activeTrades].sort((a, b) => (b.startTime || b.id) - (a.startTime || a.id));
+                        const visibleTrades = isExpanded ? sorted : [sorted[0]];
+                        const othersCount = activeTrades.length - (isExpanded ? activeTrades.length : 1);
 
                         return (
                             <>
@@ -72,14 +100,12 @@ function LiveExecutionComponent({
                                             const amountVal = parseFloat(trade.amount);
                                             const currentPriceVal = parseFloat(price);
 
-                                            const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+                                            const multiplier = trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
-                                            // INSTANT RESULT: 3dp truncation rule for win/loss
                                             const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
-                                            // FREEZE LOGIC: Capture result at exactly 0.0s to prevent flicker
                                             if (timerExpired && !isFinal && !frozenPnL.current[trade.id]) {
                                                 const exit3dp = truncTo3dp(currentPriceVal);
                                                 const entry3dp = truncTo3dp(entryPriceVal);
@@ -88,14 +114,12 @@ function LiveExecutionComponent({
                                                     status: isWin ? "WON" : "LOST",
                                                     exitPrice: currentPriceVal.toFixed(3)
                                                 };
-                                                console.log(`❄️ [UI] Froze result for ${trade.id}: ${frozenPnL.current[trade.id].status} @ ${frozenPnL.current[trade.id].exitPrice}`);
                                             }
 
                                             const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
                                                 ? (isUpTrade ? truncTo3dp(currentPriceVal) > truncTo3dp(entryPriceVal) : truncTo3dp(currentPriceVal) < truncTo3dp(entryPriceVal))
                                                 : false;
 
-                                            // Use frozen result if available, otherwise fallback to live calculation
                                             const showInstantResult = timerExpired && !isFinal;
                                             const frozen = frozenPnL.current[trade.id];
                                             const instantStatus = showInstantResult ? (frozen ? frozen.status : (liveWinning ? "WON" : "LOST")) : trade.status;
@@ -103,26 +127,24 @@ function LiveExecutionComponent({
 
                                             return (
                                                 <div
-                                                    className={`rounded-xl lg:rounded-2xl p-2 flex flex-col relative transition-all duration-300 border ${isLight
-                                                        ? 'bg-white border-[#3CB371]/15 shadow-[0_4px_20px_rgba(60,179,113,0.08)]'
-                                                        : 'bg-white/[0.02] border-white/5 shadow-xl'}`}
+                                                    className={`rounded-[12px] lg:rounded-[14px] p-1 flex flex-col relative transition-all duration-500 border ${!isExpanded && activeTrades.length === 1 ? 'h-full bg-gradient-to-b from-white/[0.03] to-transparent' : 'h-auto'} ${isLight
+                                                        ? 'bg-white border-[#3CB371]/15 shadow-[0_2px_15px_rgba(60,179,113,0.06)]'
+                                                        : 'bg-white/[0.02] border-white/5 shadow-2xl'}`}
                                                     style={displayFinal ? {
                                                         borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(60, 179, 113, 0.4)' : 'rgba(255, 127, 80, 0.4)',
                                                         boxShadow: (instantStatus === "WON" || trade.status === "WON")
-                                                            ? '0 0 20px rgba(60, 179, 113, 0.15)'
-                                                            : '0 0 20px rgba(255, 127, 80, 0.1)'
+                                                            ? '0 0 30px rgba(60, 179, 113, 0.15)'
+                                                            : '0 0 30px rgba(255, 127, 80, 0.1)'
                                                     } : {}}
                                                 >
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${displayFinal
+                                                    {/* Card Header - Ultra Compact */}
+                                                    <div className="flex items-center justify-between mb-0 px-0.5">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className={`w-1 h-1 rounded-full ${displayFinal
                                                                 ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
-                                                                : 'bg-[#3CB371] animate-pulse shadow-[0_0_10px_#3CB371]'}`} />
-                                                            <span className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/50' : 'text-white/40'}`}>
-                                                                {displayFinal
-                                                                    ? (showInstantResult ? "SETTLED" : trade.status)
-                                                                    : "Monitoring"
-                                                                }
+                                                                : 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]'}`} />
+                                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
+                                                                {displayFinal ? trade.status : "Live"}
                                                             </span>
                                                         </div>
                                                         {isFinal && (
@@ -135,79 +157,56 @@ function LiveExecutionComponent({
                                                         )}
                                                     </div>
 
-                                                    <div className="grid grid-cols-2 gap-1 mb-2 lg:mb-2">
-                                                        <div className={`p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
-                                                            <div className="flex justify-between items-center mb-0.5">
-                                                                <p className={`text-[5px] lg:text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/20'}`}>Entry</p>
+                                                    {/* Central Hero Countdown - Tighter vertical scaling */}
+                                                    {!displayFinal ? (
+                                                        <div className="flex-1 flex flex-col items-center justify-center py-0">
+                                                            <div className={`text-xl lg:text-2xl font-matrix tracking-[0.1em] transition-all duration-300 ${isLight ? 'text-black' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.4)]'}`}>
+                                                                {displayTimeLeft}<span className="text-[9px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
-                                                            <p className={`text-[10px] lg:text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>
-                                                                {!isNaN(entryPriceVal) ? `$${entryPriceVal}` : "..."}
-                                                            </p>
-                                                        </div>
-                                                        <div className={`p-1.5 lg:p-2 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-black/40 border-white/5'}`}>
-                                                            <p className={`text-[5px] lg:text-[6px] font-black uppercase tracking-widest mb-0.5 ${isLight ? 'text-black/30' : 'text-white/20'}`}>Stake</p>
-                                                            <p className={`text-[10px] lg:text-xs font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{trade.amount}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className={`rounded-xl flex flex-col items-center justify-center p-2 transition-all duration-300 overflow-hidden relative ${(instantStatus === "WON" || trade.status === "WON") && displayFinal
-                                                        ? "bg-[#3CB371]/10 border border-[#3CB371]/20"
-                                                        : (instantStatus === "LOST" || trade.status === "LOST") && displayFinal
-                                                            ? "bg-[#FF7F50]/10 border border-[#FF7F50]/20"
-                                                            : (isLight ? "bg-black/5 border-black/5" : "bg-white/[0.02] border border-white/5")
-                                                        }`}>
-                                                        {!displayFinal ? (
-                                                            <>
-                                                                <div className={`text-3xl lg:text-4xl font-matrix mb-1 tracking-[0.2em] flex items-baseline ${isLight ? 'text-black' : 'text-[#3CB371]'}`} style={{ fontVariantNumeric: "tabular-nums" }}>
-                                                                    {displayTimeLeft}<span className={`text-[10px] lg:text-[12px] ml-1 font-sans font-black italic opacity-50 ${isLight ? 'text-black/40' : 'text-white/40'}`}>s</span>
-                                                                </div>
-
-                                                                <div className={`mb-1.5 lg:mb-2 px-2 lg:px-3 py-0.5 lg:py-1 rounded-full border ${isLight ? 'bg-white border-black/10' : 'bg-white/5 border-white/10'}`}>
-                                                                    <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
-                                                                        {liveWinning ? "WIN" : "LOSS"}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div className="flex items-center gap-1 opacity-60 mb-2 lg:mb-3">
-                                                                    <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/30'}`}>Profit:</span>
-                                                                    <span className={`text-[8px] lg:text-[10px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`} style={{ color: '#3CB371' }}>
-                                                                        +{potentialProfit}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div className={`w-full h-1 rounded-full overflow-hidden ${isLight ? 'bg-black/10' : 'bg-white/5'}`}>
-                                                                    <div
-                                                                        className="h-full bg-[#3CB371] transition-all duration-200 ease-linear shadow-[0_0_15px_#3CB371]"
-                                                                        style={{ width: `${(rawTimeLeft / duration) * 100}%` }}
-                                                                    />
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <div className="flex flex-col items-center gap-2 w-full">
-                                                                <Stamp
-                                                                    status={isFinal ? trade.status : instantStatus}
-                                                                    isWon={(isFinal ? trade.status : instantStatus) === "WON"}
-                                                                    size="sm"
-                                                                />
-                                                                {(isFinal ? trade.status : instantStatus) === "WON" && (
-                                                                    <div className="flex items-center gap-1.5 animate-pulse">
-                                                                        <Zap size={10} className="text-[#3CB371]" />
-                                                                        <span className="text-[9px] font-black text-[#3CB371] tracking-wider">
-                                                                            +{trade.payout || potentialProfit} USDC
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedPnLTrade(trade);
-                                                                        setIsPnLOpen(true);
-                                                                    }}
-                                                                    className="w-full mt-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border border-[#3CB371]/20 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] transition-all text-[#3CB371]"
-                                                                >
-                                                                    <Share2 size={10} />
-                                                                    Share
-                                                                </button>
+                                                            <div className="mt-0 px-1.5 py-0 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-90">
+                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                                                    {liveWinning ? "WINNING" : "LOSING"}
+                                                                </span>
                                                             </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex-1 flex flex-col items-center justify-center py-1">
+                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                                                {(instantStatus === "WON" || trade.status === "WON") ? "Trade Won" : "Trade Lost"}
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                                                    {(instantStatus === "WON" || trade.status === "WON") ? `+$${trade.payout || potentialProfit}` : "0.000"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Data Footer - Minimal Height */}
+                                                    <div className={`mt-auto pt-1 border-t ${isLight ? 'border-black/5' : 'border-white/5'}`}>
+                                                        <div className="flex items-center justify-between mb-0.5 px-0.5">
+                                                            <div className="flex items-center gap-1">
+                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Entry:</span>
+                                                                <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>
+                                                                    {!isNaN(entryPriceVal) ? `$${entryPriceVal}` : "..."}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake:</span>
+                                                                <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{trade.amount}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {displayFinal && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedPnLTrade(trade);
+                                                                    setIsPnLOpen(true);
+                                                                }}
+                                                                className={`mt-0.5 w-full py-1 rounded-lg text-[8px] font-black uppercase tracking-[0.2em] transition-all shadow-lg ${isLight ? 'bg-black text-white' : 'bg-[#3CB371] text-white hover:brightness-110'}`}
+                                                            >
+                                                                Share Result
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -216,50 +215,28 @@ function LiveExecutionComponent({
                                     </div>
                                 ))}
 
-                                {othersCount > 0 && (
+                                {othersCount > 0 && !isExpanded && (
                                     <button
-                                        onClick={() => setIsExpanded(!isExpanded)}
-                                        className={`w-full mt-2 py-2.5 px-3 rounded-xl border flex items-center justify-center gap-2 transition-all hover:scale-[0.99] active:scale-95 ${isExpanded
-                                            ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]'
-                                            : isLight ? 'bg-black/5 border-black/10 text-black/60 shadow-inner' : 'bg-white/5 border-white/10 text-white/50'}`}
+                                        onClick={() => setIsExpanded(true)}
+                                        className={`w-full mt-1 py-1.5 px-2 rounded-lg border flex items-center justify-center gap-1.5 transition-all hover:scale-[0.99] active:scale-95 ${isLight ? 'bg-black/5 border-black/10 text-black/50' : 'bg-white/5 border-white/10 text-white/40'}`}
                                     >
-                                        <div className={`w-1.5 h-1.5 rounded-full ${isExpanded ? 'bg-[#3CB371]' : 'bg-[#3CB371] animate-pulse'}`} />
-                                        <span className="text-[9px] font-black uppercase tracking-widest">
-                                            {isExpanded
-                                                ? 'COLLAPSE ACTIVE TRADES'
-                                                : `Show +${othersCount} more active trade${othersCount > 1 ? 's' : ''}`
-                                            }
+                                        <div className="w-1 h-1 rounded-full bg-[#3CB371] animate-pulse" />
+                                        <span className="text-[7px] font-black uppercase tracking-widest">
+                                            +{othersCount} more
                                         </span>
-                                        <div className={`ml-auto transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                                            <Zap size={10} />
-                                        </div>
                                     </button>
                                 )}
                             </>
                         );
                     })()
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-20">
+                    <div className="h-full flex flex-col items-center justify-center p-6 text-center opacity-20">
                         <div className="text-[9px] uppercase font-black tracking-[0.4em] mb-2">
                             Awaiting Signal
                         </div>
                         <div className="w-16 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                     </div>
                 )}
-            </div>
-
-            <div className={`p-2 rounded-xl border flex items-center justify-between flex-none ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-white/[0.02] border-white/5'}`}>
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-[#3CB371]/10 flex items-center justify-center text-[10px]">⚡</div>
-                    <div>
-                        <p className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/20'}`}>ENGINE STATUS</p>
-                        <p className="text-[7px] text-[#3CB371] font-black tracking-widest uppercase">V3 INSTANT</p>
-                    </div>
-                </div>
-                <div className="text-right">
-                    <p className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/20' : 'text-white/20'}`}>SETTLEMENT</p>
-                    <p className={`text-[7px] font-black tabular-nums ${isLight ? 'text-black/60' : 'text-white/60'}`}>REAL-TIME</p>
-                </div>
             </div>
         </div>
     );

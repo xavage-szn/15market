@@ -62,7 +62,47 @@ const AnimatedIllustrationBackground = () => (
     </div>
 );
 
+const WalletDeepLink = ({ icon, name, onClick }) => (
+    <motion.button
+        whileHover={{ scale: 1.05, y: -2 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={onClick}
+        className="flex flex-col items-center gap-2 group"
+    >
+        <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-[2rem] bg-white/5 border border-white/10 flex items-center justify-center transition-all group-hover:bg-[#3CB371]/10 group-hover:border-[#3CB371]/30 overflow-hidden relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <img src={icon} alt={name} className="w-8 h-8 md:w-12 md:h-12 object-contain filter group-hover:drop-shadow-[0_0_15px_rgba(60,179,113,0.5)]" />
+        </div>
+        <span className="text-[10px] md:text-xs font-black uppercase tracking-widest text-white/40 group-hover:text-[#3CB371] transition-colors">{name}</span>
+    </motion.button>
+);
+
 export function LandingPage() {
+    const dAppUrl = "15market.online";
+
+    const handleWalletClick = (wallet) => {
+        const fullUrl = `https://${dAppUrl}`;
+        let deepLink = "";
+
+        switch (wallet) {
+            case 'metamask':
+                deepLink = `https://metamask.app.link/dapp/${dAppUrl}`;
+                break;
+            case 'okx':
+                deepLink = `okx://main/web3/dapp/details?dappUrl=${encodeURIComponent(fullUrl)}`;
+                break;
+            case 'rabby':
+                deepLink = `https://rabby.io/mobile`;
+                break;
+            default:
+                break;
+        }
+
+        if (deepLink) {
+            window.location.href = deepLink;
+        }
+    };
+
     return (
         <div className="h-screen w-screen bg-[#050505] text-white overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30">
             <AnimatedIllustrationBackground />
@@ -113,11 +153,32 @@ export function LandingPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.5, duration: 1 }}
-                        className="relative"
+                        className="flex flex-col items-center gap-12"
                     >
-                        <div className="absolute -inset-10 bg-[#3CB371]/15 blur-[60px] rounded-full animate-pulse pointer-events-none" />
-                        <div className="scale-125 md:scale-150 relative z-10 hover:scale-[1.3] md:hover:scale-[1.55] transition-transform duration-700">
-                            <UnifiedWalletButton />
+                        {/* Specific Wallet Deep Links for Mobile */}
+                        <div className="flex items-center gap-6 md:gap-10">
+                            <WalletDeepLink
+                                icon="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Design_Mark.svg"
+                                name="MetaMask"
+                                onClick={() => handleWalletClick('metamask')}
+                            />
+                            <WalletDeepLink
+                                icon="https://www.okx.com/cdn-production/static/admin/20230524/104106560/okx-logo.png"
+                                name="OKX Wallet"
+                                onClick={() => handleWalletClick('okx')}
+                            />
+                            <WalletDeepLink
+                                icon="https://rabby.io/assets/images/logo.png"
+                                name="Rabby"
+                                onClick={() => handleWalletClick('rabby')}
+                            />
+                        </div>
+
+                        <div className="flex flex-col items-center gap-4">
+                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">or connect via</span>
+                            <div className="scale-110 relative z-10 hover:scale-[1.15] transition-transform duration-700">
+                                <UnifiedWalletButton />
+                            </div>
                         </div>
                     </motion.div>
                 </motion.div>
@@ -132,4 +193,3 @@ export function LandingPage() {
         </div>
     );
 }
-
