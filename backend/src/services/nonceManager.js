@@ -6,6 +6,19 @@ class NonceManager {
         this.locks = new Map();  // address -> Mutex (Promise-based)
     }
 
+    async syncWithChain(address, provider) {
+        const addr = address.toLowerCase();
+        try {
+            // Force sync by bypassing initial check
+            const nonce = await provider.getTransactionCount(address, 'pending');
+            this.nonces.set(addr, nonce);
+            console.log(`[Nonce] Synced ${addr} -> ${nonce}`);
+            return nonce;
+        } catch (e) {
+            console.error(`[Nonce] Sync failed for ${addr}:`, e.message);
+        }
+    }
+
     async getNonce(address, provider) {
         const addr = address.toLowerCase();
 
@@ -18,6 +31,8 @@ class NonceManager {
         this.locks.set(addr, new Promise(r => release = r));
 
         try {
+            // If initialized recently (within 5s), reuse, otherwise re-sync to be safe
+            // Or just trust the local map if it exists
             if (!this.nonces.has(addr)) {
                 console.log(`[Nonce] Initializing nonce for ${addr}...`);
                 const nonce = await provider.getTransactionCount(address, 'pending');
@@ -35,18 +50,6 @@ class NonceManager {
 
     resetNonce(address, nonce) {
         this.nonces.set(address.toLowerCase(), nonce);
-    }
-
-    async syncWithChain(address, provider) {
-        const addr = address.toLowerCase();
-        try {
-            const nonce = await provider.getTransactionCount(address, 'pending');
-            this.nonces.set(addr, nonce);
-            console.log(`[Nonce] Synced ${addr} -> ${nonce}`);
-            return nonce;
-        } catch (e) {
-            console.error(`[Nonce] Sync failed for ${addr}:`, e.message);
-        }
     }
 }
 

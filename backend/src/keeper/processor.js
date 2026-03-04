@@ -15,6 +15,7 @@ class TradeProcessor {
     constructor() {
         this.settlingIds = new Set();
         this.settledCache = new Set();
+        this.failedSettlements = new Map(); // id -> {count, lastAttempt}
         this.SETTLED_CACHE_TTL = 30 * 60 * 1000;
         this.priceCache = {};
     }
@@ -119,6 +120,31 @@ class TradeProcessor {
                 for (const e of placed) {
                     const id = e.args.id.toString();
                     const s = settledMap.get(id);
+
+                    // --- PRODUCTION RECOVERY LOGIC ---
+                    // If a trade is PLACED on-chain but NOT found in our active memory queue,
+                    // and it's NOT yet settled, we MUST re-activate it for settlement.
+                    // This fixes cases where the frontend 'ping' failed to reach the backend.
+                    if (!s) {
+                        const existing = await redis.getTrade(id);
+                        if (!existing) {
+                            const tradeData = {
+                                id: id,
+                                user: e.args.user,
+                                amount: ethers.formatEther(e.args.amount),
+                                direction: Number(e.args.direction),
+                                duration: Number(e.args.duration),
+                                entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(4),
+                                timestamp: Number(e.args.timestamp) * 1000,
+                                expiry: (Number(e.args.timestamp) * 1000) + (Number(e.args.duration) * 1000),
+                                confirmed: true,
+                                recovered: true
+                            };
+                            await redis.setTrade(id, tradeData);
+                            console.log(`[Processor] 🩹 RECOVERY: Re-activated pending trade ${id} found on-chain.`);
+                        }
+                    }
+
                     await redis.addHistoricalTrade({
                         id,
                         user: e.args.user,
@@ -184,6 +210,11 @@ class TradeProcessor {
 
         // Only settle trades that have a confirmed on-chain expiry
         const toSettle = activeTrades.filter(t => {
+            const failed = this.failedSettlements.get(t.id);
+            if (failed) {
+                const backoff = Math.min(30000, 2000 * Math.pow(2, failed.count)); // Exponential backoff max 30s
+                if (now - failed.lastAttempt < backoff) return false;
+            }
             return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
         });
 
@@ -214,6 +245,8 @@ class TradeProcessor {
                 await new Promise(r => setTimeout(r, delayNeeded));
             } else {
                 // If it's the background loop, skip and let the next cycle pick it up
+                // BUT we log it for visibility
+                if (delayNeeded < 2500) console.log(`[Processor] ⏳ Buffering trade ${tradeId} (${delayNeeded}ms remaining)`);
                 return;
             }
         }
@@ -280,15 +313,19 @@ class TradeProcessor {
                 this.markSettled(tradeId);
                 // DELIVERABLE: We DO NOT delTrade here anymore. We wait for onTxConfirmed callback to handle it.
 
-                // If it was already settled cleanly without Tx, remove immediately
                 if (result.alreadySettled) {
                     console.log(`[Processor] Bet ${tradeId} was already settled on-chain.`);
+                    this.failedSettlements.delete(tradeId);
                     await redis.delTrade(tradeId);
+                } else {
+                    // Success!
+                    this.failedSettlements.delete(tradeId);
                 }
             }
         } catch (e) {
-            logToFile(`❌ Settlement failed for ${tradeId}: ${e.message}`);
-            this.settlingIds.delete(tradeId); // Allow retry
+            const count = (this.failedSettlements.get(tradeId)?.count || 0) + 1;
+            this.failedSettlements.set(tradeId, { count, lastAttempt: Date.now() });
+            logToFile(`❌ Settlement failed for ${tradeId} (Attempt ${count}): ${e.message}`);
         } finally {
             this.settlingIds.delete(tradeId);
         }

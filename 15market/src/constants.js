@@ -34,10 +34,12 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 const getBaseUrl = (envValue) => {
     if (isLocal) {
         if (!envValue || envValue.includes('api.15market.online') || envValue.startsWith('/')) {
+            console.log("🛠️ [Config] Local fallback enabled: Using localhost:3010");
             return `http://${window.location.hostname}:3010`;
         }
     }
-    return envValue || "https://api.15market.online";
+    const final = envValue || "https://api.15market.online";
+    return final;
 };
 
 const rawKeeperUrl = getBaseUrl(envUrl);
@@ -53,7 +55,12 @@ const ensureAbsolute = (url) => {
 
 export const KEEPER_URL = ensureAbsolute(rawKeeperUrl).endsWith('/') ? ensureAbsolute(rawKeeperUrl).slice(0, -1) : ensureAbsolute(rawKeeperUrl);
 export const KEEPER_URL_ARC = ensureAbsolute(rawKeeperUrlArc).endsWith('/') ? ensureAbsolute(rawKeeperUrlArc).slice(0, -1) : ensureAbsolute(rawKeeperUrlArc);
-console.log(`🌐 [Config] Keeper URL: ${KEEPER_URL_ARC}`);
+
+// PRODUCTION DIAGNOSTIC - Helps find "Failed to Fetch" causes
+console.log(`🌐 [Config] API Endpoint: ${KEEPER_URL_ARC}`);
+if (!isLocal && KEEPER_URL_ARC.includes('localhost')) {
+    console.warn("⚠️ [Config] WARNING: Production frontend is trying to call a LOCAL backend. Check VITE_KEEPER_URL_ARC environment variable in Vercel.");
+}
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 
 // 2. Project ID

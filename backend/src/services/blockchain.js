@@ -28,7 +28,7 @@ const RPC_ENDPOINTS = [
 
 async function createProvider(blockchainService) {
     const currentRpcs = blockchainService?.lastGoodRpc
-        ? [blockchainService.lastGoodRpc, ...RPC_ENDPOINTS.filter(r => r !== blockchainService.lastGoodRpc)]
+        ? [...RPC_ENDPOINTS.filter(r => r !== blockchainService.lastGoodRpc), blockchainService.lastGoodRpc]
         : RPC_ENDPOINTS;
 
     console.log(`[Blockchain] Initializing provider with ${currentRpcs.length} endpoints...`);
@@ -189,14 +189,28 @@ class BlockchainService {
     async _getGasPrice() {
         const now = Date.now();
         if (!this.cachedGasPrice || (now - this.lastGasUpdate > this.GAS_CACHE_TTL)) {
-            if (this.cachedGasPrice) {
-                this._refreshGasPrice();
-            } else {
-                await this._refreshGasPrice();
-            }
+            await this._refreshGasPrice();
         }
+
         const baseGas = this.cachedGasPrice || 1000000000n;
-        return (baseGas * 300n) / 100n;
+        const priorityFee = ethers.parseUnits("500", "gwei"); // High priority fee
+        const maxFee = (baseGas * 2000n) / 100n + priorityFee; // 20x base + priority
+
+        return {
+            gasPrice: maxFee > ethers.parseUnits("600", "gwei") ? maxFee : ethers.parseUnits("600", "gwei"),
+            maxFeePerGas: maxFee,
+            maxPriorityFeePerGas: priorityFee
+        };
+    }
+
+    async rotateRpc() {
+        console.warn('[Blockchain] 🔄 Congestion detected. Rotating RPC endpoints...');
+        this.providerReady = false;
+        this.provider = await createProvider(this);
+        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
+        this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
+        this.providerReady = true;
+        await this._resetNonce();
     }
 
     _startConfirmationTracker() {
@@ -236,16 +250,17 @@ class BlockchainService {
         await this._ensureReady();
 
         const nonce = await nonceManager.getNonce(this.wallet.address, this.provider);
-        const gasPrice = await this._getGasPrice();
+        const fees = await this._getGasPrice();
 
-        console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${gasPrice ? ethers.formatUnits(gasPrice, 'gwei') : 'auto'} gwei) - Bet ${betId}`);
+        console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei) - Bet ${betId}`);
 
         try {
             const tx = await this.contract.settleBet(betId, ethers.parseUnits(exitPrice.toString(), 0), {
                 nonce: nonce,
-                gasPrice: gasPrice,
+                maxFeePerGas: fees.maxFeePerGas,
+                maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
                 gasLimit: 1000000n,
-                type: 0,
+                type: 2, // EIP-1559
                 chainId: 5042002
             });
 
@@ -254,9 +269,19 @@ class BlockchainService {
             return { hash: tx.hash, status: 1 };
 
         } catch (e) {
-            const msg = e.message?.toLowerCase() || "";
+            console.error(`[Blockchain] ❌ SettleBet Error for ${betId}:`, e.message);
+            const msg = (e.message || "").toLowerCase();
+            const fullError = JSON.stringify(e).toLowerCase();
+
             if (msg.includes('nonce') || msg.includes('underpriced') || msg.includes('already been used') || msg.includes('replacement')) {
                 await this._resetNonce();
+            }
+
+            if (msg.includes('txpool is full') || msg.includes('timeout') || msg.includes('limit reached') ||
+                fullError.includes('txpool is full') || fullError.includes('timeout')) {
+                console.warn(`[Blockchain] ⏳ RPC Overloaded or Congested for bet ${betId}. Rotating nodes...`);
+                // Force rotation to a fresh node
+                await this.rotateRpc();
             }
 
             if (msg.includes('already settled')) {

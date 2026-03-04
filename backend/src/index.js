@@ -69,6 +69,23 @@ app.get('/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: Date.now() });
 });
 
+app.get('/status', async (req, res) => {
+    try {
+        const block = await blockchain.provider.getBlockNumber().catch(e => "Disconnected");
+        const redisStatus = redis.isCloud ? "Cloud Connected" : "Local Memory";
+        res.json({
+            status: 'online',
+            network: 'arc-testnet-5042002',
+            currentBlock: block,
+            redis: redisStatus,
+            uptime: process.uptime(),
+            keeperAddress: blockchain.wallet?.address || "Unknown"
+        });
+    } catch (e) {
+        res.status(500).json({ status: 'error', message: e.message });
+    }
+});
+
 // Settings & Listings (Static/Config)
 const SETTINGS_RESPONSE = {
     minBet: 0.1,
@@ -95,10 +112,28 @@ const SESSION_RPCS = [
 ];
 let sessionProvider = null;
 async function getSessionProvider() {
-    if (sessionProvider) return sessionProvider;
-    const provider = new ethers.JsonRpcProvider(SESSION_RPCS[0], 5042002, { staticNetwork: true });
-    sessionProvider = provider;
-    return provider;
+    if (sessionProvider) {
+        try {
+            await sessionProvider.getBlockNumber();
+            return sessionProvider;
+        } catch (e) {
+            console.warn("[Session] Provider health check failed, rotating...");
+            sessionProvider = null;
+        }
+    }
+
+    for (const rpc of SESSION_RPCS) {
+        try {
+            const provider = new ethers.JsonRpcProvider(rpc, 5042002, { staticNetwork: true });
+            await provider.getBlockNumber();
+            console.log(`[Session] Connected to RPC: ${rpc}`);
+            sessionProvider = provider;
+            return provider;
+        } catch (e) {
+            console.warn(`[Session] RPC failed: ${rpc}`);
+        }
+    }
+    return new ethers.JsonRpcProvider(SESSION_RPCS[0], 5042002, { staticNetwork: true });
 }
 
 async function deriveUserWallet(userAddress) {
@@ -263,6 +298,7 @@ app.post('/session/init', async (req, res) => {
     try {
         const { address } = req.body;
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
+        logToFile(`[SESSION_INIT] 🛠️ Initializing for ${address} -> Session: ${sessionAddr}`);
         const balance = await wallet.provider.getBalance(sessionAddr);
         res.json({ sessionAddress: sessionAddr, balance: ethers.formatEther(balance) });
     } catch (e) {
@@ -288,9 +324,14 @@ app.post('/session/trade', async (req, res) => {
         const amountWei = ethers.parseUnits(amount.toString(), 18);
         const balance = await wallet.provider.getBalance(sessionAddr);
 
-        // Estimating gas (roughly 500k-800k)
         // Estimating gas
-        const gasPrice = await blockchain._getGasPrice();
+        const fees = await blockchain._getGasPrice();
+        let gasPrice = fees.gasPrice;
+
+        // Aggressive floor for session trades to beat pool congestion
+        const minGasPrice = ethers.parseUnits("100", "gwei");
+        if (gasPrice < minGasPrice) gasPrice = minGasPrice;
+
         const gasLimit = 800000n;
         const totalNeeded = amountWei + (gasPrice * gasLimit);
 
@@ -313,11 +354,10 @@ app.post('/session/trade', async (req, res) => {
             value: amountWei,
             gasLimit: 800000n,
             nonce: nonce,
-            type: 0 // Force Legacy for Arc compatibility
+            maxFeePerGas: fees.maxFeePerGas,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+            type: 2 // Use EIP-1559 for auto-signer trades if supported
         };
-
-        // Fee logic - always bump for speed but stay legacy
-        txArgs.gasPrice = gasPrice;
 
         // Try to estimate or call first to catch revert reasons
         try {
@@ -328,33 +368,37 @@ app.post('/session/trade', async (req, res) => {
         }
 
         const tx = await wallet.sendTransaction(txArgs);
-        logToFile(`[SESSION_TRADE] ⛓️ Tx sent: ${tx.hash}, waiting for confirmation...`);
+        logToFile(`[SESSION_TRADE] ⛓️ Tx sent: ${tx.hash}. Returning to UI for background confirmation...`);
 
-        // WAIT FOR CONFIRMATION (Strict Logic)
-        const receipt = await tx.wait();
-        if (receipt.status !== 1) {
-            throw new Error("Transaction reverted on-chain");
-        }
+        // Return immediately to keep UI responsive
+        res.json({ success: true, txHash: tx.hash, confirmed: false });
 
-        // Register in memory store for settlement tracking
-        const tradeData = {
-            id: id.toString(),
-            user: address, // Track by main address for UI consistency
-            sessionUser: sessionAddr,
-            amount: amount,
-            direction: direction,
-            duration: duration,
-            entryPrice: (Number(entryPrice) / 1e8).toFixed(4),
-            marketId: marketId,
-            expiry: Date.now() + (duration * 1000),
-            txHash: tx.hash,
-            confirmed: true,
-            startTime: Date.now()
-        };
-        await redis.setTrade(id, tradeData);
+        // WAIT FOR CONFIRMATION in background (Non-blocking)
+        tx.wait().then(async (receipt) => {
+            if (receipt.status === 1) {
+                // Register in memory store for settlement tracking
+                const tradeData = {
+                    id: id.toString(),
+                    user: address,
+                    sessionUser: sessionAddr,
+                    amount: amount,
+                    direction: direction,
+                    duration: duration,
+                    entryPrice: (Number(entryPrice) / 1e8).toFixed(4),
+                    marketId: marketId,
+                    expiry: Date.now() + (duration * 1000),
+                    txHash: tx.hash,
+                    confirmed: true,
+                    startTime: Date.now()
+                };
+                await redis.setTrade(id, tradeData);
+                logToFile(`[SESSION_TRADE] ✅ Background Confirmed: ${tx.hash}`);
+            }
+        }).catch(err => {
+            logToFile(`[SESSION_TRADE] ❌ Background Wait Failed for ${tx.hash}: ${err.message}`);
+        });
 
-        logToFile(`[SESSION_TRADE] ✅ Confirmed & Registered: ${tx.hash}`);
-        res.json({ success: true, txHash: tx.hash, confirmed: true });
+        return; // Ensure no double response
     } catch (e) {
         logToFile(`[SESSION_TRADE] ❌ Error: ${e.message}`);
         const { address: sessionAddr } = await deriveUserWallet(req.body.address);
@@ -377,12 +421,11 @@ app.post('/session/withdraw', async (req, res) => {
         const balance = await wallet.provider.getBalance(sessionAddr);
         const amountWei = amount ? ethers.parseUnits(amount.toString(), 18) : balance;
 
-        if (balance < amountWei) {
-            return res.status(400).json({ error: `Insufficient session balance: ${ethers.formatEther(balance)} USDC` });
-        }
+        const fees = await blockchain._getGasPrice();
+        let gasPrice = fees.gasPrice;
+        const minGasPrice = ethers.parseUnits("50", "gwei");
+        if (gasPrice < minGasPrice) gasPrice = minGasPrice;
 
-        const feeData = await wallet.provider.getFeeData();
-        const gasPrice = (feeData.gasPrice || ethers.parseUnits("30", "gwei")) * 300n / 100n; // 3x bump for speed
         const gasLimit = 21000n;
         const gasCost = gasLimit * gasPrice;
 
@@ -398,16 +441,24 @@ app.post('/session/withdraw', async (req, res) => {
         const tx = await wallet.sendTransaction({
             to: address,
             value: sweepAmt,
-            gasPrice,
+            maxFeePerGas: fees.maxFeePerGas,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
             gasLimit,
             nonce,
-            type: 0,
+            type: 2,
             chainId: 5042002
         });
 
         res.json({ success: true, txHash: tx.hash });
     } catch (e) {
         logToFile(`[WITHDRAW] ❌ Error: ${e.message}`);
+        if (e.message.includes('nonce') || e.message.includes('already been used') || e.message.includes('too low')) {
+            try {
+                const { address: sessionAddr } = await deriveUserWallet(req.body.address);
+                const provider = await getSessionProvider();
+                await nonceManager.syncWithChain(sessionAddr, provider);
+            } catch (syncErr) { }
+        }
         res.status(500).json({ error: e.message });
     }
 });
