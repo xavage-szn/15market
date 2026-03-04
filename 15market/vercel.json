@@ -6,7 +6,7 @@
         },
         {
             "source": "/arc-api/(.*)",
-            "destination": "https://8v5jn289.up.railway.app/$1"
+            "destination": "https://api.15market.online/$1"
         },
         {
             "source": "/(.*)",

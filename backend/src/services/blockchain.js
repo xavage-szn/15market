@@ -7,7 +7,14 @@ const nonceManager = require('./nonceManager');
 // The previous static IP patch (64.130.40.38) was causing 502 Bad Gateway on Railway
 // because the Arc RPC node IPs rotate. Let the OS resolve DNS dynamically.
 
-
+// Local logToFile for settlement confirmation tracking
+const fs = require('fs');
+const path = require('path');
+const LOG_FILE = path.join(__dirname, '..', '..', 'settlement_activity.log');
+function logToFile(msg) {
+    const entry = `[${new Date().toISOString()}] ${msg}\n`;
+    fs.appendFile(LOG_FILE, entry, () => { });
+}
 const RPC_ENDPOINTS = [
     "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
