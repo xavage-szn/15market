@@ -31,14 +31,17 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 
 // If we are local, and the env variable is missing or pointing to the production domain,
 // we should default to the local backend to prevent "Failed to Fetch" or CORS errors.
+const PRODUCTION_BACKEND = "https://8v5jn289.up.railway.app";
+
 const getBaseUrl = (envValue) => {
     if (isLocal) {
-        if (!envValue || envValue.includes('api.15market.online') || envValue.startsWith('/')) {
+        if (!envValue || envValue.includes('api.15market.online') || envValue.includes('railway.app') || envValue.startsWith('/')) {
             console.log("🛠️ [Config] Local fallback enabled: Using localhost:3010");
             return `http://${window.location.hostname}:3010`;
         }
     }
-    const final = envValue || "https://api.15market.online";
+    // Production: Use env var if set, otherwise use the Railway backend URL directly
+    const final = envValue || PRODUCTION_BACKEND;
     return final;
 };
 
