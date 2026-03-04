@@ -797,41 +797,52 @@ export default function UserApp() {
           txHash = data.txHash;
           console.log(`✅ [SESSION] Broadcasted: ${txHash}. Verifying in background...`);
 
-          // OPTIMISTICALLY add to UI immediately since it's already in the txPool
-          const confirmTime = Date.now();
-          const newTrade = {
-            id: tradeId,
-            direction: (dirVal === 1 ? "UP" : "DOWN"),
-            amount: Number(amount).toFixed(3),
-            entryPrice: activePrice.toFixed(3),
-            timestamp: confirmTime,
-            status: "PENDING",
-            tx: txHash,
-            nonce: tradeId,
-            userPublicKey: activeUserAddr,
-            owner: activeUserAddr,
-            duration,
-            network: "arc",
-            startTime: confirmTime,
-            expiryMs: confirmTime + (duration * 1000),
-            symbol: activeMarket?.symbol || 'ETH',
-            isSessionTrade: true,
-            confirmed: true, // We treat as confirmed since it's in the pool
-          };
+          notify("Verifying Session Trade on Arc...", "pending");
 
-          const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
-          setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
-          setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
+          // STRICT LOGIC: Wait for receipt BEFORE adding to active view
+          try {
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 });
+            if (receipt.status !== "success" && receipt.status !== 1) {
+              throw new Error("Session transaction failed on-chain. Check session gas balance.");
+            }
 
-          // Deduct balance
-          setSessionBalance(prev => Math.max(0, prev - amtNum));
-          lastOptimisticActionTime.current = Date.now();
-          notify("Trade Started - Verifying on Arc...", "success");
+            console.log(`⛓️ [SESSION] Confirmed on-chain: ${txHash}`);
 
-          // Background verification (Silent check)
-          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
-            .then(() => console.log(`⛓️ [SESSION] Confirmed on-chain: ${txHash}`))
-            .catch(e => console.warn(`⛓️ [SESSION] Receipt check timed out (Network busy):`, e.message));
+            const confirmTime = Date.now();
+            const newTrade = {
+              id: tradeId,
+              direction: (dirVal === 1 ? "UP" : "DOWN"),
+              amount: Number(amount).toFixed(3),
+              entryPrice: activePrice.toFixed(3),
+              timestamp: confirmTime,
+              status: "PENDING",
+              tx: txHash,
+              nonce: tradeId,
+              userPublicKey: activeUserAddr,
+              owner: activeUserAddr,
+              duration,
+              network: "arc",
+              startTime: confirmTime,
+              expiryMs: confirmTime + (duration * 1000),
+              symbol: activeMarket?.symbol || 'ETH',
+              isSessionTrade: true,
+              confirmed: true,
+            };
+
+            const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+            setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
+            setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
+
+            // Deduct balance
+            setSessionBalance(prev => Math.max(0, prev - amtNum));
+            lastOptimisticActionTime.current = Date.now();
+            triggerGlobalRefresh(true);
+            notify("Trade Confirmed & Started!", "success");
+
+          } catch (receiptErr) {
+            console.warn(`⛓️ [SESSION] Background verification error:`, receiptErr);
+            throw new Error("Trade reverted on-chain. Please ensure session wallet has enough balance to cover gas fees.");
+          }
 
         } catch (fetchErr) {
           clearTimeout(timeoutId);
