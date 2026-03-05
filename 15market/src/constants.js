@@ -15,7 +15,9 @@ export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; //
 export const ARC_RPC_BACKUP = ARC_RPCS[1];
 export const ARC_RPC_THIRDWEB = ARC_RPCS[0];
 // 2. Keeper Configuration
+const isNative = typeof window !== 'undefined' && !!window.Capacitor;
 const isLocal = typeof window !== 'undefined' &&
+    !isNative &&
     (window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.includes('192.168.') ||

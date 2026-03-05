@@ -155,27 +155,7 @@ export function LandingPage() {
                         transition={{ delay: 0.5, duration: 1 }}
                         className="flex flex-col items-center gap-12"
                     >
-                        {/* Specific Wallet Deep Links for Mobile */}
-                        <div className="flex items-center gap-6 md:gap-10">
-                            <WalletDeepLink
-                                icon="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Design_Mark.svg"
-                                name="MetaMask"
-                                onClick={() => handleWalletClick('metamask')}
-                            />
-                            <WalletDeepLink
-                                icon="https://www.okx.com/cdn-production/static/admin/20230524/104106560/okx-logo.png"
-                                name="OKX Wallet"
-                                onClick={() => handleWalletClick('okx')}
-                            />
-                            <WalletDeepLink
-                                icon="https://rabby.io/assets/images/logo.png"
-                                name="Rabby"
-                                onClick={() => handleWalletClick('rabby')}
-                            />
-                        </div>
-
                         <div className="flex flex-col items-center gap-4">
-                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">or connect via</span>
                             <div className="scale-110 relative z-10 hover:scale-[1.15] transition-transform duration-700">
                                 <UnifiedWalletButton />
                             </div>

@@ -253,7 +253,14 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                     Standard V1
                                 </button>
                                 <button
-                                    onClick={() => setUiVersion('v2')}
+                                    onClick={() => {
+                                        const isNative = window.Capacitor?.isNativePlatform();
+                                        if (!isNative) {
+                                            notify("Pro V2 is optimized for mobile! Please download our Mobile App for the best V2 experience.", "info");
+                                            return;
+                                        }
+                                        setUiVersion('v2');
+                                    }}
                                     className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v2' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
                                 >
                                     Pro V2

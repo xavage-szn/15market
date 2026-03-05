@@ -410,7 +410,19 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                             <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v1' ? 'text-white/70' : isLight ? 'text-gray-400' : 'text-white/20'}`}>Basic Terminal</span>
                                         </button>
                                         <button
-                                            onClick={() => setUiVersion('v2')}
+                                            onClick={() => {
+                                                const isNative = window.Capacitor?.isNativePlatform();
+                                                if (!isNative) {
+                                                    setModalConfig({
+                                                        title: "Mobile App Required",
+                                                        message: "Pro V2 is optimized for a native mobile experience. Please download our official Mobile App to access the high-speed execution terminal.",
+                                                        type: 'alert',
+                                                        confirmText: "Understood"
+                                                    });
+                                                    return;
+                                                }
+                                                setUiVersion('v2');
+                                            }}
                                             className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v2'
                                                 ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-[0_0_20px_#3CB37140]'
                                                 : isLight ? 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}

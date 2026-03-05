@@ -219,7 +219,7 @@ function GlobalTradeScrollerComponent({ theme }) {
                                     {event.status === "WON" ? "WON" : "LOST"}
                                 </span>
                                 <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {event.amount} {event.symbol || 'USDC'} {event.direction === "UP" || event.direction === 1 || String(event.direction) === "1" ? "UP" : "DOWN"}
+                                    {Number(event.amount).toFixed(2)} {event.symbol || 'USDC'} {event.direction === "UP" || event.direction === 1 || String(event.direction) === "1" ? "UP" : "DOWN"}
                                 </span>
                             </div>
                         </div>
