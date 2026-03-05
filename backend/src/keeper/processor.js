@@ -252,6 +252,7 @@ class TradeProcessor {
         }
 
         this.settlingIds.add(tradeId);
+        await redis.markAsSettling(tradeId);
         try {
             logToFile(`[Processor] ⚡ Settling trade ${tradeId}...`);
             const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
@@ -302,6 +303,15 @@ class TradeProcessor {
                 }
             } catch (balError) {
                 console.warn(`[Processor] Could not check contract balance: ${balError.message}`);
+            }
+
+            // DOUBLE-CREDIT PREVENTION: Verify on-chain status before broadcasting
+            const isSettled = await blockchain.isBetSettled(trade.id);
+            if (isSettled) {
+                logToFile(`[Processor] ℹ️ Bet ${tradeId} was already settled on-chain. Removing from active pipeline.`);
+                await redis.delTrade(trade.id);
+                this.failedSettlements.delete(tradeId);
+                return;
             }
 
             // Execute on-chain

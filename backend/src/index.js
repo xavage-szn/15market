@@ -288,7 +288,7 @@ app.post('/trade-ping', async (req, res) => {
 app.get('/protocol-stats', async (req, res) => {
     try {
         const history = await getHistoryFor();
-        const activeTrades = await redis.getAllActiveTrades();
+        const activeTrades = await redis.getAllActiveTrades(true); // Filter settling trades so UI doesn't glitch
 
         const totalVolume = history.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
         const uniqueWallets = new Set(history.map(t => t.user.toLowerCase())).size;
@@ -329,6 +329,21 @@ app.post('/session/trade', async (req, res) => {
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
         if (!address) throw new Error("Main wallet address required");
+
+        // --- DOUBLE DEBIT PREVENTION ---
+        // 1. Check if ID exists (even if not confirmed yet)
+        const existing = await redis.getTrade(id);
+        if (existing && existing.txHash) {
+            logToFile(`[SESSION_TRADE] ℹ️ Returning existing trade for ${id}: ${existing.txHash}`);
+            return res.json({ success: true, txHash: existing.txHash, confirmed: existing.confirmed });
+        }
+
+        // 2. Lock the ID to prevent concurrent duplicate processing
+        const locked = await redis.lockTrade(id, 60);
+        if (!locked) {
+            return res.status(409).json({ error: "Trade is already being processed. Please wait." });
+        }
+
         logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id} for ${address}`);
 
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
@@ -429,6 +444,10 @@ app.post('/session/trade', async (req, res) => {
             await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
         }
         res.status(500).json({ error: e.message });
+    } finally {
+        if (req.body.tradeParams?.id) {
+            await redis.unlockTrade(req.body.tradeParams.id);
+        }
     }
 });
 

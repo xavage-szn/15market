@@ -50,12 +50,49 @@ class RedisStore {
         }
     }
 
-    async getAllActiveTrades() {
+    async getAllActiveTrades(filterSettling = false) {
+        let trades = [];
         if (this.isCloud) {
             const all = await this.redis.hvals('15market_active_trades');
-            return all.map(t => JSON.parse(t));
+            trades = all.map(t => JSON.parse(t));
+        } else {
+            trades = Array.from(this.activeTrades.values());
         }
-        return Array.from(this.activeTrades.values());
+        return filterSettling ? trades.filter(t => !t.isSettling) : trades;
+    }
+
+    async markAsSettling(id) {
+        const trade = await this.getTrade(id);
+        if (trade) {
+            trade.isSettling = true;
+            await this.setTrade(id, trade);
+            return true;
+        }
+        return false;
+    }
+
+    // Atomic Lock to prevent double-processing a request
+    async lockTrade(id, ttl = 30) {
+        const key = `lock:trd:${id}`;
+        if (this.isCloud) {
+            const res = await this.redis.set(key, "1", "EX", ttl, "NX");
+            return res === "OK";
+        }
+        // Memory fallback
+        if (this._memLocks?.has(id)) return false;
+        if (!this._memLocks) this._memLocks = new Set();
+        this._memLocks.add(id);
+        setTimeout(() => this._memLocks.delete(id), ttl * 1000);
+        return true;
+    }
+
+    async unlockTrade(id) {
+        const key = `lock:trd:${id}`;
+        if (this.isCloud) {
+            await this.redis.del(key);
+        } else if (this._memLocks) {
+            this._memLocks.delete(id);
+        }
     }
 
     // Historical Indexing
