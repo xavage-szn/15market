@@ -134,7 +134,8 @@ class TradeProcessor {
                                 amount: ethers.formatEther(e.args.amount),
                                 direction: Number(e.args.direction),
                                 duration: Number(e.args.duration),
-                                entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(4),
+                                marketId: Number(e.args.marketId),
+                                entryPrice: (Number(e.args.entryPrice) / 1e8).toString(), // Keep raw for better comparison
                                 timestamp: Number(e.args.timestamp) * 1000,
                                 expiry: (Number(e.args.timestamp) * 1000) + (Number(e.args.duration) * 1000),
                                 confirmed: true,
@@ -262,16 +263,15 @@ class TradeProcessor {
             let logMsg = `[Processor] Using MANUAL price from frontend for ${tradeId}`;
 
             if (!settlementPrice) {
-                // ATTEMPT 1: Get FRESH price from oracle (most accurate for settlement)
-                // Each trade MUST get its own fresh price fetch to avoid shared-cache issues
-                // when multiple trades settle at the same time
-                settlementPrice = await pricing.getPrice(symbol);
-                logMsg = `[Processor] Using FRESH oracle price for ${tradeId}`;
+                // ATTEMPT 1: Get HISTORICAL price at the exact moment of expiry
+                // This is the most accurate for settlement to match user expectations
+                settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
+                logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
 
-                // ATTEMPT 2: Fallback to historical price if fresh fetch failed
+                // ATTEMPT 2: Fallback to FRESH oracle price if historical is missing
                 if (!settlementPrice) {
-                    settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
-                    logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
+                    settlementPrice = await pricing.getPrice(symbol);
+                    logMsg = `[Processor] Using FRESH oracle price for ${tradeId}`;
                 }
             }
 
@@ -330,6 +330,15 @@ class TradeProcessor {
                 } else {
                     // Success!
                     this.failedSettlements.delete(tradeId);
+
+                    // 🔥 IMMEDIATE RECORD: Prevent 'undefined' price/payout in UI during backend backfill gap
+                    const isWin = Number(finalPrice) > Number(trade.entryPrice) ? (trade.direction === 1 || trade.direction === "UP") : (trade.direction !== 1 && trade.direction !== "UP");
+                    await redis.addHistoricalTrade({
+                        id: tradeId,
+                        status: isWin ? "WON" : "LOST",
+                        settlementPrice: finalPrice.toFixed(3),
+                        payout: isWin ? "..." : "0.000"
+                    });
                 }
             }
         } catch (e) {
