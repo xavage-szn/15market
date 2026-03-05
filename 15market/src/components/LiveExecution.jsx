@@ -193,7 +193,7 @@ function LiveExecutionComponent({
                                                             </div>
                                                             <div className="flex items-center gap-1">
                                                                 <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake:</span>
-                                                                <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{trade.amount}</span>
+                                                                <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{Number(trade.amount).toFixed(2)}</span>
                                                             </div>
                                                         </div>
 

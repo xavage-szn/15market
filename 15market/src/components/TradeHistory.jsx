@@ -66,7 +66,7 @@ function TradeHistoryComponent({
                                     }}>
                                         {String(t.direction || "").toUpperCase()}
                                     </div>
-                                    <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-black/90' : 'text-white/90'}`}>{t.amount} USDC</div>
+                                    <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-black/90' : 'text-white/90'}`}>{Number(t.amount).toFixed(2)} USDC</div>
                                 </div>
 
                                 <div className={`${isLight ? 'text-black/40' : 'text-white/40'} text-[9px] lg:text-sm hidden sm:flex flex-col`}>
