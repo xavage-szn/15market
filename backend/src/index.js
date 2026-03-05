@@ -425,7 +425,7 @@ app.post('/session/trade', async (req, res) => {
     } catch (e) {
         logToFile(`[SESSION_TRADE] ❌ Error: ${e.message}`);
         const { address: sessionAddr } = await deriveUserWallet(req.body.address);
-        if (e.message.includes('nonce') || e.message.includes('already been used')) {
+        if (e.message.includes('nonce') || e.message.includes('already been used') || e.message.includes('too low')) {
             await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
         }
         res.status(500).json({ error: e.message });

@@ -271,7 +271,7 @@ class BlockchainService {
             const msg = (e.message || "").toLowerCase();
             const fullError = JSON.stringify(e).toLowerCase();
 
-            if (msg.includes('nonce') || msg.includes('underpriced') || msg.includes('already been used') || msg.includes('replacement')) {
+            if (msg.includes('nonce') || msg.includes('underpriced') || msg.includes('already been used') || msg.includes('replacement') || msg.includes('too low')) {
                 await this._resetNonce();
             }
 
