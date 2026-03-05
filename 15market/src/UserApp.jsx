@@ -92,6 +92,25 @@ export default function UserApp() {
   const { isConnected, address, chainId: connectedChainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
+  // Keep-Alive Heartbeat (Prevents Backend from Sleeping while user is active)
+  useEffect(() => {
+    const isLocal = window.location.hostname === 'localhost';
+    if (isLocal) return;
+
+    const pulse = async () => {
+      try {
+        // Ping the health endpoint to keep the server warm
+        await fetch(`${KEEPER_URL_ARC}/health`).catch(() => { });
+        // Also ping the stats endpoint as a fallback
+        await fetch(`${KEEPER_URL_ARC}/protocol-stats`).catch(() => { });
+      } catch (e) { }
+    };
+
+    pulse(); // Initial ping
+    const interval = setInterval(pulse, 120000); // 2 minute interval
+    return () => clearInterval(interval);
+  }, []);
+
   const [price, setPrice] = useState("0.00");
   const staticPriceFails = useRef(0);
   const [amount, setAmount] = useState("");
