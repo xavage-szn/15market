@@ -8,6 +8,7 @@ const blockchain = require('./services/blockchain');
 const pricing = require('./services/pricing');
 const redis = require('./services/redis'); // Now points to MemoryStore
 const nonceManager = require('./services/nonceManager');
+const keepAlive = require('./services/keepAlive'); // Pulse service to prevent sleep
 const fs = require('fs');
 const path = require('path');
 
@@ -518,4 +519,5 @@ app.get('/debug-logs', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Fast & Decentralized running on port ${PORT}`);
     processor.init();
+    keepAlive.startKeepAlive();
 });
