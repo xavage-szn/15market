@@ -486,6 +486,16 @@ app.post('/session/withdraw', async (req, res) => {
     }
 });
 
+app.get('/debug-logs', (req, res) => {
+    try {
+        const fs = require('fs');
+        const logs = fs.readFileSync(LOG_FILE, 'utf8').split('\n').reverse().slice(0, 200).join('\n');
+        res.type('text/plain').send(logs);
+    } catch (e) {
+        res.status(500).send(e.message);
+    }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Fast & Decentralized running on port ${PORT}`);
     processor.init();
