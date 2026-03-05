@@ -3,6 +3,7 @@ import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeri
 import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock, ChevronDown, Zap, Activity } from 'lucide-react';
 
+import { MascotLoader } from './MascotLoader';
 import { KEEPER_URL_ARC } from "../constants";
 
 export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [] }) {
@@ -18,7 +19,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const [chartType, setChartType] = useState('line'); // 'candles' or 'line'
     const current1sCandle = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [chartProgress, setChartProgress] = useState(0);
+    const [loaderStatus, setLoaderStatus] = useState('walking'); // 'walking' or 'running'
+    const errorRef = useRef(null);
     const isFirstLoad = useRef(true);
 
     const [showGrid, setShowGrid] = useState(true);
@@ -200,8 +203,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         chartRef.current = chart;
 
         setIsLoading(true);
+        setChartProgress(0);
+        setLoaderStatus('walking');
+
+        // Initial progress crawl
+        const progressInterval = setInterval(() => {
+            setChartProgress(prev => {
+                if (prev < 75) return prev + Math.random() * 2;
+                return prev;
+            });
+        }, 100);
 
         fetchKlines(timeframe).then(data => {
+            clearInterval(progressInterval);
             if (data && data.length > 0 && seriesRef.current) {
                 seriesRef.current.setData(data);
                 const volumeData = data.map(d => ({
@@ -232,8 +246,24 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         }
                     }, 200);
                 }
+
+                // Finalize loading with a "run" to 100
+                setLoaderStatus('running');
+                setChartProgress(75);
+
+                const finishInterval = setInterval(() => {
+                    setChartProgress(prev => {
+                        if (prev >= 100) {
+                            clearInterval(finishInterval);
+                            setTimeout(() => setIsLoading(false), 300);
+                            return 100;
+                        }
+                        return prev + 5;
+                    });
+                }, 40);
+            } else {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         });
 
         const handleResize = () => {
@@ -460,6 +490,25 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
             <div className="absolute inset-0 overflow-hidden rounded-[inherit] z-10">
                 <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'relative' }} />
+
+                {/* Chart Crocodile Loading Overlay */}
+                <AnimatePresence>
+                    {isLoading && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[60] flex flex-col items-center justify-center backdrop-blur-md bg-black/40"
+                        >
+                            <MascotLoader
+                                status={loaderStatus}
+                                progress={chartProgress}
+                                label="Calibrating Flight Path"
+                                theme={theme}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             {/* LIVE RESULTS FLOATING OVERLAY */}

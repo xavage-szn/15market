@@ -2,21 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, Timer, Trophy, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const GREEN_COLOR = "#3CB371";
-const RED_COLOR = "#FF4444";
+const GREEN_COLOR = "#FF7F50"; // User request: WON is now Coral
+const RED_COLOR = "#3CB371";   // LOST is Green
 
 function TradeCountdown({ expiry }) {
     const [timeLeft, setTimeLeft] = useState(0);
 
     useEffect(() => {
         const updateTimer = () => {
-            const now = Math.floor(Date.now() / 1000);
+            const now = Date.now() / 1000;
             const remaining = Math.max(0, expiry - now);
             setTimeLeft(remaining);
         };
 
         updateTimer();
-        const interval = setInterval(updateTimer, 1000);
+        const interval = setInterval(updateTimer, 100);
         return () => clearInterval(interval);
     }, [expiry]);
 
@@ -24,9 +24,9 @@ function TradeCountdown({ expiry }) {
 
     return (
         <div className="flex items-center justify-center gap-1.5 mt-2 pt-2 border-t border-white/5">
-            <Timer size={10} className="opacity-40" />
-            <span className="text-[10px] font-mono font-black tabular-nums text-white/60">
-                {timeLeft}s
+            <Timer size={10} className="text-[#3CB371] animate-pulse" />
+            <span className="text-[10px] font-mono font-black tabular-nums text-white/80 tracking-tighter">
+                {timeLeft.toFixed(1)}s
             </span>
         </div>
     );
@@ -56,33 +56,32 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                 <AnimatePresence>
                     {activeTrades.length === 0 ? (
                         <motion.div
+                            key="empty"
+                            layout
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                             className="h-full flex flex-col items-center justify-center text-center opacity-20 gap-2"
                         >
-                            <span className="text-[9px] font-black uppercase tracking-[0.4em]">Ready</span>
+                            <AlertCircle size={32} strokeWidth={1} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">No Active Streams</span>
                         </motion.div>
                     ) : (
                         activeTrades.map((trade) => {
-                            const isLong = trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
-                            const entry = parseFloat(trade.entryPrice);
-                            const current = parseFloat(currentPrice || price);
-
-                            let isWinning = false;
-                            if (current > 0) {
-                                isWinning = isLong ? (current > entry) : (current < entry);
-                            }
+                            const isLong = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+                            const entryPrice = parseFloat(trade.entryPrice);
+                            const current = parseFloat(price);
+                            const isWinning = isLong ? current > entryPrice : current < entryPrice;
 
                             const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;
 
                             return (
                                 <motion.div
-                                    key={trade.id}
                                     layout
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    key={trade.id}
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 20 }}
                                     onClick={() => {
-                                        if (setSelectedPnLTrade && setIsPnLOpen) {
+                                        if (trade.status === "WON" || trade.status === "LOST") {
                                             setSelectedPnLTrade(trade);
                                             setIsPnLOpen(true);
                                         }
@@ -92,10 +91,10 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                 >
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2">
-                                            <div className={`p-1.5 rounded-lg ${isLong ? 'bg-[#3CB371]/10' : 'bg-[#FF7F50]/10'}`}>
+                                            <div className={`p-1.5 rounded-lg ${isLong ? 'bg-[#FF7F50]/10' : 'bg-[#3CB371]/10'}`}>
                                                 {isLong
-                                                    ? <ArrowUp size={12} color={GREEN_COLOR} strokeWidth={3} />
-                                                    : <ArrowDown size={12} color="#FF7F50" strokeWidth={3} />
+                                                    ? <ArrowUp size={12} color="#FF7F50" strokeWidth={3} />
+                                                    : <ArrowDown size={12} color="#3CB371" strokeWidth={3} />
                                                 }
                                             </div>
                                             <div>
@@ -109,13 +108,13 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                         </div>
                                         <div className="text-right flex flex-col items-end">
                                             <div className={`text-[10px] font-black tracking-tight ${isDark ? 'text-white/50' : 'text-[#1A3026]/50'}`}>
-                                                {trade.amount} USDC
+                                                {Number(trade.amount).toFixed(2)} USDC
                                             </div>
                                             <div className="text-[9px] font-black flex items-center gap-1" style={{ color: statusColor }}>
                                                 {isWinning ? '▲' : '▼'}
                                                 {isWinning
-                                                    ? `+${(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98))).toFixed(3)}`
-                                                    : `-${trade.amount}`
+                                                    ? `+${(Math.floor(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98)) * 100) / 100).toFixed(2)}`
+                                                    : `-${Number(trade.amount).toFixed(2)}`
                                                 }
                                             </div>
                                         </div>
@@ -137,7 +136,7 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[7px] font-black uppercase tracking-widest opacity-20 ${isDark ? 'text-white' : 'text-[#1A3026]'}`}>Entry</span>
-                                            <span className={`text-[9px] font-mono font-black ${isDark ? 'text-white/40' : 'text-[#1A3026]/40'}`}>${trade.entryPrice}</span>
+                                            <span className={`text-[9px] font-mono font-black ${isDark ? 'text-white/40' : 'text-[#1A3026]/40'}`}>${Number(trade.entryPrice).toFixed(2)}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[7px] font-black uppercase tracking-widest opacity-20 ${isDark ? 'text-white' : 'text-[#1A3026]'}`}>Now</span>
@@ -151,8 +150,8 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
 
                                     {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST') && (
                                         <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#3CB371]/10'} flex flex-col items-center justify-center rounded-xl border`}>
-                                            {trade.status === 'WON' && <div className="flex flex-col items-center text-[#3CB371] scale-90"><Trophy size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span></div>}
-                                            {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#FF7F50] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
+                                            {trade.status === 'WON' && <div className="flex flex-col items-center text-[#FF7F50] scale-90"><Trophy size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span></div>}
+                                            {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#3CB371] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
                                             {trade.status === 'RESOLVING' && (
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-4 h-4 rounded-full border-2 border-[#3CB371] border-t-transparent animate-spin" />

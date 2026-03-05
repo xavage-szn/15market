@@ -2,6 +2,65 @@ import React, { memo, useState, useEffect, useMemo, useRef } from 'react';
 import { Share2, X, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 import { Stamp } from './Stamp';
 
+const LCD_COUNTER_STYLE = `
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  /* Shared LCD digit font */
+  .lcd-digit {
+    font-family: 'Share Tech Mono', 'Courier New', monospace !important;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
+    letter-spacing: 0.06em;
+    text-rendering: geometricPrecision;
+  }
+
+  /* Dark theme — coral-green phosphor counter */
+  .lcd-counter-dark {
+    background: #060e06;
+    border: 1px solid #1e3d1e;
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 1px #0a120a,
+      0 0 10px rgba(61,255,143,0.18),
+      inset 0 0 8px rgba(0,0,0,0.85);
+    color: #3dff8f;
+    text-shadow: 0 0 6px #00ff41, 0 0 14px #3CB371;
+  }
+
+  /* Light theme — muted green counter */
+  .lcd-counter-light {
+    background: #f0faf4;
+    border: 1px solid #3CB371;
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 1px rgba(60,179,113,0.25),
+      inset 0 0 4px rgba(60,179,113,0.06);
+    color: #1a6b3c;
+    text-shadow: none;
+  }
+
+  /* Live indicator dot — dark */
+  .lcd-live-dot-dark {
+    background: #3dff8f;
+    box-shadow: 0 0 6px #00ff41, 0 0 14px #3CB371;
+  }
+
+  /* Live indicator dot — light */
+  .lcd-live-dot-light {
+    background: #3CB371;
+    box-shadow: 0 0 5px rgba(60,179,113,0.55);
+  }
+
+  /* Blink for dot */
+  .lcd-live-blink {
+    animation: lcd-live-blink-kf 1s step-end infinite;
+  }
+  @keyframes lcd-live-blink-kf {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.2; }
+  }
+`;
+
 function LiveExecutionComponent({
     activeTrades = [],
     setActiveTrades,
@@ -38,9 +97,10 @@ function LiveExecutionComponent({
 
     return (
         <div className="flex flex-col gap-1 relative min-h-0 h-full">
+            <style>{LCD_COUNTER_STYLE}</style>
             <div className="flex items-center justify-between px-2 flex-none">
                 <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
+                    <div className={`w-1.5 h-1.5 rounded-full lcd-live-blink ${isLight ? 'lcd-live-dot-light' : 'lcd-live-dot-dark'}`} />
                     <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
                         ACTIVE TRADES
                     </h4>
@@ -60,11 +120,22 @@ function LiveExecutionComponent({
                         </button>
                     )}
                 </div>
+                {/* ── LCD Digital Active Counter ── */}
                 {activeTrades.length > 0 && (
-                    <div className="bg-[#3CB371]/10 text-[#3CB371] px-2 py-0.5 rounded-full text-[8px] font-black border border-[#3CB371]/20">
-                        {!isExpanded && activeTrades.length > 1
-                            ? `+${activeTrades.length - 1} more`
-                            : `${activeTrades.length} ACTIVE`}
+                    <div className={`lcd-digit flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-[9px] tracking-widest ${isLight ? 'lcd-counter-light' : 'lcd-counter-dark'}`}>
+                        <span style={{
+                            display: 'inline-block',
+                            minWidth: '1ch',
+                            textAlign: 'right',
+                            fontVariantNumeric: 'tabular-nums'
+                        }}>
+                            {!isExpanded && activeTrades.length > 1
+                                ? `+${activeTrades.length - 1}`
+                                : activeTrades.length}
+                        </span>
+                        <span className="opacity-60" style={{ fontSize: '7px' }}>
+                            {!isExpanded && activeTrades.length > 1 ? 'MORE' : 'ACTIVE'}
+                        </span>
                     </div>
                 )}
             </div>
@@ -80,7 +151,11 @@ function LiveExecutionComponent({
                         return (
                             <>
                                 {visibleTrades.map((visibleTrade, idx) => (
-                                    <div key={visibleTrade.id} className={idx > 0 ? 'opacity-80 scale-95 origin-top transition-all hover:opacity-100 hover:scale-100' : ''}>
+                                    <motion.div
+                                        layout
+                                        key={visibleTrade.id}
+                                        className={idx > 0 ? 'opacity-80 scale-95 origin-top transition-all hover:opacity-100 hover:scale-100' : ''}
+                                    >
                                         {/* Render each trade */}
                                         {(() => {
                                             const trade = visibleTrade;
@@ -90,8 +165,8 @@ function LiveExecutionComponent({
                                             const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
                                             const rawTimeLeft = Math.max(0, (expiryMs - now) / 1000);
 
-                                            // SMOOTH COUNTDOWN: Always show 1 decimal place below 15s for precision feel
-                                            const displayTimeLeft = (rawTimeLeft > 0 && rawTimeLeft <= 15) ? rawTimeLeft.toFixed(1) : Math.ceil(rawTimeLeft);
+                                            // SMOOTH COUNTDOWN: Always show 1 decimal place for high-speed terminal feel
+                                            const displayTimeLeft = rawTimeLeft.toFixed(1);
 
                                             const timerExpired = rawTimeLeft <= 0;
                                             const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
@@ -103,21 +178,21 @@ function LiveExecutionComponent({
                                             const multiplier = trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
-                                            const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
+                                            const truncTo2dp = (p) => Math.floor(p * 100) / 100;
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
                                             if (timerExpired && !isFinal && !frozenPnL.current[trade.id]) {
-                                                const exit3dp = truncTo3dp(currentPriceVal);
-                                                const entry3dp = truncTo3dp(entryPriceVal);
-                                                const isWin = isUpTrade ? (exit3dp > entry3dp) : (exit3dp < entry3dp);
+                                                const exit2dp = truncTo2dp(currentPriceVal);
+                                                const entry2dp = truncTo2dp(entryPriceVal);
+                                                const isWin = isUpTrade ? (exit2dp > entry2dp) : (exit2dp < entry2dp);
                                                 frozenPnL.current[trade.id] = {
                                                     status: isWin ? "WON" : "LOST",
-                                                    exitPrice: currentPriceVal.toFixed(3)
+                                                    exitPrice: currentPriceVal.toFixed(2)
                                                 };
                                             }
 
                                             const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                ? (isUpTrade ? truncTo3dp(currentPriceVal) > truncTo3dp(entryPriceVal) : truncTo3dp(currentPriceVal) < truncTo3dp(entryPriceVal))
+                                                ? (isUpTrade ? truncTo2dp(currentPriceVal) > truncTo2dp(entryPriceVal) : truncTo2dp(currentPriceVal) < truncTo2dp(entryPriceVal))
                                                 : false;
 
                                             const showInstantResult = timerExpired && !isFinal;
@@ -131,18 +206,18 @@ function LiveExecutionComponent({
                                                         ? 'bg-white border-[#3CB371]/15 shadow-[0_2px_15px_rgba(60,179,113,0.06)]'
                                                         : 'bg-white/[0.02] border-white/5 shadow-2xl'}`}
                                                     style={displayFinal ? {
-                                                        borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(60, 179, 113, 0.4)' : 'rgba(255, 127, 80, 0.4)',
+                                                        borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(255, 127, 80, 0.4)' : 'rgba(60, 179, 113, 0.4)',
                                                         boxShadow: (instantStatus === "WON" || trade.status === "WON")
-                                                            ? '0 0 30px rgba(60, 179, 113, 0.15)'
-                                                            : '0 0 30px rgba(255, 127, 80, 0.1)'
+                                                            ? '0 0 30px rgba(255, 127, 80, 0.15)'
+                                                            : '0 0 30px rgba(60, 179, 113, 0.1)'
                                                     } : {}}
                                                 >
                                                     {/* Card Header - Ultra Compact */}
                                                     <div className="flex items-center justify-between mb-0 px-0.5">
                                                         <div className="flex items-center gap-1.5">
                                                             <div className={`w-1 h-1 rounded-full ${displayFinal
-                                                                ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
-                                                                : 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]'}`} />
+                                                                ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#FF7F50]' : 'bg-[#3CB371]')
+                                                                : (liveWinning ? 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]' : 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]')}`} />
                                                             <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
                                                                 {displayFinal ? trade.status : "Live"}
                                                             </span>
@@ -164,19 +239,19 @@ function LiveExecutionComponent({
                                                                 {displayTimeLeft}<span className="text-[9px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
                                                             <div className="mt-0 px-1.5 py-0 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-90">
-                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#FF7F50]" : "text-[#3CB371]"}`}>
                                                                     {liveWinning ? "WINNING" : "LOSING"}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     ) : (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-1">
-                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#FF7F50]' : 'text-[#3CB371]'}`}>
                                                                 {(instantStatus === "WON" || trade.status === "WON") ? "Trade Won" : "Trade Lost"}
                                                             </div>
                                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                                                    {(instantStatus === "WON" || trade.status === "WON") ? `+$${trade.payout || potentialProfit}` : "0.000"}
+                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#FF7F50]' : 'text-[#3CB371]'}`}>
+                                                                    {(instantStatus === "WON" || trade.status === "WON") ? `+$${Number(trade.payout || potentialProfit).toFixed(2)}` : "0.00"}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -212,7 +287,7 @@ function LiveExecutionComponent({
                                                 </div>
                                             );
                                         })()}
-                                    </div>
+                                    </motion.div>
                                 ))}
 
                                 {othersCount > 0 && !isExpanded && (

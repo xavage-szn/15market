@@ -3,6 +3,191 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Radio } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
+/* ─── Coral-Green LCD Jumbotron Styles ───────────────────────────────────── */
+const LCD_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  /* ── Panel Shell ── */
+  .lcd-panel {
+    background: #07090a;
+    border-top: 2px solid #1e2b1e;
+    border-bottom: 2px solid #1e2b1e;
+    box-shadow:
+      0 0 0 1px #111,
+      inset 0 0 60px rgba(0,0,0,0.9),
+      inset 0 0 120px rgba(0,0,0,0.6);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Scanlines */
+  .lcd-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(60,179,113,0.012) 2px,
+      rgba(60,179,113,0.012) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Edge vignette */
+  .lcd-panel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(0,0,0,0.5) 0%,
+      transparent 6%,
+      transparent 94%,
+      rgba(0,0,0,0.5) 100%
+    );
+    pointer-events: none;
+    z-index: 11;
+  }
+
+  /* Light theme panel */
+  .lcd-panel-light {
+    background: #f0faf4;
+    border-top: 2px solid #3CB371;
+    border-bottom: 2px solid #3CB371;
+    box-shadow:
+      0 0 0 1px rgba(60,179,113,0.3),
+      inset 0 0 40px rgba(60,179,113,0.04);
+  }
+  .lcd-panel-light::before {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(60,179,113,0.025) 3px,
+      rgba(60,179,113,0.025) 6px
+    );
+  }
+
+  /* ── Typography ── */
+  .lcd-text {
+    font-family: 'Share Tech Mono', 'Courier New', monospace !important;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
+  }
+
+  /* ── Green (WON / CALL) Glow ── */
+  .lcd-green {
+    color: #3dff8f;
+    text-shadow:
+      0 0 4px #00ff41,
+      0 0 10px #3CB371,
+      0 0 20px rgba(60,179,113,0.5);
+  }
+
+  /* ── Coral (LOST / PUT) Glow ── */
+  .lcd-coral {
+    color: #ff8a60;
+    text-shadow:
+      0 0 4px #FF7F50,
+      0 0 10px #ff5522,
+      0 0 20px rgba(255,127,80,0.5);
+  }
+
+  /* ── Amber (maintenance / warning) ── */
+  .lcd-amber {
+    color: #ffbb33;
+    text-shadow:
+      0 0 4px #ffaa00,
+      0 0 10px #cc8800,
+      0 0 20px rgba(255,170,0,0.4);
+  }
+
+  /* ── Dim white (neutral label) ── */
+  .lcd-white {
+    color: #d0f0d8;
+    text-shadow:
+      0 0 4px rgba(60,179,113,0.35),
+      0 0 8px rgba(0,255,65,0.2);
+  }
+
+  /* Divider pipe */
+  .lcd-divider {
+    width: 1px;
+    flex-shrink: 0;
+    background: linear-gradient(to bottom, transparent, #1e3d1e 30%, #1e3d1e 70%, transparent);
+    box-shadow: 0 0 4px rgba(60,179,113,0.08);
+  }
+
+  /* ── Badge base ── */
+  .lcd-badge {
+    border: 1px solid;
+    font-family: 'Share Tech Mono', monospace !important;
+    letter-spacing: 0.07em;
+    -webkit-font-smoothing: none;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* CALL / UP — coral (swapped to match WON) */
+  .lcd-badge-call {
+    background: rgba(255, 127, 80, 0.07);
+    border-color: rgba(255, 127, 80, 0.28);
+    color: #ff8a60;
+    text-shadow: 0 0 6px #FF7F50;
+    box-shadow: 0 0 8px rgba(255, 127, 80, 0.12);
+  }
+
+  /* PUT / DOWN — green (swapped to match LOST) */
+  .lcd-badge-put {
+    background: rgba(0, 255, 65, 0.07);
+    border-color: rgba(0, 255, 65, 0.28);
+    color: #3dff8f;
+    text-shadow: 0 0 6px #00ff41;
+    box-shadow: 0 0 8px rgba(0, 255, 65, 0.12);
+  }
+
+  /* WON result — coral (user request) */
+  .lcd-badge-won {
+    background: rgba(255,127,80,0.07);
+    border-color: rgba(255,127,80,0.25);
+    color: #ff8a60;
+    text-shadow: 0 0 6px #FF7F50;
+  }
+
+  /* LOST result — green (swapped) */
+  .lcd-badge-lost {
+    background: rgba(0,255,65,0.07);
+    border-color: rgba(0,255,65,0.25);
+    color: #3dff8f;
+    text-shadow: 0 0 6px #00ff41;
+  }
+
+  /* ── Blink animation (live dot, maintenance) ── */
+  .lcd-blink {
+    animation: lcd-blink-kf 0.85s step-end infinite;
+  }
+  @keyframes lcd-blink-kf {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.15; }
+  }
+
+  /* ── Light theme overrides ── */
+  .lcd-panel-light .lcd-green  { color: #1a6b3c; text-shadow: none; }
+  .lcd-panel-light .lcd-coral  { color: #c94e1e; text-shadow: none; }
+  .lcd-panel-light .lcd-amber  { color: #a06000; text-shadow: none; }
+  .lcd-panel-light .lcd-white  { color: #1A3026; text-shadow: none; }
+  .lcd-panel-light .lcd-divider { background: #3CB37130; box-shadow: none; }
+  .lcd-panel-light .lcd-badge-call { background: rgba(60,179,113,0.08); border-color: rgba(60,179,113,0.35); color: #1a6b3c; text-shadow: none; box-shadow: none; }
+  .lcd-panel-light .lcd-badge-put  { background: rgba(255,127,80,0.08); border-color: rgba(255,127,80,0.35); color: #c94e1e; text-shadow: none; box-shadow: none; }
+  .lcd-panel-light .lcd-badge-won  { background: rgba(60,179,113,0.08); border-color: rgba(60,179,113,0.3);  color: #1a6b3c; text-shadow: none; }
+  .lcd-panel-light .lcd-badge-lost { background: rgba(255,127,80,0.08); border-color: rgba(255,127,80,0.3);  color: #c94e1e; text-shadow: none; }
+`;
+
 function GlobalTradeScrollerComponent({ theme }) {
     const [history, setHistory] = useState(() => {
         try {
@@ -25,7 +210,6 @@ function GlobalTradeScrollerComponent({ theme }) {
                     arcData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                     const finalHistory = arcData.slice(0, 100);
 
-                    // Only update if history actually changed
                     const newJson = JSON.stringify(finalHistory.map(h => h.id));
                     const oldJson = JSON.stringify(history.map(h => h.id));
                     if (newJson !== oldJson) {
@@ -33,7 +217,6 @@ function GlobalTradeScrollerComponent({ theme }) {
                         localStorage.setItem("15market_global_history_v2", JSON.stringify(finalHistory));
                     }
 
-                    // Update Profiles
                     let updatedProfiles = { ...profiles };
                     const ownersToFetch = Array.from(new Set(finalHistory.map(item => item.owner)))
                         .filter(owner => owner && !updatedProfiles[owner]);
@@ -62,11 +245,10 @@ function GlobalTradeScrollerComponent({ theme }) {
         } catch (err) {
             console.error("Global Scroller Sync Error:", err);
         }
-    }, []); // No deps to prevent re-creating, uses refs
+    }, []);
 
     useEffect(() => {
         fetchGlobalData();
-        // REAL-TIME: Poll every 2 seconds for near-instant scroller updates
         const interval = setInterval(fetchGlobalData, 2000);
 
         const checkBroadcast = () => {
@@ -78,7 +260,7 @@ function GlobalTradeScrollerComponent({ theme }) {
                         setActiveBroadcast({
                             id: 'maintenance-mode',
                             type: 'MAINTENANCE',
-                            text: 'UNDER MAINTENANCE - TRADING OPERATIONS SUSPENDED',
+                            text: 'SYSTEM UNDER MAINTENANCE — TRADING OPERATIONS SUSPENDED',
                             expiry: Date.now() + 99999999
                         });
                         return;
@@ -96,10 +278,9 @@ function GlobalTradeScrollerComponent({ theme }) {
         };
     }, []);
 
-    // OPTIMIZED: Ghost Trades (Simulated Momentum) to keep the UI alive if real history is empty
     const ghostTrades = useMemo(() => {
         const symbols = ["ETH", "BTC", "SOL", "MON", "JUP", "XRP"];
-        const names = ["Momentum_Bot", "Pulse_Trader", "ZeroX_Alpha", "Arc_Liquid", "Sonic_Execution", "Crypto_Whale"];
+        const names = ["MOMENTUM_BOT", "PULSE_TRD", "ZEROX_ALPHA", "ARC_LIQUID", "SONIC_X", "WHALE_001"];
         return Array.from({ length: 10 }).map((_, i) => ({
             id: `ghost-${i}`,
             owner: "0x0000000000000000000000000000000000000000",
@@ -114,13 +295,8 @@ function GlobalTradeScrollerComponent({ theme }) {
     }, []);
 
     const mergedHistory = useMemo(() => {
-        // Only use backend history as source
         const filtered = history.filter(t => ["WON", "LOST"].includes(t.status));
-
-        // If no real history, use ghost trades to keep the 'Live' feel
         if (filtered.length === 0) return ghostTrades;
-
-        // Sort by timestamp descending
         filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         return filtered.slice(0, 100);
     }, [history, ghostTrades]);
@@ -128,7 +304,6 @@ function GlobalTradeScrollerComponent({ theme }) {
     const repeatedHistory = useMemo(() => {
         if (!mergedHistory || mergedHistory.length === 0) return [];
         let list = [...mergedHistory];
-        // Ensure at least 40 items for smooth infinite scroll
         while (list.length < 40) { list = [...list, ...mergedHistory]; }
         return [...list, ...list];
     }, [mergedHistory]);
@@ -136,21 +311,62 @@ function GlobalTradeScrollerComponent({ theme }) {
     const isLight = theme === 'light';
 
     return (
-        <div
-            className={`w-full h-10 lg:h-12 flex items-center overflow-hidden relative transition-all duration-500 rounded-none z-[40] ${isLight
-                ? 'border-y-2 border-[#3CB371]/20 shadow-[0_0_15px_rgba(60,179,113,0.1)] bg-[#EEF9F1]'
-                : 'border-y border-white/5 bg-transparent'
-                }`}
-            style={{
-                boxShadow: isLight ? '0 0 20px rgba(60, 179, 113, 0.1)' : `0 0 15px #3CB37115, inset 0 0 10px #3CB37110`
-            }}
-        >            <div
-            className="flex-1 h-full flex items-center relative overflow-hidden"
-            style={{
-                maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
-                WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)'
-            }}
-        >
+        <>
+            <style>{LCD_STYLES}</style>
+
+            {/* ── Full-width LCD panel — no side labels, pure ticker ── */}
+            <div
+                className={`w-full h-10 lg:h-12 relative z-[40] overflow-hidden lcd-panel ${isLight ? 'lcd-panel-light' : ''}`}
+                style={{
+                    /* Mask the ENTIRE panel — deep fade at both absolute screen edges */
+                    maskImage: `linear-gradient(
+                        to right,
+                        transparent   0%,
+                        rgba(0,0,0,0.2)  3%,
+                        rgba(0,0,0,0.6)  8%,
+                        rgba(0,0,0,0.9) 14%,
+                        black           22%,
+                        black           78%,
+                        rgba(0,0,0,0.9) 86%,
+                        rgba(0,0,0,0.6) 92%,
+                        rgba(0,0,0,0.2) 97%,
+                        transparent  100%
+                    )`,
+                    WebkitMaskImage: `linear-gradient(
+                        to right,
+                        transparent   0%,
+                        rgba(0,0,0,0.2)  3%,
+                        rgba(0,0,0,0.6)  8%,
+                        rgba(0,0,0,0.9) 14%,
+                        black           22%,
+                        black           78%,
+                        rgba(0,0,0,0.9) 86%,
+                        rgba(0,0,0,0.6) 92%,
+                        rgba(0,0,0,0.2) 97%,
+                        transparent  100%
+                    )`
+                }}
+            >
+                {/* Left solid-colour fog — matched to panel background for a hard edge illusion */}
+                <div
+                    className="absolute left-0 top-0 bottom-0 w-[20%] pointer-events-none z-30"
+                    style={{
+                        background: isLight
+                            ? 'linear-gradient(to right, #f0faf4 0%, #f0faf4 20%, rgba(240,250,244,0.8) 60%, transparent 100%)'
+                            : 'linear-gradient(to right, #07090a 0%, #07090a 20%, rgba(7,9,10,0.8) 60%, transparent 100%)'
+                    }}
+                />
+                {/* Right solid-colour fog */}
+                <div
+                    className="absolute right-0 top-0 bottom-0 w-[20%] pointer-events-none z-30"
+                    style={{
+                        background: isLight
+                            ? 'linear-gradient(to left, #f0faf4 0%, #f0faf4 20%, rgba(240,250,244,0.8) 60%, transparent 100%)'
+                            : 'linear-gradient(to left, #07090a 0%, #07090a 20%, rgba(7,9,10,0.8) 60%, transparent 100%)'
+                    }}
+                />
+
+                {/* ── Maintenance Broadcast Overlay ── */}
                 <AnimatePresence mode="wait">
                     {activeBroadcast && (
                         <motion.div
@@ -158,20 +374,23 @@ function GlobalTradeScrollerComponent({ theme }) {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className={`absolute inset-0 flex items-center z-40 ${isLight ? 'bg-[#FFF8E7]/90 backdrop-blur-md' : 'bg-[#050505]/95 backdrop-blur-md'}`}
+                            className="absolute inset-0 flex items-center z-40"
+                            style={{ background: isLight ? '#f0faf4' : '#07090a' }}
                         >
                             <motion.div
-                                className="flex items-center gap-24 whitespace-nowrap pl-24 lg:pl-32"
+                                className="flex items-center gap-24 whitespace-nowrap"
                                 animate={{ x: ["0%", "-50%"] }}
-                                transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
+                                transition={{ duration: 55, repeat: Infinity, ease: "linear" }}
                             >
                                 {[...Array(8)].map((_, i) => (
-                                    <div key={i} className="flex items-center gap-4 lg:gap-6">
-                                        <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest bg-[#3CB371] text-white`}>
-                                            <Radio size={10} className="animate-pulse" />
+                                    <div key={i} className="flex items-center gap-4 mx-8">
+                                        <span className="lcd-text lcd-badge lcd-badge-call text-[7px] px-2 py-0.5 gap-1.5">
+                                            <Radio size={7} className="lcd-blink" />
                                             {activeBroadcast.type}
-                                        </div>
-                                        <span className={`text-xs lg:text-sm font-black uppercase tracking-tight ${isLight ? 'text-black' : 'text-white'}`}>{activeBroadcast.text}</span>
+                                        </span>
+                                        <span className="lcd-text text-[9px] lg:text-[11px] tracking-widest lcd-amber">
+                                            *** {activeBroadcast.text} ***
+                                        </span>
                                     </div>
                                 ))}
                             </motion.div>
@@ -179,55 +398,54 @@ function GlobalTradeScrollerComponent({ theme }) {
                     )}
                 </AnimatePresence>
 
+                {/* ── Main ticker ── */}
                 <motion.div
                     animate={{ x: ["0%", "-50%"] }}
-                    className="flex items-center gap-4 lg:gap-8 whitespace-nowrap pl-20 lg:pl-40"
-                    transition={{ x: { duration: 240, repeat: Infinity, ease: "linear" } }}
+                    className="flex items-center whitespace-nowrap h-full"
+                    transition={{ x: { duration: 650, repeat: Infinity, ease: "linear" } }}
                 >
-                    {repeatedHistory.map((event, i) => (
-                        <div key={`${event.id}-${i}`}
-                            className={`flex items-center gap-2 lg:gap-3 px-3 py-1 lg:py-1.5 rounded-xl border transition-all group ${isLight ? 'border-black/[0.05] bg-black/[0.02] hover:bg-black/[0.05]' : 'border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.05]'}`}
-                            style={{
-                                boxShadow: event.direction === "UP" || event.direction === 1
-                                    ? `0 0 10px rgba(60, 179, 113, 0.15)`
-                                    : `0 0 10px rgba(255, 127, 80, 0.15)`
-                            }}
-                        >
-                            <div className={`w-5 h-5 lg:w-6 lg:h-6 rounded-lg overflow-hidden flex items-center justify-center shrink-0 ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
-                                {profiles[event.owner]?.xProfileImage ? (
-                                    <img src={profiles[event.owner].xProfileImage} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className={`w-full h-full flex items-center justify-center text-[8px] lg:text-[10px] font-black text-[#3CB371]`}>
-                                        {(profiles[event.owner]?.username || "A").charAt(0).toUpperCase()}
-                                    </div>
-                                )}
-                            </div>
+                    {repeatedHistory.map((event, i) => {
+                        const isUp = event.direction === "UP" || event.direction === 1 || String(event.direction) === "1";
+                        const isWon = String(event.status).toUpperCase() === "WON";
+                        const isLost = String(event.status).toUpperCase() === "LOST";
+                        const uname = (event.username || profiles[event.owner]?.username || truncate(event.owner) || "ANON")
+                            .toUpperCase().replace(/\s/g, '_').slice(0, 12);
+                        const amt = Number(event.amount).toFixed(2);
+                        const sym = (event.symbol || 'USDC').toUpperCase();
 
-                            <div className="flex flex-col">
-                                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>
-                                    ARC • #{event.id?.slice(-4) || '---'}
-                                </span>
-                                <span className={`text-[8px] lg:text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {event.username || profiles[event.owner]?.username || truncate(event.owner)}
-                                </span>
-                            </div>
+                        return (
+                            <div key={`${event.id}-${i}`} className="flex items-center h-full">
+                                {/* Vertical rule separator */}
+                                <div className="lcd-divider h-5 mx-4 lg:mx-5" />
 
-                            <div className={`w-px h-4 lg:h-6 mx-0.5 lg:mx-1 ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
-
-                            <div className="flex flex-col items-end">
-                                <span className={`text-[8px] lg:text-[10px] font-black uppercase tracking-widest ${event.status === "WON" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
-                                    {event.status === "WON" ? "WON" : "LOST"}
-                                </span>
-                                <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {Number(event.amount).toFixed(2)} {event.symbol || 'USDC'} {event.direction === "UP" || event.direction === 1 || String(event.direction) === "1" ? "UP" : "DOWN"}
-                                </span>
+                                {/* Trade chip */}
+                                <div className="flex items-center gap-1.5 lg:gap-2">
+                                    <span className={`lcd-text lcd-badge text-[6px] lg:text-[7px] px-1.5 py-0.5 ${isUp ? 'lcd-badge-call' : 'lcd-badge-put'}`}>
+                                        {isUp ? '▲ CALL' : '▼ PUT'}
+                                    </span>
+                                    <span className="lcd-text lcd-white text-[7px] lg:text-[8px] tracking-wider">
+                                        {uname}
+                                    </span>
+                                    <span
+                                        className="lcd-text text-[7px] lg:text-[8px] tracking-wide"
+                                        style={{
+                                            color: isWon ? '#ff8a60' : (isLost ? '#3dff8f' : (isLight ? '#2d5a3d' : '#8dcfaa')),
+                                            textShadow: isWon ? '0 0 6px rgba(255,127,80,0.4)' : (isLost ? '0 0 6px rgba(0,255,65,0.4)' : 'none')
+                                        }}
+                                    >
+                                        {amt}&nbsp;{sym}
+                                    </span>
+                                    <span className={`lcd-text lcd-badge text-[6px] lg:text-[7px] px-1.5 py-0.5 ${isWon ? 'lcd-badge-won' : 'lcd-badge-lost'}`}>
+                                        {isWon ? '✓ WON' : '✕ LOST'}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </motion.div>
             </div>
-        </div>
+        </>
     );
-};
+}
 
 export const GlobalTradeScroller = memo(GlobalTradeScrollerComponent);

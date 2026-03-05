@@ -32,6 +32,7 @@ import { TradeHistory } from "./components/TradeHistory";
 import { UnifiedWalletButton } from "./components/UnifiedWalletButton";
 import { OrderBook } from "./components/OrderBook";
 import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
+import { MascotLoader } from "./components/MascotLoader";
 import CustomChart from './components/CustomChart';
 import Toast from "./components/Toast";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -158,6 +159,7 @@ export default function UserApp() {
 
   const activeTrade = activeTrades[0] || null; // For backward compatibility in some components
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const loadingTimeoutRef = useRef(null);
   const lastTradeTimeRef = useRef(0);
 
@@ -170,6 +172,23 @@ export default function UserApp() {
       }
     }, 5000); // 5 seconds max loading
     return () => clearTimeout(loadingTimeoutRef.current);
+  }, [isLoading]);
+
+  // Loading progress animation
+  useEffect(() => {
+    if (isLoading) {
+      const interval = setInterval(() => {
+        setLoadingProgress(prev => {
+          if (prev < 95) { // Stop just before 100 to wait for actual data
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 50); // Increment every 50ms
+      return () => clearInterval(interval);
+    } else {
+      setLoadingProgress(100); // Instantly complete if loading finishes
+    }
   }, [isLoading]);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -286,7 +305,7 @@ export default function UserApp() {
     };
   }, []);
 
-  const isSmallScreen = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
+  const isSmallScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
   const showPortraitLock = uiVersion === 'v2' && isSmallScreen && isPortrait;
   const lastOptimisticActionTime = useRef(0); // Protects optimistic balance from stale polling
   const tradeHistoryRef = useRef([]);
@@ -1174,17 +1193,19 @@ export default function UserApp() {
       clearTimeout(timeoutId);
 
       if (fastestPrice > 0) {
-        const pStr = fastestPrice.toFixed(4);
+        // SYSTEM-WIDE RULE: Only 2 decimal places considered for prices
+        const normalizedPrice = Math.floor(fastestPrice * 100) / 100;
+        const pStr = normalizedPrice.toFixed(2);
         setPrice(pStr);
         priceRef.current = pStr;
         setIsLoading(false);
 
         // Record history for precise expiry price retrieval (keep 10s buffer)
         const now = Date.now();
-        priceHistoryRef.current.push({ p: fastestPrice, t: now });
+        priceHistoryRef.current.push({ p: normalizedPrice, t: now });
         if (priceHistoryRef.current.length > 50) priceHistoryRef.current.shift();
 
-        return fastestPrice;
+        return normalizedPrice;
       }
     } catch (err) {
       // Don't let total API failure block the UI forever
@@ -1490,8 +1511,8 @@ export default function UserApp() {
         if (now < expiryMs || trade.confirmed === false) continue; // Not yet expired or not yet confirmed on-chain
         if (resolvingInProgress.current.has(trade.id)) continue;
 
-        // RULE: Truncate to 3 decimal places (floor) for win/loss determination
-        const truncTo3dp = (p) => Math.floor(p * 1000) / 1000;
+        // SYSTEM-WIDE RULE: Only 2 decimal places considered for win/loss determination
+        const truncTo2dp = (p) => Math.floor(p * 100) / 100;
 
         // ACCURACY UPGRADE: Find the price in history that was closest to the exact expiryMs
         let capturedPrice = parseFloat(priceRef.current);
@@ -1513,10 +1534,10 @@ export default function UserApp() {
         if (!capturedPrice || capturedPrice <= 0) continue;
 
         let optimisticStatus = "LOST";
-        const entry3dp = truncTo3dp(parseFloat(trade.entryPrice));
-        const exit3dp = truncTo3dp(capturedPrice);
+        const entry2dp = truncTo2dp(parseFloat(trade.entryPrice));
+        const exit2dp = truncTo2dp(capturedPrice);
         const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
-        const isWin = isUpTrade ? (exit3dp > entry3dp) : (exit3dp < entry3dp);
+        const isWin = isUpTrade ? (exit2dp > entry2dp) : (exit2dp < entry2dp);
         optimisticStatus = isWin ? "WON" : "LOST";
 
         // NOW we lock it — we actually have a result
@@ -1528,13 +1549,13 @@ export default function UserApp() {
           if (trade.duration <= 5) multiplier = 6.98;
           else if (trade.duration <= 10) multiplier = 4.98;
 
-          optimisticPayout = (parseFloat(trade.amount) * multiplier).toFixed(3);
+          optimisticPayout = (Math.floor(parseFloat(trade.amount) * multiplier * 100) / 100).toFixed(2);
         }
 
         const updatePayload = {
           ...trade,
           status: optimisticStatus,
-          settlementPrice: capturedPrice.toFixed(3),
+          settlementPrice: capturedPrice.toFixed(2),
           payout: optimisticPayout,
           optimistic: true,
           settledAt: now
@@ -1557,7 +1578,7 @@ export default function UserApp() {
             // MAIN WALLET TRADE WIN: Credit goes to main wallet
             setEvmBalance(prev => {
               const current = parseFloat(prev || "0");
-              return (current + payoutNum).toFixed(4);
+              return (Math.floor((current + payoutNum) * 100) / 100).toFixed(2);
             });
             lastOptimisticActionTime.current = Date.now(); // Activate guard
             console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet (${tradeOwner})`);
@@ -1653,8 +1674,8 @@ export default function UserApp() {
             setTimeout(() => processedSettlements.current.delete(eventKey), 5 * 60 * 1000);
 
             const eventInitialStatus = won ? "WON" : "LOST"; // FIXED: Use WON immediately, don't stay in PENDING
-            const priceUSD = parseFloat(formatUnits(settlementPrice || log.args.exitPrice, 8)).toFixed(3);
-            const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(3);
+            const priceUSD = parseFloat(formatUnits(settlementPrice || log.args.exitPrice, 8)).toFixed(2);
+            const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(2);
 
             const updateTrade = (t) => {
               const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
@@ -1922,16 +1943,17 @@ export default function UserApp() {
 
   if (isLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
-      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative">
+      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative mb-20">
         <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
         <img src="/logo.png" alt="logo" className="h-32 lg:h-48 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
       </motion.div>
-      <div className="mt-12 flex flex-col items-center gap-4">
-        <div className="w-64 h-1.5 bg-white/10 rounded-full overflow-hidden relative border border-white/5">
-          <motion.div className="absolute inset-y-0 left-0 bg-[#3CB371]" initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 1.3 }} />
-        </div>
-        <p className="text-[10px] font-black uppercase text-[#3CB371]">Synchronizing Markets</p>
-      </div>
+
+      <MascotLoader
+        status="running"
+        progress={loadingProgress}
+        label="Pre-Flight Systems Check"
+        theme={theme}
+      />
     </div>
   );
 
@@ -2013,11 +2035,11 @@ export default function UserApp() {
         <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-0 overflow-hidden' : 'py-4 lg:py-10'}`}>
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
-              style={{ paddingLeft: uiVersion === 'v2' ? (showSideHistory ? '268px' : '36px') : '0px' }}>
+              style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
               <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-14 lg:h-24' : 'h-8 lg:h-12'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
-            <div className={`hidden lg:flex landscape:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
+            <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
               <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
@@ -2101,8 +2123,10 @@ export default function UserApp() {
             ) : (
               <div className="w-full flex lg:flex-row landscape:flex-row flex-col gap-3 lg:gap-4 mb-6 relative z-0 h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)] min-h-0">
                 {/* V2: Integrated One Screen Layout */}
-                <div className="w-full lg:w-[70%] landscape:w-[70%] flex flex-col gap-1.5 h-[450px] lg:h-full landscape:h-full transition-all duration-500 relative"
-                  style={{ paddingLeft: showSideHistory ? '268px' : '36px' }}>
+                <motion.div
+                  layout
+                  className="w-full md:w-[70%] flex flex-col gap-1.5 h-full min-h-0 transition-all duration-500 relative"
+                  style={{ paddingLeft: !isSmallScreen && showSideHistory ? '268px' : (!isSmallScreen ? '36px' : '0px') }}>
 
                   {uiVersion === 'v2' && (
                     <SideHistoryPane
@@ -2120,7 +2144,7 @@ export default function UserApp() {
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className="flex-1 min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow"
+                  <div className="flex-1 min-h-[350px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col"
                     style={{
                       background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
@@ -2128,11 +2152,25 @@ export default function UserApp() {
                         : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`,
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
                     }}>
-                    <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+                    <div className="flex-1 w-full h-full relative">
+                      <CustomChart
+                        symbol={activeMarket.binance}
+                        theme={theme}
+                        network={network}
+                        activeMarket={activeMarket}
+                        uiVersion={uiVersion}
+                        setActiveMarket={handleMarketChange}
+                        activeTrades={activeTrades}
+                        currentPrice={price}
+                      />
+                    </div>
                   </div>
-                </div>
+                </motion.div>
 
-                <div className={`w-full lg:w-[30%] landscape:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-auto lg:h-full landscape:h-full min-h-0`}>
+                <motion.div
+                  layout
+                  className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-full min-h-0`}
+                >
                   {/* Trading Terminal Box */}
                   <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0' : 'h-auto'} min-h-0`}
                     style={{
@@ -2174,7 +2212,7 @@ export default function UserApp() {
                       />
                     </div>
                   </div>
-                </div>
+                </motion.div>
               </div>
             )}
 
@@ -2276,7 +2314,8 @@ export default function UserApp() {
 
           </div>
         </div>
-      )}
+      )
+      }
 
 
 
@@ -2320,6 +2359,6 @@ export default function UserApp() {
         onClose={() => setIsTransactionReceiptOpen(false)}
         transaction={selectedTransaction}
       />
-    </motion.div>
+    </motion.div >
   );
 }

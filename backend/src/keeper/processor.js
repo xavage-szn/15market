@@ -112,7 +112,7 @@ class TradeProcessor {
                 settled.forEach(e => {
                     settledMap.set(e.args.id.toString(), {
                         status: e.args.won ? 'WON' : 'LOST',
-                        settlementPrice: (Number(e.args.settlementPrice) / 1e8).toFixed(3),
+                        settlementPrice: (Number(e.args.settlementPrice) / 1e8).toFixed(2),
                         payout: ethers.formatEther(e.args.payout)
                     });
                 });
@@ -152,7 +152,7 @@ class TradeProcessor {
                         amount: ethers.formatEther(e.args.amount),
                         direction: Number(e.args.direction) === 1 ? 'UP' : 'DOWN',
                         duration: Number(e.args.duration),
-                        entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(3),
+                        entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(2),
                         timestamp: Number(e.args.timestamp) * 1000,
                         status: s ? s.status : 'PENDING',
                         settlementPrice: s ? s.settlementPrice : null,
@@ -277,9 +277,9 @@ class TradeProcessor {
 
             if (!settlementPrice || settlementPrice <= 0) throw new Error("Price unavailable");
 
-            // 🔥 CRITICAL: Match Frontend's 3-decimal place truncation rule
+            // 🔥 CRITICAL: Match Frontend's 2-decimal place truncation rule
             // This ensures that win/loss determination on-chain matches the UI
-            const finalPrice = Math.floor(Number(settlementPrice) * 1000) / 1000;
+            const finalPrice = Math.floor(Number(settlementPrice) * 100) / 100;
 
             logToFile(`${logMsg}: ${finalPrice} (Raw: ${settlementPrice})`);
             const scaledPrice = BigInt(Math.floor(finalPrice * 1e8));
@@ -336,8 +336,8 @@ class TradeProcessor {
                     await redis.addHistoricalTrade({
                         id: tradeId,
                         status: isWin ? "WON" : "LOST",
-                        settlementPrice: finalPrice.toFixed(3),
-                        payout: isWin ? "..." : "0.000"
+                        settlementPrice: finalPrice.toFixed(2),
+                        payout: isWin ? "..." : "0.00"
                     });
                 }
             }

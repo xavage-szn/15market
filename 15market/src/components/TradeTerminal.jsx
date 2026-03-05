@@ -189,7 +189,7 @@ function TradeTerminalComponent({
                         <div className="flex flex-col">
                             <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
                             <span className="text-[7px] lg:text-xs font-mono font-black text-[#3CB371]">
-                                ${Number(sessionBalance).toFixed(4)} USDC
+                                ${Number(sessionBalance).toFixed(2)} USDC
                             </span>
                         </div>
                     </div>
@@ -225,7 +225,7 @@ function TradeTerminalComponent({
                             <input
                                 type="range" min="0" max="100" step="1"
                                 value={Math.min(100, (parseFloat(refillAmount || 0) / (balance || 1)) * 100)}
-                                onChange={(e) => balance > 0 && setRefillAmount(((balance * e.target.value) / 100).toFixed(4))}
+                                onChange={(e) => balance > 0 && setRefillAmount(((balance * e.target.value) / 100).toFixed(2))}
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                             />
                         </div>

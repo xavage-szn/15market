@@ -70,10 +70,10 @@ const normalizeTrade = (t) => {
         } catch (e) { }
     }
     if (t.entryPrice && Number(t.entryPrice) > 100000000) {
-        t.entryPrice = (Number(t.entryPrice) / 1e8).toFixed(3);
+        t.entryPrice = (Number(t.entryPrice) / 1e8).toFixed(2);
     }
     if (t.settlementPrice && Number(t.settlementPrice) > 100000000) {
-        t.settlementPrice = (Number(t.settlementPrice) / 1e8).toFixed(3);
+        t.settlementPrice = (Number(t.settlementPrice) / 1e8).toFixed(2);
     }
     return t;
 };
@@ -272,7 +272,7 @@ app.post('/trade-ping', async (req, res) => {
             amount: amount,
             direction: direction,
             duration: duration,
-            entryPrice: (Number(entryPrice) / 1e8).toFixed(4),
+            entryPrice: (Number(entryPrice) / 1e8).toFixed(2),
             symbol: symbol || 'BTC',
             expiry: Date.now() + (duration * 1000),
             confirmed: true,
@@ -300,7 +300,7 @@ app.get('/protocol-stats', async (req, res) => {
             activeCount: activeTrades.length,
             totalTrades: history.length,
             activeStakes: activeTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0),
-            autoSignerFees: { arc: (totalVolume * 0.01).toFixed(4) } // Estimate 1% fee for display
+            autoSignerFees: { arc: (totalVolume * 0.01).toFixed(2) } // Estimate 1% fee for display
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -423,7 +423,7 @@ app.post('/session/trade', async (req, res) => {
                     amount: amount,
                     direction: direction,
                     duration: duration,
-                    entryPrice: (Number(entryPrice) / 1e8).toFixed(4),
+                    entryPrice: (Number(entryPrice) / 1e8).toFixed(2),
                     marketId: marketId,
                     expiry: Date.now() + (duration * 1000),
                     txHash: tx.hash,

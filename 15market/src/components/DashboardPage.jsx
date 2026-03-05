@@ -228,7 +228,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         label="Bullish Sentiment"
                                         value={`${stats.marketSentiment}%`}
                                         sub={`${stats.bullsInfo} Calls vs ${stats.bearsInfo} Puts`}
-                                        icon={<TrendingUp size={16} className={Number(stats.marketSentiment) > 50 ? "text-[#3CB371]" : isLight ? "text-gray-300" : "text-white/20"} />}
+                                        icon={<TrendingUp size={16} className={Number(stats.marketSentiment) > 50 ? "text-[#FF7F50]" : isLight ? "text-gray-300" : "text-white/20"} />}
                                         isLight={isLight}
                                     />
                                     <StatCard
@@ -242,7 +242,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         label="Your Win Rate"
                                         value={`${stats.userWinRate}%`}
                                         sub={`${stats.userTotalWins} / ${stats.userTotalTrades} Trades`}
-                                        icon={<Award size={16} className="text-[#3CB371]" />}
+                                        icon={<Award size={16} className="text-[#FF7F50]" />}
                                         highlight
                                         isLight={isLight}
                                     />
@@ -292,7 +292,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                 ) : stats.recentTrades.map((t, i) => (
                                                     <div key={i} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-gray-50 border-gray-100' : 'bg-white/[0.02] border-white/5'} border`}>
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-lg ${(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
+                                                            <div className={`p-2 rounded-lg ${(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "bg-[#FF7F50]/10 text-[#FF7F50]" : "bg-[#3CB371]/10 text-[#3CB371]"}`}>
                                                                 {(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                                             </div>
                                                             <div>
@@ -411,11 +411,11 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         </button>
                                         <button
                                             onClick={() => {
-                                                const isNative = window.Capacitor?.isNativePlatform();
-                                                if (!isNative) {
+                                                const isLargeDisplay = window.innerWidth >= 768;
+                                                if (!isLargeDisplay) {
                                                     setModalConfig({
-                                                        title: "Mobile App Required",
-                                                        message: "Pro V2 is optimized for a native mobile experience. Please download our official Mobile App to access the high-speed execution terminal.",
+                                                        title: "Desktop & Tablet Optimized",
+                                                        message: "Precision V2 is a professional-grade terminal optimized for larger displays (iPads, Tablets, and Desktop). Please switch to a larger device to access the high-speed execution terminal.",
                                                         type: 'alert',
                                                         confirmText: "Understood"
                                                     });
@@ -650,7 +650,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     );
 };
 
-function NavTab({ active, id, label, icon, onClick, isLight }) {
+const NavTab = React.memo(({ active, id, label, icon, onClick, isLight }) => {
     return (
         <button
             onClick={() => onClick(id)}
@@ -663,11 +663,11 @@ function NavTab({ active, id, label, icon, onClick, isLight }) {
             {label}
         </button>
     );
-}
+});
 
-function StatCard({ label, value, sub, icon, highlight, isLight }) {
+const StatCard = React.memo(({ label, value, sub, icon, highlight, isLight }) => {
     return (
-        <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : `${isLight ? 'bg-white border-gray-100' : 'bg-[#111] border-white/5'}`}`}>
+        <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-[#FF7F50]/10 border-[#FF7F50]/30 shadow-[0_0_20px_#FF7F5010]' : `${isLight ? 'bg-white border-gray-100' : 'bg-[#111] border-white/5'}`}`}>
             <div className="flex justify-between items-start mb-4">
                 <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-gray-400' : 'text-white/40'}`}>{label}</div>
                 <div className={`p-2 ${isLight ? 'bg-gray-50' : 'bg-white/5'} rounded-lg`}>{icon}</div>
@@ -676,4 +676,4 @@ function StatCard({ label, value, sub, icon, highlight, isLight }) {
             <div className={`text-[8px] md:text-[10px] font-bold ${isLight ? 'text-gray-300' : 'text-white/20'} uppercase`}>{sub}</div>
         </div>
     );
-}
+});

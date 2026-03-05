@@ -70,8 +70,8 @@ function TradeHistoryComponent({
                                 </div>
 
                                 <div className={`${isLight ? 'text-black/40' : 'text-white/40'} text-[9px] lg:text-sm hidden sm:flex flex-col`}>
-                                    <span>Entry: ${t.entryPrice}</span>
-                                    {t.settlementPrice > 0 && <span className="text-[8px] lg:text-xs opacity-60">Exit: ${t.settlementPrice}</span>}
+                                    <span>Entry: ${Number(t.entryPrice).toFixed(2)}</span>
+                                    {t.settlementPrice > 0 && <span className="text-[8px] lg:text-xs opacity-60">Exit: ${Number(t.settlementPrice).toFixed(2)}</span>}
                                 </div>
 
                                 <div className="flex items-center gap-2 lg:gap-6">
@@ -81,8 +81,8 @@ function TradeHistoryComponent({
                                         href={`https://testnet.arcscan.app/tx/${t.tx}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
-                                            t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
+                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
+                                            t.status === "LOST" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
                                                 (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                             }`}
                                     >
