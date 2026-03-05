@@ -1652,8 +1652,8 @@ export default function UserApp() {
             // Auto-cleanup old entries after 5 minutes
             setTimeout(() => processedSettlements.current.delete(eventKey), 5 * 60 * 1000);
 
-            const eventInitialStatus = won ? "PENDING" : "LOST";
-            const priceUSD = parseFloat(formatUnits(settlementPrice, 8)).toFixed(3);
+            const eventInitialStatus = won ? "WON" : "LOST"; // FIXED: Use WON immediately, don't stay in PENDING
+            const priceUSD = parseFloat(formatUnits(settlementPrice || log.args.exitPrice, 8)).toFixed(3);
             const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(3);
 
             const updateTrade = (t) => {
