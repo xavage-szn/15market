@@ -65,8 +65,8 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
                 ))}
             </div>
 
-            {/* Spread / Current Price Indicator */}
-            <div className={`my-1 py-1 px-3 flex items-center justify-between border-y backdrop-blur-sm relative z-20 ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#3CB371]/5 border-[#3CB371]/10'}`}>
+            {/* Current Price Indicator */}
+            <div className={`my-1 py-1 px-3 flex items-center justify-center border-y backdrop-blur-sm relative z-20 ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#3CB371]/5 border-[#3CB371]/10'}`}>
                 <div className={`text-sm lg:text-base font-black tracking-tight flex items-center gap-2`}
                     style={{ color: parseFloat(price) > parseFloat(bids[0]?.price || 0) ? GREEN : RED }}>
                     {parseFloat(price).toFixed(4)}
@@ -74,9 +74,6 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
                         ? <ArrowUp size={12} strokeWidth={3} />
                         : <ArrowDown size={12} strokeWidth={3} />
                     }
-                </div>
-                <div className="text-[9px] opacity-40 uppercase font-bold tracking-widest">
-                    Spread 0.02%
                 </div>
             </div>
 

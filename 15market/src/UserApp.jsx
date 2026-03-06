@@ -355,10 +355,9 @@ export default function UserApp() {
       const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
       const bal = parseFloat(formatUnits(balanceWei, 18));
 
-      // CRITICAL: During cooldown, block ALL non-forced polls.
-      // Reduced to 2.5s for near-instant balance reflection on Arc.
+      // Extended to 10s for better protection against slow RPC indexing
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 2500) {
+      if (!force && msSinceLastAction < 10000) {
         return;
       }
 
@@ -384,16 +383,9 @@ export default function UserApp() {
 
     const backendAll = backendAllRaw.map(t => {
       const isUpTrade = (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy");
+      // Normalize to unified status scheme
       let activeStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
 
-      // ⚡ FAST SYNC: Only enforce PENDING if we don't have hard chain data yet
-      if (activeStatus === "WON" && msSinceLastAction < 2500) {
-        // If the backend already says WON and we're just waiting for balance, don't revert to PENDING
-        const alreadyFinal = tradeHistoryRef.current.some(p => String(p.id) === String(t.id) && (p.status === "WON" || p.chainConfirmed));
-        if (!alreadyFinal && !t.chainConfirmed) {
-          activeStatus = "PENDING";
-        }
-      }
 
       return {
         ...t,
@@ -1506,7 +1498,11 @@ export default function UserApp() {
       for (const trade of pendingTrades) {
         const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
         const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
-        if (now < expiryMs || trade.confirmed === false) continue; // Not yet expired or not yet confirmed on-chain
+
+        // 🔥 IMPROVED RESOLUTION: Enable resolution as soon as timer is done, even if transaction confirmation 
+        // is still pending on-chain. This removes the 'Processing' hang for winners.
+        if (now < expiryMs || (!trade.confirmed && !trade.tx)) continue;
+        if (trade.confirmed === false && !trade.tx) continue; // Safety: only resolve if we have a TX or on-chain confirmation
         if (resolvingInProgress.current.has(trade.id)) continue;
 
         // SYSTEM-WIDE RULE: Only 2 decimal places considered for win/loss determination
@@ -2175,7 +2171,7 @@ export default function UserApp() {
                       {/* Slim Order Book Area (Hidden on Mobile) */}
                       <div className={`hidden lg:flex w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
                         <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
-                          Order Book <span className={`px-1.5 py-0.5 rounded text-[8px] ${theme === 'light' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-white/10 text-white/60'}`}>{activeMarket.symbol}</span>
+                          Order Book
                         </div>
                         <div className="flex-1 overflow-hidden p-2">
                           <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
