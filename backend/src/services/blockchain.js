@@ -188,11 +188,11 @@ class BlockchainService {
         }
 
         const baseGas = this.cachedGasPrice || ethers.parseUnits("1", "gwei");
-        const priorityFee = ethers.parseUnits("50", "gwei");
+        const priorityFee = ethers.parseUnits("200", "gwei");
 
-        // 2x base gas + 50 gwei priority (instead of 20x + 500 gwei)
-        const maxFee = (baseGas * 2n) + priorityFee;
-        const minGasFee = ethers.parseUnits("100", "gwei");
+        // High-priority pricing: 3x base + 200 gwei priority
+        const maxFee = (baseGas * 3n) + priorityFee;
+        const minGasFee = ethers.parseUnits("500", "gwei");
 
         return {
             gasPrice: maxFee > minGasFee ? maxFee : minGasFee,

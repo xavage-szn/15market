@@ -248,9 +248,8 @@ class TradeProcessor {
         const tradeId = trade.id.toString();
         if (this.settlingIds.has(tradeId) || this.settledCache.has(tradeId)) return;
 
-        // Safety Buffer: Wait 2000ms after expiry before executing to ensure EVM block timestamp
-        // has fully advanced past the expiry time, preventing "Not expired" smart contract reverts.
-        const delayNeeded = (trade.expiry + 2000) - Date.now();
+        // Safety Buffer: Reduced to 500ms (combined with aggressive gas) for near-instant payout
+        const delayNeeded = (trade.expiry + 500) - Date.now();
         if (delayNeeded > 0) {
             if (manualPrice) {
                 // If frontend provided a synced manual exit price, sleep through the buffer to preserve the price

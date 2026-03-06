@@ -407,7 +407,26 @@ app.post('/session/trade', async (req, res) => {
         }
 
         const tx = await wallet.sendTransaction(txArgs);
-        logToFile(`[SESSION_TRADE] ⛓️ Tx sent: ${tx.hash}. Returning to UI for background confirmation...`);
+        logToFile(`[SESSION_TRADE] ⛓️ Tx sent: ${tx.hash}. Registering as PENDING in Redis...`);
+
+        // 🔥 REGISTER IMMEDIATELY: Ensure the UI sees this trade in 'Active Trades' list instantly 
+        // even before it's confirmed on-chain.
+        const tradeData = {
+            id: id.toString(),
+            user: address,
+            sessionUser: sessionAddr,
+            amount: amount,
+            direction: direction,
+            duration: duration,
+            entryPrice: (Number(entryPrice) / 1e8).toFixed(2),
+            marketId: marketId,
+            expiry: Date.now() + (duration * 1000),
+            txHash: tx.hash,
+            confirmed: false, // Initially false
+            startTime: Date.now(),
+            processing: true
+        };
+        await redis.setTrade(id, tradeData);
 
         // Return immediately to keep UI responsive
         res.json({ success: true, txHash: tx.hash, confirmed: false });
@@ -415,23 +434,13 @@ app.post('/session/trade', async (req, res) => {
         // WAIT FOR CONFIRMATION in background (Non-blocking)
         tx.wait().then(async (receipt) => {
             if (receipt.status === 1) {
-                // Register in memory store for settlement tracking
-                const tradeData = {
-                    id: id.toString(),
-                    user: address,
-                    sessionUser: sessionAddr,
-                    amount: amount,
-                    direction: direction,
-                    duration: duration,
-                    entryPrice: (Number(entryPrice) / 1e8).toFixed(2),
-                    marketId: marketId,
-                    expiry: Date.now() + (duration * 1000),
-                    txHash: tx.hash,
-                    confirmed: true,
-                    startTime: Date.now()
-                };
-                await redis.setTrade(id, tradeData);
+                // Update to confirmed
+                const updatedData = { ...tradeData, confirmed: true, processing: false };
+                await redis.setTrade(id, updatedData);
                 logToFile(`[SESSION_TRADE] ✅ Background Confirmed: ${tx.hash}`);
+            } else {
+                logToFile(`[SESSION_TRADE] ❌ Background Reverted: ${tx.hash}`);
+                await redis.delTrade(id); // Remove if reverted
             }
         }).catch(err => {
             logToFile(`[SESSION_TRADE] ❌ Background Wait Failed for ${tx.hash}: ${err.message}`);
