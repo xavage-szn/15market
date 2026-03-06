@@ -2032,11 +2032,11 @@ export default function UserApp() {
           }}
         />
       ) : (
-        <div className={`w-full flex-1 flex flex-col items-center ${uiVersion === 'v2' ? 'py-0 overflow-hidden' : 'py-4 lg:py-10'}`}>
+        <div className={`w-full flex-1 flex flex-col items-center flex-shrink-0 ${uiVersion === 'v2' ? 'py-0 overflow-hidden' : 'py-4 lg:py-6'}`}>
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-14 lg:h-24' : 'h-8 lg:h-12'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-14 lg:h-24' : 'h-10 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
             <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
@@ -2074,16 +2074,16 @@ export default function UserApp() {
           )}
 
           {uiVersion === 'v1' && (
-            <div className={`w-full h-8 lg:h-10 relative z-[45] overflow-hidden border-y ${isLight ? 'bg-[#f0f9f4]/95 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
-              <GlobalTradeScroller theme={theme} />
+            <div className={`w-full relative z-[45] overflow-hidden border-y ${isLight ? 'bg-[#f0f9f4]/95 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
+              <GlobalTradeScroller theme={theme} isV1={true} />
             </div>
           )}
 
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-[1400px]'} px-2 sm:px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-2 sm:px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
-              <div className="w-full flex-1 grid grid-cols-12 gap-2 lg:gap-6 mb-6 relative z-0 mt-2 lg:h-[calc(100vh-140px)]">
-                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border min-h-[350px] lg:min-h-0 lg:h-full glass-panel chart-glow`}
+              <div className="w-full flex-none grid grid-cols-12 gap-3 lg:gap-6 mb-8 relative z-0 mt-2 h-auto lg:h-[calc(100vh-120px)] overflow-hidden">
+                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border lg:h-full glass-panel chart-glow flex-1`}
                   style={{
                     background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                     boxShadow: theme === 'light'
@@ -2111,7 +2111,7 @@ export default function UserApp() {
                     />
                   </div>
 
-                  <div className="flex-1 min-h-[200px] glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 flex flex-col min-h-0 overflow-y-auto">
+                  <div className="flex-1 min-h-[300px] glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col min-h-0 overflow-y-auto">
                     <LiveExecution
                       activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                       setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
@@ -2168,7 +2168,7 @@ export default function UserApp() {
                       </div>
 
                       {/* Slim Order Book Area (Hidden on Mobile) */}
-                      <div className={`hidden lg:flex w-[240px] xl:w-[280px] flex-col border-l transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                      <div className={`hidden lg:flex w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
                         <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
                           Order Book <span className={`px-1.5 py-0.5 rounded text-[8px] ${theme === 'light' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-white/10 text-white/60'}`}>{activeMarket.symbol}</span>
                         </div>

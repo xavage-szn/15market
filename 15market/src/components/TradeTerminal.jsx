@@ -31,14 +31,14 @@ function TradeTerminalComponent({
     const isLight = theme === 'light';
 
     const containerClass = transparent
-        ? "flex flex-col gap-2 lg:gap-3"
-        : `w-full h-full p-2 lg:p-5 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-2 lg:gap-4 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
+        ? "flex flex-col gap-1 lg:gap-2"
+        : `w-full h-full p-2 lg:p-3 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-1.5 lg:gap-2.5 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
 
     const renderHeader = () => (
-        <div className="flex items-center justify-between pointer-events-auto mb-1">
-            <div className="flex items-center gap-2 lg:gap-3">
+        <div className="flex items-center justify-between pointer-events-auto mb-0.5">
+            <div className="flex items-center gap-2 lg:gap-2.5">
                 <div className="flex items-center gap-1">
-                    <h2 className={`text-[10px] lg:text-sm font-black tracking-tighter uppercase ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                    <h2 className={`text-[9px] lg:text-xs font-black tracking-tighter uppercase ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
                         TERMINAL
                     </h2>
                     <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#3CB371', boxShadow: `0 0 10px #3CB371` }} />
@@ -75,11 +75,11 @@ function TradeTerminalComponent({
     );
 
     const renderCallPut = () => (
-        <div className="grid grid-cols-2 gap-1 lg:gap-1.5 pointer-events-auto">
+        <div className="grid grid-cols-2 gap-1 lg:gap-1 pointer-events-auto">
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("UP"); }}
                 disabled={maintenanceMode}
-                className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "UP"
+                className={`flex flex-col items-center justify-center py-1.5 lg:py-2 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "UP"
                     ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
                     : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                     }`}
@@ -87,12 +87,12 @@ function TradeTerminalComponent({
                     boxShadow: direction === "UP" ? `0 0 20px rgba(60, 179, 113, 0.2)` : 'none'
                 }}
             >
-                <span className="text-[7px] lg:text-[10px] font-black uppercase tracking-widest">Call</span>
+                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">Call</span>
             </button>
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("DOWN"); }}
                 disabled={maintenanceMode}
-                className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "DOWN"
+                className={`flex flex-col items-center justify-center py-1.5 lg:py-2 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "DOWN"
                     ? (isLight ? 'bg-[#FF7F50] text-white border-transparent' : 'bg-[#FF7F50]/20 border-[#FF7F50] text-[#FF7F50]')
                     : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                     }`}
@@ -100,30 +100,30 @@ function TradeTerminalComponent({
                     boxShadow: direction === "DOWN" ? `0 0 20px rgba(255, 127, 80, 0.2)` : 'none'
                 }}
             >
-                <span className="text-[7px] lg:text-[10px] font-black uppercase tracking-widest">Put</span>
+                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">Put</span>
             </button>
         </div>
     );
 
     const renderTime = () => (
-        <div className="flex flex-col gap-0.5 lg:gap-1 pointer-events-auto">
+        <div className="flex flex-col gap-0.5 lg:gap-0.5 pointer-events-auto">
             <div className="flex items-center justify-between px-0.5">
-                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
-                <span className="text-[6px] lg:text-[8px] font-mono font-bold" style={{ color: '#3CB371' }}>
+                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
+                <span className="text-[6px] lg:text-[7px] font-mono font-bold" style={{ color: '#3CB371' }}>
                     {duration === 5 ? '6.98x' : duration === 10 ? '4.98x' : '1.98x'}
                 </span>
             </div>
-            <div className="grid grid-cols-3 gap-1 lg:gap-1.5">
+            <div className="grid grid-cols-3 gap-1 lg:gap-1">
                 {[15, 10, 5].map(d => (
                     <button
                         key={d}
                         onClick={(e) => { e.stopPropagation(); setDuration(d); }}
-                        className={`flex flex-col items-center justify-center py-1 rounded-xl border transition-all duration-300 active:scale-95 ${duration === d
+                        className={`flex flex-col items-center justify-center py-0.5 rounded-lg border transition-all duration-300 active:scale-95 ${duration === d
                             ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
                             : (isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/60 hover:bg-[#e6f4ed]' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
                             }`}
                     >
-                        <span className="text-[10px] lg:text-sm font-black tracking-tighter">{d}s</span>
+                        <span className="text-[9px] lg:text-xs font-black tracking-tighter">{d}s</span>
                     </button>
                 ))}
             </div>
@@ -131,20 +131,20 @@ function TradeTerminalComponent({
     );
 
     const renderStake = () => (
-        <div className="flex flex-col gap-0.5 lg:gap-1 pointer-events-auto">
+        <div className="flex flex-col gap-0.5 lg:gap-0.5 pointer-events-auto">
             <div className="flex items-center justify-between px-1">
-                <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
-                <span className={`text-[6px] lg:text-[8px] font-bold ${sessionMode ? (isLight ? 'text-[#3CB371]' : 'text-yellow-400') : 'text-[#3CB371]'}`}>
+                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
+                <span className={`text-[6px] lg:text-[7px] font-bold ${sessionMode ? (isLight ? 'text-[#3CB371]' : 'text-yellow-400') : 'text-[#3CB371]'}`}>
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1.5 p-1.5 rounded-xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
+            <div className={`flex items-center gap-1.5 p-1 rounded-lg border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
                 <input
                     type="number"
                     value={amount}
                     onChange={handleAmountChange}
                     placeholder="0.00"
-                    className={`w-full bg-transparent text-xs lg:text-base font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
+                    className={`w-full bg-transparent text-[10px] lg:text-sm font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
                 />
             </div>
             <div className="relative pt-3 pb-1 px-1">

@@ -6,7 +6,7 @@ import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock
 import { MascotLoader } from './MascotLoader';
 import { KEEPER_URL_ARC } from "../constants";
 
-export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [] }) {
+export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1' }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const seriesRef = useRef(null);
@@ -16,7 +16,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const lastCandleTime = useRef(null);
 
     const [timeframe, setTimeframe] = useState('1m');
-    const [chartType, setChartType] = useState('line'); // 'candles' or 'line'
+    const [chartType, setChartType] = useState(uiVersion === 'v1' ? 'candles' : 'line'); // 'candles' or 'line'
     const current1sCandle = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [chartProgress, setChartProgress] = useState(0);
@@ -549,21 +549,23 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         ))}
                     </div>
 
-                    {/* CHART TYPE TOGGLE - Expert Options Style */}
-                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
-                        <button
-                            onClick={() => setChartType('line')}
-                            className={`p-1.5 transition-all rounded-lg ${chartType === 'line' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
-                        >
-                            <TrendingUp size={14} />
-                        </button>
-                        <button
-                            onClick={() => setChartType('candles')}
-                            className={`p-1.5 transition-all rounded-lg ${chartType === 'candles' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
-                        >
-                            <BarChart3 size={14} />
-                        </button>
-                    </div>
+                    {/* CHART TYPE TOGGLE - Expert Options Style (Exclusive to V2) */}
+                    {uiVersion === 'v2' && (
+                        <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
+                            <button
+                                onClick={() => setChartType('line')}
+                                className={`p-1.5 transition-all rounded-lg ${chartType === 'line' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
+                            >
+                                <TrendingUp size={14} />
+                            </button>
+                            <button
+                                onClick={() => setChartType('candles')}
+                                className={`p-1.5 transition-all rounded-lg ${chartType === 'candles' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
+                            >
+                                <BarChart3 size={14} />
+                            </button>
+                        </div>
+                    )}
 
                     <div className="ml-auto flex items-center gap-2 relative">
                         <div className="relative">
@@ -601,15 +603,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                                 ))}
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => { setChartType(chartType === 'candles' ? 'line' : 'candles'); setShowSettings(false); }}
-                                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'} transition-all ${controlTextDim} hover:${controlText}`}
-                                        >
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Candles</span>
-                                            <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : (isDark ? 'bg-white/10' : 'bg-[#3CB371]/10')}`}>
-                                                <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${chartType === 'candles' ? 'translate-x-4' : 'translate-x-0'}`} />
-                                            </div>
-                                        </button>
+                                        {uiVersion === 'v2' && (
+                                            <button
+                                                onClick={() => { setChartType(chartType === 'candles' ? 'line' : 'candles'); setShowSettings(false); }}
+                                                className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'} transition-all ${controlTextDim} hover:${controlText}`}
+                                            >
+                                                <span className="text-[10px] font-black uppercase tracking_widest">Candles</span>
+                                                <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : (isDark ? 'bg-white/10' : 'bg-[#3CB371]/10')}`}>
+                                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${chartType === 'candles' ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                </div>
+                                            </button>
+                                        )}
                                     </motion.div>
                                 )}
                             </AnimatePresence>

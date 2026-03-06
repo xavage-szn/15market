@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Radio, ArrowUp, ArrowDown, Check, X } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-function GlobalTradeScrollerComponent({ theme }) {
+function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
     const [history, setHistory] = useState(() => {
         try {
             const saved = localStorage.getItem("15market_global_history_v2");
@@ -134,8 +134,11 @@ function GlobalTradeScrollerComponent({ theme }) {
         return `${mergedHistory[0]?.id}-${mergedHistory.length}`;
     }, [mergedHistory]);
 
+    const v1Bg = isLight ? 'bg-gradient-to-r from-[#3CB371]/5 via-[#3CB371]/10 to-[#3CB371]/5 border-[#3CB371]/20' : 'bg-gradient-to-r from-[#0d0d0d] via-[#1a1a1a] to-[#0d0d0d] border-white/5';
+    const v1TextClass = isLight ? 'text-[#0a261a]' : 'text-white';
+
     return (
-        <div className={`w-full h-8 lg:h-10 relative z-[45] overflow-hidden border-y ${isLight ? 'bg-white/95 border-black/5' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
+        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 border-y-2' : 'h-8 lg:h-10 border-y'} relative z-[45] overflow-hidden transition-all duration-500 ${isV1 ? v1Bg : (isLight ? 'bg-white/95 border-black/5' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md')}`}>
             <AnimatePresence mode="wait">
                 {activeBroadcast ? (
                     <motion.div
@@ -143,7 +146,7 @@ function GlobalTradeScrollerComponent({ theme }) {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 flex items-center bg-[#FF7F50]/10"
+                        className={`absolute inset-0 flex items-center ${isV1 ? 'bg-amber-500/10' : 'bg-[#FF7F50]/10'}`}
                     >
                         <motion.div
                             animate={{ x: [0, -1000] }}
@@ -152,8 +155,8 @@ function GlobalTradeScrollerComponent({ theme }) {
                         >
                             {[...Array(10)].map((_, i) => (
                                 <div key={i} className="flex items-center gap-2">
-                                    <Radio size={12} className="text-[#FF7F50] animate-pulse" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-[#FF7F50]">
+                                    <Radio size={isV1 ? 14 : 12} className={`${isV1 ? 'text-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'text-[#FF7F50]'} animate-pulse`} />
+                                    <span className={`${isV1 ? 'text-[11px] font-black' : 'text-[10px]'} uppercase tracking-[0.2em] ${isV1 ? 'text-amber-500' : 'text-[#FF7F50]'}`}>
                                         {activeBroadcast.text}
                                     </span>
                                 </div>
@@ -178,20 +181,20 @@ function GlobalTradeScrollerComponent({ theme }) {
                                 const color = isWon ? WIN_COLOR : LOSS_COLOR;
 
                                 return (
-                                    <div key={`${event.id}-${i}`} className="flex items-center gap-4 px-6 border-r border-white/5 h-full">
+                                    <div key={`${event.id}-${i}`} className={`flex items-center gap-4 ${isV1 ? 'px-10 border-r-2' : 'px-6 border-r'} border-white/10 h-full transition-all`}>
                                         <div className="flex items-center gap-2">
-                                            <div className="p-0.5 rounded-sm bg-white/5">
-                                                {isUp ? <ArrowUp size={8} className="text-[#3CB371]" /> : <ArrowDown size={8} className="text-[#FF7F50]" />}
+                                            <div className={`${isV1 ? 'p-1' : 'p-0.5'} rounded-sm bg-white/5 shadow-inner`}>
+                                                {isUp ? <ArrowUp size={isV1 ? 10 : 8} className="text-[#3CB371]" /> : <ArrowDown size={isV1 ? 10 : 8} className="text-[#FF7F50]" />}
                                             </div>
-                                            <span className={`text-[9px] font-black uppercase tracking-tighter ${isLight ? 'text-black/60' : 'text-white/60'}`}>
+                                            <span className={`${isV1 ? 'text-[10px] font-black' : 'text-[9px] font-bold'} uppercase tracking-widest ${isV1 ? v1TextClass : (isLight ? 'text-black/60' : 'text-white/60')}`}>
                                                 {event.symbol ? event.symbol.split('/')[0] : 'BTC'}
                                             </span>
                                         </div>
 
                                         <div className="flex items-center gap-2">
-                                            <div className={`px-1.5 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest flex items-center gap-1`}
-                                                style={{ backgroundColor: `${color}15`, color, border: `1px solid ${color}30` }}>
-                                                {isWon ? <Check size={7} /> : <X size={7} />}
+                                            <div className={`${isV1 ? 'px-2 py-0.5 text-[9px]' : 'px-1.5 py-0.5 text-[7px]'} rounded-sm font-black uppercase tracking-wider flex items-center gap-1 shadow-sm`}
+                                                style={{ backgroundColor: `${color}25`, color, border: `1px solid ${color}40` }}>
+                                                {isWon ? <Check size={isV1 ? 9 : 7} /> : <X size={isV1 ? 9 : 7} />}
                                                 {event.status}
                                             </div>
                                         </div>
