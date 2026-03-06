@@ -93,6 +93,16 @@ export default function UserApp() {
   const { isConnected, address, chainId: connectedChainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
+
+  const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
+  useEffect(() => {
+    localStorage.setItem('15market_theme', theme);
+  }, [theme]);
+  const isLight = theme === 'light';
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  }, []);
+
   // Keep-Alive Heartbeat (Prevents Backend from Sleeping while user is active)
   useEffect(() => {
     const isLocal = window.location.hostname === 'localhost';
