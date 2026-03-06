@@ -119,7 +119,7 @@ function TradeTerminalComponent({
                     <button
                         key={d}
                         onClick={(e) => { e.stopPropagation(); setDuration(d); }}
-                        className={`flex flex-col items-center justify-center py-0.5 rounded-lg border transition-all duration-300 active:scale-95 ${duration === d
+                        className={`flex flex-col items-center justify-center py-0.5 rounded-full border transition-all duration-300 active:scale-95 ${duration === d
                             ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
                             : (isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/60 hover:bg-[#e6f4ed]' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
                             }`}
@@ -139,7 +139,7 @@ function TradeTerminalComponent({
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1.5 p-1 rounded-lg border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
+            <div className={`flex items-center gap-1.5 p-1 rounded-2xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
                 <input
                     type="number"
                     value={amount}
@@ -195,7 +195,7 @@ function TradeTerminalComponent({
                         </div>
                     </div>
 
-                    <div className={`mt-0.5 flex items-center gap-1 p-1 rounded-lg border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
+                    <div className={`mt-0.5 flex items-center gap-1 p-1 rounded-2xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
                         <input
                             type="number"
                             value={refillAmount}
