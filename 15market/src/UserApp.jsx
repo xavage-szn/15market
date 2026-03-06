@@ -2082,8 +2082,8 @@ export default function UserApp() {
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-[1400px]'} px-2 sm:px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
-              <div className="w-full flex-1 grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0 mt-2">
-                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border min-h-[350px] lg:min-h-[450px] lg:h-[650px] glass-panel chart-glow`}
+              <div className="w-full flex-1 grid grid-cols-12 gap-2 lg:gap-6 mb-6 relative z-0 mt-2 lg:h-[calc(100vh-140px)]">
+                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border min-h-[350px] lg:min-h-0 lg:h-full glass-panel chart-glow`}
                   style={{
                     background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                     boxShadow: theme === 'light'
@@ -2094,7 +2094,7 @@ export default function UserApp() {
                   <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
                 </div>
 
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 lg:h-full min-h-0">
                   <div className="flex-none">
                     <TradeTerminal
                       activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
@@ -2111,7 +2111,7 @@ export default function UserApp() {
                     />
                   </div>
 
-                  <div className="flex-1 min-h-[250px] glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 flex flex-col">
+                  <div className="flex-1 min-h-[200px] glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-4 flex flex-col min-h-0 overflow-y-auto">
                     <LiveExecution
                       activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                       setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
