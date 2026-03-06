@@ -44,8 +44,8 @@ function TradeHistoryComponent({
             <div className={`
                 ${isCompact ? 'h-full flex flex-col p-3' : 'p-4 lg:p-6'} 
                 rounded-2xl border transition-all duration-300 glass-panel
-                ${isLight ? 'static-panel-light !shadow-xl' : 'shadow-2xl'}`}
-                style={{ background: isLight ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)' }}
+                ${isLight ? 'coral-green-gradient-light !shadow-xl' : 'shadow-2xl'}`}
+                style={isLight ? {} : { background: 'rgba(10, 10, 10, 0.7)' }}
             >
                 <div className="flex items-center justify-between mb-3 lg:mb-4 px-1">
                     <h3 className={`text-xs lg:text-base font-bold ${isLight ? 'text-[#1A3026]' : 'text-white'}`}>Trade History</h3>
@@ -61,7 +61,7 @@ function TradeHistoryComponent({
                                 : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
                                 <div className="flex items-center gap-2 lg:gap-4">
                                     <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{
-                                        background: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? `rgba(59, 130, 246, 0.2)` : `rgba(255, 127, 80, 0.2)`,
+                                        background: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? `rgba(60, 179, 113, 0.2)` : `rgba(255, 127, 80, 0.2)`,
                                         color: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? '#3CB371' : '#FF7F50'
                                     }}>
                                         {String(t.direction || "").toUpperCase()}
@@ -81,8 +81,8 @@ function TradeHistoryComponent({
                                         href={`https://testnet.arcscan.app/tx/${t.tx}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
-                                            t.status === "LOST" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
+                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
+                                            t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
                                                 (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                             }`}
                                     >

@@ -146,6 +146,10 @@ class TradeProcessor {
                         }
                     }
 
+                    const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
+                    const mId = e.args.marketId !== undefined ? Number(e.args.marketId) : 1;
+                    const parsedSymbol = ID_ASSET_MAP[mId] || 'BTC';
+
                     await redis.addHistoricalTrade({
                         id,
                         user: e.args.user,
@@ -157,17 +161,23 @@ class TradeProcessor {
                         status: s ? s.status : 'PENDING',
                         settlementPrice: s ? s.settlementPrice : null,
                         payout: s ? s.payout : null,
-                        tx: e.transactionHash
+                        tx: e.transactionHash,
+                        symbol: parsedSymbol
                     });
                 }
 
                 // Update historical trades that were placed in earlier chunks but settled in this chunk
                 for (const [id, s] of settledMap.entries()) {
+                    const existing = await redis.getTrade(id);
+                    const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
+                    const symbol = existing?.symbol || (existing?.marketId !== undefined ? ID_ASSET_MAP[existing.marketId] : null);
+
                     await redis.addHistoricalTrade({
                         id,
                         status: s.status,
                         settlementPrice: s.settlementPrice,
-                        payout: s.payout
+                        payout: s.payout,
+                        ...(symbol ? { symbol } : {})
                     });
                 }
 
@@ -219,17 +229,18 @@ class TradeProcessor {
             return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
         });
 
-        // CRITICAL: Process settlements SEQUENTIALLY to prevent nonce collisions
-        // When multiple trades expire at the same time, parallel settlement causes:
-        // 1. Nonce collisions (same nonce used for multiple TXs)
-        // 2. Shared price cache returns same price for different trades  
-        // 3. Some TXs revert silently, leading to incorrect win/loss results
-        for (const trade of toSettle) {
-            await this._settleSingleTrade(trade);
-            // Small delay between settlements to ensure unique nonce and fresh price
-            if (toSettle.length > 1) {
-                await new Promise(r => setTimeout(r, 300));
-            }
+        // Process settlements in parallel to enable "Mass Settlement" behavior
+        // NonceManager handles serialization and locking, so we can broadcast simultaneously
+        console.log(`[Processor] ⚡ Mass settling ${toSettle.length} trades...`);
+
+        const chunks = [];
+        const CHUNK_SIZE = 10; // Batch in chunks of 10 to avoid RPC rate limits
+        for (let i = 0; i < toSettle.length; i += CHUNK_SIZE) {
+            chunks.push(toSettle.slice(i, i + CHUNK_SIZE));
+        }
+
+        for (const chunk of chunks) {
+            await Promise.allSettled(chunk.map(trade => this._settleSingleTrade(trade)));
         }
     }
 
@@ -332,12 +343,23 @@ class TradeProcessor {
                     this.failedSettlements.delete(tradeId);
 
                     // 🔥 IMMEDIATE RECORD: Prevent 'undefined' price/payout in UI during backend backfill gap
-                    const isWin = Number(finalPrice) > Number(trade.entryPrice) ? (trade.direction === 1 || trade.direction === "UP") : (trade.direction !== 1 && trade.direction !== "UP");
+                    // Force 3DP floor to match frontend/blockchain comparison exactly
+                    const entry2dp = Math.floor(Number(trade.entryPrice) * 1000) / 1000;
+                    const exit2dp = Math.floor(finalPrice * 1000) / 1000;
+
+                    const isUp = (trade.direction === 1 || trade.direction === "UP");
+                    const isWin = isUp ? (exit2dp > entry2dp) : (exit2dp < entry2dp);
+
+                    const duration = Number(trade.duration) || 15;
+                    const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+                    const instantVal = isWin ? (Number(trade.amount) * multiplier).toFixed(2) : "0.000";
+
                     await redis.addHistoricalTrade({
                         id: tradeId,
                         status: isWin ? "WON" : "LOST",
-                        settlementPrice: finalPrice.toFixed(2),
-                        payout: isWin ? "..." : "0.00"
+                        settlementPrice: exit2dp.toFixed(3),
+                        payout: instantVal,
+                        symbol: symbol
                     });
                 }
             }

@@ -1,5 +1,6 @@
 import React, { memo, useState, useEffect, useMemo, useRef } from 'react';
 import { Share2, X, Zap, TrendingUp, TrendingDown } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Stamp } from './Stamp';
 
 const LCD_COUNTER_STYLE = `
@@ -202,24 +203,24 @@ function LiveExecutionComponent({
 
                                             return (
                                                 <div
-                                                    className={`rounded-[12px] lg:rounded-[14px] p-1 flex flex-col relative transition-all duration-500 border ${!isExpanded && activeTrades.length === 1 ? 'h-full bg-gradient-to-b from-white/[0.03] to-transparent' : 'h-auto'} ${isLight
-                                                        ? 'bg-white border-[#3CB371]/15 shadow-[0_2px_15px_rgba(60,179,113,0.06)]'
-                                                        : 'bg-white/[0.02] border-white/5 shadow-2xl'}`}
+                                                    className={`rounded-[16px] p-2 lg:p-3 flex flex-col relative transition-all duration-500 border-2 ${!isExpanded && activeTrades.length === 1 ? 'h-full flex-1' : 'h-auto'} ${isLight
+                                                        ? 'bg-white/80 backdrop-blur-xl border-[#3CB371]/10 shadow-sm hover:shadow-md'
+                                                        : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
                                                     style={displayFinal ? {
-                                                        borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(255, 127, 80, 0.4)' : 'rgba(60, 179, 113, 0.4)',
+                                                        borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(60, 179, 113, 0.5)' : 'rgba(255, 127, 80, 0.5)',
                                                         boxShadow: (instantStatus === "WON" || trade.status === "WON")
-                                                            ? '0 0 30px rgba(255, 127, 80, 0.15)'
-                                                            : '0 0 30px rgba(60, 179, 113, 0.1)'
+                                                            ? 'inset 0 0 30px rgba(60, 179, 113, 0.05), 0 5px 30px rgba(60, 179, 113, 0.1)'
+                                                            : 'inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px rgba(255, 127, 80, 0.1)'
                                                     } : {}}
                                                 >
                                                     {/* Card Header - Ultra Compact */}
                                                     <div className="flex items-center justify-between mb-0 px-0.5">
                                                         <div className="flex items-center gap-1.5">
                                                             <div className={`w-1 h-1 rounded-full ${displayFinal
-                                                                ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#FF7F50]' : 'bg-[#3CB371]')
-                                                                : (liveWinning ? 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]' : 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]')}`} />
-                                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
-                                                                {displayFinal ? trade.status : "Live"}
+                                                                ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
+                                                                : (liveWinning ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
+                                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-black/50' : 'text-white/40')}`}>
+                                                                {displayFinal ? trade.status : (trade.confirmed === false ? "Verifying" : "Live")}
                                                             </span>
                                                         </div>
                                                         {isFinal && (
@@ -235,22 +236,22 @@ function LiveExecutionComponent({
                                                     {/* Central Hero Countdown - Tighter vertical scaling */}
                                                     {!displayFinal ? (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-0">
-                                                            <div className={`text-xl lg:text-2xl font-matrix tracking-[0.1em] transition-all duration-300 ${isLight ? 'text-black' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.4)]'}`}>
-                                                                {displayTimeLeft}<span className="text-[9px] font-sans font-black italic opacity-40 ml-0.5">s</span>
+                                                            <div className={`text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-black opacity-80' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.5)]'}`}>
+                                                                {displayTimeLeft}<span className="text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
                                                             <div className="mt-0 px-1.5 py-0 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-90">
-                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#FF7F50]" : "text-[#3CB371]"}`}>
+                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
                                                                     {liveWinning ? "WINNING" : "LOSING"}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     ) : (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-1">
-                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#FF7F50]' : 'text-[#3CB371]'}`}>
+                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
                                                                 {(instantStatus === "WON" || trade.status === "WON") ? "Trade Won" : "Trade Lost"}
                                                             </div>
                                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#FF7F50]' : 'text-[#3CB371]'}`}>
+                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
                                                                     {(instantStatus === "WON" || trade.status === "WON") ? `+$${Number(trade.payout || potentialProfit).toFixed(2)}` : "0.00"}
                                                                 </span>
                                                             </div>
@@ -258,16 +259,16 @@ function LiveExecutionComponent({
                                                     )}
 
                                                     {/* Data Footer - Minimal Height */}
-                                                    <div className={`mt-auto pt-1 border-t ${isLight ? 'border-black/5' : 'border-white/5'}`}>
-                                                        <div className="flex items-center justify-between mb-0.5 px-0.5">
-                                                            <div className="flex items-center gap-1">
-                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Entry:</span>
+                                                    <div className={`mt-auto pt-2 border-t flex items-end justify-between px-0.5 ${isLight ? 'border-black/5' : 'border-white/5'}`}>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Entry</span>
                                                                 <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>
                                                                     {!isNaN(entryPriceVal) ? `$${entryPriceVal}` : "..."}
                                                                 </span>
                                                             </div>
-                                                            <div className="flex items-center gap-1">
-                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake:</span>
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
                                                                 <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{Number(trade.amount).toFixed(2)}</span>
                                                             </div>
                                                         </div>
@@ -278,9 +279,10 @@ function LiveExecutionComponent({
                                                                     setSelectedPnLTrade(trade);
                                                                     setIsPnLOpen(true);
                                                                 }}
-                                                                className={`mt-0.5 w-full py-1 rounded-lg text-[8px] font-black uppercase tracking-[0.2em] transition-all shadow-lg ${isLight ? 'bg-black text-white' : 'bg-[#3CB371] text-white hover:brightness-110'}`}
+                                                                title="Share Result"
+                                                                className={`p-1.5 rounded-full transition-all hover:scale-110 active:scale-95 border ${isLight ? 'bg-black/5 border-black/10 text-black hover:bg-black/10' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
                                                             >
-                                                                Share Result
+                                                                <Share2 size={12} />
                                                             </button>
                                                         )}
                                                     </div>

@@ -174,154 +174,238 @@ body {
   box-shadow: none !important;
 }
 
-/* ===== PREMIUM LIGHT MODE ===== */
+/* ===== PREMIUM LIGHT MODE — Branded Sage ===== */
 html.light,
 body.light {
-  background-color: #EEF9F1 !important;
-  /* Very Light Coral Green */
-  background-image: radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.05) 1px, transparent 0) !important;
-  background-size: 32px 32px !important;
+  background-color: #c8ddd0 !important;
+  background-image:
+    radial-gradient(circle at 2px 2px, rgba(30, 90, 56, 0.06) 1px, transparent 0),
+    linear-gradient(180deg, #c8ddd0 0%, #b8d1c0 100%) !important;
+  background-size: 32px 32px, 100% 100% !important;
+  background-attachment: fixed !important;
 }
 
 .light {
-  --primary-color: #3CB371;
-  --primary-glow: rgba(60, 179, 113, 0.4);
-  --primary-glow-strong: rgba(60, 179, 113, 0.6);
-  --primary-glow-subtle: rgba(60, 179, 113, 0.2);
-  --glass-bg: rgba(238, 249, 241, 0.92);
-  --glass-border: rgba(60, 179, 113, 0.2);
-  --glass-highlight: rgba(255, 255, 255, 0.4);
-  --text-primary: #1A3026;
-  /* Darker green-tinted text */
-  --text-secondary: #3D5A4C;
-  --text-tertiary: #6B8E7D;
+  --primary-color: #2a9d5c;
+  --primary-glow: rgba(42, 157, 92, 0.4);
+  --primary-glow-strong: rgba(42, 157, 92, 0.6);
+  --primary-glow-subtle: rgba(42, 157, 92, 0.2);
+  --glass-bg: rgba(190, 215, 198, 0.80);
+  --glass-border: rgba(30, 90, 56, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.25);
+  --text-primary: #0f2618;
+  --text-secondary: #1e3f2c;
+  --text-tertiary: #3d6b50;
 }
 
 /* Light Mode Glass Panels */
 .light .glass-panel {
-  background: rgba(238, 249, 241, 0.9) !important;
-  /* Very Light Coral Green Glass */
+  background: rgba(185, 212, 195, 0.85) !important;
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(60, 179, 113, 0.15) !important;
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(30, 90, 56, 0.15) !important;
   box-shadow:
-    0 4px 24px rgba(60, 179, 113, 0.08),
-    0 0 1px rgba(60, 179, 113, 0.2) inset !important;
+    0 4px 24px rgba(20, 60, 36, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset !important;
 }
 
 .light .glass-panel::before {
   background: linear-gradient(135deg,
-      rgba(60, 179, 113, 0.06) 0%,
+      rgba(255, 255, 255, 0.12) 0%,
       transparent 50%,
       transparent 100%) !important;
 }
 
 /* Light Mode Static Panels */
 .light .static-panel-light {
-  background: #EEF9F1 !important;
-  border: 1px solid rgba(60, 179, 113, 0.18) !important;
+  background: #bfd7c6 !important;
+  border: 1px solid rgba(30, 90, 56, 0.16) !important;
   box-shadow:
-    0 2px 12px rgba(60, 179, 113, 0.06),
-    0 0 0 1px rgba(60, 179, 113, 0.08) inset !important;
+    0 2px 12px rgba(20, 60, 36, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.15) inset !important;
+}
+
+/* Light Mode Nav */
+.light .glass-nav {
+  background: rgba(175, 205, 185, 0.88) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(30, 90, 56, 0.12) !important;
 }
 
 /* Light Mode Scrollbar */
 .light ::-webkit-scrollbar-track {
-  background: rgba(60, 179, 113, 0.05);
+  background: rgba(30, 90, 56, 0.08);
 }
 
 .light ::-webkit-scrollbar-thumb {
-  background: rgba(60, 179, 113, 0.2);
+  background: rgba(30, 90, 56, 0.22);
 }
 
 .light ::-webkit-scrollbar-thumb:hover {
-  background: rgba(60, 179, 113, 0.35);
+  background: rgba(30, 90, 56, 0.35);
 }
 
 /* Light Mode Neon Effects */
 .light .neon-border {
-  border: 1px solid rgba(60, 179, 113, 0.2) !important;
-  box-shadow: 0 0 20px rgba(60, 179, 113, 0.1) !important;
+  border: 1px solid rgba(30, 90, 56, 0.18) !important;
+  box-shadow: 0 2px 16px rgba(20, 60, 36, 0.10) !important;
 }
 
 /* Light Mode Button Enhancements */
 .light button[style*="#3CB371"],
 .light .bg-\[#3CB371\] {
   box-shadow:
-    0 4px 12px rgba(60, 179, 113, 0.25),
-    0 0 0 1px rgba(60, 179, 113, 0.1) inset !important;
+    0 4px 14px rgba(42, 157, 92, 0.30),
+    0 0 0 1px rgba(42, 157, 92, 0.12) inset !important;
 }
 
 .light button[style*="#3CB371"]:hover,
 .light .bg-\[#3CB371\]:hover {
   box-shadow:
-    0 6px 16px rgba(60, 179, 113, 0.35),
-    0 0 0 1px rgba(60, 179, 113, 0.2) inset !important;
+    0 6px 20px rgba(42, 157, 92, 0.40),
+    0 0 0 1px rgba(42, 157, 92, 0.20) inset !important;
   transform: translateY(-1px);
 }
 
-/* Light Mode Text Readability */
+/* Light Mode Text — Strong Contrast */
 .light .text-white {
-  color: #1a1a1a !important;
+  color: #0f2618 !important;
+}
+
+.light .text-white\/90 {
+  color: rgba(15, 38, 24, 0.90) !important;
 }
 
 .light .text-white\/60 {
-  color: rgba(26, 26, 26, 0.6) !important;
+  color: rgba(15, 38, 24, 0.60) !important;
 }
 
 .light .text-white\/40 {
-  color: rgba(26, 26, 26, 0.4) !important;
+  color: rgba(15, 38, 24, 0.45) !important;
 }
 
 .light .text-white\/20 {
-  color: rgba(26, 26, 26, 0.2) !important;
+  color: rgba(15, 38, 24, 0.28) !important;
 }
 
-/* Preserve Coral Green Text */
+/* Preserve Brand Green Text */
 .light [style*="color: #3CB371"],
 .light .text-\[#3CB371\] {
-  color: #3CB371 !important;
+  color: #2a9d5c !important;
 }
 
 /* Light Mode Borders */
 .light .border-white\/5,
 .light .border-white\/10 {
-  border-color: rgba(60, 179, 113, 0.1) !important;
+  border-color: rgba(30, 90, 56, 0.12) !important;
 }
 
-/* Light Mode Backgrounds */
+/* Light Mode Backgrounds — Tinted, Not White */
 .light .bg-white\/5 {
-  background-color: rgba(60, 179, 113, 0.04) !important;
+  background-color: rgba(30, 90, 56, 0.05) !important;
 }
 
 .light .bg-white\/10 {
-  background-color: rgba(60, 179, 113, 0.06) !important;
+  background-color: rgba(30, 90, 56, 0.08) !important;
 }
 
 .light .bg-black\/5 {
-  background-color: rgba(60, 179, 113, 0.04) !important;
+  background-color: rgba(30, 90, 56, 0.05) !important;
 }
 
 .light .bg-black\/10 {
-  background-color: rgba(60, 179, 113, 0.06) !important;
+  background-color: rgba(30, 90, 56, 0.08) !important;
+}
+
+.light .bg-white\/80 {
+  background-color: rgba(185, 212, 195, 0.85) !important;
+}
+
+.light .bg-white {
+  background-color: #b9d4c3 !important;
+}
+
+.light .bg-white\/60 {
+  background-color: rgba(185, 212, 195, 0.65) !important;
 }
 
 /* Light Mode Hover States */
 .light .hover\:bg-white\/5:hover {
-  background-color: rgba(60, 179, 113, 0.08) !important;
+  background-color: rgba(30, 90, 56, 0.10) !important;
 }
 
 .light .hover\:bg-white\/10:hover {
-  background-color: rgba(60, 179, 113, 0.12) !important;
+  background-color: rgba(30, 90, 56, 0.14) !important;
+}
+
+/* Light Mode Input Fields */
+.light input,
+.light select,
+.light textarea {
+  background-color: rgba(175, 205, 185, 0.5) !important;
+  border-color: rgba(30, 90, 56, 0.15) !important;
+  color: #0f2618 !important;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+  color: rgba(15, 38, 24, 0.3) !important;
+}
+
+.light input:focus,
+.light select:focus,
+.light textarea:focus {
+  border-color: rgba(42, 157, 92, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(42, 157, 92, 0.12) !important;
 }
 
 /* Chart Widget Glow - Light Mode */
 .light .chart-glow {
   box-shadow:
-    0 0 40px rgba(60, 179, 113, 0.5),
-    0 0 25px rgba(60, 179, 113, 0.4),
-    0 0 15px rgba(60, 179, 113, 0.3),
-    inset 0 0 40px rgba(60, 179, 113, 0.1) !important;
-  border-color: rgba(60, 179, 113, 0.8) !important;
+    0 0 30px rgba(42, 157, 92, 0.35),
+    0 0 15px rgba(42, 157, 92, 0.25),
+    inset 0 0 20px rgba(42, 157, 92, 0.08) !important;
+  border-color: rgba(42, 157, 92, 0.6) !important;
+}
+
+/* Light Mode — Force darker tones on opacity text helpers */
+.light .text-black\/50,
+.light .text-black\/60 {
+  color: rgba(15, 38, 24, 0.65) !important;
+}
+
+.light .text-black\/40 {
+  color: rgba(15, 38, 24, 0.5) !important;
+}
+
+/* Diluted Sage Gradient for Light Mode Containers */
+.coral-green-gradient-light {
+  background: linear-gradient(145deg,
+      #EEF9F1 0%,
+      #EEF9F1 60%,
+      rgba(60, 179, 113, 0.08) 85%,
+      rgba(255, 127, 80, 0.05) 100%) !important;
+}
+
+.light .text-black\/20 {
+  color: rgba(15, 38, 24, 0.3) !important;
+}
+
+.light .text-black\/10 {
+  color: rgba(15, 38, 24, 0.18) !important;
+}
+
+.light .text-black {
+  color: #0f2618 !important;
+}
+
+.light .text-black\/90 {
+  color: rgba(15, 38, 24, 0.90) !important;
+}
+
+.light .text-black\/80 {
+  color: rgba(15, 38, 24, 0.80) !important;
 }
 
 /* Coral Green Sliders - Always Visible */

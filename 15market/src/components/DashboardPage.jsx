@@ -117,12 +117,12 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                 const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data) {
+                    if (data && data.stats) {
                         setStats(prev => ({
                             ...prev,
-                            userWinRate: data.totalTrades > 0 ? ((data.totalWins / data.totalTrades) * 100).toFixed(1) : 0,
-                            userTotalTrades: data.totalTrades || 0,
-                            userTotalWins: data.totalWins || 0
+                            userWinRate: data.stats.totalTrades > 0 ? ((data.stats.totalWins / data.stats.totalTrades) * 100).toFixed(1) : 0,
+                            userTotalTrades: data.stats.totalTrades || 0,
+                            userTotalWins: data.stats.totalWins || 0
                         }));
                     }
                 }

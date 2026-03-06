@@ -24,13 +24,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const errorRef = useRef(null);
     const isFirstLoad = useRef(true);
 
-    const [showGrid, setShowGrid] = useState(true);
+    const [gridMode, setGridMode] = useState('none');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
 
     const isDark = theme !== 'light';
-    const textColor = isDark ? '#D9D9D9' : '#1f2937';
-    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+    const textColor = isDark ? '#D9D9D9' : '#0f2618';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(30, 90, 56, 0.08)';
+
+    const controlBg = isDark ? 'bg-black/60' : 'bg-white/80';
+    const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#bfd7c6]/95';
+    const controlBorder = isDark ? 'border-white/10' : 'border-[#1e3f2c]/15';
+    const controlText = isDark ? 'text-white' : 'text-[#0f2618]';
+    const controlTextDim = isDark ? 'text-white/40' : 'text-[#0f2618]/60';
 
     const upColor = '#3CB371';
     const downColor = '#FF4444';
@@ -108,8 +114,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 textColor: textColor,
             },
             grid: {
-                vertLines: { color: showGrid ? gridColor : 'transparent' },
-                horzLines: { color: showGrid ? gridColor : 'transparent' },
+                vertLines: { color: gridMode === 'all' ? gridColor : 'transparent' },
+                horzLines: { color: (gridMode === 'horz' || gridMode === 'all') ? gridColor : 'transparent' },
             },
             width: chartContainerRef.current.clientWidth,
             height: chartContainerRef.current.clientHeight,
@@ -305,7 +311,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             smaSeriesRef.current = null;
             tradePriceLines.current.clear();
         };
-    }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType, showGrid]);
+    }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType, gridMode]);
 
     // Handle Fullscreen Escape
     useEffect(() => {
@@ -477,7 +483,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     };
 
     return (
-        <div className={`relative w-full h-full ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`} style={{ backgroundColor: isDark ? '#0d0d0d' : '#FFF8E7', borderRadius: isFullscreen ? '0' : 'inherit', minHeight: isFullscreen ? '100vh' : '220px' }}>
+        <div className={`relative w-full h-full ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`} style={{ backgroundColor: isDark ? '#0d0d0d' : '#b8d1c0', borderRadius: isFullscreen ? '0' : 'inherit', minHeight: isFullscreen ? '100vh' : '220px' }}>
             {/* Branded Background Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <img src="/logo.png" alt="15market" style={{
@@ -500,12 +506,14 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             exit={{ opacity: 0 }}
                             className="absolute inset-0 z-[60] flex flex-col items-center justify-center backdrop-blur-md bg-black/40"
                         >
-                            <MascotLoader
-                                status={loaderStatus}
-                                progress={chartProgress}
-                                label="Calibrating Flight Path"
-                                theme={theme}
-                            />
+                            <div className="flex flex-col items-center justify-center w-full h-full">
+                                <MascotLoader
+                                    status={loaderStatus}
+                                    progress={chartProgress}
+                                    label="Calibrating Flight Path"
+                                    theme={theme}
+                                />
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -535,23 +543,23 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
                 <div className="flex flex-wrap items-center gap-2 lg:gap-4 pointer-events-auto">
                     {/* Timeframe Selector */}
-                    <div className="flex items-center bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden p-0.5 shadow-2xl">
+                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
                         {['1s', '1m', '1h', 'D'].map(tf => (
-                            <button key={tf} onClick={() => setTimeframe(tf)} className={`px-2 lg:px-4 py-1.5 text-[8px] lg:text-[10px] font-black tracking-widest transition-all rounded-lg ${timeframe === tf ? 'bg-[#3CB371] text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}>{tf}</button>
+                            <button key={tf} onClick={() => setTimeframe(tf)} className={`px-2 lg:px-4 py-1.5 text-[8px] lg:text-[10px] font-black tracking-widest transition-all rounded-lg ${timeframe === tf ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText} hover:bg-white/5`}`}>{tf}</button>
                         ))}
                     </div>
 
                     {/* CHART TYPE TOGGLE - Expert Options Style */}
-                    <div className="flex items-center bg-black/60 backdrop-blur-2xl border border-white/10 rounded-xl overflow-hidden p-0.5 shadow-2xl">
+                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
                         <button
                             onClick={() => setChartType('line')}
-                            className={`p-1.5 transition-all rounded-lg ${chartType === 'line' ? 'bg-[#3CB371] text-white' : 'text-white/40 hover:text-white'}`}
+                            className={`p-1.5 transition-all rounded-lg ${chartType === 'line' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
                         >
                             <TrendingUp size={14} />
                         </button>
                         <button
                             onClick={() => setChartType('candles')}
-                            className={`p-1.5 transition-all rounded-lg ${chartType === 'candles' ? 'bg-[#3CB371] text-white' : 'text-white/40 hover:text-white'}`}
+                            className={`p-1.5 transition-all rounded-lg ${chartType === 'candles' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
                         >
                             <BarChart3 size={14} />
                         </button>
@@ -561,7 +569,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         <div className="relative">
                             <button
                                 onClick={() => setShowSettings(!showSettings)}
-                                className={`p-2 bg-black/60 border border-white/10 rounded-xl transition-all shadow-2xl pointer-events-auto ${showSettings ? 'text-[#3CB371] border-[#3CB371]/50' : 'text-white/60 hover:text-white'}`}
+                                className={`p-2 ${controlBg} border ${controlBorder} rounded-xl transition-all shadow-2xl pointer-events-auto ${showSettings ? 'text-[#3CB371] border-[#3CB371]/50' : `${controlTextDim} hover:${controlText}`}`}
                             >
                                 <Settings size={16} />
                             </button>
@@ -572,21 +580,30 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                         initial={{ opacity: 0, scale: 0.95, y: -10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                        className="absolute top-12 right-0 w-48 bg-[#0a0a0a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 shadow-2xl z-[110] flex flex-col gap-1 pointer-events-auto"
+                                        className={`absolute top-12 right-0 w-48 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-2xl z-[110] flex flex-col gap-1 pointer-events-auto`}
                                     >
-                                        <div className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white/30 border-b border-white/5 mb-1">Chart Settings</div>
-                                        <button
-                                            onClick={() => { setShowGrid(!showGrid); setShowSettings(false); }}
-                                            className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all text-white/80 hover:text-white"
-                                        >
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Show Grid</span>
-                                            <div className={`w-8 h-4 rounded-full relative transition-all ${showGrid ? 'bg-[#3CB371]' : 'bg-white/10'}`}>
-                                                <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${showGrid ? 'translate-x-4' : 'translate-x-0'}`} />
+                                        <div className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest ${controlTextDim} border-b ${controlBorder} mb-1`}>Chart Settings</div>
+                                        <div className={`px-3 py-1.5 flex flex-col gap-2 border-b ${controlBorder} pb-3 mb-1`}>
+                                            <span className={`text-[9px] font-bold uppercase tracking-widest ${controlTextDim}`}>Grid Display</span>
+                                            <div className="flex gap-1">
+                                                {[
+                                                    { id: 'none', label: 'Off' },
+                                                    { id: 'horz', label: 'Horz' },
+                                                    { id: 'all', label: 'All' }
+                                                ].map(opt => (
+                                                    <button
+                                                        key={opt.id}
+                                                        onClick={() => { setGridMode(opt.id); setShowSettings(false); }}
+                                                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg border ${gridMode === opt.id ? 'bg-[#3CB371] text-white border-[#3CB371]' : `bg-white/5 ${controlTextDim} border-transparent hover:bg-white/10`}`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
                                             </div>
-                                        </button>
+                                        </div>
                                         <button
                                             onClick={() => { setChartType(chartType === 'candles' ? 'line' : 'candles'); setShowSettings(false); }}
-                                            className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all text-white/80 hover:text-white"
+                                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all ${controlTextDim} hover:${controlText}`}
                                         >
                                             <span className="text-[10px] font-black uppercase tracking-widest">Candles</span>
                                             <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : 'bg-white/10'}`}>
@@ -599,7 +616,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         </div>
                         <button
                             onClick={toggleFullscreen}
-                            className="p-2 bg-black/60 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all shadow-2xl pointer-events-auto"
+                            className={`p-2 ${controlBg} border ${controlBorder} rounded-xl ${controlTextDim} hover:${controlText} transition-all shadow-2xl pointer-events-auto`}
                         >
                             <Maximize2 size={16} />
                         </button>
@@ -608,18 +625,18 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
                 <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 lg:gap-4 px-1">
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:border-white/10 pointer-events-auto group" onClick={() => setIsSelectorOpen(!isSelectorOpen)}>
-                            <h2 className="text-[14px] lg:text-lg font-black text-white tracking-widest uppercase flex items-center gap-2">{symbol.replace('USDT', '')}</h2>
-                            <ChevronDown size={14} className={`text-[#3CB371] transition-transform duration-300 ${isSelectorOpen ? 'rotate-180' : ''}`} />
+                        <div className={`flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:${controlBorder} pointer-events-auto group`} onClick={() => setIsSelectorOpen(!isSelectorOpen)}>
+                            <h2 className={`text-[14px] lg:text-lg font-black ${controlText} tracking-widest uppercase flex items-center gap-2`}>{symbol.replace('USDT', '')}</h2>
+                            <ChevronDown size={14} className="text-[#3CB371] transition-transform duration-300 group-hover:scale-110" />
                         </div>
                     </div>
                 </div>
 
                 <AnimatePresence>
                     {isSelectorOpen && (
-                        <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="absolute top-16 left-4 z-[100] w-56 bg-[#0a0a0a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto">
+                        <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`absolute top-16 left-4 z-[100] w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto`}>
                             {tokens.map(t => (
-                                <button key={t.id} onClick={() => { setActiveMarket(t); setIsSelectorOpen(false); }} className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : 'hover:bg-white/5 text-white/40 hover:text-white'}`}>
+                                <button key={t.id} onClick={() => { setActiveMarket(t); setIsSelectorOpen(false); }} className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}>
                                     <div className="flex flex-col items-start"><span className="text-xs font-black uppercase tracking-widest">{t.symbol}</span><span className="text-[8px] opacity-60 font-medium">{t.name || 'Crypto'}</span></div>
                                     {activeMarket?.id === t.id && <Zap size={10} className="fill-current text-white animate-pulse" />}
                                 </button>

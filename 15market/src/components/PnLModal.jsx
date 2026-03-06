@@ -121,7 +121,7 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <span className="text-[9px] opacity-40 font-black">EXECUTION</span>
-                                        <span className={`font-black uppercase text-sm ${isUp ? 'text-green-600' : 'text-red-600'}`}>
+                                        <span className={`font-black uppercase text-sm ${isUp ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
                                             {isUp ? 'CALL_OPTION' : 'PUT_OPTION'}
                                         </span>
                                     </div>
@@ -145,7 +145,7 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <span className="text-[8px] opacity-40 font-black">PNL_OUTCOME</span>
-                                        <span className={`text-2xl font-black tracking-tighter ${isWon ? 'text-[#FF7F50]' : 'text-[#3CB371]'}`}>
+                                        <span className={`text-2xl font-black tracking-tighter ${isWon ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
                                             {isWon ? '▲' : '▼'}{profit} <small className="text-[9px] opacity-40">{currency}</small>
                                         </span>
                                     </div>

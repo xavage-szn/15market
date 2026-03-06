@@ -28,7 +28,7 @@ const SideHistoryPane = ({
                 transition-all duration-500 flex flex-row overflow-hidden
                 ${isDark
                     ? 'bg-[#0a0a0a]/90 border-white/10'
-                    : 'bg-white/90 border-[#3CB371]/20'}
+                    : 'coral-green-gradient-light border-[#3CB371]/20'}
             `}>
                 {/* Vertical Toggle Bar */}
                 <div
@@ -40,15 +40,15 @@ const SideHistoryPane = ({
                     `}
                 >
                     <div className="flex flex-col items-center gap-8">
-                        <History size={20} className={isOpen ? 'text-[#3CB371]' : 'text-white/40 group-hover:text-white'} />
+                        <History size={20} className={isOpen ? 'text-[#3CB371]' : (isDark ? 'text-white/40 group-hover:text-white' : 'text-[#0f2618]/40 group-hover:text-[#0f2618]')} />
 
                         <div className="flex items-center gap-2" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isOpen ? 'text-white' : 'text-white/40 group-hover:text-white'}`}>
+                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40 group-hover:text-white' : 'text-[#0f2618]/40 group-hover:text-[#0f2618]')}`}>
                                 History
                             </span>
                         </div>
 
-                        {isOpen ? <ChevronLeft size={16} className="text-white/40" /> : <ChevronRight size={16} className="text-white/40" />}
+                        {isOpen ? <ChevronLeft size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronRight size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
                     </div>
                 </div>
 
@@ -63,7 +63,7 @@ const SideHistoryPane = ({
                             className="flex-1 flex flex-col overflow-hidden py-6 pr-4 pl-2"
                         >
                             <div className="flex items-center justify-between mb-6 px-2">
-                                <h2 className="text-lg font-black uppercase tracking-tighter text-white">Trade History</h2>
+                                <h2 className={`text-lg font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>Trade History</h2>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20">
                                     {tradeHistory.length} Trades
                                 </span>
@@ -71,7 +71,7 @@ const SideHistoryPane = ({
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-2">
                                 {tradeHistory.length === 0 ? (
-                                    <div className="h-full flex flex-col items-center justify-center opacity-20 text-center p-8">
+                                    <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
                                         <History size={48} className="mb-4" />
                                         <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
                                     </div>
@@ -85,7 +85,7 @@ const SideHistoryPane = ({
                                                 key={trade.id}
                                                 className={`
                                                     p-3 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
-                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-black/5 border-black/5'}
+                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-white/40 border-[#3CB371]/10'}
                                                 `}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -96,17 +96,17 @@ const SideHistoryPane = ({
                                                         `}>
                                                             {trade.direction}
                                                         </div>
-                                                        <span className="text-[11px] font-bold text-white/90">{trade.symbol || 'BTC'}</span>
+                                                        <span className={`text-[11px] font-bold ${isDark ? 'text-white/90' : 'text-[#0f2618]/90'}`}>{trade.symbol || 'BTC'}</span>
                                                     </div>
-                                                    <span className={`text-[11px] font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : 'text-white/40'}`}>
+                                                    <span className={`text-[11px] font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
                                                         {isWin ? `+${trade.payout}` : trade.status}
                                                     </span>
                                                 </div>
 
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] text-white/40 font-medium">Entry: ${trade.entryPrice}</span>
-                                                        <span className="text-[9px] text-white/20 font-mono">
+                                                        <span className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-[#0f2618]/40'}`}>Entry: ${trade.entryPrice}</span>
+                                                        <span className={`text-[9px] font-mono ${isDark ? 'text-white/20' : 'text-[#0f2618]/20'}`}>
                                                             {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                                         </span>
                                                     </div>
@@ -117,7 +117,7 @@ const SideHistoryPane = ({
                                                                 setSelectedPnLTrade(trade);
                                                                 setIsPnLOpen(true);
                                                             }}
-                                                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all"
+                                                            className={`p-1.5 rounded-lg transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
                                                         >
                                                             <Share2 size={12} />
                                                         </button>
@@ -125,7 +125,7 @@ const SideHistoryPane = ({
                                                             href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all"
+                                                            className={`p-1.5 rounded-lg transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
                                                         >
                                                             <ExternalLink size={12} />
                                                         </a>

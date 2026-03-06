@@ -72,13 +72,14 @@ const LineArtPlane = ({ isTakingOff = false, progress = 0 }) => {
 
 export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loading...", theme = 'dark' }) => {
     const isTakingOff = status === 'running' || progress > 70;
+    const isLight = theme === 'light';
 
     return (
-        <div className="flex flex-col items-center gap-10 w-full max-w-[340px]">
+        <div className="flex flex-col items-center gap-10 w-full max-w-[240px] md:max-w-[340px] scale-75 transform-gpu origin-center">
             {/* Runway Progress Container */}
-            <div className="w-full h-1 bg-white/5 rounded-full relative border border-white/5 overflow-visible">
+            <div className={`w-full h-1 ${isLight ? 'bg-[#0f2618]/10' : 'bg-white/5'} rounded-full relative border ${isLight ? 'border-[#0f2618]/10' : 'border-white/5'} overflow-visible`}>
                 {/* Runway Dashed Markings */}
-                <div className="absolute inset-x-0 -bottom-3 flex justify-around px-8 opacity-20">
+                <div className={`absolute inset-x-0 -bottom-3 flex justify-around px-8 ${isLight ? 'opacity-30' : 'opacity-20'}`}>
                     {[...Array(8)].map((_, i) => (
                         <div key={i} className="w-4 h-[1px] bg-[#3CB371]" />
                     ))}
@@ -122,18 +123,18 @@ export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loadin
             </div>
 
             <div className="flex flex-col items-center gap-1.5 mt-2">
-                <p className="text-[11px] font-black uppercase text-[#3CB371] tracking-[0.5em] animate-pulse">
+                <p className="text-[11px] font-black uppercase text-[#3CB371] tracking-[0.5em] animate-pulse text-center">
                     {progress >= 100 ? "V1 ROTATE • AIRBORNE" : label}
                 </p>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-ping" />
-                        <span className="text-[9px] font-mono text-white/40 tabular-nums tracking-widest uppercase">
+                        <span className={`text-[9px] font-mono ${isLight ? 'text-[#0f2618]/40' : 'text-white/40'} tabular-nums tracking-widest uppercase`}>
                             THRUST: {Math.floor(progress)}%
                         </span>
                     </div>
-                    <div className="w-[1px] h-3 bg-white/10" />
-                    <span className="text-[9px] font-mono text-white/40 tabular-nums tracking-widest uppercase">
+                    <div className={`w-[1px] h-3 ${isLight ? 'bg-[#0f2618]/10' : 'bg-white/10'}`} />
+                    <span className={`text-[9px] font-mono ${isLight ? 'text-[#0f2618]/40' : 'text-white/40'} tabular-nums tracking-widest uppercase`}>
                         ALT: {progress > 70 ? Math.floor((progress - 70) * 100) : 0} FT
                     </span>
                 </div>

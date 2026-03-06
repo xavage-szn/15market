@@ -801,7 +801,7 @@ export default function UserApp() {
       if (sessionMode) {
         console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper (Strict Mode)...`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s - Arc testnet block times can be irregular
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
 
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
@@ -826,73 +826,69 @@ export default function UserApp() {
           try {
             data = JSON.parse(responseText);
           } catch (e) {
-            if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html")) {
-              throw new Error("Backend connection failed (Server returned HTML/404). Check VITE_KEEPER_URL environment variable.");
-            }
-            throw new Error(`Invalid JSON response from backend: ${responseText.slice(0, 100)}`);
+            throw new Error(`Invalid JSON response: ${responseText.slice(0, 100)}`);
           }
+
           if (!res.ok) throw new Error(data.error || "Session trade failed");
           txHash = data.txHash;
           console.log(`✅ [SESSION] Broadcasted: ${txHash}. Verifying in background...`);
 
-          notify("Verifying Session Trade on Arc...", "pending");
+          // RELEASE UI IMMEDIATELY FOR BURST MODE
+          setIsExecuting(false);
+          notify("Trade Broadcasted! Verifying...", "success");
 
-          // STRICT LOGIC: Wait for receipt BEFORE adding to active view
-          try {
-            const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 });
-            if (receipt.status !== "success" && receipt.status !== 1) {
-              throw new Error("Session transaction failed on-chain. Check session gas balance.");
-            }
+          // Optimistically add to UI while verifying
+          const optimisticTrade = {
+            id: tradeId,
+            direction: (dirVal === 1 ? "UP" : "DOWN"),
+            amount: Number(amount).toFixed(3),
+            entryPrice: activePrice.toFixed(3),
+            timestamp: Date.now(),
+            status: "PENDING",
+            tx: txHash,
+            nonce: tradeId,
+            userPublicKey: activeUserAddr,
+            owner: activeUserAddr,
+            duration,
+            network: "arc",
+            startTime: Date.now(),
+            expiryMs: Date.now() + (duration * 1000),
+            symbol: activeMarket?.symbol || 'ETH',
+            isSessionTrade: true,
+            confirmed: false, // Flag for verification state
+          };
 
-            console.log(`⛓️ [SESSION] Confirmed on-chain: ${txHash}`);
+          const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+          setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
+          setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
 
-            const confirmTime = Date.now();
-            const newTrade = {
-              id: tradeId,
-              direction: (dirVal === 1 ? "UP" : "DOWN"),
-              amount: Number(amount).toFixed(3),
-              entryPrice: activePrice.toFixed(3),
-              timestamp: confirmTime,
-              status: "PENDING",
-              tx: txHash,
-              nonce: tradeId,
-              userPublicKey: activeUserAddr,
-              owner: activeUserAddr,
-              duration,
-              network: "arc",
-              startTime: confirmTime,
-              expiryMs: confirmTime + (duration * 1000),
-              symbol: activeMarket?.symbol || 'ETH',
-              isSessionTrade: true,
-              confirmed: true,
-            };
-
-            const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
-            setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
-            setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
-
-            // Deduct balance
-            setSessionBalance(prev => Math.max(0, prev - amtNum));
-            lastOptimisticActionTime.current = Date.now();
-            triggerGlobalRefresh(true);
-            notify("Trade Confirmed & Started!", "success");
-
-          } catch (receiptErr) {
-            console.warn(`⛓️ [SESSION] Background verification error:`, receiptErr);
-            throw new Error("Trade reverted on-chain. Please ensure session wallet has enough balance to cover gas fees.");
-          }
+          // Background Verification (Non-blocking)
+          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
+            .then(async (receipt) => {
+              if (receipt.status === "success" || receipt.status === 1) {
+                console.log(`⛓️ [SESSION] Confirmed: ${txHash}`);
+                setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+                // Deduct balance
+                setSessionBalance(prev => Math.max(0, prev - amtNum));
+                lastOptimisticActionTime.current = Date.now();
+                triggerGlobalRefresh(true);
+              } else {
+                throw new Error("Transaction Reverted");
+              }
+            })
+            .catch(err => {
+              console.warn("Session background verification failed:", err);
+              notify("Trade Reverted! Check Gas/Balance.", "error");
+              setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+            });
 
         } catch (fetchErr) {
           clearTimeout(timeoutId);
-          console.error("Session trade error details:", fetchErr);
-          const errMsg = fetchErr.name === 'AbortError'
-            ? "Connection Timeout: Backend didn't respond. Check if server is running."
-            : (fetchErr.message || "Session trade failed. Check backend logs.");
-          throw new Error(errMsg);
+          throw fetchErr;
         }
       } else {
         if (!walletClient) throw new Error("Wallet not connected");
-        console.log(`✍️ [MAIN] Requesting contract signature...`);
+        console.log(`✍️ [MAIN] Requesting signature...`);
         txHash = await walletClient.writeContract({
           address: ARC_CONTRACT_ADDRESS,
           abi: ArcABI.abi,
@@ -902,70 +898,68 @@ export default function UserApp() {
           account: address,
           gas: 800000n
         });
-        console.log(`✅ [MAIN] Broadcasted: ${txHash}. Waiting for verification...`);
-        notify("Verifying Stake on Arc...", "pending");
 
-        // STRICT LOGIC: Wait for receipt BEFORE adding to active view
+        // RELEASE UI IMMEDIATELY
+        setIsExecuting(false);
+        notify("Trade Signed! Verifying...", "success");
+
+        // Optimistically add
+        const optimisticTrade = {
+          id: tradeId,
+          direction: (dirVal === 1 ? "UP" : "DOWN"),
+          amount: Number(amount).toFixed(3),
+          entryPrice: activePrice.toFixed(3),
+          timestamp: Date.now(),
+          status: "PENDING",
+          tx: txHash,
+          nonce: tradeId,
+          userPublicKey: address,
+          owner: address,
+          duration,
+          network: "arc",
+          startTime: Date.now(),
+          expiryMs: Date.now() + (duration * 1000),
+          symbol: activeMarket?.symbol || 'ETH',
+          isSessionTrade: false,
+          confirmed: false,
+        };
+
+        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+        setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
+        setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
+
+        // Background Verification
         publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
           .then(async (receipt) => {
-            if (receipt.status !== "success" && receipt.status !== 1) {
-              throw new Error("Transaction failed on-chain");
+            if (receipt.status === "success" || receipt.status === 1) {
+              console.log(`⛓️ [MAIN] Confirmed: ${txHash}`);
+              setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+
+              fetch(`${KEEPER_URL_ARC}/trade-ping`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: tradeId.toString(),
+                  address, amount, direction: dirVal, duration: Number(duration),
+                  entryPrice: entryPriceParams.toString(),
+                  symbol: activeMarket?.symbol || 'ETH'
+                })
+              }).catch(e => console.warn("Ping failed", e));
+
+              setEvmBalance(prev => {
+                const current = parseFloat(prev || "0");
+                return Math.max(0, current - amtNum).toString();
+              });
+              lastOptimisticActionTime.current = Date.now();
+              triggerGlobalRefresh(true);
+              notify("Trade Confirmed!", "success");
+            } else {
+              throw new Error("Reverted");
             }
-
-            console.log(`⛓️ [UI] Trade confirmed on-chain. Syncing with backend...`);
-            const confirmTime = Date.now();
-
-            // Notify backend about the main wallet trade (Ensure it settles)
-            fetch(`${KEEPER_URL_ARC}/trade-ping`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: tradeId.toString(),
-                address: address,
-                amount: amount,
-                direction: dirVal,
-                duration: Number(duration),
-                entryPrice: entryPriceParams.toString(),
-                symbol: activeMarket?.symbol || 'ETH'
-              })
-            }).catch(e => console.warn("Trade-ping failed:", e));
-
-            const newTrade = {
-              id: tradeId,
-              direction: (dirVal === 1 ? "UP" : "DOWN"),
-              amount: Number(amount).toFixed(3),
-              entryPrice: activePrice.toFixed(3),
-              timestamp: confirmTime,
-              status: "PENDING",
-              tx: txHash,
-              nonce: tradeId,
-              userPublicKey: address,
-              owner: address,
-              duration,
-              network: "arc",
-              startTime: confirmTime,
-              expiryMs: confirmTime + (duration * 1000),
-              symbol: activeMarket?.symbol || 'ETH',
-              isSessionTrade: false,
-              confirmed: true,
-            };
-
-            const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
-            setActiveTrades(prev => dedupeAndAdd(prev, newTrade));
-            setTradeHistory(prev => dedupeAndAdd(prev, newTrade));
-
-            // Optimistic Debit
-            setEvmBalance(prev => {
-              const current = parseFloat(prev || "0");
-              return Math.max(0, current - amtNum).toString();
-            });
-            lastOptimisticActionTime.current = Date.now();
-            triggerGlobalRefresh(true);
-            notify("Trade Confirmed & Started!", "success");
           })
           .catch(e => {
-            console.error("Wait for receipt failed:", e);
-            notify("Trade Verification Error", "error");
+            notify("Trade Reverted!", "error");
+            setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           });
       }
 
@@ -1942,18 +1936,20 @@ export default function UserApp() {
   }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
   if (isLoading) return (
-    <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center">
-      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative mb-20">
+    <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center bg-black/40">
+      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative mb-20 flex flex-col items-center justify-center">
         <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
         <img src="/logo.png" alt="logo" className="h-32 lg:h-48 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
       </motion.div>
 
-      <MascotLoader
-        status="running"
-        progress={loadingProgress}
-        label="Pre-Flight Systems Check"
-        theme={theme}
-      />
+      <div className="flex flex-col items-center justify-center w-full">
+        <MascotLoader
+          status="running"
+          progress={loadingProgress}
+          label="Pre-Flight Systems Check"
+          theme={theme}
+        />
+      </div>
     </div>
   );
 
@@ -2080,10 +2076,10 @@ export default function UserApp() {
           )}
 
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-[1400px]'} px-2 sm:px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
-              <div className="w-full max-w-7xl grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0">
-                <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border h-[300px] sm:h-[400px] lg:h-[500px] glass-panel chart-glow`}
+              <div className="w-full flex-1 grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0 mt-2">
+                <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] h-full glass-panel chart-glow`}
                   style={{
                     background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
                     boxShadow: theme === 'light'
@@ -2220,7 +2216,7 @@ export default function UserApp() {
             {showPortraitLock && <PortraitPrompt theme={theme} />}
 
             {uiVersion === 'v1' && (
-              <>
+              <div className="w-full max-w-[1400px] px-2 sm:px-4">
                 <TradeHistory
                   wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
                   tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
@@ -2230,7 +2226,7 @@ export default function UserApp() {
                   theme={theme} currentNetwork={network}
                 />
                 {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
-                <div className="w-full max-w-7xl mb-6 flex flex-col gap-4">
+                <div className="w-full mb-6 flex flex-col gap-4 mt-6">
                   {winnerBanner && (
                     <motion.div
                       initial={{ opacity: 0 }}
@@ -2309,7 +2305,7 @@ export default function UserApp() {
                     </motion.div>
                   ))}
                 </div>
-              </>
+              </div>
             )}
 
           </div>

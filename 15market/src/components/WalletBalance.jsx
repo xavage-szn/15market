@@ -40,9 +40,9 @@ export function WalletBalance({ theme, balanceOverride, sessionMode }) {
             }}>
 
             {sessionMode && (
-                <div className="flex items-center gap-1.5 pr-2 border-r border-white/10">
-                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                    <span className="text-[8px] font-black text-yellow-400/90 uppercase tracking-tighter">Auto</span>
+                <div className={`flex items-center gap-1.5 pr-2 border-r ${theme === 'light' ? 'border-black/5' : 'border-white/10'}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full animate-pulse`} style={{ backgroundColor: theme === 'light' ? '#3CB371' : '#facc15' }} />
+                    <span className={`text-[8px] font-black uppercase tracking-tighter ${theme === 'light' ? 'text-[#3CB371]' : 'text-yellow-400/90'}`}>Auto</span>
                 </div>
             )}
 

@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, Timer, Trophy, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const GREEN_COLOR = "#FF7F50"; // User request: WON is now Coral
-const RED_COLOR = "#3CB371";   // LOST is Green
+const GREEN_COLOR = "#3CB371"; // WON is Green
+const RED_COLOR = "#FF7F50";   // LOST is Coral
 
-function TradeCountdown({ expiry }) {
+function TradeCountdown({ expiry, isDark }) {
     const [timeLeft, setTimeLeft] = useState(0);
 
     useEffect(() => {
@@ -23,9 +23,9 @@ function TradeCountdown({ expiry }) {
     if (timeLeft === 0) return null;
 
     return (
-        <div className="flex items-center justify-center gap-1.5 mt-2 pt-2 border-t border-white/5">
+        <div className={`flex items-center justify-center gap-1.5 mt-2 pt-2 border-t ${isDark ? 'border-white/5' : 'border-[#0f2618]/5'}`}>
             <Timer size={10} className="text-[#3CB371] animate-pulse" />
-            <span className="text-[10px] font-mono font-black tabular-nums text-white/80 tracking-tighter">
+            <span className={`text-[10px] font-mono font-black tabular-nums tracking-tighter ${isDark ? 'text-white/80' : 'text-[#0f2618]/80'}`}>
                 {timeLeft.toFixed(1)}s
             </span>
         </div>
@@ -37,11 +37,12 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
     const isDark = theme !== 'light';
 
     return (
-        <div className="w-full h-full flex flex-col overflow-hidden bg-transparent">
-            <div className={`px-4 py-2.5 flex items-center justify-between border-b ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-[#3CB371]/10 bg-black/[0.02]'}`}>
+        <div className={`w-full h-full flex flex-col overflow-hidden ${isDark ? 'bg-transparent' : 'coral-green-gradient-light'}`}
+        >
+            <div className={`px-4 py-2.5 flex items-center justify-between border-b ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-[#3CB371]/10 bg-white/20'}`}>
                 <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
-                    <span className={`text-[9px] uppercase font-black tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-[#3D5A4C]/40'}`}>
+                    <span className={`text-[9px] uppercase font-black tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-[#0f2618]/40'}`}>
                         Engines
                     </span>
                 </div>
@@ -146,12 +147,12 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                         </div>
                                     </div>
 
-                                    <TradeCountdown expiry={trade.expiry} />
+                                    <TradeCountdown expiry={trade.expiry} isDark={isDark} />
 
                                     {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST') && (
                                         <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#3CB371]/10'} flex flex-col items-center justify-center rounded-xl border`}>
-                                            {trade.status === 'WON' && <div className="flex flex-col items-center text-[#FF7F50] scale-90"><Trophy size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span></div>}
-                                            {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#3CB371] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
+                                            {trade.status === 'WON' && <div className="flex flex-col items-center text-[#3CB371] scale-90"><Trophy size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span></div>}
+                                            {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#FF7F50] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
                                             {trade.status === 'RESOLVING' && (
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-4 h-4 rounded-full border-2 border-[#3CB371] border-t-transparent animate-spin" />

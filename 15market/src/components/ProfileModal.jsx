@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { KEEPER_URL_ARC } from '../constants';
 
-import { Zap, Shield } from 'lucide-react';
+import { Zap, Shield, TrendingUp, TrendingDown } from 'lucide-react';
 
 export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, uiVersion = 'v1', setUiVersion, theme }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
     const [metrics, setMetrics] = useState(null);
+    const [tradeHistory, setTradeHistory] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isVerifyingX, setIsVerifyingX] = useState(false);
 
@@ -38,13 +39,17 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
             const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
             if (res.ok) {
                 const data = await res.json();
-                if (data) {
+                if (data && data.stats) {
                     setMetrics({
-                        wins: data.totalWins || 0,
-                        losses: data.totalLosses || 0,
-                        trades: data.totalTrades || 0,
-                        volume: data.totalVolume ? (parseFloat(data.totalVolume)).toFixed(2) : "0.00"
+                        wins: data.stats.totalWins || 0,
+                        losses: (data.stats.totalTrades || 0) - (data.stats.totalWins || 0),
+                        trades: data.stats.totalTrades || 0,
+                        volume: data.stats.totalVolume ? (parseFloat(data.stats.totalVolume)).toFixed(2) : "0.00"
                     });
+                }
+                // Store full trade history (includes auto-signer trades)
+                if (data.history && Array.isArray(data.history)) {
+                    setTradeHistory(data.history.filter(t => t.status === 'WON' || t.status === 'LOST').slice(0, 20));
                 }
             }
         } catch (err) {
@@ -130,7 +135,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className={`w-full max-w-md ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/30'} border rounded-[32px] p-8 shadow-[0_0_50px_rgba(60,179,113,0.1)] relative overflow-hidden`}
+                    className={`w-full max-w-md ${isLight ? 'coral-green-gradient-light border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/30'} border rounded-[32px] p-8 shadow-[0_0_50px_rgba(60,179,113,0.1)] relative overflow-hidden`}
                 >
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent" />
 
@@ -181,34 +186,68 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                     )}
 
                     <div className="mb-6">
-                        <h4 className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-3 block`}>Transaction History</h4>
-                        <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-2">
-                            {(!transactionHistory || transactionHistory.length === 0) ? (
-                                <div className={`text-center py-4 ${isLight ? 'text-black/10 border-black/5' : 'text-white/10 border-white/5'} text-[9px] uppercase font-black border rounded-xl`}>No transactions</div>
-                            ) : transactionHistory.map((tx, i) => (
-                                <div key={tx.id || i} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/[0.02] border-white/5'} border`}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-1.5 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
-                                            {tx.type === "DEPOSIT" ? <Zap size={14} /> : <Shield size={14} />}
+                        <h4 className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-3 block`}>Trade Activity</h4>
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
+                            {tradeHistory.length === 0 && (!transactionHistory || transactionHistory.length === 0) ? (
+                                <div className={`text-center py-4 ${isLight ? 'text-black/10 border-black/5' : 'text-white/10 border-white/5'} text-[9px] uppercase font-black border rounded-xl`}>No activity yet</div>
+                            ) : (
+                                <>
+                                    {/* Settled Trades from Backend (includes auto-signer) */}
+                                    {tradeHistory.map((t, i) => {
+                                        const isWon = t.status === 'WON';
+                                        const isUp = t.direction === 'UP' || t.direction === 1 || String(t.direction) === '1';
+                                        return (
+                                            <div key={t.id || `trade-${i}`} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/[0.02] border-white/5'} border`}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-1.5 rounded-lg ${isUp ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-[#FF7F50]/10 text-[#FF7F50]'}`}>
+                                                        {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                                    </div>
+                                                    <div>
+                                                        <div className={`text-[10px] font-black ${isLight ? 'text-black' : 'text-white'} uppercase`}>
+                                                            {t.symbol || 'BTC'} {isUp ? 'Long' : 'Short'}
+                                                        </div>
+                                                        <div className={`text-[8px] ${isLight ? 'text-black/20' : 'text-white/20'} font-mono italic`}>
+                                                            {t.timestamp ? new Date(t.timestamp).toLocaleDateString() : '—'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right flex flex-col items-end">
+                                                    <div className={`text-[11px] font-black ${isWon ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                                        {isWon ? `+${Number(t.payout || 0).toFixed(2)}` : `-${Number(t.amount || 0).toFixed(2)}`}
+                                                    </div>
+                                                    <span className={`text-[7px] font-black uppercase ${isWon ? 'text-[#3CB371]/60' : 'text-[#FF7F50]/60'}`}>{t.status}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Deposit / Withdraw from local storage */}
+                                    {transactionHistory && transactionHistory.map((tx, i) => (
+                                        <div key={tx.id || `tx-${i}`} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/[0.02] border-white/5'} border`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-1.5 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
+                                                    {tx.type === "DEPOSIT" ? <Zap size={14} /> : <Shield size={14} />}
+                                                </div>
+                                                <div>
+                                                    <div className={`text-[10px] font-black ${isLight ? 'text-black' : 'text-white'} uppercase`}>{tx.type}</div>
+                                                    <div className={`text-[8px] ${isLight ? 'text-black/20' : 'text-white/20'} font-mono italic`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex flex-col items-end">
+                                                <div className={`text-[11px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : (isLight ? "text-black/80" : "text-white/80")}`}>
+                                                    {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount}
+                                                </div>
+                                                <button
+                                                    onClick={() => onViewReceipt && onViewReceipt(tx)}
+                                                    className="text-[7px] font-black text-[#3CB371] uppercase underline"
+                                                >
+                                                    Receipt
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className={`text-[10px] font-black ${isLight ? 'text-black' : 'text-white'} uppercase`}>{tx.type}</div>
-                                            <div className={`text-[8px] ${isLight ? 'text-black/20' : 'text-white/20'} font-mono italic`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
-                                        </div>
-                                    </div>
-                                    <div className="text-right flex flex-col items-end">
-                                        <div className={`text-[11px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : (isLight ? "text-black/80" : "text-white/80")}`}>
-                                            {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount}
-                                        </div>
-                                        <button
-                                            onClick={() => onViewReceipt && onViewReceipt(tx)}
-                                            className="text-[7px] font-black text-[#3CB371] uppercase underline"
-                                        >
-                                            Receipt
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                    ))}
+                                </>
+                            )}
                         </div>
                     </div>
 

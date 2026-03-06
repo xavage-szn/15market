@@ -134,7 +134,7 @@ function TradeTerminalComponent({
         <div className="flex flex-col gap-0.5 lg:gap-1 pointer-events-auto">
             <div className="flex items-center justify-between px-1">
                 <span className={`text-[6px] lg:text-[8px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
-                <span className={`text-[6px] lg:text-[8px] font-bold ${sessionMode ? 'text-yellow-400' : 'text-[#3CB371]'}`}>
+                <span className={`text-[6px] lg:text-[8px] font-bold ${sessionMode ? (isLight ? 'text-[#3CB371]' : 'text-yellow-400') : 'text-[#3CB371]'}`}>
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
