@@ -2082,7 +2082,7 @@ export default function UserApp() {
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-2 sm:px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
-              <div className="w-full flex-none grid grid-cols-12 gap-3 lg:gap-6 mb-8 relative z-0 mt-2 h-auto lg:h-[calc(100vh-120px)] overflow-hidden">
+              <div className="w-full flex-none grid grid-cols-12 gap-3 lg:gap-6 mb-8 relative z-0 mt-2 h-auto lg:h-[calc(100vh-200px)] lg:min-h-0">
                 <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border lg:h-full glass-panel chart-glow flex-1`}
                   style={{
                     background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
@@ -2111,7 +2111,7 @@ export default function UserApp() {
                     />
                   </div>
 
-                  <div className="flex-1 min-h-[300px] glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col min-h-0 overflow-y-auto">
+                  <div className="flex-1 min-h-[200px] lg:min-h-0 glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col min-h-0 overflow-hidden">
                     <LiveExecution
                       activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                       setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
