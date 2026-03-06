@@ -2183,10 +2183,10 @@ export default function UserApp() {
 
                 <motion.div
                   layout
-                  className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-full min-h-0`}
+                  className={`w-full md:w-[30%] flex flex-row md:flex-col ${showActiveExpanded ? 'gap-0' : 'gap-2 md:gap-3'} h-full min-h-0`}
                 >
                   {/* Trading Terminal Box */}
-                  <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0' : 'h-auto'} min-h-0`}
+                  <div className={`flex-1 md:flex-none lg:rounded-[32px] rounded-[16px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-0 opacity-0 pointer-events-none mb-0' : 'w-full'} min-h-0`}
                     style={{
                       background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2211,7 +2211,7 @@ export default function UserApp() {
                   </div>
 
                   {/* Active Trade / Controls Box */}
-                  <div className={`flex-1 min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col`}
+                  <div className={`flex-1 min-h-0 lg:rounded-[32px] rounded-[16px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col`}
                     style={{
                       background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2234,105 +2234,100 @@ export default function UserApp() {
             {/* Forced Orientation Overlay for V2 Mobile */}
             {showPortraitLock && <PortraitPrompt theme={theme} />}
 
-            {uiVersion === 'v1' && (
-              <div className="w-full max-w-5xl mx-auto px-2 sm:px-4 flex flex-col justify-center">
-                <TradeHistory
-                  wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-                  tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                  GREEN={GREEN} CORAL={CORAL}
-                  evmSessionWallet={evmSessionWallet}
-                  theme={theme} currentNetwork={network}
-                />
-                {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
-                <div className="w-full mb-6 flex flex-col gap-4 mt-6">
-                  {winnerBanner && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
-                      style={{
-                        background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
-                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
-                      }}
-                    >
-                      <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                        <Trophy size={80} />
+            <div className="w-full max-w-5xl mx-auto px-2 sm:px-4 flex flex-col justify-center">
+              {/* Show Trade History at bottom for both UI versions on mobile */}
+              <TradeHistory
+                wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+                tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                GREEN={GREEN} CORAL={CORAL}
+                evmSessionWallet={evmSessionWallet}
+                theme={theme} currentNetwork={network}
+              />
+              {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
+              <div className="w-full mb-6 flex flex-col gap-4 mt-6">
+                {winnerBanner && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
+                    style={{
+                      background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
+                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
+                    }}
+                  >
+                    <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                      <Trophy size={80} />
+                    </div>
+                    <div className="flex items-center gap-4 lg:gap-8 relative z-10">
+                      <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                        <Trophy size={32} className="text-yellow-500" />
                       </div>
-                      <div className="flex items-center gap-4 lg:gap-8 relative z-10">
-                        <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
-                          <Trophy size={32} className="text-yellow-500" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
+                          <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
-                            <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
-                          </div>
-                          <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                            Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
-                          </h3>
-                        </div>
+                        <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                          Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
+                        </h3>
                       </div>
-                    </motion.div>
-                  )}
+                    </div>
+                  </motion.div>
+                )}
 
-                  {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
-                    <motion.div
-                      key={camp.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
-                    >
-                      <div className="flex items-center gap-6">
-                        <div className={`p-4 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/10 text-[#3CB371]'} border rounded-2xl`}>
-                          <Trophy size={24} />
-                        </div>
-                        <div>
-                          <h3 className={`text-lg font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} uppercase tracking-tight`}>{camp.title}</h3>
-                          <div className="flex flex-wrap items-center gap-4 mt-1">
-                            <div className={`flex items-center gap-1.5 text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>
-                              <Calendar size={12} />
-                              Ends {new Date(camp.endTime).toLocaleString()}
-                            </div>
-                            <div className={`w-1 h-1 ${isLight ? 'bg-[#3CB371]/10' : 'bg-white/10'} rounded-full`} />
-                            <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
-                              Prize: {camp.prize || 'Pride'}
-                            </div>
+                {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
+                  <motion.div
+                    key={camp.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
+                  >
+                    <div className="flex items-center gap-6">
+                      <div className={`p-4 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/10 text-[#3CB371]'} border rounded-2xl`}>
+                        <Trophy size={24} />
+                      </div>
+                      <div>
+                        <h3 className={`text-lg font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} uppercase tracking-tight`}>{camp.title}</h3>
+                        <div className="flex flex-wrap items-center gap-4 mt-1">
+                          <div className={`flex items-center gap-1.5 text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>
+                            <Calendar size={12} />
+                            Ends {new Date(camp.endTime).toLocaleString()}
+                          </div>
+                          <div className={`w-1 h-1 ${isLight ? 'bg-[#3CB371]/10' : 'bg-white/10'} rounded-full`} />
+                          <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
+                            Prize: {camp.prize || 'Pride'}
                           </div>
                         </div>
                       </div>
+                    </div>
 
-                      <button
-                        onClick={() => navigate(`/campaign/${camp.id}`)}
-                        className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
-                          ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
-                          : (isLight ? 'bg-[#3CB371] text-white' : 'bg-white text-black') + ' hover:scale-105 active:scale-95 shadow-xl'
-                          }`}
-                      >
-                        {enrollments[camp.id] ? (
-                          <>
-                            <CheckCircle size={14} />
-                            View Leaderboard
-                          </>
-                        ) : (
-                          <>
-                            View Campaign Details
-                            <ChevronRight size={14} />
-                          </>
-                        )}
-                      </button>
-                    </motion.div>
-                  ))}
-                </div>
+                    <button
+                      onClick={() => navigate(`/campaign/${camp.id}`)}
+                      className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
+                        ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
+                        : (isLight ? 'bg-[#3CB371] text-white' : 'bg-white text-black') + ' hover:scale-105 active:scale-95 shadow-xl'
+                        }`}
+                    >
+                      {enrollments[camp.id] ? (
+                        <>
+                          <CheckCircle size={14} />
+                          View Leaderboard
+                        </>
+                      ) : (
+                        <>
+                          View Campaign Details
+                          <ChevronRight size={14} />
+                        </>
+                      )}
+                    </button>
+                  </motion.div>
+                ))}
               </div>
-            )}
-
+            </div>
           </div>
         </div>
-      )
-      }
-
-
+      )}
 
       <ProfileModal
         isOpen={isProfileOpen}
