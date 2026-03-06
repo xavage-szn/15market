@@ -269,11 +269,6 @@ export default function UserApp() {
     localStorage.setItem("15market_theme", theme);
   }, [theme, network]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  }, []);
-
-
   // Auto-switch to Arc Testnet if wallet is on the wrong network
   useEffect(() => {
     if (isConnected && connectedChainId && connectedChainId !== ARC_CHAIN_ID) {
