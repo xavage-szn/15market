@@ -85,7 +85,7 @@ const SideHistoryPane = ({
                                                 key={trade.id}
                                                 className={`
                                                     p-3 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
-                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-white/40 border-[#3CB371]/10'}
+                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#f0f9f4] border-[#3CB371]/10 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
                                                 `}
                                             >
                                                 <div className="flex items-center justify-between mb-2">

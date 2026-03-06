@@ -1955,9 +1955,9 @@ export default function UserApp() {
 
   if (!authenticated) return (
     <div className={themeClass}>
-      <LandingPage />
+      <LandingPage theme={theme} />
       <AnimatePresence>
-        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} theme={theme} />}
       </AnimatePresence>
     </div>
   );
@@ -2070,7 +2070,7 @@ export default function UserApp() {
           )}
 
           {uiVersion === 'v1' && (
-            <div className={`w-full mb-4 lg:mb-6 overflow-hidden border-y transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#3CB371]/5' : 'border-white/5 bg-black/20'}`}>
+            <div className={`w-full h-8 lg:h-10 relative z-[45] overflow-hidden border-y ${isLight ? 'bg-[#f0f9f4]/95 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
               <GlobalTradeScroller theme={theme} />
             </div>
           )}
@@ -2081,11 +2081,11 @@ export default function UserApp() {
               <div className="w-full flex-1 grid grid-cols-12 gap-2 lg:gap-6 mb-10 relative z-0 mt-2">
                 <div className={`col-span-12 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 mb-2 overflow-hidden border min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] h-full glass-panel chart-glow`}
                   style={{
-                    background: theme === 'light' ? '#ffffff' : 'rgba(10, 10, 10, 0.7)',
+                    background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                     boxShadow: theme === 'light'
-                      ? '0 0 40px rgba(60, 179, 113, 0.5), 0 0 25px rgba(60, 179, 113, 0.4), 0 0 15px rgba(60, 179, 113, 0.3), inset 0 0 40px rgba(60, 179, 113, 0.1)'
+                      ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                       : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.8)' : `${GREEN}40`
+                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : `${GREEN}40`
                   }}>
                   <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
                 </div>
@@ -2142,9 +2142,9 @@ export default function UserApp() {
                   </div>
                   <div className="flex-1 min-h-[350px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col"
                     style={{
-                      background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
+                      background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
-                        ? '0 0 40px rgba(60, 179, 113, 0.1), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                        ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                         : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`,
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
                     }}>
@@ -2170,8 +2170,8 @@ export default function UserApp() {
                   {/* Trading Terminal Box */}
                   <div className={`rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0' : 'h-auto'} min-h-0`}
                     style={{
-                      background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
-                      borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
+                      background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
                     }}>
                     <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : 'p-3 lg:p-4'} flex flex-col min-h-0`}>
                       <TradeTerminal
@@ -2194,8 +2194,8 @@ export default function UserApp() {
                   {/* Active Trade / Controls Box */}
                   <div className={`flex-1 min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col`}
                     style={{
-                      background: theme === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(10,10,10,0.8)',
-                      borderColor: theme === 'light' ? 'rgba(60,179,113,0.1)' : 'rgba(255,255,255,0.05)'
+                      background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
                     }}>
                     <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
                       <LiveExecution
@@ -2233,7 +2233,7 @@ export default function UserApp() {
                       animate={{ opacity: 1 }}
                       className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
                       style={{
-                        background: theme === 'light' ? '#EEF9F1' : 'rgba(10, 10, 10, 0.7)',
+                        background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
                       }}
                     >
@@ -2265,17 +2265,17 @@ export default function UserApp() {
                       className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
                     >
                       <div className="flex items-center gap-6">
-                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[#3CB371]">
+                        <div className={`p-4 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/10 text-[#3CB371]'} border rounded-2xl`}>
                           <Trophy size={24} />
                         </div>
                         <div>
-                          <h3 className="text-lg font-black text-white uppercase tracking-tight">{camp.title}</h3>
+                          <h3 className={`text-lg font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} uppercase tracking-tight`}>{camp.title}</h3>
                           <div className="flex flex-wrap items-center gap-4 mt-1">
-                            <div className="flex items-center gap-1.5 text-[10px] font-black text-white/40 uppercase tracking-widest">
+                            <div className={`flex items-center gap-1.5 text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>
                               <Calendar size={12} />
                               Ends {new Date(camp.endTime).toLocaleString()}
                             </div>
-                            <div className="w-1 h-1 bg-white/10 rounded-full" />
+                            <div className={`w-1 h-1 ${isLight ? 'bg-[#3CB371]/10' : 'bg-white/10'} rounded-full`} />
                             <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
                               Prize: {camp.prize || 'Pride'}
                             </div>
@@ -2287,7 +2287,7 @@ export default function UserApp() {
                         onClick={() => navigate(`/campaign/${camp.id}`)}
                         className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
                           ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
-                          : 'bg-white text-black hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(0,0,0,0.2)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.3)]'
+                          : (isLight ? 'bg-[#3CB371] text-white' : 'bg-white text-black') + ' hover:scale-105 active:scale-95 shadow-xl'
                           }`}
                       >
                         {enrollments[camp.id] ? (

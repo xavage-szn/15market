@@ -174,39 +174,39 @@ body {
   box-shadow: none !important;
 }
 
-/* ===== PREMIUM LIGHT MODE — Branded Sage ===== */
+/* ===== PREMIUM LIGHT MODE — Light Coral Green Branding ===== */
 html.light,
 body.light {
-  background-color: #c8ddd0 !important;
+  background-color: #f0f9f4 !important;
   background-image:
-    radial-gradient(circle at 2px 2px, rgba(30, 90, 56, 0.06) 1px, transparent 0),
-    linear-gradient(180deg, #c8ddd0 0%, #b8d1c0 100%) !important;
+    radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.05) 1px, transparent 0),
+    linear-gradient(180deg, #f0f9f4 0%, #e6f4ed 100%) !important;
   background-size: 32px 32px, 100% 100% !important;
   background-attachment: fixed !important;
 }
 
 .light {
-  --primary-color: #2a9d5c;
-  --primary-glow: rgba(42, 157, 92, 0.4);
-  --primary-glow-strong: rgba(42, 157, 92, 0.6);
-  --primary-glow-subtle: rgba(42, 157, 92, 0.2);
-  --glass-bg: rgba(190, 215, 198, 0.80);
-  --glass-border: rgba(30, 90, 56, 0.18);
-  --glass-highlight: rgba(255, 255, 255, 0.25);
-  --text-primary: #0f2618;
-  --text-secondary: #1e3f2c;
-  --text-tertiary: #3d6b50;
+  --primary-color: #3CB371;
+  --primary-glow: rgba(60, 179, 113, 0.3);
+  --primary-glow-strong: rgba(60, 179, 113, 0.5);
+  --primary-glow-subtle: rgba(60, 179, 113, 0.15);
+  --glass-bg: rgba(240, 250, 245, 0.95);
+  --glass-border: rgba(60, 179, 113, 0.15);
+  --glass-highlight: rgba(255, 255, 255, 0.8);
+  --text-primary: #0a261a;
+  --text-secondary: #1a3d2e;
+  --text-tertiary: #2d5a45;
 }
 
 /* Light Mode Glass Panels */
 .light .glass-panel {
-  background: rgba(185, 212, 195, 0.85) !important;
+  background: rgba(240, 250, 245, 0.92) !important;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(30, 90, 56, 0.15) !important;
+  border: 1px solid rgba(60, 179, 113, 0.18) !important;
   box-shadow:
-    0 4px 24px rgba(20, 60, 36, 0.10),
-    0 1px 0 rgba(255, 255, 255, 0.18) inset !important;
+    0 10px 40px rgba(0, 0, 0, 0.04),
+    0 1px 0 rgba(255, 255, 255, 0.5) inset !important;
 }
 
 .light .glass-panel::before {
@@ -218,19 +218,19 @@ body.light {
 
 /* Light Mode Static Panels */
 .light .static-panel-light {
-  background: #bfd7c6 !important;
-  border: 1px solid rgba(30, 90, 56, 0.16) !important;
+  background: #f8fdfb !important;
+  border: 1px solid rgba(60, 179, 113, 0.15) !important;
   box-shadow:
-    0 2px 12px rgba(20, 60, 36, 0.08),
-    0 1px 0 rgba(255, 255, 255, 0.15) inset !important;
+    0 10px 40px rgba(0, 0, 0, 0.04),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset !important;
 }
 
 /* Light Mode Nav */
 .light .glass-nav {
-  background: rgba(175, 205, 185, 0.88) !important;
+  background: rgba(255, 255, 255, 0.90) !important;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(30, 90, 56, 0.12) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
 }
 
 /* Light Mode Scrollbar */
@@ -248,8 +248,8 @@ body.light {
 
 /* Light Mode Neon Effects */
 .light .neon-border {
-  border: 1px solid rgba(30, 90, 56, 0.18) !important;
-  box-shadow: 0 2px 16px rgba(20, 60, 36, 0.10) !important;
+  border: 1px solid rgba(42, 157, 92, 0.15) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03) !important;
 }
 
 /* Light Mode Button Enhancements */
@@ -301,33 +301,33 @@ body.light {
   border-color: rgba(30, 90, 56, 0.12) !important;
 }
 
-/* Light Mode Backgrounds — Tinted, Not White */
+/* Light Mode Backgrounds — Clean Elevations */
 .light .bg-white\/5 {
-  background-color: rgba(30, 90, 56, 0.05) !important;
+  background-color: rgba(42, 157, 92, 0.04) !important;
 }
 
 .light .bg-white\/10 {
-  background-color: rgba(30, 90, 56, 0.08) !important;
+  background-color: rgba(42, 157, 92, 0.08) !important;
 }
 
 .light .bg-black\/5 {
-  background-color: rgba(30, 90, 56, 0.05) !important;
+  background-color: rgba(0, 0, 0, 0.03) !important;
 }
 
 .light .bg-black\/10 {
-  background-color: rgba(30, 90, 56, 0.08) !important;
+  background-color: rgba(0, 0, 0, 0.06) !important;
 }
 
 .light .bg-white\/80 {
-  background-color: rgba(185, 212, 195, 0.85) !important;
+  background-color: rgba(255, 255, 255, 0.90) !important;
 }
 
 .light .bg-white {
-  background-color: #b9d4c3 !important;
+  background-color: #ffffff !important;
 }
 
 .light .bg-white\/60 {
-  background-color: rgba(185, 212, 195, 0.65) !important;
+  background-color: rgba(255, 255, 255, 0.70) !important;
 }
 
 /* Light Mode Hover States */
@@ -369,43 +369,41 @@ body.light {
   border-color: rgba(42, 157, 92, 0.6) !important;
 }
 
-/* Light Mode — Force darker tones on opacity text helpers */
+/* Light Mode — Force darker tones on opacity text helpers for readability */
 .light .text-black\/50,
 .light .text-black\/60 {
-  color: rgba(15, 38, 24, 0.65) !important;
+  color: rgba(5, 20, 11, 0.65) !important;
 }
 
 .light .text-black\/40 {
-  color: rgba(15, 38, 24, 0.5) !important;
+  color: rgba(5, 20, 11, 0.55) !important;
 }
 
-/* Diluted Sage Gradient for Light Mode Containers */
+/* Diluted Gradient for Light Mode Containers - Light Coral Green */
 .coral-green-gradient-light {
   background: linear-gradient(145deg,
-      #EEF9F1 0%,
-      #EEF9F1 60%,
-      rgba(60, 179, 113, 0.08) 85%,
-      rgba(255, 127, 80, 0.05) 100%) !important;
+      #f8fdfb 0%,
+      #ebf7f1 100%) !important;
 }
 
 .light .text-black\/20 {
-  color: rgba(15, 38, 24, 0.3) !important;
+  color: rgba(5, 20, 11, 0.35) !important;
 }
 
 .light .text-black\/10 {
-  color: rgba(15, 38, 24, 0.18) !important;
+  color: rgba(5, 20, 11, 0.2) !important;
 }
 
 .light .text-black {
-  color: #0f2618 !important;
+  color: #05140b !important;
 }
 
 .light .text-black\/90 {
-  color: rgba(15, 38, 24, 0.90) !important;
+  color: rgba(5, 20, 11, 0.92) !important;
 }
 
 .light .text-black\/80 {
-  color: rgba(15, 38, 24, 0.80) !important;
+  color: rgba(5, 20, 11, 0.82) !important;
 }
 
 /* Coral Green Sliders - Always Visible */

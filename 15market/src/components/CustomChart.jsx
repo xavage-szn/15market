@@ -30,13 +30,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
     const isDark = theme !== 'light';
     const textColor = isDark ? '#D9D9D9' : '#0f2618';
-    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(30, 90, 56, 0.08)';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(60, 179, 113, 0.1)';
 
-    const controlBg = isDark ? 'bg-black/60' : 'bg-white/80';
-    const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#bfd7c6]/95';
-    const controlBorder = isDark ? 'border-white/10' : 'border-[#1e3f2c]/15';
-    const controlText = isDark ? 'text-white' : 'text-[#0f2618]';
-    const controlTextDim = isDark ? 'text-white/40' : 'text-[#0f2618]/60';
+    const controlBg = isDark ? 'bg-black/60' : 'bg-[#f0f9f4]/80';
+    const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#e6f4ed]/95';
+    const controlBorder = isDark ? 'border-white/10' : 'border-[#3CB371]/15';
+    const controlText = isDark ? 'text-white' : 'text-[#0a261a]';
+    const controlTextDim = isDark ? 'text-white/40' : 'text-[#0a261a]/60';
 
     const upColor = '#3CB371';
     const downColor = '#FF4444';
@@ -125,14 +125,14 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     labelBackgroundColor: '#3CB371',
                     style: 0, // Solid
                     width: 1,
-                    color: 'rgba(255, 255, 255, 0.2)',
+                    color: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(60, 179, 113, 0.2)',
                     labelVisible: true,
                 },
                 horzLine: {
                     labelBackgroundColor: '#3CB371',
                     style: 0,
                     width: 1,
-                    color: 'rgba(255, 255, 255, 0.2)',
+                    color: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(60, 179, 113, 0.2)',
                     labelVisible: true,
                 },
             },
@@ -504,7 +504,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 z-[60] flex flex-col items-center justify-center backdrop-blur-md bg-black/40"
+                            className={`absolute inset-0 z-[60] flex flex-col items-center justify-center backdrop-blur-md ${isDark ? 'bg-black/40' : 'bg-[#f0f9f4]/60'}`}
                         >
                             <div className="flex flex-col items-center justify-center w-full h-full">
                                 <MascotLoader
@@ -532,7 +532,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                 }`}
                         >
                             <div className={`w-2 h-2 rounded-full animate-pulse ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
-                            <span className="text-[10px] font-black uppercase text-white tracking-widest">
+                            <span className={`text-[10px] font-black uppercase ${isDark ? 'text-white' : 'text-[#0a261a]'} tracking-widest`}>
                                 {result.won ? `+$${(result.amount * 1.95).toFixed(2)}` : `-$${result.amount}`}
                             </span>
                         </motion.div>
@@ -545,7 +545,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     {/* Timeframe Selector */}
                     <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
                         {['1s', '1m', '1h', 'D'].map(tf => (
-                            <button key={tf} onClick={() => setTimeframe(tf)} className={`px-2 lg:px-4 py-1.5 text-[8px] lg:text-[10px] font-black tracking-widest transition-all rounded-lg ${timeframe === tf ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText} hover:bg-white/5`}`}>{tf}</button>
+                            <button key={tf} onClick={() => setTimeframe(tf)} className={`px-2 lg:px-4 py-1.5 text-[8px] lg:text-[10px] font-black tracking-widest transition-all rounded-lg ${timeframe === tf ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText} ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'}`}`}>{tf}</button>
                         ))}
                     </div>
 
@@ -594,7 +594,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                                     <button
                                                         key={opt.id}
                                                         onClick={() => { setGridMode(opt.id); setShowSettings(false); }}
-                                                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg border ${gridMode === opt.id ? 'bg-[#3CB371] text-white border-[#3CB371]' : `bg-white/5 ${controlTextDim} border-transparent hover:bg-white/10`}`}
+                                                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg border ${gridMode === opt.id ? 'bg-[#3CB371] text-white border-[#3CB371]' : `${isDark ? 'bg-white/5' : 'bg-[#3CB371]/5'} ${controlTextDim} border-transparent hover:${isDark ? 'bg-white/10' : 'bg-[#3CB371]/10'}`}`}
                                                     >
                                                         {opt.label}
                                                     </button>
@@ -603,10 +603,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                         </div>
                                         <button
                                             onClick={() => { setChartType(chartType === 'candles' ? 'line' : 'candles'); setShowSettings(false); }}
-                                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all ${controlTextDim} hover:${controlText}`}
+                                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'} transition-all ${controlTextDim} hover:${controlText}`}
                                         >
                                             <span className="text-[10px] font-black uppercase tracking-widest">Candles</span>
-                                            <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : 'bg-white/10'}`}>
+                                            <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : (isDark ? 'bg-white/10' : 'bg-[#3CB371]/10')}`}>
                                                 <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${chartType === 'candles' ? 'translate-x-4' : 'translate-x-0'}`} />
                                             </div>
                                         </button>

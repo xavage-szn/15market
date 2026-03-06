@@ -204,7 +204,7 @@ function LiveExecutionComponent({
                                             return (
                                                 <div
                                                     className={`rounded-[16px] p-2 lg:p-3 flex flex-col relative transition-all duration-500 border-2 ${!isExpanded && activeTrades.length === 1 ? 'h-full flex-1' : 'h-auto'} ${isLight
-                                                        ? 'bg-white/80 backdrop-blur-xl border-[#3CB371]/10 shadow-sm hover:shadow-md'
+                                                        ? 'bg-[#f0f9f4]/90 backdrop-blur-xl border-[#3CB371]/20 shadow-sm hover:shadow-md'
                                                         : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
                                                     style={displayFinal ? {
                                                         borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(60, 179, 113, 0.5)' : 'rgba(255, 127, 80, 0.5)',
@@ -219,14 +219,14 @@ function LiveExecutionComponent({
                                                             <div className={`w-1 h-1 rounded-full ${displayFinal
                                                                 ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
                                                                 : (liveWinning ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
-                                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-black/50' : 'text-white/40')}`}>
+                                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
                                                                 {displayFinal ? trade.status : (trade.confirmed === false ? "Verifying" : "Live")}
                                                             </span>
                                                         </div>
                                                         {isFinal && (
                                                             <button
                                                                 onClick={() => removeTrade(trade.id)}
-                                                                className={`p-1 rounded-full transition-colors ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}
+                                                                className={`p-1 rounded-full transition-colors ${isLight ? 'bg-[#3CB371]/10 hover:bg-[#3CB371]/20 text-[#0a261a]/40' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}
                                                             >
                                                                 <X size={10} />
                                                             </button>
@@ -236,7 +236,7 @@ function LiveExecutionComponent({
                                                     {/* Central Hero Countdown - Tighter vertical scaling */}
                                                     {!displayFinal ? (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-0">
-                                                            <div className={`text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-black opacity-80' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.5)]'}`}>
+                                                            <div className={`text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-[#0a261a] opacity-80' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.5)]'}`}>
                                                                 {displayTimeLeft}<span className="text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
                                                             <div className="mt-0 px-1.5 py-0 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-90">

@@ -130,19 +130,19 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
     return (
         <AnimatePresence>
-            <div className={`fixed inset-0 z-[150] flex items-center justify-center p-6 backdrop-blur-md ${isLight ? 'bg-white/40' : 'bg-black/80'}`}>
+            <div className={`fixed inset-0 z-[150] flex items-center justify-center p-6 backdrop-blur-md ${isLight ? 'bg-black/20' : 'bg-black/80'}`}>
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className={`w-full max-w-md ${isLight ? 'coral-green-gradient-light border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/30'} border rounded-[32px] p-8 shadow-[0_0_50px_rgba(60,179,113,0.1)] relative overflow-hidden`}
+                    className={`w-full max-w-md ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/30'} border rounded-[32px] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.1)] relative overflow-hidden`}
                 >
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent" />
 
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-4">
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#3CB371] to-black p-[1px] overflow-hidden">
-                                <div className={`w-full h-full rounded-2xl ${isLight ? 'bg-white' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
+                                <div className={`w-full h-full rounded-2xl ${isLight ? 'bg-[#e6f4ed]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                     {userProfile?.xProfileImage ? (
                                         <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                     ) : (
@@ -164,23 +164,23 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                     {metrics && (
                         <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
+                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
                                 <p className="text-[8px] font-bold text-[#3CB371] uppercase tracking-widest mb-1">Win Rate</p>
                                 <div className="flex items-baseline gap-1">
-                                    <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'}`}>
+                                    <p className={`text-2xl font-black ${isLight ? 'text-[#05140b]' : 'text-white'}`}>
                                         {metrics.trades > 0 ? ((metrics.wins / metrics.trades) * 100).toFixed(0) : 0}
                                     </p>
-                                    <span className={`text-xs font-bold ${isLight ? 'text-black/40' : 'text-white/40'}`}>%</span>
+                                    <span className={`text-xs font-bold ${isLight ? 'text-[#05140b]/40' : 'text-white/40'}`}>%</span>
                                 </div>
-                                <p className={`text-[7px] ${isLight ? 'text-black/20' : 'text-white/20'} font-bold uppercase mt-1`}>{metrics.wins} W // {metrics.trades - metrics.wins} L</p>
+                                <p className={`text-[7px] ${isLight ? 'text-[#05140b]/20' : 'text-white/20'} font-bold uppercase mt-1`}>{metrics.wins} W // {metrics.trades - metrics.wins} L</p>
                             </div>
-                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
-                                <p className={`text-[8px] font-bold ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-widest mb-1`}>Total Volume</p>
+                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
+                                <p className={`text-[8px] font-bold ${isLight ? 'text-[#05140b]/40' : 'text-white/40'} uppercase tracking-widest mb-1`}>Total Volume</p>
                                 <div className="flex items-baseline gap-1">
-                                    <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'}`}>{metrics.volume}</p>
-                                    <span className={`text-xs font-bold ${isLight ? 'text-black/40' : 'text-white/40'}`}>USDC</span>
+                                    <p className={`text-2xl font-black ${isLight ? 'text-[#05140b]' : 'text-white'}`}>{metrics.volume}</p>
+                                    <span className={`text-xs font-bold ${isLight ? 'text-[#05140b]/40' : 'text-white/40'}`}>USDC</span>
                                 </div>
-                                <p className={`text-[7px] ${isLight ? 'text-black/20' : 'text-white/20'} font-bold uppercase mt-1`}>Across {metrics.trades} Trades</p>
+                                <p className={`text-[7px] ${isLight ? 'text-[#05140b]/20' : 'text-white/20'} font-bold uppercase mt-1`}>Across {metrics.trades} Trades</p>
                             </div>
                         </div>
                     )}
@@ -223,13 +223,15 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                                     {/* Deposit / Withdraw from local storage */}
                                     {transactionHistory && transactionHistory.map((tx, i) => (
-                                        <div key={tx.id || `tx-${i}`} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/[0.02] border-white/5'} border`}>
+                                        <div key={tx.id || `tx-${i}`} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border transition-all group ${isLight
+                                            ? 'bg-[#f0f9f4] border-[#3CB371]/10 shadow-sm hover:shadow-md hover:border-[#3CB371]/40'
+                                            : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
                                             <div className="flex items-center gap-3">
                                                 <div className={`p-1.5 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/10 text-[#3CB371]" : "bg-orange-500/10 text-orange-500"}`}>
                                                     {tx.type === "DEPOSIT" ? <Zap size={14} /> : <Shield size={14} />}
                                                 </div>
                                                 <div>
-                                                    <div className={`text-[10px] font-black ${isLight ? 'text-black' : 'text-white'} uppercase`}>{tx.type}</div>
+                                                    <div className={`text-[10px] font-black ${isLight ? 'text-[#05140b]' : 'text-white'} uppercase`}>{tx.type}</div>
                                                     <div className={`text-[8px] ${isLight ? 'text-black/20' : 'text-white/20'} font-mono italic`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
                                                 </div>
                                             </div>

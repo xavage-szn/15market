@@ -135,7 +135,7 @@ function GlobalTradeScrollerComponent({ theme }) {
     }, [mergedHistory]);
 
     return (
-        <div className={`w-full h-8 lg:h-10 relative z-[45] overflow-hidden border-y ${isLight ? 'bg-white/80 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
+        <div className={`w-full h-8 lg:h-10 relative z-[45] overflow-hidden border-y ${isLight ? 'bg-white/95 border-black/5' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
             <AnimatePresence mode="wait">
                 {activeBroadcast ? (
                     <motion.div

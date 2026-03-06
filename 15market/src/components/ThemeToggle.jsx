@@ -10,7 +10,7 @@ export function ThemeToggle({ theme, onToggle }) {
             onClick={onToggle}
             className="relative w-12 h-6 lg:w-16 lg:h-8 rounded-full p-1 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black"
             style={{
-                backgroundColor: isDark ? '#1f2937' : '#e5e7eb'
+                backgroundColor: isDark ? '#1a3026' : '#d1e5d9'
             }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}

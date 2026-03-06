@@ -41,8 +41,8 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
     }, [price]);
 
     return (
-        <div className={`w-full h-full flex flex-col font-mono text-[10px] lg:text-xs overflow-hidden rounded-xl transition-colors duration-300 ${isDark ? 'text-white/80' : 'text-[#1A3026]'}`}>
-            <div className={`flex items-center justify-between px-3 py-2 border-b ${isDark ? 'border-white/5 opacity-60' : 'border-[#3CB371]/10 text-[#3D5A4C]/50'} text-[9px] uppercase tracking-wider font-bold`}>
+        <div className={`w-full h-full flex flex-col font-mono text-[10px] lg:text-xs overflow-hidden rounded-xl transition-colors duration-300 ${isDark ? 'text-white/80' : 'text-[#0a261a]'}`}>
+            <div className={`flex items-center justify-between px-3 py-2 border-b ${isDark ? 'border-white/5 opacity-60' : 'border-[#3CB371]/10 text-[#0a261a]/40'} text-[9px] uppercase tracking-wider font-bold`}>
                 <span>Price ({symbol})</span>
                 <span>Size</span>
             </div>
@@ -50,7 +50,7 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
             {/* Asks (Sells) - Red */}
             <div className="flex-1 overflow-hidden flex flex-col justify-end gap-[1px]">
                 {asks.map((ask, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-0.5 relative group cursor-pointer hover:bg-white/5 transition-colors">
+                    <div key={i} className={`flex items-center justify-between px-3 py-0.5 relative group cursor-pointer ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'} transition-colors`}>
                         <div
                             className="absolute right-0 top-0 bottom-0 pointer-events-none transition-all duration-300"
                             style={{
@@ -66,7 +66,7 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
             </div>
 
             {/* Spread / Current Price Indicator */}
-            <div className={`my-1 py-1 px-3 flex items-center justify-between border-y backdrop-blur-sm relative z-20 ${isDark ? 'bg-white/5 border-white/5' : 'bg-black/5 border-[#3CB371]/10'}`}>
+            <div className={`my-1 py-1 px-3 flex items-center justify-between border-y backdrop-blur-sm relative z-20 ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#3CB371]/5 border-[#3CB371]/10'}`}>
                 <div className={`text-sm lg:text-base font-black tracking-tight flex items-center gap-2`}
                     style={{ color: parseFloat(price) > parseFloat(bids[0]?.price || 0) ? GREEN : RED }}>
                     {parseFloat(price).toFixed(4)}
@@ -83,7 +83,7 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
             {/* Bids (Buys) - Green */}
             <div className="flex-1 overflow-hidden flex flex-col justify-start gap-[1px]">
                 {bids.map((bid, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-0.5 relative group cursor-pointer hover:bg-white/5 transition-colors">
+                    <div key={i} className={`flex items-center justify-between px-3 py-0.5 relative group cursor-pointer ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'} transition-colors`}>
                         <div
                             className="absolute right-0 top-0 bottom-0 pointer-events-none transition-all duration-300"
                             style={{

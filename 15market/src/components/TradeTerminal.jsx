@@ -38,7 +38,7 @@ function TradeTerminalComponent({
         <div className="flex items-center justify-between pointer-events-auto mb-1">
             <div className="flex items-center gap-2 lg:gap-3">
                 <div className="flex items-center gap-1">
-                    <h2 className={`text-[10px] lg:text-sm font-black tracking-tighter uppercase ${isLight ? 'text-black' : 'text-white'}`}>
+                    <h2 className={`text-[10px] lg:text-sm font-black tracking-tighter uppercase ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
                         TERMINAL
                     </h2>
                     <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#3CB371', boxShadow: `0 0 10px #3CB371` }} />
@@ -47,15 +47,15 @@ function TradeTerminalComponent({
                 <div className="flex items-center gap-1.5">
                     <button
                         onClick={(e) => { e.stopPropagation(); setSessionMode(); }}
-                        className={`w-5 lg:w-7 h-2.5 lg:h-3.5 rounded-full relative transition-all duration-300 cursor-pointer ${sessionMode ? 'bg-[#3CB371]' : (isLight ? 'bg-black/10' : 'bg-white/10')}`}
+                        className={`w-5 lg:w-7 h-2.5 lg:h-3.5 rounded-full relative transition-all duration-300 cursor-pointer ${sessionMode ? 'bg-[#3CB371]' : (isLight ? 'bg-[#3CB371]/10' : 'bg-white/10')}`}
                     >
                         <div className={`absolute top-0.5 left-0.5 w-1.5 lg:w-2.5 h-1.5 lg:h-2.5 rounded-full bg-white transition-all duration-300 ${sessionMode ? 'translate-x-2.5 lg:translate-x-3.5' : 'translate-x-0'}`} />
                     </button>
-                    <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto</span>
+                    <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>Auto</span>
                     {sessionMode && (
                         <button
                             onClick={(e) => { e.stopPropagation(); setShowManagement(!showManagement); }}
-                            className={`p-0.5 rounded-md transition-all duration-300 ${isLight ? 'hover:bg-black/5' : 'hover:bg-white/5'} ${showManagement ? 'rotate-180' : ''}`}
+                            className={`p-0.5 rounded-md transition-all duration-300 ${isLight ? 'hover:bg-[#3CB371]/5' : 'hover:bg-white/5'} ${showManagement ? 'rotate-180' : ''}`}
                         >
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
                                 <path d="m6 9 6 6 6-6" />
@@ -81,7 +81,7 @@ function TradeTerminalComponent({
                 disabled={maintenanceMode}
                 className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "UP"
                     ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
-                    : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
+                    : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                     }`}
                 style={{
                     boxShadow: direction === "UP" ? `0 0 20px rgba(60, 179, 113, 0.2)` : 'none'
@@ -94,7 +94,7 @@ function TradeTerminalComponent({
                 disabled={maintenanceMode}
                 className={`flex flex-col items-center justify-center py-2 lg:py-2.5 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "DOWN"
                     ? (isLight ? 'bg-[#FF7F50] text-white border-transparent' : 'bg-[#FF7F50]/20 border-[#FF7F50] text-[#FF7F50]')
-                    : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
+                    : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                     }`}
                 style={{
                     boxShadow: direction === "DOWN" ? `0 0 20px rgba(255, 127, 80, 0.2)` : 'none'
@@ -120,7 +120,7 @@ function TradeTerminalComponent({
                         onClick={(e) => { e.stopPropagation(); setDuration(d); }}
                         className={`flex flex-col items-center justify-center py-1 rounded-xl border transition-all duration-300 active:scale-95 ${duration === d
                             ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
-                            : (isLight ? 'bg-black/5 border-black/5 text-black/40' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
+                            : (isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/60 hover:bg-[#e6f4ed]' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
                             }`}
                     >
                         <span className="text-[10px] lg:text-sm font-black tracking-tighter">{d}s</span>
@@ -138,7 +138,7 @@ function TradeTerminalComponent({
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1.5 p-1.5 rounded-xl border ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
+            <div className={`flex items-center gap-1.5 p-1.5 rounded-xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
                 <input
                     type="number"
                     value={amount}

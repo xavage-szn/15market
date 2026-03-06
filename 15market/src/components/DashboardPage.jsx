@@ -178,14 +178,14 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`min-h-screen w-full flex flex-col ${isLight ? 'bg-[#EEF9F1] text-[#1A3026]' : 'bg-transparent text-white'}`}>
-            <div className={`sticky top-0 z-40 ${isLight ? 'bg-[#EEF9F1]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
+        <div className={`min-h-screen w-full flex flex-col ${isLight ? 'bg-[#f0f9f4] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+            <div className={`sticky top-0 z-40 ${isLight ? 'bg-[#f0f9f4]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
                 <div className="max-w-7xl mx-auto p-4 md:p-6">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={onBack}
-                                className={`p-2 md:p-3 rounded-xl ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-900' : 'bg-white/5 hover:bg-white/10 border-white/5 text-white'} border transition-colors group`}
+                                className={`p-2 md:p-3 rounded-xl ${isLight ? 'bg-[#3CB371]/5 hover:bg-[#3CB371]/10 border-[#3CB371]/10 text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 border-white/5 text-white'} border transition-colors group`}
                             >
                                 <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
                             </button>
@@ -202,7 +202,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                     </div>
 
                     <div className="overflow-x-auto no-scrollbar -mx-4 px-4">
-                        <div className={`flex ${isLight ? 'bg-gray-100 border-gray-200' : 'bg-[#111] border-white/5'} p-1 rounded-xl border w-max md:w-auto`}>
+                        <div className={`flex ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10' : 'bg-[#111] border-white/5'} p-1 rounded-xl border w-max md:w-auto`}>
                             <NavTab active={activeTab} id="overview" label="Overview" icon={<Activity size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="profile" label="My Profile" icon={<User size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="community" label="Community" icon={<MessageSquare size={14} />} onClick={setActiveTab} isLight={isLight} />
@@ -228,7 +228,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         label="Bullish Sentiment"
                                         value={`${stats.marketSentiment}%`}
                                         sub={`${stats.bullsInfo} Calls vs ${stats.bearsInfo} Puts`}
-                                        icon={<TrendingUp size={16} className={Number(stats.marketSentiment) > 50 ? "text-[#FF7F50]" : isLight ? "text-gray-300" : "text-white/20"} />}
+                                        icon={<TrendingUp size={16} className={Number(stats.marketSentiment) > 50 ? "text-[#FF7F50]" : isLight ? "text-[#3CB371]/20" : "text-white/20"} />}
                                         isLight={isLight}
                                     />
                                     <StatCard
@@ -249,7 +249,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                                    <div className={`lg:col-span-2 ${isLight ? 'bg-white border-[#3CB371]/10 shadow-[0_8px_32px_rgba(60,179,113,0.05)]' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 relative overflow-hidden`}>
+                                    <div className={`lg:col-span-2 ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 relative overflow-hidden`}>
                                         <div className="flex justify-between items-center mb-6">
                                             <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/40'}`}>Market Activity Pulse</h3>
                                             <div className="flex gap-2">
@@ -267,8 +267,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                         </linearGradient>
                                                     </defs>
                                                     <Tooltip
-                                                        contentStyle={{ backgroundColor: isLight ? '#fff' : '#000', border: isLight ? '1px solid #ddd' : '1px solid #333', borderRadius: '8px' }}
-                                                        itemStyle={{ color: isLight ? '#000' : '#fff' }}
+                                                        contentStyle={{ backgroundColor: isLight ? '#f0f9f4' : '#000', border: isLight ? '1px solid rgba(60, 179, 113, 0.2)' : '1px solid #333', borderRadius: '8px' }}
+                                                        itemStyle={{ color: isLight ? '#0a261a' : '#fff' }}
                                                     />
                                                     <Area
                                                         type="monotone"
@@ -284,20 +284,20 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                     </div>
 
                                     <div className="flex flex-col gap-6 lg:col-span-2">
-                                        <div className={`${isLight ? 'bg-white border-[#3CB371]/10 shadow-[0_8px_32px_rgba(60,179,113,0.05)]' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 flex flex-col h-full`}>
+                                        <div className={`${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 flex flex-col h-full`}>
                                             <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/40'} mb-4`}>Recent Signals</h3>
                                             <div className="flex-1 overflow-y-auto space-y-3 max-h-[180px] custom-scrollbar">
                                                 {stats.recentTrades.length === 0 ? (
-                                                    <div className={`text-center py-4 ${isLight ? 'text-gray-200' : 'text-white/10'} text-[10px] uppercase font-black`}>No active signals</div>
+                                                    <div className={`text-center py-4 ${isLight ? 'text-[#0a261a]/20' : 'text-white/10'} text-[10px] uppercase font-black`}>No active signals</div>
                                                 ) : stats.recentTrades.map((t, i) => (
-                                                    <div key={i} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-gray-50 border-gray-100' : 'bg-white/[0.02] border-white/5'} border`}>
+                                                    <div key={i} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10' : 'bg-white/[0.02] border-white/5'} border`}>
                                                         <div className="flex items-center gap-3">
                                                             <div className={`p-2 rounded-lg ${(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "bg-[#FF7F50]/10 text-[#FF7F50]" : "bg-[#3CB371]/10 text-[#3CB371]"}`}>
                                                                 {(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                                             </div>
                                                             <div>
                                                                 <div className="text-[10px] font-bold">{t.user?.slice(0, 6) || "Trader"}</div>
-                                                                <div className={`text-[8px] ${isLight ? 'text-gray-400' : 'text-white/30'} uppercase`}>{t.direction}</div>
+                                                                <div className={`text-[8px] ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'} uppercase`}>{t.direction}</div>
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
@@ -313,19 +313,19 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         )}
 
                         {activeTab === "profile" && (
-                            <div className={`max-w-2xl mx-auto ${isLight ? 'bg-white border-[#3CB371]/10 shadow-[0_8px_32px_rgba(60,179,113,0.05)]' : 'bg-[#111] border-white/5'} border rounded-[32px] p-8`}>
+                            <div className={`max-w-2xl mx-auto ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[32px] p-8`}>
                                 <div className="flex flex-col items-center mb-8">
                                     <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[2px] mb-4 overflow-hidden">
-                                        <div className={`w-full h-full rounded-full ${isLight ? 'bg-gray-50' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
+                                        <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                             {userProfile?.xProfileImage ? (
                                                 <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                             ) : (
-                                                <User size={40} className={isLight ? 'text-gray-300' : 'text-white/50'} />
+                                                <User size={40} className={isLight ? 'text-[#3CB371]/40' : 'text-white/50'} />
                                             )}
                                         </div>
                                     </div>
-                                    <h2 className="text-2xl font-black">{userProfile?.username || (address ? "Trader" : "Guest User")}</h2>
-                                    <div className={`text-sm ${isLight ? 'text-gray-400' : 'text-white/40'} font-mono mb-4 text-center`}>
+                                    <h2 className={`text-2xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{userProfile?.username || (address ? "Trader" : "Guest User")}</h2>
+                                    <div className={`text-sm ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} font-mono mb-4 text-center`}>
                                         {address}
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -372,13 +372,13 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 mb-8">
-                                    <div className={`p-4 ${isLight ? 'bg-gray-50 border-gray-100' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
+                                    <div className={`p-4 ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
                                         <div className="text-3xl font-black text-[#3CB371]">{stats.userTotalWins}</div>
-                                        <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-white/30'}`}>Total Wins</div>
+                                        <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>Total Wins</div>
                                     </div>
-                                    <div className={`p-4 ${isLight ? 'bg-gray-50 border-gray-100' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
-                                        <div className={`text-3xl font-black ${isLight ? 'text-gray-900' : 'text-white'}`}>{stats.userTotalTrades}</div>
-                                        <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-white/30'}`}>Total Trades</div>
+                                    <div className={`p-4 ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
+                                        <div className={`text-3xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.userTotalTrades}</div>
+                                        <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>Total Trades</div>
                                     </div>
                                 </div>
 
@@ -386,7 +386,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                     <Shield className="text-[#3CB371] shrink-0" />
                                     <div>
                                         <h4 className="font-bold text-[#3CB371] mb-1">Account Status: Good</h4>
-                                        <p className={`text-xs ${isLight ? 'text-gray-600' : 'text-white/60'} leading-relaxed`}>
+                                        <p className={`text-xs ${isLight ? 'text-[#0a261a]/60' : 'text-white/60'} leading-relaxed`}>
                                             Your account is active. You can now dispute trades below if you find discrepancies.
                                         </p>
                                     </div>
@@ -397,17 +397,17 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         <div className="p-2 bg-[#3CB371]/10 text-[#3CB371] rounded-lg">
                                             <Settings size={18} />
                                         </div>
-                                        <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-700' : 'text-white/80'}`}>Interface Version</h4>
+                                        <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/80' : 'text-white/80'}`}>Interface Version</h4>
                                     </div>
                                     <div className="flex gap-4">
                                         <button
                                             onClick={() => setUiVersion('v1')}
                                             className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v1'
-                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-[0_0_20px_#3CB37140]'
-                                                : isLight ? 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
+                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-lg'
+                                                : isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/50 hover:bg-[#e6f4ed]' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
                                         >
                                             <span className="text-[10px] font-black uppercase tracking-widest">V1 CLASSIC</span>
-                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v1' ? 'text-white/70' : isLight ? 'text-gray-400' : 'text-white/20'}`}>Basic Terminal</span>
+                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v1' ? 'text-white/70' : isLight ? 'text-[#0a261a]/40' : 'text-white/20'}`}>Basic Terminal</span>
                                         </button>
                                         <button
                                             onClick={() => {
@@ -424,11 +424,11 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                 setUiVersion('v2');
                                             }}
                                             className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v2'
-                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-[0_0_20px_#3CB37140]'
-                                                : isLight ? 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
+                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-lg'
+                                                : isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/50 hover:bg-[#e6f4ed]' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
                                         >
                                             <span className="text-[10px] font-black uppercase tracking-widest">V2 ADVANCED</span>
-                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v2' ? 'text-white/70' : isLight ? 'text-gray-400' : 'text-white/20'}`}>High Speed Execution</span>
+                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v2' ? 'text-white/70' : isLight ? 'text-[#0a261a]/40' : 'text-white/20'}`}>High Speed Execution</span>
                                         </button>
                                     </div>
                                 </div>
@@ -440,10 +440,10 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                 <Zap size={18} />
                                             </div>
                                             <div>
-                                                <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-700' : 'text-white/80'} flex items-center gap-2`}>
+                                                <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/80' : 'text-white/80'} flex items-center gap-2`}>
                                                     Auto-Signer Module
                                                 </h4>
-                                                <p className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'} font-bold uppercase`}>
+                                                <p className={`text-[10px] ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'} font-bold uppercase`}>
                                                     {evmSessionWallet ? `Active: ${evmSessionWallet.address.slice(0, 6)}...${evmSessionWallet.address.slice(-4)}` : "Initializing..."}
                                                 </p>
                                             </div>
@@ -494,7 +494,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                     }
                                                 });
                                             }}
-                                            className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'} text-[10px] font-black uppercase tracking-widest rounded-2xl active:scale-[0.98] transition-all border shadow-lg`}
+                                            className={`py-4 ${isLight ? 'bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'} text-[10px] font-black uppercase tracking-widest rounded-2xl active:scale-[0.98] transition-all border shadow-lg`}
                                         >
                                             Sweep to Main
                                         </button>
@@ -502,19 +502,19 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
 
                                 <div className="space-y-4">
-                                    <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-gray-400' : 'text-white/40'} mb-4`}>Transaction History</h3>
+                                    <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} mb-4`}>Transaction History</h3>
                                     <div className="space-y-3">
                                         {!transactionHistory || transactionHistory.length === 0 ? (
-                                            <div className={`text-center py-8 ${isLight ? 'text-gray-300 bg-gray-50 border-gray-100' : 'text-white/20 bg-white/[0.02] border-white/5'} text-xs uppercase font-black border rounded-2xl`}>No transactions found</div>
+                                            <div className={`text-center py-8 ${isLight ? 'text-[#0a261a]/20 bg-[#f0f9f4] border-[#3CB371]/10' : 'text-white/20 bg-white/[0.02] border-white/5'} text-xs uppercase font-black border rounded-2xl`}>No transactions found</div>
                                         ) : transactionHistory.map((tx, i) => (
-                                            <div key={tx.id || i} className={`p-4 ${isLight ? 'bg-white border-gray-100 hover:border-gray-200' : 'bg-white/5 border-white/5 hover:border-white/10'} border rounded-2xl flex items-center justify-between group transition-all`}>
+                                            <div key={tx.id || i} className={`p-4 ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 hover:border-[#3CB371]/20' : 'bg-white/5 border-white/5 hover:border-white/10'} border rounded-2xl flex items-center justify-between group transition-all`}>
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/20 text-[#3CB371]" : "bg-orange-500/20 text-orange-500"}`}>
                                                         {tx.type === "DEPOSIT" ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                                                     </div>
                                                     <div>
-                                                        <div className={`text-xs font-black uppercase ${isLight ? 'text-gray-900' : 'text-white'}`}>{tx.type === "DEPOSIT" ? "Auto-Signer Deposit" : "Auto-Signer Withdrawal"}</div>
-                                                        <div className={`text-[10px] ${isLight ? 'text-gray-400' : 'text-white/30'} font-mono uppercase`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
+                                                        <div className={`text-xs font-black uppercase ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{tx.type === "DEPOSIT" ? "Auto-Signer Deposit" : "Auto-Signer Withdrawal"}</div>
+                                                        <div className={`text-[10px] ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'} font-mono uppercase`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
                                                     </div>
                                                 </div>
 
@@ -553,11 +553,11 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
             </div>
 
             {modalConfig && (
-                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-black/20' : 'bg-black/60'} backdrop-blur-sm`}>
+                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20 shadow-[0_20px_60px_rgba(60,179,113,0.15)]' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
+                        className={`w-full max-w-md ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/20 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
                     >
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10 flex flex-col items-center text-center">
@@ -599,15 +599,15 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
             )}
 
             {promptConfig && (
-                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-black/20' : 'bg-black/60'} backdrop-blur-sm`}>
+                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-[#EEF9F1] border-[#3CB371]/20 shadow-[0_20px_60px_rgba(60,179,113,0.15)]' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
+                        className={`w-full max-w-md ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/20 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
                     >
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10">
-                            <h3 className={`text-2xl font-black ${isLight ? 'text-gray-900' : 'text-white'} mb-6 tracking-tight uppercase text-center`}>
+                            <h3 className={`text-2xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} mb-6 tracking-tight uppercase text-center`}>
                                 {promptConfig.title}
                             </h3>
                             <div className="mb-8 relative">
@@ -655,8 +655,8 @@ const NavTab = React.memo(({ active, id, label, icon, onClick, isLight }) => {
         <button
             onClick={() => onClick(id)}
             className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${active === id
-                ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37150]'
-                : `${isLight ? 'text-gray-400 hover:text-gray-900 hover:bg-gray-200' : 'text-white/40 hover:text-white hover:bg-white/5'}`
+                ? 'bg-[#3CB371] text-white shadow-lg'
+                : `${isLight ? 'text-[#0a261a]/40 hover:text-[#0a261a] hover:bg-[#3CB371]/5' : 'text-white/40 hover:text-white hover:bg-white/5'}`
                 }`}
         >
             {icon}
@@ -667,13 +667,13 @@ const NavTab = React.memo(({ active, id, label, icon, onClick, isLight }) => {
 
 const StatCard = React.memo(({ label, value, sub, icon, highlight, isLight }) => {
     return (
-        <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-[#FF7F50]/10 border-[#FF7F50]/30 shadow-[0_0_20px_#FF7F5010]' : `${isLight ? 'bg-white border-gray-100' : 'bg-[#111] border-white/5'}`}`}>
+        <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-[#FF7F50]/10 border-[#FF7F50]/30 shadow-lg' : `${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}`}>
             <div className="flex justify-between items-start mb-4">
-                <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-gray-400' : 'text-white/40'}`}>{label}</div>
-                <div className={`p-2 ${isLight ? 'bg-gray-50' : 'bg-white/5'} rounded-lg`}>{icon}</div>
+                <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>{label}</div>
+                <div className={`p-2 ${isLight ? 'bg-[#3CB371]/5' : 'bg-white/5'} rounded-lg`}>{icon}</div>
             </div>
-            <div className={`text-xl md:text-2xl font-black mb-1 tracking-tighter ${isLight ? 'text-gray-900' : 'text-white'}`}>{value}</div>
-            <div className={`text-[8px] md:text-[10px] font-bold ${isLight ? 'text-gray-300' : 'text-white/20'} uppercase`}>{sub}</div>
+            <div className={`text-xl md:text-2xl font-black mb-1 tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{value}</div>
+            <div className={`text-[8px] md:text-[10px] font-bold ${isLight ? 'text-[#0a261a]/20' : 'text-white/20'} uppercase`}>{sub}</div>
         </div>
     );
 });
