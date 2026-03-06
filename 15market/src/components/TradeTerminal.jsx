@@ -27,6 +27,7 @@ function TradeTerminalComponent({
     transparent = false,
     showManagement,
     setShowManagement,
+    uiVersion = 'v1',
 }) {
     const isLight = theme === 'light';
 
@@ -52,7 +53,7 @@ function TradeTerminalComponent({
                         <div className={`absolute top-0.5 left-0.5 w-1.5 lg:w-2.5 h-1.5 lg:h-2.5 rounded-full bg-white transition-all duration-300 ${sessionMode ? 'translate-x-2.5 lg:translate-x-3.5' : 'translate-x-0'}`} />
                     </button>
                     <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>Auto</span>
-                    {sessionMode && (
+                    {sessionMode && uiVersion !== 'v1' && (
                         <button
                             onClick={(e) => { e.stopPropagation(); setShowManagement(!showManagement); }}
                             className={`p-0.5 rounded-md transition-all duration-300 ${isLight ? 'hover:bg-[#3CB371]/5' : 'hover:bg-white/5'} ${showManagement ? 'rotate-180' : ''}`}
@@ -183,7 +184,7 @@ function TradeTerminalComponent({
         <div className={containerClass}>
             {renderHeader()}
 
-            {sessionMode && showManagement && (
+            {sessionMode && showManagement && uiVersion !== 'v1' && (
                 <div className={`px-2 py-1.5 lg:px-3 lg:py-2 rounded-xl border flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-300 ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col">
