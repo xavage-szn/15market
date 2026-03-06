@@ -233,7 +233,6 @@ export default function UserApp() {
 
   // Main Network State
   const [network, setNetwork] = useState("arc");
-  const [theme, setTheme] = useState(() => localStorage.getItem("15market_theme") || "dark");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
 
   useEffect(() => {
