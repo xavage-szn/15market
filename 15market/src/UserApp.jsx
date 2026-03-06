@@ -2152,17 +2152,30 @@ export default function UserApp() {
                         : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`,
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
                     }}>
-                    <div className="flex-1 w-full h-full relative">
-                      <CustomChart
-                        symbol={activeMarket.binance}
-                        theme={theme}
-                        network={network}
-                        activeMarket={activeMarket}
-                        uiVersion={uiVersion}
-                        setActiveMarket={handleMarketChange}
-                        activeTrades={activeTrades}
-                        currentPrice={price}
-                      />
+                    <div className="flex-1 w-full h-full flex relative">
+                      {/* Chart Area */}
+                      <div className="flex-1 w-full h-full relative min-w-0">
+                        <CustomChart
+                          symbol={activeMarket.binance}
+                          theme={theme}
+                          network={network}
+                          activeMarket={activeMarket}
+                          uiVersion={uiVersion}
+                          setActiveMarket={handleMarketChange}
+                          activeTrades={activeTrades}
+                          currentPrice={price}
+                        />
+                      </div>
+
+                      {/* Slim Order Book Area (Hidden on Mobile) */}
+                      <div className={`hidden lg:flex w-[240px] xl:w-[280px] flex-col border-l transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                        <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                          Order Book <span className={`px-1.5 py-0.5 rounded text-[8px] ${theme === 'light' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-white/10 text-white/60'}`}>{activeMarket.symbol}</span>
+                        </div>
+                        <div className="flex-1 overflow-hidden p-2">
+                          <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
