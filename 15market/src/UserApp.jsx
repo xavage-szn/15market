@@ -342,7 +342,8 @@ export default function UserApp() {
         return;
       }
 
-      if (formatted !== evmBalance) {
+      // Use numeric comparison to avoid floating-point string format mismatches
+      if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001) {
         setEvmBalance(formatted);
       }
     } catch (e) { }
@@ -471,7 +472,16 @@ export default function UserApp() {
         }
 
         if (now <= (bt.expiryMs + GHOST_GRACE)) {
-          updatedActive.push({ ...bt, status: finalStatus, optimistic: (local?.optimistic || false), balanceApplied: local?.balanceApplied });
+          updatedActive.push({
+            ...bt,
+            status: finalStatus,
+            optimistic: (local?.optimistic || false),
+            // Preserve all local fields that the backend doesn't track
+            balanceApplied: local?.balanceApplied,
+            sessionOwner: local?.sessionOwner || bt.sessionOwner,
+            isSessionTrade: local?.isSessionTrade || bt.isSessionTrade,
+            entryPrice: local?.entryPrice || bt.entryPrice, // prefer local high-precision price
+          });
         }
       });
 
@@ -837,13 +847,16 @@ export default function UserApp() {
             id: tradeId,
             direction: (dirVal === 1 ? "UP" : "DOWN"),
             amount: Number(amount).toFixed(3),
-            entryPrice: activePrice.toFixed(3),
+            entryPrice: activePrice.toFixed(8),
             timestamp: Date.now(),
             status: "PENDING",
             tx: txHash,
             nonce: tradeId,
+            // For session trades, owner = main wallet address (for history display)
+            // but sessionOwner = session wallet address (for balance crediting)
             userPublicKey: activeUserAddr,
-            owner: activeUserAddr,
+            owner: address, // main wallet — always the account owner
+            sessionOwner: activeUserAddr, // session wallet — where payout lands
             duration,
             network: "arc",
             startTime: Date.now(),
@@ -904,7 +917,7 @@ export default function UserApp() {
           id: tradeId,
           direction: (dirVal === 1 ? "UP" : "DOWN"),
           amount: Number(amount).toFixed(3),
-          entryPrice: activePrice.toFixed(3),
+          entryPrice: activePrice.toFixed(8),
           timestamp: Date.now(),
           status: "PENDING",
           tx: txHash,
@@ -1556,28 +1569,38 @@ export default function UserApp() {
           settledAt: now
         };
 
-        // INSTANT WALLET BALANCE CREDIT: Use address comparison for reliability
+        // INSTANT WALLET BALANCE CREDIT
         if (optimisticStatus === "WON" && !trade.balanceApplied) {
           const payoutNum = parseFloat(optimisticPayout);
-          const tradeOwner = (trade.owner || trade.userPublicKey || trade.user || "").toLowerCase();
           const sessionAddr = evmSessionWallet?.address?.toLowerCase();
           const mainAddr = address?.toLowerCase();
 
-          if (sessionAddr && (tradeOwner === sessionAddr || trade.isSessionTrade)) {
+          // Determine if this is a session trade:
+          // Either explicitly flagged, or the sessionOwner field matches the session wallet,
+          // or the user/owner field matches the session wallet address
+          const tradeSessionOwner = (trade.sessionOwner || "").toLowerCase();
+          const tradeOwner = (trade.owner || trade.userPublicKey || trade.user || "").toLowerCase();
+          const isSessionTrade = trade.isSessionTrade ||
+            (sessionAddr && tradeSessionOwner === sessionAddr) ||
+            (sessionAddr && tradeOwner === sessionAddr);
+
+          if (isSessionTrade && sessionAddr) {
             // SESSION TRADE WIN: Credit stays in session wallet
             setSessionBalance(prev => prev + payoutNum);
-            lastOptimisticActionTime.current = Date.now(); // Activate guard
-            console.log(`⚡ [INSTANT] +${payoutNum} credited to SESSION wallet (${tradeOwner})`);
+            lastOptimisticActionTime.current = Date.now();
+            console.log(`⚡ [INSTANT] +${payoutNum} credited to SESSION wallet`);
             updatePayload.balanceApplied = true;
-          } else if (mainAddr && tradeOwner === mainAddr) {
+            creditedPayouts.current.add(String(trade.id)); // Prevent on-chain double-credit
+          } else if (mainAddr) {
             // MAIN WALLET TRADE WIN: Credit goes to main wallet
             setEvmBalance(prev => {
               const current = parseFloat(prev || "0");
-              return (Math.floor((current + payoutNum) * 100) / 100).toFixed(2);
+              return (current + payoutNum).toFixed(6);
             });
-            lastOptimisticActionTime.current = Date.now(); // Activate guard
-            console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet (${tradeOwner})`);
+            lastOptimisticActionTime.current = Date.now();
+            console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet`);
             updatePayload.balanceApplied = true;
+            creditedPayouts.current.add(String(trade.id)); // Prevent on-chain double-credit
           }
         }
 
@@ -1641,6 +1664,7 @@ export default function UserApp() {
 
   // Arc Settlement Listener — with dedup to prevent double-crediting
   const processedSettlements = useRef(new Set());
+  const creditedPayouts = useRef(new Set()); // Track which betIds have had balance credited
 
   useEffect(() => {
     const unwatch = publicClient.watchContractEvent({
@@ -1693,39 +1717,65 @@ export default function UserApp() {
             setActiveTrades(prev => prev.map(updateTrade));
 
             if (won) {
+              const payoutNum = parseFloat(formattedPayout);
+
+              // 🔥 DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
+              // Check activeTradesRef to see if the trade already has balanceApplied
+              const existingTrade = activeTradesRef.current.find(t =>
+                (t.id && t.id.toString() === betId) || (t.nonce && t.nonce.toString() === betId)
+              );
+              const alreadyOptimisticallyCredited = existingTrade?.balanceApplied === true ||
+                creditedPayouts.current.has(betId);
+
+              if (!alreadyOptimisticallyCredited) {
+                creditedPayouts.current.add(betId);
+                setTimeout(() => creditedPayouts.current.delete(betId), 10 * 60 * 1000);
+
+                const sessionAddrLower = evmSessionWallet?.address?.toLowerCase();
+                const mainAddrLower = address?.toLowerCase();
+
+                if (sessionAddrLower && normalizedUser === sessionAddrLower) {
+                  setSessionBalance(prev => prev + payoutNum);
+                  console.log(`🔗 [ON-CHAIN WIN] +${payoutNum} credited to SESSION wallet (optimistic had not run)`);
+                } else if (mainAddrLower && normalizedUser === mainAddrLower) {
+                  setEvmBalance(prev => {
+                    const current = parseFloat(prev || '0');
+                    return (current + payoutNum).toFixed(6);
+                  });
+                  console.log(`🔗 [ON-CHAIN WIN] +${payoutNum} credited to MAIN wallet (optimistic had not run)`);
+                }
+              } else {
+                console.log(`🔗 [ON-CHAIN WIN] Bet ${betId} already credited optimistically, skipping duplicate credit.`);
+              }
+
+              // Also set the lastOptimisticActionTime to prevent the polling cooldown
+              // from immediately overwriting our credited balance with a stale on-chain value
               lastOptimisticActionTime.current = Date.now();
 
-              const forceRead = () => {
-                updateEvmSessionBal(true);
-                refetchEvmBalance(true);
-              };
-
-              // Finalize status to WON and notify only when balance reaches them
+              // Finalize status across trade lists
               const finalizeWin = () => {
-                setTradeHistory(prev => prev.map(t => {
+                const matchFn = (t) => {
                   const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
                     (t.id && t.id.toString() === betId);
-                  return isMatch ? { ...t, status: "WON" } : t;
-                }));
-                setActiveTrades(prev => prev.map(t => {
-                  const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
-                    (t.id && t.id.toString() === betId);
-                  return isMatch ? { ...t, status: "WON" } : t;
-                }));
+                  return isMatch ? { ...t, status: "WON", payout: formattedPayout, chainConfirmed: true, balanceApplied: true } : t;
+                };
+                setTradeHistory(prev => prev.map(matchFn));
+                setActiveTrades(prev => prev.map(matchFn));
                 notify(`Trade WON! +${formattedPayout} USDC`, "success");
               };
 
-              setTimeout(forceRead, 1000);
-              setTimeout(forceRead, 3000);
+              // Release cooldown and do a final on-chain sync after 5s
               setTimeout(() => {
-                forceRead();
-                lastOptimisticActionTime.current = 0; // Release cooldown
+                lastOptimisticActionTime.current = 0;
+                refetchEvmBalance(true);
+                updateEvmSessionBal(true);
                 finalizeWin();
-              }, 4000);
+              }, 5000);
 
             } else {
               notify(`Trade LOST.`, "error");
-              // Force-read balance after loss settlement too 
+              // Force-read balance after loss settlement
+              lastOptimisticActionTime.current = 0;
               setTimeout(() => {
                 updateEvmSessionBal(true);
                 refetchEvmBalance(true);
