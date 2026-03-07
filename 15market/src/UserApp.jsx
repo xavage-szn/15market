@@ -2199,7 +2199,7 @@ export default function UserApp() {
                 <motion.div
                   layout
                   className="w-full md:w-[70%] flex flex-col gap-1.5 h-full min-h-0 transition-all duration-500 relative"
-                  style={{ paddingLeft: !isSmallScreen && showSideHistory ? '268px' : (!isSmallScreen ? '36px' : '0px') }}>
+                  style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
                   {uiVersion === 'v2' && (
                     <SideHistoryPane
@@ -2240,8 +2240,8 @@ export default function UserApp() {
                         />
                       </div>
 
-                      {/* Slim Order Book Area (Hidden on Mobile) */}
-                      <div className={`hidden lg:flex w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                      {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
+                      <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
                         <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
                           Order Book
                         </div>

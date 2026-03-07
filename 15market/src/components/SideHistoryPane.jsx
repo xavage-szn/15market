@@ -16,7 +16,7 @@ const SideHistoryPane = ({
         <motion.div
             initial={false}
             animate={{
-                width: isOpen ? 280 : 48,
+                width: isOpen ? 230 : 48,
             }}
             transition={{ type: 'spring', damping: 20, stiffness: 100 }}
             className={`absolute left-[-16px] lg:left-[-24px] top-0 bottom-0 z-[60] flex flex-row items-center pointer-events-none group`}
