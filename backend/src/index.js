@@ -139,16 +139,27 @@ async function getSessionProvider() {
 
     for (const rpc of SESSION_RPCS) {
         try {
+            console.log(`[Session] Checking RPC: ${rpc}`);
             const provider = new ethers.JsonRpcProvider(rpc, 5042002, { staticNetwork: true });
-            await provider.getBlockNumber();
-            console.log(`[Session] Connected to RPC: ${rpc}`);
+
+            // Fast health check: 3s timeout for block number
+            const blockNum = await Promise.race([
+                provider.getBlockNumber(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+            ]);
+
+            console.log(`[Session] RPC ${rpc} is Healthy (Block: ${blockNum})`);
             sessionProvider = provider;
             return provider;
         } catch (e) {
-            console.warn(`[Session] RPC failed: ${rpc}`);
+            console.warn(`[Session] RPC ${rpc} failed: ${e.message}`);
         }
     }
-    return new ethers.JsonRpcProvider(SESSION_RPCS[0], 5042002, { staticNetwork: true });
+
+    // Final fallback: use the main blockchain provider if available
+    if (blockchain.providerReady) return blockchain.provider;
+
+    throw new Error("No healthy session providers available");
 }
 
 async function deriveUserWallet(userAddress) {
@@ -199,6 +210,29 @@ const getHistoryFor = async (address) => {
 // Support for historical/missing frontend routes
 app.get('/campaigns', (req, res) => res.json([]));
 app.get('/stats', (req, res) => res.json({ status: 'active', network: 'arc-testnet' }));
+
+// --- MARKET SYNC (Missing in early versions) ---
+let activeMarketId = 'eth';
+app.get('/active-market', (req, res) => {
+    res.json({ activeId: activeMarketId });
+});
+
+app.post('/active-market', (req, res) => {
+    const { activeId } = req.body;
+    if (activeId) {
+        activeMarketId = activeId;
+        console.log(`🎯 Active market synced to: ${activeId}`);
+    }
+    res.json({ success: true, activeId });
+});
+
+app.get('/settings', (req, res) => {
+    res.json(SETTINGS_RESPONSE);
+});
+
+app.get('/listings', (req, res) => {
+    res.json(LISTINGS_RESPONSE);
+});
 
 // ===== HISTORY ENDPOINT =====
 app.get('/history/:address?', async (req, res) => {
@@ -357,47 +391,43 @@ app.post('/session/trade', async (req, res) => {
         const { address, tradeParams } = req.body;
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
-        if (!address) throw new Error("Main wallet address required");
+        logToFile(`[SESSION_TRADE] 🚀 INCOMING: Bet ${id} for ${address} (${amount} USDC)`);
 
-        // --- DOUBLE DEBIT PREVENTION ---
-        // 1. Check if ID exists (even if not confirmed yet)
-        const existing = await redis.getTrade(id);
-        if (existing && existing.txHash) {
-            logToFile(`[SESSION_TRADE] ℹ️ Returning existing trade for ${id}: ${existing.txHash}`);
-            return res.json({ success: true, txHash: existing.txHash, confirmed: existing.confirmed });
+        if (!id || !address || !amount) {
+            return res.status(400).json({ error: 'Missing parameters' });
         }
 
-        // 2. Lock the ID to prevent concurrent duplicate processing
-        const locked = await redis.lockTrade(id, 60);
-        if (!locked) {
-            return res.status(409).json({ error: "Trade is already being processed. Please wait." });
+        const lockTrade = await redis.lockTrade(id);
+        if (!lockTrade) {
+            logToFile(`[SESSION_TRADE] 🛑 Bet ${id} already being processed (locked)`);
+            return res.status(409).json({ error: 'Trade already in progress' });
         }
 
-        logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id} for ${address}`);
-
+        // Fetch Wallet & Provider
+        const derivationStart = Date.now();
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        // Ensure mapping is saved
+        logToFile(`[SESSION_TRADE] 👛 Sync took ${Date.now() - derivationStart}ms (${sessionAddr})`);
+
         redis.saveSessionMapping(sessionAddr, address).catch(() => { });
 
-        // Parallelize independent RPC calls to speed up trade initiation
-        if (!amount || isNaN(amount)) throw new Error("Invalid trade amount");
-        const amountWei = ethers.parseUnits(amount.toString(), 18);
-
+        // Pre-flight consistency check
+        logToFile(`[SESSION_TRADE] 📡 Fetching balance/nonce/gas for ${sessionAddr}...`);
+        const preflightStart = Date.now();
         const [balance, nonce, fees] = await Promise.all([
             wallet.provider.getBalance(sessionAddr),
             nonceManager.getNonce(sessionAddr, wallet.provider),
             blockchain._getGasPrice()
         ]);
+        logToFile(`[SESSION_TRADE] 📡 Pre-flight took ${Date.now() - preflightStart}ms (Bal: ${ethers.formatEther(balance)}, Nonce: ${nonce})`);
 
-        // Quick balance check with a conservative gas estimate
-        const gasCostEstimate = fees.maxFeePerGas * 800000n;
-        const totalNeeded = amountWei + gasCostEstimate;
+        const amtNum = parseFloat(amount);
+        const amtWei = ethers.parseUnits(amtNum.toFixed(18), 18);
 
-        if (balance < totalNeeded) {
-            throw new Error(`Insufficient session balance. Have ${ethers.formatEther(balance)}, need ${ethers.formatEther(totalNeeded)} (Amount + Gas)`);
+        if (balance < amtWei) {
+            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC vs ${amount} USDC needed`;
+            logToFile(`[SESSION_TRADE] ❌ ${err}`);
+            throw new Error(err);
         }
-
-        logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC)`);
 
         const txArgs = {
             to: process.env.ARC_CONTRACT_ADDRESS,
@@ -407,65 +437,63 @@ app.post('/session/trade', async (req, res) => {
                 BigInt(duration),
                 BigInt(entryPrice),
                 Number(marketId),
-                sessionAddr // Payout goes to SESSION wallet for auto-signer trades
+                address // Pay Payout back to main address
             ]),
-            value: amountWei,
-            gasLimit: 800000n,
+            value: amtWei,
             nonce: nonce,
             maxFeePerGas: fees.maxFeePerGas,
             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-            type: 2 // EIP-1559
+            gasLimit: 800000n, // Fixed limit for consistency
+            type: 2,
+            chainId: 5042002
         };
 
-        // Skip estimateGas (slow + unreliable on Arc) — just send directly
+        logToFile(`[SESSION_TRADE] ✍️ Broadcasting TX for bet ${id}...`);
+        const broadcastStart = Date.now();
         const tx = await wallet.sendTransaction(txArgs);
-        logToFile(`[SESSION_TRADE] ⛓️ Tx sent: ${tx.hash}. Registering as PENDING in Redis...`);
+        logToFile(`[SESSION_TRADE] ✅ Broadcasted ${id} in ${Date.now() - broadcastStart}ms: ${tx.hash}`);
 
-        // 🔥 REGISTER IMMEDIATELY: Ensure the UI sees this trade in 'Active Trades' list instantly 
-        // even before it's confirmed on-chain.
+        // Immediate Redis Register
         const tradeData = {
             id: id.toString(),
             user: address,
-            sessionUser: sessionAddr,
             amount: amount,
             direction: direction,
             duration: duration,
             entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
-            marketId: marketId,
+            symbol: 'ETH',
             expiry: Date.now() + (duration * 1000),
             txHash: tx.hash,
-            confirmed: false, // Initially false
             startTime: Date.now(),
-            processing: true
+            confirmed: false
         };
         await redis.setTrade(id, tradeData);
 
-        // Return immediately to keep UI responsive
         res.json({ success: true, txHash: tx.hash, confirmed: false });
 
-        // WAIT FOR CONFIRMATION in background (Non-blocking)
-        tx.wait().then(async (receipt) => {
-            if (receipt.status === 1) {
-                // Update to confirmed
-                const updatedData = { ...tradeData, confirmed: true, processing: false };
+        // Non-blocking background confirmation
+        tx.wait(1).then(async (receipt) => {
+            if (receipt && receipt.status === 1) {
+                const updatedData = { ...tradeData, confirmed: true };
                 await redis.setTrade(id, updatedData);
-                logToFile(`[SESSION_TRADE] ✅ Background Confirmed: ${tx.hash}`);
+                logToFile(`[SESSION_TRADE] ⛓️ Confirmed ${id}: ${tx.hash}`);
             } else {
-                logToFile(`[SESSION_TRADE] ❌ Background Reverted: ${tx.hash}`);
-                await redis.delTrade(id); // Remove if reverted
+                logToFile(`[SESSION_TRADE] ❌ Reverted ${id}: ${tx.hash}`);
+                await redis.delTrade(id);
             }
         }).catch(err => {
-            logToFile(`[SESSION_TRADE] ❌ Background Wait Failed for ${tx.hash}: ${err.message}`);
+            logToFile(`[SESSION_TRADE] ❌ background wait failed for ${tx.hash}: ${err.message}`);
         });
 
-        return; // Ensure no double response
     } catch (e) {
         logToFile(`[SESSION_TRADE] ❌ Error: ${e.message}`);
-        const { address: sessionAddr } = await deriveUserWallet(req.body.address);
         if (e.message.includes('nonce') || e.message.includes('already been used') || e.message.includes('too low')) {
-            await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
+            try {
+                const { address: sessionAddr } = await deriveUserWallet(req.body.address);
+                await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
+            } catch (err) { }
         }
-        res.status(500).json({ error: e.message });
+        if (!res.headersSent) res.status(500).json({ error: e.message });
     } finally {
         if (req.body.tradeParams?.id) {
             await redis.unlockTrade(req.body.tradeParams.id);
