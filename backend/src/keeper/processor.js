@@ -211,7 +211,7 @@ class TradeProcessor {
             } finally {
                 isProcessing = false;
             }
-        }, 500);
+        }, 200); // Faster tick
     }
 
     async processSettlements() {
@@ -219,29 +219,22 @@ class TradeProcessor {
         const now = Date.now();
         const activeTrades = await redis.getAllActiveTrades();
 
-        // Only settle trades that have a confirmed on-chain expiry
         const toSettle = activeTrades.filter(t => {
             const failed = this.failedSettlements.get(t.id);
             if (failed) {
-                const backoff = Math.min(30000, 2000 * Math.pow(2, failed.count)); // Exponential backoff max 30s
+                const backoff = Math.min(30000, 2000 * Math.pow(2, failed.count));
                 if (now - failed.lastAttempt < backoff) return false;
             }
             return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
         });
 
-        // Process settlements in parallel to enable "Mass Settlement" behavior
-        // NonceManager handles serialization and locking, so we can broadcast simultaneously
+        if (toSettle.length === 0) return;
+
         console.log(`[Processor] ⚡ Mass settling ${toSettle.length} trades...`);
 
-        const chunks = [];
-        const CHUNK_SIZE = 10; // Batch in chunks of 10 to avoid RPC rate limits
-        for (let i = 0; i < toSettle.length; i += CHUNK_SIZE) {
-            chunks.push(toSettle.slice(i, i + CHUNK_SIZE));
-        }
-
-        for (const chunk of chunks) {
-            await Promise.allSettled(chunk.map(trade => this._settleSingleTrade(trade)));
-        }
+        // Concurrent broadcasting without chunk-waiting
+        // NonceManager handles the sequential nonce dispensation internally
+        toSettle.map(trade => this._settleSingleTrade(trade));
     }
 
     async _settleSingleTrade(trade, manualPrice = null) {
