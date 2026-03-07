@@ -122,7 +122,8 @@ if (!SESSION_MASTER_SECRET) {
 }
 const SESSION_RPCS = [
     "https://5042002.rpc.thirdweb.com",
-    "https://rpc.testnet.arc.network"
+    "https://rpc.testnet.arc.network",
+    "https://rpc-test-1.arc.market"
 ];
 let sessionProvider = null;
 async function getSessionProvider() {
@@ -155,9 +156,8 @@ async function deriveUserWallet(userAddress) {
     const addr = userAddress.toLowerCase();
     const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
     const privateKey = ethers.keccak256(entropy);
-    const provider = await getSessionProvider();
+    const provider = blockchain.provider || await getSessionProvider();
     const wallet = new ethers.Wallet(privateKey, provider);
-    // Don't await nonce here, let callers use nonceManager
     return { wallet, address: wallet.address };
 }
 

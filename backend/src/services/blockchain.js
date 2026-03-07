@@ -194,12 +194,15 @@ class BlockchainService {
             await this.gasRefreshPromise;
         }
 
-        const baseGas = this.cachedGasPrice || ethers.parseUnits("1", "gwei");
-        const priorityFee = ethers.parseUnits("200", "gwei");
+        let feeData;
+        try { feeData = await this.provider.getFeeData(); } catch (e) { }
 
-        // High-priority pricing: 3x base + 200 gwei priority
-        const maxFee = (baseGas * 3n) + priorityFee;
-        const minGasFee = ethers.parseUnits("500", "gwei");
+        const baseGas = this.cachedGasPrice || feeData?.gasPrice || ethers.parseUnits("10", "gwei");
+        const priorityFee = feeData?.maxPriorityFeePerGas || ethers.parseUnits("100", "gwei");
+
+        // Strategy: 2.5x base + standard priority
+        const maxFee = (baseGas * 25n / 10n) + priorityFee;
+        const minGasFee = ethers.parseUnits("150", "gwei");
 
         return {
             gasPrice: maxFee > minGasFee ? maxFee : minGasFee,
@@ -264,7 +267,7 @@ class BlockchainService {
                 nonce: nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 300000n, // Reduced from 1,000,000n to ensure we don't trigger "insufficient funds" estimation errors
+                gasLimit: 800000n, // Increased back for complex settlements with multiple payouts
                 type: 2, // EIP-1559
                 chainId: 5042002
             });

@@ -31,7 +31,7 @@ class NonceManager {
                 let cachedVal = await redisStore.redis.get(redisKey);
                 if (cachedVal === null) {
                     console.log(`[Nonce] Initializing ${addr} in Redis from Chain...`);
-                    const count = await provider.getTransactionCount(address, 'pending');
+                    const count = await provider.getTransactionCount(address, 'latest');
                     await redisStore.redis.setnx(redisKey, count);
                 }
 
@@ -42,7 +42,7 @@ class NonceManager {
                 // Persistent memory tracking
                 if (!this.nonces.has(addr)) {
                     console.log(`[Nonce] Initializing ${addr} in Memory from Chain...`);
-                    const count = await provider.getTransactionCount(address, 'pending');
+                    const count = await provider.getTransactionCount(address, 'latest');
                     this.nonces.set(addr, count);
                 }
                 finalNonce = this.nonces.get(addr);
@@ -55,7 +55,7 @@ class NonceManager {
         } catch (e) {
             console.error(`[NonceManager] Critical error for ${addr}:`, e.message);
             // On failure, fall back to chain as a last resort (might cause nonce too low if multiple fail)
-            return await provider.getTransactionCount(address, 'pending');
+            return await provider.getTransactionCount(address, 'latest');
         } finally {
             release();
             // Optional: If we are the latest lock, we could delete this.locks.get(addr) after some time
@@ -66,7 +66,7 @@ class NonceManager {
     async syncWithChain(address, provider) {
         const addr = address.toLowerCase();
         try {
-            const nonce = await provider.getTransactionCount(address, 'pending');
+            const nonce = await provider.getTransactionCount(address, 'latest');
             if (redisStore.isCloud) {
                 await redisStore.redis.set(`nnc:${addr}`, nonce);
                 console.log(`[Nonce] Sync: Updated Redis for ${addr} to ${nonce}`);
