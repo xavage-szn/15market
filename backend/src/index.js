@@ -376,37 +376,28 @@ app.post('/session/trade', async (req, res) => {
         logToFile(`[SESSION_TRADE] 🏁 Start: BetId ${id} for ${address}`);
 
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        const nonce = await nonceManager.getNonce(sessionAddr, wallet.provider);
         // Ensure mapping is saved
         redis.saveSessionMapping(sessionAddr, address).catch(() => { });
 
-        // 1. Balance Check
+        // Parallelize independent RPC calls to speed up trade initiation
         if (!amount || isNaN(amount)) throw new Error("Invalid trade amount");
         const amountWei = ethers.parseUnits(amount.toString(), 18);
-        const balance = await wallet.provider.getBalance(sessionAddr);
 
-        // Gas estimation - use actual network fees with a modest buffer (NOT the keeper's aggressive settlement fees)
-        const feeData = await wallet.provider.getFeeData();
-        const networkGasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
+        const [balance, nonce, fees] = await Promise.all([
+            wallet.provider.getBalance(sessionAddr),
+            nonceManager.getNonce(sessionAddr, wallet.provider),
+            blockchain._getGasPrice()
+        ]);
 
-        // Session trades: 2x network price with a reasonable floor of 50 gwei
-        const sessionGasPrice = networkGasPrice * 2n;
-        const minSessionGas = ethers.parseUnits("50", "gwei");
-        const effectiveGasPrice = sessionGasPrice > minSessionGas ? sessionGasPrice : minSessionGas;
-
-        // Use a tighter gas limit for balance checking (actual usage is ~300-400k)
-        const estimatedGasLimit = 500000n;
-        const gasCostEstimate = effectiveGasPrice * estimatedGasLimit;
+        // Quick balance check with a conservative gas estimate
+        const gasCostEstimate = fees.maxFeePerGas * 800000n;
         const totalNeeded = amountWei + gasCostEstimate;
 
         if (balance < totalNeeded) {
             throw new Error(`Insufficient session balance. Have ${ethers.formatEther(balance)}, need ${ethers.formatEther(totalNeeded)} (Amount + Gas)`);
         }
 
-        logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC, Gas: ~${ethers.formatEther(gasCostEstimate)} USDC)`);
-
-        // For the actual TX, use the keeper's gas prices to ensure it gets included quickly
-        const fees = await blockchain._getGasPrice();
+        logToFile(`[SESSION_TRADE] 🚀 Sending Tx for ${id} (Value: ${amount} USDC)`);
 
         const txArgs = {
             to: process.env.ARC_CONTRACT_ADDRESS,
@@ -423,17 +414,10 @@ app.post('/session/trade', async (req, res) => {
             nonce: nonce,
             maxFeePerGas: fees.maxFeePerGas,
             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-            type: 2 // Use EIP-1559 for auto-signer trades if supported
+            type: 2 // EIP-1559
         };
 
-        // Try to estimate or call first to catch revert reasons
-        try {
-            await wallet.estimateGas(txArgs);
-        } catch (estError) {
-            logToFile(`[SESSION_TRADE] ⚠️ Dry run failed: ${estError.message}`);
-            // We still proceed if it's just an estimation error, but log it
-        }
-
+        // Skip estimateGas (slow + unreliable on Arc) — just send directly
         const tx = await wallet.sendTransaction(txArgs);
         logToFile(`[SESSION_TRADE] ⛓️ Tx sent: ${tx.hash}. Registering as PENDING in Redis...`);
 

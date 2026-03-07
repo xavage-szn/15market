@@ -806,7 +806,12 @@ export default function UserApp() {
       if (sessionMode) {
         console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper (Strict Mode)...`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000);
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          // Safety: ensure UI is reset if backend doesn't respond in time
+          setIsExecuting(false);
+          notify("Trade timed out. The backend may be busy — please try again.", "error");
+        }, 25000); // 25 second timeout (was 120s)
 
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {

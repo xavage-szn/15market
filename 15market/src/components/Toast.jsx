@@ -4,12 +4,11 @@ import { CheckCircle, XCircle, X, Loader2, Info } from 'lucide-react';
 
 function Toast({ message, type = 'success', onClose }) {
     useEffect(() => {
-        // Don't auto-close if it's pending
-        if (type === 'pending') return;
-
+        // Auto-close all toasts (pending after 20s, others after 5s)
+        const duration = type === 'pending' ? 20000 : 5000;
         const timer = setTimeout(() => {
             onClose();
-        }, 5000);
+        }, duration);
         return () => clearTimeout(timer);
     }, [onClose, type]);
 
@@ -41,14 +40,13 @@ function Toast({ message, type = 'success', onClose }) {
                     {message}
                 </p>
             </div>
-            {type !== 'pending' && (
-                <button
-                    onClick={onClose}
-                    className="p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors"
-                >
-                    <X size={16} />
-                </button>
-            )}
+            {/* Always show close button so users can dismiss stuck toasts */}
+            <button
+                onClick={onClose}
+                className="p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+            >
+                <X size={16} />
+            </button>
         </motion.div>
     );
 };
