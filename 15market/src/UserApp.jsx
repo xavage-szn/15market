@@ -378,32 +378,31 @@ export default function UserApp() {
   const reconcileTrades = useCallback((backendAllRaw) => {
     if (!backendAllRaw) return;
 
-    // 1. Normalize backend trades
-    const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+    // 1. DEDUPLICATE: Only process the most 'final' version of each trade from backend
+    // Since backend now returns both Active and History in the same list, they may duplicate.
+    const uniqueBackendById = new Map();
+    backendAllRaw.forEach(t => {
+      const id = String(t.id);
+      const existing = uniqueBackendById.get(id);
+      const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+      const newStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
 
-    const backendAll = backendAllRaw.map(t => {
-      const isUpTrade = (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy");
-      // Normalize to unified status scheme
-      let activeStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
-
-
-      return {
-        ...t,
-        direction: isUpTrade ? "UP" : "DOWN",
-        status: activeStatus,
-        owner: t.owner || t.user || t.userPublicKey || t.userAddress
-      };
+      if (!existing || statusOrder[newStatus] > statusOrder[existing.status]) {
+        const isUpTrade = (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy");
+        uniqueBackendById.set(id, {
+          ...t,
+          direction: isUpTrade ? "UP" : "DOWN",
+          status: newStatus,
+          owner: t.owner || t.user || t.userPublicKey || t.userAddress
+        });
+      }
     });
 
-    // 2. Reactive Balance Sync: If any trade settled since last view, force refresh
-    const hasSettled = backendAll.some(bt =>
-      (bt.status === "WON" || bt.status === "LOST") &&
-      activeTradesRef.current.some(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce) && (p.status === "PENDING" || p.status === "RESOLVING"))
-    );
-    if (hasSettled) {
-      console.log("💰 [BALANCE] Settlement detected. Force refreshing balance...");
-      triggerGlobalRefresh(true);
-    }
+    const backendAll = Array.from(uniqueBackendById.values());
+
+    // 2. NO FORCED REFRESH: Optimistic balance injection is handled by checkAndResolve.
+    // We let the natural polling handle on-chain sync AFTER the guard period (10-15s) expires.
+    // This prevents old on-chain balances from overwriting our instant winning credits.
 
     // 3. Absolute Sync: Use backend as source of truth for settled trades
     setTradeHistory(prev => {
@@ -417,12 +416,12 @@ export default function UserApp() {
         // Find local copy
         const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
         if (local) {
-          // Keep local status if it is more "final" than backend
-          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1 };
+          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           if (statusOrder[local.status] > statusOrder[bt.status]) {
-            merged.push({ ...bt, status: local.status, payout: local.payout });
+            merged.push({ ...bt, status: local.status, payout: local.payout, balanceApplied: local.balanceApplied });
           } else {
-            merged.push(bt);
+            // If backend caught up, still preserve the local balanceApplied flag to prevent double-crediting
+            merged.push({ ...bt, balanceApplied: local.balanceApplied });
           }
         } else {
           merged.push(bt);
@@ -472,7 +471,7 @@ export default function UserApp() {
         }
 
         if (now <= (bt.expiryMs + GHOST_GRACE)) {
-          updatedActive.push({ ...bt, status: finalStatus, optimistic: (local?.optimistic || false) });
+          updatedActive.push({ ...bt, status: finalStatus, optimistic: (local?.optimistic || false), balanceApplied: local?.balanceApplied });
         }
       });
 
@@ -858,16 +857,17 @@ export default function UserApp() {
           setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
           setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
 
+          // 🔥 INSTANT OVERHEAD: Deduct balance and activate guard immediately
+          setSessionBalance(prev => Math.max(0, prev - amtNum));
+          lastOptimisticActionTime.current = Date.now();
+
           // Background Verification (Non-blocking)
           publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
             .then(async (receipt) => {
               if (receipt.status === "success" || receipt.status === 1) {
                 console.log(`⛓️ [SESSION] Confirmed: ${txHash}`);
                 setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
-                // Deduct balance
-                setSessionBalance(prev => Math.max(0, prev - amtNum));
-                lastOptimisticActionTime.current = Date.now();
-                triggerGlobalRefresh(true);
+                triggerGlobalRefresh(true); // Final sync with chain reality
               } else {
                 throw new Error("Transaction Reverted");
               }
@@ -924,6 +924,13 @@ export default function UserApp() {
         setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
         setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
 
+        // 🔥 INSTANT OVERHEAD: Deduct balance and activate guard immediately
+        setEvmBalance(prev => {
+          const current = parseFloat(prev || "0");
+          return Math.max(0, current - amtNum).toString();
+        });
+        lastOptimisticActionTime.current = Date.now();
+
         // Background Verification
         publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
           .then(async (receipt) => {
@@ -942,12 +949,7 @@ export default function UserApp() {
                 })
               }).catch(e => console.warn("Ping failed", e));
 
-              setEvmBalance(prev => {
-                const current = parseFloat(prev || "0");
-                return Math.max(0, current - amtNum).toString();
-              });
-              lastOptimisticActionTime.current = Date.now();
-              triggerGlobalRefresh(true);
+              triggerGlobalRefresh(true); // Final sync with chain reality
               notify("Trade Confirmed!", "success");
             } else {
               throw new Error("Reverted");
@@ -1183,19 +1185,18 @@ export default function UserApp() {
       clearTimeout(timeoutId);
 
       if (fastestPrice > 0) {
-        // SYSTEM-WIDE RULE: Only 2 decimal places considered for prices
-        const normalizedPrice = Math.floor(fastestPrice * 100) / 100;
-        const pStr = normalizedPrice.toFixed(2);
+        // Use full precision for internal price tracking (keep up to 8 decimals)
+        const pStr = fastestPrice.toFixed(8);
         setPrice(pStr);
         priceRef.current = pStr;
         setIsLoading(false);
 
         // Record history for precise expiry price retrieval (keep 10s buffer)
         const now = Date.now();
-        priceHistoryRef.current.push({ p: normalizedPrice, t: now });
+        priceHistoryRef.current.push({ p: fastestPrice, t: now });
         if (priceHistoryRef.current.length > 50) priceHistoryRef.current.shift();
 
-        return normalizedPrice;
+        return fastestPrice;
       }
     } catch (err) {
       // Don't let total API failure block the UI forever
@@ -1505,8 +1506,8 @@ export default function UserApp() {
         if (trade.confirmed === false && !trade.tx) continue; // Safety: only resolve if we have a TX or on-chain confirmation
         if (resolvingInProgress.current.has(trade.id)) continue;
 
-        // SYSTEM-WIDE RULE: Only 2 decimal places considered for win/loss determination
-        const truncTo2dp = (p) => Math.floor(p * 100) / 100;
+        // Use full precision for win/loss determination (up to 8 decimal places)
+        const highPrecisionCmp = (p) => parseFloat(p);
 
         // ACCURACY UPGRADE: Find the price in history that was closest to the exact expiryMs
         let capturedPrice = parseFloat(priceRef.current);
@@ -1528,10 +1529,10 @@ export default function UserApp() {
         if (!capturedPrice || capturedPrice <= 0) continue;
 
         let optimisticStatus = "LOST";
-        const entry2dp = truncTo2dp(parseFloat(trade.entryPrice));
-        const exit2dp = truncTo2dp(capturedPrice);
+        const entryVal = highPrecisionCmp(trade.entryPrice);
+        const exitVal = highPrecisionCmp(capturedPrice);
         const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
-        const isWin = isUpTrade ? (exit2dp > entry2dp) : (exit2dp < entry2dp);
+        const isWin = isUpTrade ? (exitVal > entryVal) : (exitVal < entryVal);
         optimisticStatus = isWin ? "WON" : "LOST";
 
         // NOW we lock it — we actually have a result
@@ -1549,7 +1550,7 @@ export default function UserApp() {
         const updatePayload = {
           ...trade,
           status: optimisticStatus,
-          settlementPrice: capturedPrice.toFixed(2),
+          settlementPrice: capturedPrice.toFixed(8),
           payout: optimisticPayout,
           optimistic: true,
           settledAt: now

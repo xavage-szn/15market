@@ -65,10 +65,11 @@ class BlockchainService {
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
         this.lastGoodRpc = null;
 
-        // ===== GAS CACHE =====
+        // ===== GAS CACHE & DEDUP =====
         this.lastGasUpdate = 0;
         this.cachedGasPrice = null;
-        this.GAS_CACHE_TTL = 2000;
+        this.GAS_CACHE_TTL = 5000;
+        this.gasRefreshPromise = null;
 
         // ===== TX CONFIRMATION TRACKING =====
         this.pendingTxs = new Map();
@@ -184,7 +185,13 @@ class BlockchainService {
     async _getGasPrice() {
         const now = Date.now();
         if (!this.cachedGasPrice || (now - this.lastGasUpdate > this.GAS_CACHE_TTL)) {
-            await this._refreshGasPrice();
+            // Dedup concurrent requests
+            if (!this.gasRefreshPromise) {
+                this.gasRefreshPromise = this._refreshGasPrice().finally(() => {
+                    this.gasRefreshPromise = null;
+                });
+            }
+            await this.gasRefreshPromise;
         }
 
         const baseGas = this.cachedGasPrice || ethers.parseUnits("1", "gwei");

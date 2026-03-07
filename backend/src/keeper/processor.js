@@ -156,7 +156,7 @@ class TradeProcessor {
                         amount: ethers.formatEther(e.args.amount),
                         direction: Number(e.args.direction) === 1 ? 'UP' : 'DOWN',
                         duration: Number(e.args.duration),
-                        entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(2),
+                        entryPrice: (Number(e.args.entryPrice) / 1e8).toFixed(8),
                         timestamp: Number(e.args.timestamp) * 1000,
                         status: s ? s.status : 'PENDING',
                         settlementPrice: s ? s.settlementPrice : null,
@@ -280,9 +280,9 @@ class TradeProcessor {
 
             if (!settlementPrice || settlementPrice <= 0) throw new Error("Price unavailable");
 
-            // 🔥 CRITICAL: Match Frontend's 2-decimal place truncation rule
-            // This ensures that win/loss determination on-chain matches the UI
-            const finalPrice = Math.floor(Number(settlementPrice) * 100) / 100;
+            // 🔥 UNIFIED PRECISION: Keep 8 decimal places to match chain and entry price
+            // This ensures that win/loss determination on-chain matches the UI/Backend
+            const finalPrice = Number(settlementPrice);
 
             logToFile(`${logMsg}: ${finalPrice} (Raw: ${settlementPrice})`);
             const scaledPrice = BigInt(Math.floor(finalPrice * 1e8));
@@ -334,22 +334,21 @@ class TradeProcessor {
                     // Success!
                     this.failedSettlements.delete(tradeId);
 
-                    // 🔥 IMMEDIATE RECORD: Prevent 'undefined' price/payout in UI during backend backfill gap
-                    // Force 3DP floor to match frontend/blockchain comparison exactly
-                    const entry2dp = Math.floor(Number(trade.entryPrice) * 1000) / 1000;
-                    const exit2dp = Math.floor(finalPrice * 1000) / 1000;
+                    // 🔥 UNIFY RESOLUTION: Use high precision (8dp) for win/loss comparison
+                    const entryVal = Number(trade.entryPrice);
+                    const exitVal = finalPrice;
 
-                    const isUp = (trade.direction === 1 || trade.direction === "UP");
-                    const isWin = isUp ? (exit2dp > entry2dp) : (exit2dp < entry2dp);
+                    const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
+                    const isWin = isUp ? (exitVal > entryVal) : (exitVal < entryVal);
 
                     const duration = Number(trade.duration) || 15;
                     const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
-                    const instantVal = isWin ? (Number(trade.amount) * multiplier).toFixed(2) : "0.000";
+                    const instantVal = isWin ? (Number(trade.amount) * multiplier).toFixed(2) : "0.00";
 
                     await redis.addHistoricalTrade({
                         id: tradeId,
                         status: isWin ? "WON" : "LOST",
-                        settlementPrice: exit2dp.toFixed(3),
+                        settlementPrice: exitVal.toFixed(8),
                         payout: instantVal,
                         symbol: symbol
                     });
