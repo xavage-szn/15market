@@ -99,13 +99,13 @@ const SideHistoryPane = ({
                                                         <span className={`text-[11px] font-bold ${isDark ? 'text-white/90' : 'text-[#0f2618]/90'}`}>{trade.symbol || 'BTC'}</span>
                                                     </div>
                                                     <span className={`text-[11px] font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
-                                                        {isWin ? `+${trade.payout}` : trade.status}
+                                                        {isWin ? `+${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                                                     </span>
                                                 </div>
 
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex flex-col">
-                                                        <span className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-[#0f2618]/40'}`}>Entry: ${trade.entryPrice}</span>
+                                                        <span className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-[#0f2618]/40'}`}>Entry: ${Number(trade.entryPrice || 0).toFixed(2)}</span>
                                                         <span className={`text-[9px] font-mono ${isDark ? 'text-white/20' : 'text-[#0f2618]/20'}`}>
                                                             {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                                         </span>
