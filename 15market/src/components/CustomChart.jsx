@@ -292,6 +292,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 const fresh = await fetchKlines(timeframe);
                 if (fresh && fresh.length > 0 && seriesRef.current) {
                     const newCandle = fresh[fresh.length - 1];
+                    if (typeof newCandle.time !== 'number') return;
                     if (lastCandleTime.current && newCandle.time < lastCandleTime.current) return;
                     seriesRef.current.update(newCandle);
                     lastCandleTime.current = newCandle.time;

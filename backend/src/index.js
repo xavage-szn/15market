@@ -437,7 +437,7 @@ app.post('/session/trade', async (req, res) => {
                 BigInt(duration),
                 BigInt(entryPrice),
                 Number(marketId),
-                address // Pay Payout back to main address
+                sessionAddr // Pay Payout back to session address for auto-signer trades
             ]),
             value: amtWei,
             nonce: nonce,
