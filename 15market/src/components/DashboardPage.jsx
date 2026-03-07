@@ -410,19 +410,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                             <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v1' ? 'text-white/70' : isLight ? 'text-[#0a261a]/40' : 'text-white/20'}`}>Basic Terminal</span>
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                const isLargeDisplay = window.innerWidth >= 768;
-                                                if (!isLargeDisplay) {
-                                                    setModalConfig({
-                                                        title: "Desktop & Tablet Optimized",
-                                                        message: "Precision V2 is a professional-grade terminal optimized for larger displays (iPads, Tablets, and Desktop). Please switch to a larger device to access the high-speed execution terminal.",
-                                                        type: 'alert',
-                                                        confirmText: "Understood"
-                                                    });
-                                                    return;
-                                                }
-                                                setUiVersion('v2');
-                                            }}
+                                            onClick={() => setUiVersion('v2')}
                                             className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v2'
                                                 ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-lg'
                                                 : isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/50 hover:bg-[#e6f4ed]' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
