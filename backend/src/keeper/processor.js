@@ -280,9 +280,9 @@ class TradeProcessor {
 
             if (!settlementPrice || settlementPrice <= 0) throw new Error("Price unavailable");
 
-            // 🔥 UNIFIED PRECISION: Keep 8 decimal places to match chain and entry price
+            // 🔥 UNIFIED PRECISION: Enforce 2 decimal model (TRUNCATION) as requested
             // This ensures that win/loss determination on-chain matches the UI/Backend
-            const finalPrice = Number(settlementPrice);
+            const finalPrice = Math.floor(Number(settlementPrice) * 100) / 100;
 
             logToFile(`${logMsg}: ${finalPrice} (Raw: ${settlementPrice})`);
             const scaledPrice = BigInt(Math.floor(finalPrice * 1e8));
@@ -334,21 +334,22 @@ class TradeProcessor {
                     // Success!
                     this.failedSettlements.delete(tradeId);
 
-                    // 🔥 UNIFY RESOLUTION: Use high precision (8dp) for win/loss comparison
-                    const entryVal = Number(trade.entryPrice);
-                    const exitVal = finalPrice;
+                    // 🔥 UNIFY RESOLUTION: Use 2 decimal places for win/loss comparison
+                    const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
+                    const entryVal = trunc2(trade.entryPrice);
+                    const exitVal = trunc2(finalPrice);
 
                     const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
                     const isWin = isUp ? (exitVal > entryVal) : (exitVal < entryVal);
 
                     const duration = Number(trade.duration) || 15;
                     const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
-                    const instantVal = isWin ? (Number(trade.amount) * multiplier).toFixed(2) : "0.00";
+                    const instantVal = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
 
                     await redis.addHistoricalTrade({
                         id: tradeId,
                         status: isWin ? "WON" : "LOST",
-                        settlementPrice: exitVal.toFixed(8),
+                        settlementPrice: exitVal.toFixed(2),
                         payout: instantVal,
                         symbol: symbol
                     });

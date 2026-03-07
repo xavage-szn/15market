@@ -289,22 +289,24 @@ app.post('/settle', async (req, res) => {
         if (trade) {
             // 🔥 INSTANT BACKEND RECORD: 
             // Update Redis immediately so the source of truth reflects the win/loss instantly.
-            const entryPrice = parseFloat(trade.entryPrice);
-            const exitPriceNum = parseFloat(exitPrice) || entryPrice; // Pathological fallback
+            const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
+            const entryPrice = trunc2(trade.entryPrice);
+            const exitPriceNum = trunc2(exitPrice || entryPrice);
 
             const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
-            // Use full precision for win/loss determination
+            // Use 2 decimal precision for win/loss determination as requested
             const isWin = isUp ? (exitPriceNum > entryPrice) : (exitPriceNum < entryPrice);
 
             const duration = Number(trade.duration) || 15;
             const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
-            const payout = isWin ? (Number(trade.amount) * multiplier).toFixed(2) : "0.00";
+            // Truncate payout to 2 decimals
+            const payout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
 
             // Mark as settled in Redis immediately to satisfy the 'Real' requirement
             await redis.addHistoricalTrade({
                 id: id,
                 status: isWin ? "WON" : "LOST",
-                settlementPrice: exitPriceNum.toFixed(8),
+                settlementPrice: exitPriceNum.toFixed(2),
                 payout: payout,
                 settled: true
             });
@@ -328,13 +330,14 @@ app.post('/settle', async (req, res) => {
 app.post('/trade-ping', async (req, res) => {
     try {
         const { id, address, amount, direction, duration, entryPrice, symbol } = req.body;
+        const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
         const tradeData = {
             id: id.toString(),
             user: address,
             amount: amount,
             direction: direction,
             duration: duration,
-            entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
+            entryPrice: trunc2(Number(entryPrice) / 1e8).toFixed(2),
             symbol: symbol || 'BTC',
             expiry: Date.now() + (duration * 1000),
             confirmed: true,
@@ -454,13 +457,14 @@ app.post('/session/trade', async (req, res) => {
         logToFile(`[SESSION_TRADE] ✅ Broadcasted ${id} in ${Date.now() - broadcastStart}ms: ${tx.hash}`);
 
         // Immediate Redis Register
+        const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
         const tradeData = {
             id: id.toString(),
             user: address,
             amount: amount,
             direction: direction,
             duration: duration,
-            entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
+            entryPrice: trunc2(Number(entryPrice) / 1e8).toFixed(2),
             symbol: 'ETH',
             expiry: Date.now() + (duration * 1000),
             txHash: tx.hash,

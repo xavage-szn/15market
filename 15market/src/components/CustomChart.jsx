@@ -166,8 +166,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 wickDownColor: downColor,
                 priceFormat: {
                     type: 'price',
-                    precision: 4,
-                    minMove: 0.0001,
+                    precision: 2,
+                    minMove: 0.01,
                 },
             });
             seriesRef.current = candlestickSeries;
@@ -179,8 +179,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 lineWidth: 3,
                 priceFormat: {
                     type: 'price',
-                    precision: 4,
-                    minMove: 0.0001,
+                    precision: 2,
+                    minMove: 0.01,
                 },
             });
             seriesRef.current = areaSeries;

@@ -69,7 +69,7 @@ function TradeTerminalComponent({
             <div className="flex flex-col items-end">
                 <span className="text-[5px] lg:text-[6px] font-black opacity-30 uppercase tracking-widest">Market</span>
                 <span className="text-[7px] lg:text-[10px] font-mono font-black text-[#3CB371]">
-                    ${Number(price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${(Math.floor(Number(price) * 100) / 100).toFixed(2)}
                 </span>
             </div>
         </div>

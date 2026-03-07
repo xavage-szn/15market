@@ -1203,15 +1203,16 @@ export default function UserApp() {
       clearTimeout(timeoutId);
 
       if (fastestPrice > 0) {
-        // Use full precision for internal price tracking (keep up to 8 decimals)
-        const pStr = fastestPrice.toFixed(8);
+        // Enforce 2 decimal model as requested (Truncation)
+        const truncated = Math.floor(fastestPrice * 100) / 100;
+        const pStr = truncated.toFixed(2);
         setPrice(pStr);
         priceRef.current = pStr;
         setIsLoading(false);
 
         // Record history for precise expiry price retrieval (keep 10s buffer)
         const now = Date.now();
-        priceHistoryRef.current.push({ p: fastestPrice, t: now });
+        priceHistoryRef.current.push({ p: truncated, t: now });
         if (priceHistoryRef.current.length > 50) priceHistoryRef.current.shift();
 
         return fastestPrice;
@@ -1479,13 +1480,27 @@ export default function UserApp() {
   const handleSliderChange = useCallback((e) => {
     const val = e.target.value;
     setSliderValue(val);
-    if (activeBal > 0) setAmount(((activeBal * val) / 100).toFixed(4));
+    if (activeBal > 0) {
+      const calculated = (activeBal * val) / 100;
+      const truncated = Math.floor(calculated * 100) / 100;
+      setAmount(truncated.toFixed(2));
+    }
   }, [activeBal]);
 
   const handleAmountChange = useCallback((e) => {
-    const val = e.target.value;
+    let val = e.target.value;
+
+    // Enforce 2 decimal truncation on input
+    if (val.includes('.')) {
+      const [int, dec] = val.split('.');
+      if (dec.length > 2) {
+        val = `${int}.${dec.slice(0, 2)}`;
+      }
+    }
+
     setAmount(val);
-    if (activeBal > 0) setSliderValue(Math.min((val / activeBal) * 100, 100));
+    const num = parseFloat(val);
+    if (!isNaN(num) && activeBal > 0) setSliderValue(Math.min((num / activeBal) * 100, 100));
     else setSliderValue(0);
   }, [activeBal]);
 
@@ -1547,8 +1562,9 @@ export default function UserApp() {
         if (!capturedPrice || capturedPrice <= 0) continue;
 
         let optimisticStatus = "LOST";
-        const entryVal = highPrecisionCmp(trade.entryPrice);
-        const exitVal = highPrecisionCmp(capturedPrice);
+        const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
+        const entryVal = trunc2(trade.entryPrice);
+        const exitVal = trunc2(capturedPrice);
         const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
         const isWin = isUpTrade ? (exitVal > entryVal) : (exitVal < entryVal);
         optimisticStatus = isWin ? "WON" : "LOST";
@@ -1568,7 +1584,7 @@ export default function UserApp() {
         const updatePayload = {
           ...trade,
           status: optimisticStatus,
-          settlementPrice: capturedPrice.toFixed(8),
+          settlementPrice: exitVal.toFixed(2),
           payout: optimisticPayout,
           optimistic: true,
           settledAt: now
