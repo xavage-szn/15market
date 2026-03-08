@@ -22,7 +22,6 @@ async function main() {
     console.log('Testing 3 rounds per RPC...');
 
     const rpcs = [
-        { url: 'https://5042002.rpc.thirdweb.com', name: 'ThirdWeb' },
         { url: 'https://rpc.testnet.arc.network', name: 'Arc Official' },
         { url: 'https://rpc-test-1.arc.market', name: 'Arc Market' }
     ];
