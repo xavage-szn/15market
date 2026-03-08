@@ -121,7 +121,6 @@ if (!SESSION_MASTER_SECRET) {
     // In production, we should probably exit, but for now we'll just log loudly
 }
 const SESSION_RPCS = [
-    "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
     "https://rpc-test-1.arc.market"
 ];
