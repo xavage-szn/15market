@@ -16,7 +16,6 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const RPC_ENDPOINTS = [
-    "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
     "https://rpc-test-1.arc.market"
 ];
