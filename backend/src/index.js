@@ -121,9 +121,9 @@ if (!SESSION_MASTER_SECRET) {
     // In production, we should probably exit, but for now we'll just log loudly
 }
 const SESSION_RPCS = [
-    "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
-    "https://rpc-test-1.arc.market"
+    "https://rpc-test-1.arc.market",
+    "https://5042002.rpc.thirdweb.com"
 ];
 let sessionProvider = null;
 async function getSessionProvider() {
@@ -458,6 +458,9 @@ app.post('/session/trade', async (req, res) => {
 
         // Immediate Redis Register
         const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
+        const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
+        const symbol = ID_ASSET_MAP[Number(marketId)] || 'BTC';
+
         const tradeData = {
             id: id.toString(),
             user: address,
@@ -465,7 +468,7 @@ app.post('/session/trade', async (req, res) => {
             direction: direction,
             duration: duration,
             entryPrice: trunc2(Number(entryPrice) / 1e8).toFixed(2),
-            symbol: 'ETH',
+            symbol: symbol,
             expiry: Date.now() + (duration * 1000),
             txHash: tx.hash,
             startTime: Date.now(),

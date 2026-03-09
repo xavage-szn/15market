@@ -16,9 +16,9 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const RPC_ENDPOINTS = [
-    "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
-    "https://rpc-test-1.arc.market"
+    "https://rpc-test-1.arc.market",
+    "https://5042002.rpc.thirdweb.com"
 ];
 
 async function createProvider(blockchainService) {
@@ -176,6 +176,7 @@ class BlockchainService {
         try {
             const feeData = await this.provider.getFeeData();
             this.cachedGasPrice = feeData.gasPrice;
+            this.cachedPriorityFee = feeData.maxPriorityFeePerGas;
             this.lastGasUpdate = Date.now();
         } catch (e) {
             console.warn('[Blockchain] Gas price fetch failed:', e.message);
@@ -194,11 +195,8 @@ class BlockchainService {
             await this.gasRefreshPromise;
         }
 
-        let feeData;
-        try { feeData = await this.provider.getFeeData(); } catch (e) { }
-
-        const baseGas = this.cachedGasPrice || feeData?.gasPrice || ethers.parseUnits("10", "gwei");
-        const priorityFee = feeData?.maxPriorityFeePerGas || ethers.parseUnits("100", "gwei");
+        const baseGas = this.cachedGasPrice || ethers.parseUnits("10", "gwei");
+        const priorityFee = this.cachedPriorityFee || ethers.parseUnits("100", "gwei");
 
         // Strategy: 2.5x base + standard priority
         const maxFee = (baseGas * 25n / 10n) + priorityFee;

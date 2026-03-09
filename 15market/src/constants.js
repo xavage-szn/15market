@@ -5,15 +5,15 @@ import { defineChain } from 'viem'
 export const ARC_CHAIN_ID = 5042002;
 export const ARC_RPCS = [
     "https://rpc.testnet.arc.network",
-    "https://5042002.rpc.thirdweb.com",
-    "https://rpc-test-1.arc.market"
+    "https://rpc-test-1.arc.market",
+    "https://5042002.rpc.thirdweb.com"
 ];
 export const ARC_RPC = ARC_RPCS[0];
 export const ARC_EXPLORER = "https://explorer-test-1.arc.market";
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
 export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
 export const ARC_RPC_BACKUP = ARC_RPCS[1];
-export const ARC_RPC_THIRDWEB = ARC_RPCS[0];
+export const ARC_RPC_THIRDWEB = ARC_RPCS[2];
 // 2. Keeper Configuration
 const isNative = typeof window !== 'undefined' && !!window.Capacitor;
 const isLocal = typeof window !== 'undefined' &&
