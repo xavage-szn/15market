@@ -15,6 +15,13 @@ class PricingService {
             httpAgent: this.httpAgent,
             httpsAgent: this.httpsAgent,
         });
+
+        this.activeSymbols = ['BTC', 'ETH', 'SOL', 'MON', 'JUP', 'XRP'];
+        setInterval(() => this._pollPrices(), 1500); // 1.5s resolution
+    }
+
+    _pollPrices() {
+        this.activeSymbols.forEach(sym => this.getPrice(sym).catch(() => { }));
     }
 
     getSources(symbol) {
