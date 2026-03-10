@@ -15,10 +15,14 @@ function logToFile(msg) {
     const entry = `[${new Date().toISOString()}] ${msg}\n`;
     fs.appendFile(LOG_FILE, entry, () => { });
 }
+const THIRDWEB_RPC = process.env.THIRDWEB_CLIENT_ID
+    ? `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`
+    : "https://5042002.rpc.thirdweb.com";
+
 const RPC_ENDPOINTS = [
     "https://rpc.testnet.arc.network",
     "https://rpc-test-1.arc.market",
-    "https://5042002.rpc.thirdweb.com"
+    THIRDWEB_RPC
 ];
 
 async function createProvider(blockchainService) {
@@ -32,6 +36,11 @@ async function createProvider(blockchainService) {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
             fetchReq.timeout = 7000;
+
+            // Add Secret Key if it's a Thirdweb RPC
+            if (rpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
+                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+            }
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, { staticNetwork: true });

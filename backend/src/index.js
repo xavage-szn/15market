@@ -120,10 +120,14 @@ if (!SESSION_MASTER_SECRET) {
     console.error("❌ CRITICAL: SESSION_MASTER_SECRET is missing in .env");
     // In production, we should probably exit, but for now we'll just log loudly
 }
+const THIRDWEB_RPC_SESSION = process.env.THIRDWEB_CLIENT_ID
+    ? `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`
+    : "https://5042002.rpc.thirdweb.com";
+
 const SESSION_RPCS = [
     "https://rpc.testnet.arc.network",
     "https://rpc-test-1.arc.market",
-    "https://5042002.rpc.thirdweb.com"
+    THIRDWEB_RPC_SESSION
 ];
 let sessionProvider = null;
 async function getSessionProvider() {
@@ -140,7 +144,13 @@ async function getSessionProvider() {
     for (const rpc of SESSION_RPCS) {
         try {
             console.log(`[Session] Checking RPC: ${rpc}`);
-            const provider = new ethers.JsonRpcProvider(rpc, 5042002, { staticNetwork: true });
+
+            const fetchReq = new ethers.FetchRequest(rpc);
+            if (rpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
+                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+            }
+
+            const provider = new ethers.JsonRpcProvider(fetchReq, 5042002, { staticNetwork: true });
 
             // Fast health check: 3s timeout for block number
             const blockNum = await Promise.race([

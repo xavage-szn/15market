@@ -1,9 +1,9 @@
-// Network Constants & Chain Definitions
 import { defineChain } from 'viem'
+const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33df2adaf240de11d97651104a14c461";
 
 // Arc Network Constants
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
-export const ARC_RPC = import.meta.env.VITE_ARC_RPC;
+export const ARC_RPC = import.meta.env.VITE_ARC_RPC || `https://5042002.rpc.thirdweb.com/${THIRDWEB_CLIENT_ID}`;
 
 // Project ID
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
