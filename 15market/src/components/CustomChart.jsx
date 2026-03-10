@@ -421,6 +421,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         const now = Math.floor(Date.now() / 1000);
         const price = parseFloat(currentPrice);
 
+        // SAFETY: Prevent "Cannot update oldest data" error in lightweight-charts
+        if (lastCandleTime.current && now <= lastCandleTime.current) {
+            return;
+        }
+
         if (timeframe === '1s' || chartType === 'line') {
             const time = timeframe === '1s' ? now : Math.floor(now / 5) * 5;
             if (chartType === 'candles') {
@@ -439,8 +444,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 seriesRef.current.update({ time, value: price });
             }
         } else {
-            seriesRef.current.update({ time: Math.floor(now / 60) * 60, close: price });
+            const time = Math.floor(now / 60) * 60;
+            seriesRef.current.update({ time, close: price });
         }
+
+        lastCandleTime.current = now;
     }, [currentPrice, timeframe, chartType]);
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);

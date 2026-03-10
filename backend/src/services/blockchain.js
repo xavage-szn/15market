@@ -270,7 +270,10 @@ class BlockchainService {
         console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei) - Bet ${betId}`);
 
         try {
-            const tx = await this.contract.settleBet(betId, ethers.parseUnits(exitPrice.toString(), 0), {
+            // SCALE FIX: Entry price is stored at 10^8 precision. Exit price must match.
+            const settlementPriceBigInt = ethers.parseUnits(parseFloat(exitPrice).toFixed(8), 8);
+
+            const tx = await this.contract.settleBet(betId, settlementPriceBigInt, {
                 nonce: nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,

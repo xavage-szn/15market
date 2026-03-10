@@ -126,7 +126,6 @@ const THIRDWEB_RPC_SESSION = process.env.THIRDWEB_CLIENT_ID
 
 const SESSION_RPCS = [
     "https://rpc.testnet.arc.network",
-    "https://rpc-test-1.arc.market",
     THIRDWEB_RPC_SESSION
 ];
 let sessionProvider = null;
@@ -515,6 +514,25 @@ app.post('/session/trade', async (req, res) => {
         if (req.body.tradeParams?.id) {
             await redis.unlockTrade(req.body.tradeParams.id);
         }
+    }
+});
+
+app.post('/settle', async (req, res) => {
+    try {
+        const { id, exitPrice } = req.body;
+        if (!id || exitPrice === undefined) {
+            return res.status(400).json({ error: 'Missing id or exitPrice' });
+        }
+
+        logToFile(`[SETTLE_REQ] ⚡ Request to settle bet ${id} at ${exitPrice}`);
+
+        // Use blockchain service to settle on-chain
+        const result = await blockchain.settleBet(id, exitPrice);
+
+        res.json({ success: true, txHash: result.hash });
+    } catch (e) {
+        logToFile(`[SETTLE_REQ] ❌ Error: ${e.message}`);
+        res.status(500).json({ error: e.message });
     }
 });
 
