@@ -20,9 +20,8 @@ const THIRDWEB_RPC = process.env.THIRDWEB_CLIENT_ID
     : "https://5042002.rpc.thirdweb.com";
 
 const RPC_ENDPOINTS = [
-    "https://rpc.testnet.arc.network",
-    "https://rpc-test-1.arc.market",
-    THIRDWEB_RPC
+    THIRDWEB_RPC,
+    "https://rpc.testnet.arc.network"
 ];
 
 async function createProvider(blockchainService) {
@@ -205,15 +204,17 @@ class BlockchainService {
         }
 
         const baseGas = this.cachedGasPrice || ethers.parseUnits("10", "gwei");
-        const priorityFee = this.cachedPriorityFee || ethers.parseUnits("100", "gwei");
+        const priorityFee = this.cachedPriorityFee || ethers.parseUnits("150", "gwei");
 
-        // Strategy: 2.5x base + standard priority
-        const maxFee = (baseGas * 25n / 10n) + priorityFee;
-        const minGasFee = ethers.parseUnits("150", "gwei");
+        // Aggressive Strategy: 3.5x base + higher priority to ensure inclusion on Arc Testnet
+        const maxFee = (baseGas * 35n / 10n) + priorityFee;
+        const minGasFee = ethers.parseUnits("200", "gwei"); // Increased floor for reliability
+
+        const finalGasPrice = maxFee > minGasFee ? maxFee : minGasFee;
 
         return {
-            gasPrice: maxFee > minGasFee ? maxFee : minGasFee,
-            maxFeePerGas: maxFee > minGasFee ? maxFee : minGasFee,
+            gasPrice: finalGasPrice,
+            maxFeePerGas: finalGasPrice,
             maxPriorityFeePerGas: priorityFee
         };
     }

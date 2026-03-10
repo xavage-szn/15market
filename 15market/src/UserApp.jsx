@@ -768,8 +768,13 @@ export default function UserApp() {
     if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
 
     const currentBal = sessionMode ? sessionBalance : balance;
-    if (parseFloat(amount) > currentBal) {
-      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. Balance: ${currentBal.toFixed(3)}`, "error");
+    const stakeAmt = parseFloat(amount);
+
+    // For session trades, require a small margin (0.1 USDC) for gas to avoid "Insufficient funds for gas" errors
+    const gasMargin = sessionMode ? 0.1 : 0;
+
+    if (stakeAmt + gasMargin > currentBal) {
+      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. ${sessionMode ? `Session wallet needs at least ${stakeAmt + gasMargin} USDC (Stake + Gas room)` : `Balance: ${currentBal.toFixed(3)}`}`, "error");
     }
 
     if (Number(amount) < parseFloat(platformSettings.minBet)) {
@@ -894,6 +899,9 @@ export default function UserApp() {
               console.warn("Session background verification failed:", err);
               notify("Trade Reverted! Check Gas/Balance.", "error");
               setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+              // 🔥 RESTORE BALANCE on revert
+              setSessionBalance(prev => prev + amtNum);
+              lastOptimisticActionTime.current = 0; // Release guard to allow fresh on-chain sync
             });
 
         } catch (fetchErr) {

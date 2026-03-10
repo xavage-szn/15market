@@ -125,8 +125,8 @@ const THIRDWEB_RPC_SESSION = process.env.THIRDWEB_CLIENT_ID
     : "https://5042002.rpc.thirdweb.com";
 
 const SESSION_RPCS = [
-    "https://rpc.testnet.arc.network",
-    THIRDWEB_RPC_SESSION
+    THIRDWEB_RPC_SESSION,
+    "https://rpc.testnet.arc.network"
 ];
 let sessionProvider = null;
 async function getSessionProvider() {
@@ -435,11 +435,17 @@ app.post('/session/trade', async (req, res) => {
         const amtNum = parseFloat(amount);
         const amtWei = ethers.parseUnits(amtNum.toFixed(18), 18);
 
-        if (balance < amtWei) {
-            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC vs ${amount} USDC needed`;
+        // Calculate gas buffer (estimated cost of 800k gas at current price)
+        const gasBufferWei = BigInt(800000) * fees.gasPrice;
+        const totalNeeded = amtWei + gasBufferWei;
+
+        if (balance < totalNeeded) {
+            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC. Need ${ethers.formatEther(totalNeeded)} USDC (Stake: ${amount} + Gas: ${ethers.formatEther(gasBufferWei)})`;
             logToFile(`[SESSION_TRADE] ❌ ${err}`);
             throw new Error(err);
         }
+
+        logToFile(`[SESSION_TRADE] 📝 Preparing TX (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei, Value: ${amtNum} USDC)`);
 
         const txArgs = {
             to: process.env.ARC_CONTRACT_ADDRESS,
@@ -472,7 +478,9 @@ app.post('/session/trade', async (req, res) => {
 
         const tradeData = {
             id: id.toString(),
-            user: address,
+            user: address, // Main wallet for identification
+            owner: address,
+            sessionOwner: sessionAddr,
             amount: amount,
             direction: direction,
             duration: duration,
@@ -481,7 +489,8 @@ app.post('/session/trade', async (req, res) => {
             expiry: Date.now() + (duration * 1000),
             txHash: tx.hash,
             startTime: Date.now(),
-            confirmed: false
+            confirmed: false,
+            isSessionTrade: true
         };
         await redis.setTrade(id, tradeData);
 
@@ -494,22 +503,25 @@ app.post('/session/trade', async (req, res) => {
                 await redis.setTrade(id, updatedData);
                 logToFile(`[SESSION_TRADE] ⛓️ Confirmed ${id}: ${tx.hash}`);
             } else {
-                logToFile(`[SESSION_TRADE] ❌ Reverted ${id}: ${tx.hash}`);
+                logToFile(`[SESSION_TRADE] ❌ Reverted on-chain ${id}: ${tx.hash}`);
                 await redis.delTrade(id);
             }
         }).catch(err => {
-            logToFile(`[SESSION_TRADE] ❌ background wait failed for ${tx.hash}: ${err.message}`);
+            logToFile(`[SESSION_TRADE] ❌ Background confirmation error for ${tx.hash}: ${err.message}`);
         });
 
     } catch (e) {
-        logToFile(`[SESSION_TRADE] ❌ Error: ${e.message}`);
-        if (e.message.includes('nonce') || e.message.includes('already been used') || e.message.includes('too low')) {
+        const errorMsg = e.reason || e.message || "Unknown error";
+        logToFile(`[SESSION_TRADE] ❌ FATAL Error: ${errorMsg}`);
+        console.error(`[SESSION_TRADE] Trace:`, e);
+
+        if (errorMsg.toLowerCase().includes('nonce') || errorMsg.toLowerCase().includes('already been used') || errorMsg.toLowerCase().includes('too low')) {
             try {
                 const { address: sessionAddr } = await deriveUserWallet(req.body.address);
                 await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
             } catch (err) { }
         }
-        if (!res.headersSent) res.status(500).json({ error: e.message });
+        if (!res.headersSent) res.status(500).json({ error: errorMsg });
     } finally {
         if (req.body.tradeParams?.id) {
             await redis.unlockTrade(req.body.tradeParams.id);

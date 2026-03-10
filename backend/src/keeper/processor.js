@@ -30,36 +30,39 @@ class TradeProcessor {
 
         // 1. Listen for new trades on-chain (Real-time)
         blockchain.onBetPlaced(async (trade) => {
-            const existing = await redis.getTrade(trade.id);
+            const tradeId = trade.id.toString();
+            const existing = await redis.getTrade(tradeId);
+
             // Use the on-chain timestamp as the true start time
-            // This is when the stake was actually confirmed on-chain
             const onChainStartMs = trade.timestamp * 1000;
             const onChainExpiry = onChainStartMs + (trade.duration * 1000);
 
-            if (!existing) {
-                await redis.setTrade(trade.id, {
-                    ...trade,
-                    startTime: onChainStartMs,
-                    expiry: onChainExpiry
-                });
-                console.log(`[Processor] 🛰️ Detected on-chain trade ${trade.id}, tracking for settlement. Expiry: ${new Date(onChainExpiry).toISOString()}`);
-            } else {
-                // Update existing trade with confirmed on-chain timing
-                await redis.setTrade(trade.id, {
-                    ...existing,
-                    ...trade,
-                    startTime: onChainStartMs,
-                    expiry: onChainExpiry,
-                    confirmed: true
-                });
-                console.log(`[Processor] 🔄 Updated trade ${trade.id} with on-chain confirmed timing.`);
-            }
+            // Mapping Logic: If the 'user' in the event is a session wallet, 
+            // we must ensure the trade is indexed under the MAIN wallet.
+            const sessionAddr = trade.user.toLowerCase();
+            const mainAddrFromMapping = await redis.getMainAddressForSession(sessionAddr);
+
+            const finalOwner = existing?.owner || mainAddrFromMapping || trade.user;
+            const finalUser = existing?.user || mainAddrFromMapping || trade.user;
+
+            const updatedTrade = {
+                ...(existing || {}),
+                ...trade,
+                user: finalUser,   // Preserve main wallet address
+                owner: finalOwner, // Preserve main wallet address
+                sessionOwner: sessionAddr,
+                startTime: onChainStartMs,
+                expiry: onChainExpiry,
+                confirmed: true
+            };
+
+            await redis.setTrade(tradeId, updatedTrade);
+            console.log(`[Processor] ${existing ? '🔄 Updated' : '🛰️ Detected'} trade ${tradeId}. User: ${finalUser}, Expiry: ${new Date(onChainExpiry).toISOString()}`);
+
             // Add to history too
             await redis.addHistoricalTrade({
-                ...trade,
+                ...updatedTrade,
                 timestamp: onChainStartMs,
-                startTime: onChainStartMs,
-                expiryMs: onChainExpiry,
                 status: 'PENDING'
             });
         });
