@@ -16,18 +16,11 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const getRpcEndpoints = () => {
-    const clientId = process.env.THIRDWEB_CLIENT_ID;
-    const thirdwebUrl = clientId
-        ? `https://5042002.rpc.thirdweb.com/${clientId}`
-        : "https://5042002.rpc.thirdweb.com";
-
-    // Official Arc RPC first (most reliable), dRPC as fallback (has batch limits on free tier)
+    // Official Arc + dRPC only (Thirdweb/Quicknode removed — hit rate limits)
     return [
         "https://rpc.testnet.arc.network",
         "https://arc-testnet.drpc.org",
-        "https://rpc.drpc.testnet.arc.network",
-        "https://rpc.blockdaemon.testnet.arc.network",
-        thirdwebUrl
+        "https://rpc.drpc.testnet.arc.network"
     ];
 };
 
@@ -43,15 +36,6 @@ async function createProvider(blockchainService) {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
             fetchReq.timeout = 7000;
-
-            if (rpc.includes('thirdweb.com')) {
-                if (process.env.THIRDWEB_SECRET_KEY) {
-                    fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-                }
-                if (process.env.THIRDWEB_CLIENT_ID) {
-                    fetchReq.setHeader("x-client-id", process.env.THIRDWEB_CLIENT_ID);
-                }
-            }
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
@@ -73,12 +57,8 @@ async function createProvider(blockchainService) {
         }
     }
     const fallbackReq = new FetchRequest(endpoints[0]);
-    if (endpoints[0].includes('thirdweb.com')) {
-        if (process.env.THIRDWEB_SECRET_KEY) fallbackReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-        if (process.env.THIRDWEB_CLIENT_ID) fallbackReq.setHeader("x-client-id", process.env.THIRDWEB_CLIENT_ID);
-    }
     fallbackReq.timeout = 15000;
-    return new ethers.JsonRpcProvider(fallbackReq, ethers.Network.from(5042002), { staticNetwork: true });
+    return new ethers.JsonRpcProvider(fallbackReq, ethers.Network.from(5042002), { staticNetwork: true, batchMaxCount: 1 });
 }
 
 class BlockchainService {

@@ -125,18 +125,11 @@ if (!SESSION_MASTER_SECRET) {
     // In production, we should probably exit, but for now we'll just log loudly
 }
 const getSessionRpcs = () => {
-    const clientId = process.env.THIRDWEB_CLIENT_ID;
-    const thirdwebUrl = clientId
-        ? `https://5042002.rpc.thirdweb.com/${clientId}`
-        : "https://5042002.rpc.thirdweb.com";
-
-    // Matching the robust rotate logic used for settlement
+    // Official Arc + dRPC only (Thirdweb/Quicknode removed — hit rate limits)
     return [
         "https://rpc.testnet.arc.network",
         "https://arc-testnet.drpc.org",
-        "https://rpc.drpc.testnet.arc.network",
-        "https://rpc.blockdaemon.testnet.arc.network",
-        thirdwebUrl
+        "https://rpc.drpc.testnet.arc.network"
     ];
 };
 
@@ -158,14 +151,6 @@ async function getSessionProvider() {
             console.log(`[Session] Checking RPC: ${rpc}`);
 
             const fetchReq = new ethers.FetchRequest(rpc);
-            if (rpc.includes('thirdweb.com')) {
-                if (process.env.THIRDWEB_SECRET_KEY) {
-                    fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-                }
-                if (process.env.THIRDWEB_CLIENT_ID) {
-                    fetchReq.setHeader("x-client-id", process.env.THIRDWEB_CLIENT_ID);
-                }
-            }
 
             const provider = new ethers.JsonRpcProvider(fetchReq, 5042002, {
                 staticNetwork: true,
