@@ -167,7 +167,10 @@ async function getSessionProvider() {
                 }
             }
 
-            const provider = new ethers.JsonRpcProvider(fetchReq, 5042002, { staticNetwork: true });
+            const provider = new ethers.JsonRpcProvider(fetchReq, 5042002, {
+                staticNetwork: true,
+                batchMaxCount: 1 // Disable batching for dRPC compatibility
+            });
 
             // Fast health check: 3s timeout for block number
             const blockNum = await Promise.race([

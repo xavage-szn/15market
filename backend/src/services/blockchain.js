@@ -54,7 +54,10 @@ async function createProvider(blockchainService) {
             }
 
             const network = ethers.Network.from(5042002);
-            const provider = new ethers.JsonRpcProvider(fetchReq, network, { staticNetwork: true });
+            const provider = new ethers.JsonRpcProvider(fetchReq, network, {
+                staticNetwork: true,
+                batchMaxCount: 1 // Disable batching for dRPC compatibility
+            });
 
             // Race getBlockNumber against a 5s timeout
             const block = await Promise.race([
