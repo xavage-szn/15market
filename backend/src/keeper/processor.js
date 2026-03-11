@@ -225,7 +225,15 @@ class TradeProcessor {
         const toSettle = activeTrades.filter(t => {
             const failed = this.failedSettlements.get(t.id);
             if (failed) {
-                const backoff = Math.min(30000, 2000 * Math.pow(2, failed.count));
+                // Aggressive Retry Strategy:
+                // Attempts 1-2: 2s delay
+                // Attempts 3-4: 5s delay
+                // Attempt 5+: 15s delay
+                // Capped at 30s to ensure we never stop trying for "stuck" trades
+                const backoff = failed.count <= 2 ? 2000 :
+                    failed.count <= 4 ? 5000 :
+                        failed.count <= 10 ? 15000 : 30000;
+
                 if (now - failed.lastAttempt < backoff) return false;
             }
             return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
@@ -233,11 +241,21 @@ class TradeProcessor {
 
         if (toSettle.length === 0) return;
 
-        console.log(`[Processor] ⚡ Mass settling ${toSettle.length} trades...`);
+        console.log(`[Processor] ⚡ Mass settling ${toSettle.length} trades (Concurrency: ${Math.min(toSettle.length, 25)})...`);
 
-        // Concurrent broadcasting without chunk-waiting
-        // NonceManager handles the sequential nonce dispensation internally
-        toSettle.map(trade => this._settleSingleTrade(trade));
+        // Use a high-concurrency batching to stay fast but avoid RPC/Mempool floods
+        // NonceManager still handles the sequential nonce dispensation per wallet
+        const BATCH_SIZE = 25;
+        for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
+            const batch = toSettle.slice(i, i + BATCH_SIZE);
+            // Fire batch members in parallel. We DON'T await them so the next batch can start
+            // as soon as nonces are dispensed, achieving maximum throughput.
+            batch.forEach(trade => {
+                this._settleSingleTrade(trade).catch(err => {
+                    logToFile(`[Processor] ❌ Error in settlement task for ${trade.id}: ${err.message}`);
+                });
+            });
+        }
     }
 
     async _settleSingleTrade(trade, manualPrice = null) {

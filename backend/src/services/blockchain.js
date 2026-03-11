@@ -77,6 +77,7 @@ async function createProvider(blockchainService) {
 class BlockchainService {
     constructor() {
         this.providerReady = false;
+        this.isRotating = false;
         this.provider = null;
         this.wallet = null;
         this.contract = null;
@@ -230,13 +231,27 @@ class BlockchainService {
     }
 
     async rotateRpc() {
-        console.warn('[Blockchain] 🔄 Congestion detected. Rotating RPC endpoints...');
-        this.providerReady = false;
-        this.provider = await createProvider(this);
-        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
-        this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
-        this.providerReady = true;
-        await this._resetNonce();
+        if (this.isRotating) return;
+        this.isRotating = true;
+
+        try {
+            console.warn('[Blockchain] 🔄 Congestion detected. Background rotating RPC endpoints...');
+            const newProvider = await createProvider(this);
+            const newWallet = new ethers.Wallet(process.env.PRIVATE_KEY, newProvider);
+            const newContract = new ethers.Contract(this.contractAddress, this.abi, newWallet);
+
+            // Atomic swap to avoid race conditions or provider becoming null
+            this.provider = newProvider;
+            this.wallet = newWallet;
+            this.contract = newContract;
+
+            console.log(`[Blockchain] ✅ RPC rotated and service updated.`);
+            await this._resetNonce();
+        } catch (e) {
+            console.error(`[Blockchain] ❌ RPC rotation failed: ${e.message}`);
+        } finally {
+            this.isRotating = false;
+        }
     }
 
     _startConfirmationTracker() {
