@@ -2156,11 +2156,11 @@ export default function UserApp() {
           )}
 
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-7xl'} px-2 sm:px-4 lg:px-6 flex flex-col items-center flex-1 min-h-0`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px]' : 'max-w-4xl lg:max-w-7xl'} px-4 sm:px-6 lg:px-8 flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
               <div className="w-full flex-none grid grid-cols-12 gap-4 lg:gap-6 mb-8 relative z-0 mt-2 h-auto lg:h-[calc(100vh-150px)] lg:min-h-0">
                 {/* Chart Widget - First in stack on mobile */}
-                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border lg:h-full glass-panel chart-glow min-h-[400px] lg:min-h-0`}
+                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border lg:h-full glass-panel chart-glow min-h-[280px] md:min-h-[400px] lg:min-h-0 w-full max-w-[94%] md:max-w-full mx-auto`}
                   style={{
                     background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                     boxShadow: theme === 'light'
@@ -2172,7 +2172,7 @@ export default function UserApp() {
                 </div>
 
                 {/* Sidebar - Below chart on mobile, right side on desktop */}
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 lg:h-full min-h-0">
+                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 lg:h-full min-h-0 w-full max-w-[94%] md:max-w-full mx-auto">
                   {/* Trade Terminal - Second in stack on mobile */}
                   <div className="flex-none">
                     <TradeTerminal
@@ -2315,7 +2315,7 @@ export default function UserApp() {
             {showPortraitLock && <PortraitPrompt theme={theme} />}
 
             {uiVersion === 'v1' && (
-              <div className="w-full max-w-5xl mx-auto px-2 sm:px-4 flex flex-col justify-center">
+              <div className="w-full max-w-4xl lg:max-w-7xl mx-auto px-4 sm:px-6 flex flex-col justify-center">
                 <TradeHistory
                   wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
                   tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}

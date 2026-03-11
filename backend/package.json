@@ -1,6 +1,9 @@
 {
     "name": "15market-backend",
     "version": "1.0.0",
+    "engines": {
+        "node": ">=20.0.0"
+    },
     "description": "Overhauled 15market Backend for high-frequency parallel trade processing",
     "main": "src/index.js",
     "scripts": {

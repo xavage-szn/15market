@@ -40,7 +40,7 @@ function TradeHistoryComponent({
     const isCompact = window.localStorage.getItem('15market_ui_version') === 'v2';
 
     return (
-        <div className={`w-full ${isCompact ? 'h-full' : 'max-w-4xl mt-6 lg:mt-10 mb-20'} text-left`} >
+        <div className={`w-full ${isCompact ? 'h-full' : 'w-full mt-6 lg:mt-10 mb-20'} text-left`} >
             <div className={`
                 ${isCompact ? 'h-full flex flex-col p-3' : 'p-4 lg:p-6'} 
                 rounded-2xl border transition-all duration-300 glass-panel

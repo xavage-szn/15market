@@ -1,0 +1,33 @@
+services:
+  # Backend Service
+  - type: web
+    name: 15market-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3010
+      - key: NODE_ENV
+        value: production
+      # These should be set in the Render Dashboard for security, but listed here for clarity
+      - fromContext: env
+        key: PRIVATE_KEY
+      - fromContext: env
+        key: SESSION_MASTER_SECRET
+      - fromContext: env
+        key: ARC_CONTRACT_ADDRESS
+      - fromContext: env
+        key: REDIS_URL
+
+  # Frontend Service (Static Site)
+  - type: web
+    name: 15market-frontend
+    env: static
+    rootDir: 15market
+    buildCommand: npm install && npm run build
+    staticPublishDir: dist
+    envVars:
+      - key: VITE_KEEPER_URL
+        value: https://15market-backend.onrender.com

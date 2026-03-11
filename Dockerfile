@@ -1,26 +1,21 @@
-# Build from the root for monorepo context
+# Multi-service Dockerfile for 15market Monorepo
 FROM node:20-slim
+
 WORKDIR /app
 
-# Copy shared utils first
-COPY backend/shared ./backend/shared
-RUN cd backend/shared && npm install
+# Copy root package files
+COPY package.json package-lock.json ./
 
-# Copy keeper code
-COPY backend/arc-keeper ./backend/arc-keeper
-RUN cd backend/arc-keeper && npm install
+# Copy backend
+COPY backend ./backend
+RUN cd backend && npm install
 
-# Copy all code for path resolution
-COPY . .
+# Copy frontend
+COPY 15market ./15market
 
-# Ensure start script is executable
-RUN chmod +x ./start-keepers.sh
-
-# Expose port for Arc keeper
+# We only build the backend part here since Render Frontend usually uses Static Site or its own build
+# If using this for backend deployment:
 EXPOSE 3010
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3010/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
-
-CMD ["./start-keepers.sh"]
+# Default to starting the backend
+CMD ["npm", "run", "render:start:backend"]

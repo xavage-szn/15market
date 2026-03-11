@@ -180,7 +180,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     return (
         <div className={`min-h-screen w-full flex flex-col ${isLight ? 'bg-[#f0f9f4] text-[#0a261a]' : 'bg-transparent text-white'}`}>
             <div className={`sticky top-0 z-40 ${isLight ? 'bg-[#f0f9f4]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
-                <div className="max-w-7xl mx-auto p-4 md:p-6">
+                <div className="max-w-4xl lg:max-w-7xl mx-auto p-4 md:p-8">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <button
@@ -212,7 +212,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
             </div>
 
             <div className="flex-1 overflow-y-auto">
-                <div className="max-w-7xl mx-auto p-4 md:p-8">
+                <div className="max-w-4xl lg:max-w-7xl mx-auto p-4 md:p-8">
                     <div>
                         {activeTab === "overview" && (
                             <div className="space-y-6">
