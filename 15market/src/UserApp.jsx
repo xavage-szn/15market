@@ -852,7 +852,7 @@ export default function UserApp() {
           setIsExecuting(false);
           notify("Trade Broadcasted! Verifying...", "success");
 
-          // Optimistically add to UI while verifying
+          // We ONLY add to UI and debit if we actually got a txHash back
           const optimisticTrade = {
             id: tradeId,
             direction: (dirVal === 1 ? "UP" : "DOWN"),
@@ -880,9 +880,25 @@ export default function UserApp() {
           setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
           setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
 
-          // 🔥 INSTANT OVERHEAD: Deduct balance and activate guard immediately
+          // 🔥 INSTANT OVERHEAD: Deduct balance and activate guard immediately ONLY after hash received
           setSessionBalance(prev => Math.max(0, prev - amtNum));
           lastOptimisticActionTime.current = Date.now();
+
+          // 5-second timeout safety check
+          setTimeout(() => {
+            setActiveTrades(currentActive => {
+              const tradeStillThere = currentActive.find(t => t.id === tradeId);
+              if (tradeStillThere && !tradeStillThere.confirmed) {
+                // Check if it's eventually confirmed
+                publicClient.getTransactionReceipt({ hash: txHash }).catch(() => null).then(r => {
+                  if (!r) {
+                    console.warn(`⏳ [SESSION] Trade ${tradeId} taking too long, checking again later...`);
+                  }
+                });
+              }
+              return currentActive;
+            });
+          }, 5000);
 
           // Background Verification (Non-blocking)
           publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 })
