@@ -448,16 +448,16 @@ app.post('/session/trade', async (req, res) => {
         const amtNum = parseFloat(amount);
         const amtWei = ethers.parseUnits(amtNum.toFixed(18), 18);
 
-        // Calculate gas buffer (estimated cost of 800k gas at current price)
-        const gasBufferWei = BigInt(800000) * fees.gasPrice;
-        const totalNeeded = amtWei + gasBufferWei;
+        // Calculate gas buffer based on MAX fee to be conservative
+        const maxGasCost = BigInt(800000) * fees.maxFeePerGas;
+        const totalNeeded = amtWei + maxGasCost;
 
-        logToFile(`[SESSION_TRADE] 💰 Balance Check: Current=${ethers.formatEther(balance)}, Required=${ethers.formatEther(totalNeeded)} (Stake: ${amount} + Gas: ${ethers.formatEther(gasBufferWei)})`);
+        logToFile(`[SESSION_TRADE] 💰 Balance Check: Current=${ethers.formatEther(balance)}, Required=${ethers.formatEther(totalNeeded)} (Stake: ${amount} + MaxGas: ${ethers.formatEther(maxGasCost)})`);
 
         if (balance < totalNeeded) {
-            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC. Need ${ethers.formatEther(totalNeeded)} USDC (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(gasBufferWei)})`;
+            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC. Need ${ethers.formatEther(totalNeeded)} USDC (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(maxGasCost)})`;
             logToFile(`[SESSION_TRADE] ❌ ${err}`);
-            throw new Error(err);
+            return res.status(400).json({ error: err });
         }
 
         logToFile(`[SESSION_TRADE] 📝 Preparing TX (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei, Value: ${amtNum} USDC)`);
@@ -481,9 +481,45 @@ app.post('/session/trade', async (req, res) => {
             chainId: 5042002
         };
 
-        logToFile(`[SESSION_TRADE] ✍️ Broadcasting TX for bet ${id}...`);
+        logToFile(`[SESSION_TRADE] ✍️ Broadcasting TX for bet ${id} (Nonce: ${nonce})...`);
         const broadcastStart = Date.now();
-        const tx = await wallet.sendTransaction(txArgs);
+        let tx;
+        let lastError;
+
+        // Attempt 1
+        try {
+            tx = await wallet.sendTransaction(txArgs);
+        } catch (sendErr) {
+            lastError = sendErr;
+            const errLower = sendErr.message?.toLowerCase() || "";
+
+            // Handle Nonce/Pool issues immediately with a retry
+            if (errLower.includes("txpool is full") || errLower.includes("timeout") || errLower.includes("nonce") || errLower.includes("underpriced")) {
+                logToFile(`[SESSION_TRADE] 🔄 Transient error: ${sendErr.message}. Syncing nonce and retrying...`);
+
+                // Force RPC rotation for better luck
+                await blockchain.rotateRpc();
+
+                // Real-time Nonce Sync
+                const freshNonce = await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
+                const freshFees = await blockchain._getGasPrice();
+
+                txArgs.nonce = freshNonce;
+                txArgs.maxFeePerGas = freshFees.maxFeePerGas * 15n / 10n; // 50% extra push
+                txArgs.maxPriorityFeePerGas = freshFees.maxPriorityFeePerGas * 15n / 10n;
+
+                logToFile(`[SESSION_TRADE] 🔄 Retry with Nonce: ${freshNonce}, Purgatory RPC: ${blockchain.provider._getPath?.() || 'rotated'}`);
+
+                try {
+                    tx = await blockchain.wallet.connect(blockchain.provider).sendTransaction(txArgs);
+                } catch (retryErr) {
+                    logToFile(`[SESSION_TRADE] ❌ Retry Failed: ${retryErr.message}`);
+                    throw retryErr;
+                }
+            } else {
+                throw sendErr;
+            }
+        }
         logToFile(`[SESSION_TRADE] ✅ Broadcasted ${id} in ${Date.now() - broadcastStart}ms: ${tx.hash}`);
 
         // Immediate Redis Register

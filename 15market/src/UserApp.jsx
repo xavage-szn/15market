@@ -878,8 +878,8 @@ export default function UserApp() {
           controller.abort();
           // Safety: ensure UI is reset if backend doesn't respond in time
           setIsExecuting(false);
-          notify("Trade timed out. The backend may be busy — please try again.", "error");
-        }, 45000); // 45 second timeout (was 25s)
+          notify("Trade timed out. The network may be slow — checking status in background...", "error");
+        }, 60000); // 60 second timeout (was 45s)
 
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {

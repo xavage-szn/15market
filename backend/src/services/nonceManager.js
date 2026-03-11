@@ -30,8 +30,8 @@ class NonceManager {
                 // Initialize if key is missing in Redis
                 let cachedVal = await redisStore.redis.get(redisKey);
                 if (cachedVal === null) {
-                    console.log(`[Nonce] Initializing ${addr} in Redis from Chain...`);
-                    const count = await provider.getTransactionCount(address, 'latest');
+                    console.log(`[Nonce] Initializing ${addr} in Redis from Chain (Pending Mode)...`);
+                    const count = await provider.getTransactionCount(address, 'pending');
                     await redisStore.redis.setnx(redisKey, count);
                 }
 
