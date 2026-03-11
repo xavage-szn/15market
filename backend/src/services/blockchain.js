@@ -5,7 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const nonceManager = require('./nonceManager');
 
 // DNS: Using system DNS resolution (no hardcoded IP overrides)
-// The previous static IP patch (64.130.40.38) was causing 502 Bad Gateway on Railway
+// The previous static IP patch (64.130.40.38) was causing 502 Bad Gateway
 // because the Arc RPC node IPs rotate. Let the OS resolve DNS dynamically.
 
 // Local logToFile for settlement confirmation tracking

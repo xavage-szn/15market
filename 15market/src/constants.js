@@ -41,7 +41,7 @@ const PRODUCTION_BACKEND = "https://api.15market.online";
 
 const getBaseUrl = (envValue) => {
     if (isLocal) {
-        if (!envValue || envValue.includes('api.15market.online') || envValue.includes('railway.app') || envValue.startsWith('/')) {
+        if (!envValue || envValue.includes('api.15market.online') || envValue.startsWith('/')) {
             console.log("🛠️ [Config] Local fallback enabled: Using localhost:3010");
             return `http://${window.location.hostname}:3010`;
         }
