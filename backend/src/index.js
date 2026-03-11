@@ -11,7 +11,6 @@ const redis = require('./services/redis'); // Now points to MemoryStore
 const nonceManager = require('./services/nonceManager');
 const keepAlive = require('./services/keepAlive'); // Pulse service to prevent sleep
 const fs = require('fs');
-const path = require('path');
 
 const LOG_FILE = path.join(__dirname, '..', 'settlement_activity.log');
 function logToFile(msg) {
