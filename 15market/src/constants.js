@@ -7,6 +7,8 @@ export const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33
 
 export const ARC_RPCS = [
     "https://rpc.testnet.arc.network",
+    "https://arc-testnet.drpc.org",
+    "https://rpc.blockdaemon.testnet.arc.network",
     `https://5042002.rpc.thirdweb.com/${THIRDWEB_CLIENT_ID}`
 ];
 export const ARC_RPC = ARC_RPCS[0];
@@ -83,10 +85,10 @@ export const arcTestnet = defineChain({
     },
     rpcUrls: {
         default: {
-            http: [ARC_RPC],
+            http: ARC_RPCS,
         },
         public: {
-            http: [ARC_RPC],
+            http: ARC_RPCS,
         },
     },
     blockExplorers: {

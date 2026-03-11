@@ -126,9 +126,12 @@ const getSessionRpcs = () => {
         ? `https://5042002.rpc.thirdweb.com/${clientId}`
         : "https://5042002.rpc.thirdweb.com";
 
+    // Matching the robust rotate logic used for settlement
     return [
-        thirdwebUrl,
-        "https://rpc.testnet.arc.network"
+        "https://rpc.testnet.arc.network",
+        "https://arc-testnet.drpc.org",
+        "https://rpc.blockdaemon.testnet.arc.network",
+        thirdwebUrl
     ];
 };
 
