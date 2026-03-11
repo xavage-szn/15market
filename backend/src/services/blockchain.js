@@ -22,8 +22,8 @@ const getRpcEndpoints = () => {
         : "https://5042002.rpc.thirdweb.com";
 
     return [
-        "https://rpc.testnet.arc.network",
-        thirdwebUrl
+        thirdwebUrl,
+        "https://rpc.testnet.arc.network"
     ];
 };
 
