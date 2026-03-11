@@ -64,6 +64,7 @@ class NonceManager {
     async syncWithChain(address, provider) {
         const addr = address.toLowerCase();
         try {
+            console.log(`[Nonce] Force syncing ${addr} from chain...`);
             const nonce = await provider.getTransactionCount(address, 'pending');
             if (redisStore.isCloud) {
                 await redisStore.redis.set(`nnc:${addr}`, nonce);
@@ -75,6 +76,11 @@ class NonceManager {
             return nonce;
         } catch (e) {
             console.error(`[Nonce] Sync failed for ${addr}:`, e.message);
+            // Fallback to latest if pending fails
+            const fallback = await provider.getTransactionCount(address, 'latest').catch(() => 0);
+            if (redisStore.isCloud) await redisStore.redis.set(`nnc:${addr}`, fallback);
+            else this.nonces.set(addr, fallback);
+            return fallback;
         }
     }
 

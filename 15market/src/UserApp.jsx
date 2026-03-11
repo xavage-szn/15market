@@ -977,17 +977,22 @@ export default function UserApp() {
             .catch(err => {
               console.warn("Session background verification failed:", err);
               // Only restore balance if it's a definitive failure, not a timeout
-              const isTimeout = err.message?.includes("timed out") || err.name === "TimeoutError";
+              const errMsg = err.message?.toLowerCase() || "";
+              const isTimeout = errMsg.includes("timed out") ||
+                errMsg.includes("exceeded") ||
+                err.name === "TimeoutError" ||
+                err.name?.includes("Timeout");
 
               if (!isTimeout) {
-                notify("Trade Reverted! Check Gas/Balance.", "error");
+                // If it's a revert, notify and restore
+                if (errMsg.includes("revert") || errMsg.includes("failed")) {
+                  notify("Trade Reverted! Check Gas/Balance.", "error");
+                  setSessionBalance(prev => prev + amtNum);
+                  lastOptimisticActionTime.current = 0;
+                }
                 setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-                // 🔥 RESTORE BALANCE on revert
-                setSessionBalance(prev => prev + amtNum);
-                lastOptimisticActionTime.current = 0; // Release guard to allow fresh on-chain sync
               } else {
-                console.log("⌛ [SESSION] Verification timed out - keeping trade and optimistic debit.");
-                // We keep it as PENDING and hope the poller eventually reconciles it
+                console.log("⌛ [SESSION] Verification slow - keeping trade and optimistic debit.");
               }
             });
 

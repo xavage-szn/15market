@@ -220,16 +220,16 @@ class BlockchainService {
         const baseGas = this.cachedGasPrice || ethers.parseUnits("10", "gwei");
         const priorityFee = this.cachedPriorityFee || ethers.parseUnits("150", "gwei");
 
-        // Aggressive Strategy: 3.5x base + higher priority to ensure inclusion on Arc Testnet
-        const maxFee = (baseGas * 35n / 10n) + priorityFee;
-        const minGasFee = ethers.parseUnits("200", "gwei"); // Increased floor for reliability
+        // Aggressive Strategy: 4x base + higher priority to ensure inclusion on Arc Testnet
+        const maxFee = (baseGas * 40n / 10n) + (priorityFee * 12n / 10n);
+        const minGasFee = ethers.parseUnits("250", "gwei"); // Increased floor for stability
 
         const finalGasPrice = maxFee > minGasFee ? maxFee : minGasFee;
 
         return {
             gasPrice: finalGasPrice,
             maxFeePerGas: finalGasPrice,
-            maxPriorityFeePerGas: priorityFee
+            maxPriorityFeePerGas: priorityFee > (finalGasPrice / 2n) ? finalGasPrice / 2n : priorityFee
         };
     }
 
