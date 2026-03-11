@@ -21,11 +21,11 @@ const getRpcEndpoints = () => {
         ? `https://5042002.rpc.thirdweb.com/${clientId}`
         : "https://5042002.rpc.thirdweb.com";
 
-    // Prioritize dRPC official and proxies for maximum reliability as Thirdweb/Quicknode reach limits
+    // Official Arc RPC first (most reliable), dRPC as fallback (has batch limits on free tier)
     return [
-        "https://rpc.drpc.testnet.arc.network",
-        "https://arc-testnet.drpc.org",
         "https://rpc.testnet.arc.network",
+        "https://arc-testnet.drpc.org",
+        "https://rpc.drpc.testnet.arc.network",
         "https://rpc.blockdaemon.testnet.arc.network",
         thirdwebUrl
     ];
