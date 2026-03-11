@@ -1735,7 +1735,7 @@ export default function UserApp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: trade.id,
-            exitPrice: capturedPrice
+            exitPrice: exitVal.toFixed(2)
           })
         }).catch(e => console.error("Settlement trigger fail:", e));
 

@@ -236,7 +236,9 @@ class TradeProcessor {
 
                 if (now - failed.lastAttempt < backoff) return false;
             }
-            return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
+            // CRITICAL: Give frontend 3s grace period to settle with its local price before background loop takes over
+            // This prevents the 'result change' glitch where frontend sees one thing and backend sees another half-second later.
+            return now >= (t.expiry + 3000) && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
         });
 
         if (toSettle.length === 0) return;
@@ -284,18 +286,24 @@ class TradeProcessor {
             const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
 
             let settlementPrice = manualPrice;
-            let logMsg = `[Processor] Using MANUAL price from frontend for ${tradeId}`;
+            let logMsg = manualPrice ? `[Processor] Using MANUAL price from frontend for ${tradeId}` : "";
 
             if (!settlementPrice) {
                 // ATTEMPT 1: Get HISTORICAL price at the exact moment of expiry
                 // This is the most accurate for settlement to match user expectations
                 settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
-                logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
-
-                // ATTEMPT 2: Fallback to FRESH oracle price if historical is missing
-                if (!settlementPrice) {
-                    settlementPrice = await pricing.getPrice(symbol);
-                    logMsg = `[Processor] Using FRESH oracle price for ${tradeId}`;
+                if (settlementPrice) {
+                    logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
+                } else {
+                    // ATTEMPT 2: Fallback to FRESH oracle price ONLY if it's been more than 15s since expiry
+                    // Otherwise, we wait for history or manual settle.
+                    const age = Date.now() - trade.expiry;
+                    if (age > 15000) {
+                        settlementPrice = await pricing.getPrice(symbol);
+                        logMsg = `[Processor] Using EMERGENCY FRESH oracle price for ${tradeId}`;
+                    } else {
+                        throw new Error(`Price for ${symbol} at ${trade.expiry} not in history yet (age: ${age}ms). Waiting.`);
+                    }
                 }
             }
 

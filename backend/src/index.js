@@ -595,10 +595,23 @@ app.post('/settle', async (req, res) => {
 
         logToFile(`[SETTLE_REQ] ⚡ Request to settle bet ${id} at ${exitPrice}`);
 
-        // Use blockchain service to settle on-chain
-        const result = await blockchain.settleBet(id, exitPrice);
+        // Fetch trade metadata from Redis to pass to the processor
+        const trade = await redis.getTrade(id);
+        if (!trade) {
+            // If it's not in active trades, it might be in history or already settling.
+            // Check blockchain to be absolutely sure.
+            const isSettled = await blockchain.isBetSettled(id);
+            if (isSettled) {
+                return res.json({ success: true, message: 'Already settled on-chain' });
+            }
+            throw new Error(`Trade ${id} not found in active pipeline`);
+        }
 
-        res.json({ success: true, txHash: result.hash });
+        // Use the unified processor to handle settlement. 
+        // This ensures the 2-decimal truncation and on-chain record indexing are all consistent.
+        await processor._settleSingleTrade(trade, exitPrice);
+
+        res.json({ success: true, note: 'Settlement initiated' });
     } catch (e) {
         logToFile(`[SETTLE_REQ] ❌ Error: ${e.message}`);
         res.status(500).json({ error: e.message });
