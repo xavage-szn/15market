@@ -1623,134 +1623,46 @@ export default function UserApp() {
     }
   }, [activeTrades]);
 
-  // Result Resolution - HIGH SPEED polling for instant settlement feel
+  // Result Resolution - SYNCED WITH SERVER
+  const [serverTimeOffset, setServerTimeOffset] = useState(0);
+  useEffect(() => {
+    fetch(`${KEEPER_URL_ARC}/time`).then(r => r.json()).then(d => {
+      setServerTimeOffset(d.time - Date.now());
+    }).catch(() => { });
+  }, []);
+
   useEffect(() => {
     const checkAndResolve = () => {
-      const now = Date.now();
-      const pendingTrades = activeTrades.filter(t => t.status === "PENDING" || t.status === "RESOLVING");
+      const now = Date.now() + serverTimeOffset;
+      const pendingTrades = activeTrades.filter(t => t.status === "PENDING");
 
       for (const trade of pendingTrades) {
         const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
         const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
 
-        // 🔥 IMPROVED RESOLUTION: Enable resolution as soon as timer is done, even if transaction confirmation 
-        // is still pending on-chain. This removes the 'Processing' hang for winners.
-        if (now < expiryMs || (!trade.confirmed && !trade.tx)) continue;
-        if (trade.confirmed === false && !trade.tx) continue; // Safety: only resolve if we have a TX or on-chain confirmation
-        if (resolvingInProgress.current.has(trade.id)) continue;
+        // When server-synced time hits expiry, mark as RESOLVING
+        // Then wait for backend polling to bring in the WON/LOST status
+        if (now >= expiryMs && (trade.confirmed || trade.tx)) {
+          if (!resolvingInProgress.current.has(trade.id)) {
+            resolvingInProgress.current.add(trade.id);
+            console.log(`📡 [RESOLVER] Trade ${trade.id} expired. Waiting for backend...`);
 
-        // Use full precision for win/loss determination (up to 8 decimal places)
-        const highPrecisionCmp = (p) => parseFloat(p);
+            // Optimistic UI Update to 'RESOLVING'
+            setActiveTrades(prev => prev.map(t => t.id === trade.id ? { ...t, status: "RESOLVING" } : t));
 
-        // ACCURACY UPGRADE: Find the price in history that was closest to the exact expiryMs
-        let capturedPrice = parseFloat(priceRef.current);
-        if (priceHistoryRef.current.length > 0) {
-          const closest = priceHistoryRef.current.reduce((prev, curr) =>
-            Math.abs(curr.t - expiryMs) < Math.abs(prev.t - expiryMs) ? curr : prev
-          );
-          // Only use history if it's within 1s of expiry
-          if (Math.abs(closest.t - expiryMs) < 1000) {
-            capturedPrice = closest.p;
-            console.log(`🎯 [RESOLVER] Precise capture for ${trade.id}: ${capturedPrice} (diff: ${Math.abs(closest.t - expiryMs)}ms)`);
+            // Explicit Nudge (No price sent, backend uses historical feed)
+            fetch(`${KEEPER_URL_ARC}/settle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: trade.id })
+            }).catch(() => { });
           }
         }
-
-        if (trade.status === "RESOLVING" && trade.settlementPrice) {
-          capturedPrice = parseFloat(trade.settlementPrice);
-        }
-
-        if (!capturedPrice || capturedPrice <= 0) continue;
-
-        let optimisticStatus = "LOST";
-        const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
-        const entryVal = trunc2(trade.entryPrice);
-        const exitVal = trunc2(capturedPrice);
-        const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
-        const isWin = isUpTrade ? (exitVal > entryVal) : (exitVal < entryVal);
-        optimisticStatus = isWin ? "WON" : "LOST";
-
-        // NOW we lock it — we actually have a result
-        resolvingInProgress.current.add(trade.id);
-
-        let optimisticPayout = "0.0000";
-        if (optimisticStatus === "WON") {
-          let multiplier = 1.98;
-          if (trade.duration <= 5) multiplier = 6.98;
-          else if (trade.duration <= 10) multiplier = 4.98;
-
-          optimisticPayout = (Math.floor(parseFloat(trade.amount) * multiplier * 100) / 100).toFixed(2);
-        }
-
-        const updatePayload = {
-          ...trade,
-          status: optimisticStatus,
-          settlementPrice: exitVal.toFixed(2),
-          payout: optimisticPayout,
-          optimistic: true,
-          settledAt: now
-        };
-
-        // INSTANT WALLET BALANCE CREDIT
-        if (optimisticStatus === "WON" && !trade.balanceApplied) {
-          const payoutNum = parseFloat(optimisticPayout);
-          const sessionAddr = evmSessionWallet?.address?.toLowerCase();
-          const mainAddr = address?.toLowerCase();
-
-          // Determine if this is a session trade:
-          // Either explicitly flagged, or the sessionOwner field matches the session wallet,
-          // or the user/owner field matches the session wallet address
-          const tradeSessionOwner = (trade.sessionOwner || "").toLowerCase();
-          const tradeOwner = (trade.owner || trade.userPublicKey || trade.user || "").toLowerCase();
-          const isSessionTrade = trade.isSessionTrade ||
-            (sessionAddr && tradeSessionOwner === sessionAddr) ||
-            (sessionAddr && tradeOwner === sessionAddr);
-
-          if (isSessionTrade && sessionAddr) {
-            // SESSION TRADE WIN: Credit stays in session wallet
-            setSessionBalance(prev => prev + payoutNum);
-            lastOptimisticActionTime.current = Date.now();
-            console.log(`⚡ [INSTANT] +${payoutNum} credited to SESSION wallet`);
-            updatePayload.balanceApplied = true;
-            creditedPayouts.current.add(String(trade.id)); // Prevent on-chain double-credit
-          } else if (mainAddr) {
-            // MAIN WALLET TRADE WIN: Credit goes to main wallet
-            setEvmBalance(prev => {
-              const current = parseFloat(prev || "0");
-              return (current + payoutNum).toFixed(6);
-            });
-            lastOptimisticActionTime.current = Date.now();
-            console.log(`⚡ [INSTANT] +${payoutNum} credited to MAIN wallet`);
-            updatePayload.balanceApplied = true;
-            creditedPayouts.current.add(String(trade.id)); // Prevent on-chain double-credit
-          }
-        }
-
-        // Instant UI Update - show result immediately
-        setActiveTrades(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
-        setTradeHistory(prev => prev.map(t => t.id === trade.id ? updatePayload : t));
-
-        // CALL BACKEND TO SETTLE ON CHAIN
-        fetch(`${KEEPER_URL_ARC}/settle`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: trade.id,
-            exitPrice: exitVal.toFixed(2)
-          })
-        }).catch(e => console.error("Settlement trigger fail:", e));
-
-        // Release resolving lock after a safety period
-        setTimeout(() => {
-          resolvingInProgress.current.delete(trade.id);
-        }, 3000);
       }
     };
-    // HIGH SPEED: Check every 200ms for near-instant resolution
-    const interval = setInterval(checkAndResolve, 200);
-    // Also run immediately on mount/update
-    checkAndResolve();
+    const interval = setInterval(checkAndResolve, 500);
     return () => clearInterval(interval);
-  }, [activeTrades, address, evmSessionWallet, sessionMode]);
+  }, [activeTrades, serverTimeOffset]);
 
   // Safety Cleanup: Remove finalized trades after showing result
   useEffect(() => {

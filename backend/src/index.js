@@ -37,6 +37,10 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+app.get('/time', (req, res) => {
+    res.json({ time: Date.now() });
+});
+
 // Support both /arc/session/init and /session/init
 app.use((req, res, next) => {
     if (req.url.startsWith('/arc/')) {
@@ -588,30 +592,25 @@ app.post('/session/trade', async (req, res) => {
 
 app.post('/settle', async (req, res) => {
     try {
-        const { id, exitPrice } = req.body;
-        if (!id || exitPrice === undefined) {
-            return res.status(400).json({ error: 'Missing id or exitPrice' });
+        const { id } = req.body;
+        if (!id) {
+            return res.status(400).json({ error: 'Missing trade id' });
         }
 
-        logToFile(`[SETTLE_REQ] ⚡ Request to settle bet ${id} at ${exitPrice}`);
+        logToFile(`[SETTLE_REQ] ⚡ Nudge to settle bet ${id} (Backend price only)`);
 
-        // Fetch trade metadata from Redis to pass to the processor
+        // Fetch trade metadata from Redis
         const trade = await redis.getTrade(id);
         if (!trade) {
-            // If it's not in active trades, it might be in history or already settling.
-            // Check blockchain to be absolutely sure.
             const isSettled = await blockchain.isBetSettled(id);
-            if (isSettled) {
-                return res.json({ success: true, message: 'Already settled on-chain' });
-            }
-            throw new Error(`Trade ${id} not found in active pipeline`);
+            if (isSettled) return res.json({ success: true, message: 'Already settled' });
+            throw new Error(`Trade ${id} not found`);
         }
 
-        // Use the unified processor to handle settlement. 
-        // This ensures the 2-decimal truncation and on-chain record indexing are all consistent.
-        await processor._settleSingleTrade(trade, exitPrice);
+        // Call processor without manualPrice to force backend historical lookup
+        await processor._settleSingleTrade(trade);
 
-        res.json({ success: true, note: 'Settlement initiated' });
+        res.json({ success: true, note: 'Settlement processed via backend price source' });
     } catch (e) {
         logToFile(`[SETTLE_REQ] ❌ Error: ${e.message}`);
         res.status(500).json({ error: e.message });

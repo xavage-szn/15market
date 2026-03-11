@@ -280,6 +280,11 @@ class TradeProcessor {
 
         this.settlingIds.add(tradeId);
         await redis.markAsSettling(tradeId);
+        // Explicitly update the trade status to RESOLVING in Redis for frontend visibility
+        const currentTrade = await redis.getTrade(tradeId);
+        if (currentTrade) {
+            await redis.setTrade(tradeId, { ...currentTrade, status: 'RESOLVING' });
+        }
         try {
             logToFile(`[Processor] ⚡ Settling trade ${tradeId}...`);
             const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };

@@ -7,10 +7,18 @@ const RED_COLOR = "#FF7F50";   // LOST is Coral
 
 function TradeCountdown({ expiry, isDark }) {
     const [timeLeft, setTimeLeft] = useState(0);
+    const [serverOffset, setServerOffset] = useState(0);
+
+    useEffect(() => {
+        // Sync with server once
+        fetch('https://api.15market.online/time').then(r => r.json()).then(d => {
+            setServerOffset(d.time - Date.now());
+        }).catch(() => { });
+    }, []);
 
     useEffect(() => {
         const updateTimer = () => {
-            const now = Date.now() / 1000;
+            const now = (Date.now() + serverOffset) / 1000;
             const remaining = Math.max(0, expiry - now);
             setTimeLeft(remaining);
         };

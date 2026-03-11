@@ -86,14 +86,16 @@ class PricingService {
 
                 const fastestPrice = await Promise.any(pricePromises);
                 const time = Date.now();
-                this.cache[symbol] = { price: fastestPrice, time };
+                // Enforce 2 decimal models globally at source for outcome consistency
+                const finalPrice = Math.floor(fastestPrice * 100) / 100;
+                this.cache[symbol] = { price: finalPrice, time };
 
-                // Keep history for last 5 minutes (300 seconds)
+                // Keep history for last 20 minutes (roughly 800-1200 entries at 1s-1.5s resolution)
                 if (!this.history[symbol]) this.history[symbol] = [];
-                this.history[symbol].push({ price: fastestPrice, time });
-                if (this.history[symbol].length > 600) this.history[symbol].shift(); // roughly 5-10 mins of data
+                this.history[symbol].push({ price: finalPrice, time });
+                if (this.history[symbol].length > 1200) this.history[symbol].shift();
 
-                return fastestPrice;
+                return finalPrice;
             } catch (e) {
                 if (this.cache[symbol]) return this.cache[symbol].price;
                 return 0;
