@@ -449,8 +449,10 @@ app.post('/session/trade', async (req, res) => {
         const gasBufferWei = BigInt(800000) * fees.gasPrice;
         const totalNeeded = amtWei + gasBufferWei;
 
+        logToFile(`[SESSION_TRADE] 💰 Balance Check: Current=${ethers.formatEther(balance)}, Required=${ethers.formatEther(totalNeeded)} (Stake: ${amount} + Gas: ${ethers.formatEther(gasBufferWei)})`);
+
         if (balance < totalNeeded) {
-            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC. Need ${ethers.formatEther(totalNeeded)} USDC (Stake: ${amount} + Gas: ${ethers.formatEther(gasBufferWei)})`;
+            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC. Need ${ethers.formatEther(totalNeeded)} USDC (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(gasBufferWei)})`;
             logToFile(`[SESSION_TRADE] ❌ ${err}`);
             throw new Error(err);
         }

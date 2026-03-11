@@ -89,19 +89,82 @@ const PortraitPrompt = ({ theme }) => (
 );
 
 
+const ThemeTransitionOverlay = ({ isAnimating, targetTheme }) => {
+  if (!isAnimating) return null;
+
+  const isSunrise = targetTheme === 'light'; // dark -> light (Bottom to Top)
+
+  return (
+    <div className="fixed inset-0 z-[10000] pointer-events-none overflow-hidden">
+      {/* Directional Wash */}
+      <motion.div
+        initial={{ y: isSunrise ? '100vh' : '-200vh' }}
+        animate={{ y: isSunrise ? '-200vh' : '100vh' }}
+        transition={{ duration: 2.2, ease: [0.4, 0, 0.2, 1] }}
+        className="absolute left-0 w-full h-[300vh] z-10"
+        style={{
+          background: isSunrise
+            ? 'linear-gradient(to top, #f0f9f4 0%, #f0f9f4 60%, rgba(60, 179, 113, 0.4) 80%, transparent 100%)'
+            : 'linear-gradient(to bottom, #030303 0%, #030303 60%, rgba(75, 0, 130, 0.4) 80%, transparent 100%)'
+        }}
+      />
+
+      {/* Celestial Body (Sun/Moon) */}
+      <motion.div
+        initial={{
+          y: isSunrise ? '110vh' : '-30vh',
+          left: '50%',
+          x: '-50%'
+        }}
+        animate={{
+          y: isSunrise ? '-30vh' : '110vh',
+        }}
+        transition={{ duration: 2.2, ease: [0.4, 0, 0.2, 1] }}
+        className="absolute w-40 h-40 rounded-full z-20"
+        style={{
+          backgroundColor: isSunrise ? '#FFD700' : '#F4F4F4',
+          boxShadow: isSunrise
+            ? '0 0 120px 60px rgba(255, 215, 0, 0.6), 0 0 240px 100px rgba(255, 255, 255, 0.2)'
+            : '0 0 80px 30px rgba(244, 244, 244, 0.3), inset -15px -15px 30px rgba(0,0,0,0.1)'
+        }}
+      />
+    </div>
+  );
+};
+
 export default function UserApp() {
   const { isConnected, address, chainId: connectedChainId } = useAccount();
   const { switchChain } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
 
   const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
+  const [isAnimatingTheme, setIsAnimatingTheme] = useState(false);
+  const [targetTheme, setTargetTheme] = useState(null);
+
   useEffect(() => {
     localStorage.setItem('15market_theme', theme);
   }, [theme]);
+
   const isLight = theme === 'light';
+
   const toggleTheme = useCallback(() => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  }, []);
+    if (isAnimatingTheme) return;
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+
+    setTargetTheme(nextTheme);
+    setIsAnimatingTheme(true);
+
+    // Swap actual theme exactly when the transition fully covers the screen
+    setTimeout(() => {
+      setTheme(nextTheme);
+    }, 1100);
+
+    // End animation and clean up
+    setTimeout(() => {
+      setIsAnimatingTheme(false);
+      setTargetTheme(null);
+    }, 2200);
+  }, [theme, isAnimatingTheme]);
 
   // Keep-Alive Heartbeat (Prevents Backend from Sleeping while user is active)
   useEffect(() => {
@@ -336,9 +399,9 @@ export default function UserApp() {
       const newBalNum = parseFloat(formatted);
 
       // During cooldown, block ALL non-forced polls
-      // Extended to 15s to prevent balance flicker while awaiting on-chain payout settlement
+      // Extended to 30s to prevent balance flicker while awaiting on-chain payout settlement
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 15000) {
+      if (!force && msSinceLastAction < 30000) {
         return;
       }
 
@@ -356,9 +419,9 @@ export default function UserApp() {
       const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
       const bal = parseFloat(formatUnits(balanceWei, 18));
 
-      // Extended to 10s for better protection against slow RPC indexing
+      // Extended to 30s for better protection against slow RPC indexing
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 10000) {
+      if (!force && msSinceLastAction < 30000) {
         return;
       }
 
@@ -402,7 +465,7 @@ export default function UserApp() {
     const backendAll = Array.from(uniqueBackendById.values());
 
     // 2. NO FORCED REFRESH: Optimistic balance injection is handled by checkAndResolve.
-    // We let the natural polling handle on-chain sync AFTER the guard period (10-15s) expires.
+    // We let the natural polling handle on-chain sync AFTER the guard period (30s) expires.
     // This prevents old on-chain balances from overwriting our instant winning credits.
 
     // 3. Absolute Sync: Use backend as source of truth for settled trades
@@ -913,11 +976,19 @@ export default function UserApp() {
             })
             .catch(err => {
               console.warn("Session background verification failed:", err);
-              notify("Trade Reverted! Check Gas/Balance.", "error");
-              setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-              // 🔥 RESTORE BALANCE on revert
-              setSessionBalance(prev => prev + amtNum);
-              lastOptimisticActionTime.current = 0; // Release guard to allow fresh on-chain sync
+              // Only restore balance if it's a definitive failure, not a timeout
+              const isTimeout = err.message?.includes("timed out") || err.name === "TimeoutError";
+
+              if (!isTimeout) {
+                notify("Trade Reverted! Check Gas/Balance.", "error");
+                setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+                // 🔥 RESTORE BALANCE on revert
+                setSessionBalance(prev => prev + amtNum);
+                lastOptimisticActionTime.current = 0; // Release guard to allow fresh on-chain sync
+              } else {
+                console.log("⌛ [SESSION] Verification timed out - keeping trade and optimistic debit.");
+                // We keep it as PENDING and hope the poller eventually reconciles it
+              }
             });
 
         } catch (fetchErr) {
@@ -2102,6 +2173,8 @@ export default function UserApp() {
       }}>
 
 
+
+      <ThemeTransitionOverlay isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
 
       {view === "dashboard" ? (
         <DashboardPage

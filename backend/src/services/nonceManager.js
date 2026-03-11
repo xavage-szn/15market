@@ -41,8 +41,8 @@ class NonceManager {
             } else {
                 // Persistent memory tracking
                 if (!this.nonces.has(addr)) {
-                    console.log(`[Nonce] Initializing ${addr} in Memory from Chain...`);
-                    const count = await provider.getTransactionCount(address, 'latest');
+                    console.log(`[Nonce] Initializing ${addr} in Memory from Chain (Pending Mode)...`);
+                    const count = await provider.getTransactionCount(address, 'pending');
                     this.nonces.set(addr, count);
                 }
                 finalNonce = this.nonces.get(addr);
@@ -54,19 +54,17 @@ class NonceManager {
 
         } catch (e) {
             console.error(`[NonceManager] Critical error for ${addr}:`, e.message);
-            // On failure, fall back to chain as a last resort (might cause nonce too low if multiple fail)
-            return await provider.getTransactionCount(address, 'latest');
+            // On failure, fall back to chain as a last resort
+            return await provider.getTransactionCount(address, 'pending');
         } finally {
             release();
-            // Optional: If we are the latest lock, we could delete this.locks.get(addr) after some time
-            // to free memory, but for high-frequency trading it's better to keep it initialized.
         }
     }
 
     async syncWithChain(address, provider) {
         const addr = address.toLowerCase();
         try {
-            const nonce = await provider.getTransactionCount(address, 'latest');
+            const nonce = await provider.getTransactionCount(address, 'pending');
             if (redisStore.isCloud) {
                 await redisStore.redis.set(`nnc:${addr}`, nonce);
                 console.log(`[Nonce] Sync: Updated Redis for ${addr} to ${nonce}`);
