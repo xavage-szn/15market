@@ -3,10 +3,12 @@ const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33df2adaf
 
 // Arc Network Constants
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
-export const ARC_RPC = import.meta.env.VITE_ARC_RPC || "https://rpc.testnet.arc.network";
-export const ARC_RPC_DRPC = "https://arc-testnet.drpc.org";
+export const ARC_RPC_DRPC_OFFICIAL = "https://rpc.drpc.testnet.arc.network";
+export const ARC_RPC_DRPC_PROXY = "https://arc-testnet.drpc.org";
+export const ARC_RPC_OFFICIAL = "https://rpc.testnet.arc.network";
+export const ARC_RPC = ARC_RPC_DRPC_OFFICIAL;
 export const ARC_RPC_THIRDWEB = `https://5042002.rpc.thirdweb.com/${THIRDWEB_CLIENT_ID}`;
-export const ARC_RPC_FALLBACK = ARC_RPC_DRPC;
+export const ARC_RPC_FALLBACK = ARC_RPC_DRPC_PROXY;
 
 // Project ID
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
@@ -28,10 +30,10 @@ export const arcTestnet = defineChain({
     },
     rpcUrls: {
         default: {
-            http: [ARC_RPC, ARC_RPC_DRPC, ARC_RPC_THIRDWEB],
+            http: [ARC_RPC_DRPC_OFFICIAL, ARC_RPC_DRPC_PROXY, ARC_RPC_OFFICIAL, ARC_RPC_THIRDWEB],
         },
         public: {
-            http: [ARC_RPC, ARC_RPC_DRPC, ARC_RPC_THIRDWEB],
+            http: [ARC_RPC_DRPC_OFFICIAL, ARC_RPC_DRPC_PROXY, ARC_RPC_OFFICIAL, ARC_RPC_THIRDWEB],
         },
     },
     blockExplorers: {

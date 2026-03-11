@@ -132,8 +132,9 @@ const getSessionRpcs = () => {
 
     // Matching the robust rotate logic used for settlement
     return [
-        "https://rpc.testnet.arc.network",
+        "https://rpc.drpc.testnet.arc.network",
         "https://arc-testnet.drpc.org",
+        "https://rpc.testnet.arc.network",
         "https://rpc.blockdaemon.testnet.arc.network",
         thirdwebUrl
     ];

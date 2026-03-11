@@ -6,8 +6,9 @@ export const ARC_CHAIN_ID = 5042002;
 export const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33df2adaf240de11d97651104a14c461";
 
 export const ARC_RPCS = [
-    "https://rpc.testnet.arc.network",
+    "https://rpc.drpc.testnet.arc.network",
     "https://arc-testnet.drpc.org",
+    "https://rpc.testnet.arc.network",
     "https://rpc.blockdaemon.testnet.arc.network",
     `https://5042002.rpc.thirdweb.com/${THIRDWEB_CLIENT_ID}`
 ];
