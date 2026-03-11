@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const { ethers } = require('ethers');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const processor = require('./keeper/processor');
 const blockchain = require('./services/blockchain');
@@ -120,14 +121,18 @@ if (!SESSION_MASTER_SECRET) {
     console.error("❌ CRITICAL: SESSION_MASTER_SECRET is missing in .env");
     // In production, we should probably exit, but for now we'll just log loudly
 }
-const THIRDWEB_RPC_SESSION = process.env.THIRDWEB_CLIENT_ID
-    ? `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`
-    : "https://5042002.rpc.thirdweb.com";
+const getSessionRpcs = () => {
+    const clientId = process.env.THIRDWEB_CLIENT_ID;
+    const thirdwebUrl = clientId
+        ? `https://5042002.rpc.thirdweb.com/${clientId}`
+        : "https://5042002.rpc.thirdweb.com";
 
-const SESSION_RPCS = [
-    THIRDWEB_RPC_SESSION,
-    "https://rpc.testnet.arc.network"
-];
+    return [
+        "https://rpc.testnet.arc.network",
+        thirdwebUrl
+    ];
+};
+
 let sessionProvider = null;
 async function getSessionProvider() {
     if (sessionProvider) {
@@ -140,13 +145,19 @@ async function getSessionProvider() {
         }
     }
 
-    for (const rpc of SESSION_RPCS) {
+    const rpcs = getSessionRpcs();
+    for (const rpc of rpcs) {
         try {
             console.log(`[Session] Checking RPC: ${rpc}`);
 
             const fetchReq = new ethers.FetchRequest(rpc);
-            if (rpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
-                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+            if (rpc.includes('thirdweb.com')) {
+                if (process.env.THIRDWEB_SECRET_KEY) {
+                    fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+                }
+                if (process.env.THIRDWEB_CLIENT_ID) {
+                    fetchReq.setHeader("x-client-id", process.env.THIRDWEB_CLIENT_ID);
+                }
             }
 
             const provider = new ethers.JsonRpcProvider(fetchReq, 5042002, { staticNetwork: true });

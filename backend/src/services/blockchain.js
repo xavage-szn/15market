@@ -1,6 +1,7 @@
 const { ethers, FetchRequest } = require('ethers');
 const dns = require('dns');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const nonceManager = require('./nonceManager');
 
 // DNS: Using system DNS resolution (no hardcoded IP overrides)
@@ -9,25 +10,28 @@ const nonceManager = require('./nonceManager');
 
 // Local logToFile for settlement confirmation tracking
 const fs = require('fs');
-const path = require('path');
 const LOG_FILE = path.join(__dirname, '..', '..', 'settlement_activity.log');
 function logToFile(msg) {
     const entry = `[${new Date().toISOString()}] ${msg}\n`;
     fs.appendFile(LOG_FILE, entry, () => { });
 }
-const THIRDWEB_RPC = process.env.THIRDWEB_CLIENT_ID
-    ? `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`
-    : "https://5042002.rpc.thirdweb.com";
+const getRpcEndpoints = () => {
+    const clientId = process.env.THIRDWEB_CLIENT_ID;
+    const thirdwebUrl = clientId
+        ? `https://5042002.rpc.thirdweb.com/${clientId}`
+        : "https://5042002.rpc.thirdweb.com";
 
-const RPC_ENDPOINTS = [
-    THIRDWEB_RPC,
-    "https://rpc.testnet.arc.network"
-];
+    return [
+        "https://rpc.testnet.arc.network",
+        thirdwebUrl
+    ];
+};
 
 async function createProvider(blockchainService) {
+    const endpoints = getRpcEndpoints();
     const currentRpcs = blockchainService?.lastGoodRpc
-        ? [...RPC_ENDPOINTS.filter(r => r !== blockchainService.lastGoodRpc), blockchainService.lastGoodRpc]
-        : RPC_ENDPOINTS;
+        ? [blockchainService.lastGoodRpc, ...endpoints.filter(r => r !== blockchainService.lastGoodRpc)]
+        : endpoints;
 
     console.log(`[Blockchain] Initializing provider with ${currentRpcs.length} endpoints...`);
     for (const rpc of currentRpcs) {
@@ -36,9 +40,13 @@ async function createProvider(blockchainService) {
             const fetchReq = new FetchRequest(rpc);
             fetchReq.timeout = 7000;
 
-            // Add Secret Key if it's a Thirdweb RPC
-            if (rpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
-                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+            if (rpc.includes('thirdweb.com')) {
+                if (process.env.THIRDWEB_SECRET_KEY) {
+                    fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+                }
+                if (process.env.THIRDWEB_CLIENT_ID) {
+                    fetchReq.setHeader("x-client-id", process.env.THIRDWEB_CLIENT_ID);
+                }
             }
 
             const network = ethers.Network.from(5042002);
@@ -57,9 +65,11 @@ async function createProvider(blockchainService) {
             console.warn(`[Blockchain] ⚠️ RPC failed: ${rpc} — ${e.message}`);
         }
     }
-    // Fall back to first endpoint and let it retry
-    console.warn('[Blockchain] ❌ All RPCs failed, using first as fallback');
-    const fallbackReq = new FetchRequest(RPC_ENDPOINTS[0]);
+    const fallbackReq = new FetchRequest(endpoints[0]);
+    if (endpoints[0].includes('thirdweb.com')) {
+        if (process.env.THIRDWEB_SECRET_KEY) fallbackReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+        if (process.env.THIRDWEB_CLIENT_ID) fallbackReq.setHeader("x-client-id", process.env.THIRDWEB_CLIENT_ID);
+    }
     fallbackReq.timeout = 15000;
     return new ethers.JsonRpcProvider(fallbackReq, ethers.Network.from(5042002), { staticNetwork: true });
 }
@@ -297,8 +307,9 @@ class BlockchainService {
             }
 
             if (msg.includes('txpool is full') || msg.includes('timeout') || msg.includes('limit reached') ||
-                fullError.includes('txpool is full') || fullError.includes('timeout')) {
-                console.warn(`[Blockchain] ⏳ RPC Overloaded or Congested for bet ${betId}. Rotating nodes...`);
+                msg.includes('too many requests') || msg.includes('429') ||
+                fullError.includes('txpool is full') || fullError.includes('timeout') || fullError.includes('rate limit')) {
+                console.warn(`[Blockchain] ⏳ RPC Overloaded or Rate Limited for bet ${betId}. Rotating nodes...`);
                 // Force rotation to a fresh node
                 await this.rotateRpc();
             }

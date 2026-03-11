@@ -3,7 +3,7 @@ import { defineChain } from 'viem'
 
 // ARC TESTNET
 export const ARC_CHAIN_ID = 5042002;
-const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33df2adaf240de11d97651104a14c461";
+export const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33df2adaf240de11d97651104a14c461";
 
 export const ARC_RPCS = [
     "https://rpc.testnet.arc.network",
