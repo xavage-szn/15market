@@ -12,6 +12,9 @@ class RedisStore {
                 retryStrategy: (times) => Math.min(times * 50, 2000),
                 reconnectOnError: (err) => true
             });
+            this.redis.on('error', (err) => {
+                console.error('[Redis] ❌ Error Event:', err.message);
+            });
             this.isCloud = true;
             this._lastBlock = 28600000;
 

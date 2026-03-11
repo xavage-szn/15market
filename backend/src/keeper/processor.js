@@ -91,10 +91,18 @@ class TradeProcessor {
 
         const sync = async () => {
             try {
+                if (!blockchain.providerReady || !blockchain.provider) {
+                    console.log('[Processor] ⏳ Waiting for blockchain provider before backfilling...');
+                    setTimeout(sync, 2000);
+                    return;
+                }
                 const currentBlock = await blockchain.provider.getBlockNumber();
                 const startBlock = redis.lastScannedBlock;
 
-                if (startBlock >= currentBlock) return;
+                if (startBlock >= currentBlock) {
+                    setTimeout(sync, 30000); // 30s poll
+                    return;
+                }
 
                 // Scan in chunks of 200k blocks via blockchain helper
                 const lookback = 200000;

@@ -373,7 +373,7 @@ export default function UserApp() {
   }, []);
 
   const isSmallScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
-  const showPortraitLock = uiVersion === 'v2' && isSmallScreen && isPortrait;
+  const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
   const lastOptimisticActionTime = useRef(0); // Protects optimistic balance from stale polling
   const tradeHistoryRef = useRef([]);
   const activeTradesRef = useRef([]);
