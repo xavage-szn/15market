@@ -16,9 +16,10 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const getRpcEndpoints = () => {
-    // Official Arc + dRPC only (Thirdweb/Quicknode removed — hit rate limits)
     return [
         "https://rpc.testnet.arc.network",
+        "https://rpc.arc.network",
+        "https://arc-testnet.alt.technology",
         "https://arc-testnet.drpc.org",
         "https://rpc.drpc.testnet.arc.network"
     ];
@@ -35,7 +36,7 @@ async function createProvider(blockchainService) {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 30000;
+            fetchReq.timeout = 60000;
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
@@ -43,10 +44,10 @@ async function createProvider(blockchainService) {
                 batchMaxCount: 1 // Disable batching for dRPC compatibility
             });
 
-            // Race getBlockNumber against a 5s timeout
+            // Race getBlockNumber against a 10s timeout for faster rotation
             const block = await Promise.race([
                 provider.getBlockNumber(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000))
             ]);
 
             console.log(`[Blockchain] ✅ Connected to RPC: ${rpc} (Block: ${block})`);
@@ -57,7 +58,7 @@ async function createProvider(blockchainService) {
         }
     }
     const fallbackReq = new FetchRequest(endpoints[0]);
-    fallbackReq.timeout = 15000;
+    fallbackReq.timeout = 60000;
     return new ethers.JsonRpcProvider(fallbackReq, ethers.Network.from(5042002), { staticNetwork: true, batchMaxCount: 1 });
 }
 
@@ -354,7 +355,7 @@ class BlockchainService {
             console.log(`[Blockchain] 🔍 Scanning past events: ${eventName} from block ${fromBlock} to ${currentBlock}`);
             let allEvents = [];
             let startBlock = fromBlock;
-            const chunk = 5000; // Smaller chunk for stability
+            const chunk = 1000; // Even smaller chunk for unstable Arc nodes
 
             while (startBlock <= currentBlock) {
                 const endBlock = Math.min(startBlock + chunk - 1, currentBlock);

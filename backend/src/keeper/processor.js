@@ -97,15 +97,23 @@ class TradeProcessor {
                     return;
                 }
                 const currentBlock = await blockchain.provider.getBlockNumber();
-                const startBlock = redis.lastScannedBlock;
+                let startBlock = redis.lastScannedBlock;
+
+                // SAFETY JUMP: If we are way too far behind (e.g. 50k blocks), 
+                // jump forward to avoid saturating the RPC with millions of old requests.
+                if (currentBlock - startBlock > 50000) {
+                    console.log(`[Processor] ⚠️ Indexer is way behind (${currentBlock - startBlock} blocks). Jumping forward to prioritize recent trades...`);
+                    startBlock = currentBlock - 5000;
+                    redis.lastScannedBlock = startBlock;
+                }
 
                 if (startBlock >= currentBlock) {
                     setTimeout(sync, 30000); // 30s poll
                     return;
                 }
 
-                // Scan in chunks of 200k blocks via blockchain helper
-                const lookback = 200000;
+                // Scan in small chunks to avoid RPC timeouts
+                const lookback = 1000; // Even smaller for fragile RPCs
                 const endBlock = Math.min(startBlock + lookback, currentBlock);
 
                 console.log(`[Processor] 📚 Syncing history: ${startBlock} -> ${endBlock} (Target: ${currentBlock})`);
@@ -197,7 +205,7 @@ class TradeProcessor {
 
                 // If we are way behind, run again immediately
                 if (endBlock < currentBlock) {
-                    setTimeout(sync, 1000);
+                    setTimeout(sync, 5000);
                 }
 
             } catch (e) {
@@ -208,8 +216,8 @@ class TradeProcessor {
 
         // Initial burst
         await sync();
-        // Periodic sync
-        setInterval(sync, 15000);
+        // Periodic sync (Slower to save RPC units)
+        setInterval(sync, 45000);
     }
 
     _startSettlementLoop() {
@@ -255,7 +263,7 @@ class TradeProcessor {
 
         // Use a high-concurrency batching to stay fast but avoid RPC/Mempool floods
         // NonceManager still handles the sequential nonce dispensation per wallet
-        const BATCH_SIZE = 25;
+        const BATCH_SIZE = 5; // Reduced to avoid hitting RPC rate limits during congestion
         for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
             const batch = toSettle.slice(i, i + BATCH_SIZE);
             // Fire batch members in parallel. We DON'T await them so the next batch can start

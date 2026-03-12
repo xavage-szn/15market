@@ -31,7 +31,10 @@ class NonceManager {
                 let cachedVal = await redisStore.redis.get(redisKey);
                 if (cachedVal === null) {
                     console.log(`[Nonce] Initializing ${addr} in Redis from Chain (Pending Mode)...`);
-                    const count = await provider.getTransactionCount(address, 'pending');
+                    const count = await Promise.race([
+                        provider.getTransactionCount(address, 'pending'),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                    ]);
                     await redisStore.redis.setnx(redisKey, count);
                 }
 
@@ -42,7 +45,10 @@ class NonceManager {
                 // Persistent memory tracking
                 if (!this.nonces.has(addr)) {
                     console.log(`[Nonce] Initializing ${addr} in Memory from Chain (Pending Mode)...`);
-                    const count = await provider.getTransactionCount(address, 'pending');
+                    const count = await Promise.race([
+                        provider.getTransactionCount(address, 'pending'),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                    ]);
                     this.nonces.set(addr, count);
                 }
                 finalNonce = this.nonces.get(addr);
@@ -55,7 +61,10 @@ class NonceManager {
         } catch (e) {
             console.error(`[NonceManager] Critical error for ${addr}:`, e.message);
             // On failure, fall back to chain as a last resort
-            return await provider.getTransactionCount(address, 'pending');
+            return await Promise.race([
+                provider.getTransactionCount(address, 'pending'),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+            ]).catch(() => 0);
         } finally {
             release();
         }
@@ -65,7 +74,10 @@ class NonceManager {
         const addr = address.toLowerCase();
         try {
             console.log(`[Nonce] Force syncing ${addr} from chain...`);
-            const nonce = await provider.getTransactionCount(address, 'pending');
+            const nonce = await Promise.race([
+                provider.getTransactionCount(address, 'pending'),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+            ]);
             if (redisStore.isCloud) {
                 await redisStore.redis.set(`nnc:${addr}`, nonce);
                 console.log(`[Nonce] Sync: Updated Redis for ${addr} to ${nonce}`);

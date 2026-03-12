@@ -16,7 +16,7 @@ class RedisStore {
                 console.error('[Redis] ❌ Error Event:', err.message);
             });
             this.isCloud = true;
-            this._lastBlock = 28600000;
+            this._lastBlock = 31400000; // Reset to recent block to avoid saturating RPC during sync
 
             this.redis.ping().then(() => console.log('[Redis] ✅ Cloud Connection Verified')).catch(e => console.error('[Redis] ❌ Connection Failed:', e.message));
         } else {
@@ -26,7 +26,7 @@ class RedisStore {
             this.activeTrades = new Map();
             this.sessionWallets = new Map();
             this.historicalTrades = new Map();
-            this._lastBlock = 28600000;
+            this._lastBlock = 31400000;
         }
     }
 
