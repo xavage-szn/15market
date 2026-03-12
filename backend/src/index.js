@@ -497,45 +497,48 @@ app.post('/session/trade', async (req, res) => {
         const broadcastStart = Date.now();
         let tx;
         let lastError;
+        let attempts = 0;
+        const maxAttempts = 3;
 
-        // Attempt 1
-        try {
-            tx = await wallet.sendTransaction(txArgs);
-        } catch (sendErr) {
-            lastError = sendErr;
-            const errLower = sendErr.message?.toLowerCase() || "";
+        while (attempts < maxAttempts) {
+            attempts++;
+            try {
+                logToFile(`[SESSION_TRADE] ✍️ Broadcast attempt ${attempts} for bet ${id} (Nonce: ${txArgs.nonce})...`);
+                tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
+                break; // Success!
+            } catch (err) {
+                lastError = err;
+                const errLower = err.message?.toLowerCase() || "";
+                logToFile(`[SESSION_TRADE] ⚠️ Attempt ${attempts} Failed: ${err.message}`);
 
-            // Handle Nonce/Pool issues immediately with a retry
-            if (errLower.includes("txpool is full") || errLower.includes("timeout") || errLower.includes("nonce") || errLower.includes("underpriced") || errLower.includes("replacement") || errLower.includes("already")) {
-                logToFile(`[SESSION_TRADE] 🔄 Transient error: ${sendErr.message}. Syncing nonce and retrying with +50% gas...`);
+                const isTransient = errLower.includes("txpool is full") ||
+                    errLower.includes("timeout") ||
+                    errLower.includes("nonce") ||
+                    errLower.includes("underpriced") ||
+                    errLower.includes("replacement") ||
+                    errLower.includes("already");
 
-                // Force RPC rotation for better luck
-                await blockchain.rotateRpc();
+                if (isTransient && attempts < maxAttempts) {
+                    logToFile(`[SESSION_TRADE] 🔄 Retrying transient error...`);
+                    // Rotate RPC and Resync
+                    await blockchain.rotateRpc();
+                    const freshNonce = await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
+                    const freshFees = await blockchain._getGasPrice();
 
-                // Real-time Nonce Sync
-                const freshNonce = await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
-                const freshFees = await blockchain._getGasPrice();
+                    txArgs.nonce = freshNonce;
+                    // Aggressively bump gas on each retry (+20% cumulative)
+                    const bumpFactor = 10n + BigInt(attempts * 2);
+                    txArgs.maxFeePerGas = freshFees.maxFeePerGas * bumpFactor / 10n;
+                    txArgs.maxPriorityFeePerGas = freshFees.maxPriorityFeePerGas * bumpFactor / 10n;
 
-                txArgs.nonce = freshNonce;
-                // Aggressive bump for the retry
-                txArgs.maxFeePerGas = freshFees.maxFeePerGas * 15n / 10n;
-                txArgs.maxPriorityFeePerGas = freshFees.maxPriorityFeePerGas * 15n / 10n;
-
-                logToFile(`[SESSION_TRADE] 🔄 Retry Nonce: ${freshNonce}, Gas: ${ethers.formatUnits(txArgs.maxFeePerGas, 'gwei')} gwei`);
-
-                try {
-                    tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
-                } catch (retryErr) {
-                    logToFile(`[SESSION_TRADE] ❌ Retry 1 Failed: ${retryErr.message}`);
-                    // Ensure we sync again so the NEXT trade isn't broken
+                    // Re-connect wallet to the potentially new provider from rotation
+                    wallet = wallet.connect(blockchain.provider);
+                    continue;
+                } else {
+                    // Non-transient or final attempt failed
                     await nonceManager.syncWithChain(sessionAddr, blockchain.provider).catch(() => { });
-                    throw retryErr;
+                    throw err;
                 }
-            } else {
-                // For other errors (like "insufficient funds" or logic reverts)
-                // Sync anyway to be safe
-                await nonceManager.syncWithChain(sessionAddr, blockchain.provider).catch(() => { });
-                throw sendErr;
             }
         }
         logToFile(`[SESSION_TRADE] ✅ Broadcasted ${id} in ${Date.now() - broadcastStart}ms: ${tx.hash}`);
