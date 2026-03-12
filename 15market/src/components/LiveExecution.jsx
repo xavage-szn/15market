@@ -175,8 +175,6 @@ function LiveExecutionComponent({
                                             const rawTimeLeft = lastTimeRef.current[trade.id];
 
 
-                                            // SMOOTH COUNTDOWN: Always show 1 decimal place for high-speed terminal feel
-                                            const displayTimeLeft = rawTimeLeft.toFixed(1);
 
                                             const timerExpired = rawTimeLeft <= 0;
                                             const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
