@@ -909,14 +909,25 @@ export default function UserApp() {
 
           if (!res.ok) throw new Error(data.error || "Session trade failed");
           txHash = data.txHash;
-          console.log(`✅ [SESSION] Handshake strictly confirmed by Backend: ${txHash}`);
+          console.log(`✅ [SESSION] Backend broadcasted tx: ${txHash}. Waiting for on-chain confirmation...`);
 
-          const strictTrade = data.trade || {
+          notify("Transaction broadcasted! Confirming on-chain...", "pending");
+
+          // Frontend waits for on-chain confirmation before starting the trade
+          const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
+          if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+            throw new Error("Transaction reverted on-chain. Stake not deducted.");
+          }
+
+          const confirmedNow = Date.now();
+          console.log(`⛓️ [SESSION] Confirmed on-chain: ${txHash}`);
+
+          const strictTrade = {
             id: tradeId,
             direction: (dirVal === 1 ? "UP" : "DOWN"),
             amount: Number(amount).toFixed(3),
             entryPrice: activePrice.toFixed(8),
-            timestamp: Date.now(),
+            timestamp: confirmedNow,
             status: "PENDING",
             tx: txHash,
             nonce: tradeId,
@@ -925,8 +936,8 @@ export default function UserApp() {
             sessionOwner: activeUserAddr,
             duration,
             network: "arc",
-            startTime: Date.now(),
-            expiryMs: Date.now() + (duration * 1000),
+            startTime: confirmedNow,
+            expiryMs: confirmedNow + (duration * 1000),
             symbol: activeMarket?.symbol || 'ETH',
             isSessionTrade: true,
             confirmed: true,

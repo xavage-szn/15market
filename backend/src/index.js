@@ -564,36 +564,36 @@ app.post('/session/trade', async (req, res) => {
         };
         await redis.setTrade(id, tradeData);
 
-        // Strict background confirmation - backend holds the UI until 1 block confirmation!
-        logToFile(`[SESSION_TRADE] ⏳ Waiting for block confirmation for ${tx.hash}...`);
-        try {
-            // Wait up to ~60 seconds for block
-            const receipt = await tx.wait(1);
-            if (receipt && receipt.status === 1) {
-                const confirmedNow = Date.now();
-                const updatedData = {
-                    ...tradeData,
-                    confirmed: true,
-                    startTime: confirmedNow,
-                    expiry: confirmedNow + (Number(duration) * 1000)
-                };
-                await redis.setTrade(id, updatedData);
-                logToFile(`[SESSION_TRADE] ⛓️ Confirmed ${id}: ${tx.hash}`);
+        // Return txHash immediately after successful broadcast
+        // The EVM guarantees funds are locked once tx is in mempool
+        res.json({ success: true, txHash: tx.hash, confirmed: false });
+        logToFile(`[SESSION_TRADE] ✅ Responded to frontend with txHash: ${tx.hash}`);
 
-                // Return success ONLY after confirmed
-                if (!res.headersSent) {
-                    res.json({ success: true, txHash: tx.hash, confirmed: true, trade: updatedData });
+        // Background confirmation tracking (non-blocking)
+        (async () => {
+            try {
+                // Use a fresh provider for confirmation polling to avoid timeout issues
+                const confirmProvider = blockchain.provider;
+                const receipt = await confirmProvider.waitForTransaction(tx.hash, 1, 120000); // 120s timeout
+                if (receipt && receipt.status === 1) {
+                    const confirmedNow = Date.now();
+                    const updatedData = {
+                        ...tradeData,
+                        confirmed: true,
+                        startTime: confirmedNow,
+                        expiry: confirmedNow + (Number(duration) * 1000)
+                    };
+                    await redis.setTrade(id, updatedData);
+                    logToFile(`[SESSION_TRADE] ⛓️ Confirmed ${id}: ${tx.hash}`);
+                } else {
+                    logToFile(`[SESSION_TRADE] ❌ Reverted on-chain ${id}: ${tx.hash}`);
+                    await redis.delTrade(id);
                 }
-            } else {
-                logToFile(`[SESSION_TRADE] ❌ Reverted on-chain ${id}: ${tx.hash}`);
-                await redis.delTrade(id);
-                if (!res.headersSent) res.status(500).json({ error: "Transaction reverted on the blockchain" });
+            } catch (err) {
+                logToFile(`[SESSION_TRADE] ⚠️ Background confirmation polling failed for ${tx.hash}: ${err.message}`);
+                // Don't delete trade — it may still be pending in mempool
             }
-        } catch (err) {
-            logToFile(`[SESSION_TRADE] ❌ Block confirmation error for ${tx.hash}: ${err.message}`);
-            await redis.delTrade(id);
-            if (!res.headersSent) res.status(500).json({ error: "Transaction failed or timed out on-chain" });
-        }
+        })();
 
     } catch (e) {
         const errorMsg = e.reason || e.message || "Unknown error";
