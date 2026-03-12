@@ -505,7 +505,7 @@ app.post('/session/trade', async (req, res) => {
                 logToFile(`[SESSION_TRADE] 🔄 Retry Nonce: ${freshNonce}, Gas: ${ethers.formatUnits(txArgs.maxFeePerGas, 'gwei')} gwei`);
 
                 try {
-                    tx = await blockchain.wallet.connect(blockchain.provider).sendTransaction(txArgs);
+                    tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
                 } catch (retryErr) {
                     logToFile(`[SESSION_TRADE] ❌ Retry 1 Failed: ${retryErr.message}`);
                     // Ensure we sync again so the NEXT trade isn't broken
