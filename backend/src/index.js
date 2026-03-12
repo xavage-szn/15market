@@ -545,10 +545,11 @@ app.post('/session/trade', async (req, res) => {
         };
         await redis.setTrade(id, tradeData);
 
-        res.json({ success: true, txHash: tx.hash, confirmed: false });
-
-        // Strict background confirmation - updates timings to match exact on-chain reality
-        tx.wait(1).then(async (receipt) => {
+        // Strict background confirmation - backend holds the UI until 1 block confirmation!
+        logToFile(`[SESSION_TRADE] ⏳ Waiting for block confirmation for ${tx.hash}...`);
+        try {
+            // Wait up to ~60 seconds for block
+            const receipt = await tx.wait(1);
             if (receipt && receipt.status === 1) {
                 const confirmedNow = Date.now();
                 const updatedData = {
@@ -559,13 +560,21 @@ app.post('/session/trade', async (req, res) => {
                 };
                 await redis.setTrade(id, updatedData);
                 logToFile(`[SESSION_TRADE] ⛓️ Confirmed ${id}: ${tx.hash}`);
+
+                // Return success ONLY after confirmed
+                if (!res.headersSent) {
+                    res.json({ success: true, txHash: tx.hash, confirmed: true, trade: updatedData });
+                }
             } else {
                 logToFile(`[SESSION_TRADE] ❌ Reverted on-chain ${id}: ${tx.hash}`);
                 await redis.delTrade(id);
+                if (!res.headersSent) res.status(500).json({ error: "Transaction reverted on the blockchain" });
             }
-        }).catch(err => {
-            logToFile(`[SESSION_TRADE] ❌ Background confirmation error for ${tx.hash}: ${err.message}`);
-        });
+        } catch (err) {
+            logToFile(`[SESSION_TRADE] ❌ Block confirmation error for ${tx.hash}: ${err.message}`);
+            await redis.delTrade(id);
+            if (!res.headersSent) res.status(500).json({ error: "Transaction failed or timed out on-chain" });
+        }
 
     } catch (e) {
         const errorMsg = e.reason || e.message || "Unknown error";
