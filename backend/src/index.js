@@ -536,6 +536,7 @@ app.post('/session/trade', async (req, res) => {
             duration: duration,
             entryPrice: trunc2(Number(entryPrice) / 1e8).toFixed(2),
             symbol: symbol,
+            // Expiry/StartTime set pessimistically, will be updated strictly on confirmation
             expiry: Date.now() + (duration * 1000),
             txHash: tx.hash,
             startTime: Date.now(),
@@ -546,10 +547,16 @@ app.post('/session/trade', async (req, res) => {
 
         res.json({ success: true, txHash: tx.hash, confirmed: false });
 
-        // Non-blocking background confirmation
+        // Strict background confirmation - updates timings to match exact on-chain reality
         tx.wait(1).then(async (receipt) => {
             if (receipt && receipt.status === 1) {
-                const updatedData = { ...tradeData, confirmed: true };
+                const confirmedNow = Date.now();
+                const updatedData = {
+                    ...tradeData,
+                    confirmed: true,
+                    startTime: confirmedNow,
+                    expiry: confirmedNow + (Number(duration) * 1000)
+                };
                 await redis.setTrade(id, updatedData);
                 logToFile(`[SESSION_TRADE] ⛓️ Confirmed ${id}: ${tx.hash}`);
             } else {
