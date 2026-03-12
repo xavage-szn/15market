@@ -1640,21 +1640,44 @@ export default function UserApp() {
         const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
         const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
 
-        // When server-synced time hits expiry, mark as RESOLVING
-        // Then wait for backend polling to bring in the WON/LOST status
         if (now >= expiryMs && (trade.confirmed || trade.tx)) {
           if (!resolvingInProgress.current.has(trade.id)) {
             resolvingInProgress.current.add(trade.id);
-            console.log(`📡 [RESOLVER] Trade ${trade.id} expired. Waiting for backend...`);
 
-            // Optimistic UI Update to 'RESOLVING'
-            setActiveTrades(prev => prev.map(t => t.id === trade.id ? { ...t, status: "RESOLVING" } : t));
+            // ACCURACY UPGRADE: Find the price in history closest to the exact expiry time
+            let capturedPrice = parseFloat(priceRef.current);
+            if (priceHistoryRef.current.length > 0) {
+              const closest = priceHistoryRef.current.reduce((prev, curr) =>
+                Math.abs(curr.t - expiryMs) < Math.abs(prev.t - expiryMs) ? curr : prev
+              );
+              // Only use history if it's within 1s of expiry
+              if (Math.abs(closest.t - expiryMs) < 1000) {
+                capturedPrice = closest.p;
+              }
+            }
 
-            // Explicit Nudge (No price sent, backend uses historical feed)
+            // Determine Outcome Locally
+            const ePrice = parseFloat(trade.entryPrice);
+            const isUp = parseInt(trade.direction) === 0;
+            const diff = capturedPrice - ePrice;
+            const isWon = isUp ? diff > 0 : diff < 0;
+            const finalStatus = isWon ? "WON" : "LOST";
+
+            console.log(`🎯 [RESOLVER] Captured exact result for ${trade.id}: ${finalStatus} at $${capturedPrice}`);
+
+            // Optimistic UI Update to FINAL Result immediately
+            setActiveTrades(prev => prev.map(t =>
+              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: capturedPrice.toFixed(2) } : t
+            ));
+
+            // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches
             fetch(`${KEEPER_URL_ARC}/settle`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: trade.id })
+              body: JSON.stringify({
+                id: trade.id,
+                exitPrice: capturedPrice
+              })
             }).catch(() => { });
           }
         }

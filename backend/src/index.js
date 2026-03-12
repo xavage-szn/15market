@@ -581,12 +581,12 @@ app.post('/session/trade', async (req, res) => {
 
 app.post('/settle', async (req, res) => {
     try {
-        const { id } = req.body;
+        const { id, exitPrice } = req.body;
         if (!id) {
             return res.status(400).json({ error: 'Missing trade id' });
         }
 
-        logToFile(`[SETTLE_REQ] ⚡ Nudge to settle bet ${id} (Backend price only)`);
+        logToFile(`[SETTLE_REQ] ⚡ Nudge to settle bet ${id} (Frontend Locked Price: ${exitPrice || 'None'})`);
 
         // Fetch trade metadata from Redis
         const trade = await redis.getTrade(id);
@@ -596,10 +596,10 @@ app.post('/settle', async (req, res) => {
             throw new Error(`Trade ${id} not found`);
         }
 
-        // Call processor without manualPrice to force backend historical lookup
-        await processor._settleSingleTrade(trade);
+        // Call processor WITH exitPrice to lock the outcome
+        await processor._settleSingleTrade(trade, exitPrice);
 
-        res.json({ success: true, note: 'Settlement processed via backend price source' });
+        res.json({ success: true, note: 'Settlement processed' });
     } catch (e) {
         logToFile(`[SETTLE_REQ] ❌ Error: ${e.message}`);
         res.status(500).json({ error: e.message });

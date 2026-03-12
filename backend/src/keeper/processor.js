@@ -272,12 +272,13 @@ class TradeProcessor {
         const tradeId = trade.id.toString();
         if (this.settlingIds.has(tradeId) || this.settledCache.has(tradeId)) return;
 
-        // Safety Buffer: Reduced to 500ms (combined with aggressive gas) for near-instant payout
-        const delayNeeded = (trade.expiry + 500) - Date.now();
+        // Grace Period: Give the frontend a generous 4-second window to submit its exact price lock
+        // so that the on-chain settlement strictly matches the user's visual outcome.
+        const delayNeeded = (trade.expiry + 4000) - Date.now();
         if (delayNeeded > 0) {
             if (manualPrice) {
-                // If frontend provided a synced manual exit price, sleep through the buffer to preserve the price
-                await new Promise(r => setTimeout(r, delayNeeded));
+                // If frontend provided a synced manual exit price, proceed immediately to execute the user's locked result
+                // We don't sleep here, we just execute it because it's the explicit nudge from the UI
             } else {
                 // If it's the background loop, skip and let the next cycle pick it up
                 // BUT we log it for visibility
@@ -291,15 +292,18 @@ class TradeProcessor {
         // Explicitly update the trade status to RESOLVING in Redis for frontend visibility
         const currentTrade = await redis.getTrade(tradeId);
         if (currentTrade) {
-            await redis.setTrade(tradeId, { ...currentTrade, status: 'RESOLVING' });
+            const updates = { status: 'RESOLVING' };
+            if (manualPrice) updates.lockedExitPrice = manualPrice; // Permanently lock front-end source of truth
+            await redis.setTrade(tradeId, { ...currentTrade, ...updates });
         }
         try {
             logToFile(`[Processor] ⚡ Settling trade ${tradeId}...`);
             const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
             const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
 
-            let settlementPrice = manualPrice;
-            let logMsg = manualPrice ? `[Processor] Using MANUAL price from frontend for ${tradeId}` : "";
+            // Check for explicit frontend price OR previously locked price for this trade
+            let settlementPrice = manualPrice || currentTrade?.lockedExitPrice || trade.lockedExitPrice;
+            let logMsg = settlementPrice ? `[Processor] Using LOCKED FRONTEND price for ${tradeId}` : "";
 
             if (!settlementPrice) {
                 // ATTEMPT 1: Get HISTORICAL price at the exact moment of expiry
