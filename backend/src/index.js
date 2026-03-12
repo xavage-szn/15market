@@ -423,19 +423,38 @@ app.post('/session/trade', async (req, res) => {
 
         // Fetch Wallet & Provider
         const derivationStart = Date.now();
-        const { wallet, address: sessionAddr } = await deriveUserWallet(address);
+        let { wallet, address: sessionAddr } = await deriveUserWallet(address);
         logToFile(`[SESSION_TRADE] 👛 Sync took ${Date.now() - derivationStart}ms (${sessionAddr})`);
 
         redis.saveSessionMapping(sessionAddr, address).catch(() => { });
 
-        // Pre-flight consistency check
+        // Pre-flight consistency check WITH retry + RPC rotation
         logToFile(`[SESSION_TRADE] 📡 Fetching balance/nonce/gas for ${sessionAddr}...`);
         const preflightStart = Date.now();
-        const [balance, nonce, fees] = await Promise.all([
-            wallet.provider.getBalance(sessionAddr),
-            nonceManager.getNonce(sessionAddr, wallet.provider),
-            blockchain._getGasPrice()
-        ]);
+        let balance, nonce, fees;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const provider = wallet.provider || blockchain.provider;
+                [balance, nonce, fees] = await Promise.all([
+                    Promise.race([
+                        provider.getBalance(sessionAddr),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('Balance timeout')), 10000))
+                    ]),
+                    nonceManager.getNonce(sessionAddr, provider),
+                    blockchain._getGasPrice()
+                ]);
+                break; // Success
+            } catch (pfErr) {
+                logToFile(`[SESSION_TRADE] ⚠️ Pre-flight attempt ${attempt + 1} failed: ${pfErr.message}`);
+                if (attempt < 2) {
+                    await blockchain.rotateRpc();
+                    // Reconnect wallet to the new provider
+                    wallet = wallet.connect(blockchain.provider);
+                } else {
+                    throw pfErr;
+                }
+            }
+        }
         logToFile(`[SESSION_TRADE] 📡 Pre-flight took ${Date.now() - preflightStart}ms (Bal: ${ethers.formatEther(balance)}, Nonce: ${nonce})`);
 
         const amtNum = parseFloat(amount);

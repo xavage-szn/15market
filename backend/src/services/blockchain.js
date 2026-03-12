@@ -35,7 +35,7 @@ async function createProvider(blockchainService) {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 7000;
+            fetchReq.timeout = 15000;
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
