@@ -596,8 +596,32 @@ app.post('/settle', async (req, res) => {
             throw new Error(`Trade ${id} not found`);
         }
 
-        // Call processor WITH exitPrice to lock the outcome
-        await processor._settleSingleTrade(trade, exitPrice);
+        // anti-cheat validation
+        let validatedExitPrice = exitPrice;
+        if (exitPrice) {
+            const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
+            const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
+            const serverPriceAtExpiry = pricing.getHistoricalPrice(symbol, trade.expiry);
+
+            if (serverPriceAtExpiry) {
+                const diffPercent = Math.abs(serverPriceAtExpiry - exitPrice) / serverPriceAtExpiry;
+
+                // If the submitted frontend price differs from the server's historical price 
+                // at that exact millisecond by more than 0.25%, it's almost certainly spoofed
+                if (diffPercent > 0.0025) {
+                    logToFile(`🚨 [ANTI-CHEAT] Rejecting spoofed exitPrice from ${trade.user}. Submitted: ${exitPrice}, Server History: ${serverPriceAtExpiry}`);
+                    console.error(`[ANTI-CHEAT] Spoofed price detected on trade ${id}`);
+                    validatedExitPrice = null; // Force backend to use its own historical price
+                } else {
+                    logToFile(`✅ [ANTI-CHEAT] Frontend price ${exitPrice} validated against server history ${serverPriceAtExpiry}. Diff: ${(diffPercent * 100).toFixed(4)}%`);
+                }
+            } else {
+                logToFile(`⚠️ [ANTI-CHEAT] No exact server history for ${trade.expiry}. Accepting frontend price conditionally.`);
+            }
+        }
+
+        // Call processor WITH validated price to lock the outcome safely
+        await processor._settleSingleTrade(trade, validatedExitPrice);
 
         res.json({ success: true, note: 'Settlement processed' });
     } catch (e) {
