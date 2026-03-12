@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 import { UnifiedWalletButton } from "./UnifiedWalletButton";
 
+import { ThemeToggle } from "./ThemeToggle";
+
 const AnimatedIllustrationBackground = ({ theme }) => {
     const isLight = theme === 'light';
     return (
@@ -65,7 +67,7 @@ const AnimatedIllustrationBackground = ({ theme }) => {
     );
 };
 
-export function LandingPage({ theme }) {
+export function LandingPage({ theme, onToggle }) {
     const isLight = theme === 'light';
     const dAppUrl = "15market.online";
 
@@ -85,6 +87,15 @@ export function LandingPage({ theme }) {
                         alt="15market"
                         className={`h-24 md:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)] ${isLight ? 'invert hue-rotate-180' : ''}`}
                     />
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.8, delay: 0.2 }}
+                    className="flex items-center gap-4"
+                >
+                    <ThemeToggle theme={theme} onToggle={onToggle} />
                 </motion.div>
             </nav>
 

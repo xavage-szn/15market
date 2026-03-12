@@ -95,6 +95,7 @@ function LiveExecutionComponent({
 
     // Keep track of 'frozen' results to prevent UI flicker during settlement phase
     const frozenPnL = useRef({}); // tradeId -> { status, exitPrice }
+    const lastTimeRef = useRef({}); // tradeId -> lastTime
 
     return (
         <div className="flex flex-col gap-1 relative min-h-0 h-full">
@@ -164,7 +165,15 @@ function LiveExecutionComponent({
                                             const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000) || now;
                                             const duration = trade.duration || 30;
                                             const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
-                                            const rawTimeLeft = Math.max(0, (expiryMs - now) / 1000);
+                                            // STABLE TIMER: Ensure time left never increases (glitch protection)
+                                            const currentRawTime = Math.max(0, (expiryMs - now) / 1000);
+
+                                            // Lock the time so it only goes down
+                                            if (lastTimeRef.current[trade.id] === undefined || currentRawTime < lastTimeRef.current[trade.id]) {
+                                                lastTimeRef.current[trade.id] = currentRawTime;
+                                            }
+                                            const rawTimeLeft = lastTimeRef.current[trade.id];
+
 
                                             // SMOOTH COUNTDOWN: Always show 1 decimal place for high-speed terminal feel
                                             const displayTimeLeft = rawTimeLeft.toFixed(1);
@@ -182,23 +191,42 @@ function LiveExecutionComponent({
                                             const truncTo2dp = (p) => Math.floor(p * 100) / 100;
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
-                                            if (timerExpired && !isFinal && !frozenPnL.current[trade.id]) {
+                                            // CRITICAL: Settle Trigger Logic
+                                            // Once timer hits 0, we freeze the current price and result, then nudge the backend
+                                            const frozen = frozenPnL.current[trade.id];
+                                            if (timerExpired && !isFinal && !frozen) {
+
                                                 const exit2dp = truncTo2dp(currentPriceVal);
                                                 const entry2dp = truncTo2dp(entryPriceVal);
+                                                // Determine result based on truncated 2dp values (Protocol Standard)
                                                 const isWin = isUpTrade ? (exit2dp > entry2dp) : (exit2dp < entry2dp);
+
+                                                // Freeze it locally so the UI never flips back
                                                 frozenPnL.current[trade.id] = {
                                                     status: isWin ? "WON" : "LOST",
                                                     exitPrice: currentPriceVal.toFixed(2)
                                                 };
+
+                                                // PROACTIVE SYNC: Nudge backend to settle with OUR source-of-truth price
+                                                fetch(`/api-arc/settle`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        id: trade.id,
+                                                        exitPrice: currentPriceVal.toFixed(2)
+                                                    })
+                                                }).catch(() => { });
                                             }
 
                                             const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
                                                 ? (isUpTrade ? truncTo2dp(currentPriceVal) > truncTo2dp(entryPriceVal) : truncTo2dp(currentPriceVal) < truncTo2dp(entryPriceVal))
                                                 : false;
 
-                                            const showInstantResult = timerExpired && !isFinal;
-                                            const frozen = frozenPnL.current[trade.id];
+
+                                            const displayTimeLeft = frozen ? "0.0" : rawTimeLeft.toFixed(1);
+                                            const showInstantResult = (timerExpired || !!frozen) && !isFinal;
                                             const instantStatus = showInstantResult ? (frozen ? frozen.status : (liveWinning ? "WON" : "LOST")) : trade.status;
+
                                             const displayFinal = isFinal || showInstantResult;
 
                                             return (
@@ -220,7 +248,7 @@ function LiveExecutionComponent({
                                                                 ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
                                                                 : (liveWinning ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
                                                             <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
-                                                                {displayFinal ? trade.status : (trade.confirmed === false ? "Verifying" : "Live")}
+                                                                {displayFinal ? (trade.status === "PENDING" || trade.status === "RESOLVING" ? instantStatus : trade.status) : (trade.confirmed === false ? "Verifying" : "Live")}
                                                             </span>
                                                         </div>
                                                         {isFinal && (

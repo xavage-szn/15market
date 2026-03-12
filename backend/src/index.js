@@ -263,38 +263,41 @@ app.post('/settle', async (req, res) => {
 
         const trade = await redis.getTrade(id);
         if (trade) {
-            // 🔥 INSTANT BACKEND RECORD: 
-            // Update Redis immediately so the source of truth reflects the win/loss instantly.
+            // 🔥 FRONTEND SOURCE OF TRUTH: 
+            // We use the exitPrice provided by the frontend if it exists. 
+            // This ensures the outcome shown to the user is exactly what is settled on-chain.
+
             const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
             const entryPrice = trunc2(trade.entryPrice);
             const exitPriceNum = trunc2(exitPrice || entryPrice);
 
             const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
-            // Use 2 decimal precision for win/loss determination as requested
             const isWin = isUp ? (exitPriceNum > entryPrice) : (exitPriceNum < entryPrice);
 
             const duration = Number(trade.duration) || 15;
             const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
-            // Truncate payout to 2 decimals
             const payout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
 
-            // Mark as settled in Redis immediately to satisfy the 'Real' requirement
+            // Mark as settled in Redis immediately
             await redis.addHistoricalTrade({
                 id: id,
                 status: isWin ? "WON" : "LOST",
                 settlementPrice: exitPriceNum.toFixed(2),
                 payout: payout,
-                settled: true
+                settled: true,
+                lockedExitPrice: exitPriceNum.toFixed(2) // Save this so background processor uses it too
             });
 
             // Trigger on-chain settlement in the BACKGROUND
-            processor._settleSingleTrade(trade, exitPrice).catch(e => {
+            processor._settleSingleTrade(trade, exitPriceNum.toFixed(2)).catch(e => {
                 logToFile(`[SETTLE] ❌ Background settlement failed for ${id}: ${e.message}`);
             });
 
-            // Return success instantly
             return res.json({ success: true, status: isWin ? "WON" : "LOST", payout });
         } else {
+            // Check if already settled on-chain
+            const isSettled = await blockchain.isBetSettled(id);
+            if (isSettled) return res.json({ success: true, note: 'Already settled' });
             res.status(404).json({ error: 'Trade not found in active session' });
         }
     } catch (e) {
@@ -592,56 +595,7 @@ app.post('/session/trade', async (req, res) => {
     }
 });
 
-app.post('/settle', async (req, res) => {
-    try {
-        const { id, exitPrice } = req.body;
-        if (!id) {
-            return res.status(400).json({ error: 'Missing trade id' });
-        }
 
-        logToFile(`[SETTLE_REQ] ⚡ Nudge to settle bet ${id} (Frontend Locked Price: ${exitPrice || 'None'})`);
-
-        // Fetch trade metadata from Redis
-        const trade = await redis.getTrade(id);
-        if (!trade) {
-            const isSettled = await blockchain.isBetSettled(id);
-            if (isSettled) return res.json({ success: true, message: 'Already settled' });
-            throw new Error(`Trade ${id} not found`);
-        }
-
-        // anti-cheat validation
-        let validatedExitPrice = exitPrice;
-        if (exitPrice) {
-            const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
-            const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
-            const serverPriceAtExpiry = pricing.getHistoricalPrice(symbol, trade.expiry);
-
-            if (serverPriceAtExpiry) {
-                const diffPercent = Math.abs(serverPriceAtExpiry - exitPrice) / serverPriceAtExpiry;
-
-                // If the submitted frontend price differs from the server's historical price 
-                // at that exact millisecond by more than 0.25%, it's almost certainly spoofed
-                if (diffPercent > 0.0025) {
-                    logToFile(`🚨 [ANTI-CHEAT] Rejecting spoofed exitPrice from ${trade.user}. Submitted: ${exitPrice}, Server History: ${serverPriceAtExpiry}`);
-                    console.error(`[ANTI-CHEAT] Spoofed price detected on trade ${id}`);
-                    validatedExitPrice = null; // Force backend to use its own historical price
-                } else {
-                    logToFile(`✅ [ANTI-CHEAT] Frontend price ${exitPrice} validated against server history ${serverPriceAtExpiry}. Diff: ${(diffPercent * 100).toFixed(4)}%`);
-                }
-            } else {
-                logToFile(`⚠️ [ANTI-CHEAT] No exact server history for ${trade.expiry}. Accepting frontend price conditionally.`);
-            }
-        }
-
-        // Call processor WITH validated price to lock the outcome safely
-        await processor._settleSingleTrade(trade, validatedExitPrice);
-
-        res.json({ success: true, note: 'Settlement processed' });
-    } catch (e) {
-        logToFile(`[SETTLE_REQ] ❌ Error: ${e.message}`);
-        res.status(500).json({ error: e.message });
-    }
-});
 
 app.post('/session/withdraw', async (req, res) => {
     try {

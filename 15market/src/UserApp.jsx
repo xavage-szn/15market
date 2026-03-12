@@ -92,70 +92,69 @@ const PortraitPrompt = ({ theme }) => (
 /**
  * Mobile Bottom History Drawer for V2
  */
-const MobileHistoryDrawer = ({ tradeHistory, theme, setSelectedPnLTrade, setIsPnLOpen }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const MobileHistorySection = ({ isOpen, tradeHistory, theme, setSelectedPnLTrade, setIsPnLOpen }) => {
   const isDark = theme !== 'light';
 
   return (
-    <motion.div
-      initial={false}
-      animate={{ height: isOpen ? '70vh' : '48px' }}
-      className={`fixed bottom-0 left-0 right-0 z-[100] flex flex-col backdrop-blur-3xl border-t shadow-[0_-20px_50px_rgba(0,0,0,0.3)] overflow-hidden rounded-t-[32px] ${isDark ? 'bg-[#0a0a0a]/90 border-white/10' : 'bg-[#f0f9f4]/95 border-[#3CB371]/20'}`}
-    >
-      {/* Handle Bar / Toggle */}
-      <div
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full h-[48px] flex items-center justify-between px-6 cursor-pointer"
-      >
-        <div className="flex items-center gap-2">
-          <History size={16} className={isDark ? 'text-white/40' : 'text-[#3CB371]'} />
-          <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
-            Trade History ({tradeHistory.length})
-          </span>
-        </div>
-        {isOpen ? <ChevronDown size={18} className="opacity-40" /> : <ChevronUp size={18} className="opacity-40" />}
-      </div>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full flex flex-col mt-4 overflow-hidden"
+        >
+          <div className={`p-4 rounded-[28px] border ${isDark ? 'bg-white/5 border-white/5' : 'bg-white border-[#3CB371]/10 shadow-sm'}`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <History size={16} className="text-[#3CB371]" />
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
+                  Trade History ({tradeHistory.length})
+                </span>
+              </div>
+            </div>
 
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-4 pb-8 custom-scrollbar">
-        {tradeHistory.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center opacity-20 py-12">
-            <History size={48} className="mb-4" />
-            <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {tradeHistory.map((trade) => {
-              const isWin = trade.status === 'WON';
-              return (
-                <div key={trade.id} className={`p-4 rounded-2xl border ${isDark ? 'bg-white/5 border-white/5' : 'bg-white border-[#3CB371]/10 shadow-sm'}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
-                        {trade.direction}
-                      </div>
-                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
-                    </div>
-                    <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : (trade.status === 'LOST' ? 'text-[#FF7F50]' : 'opacity-40')}`}>
-                      {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-[10px] opacity-40">
-                      ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString()}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }} className="p-1.5 rounded-lg bg-white/5"><Share2 size={12} /></button>
-                      <a href={`https://testnet.arcscan.app/tx/${trade.tx}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg bg-white/5"><ExternalLink size={12} /></a>
-                    </div>
-                  </div>
+            <div className="flex flex-col gap-2">
+              {tradeHistory.length === 0 ? (
+                <div className="py-12 flex flex-col items-center justify-center opacity-20">
+                  <History size={40} className="mb-2" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
                 </div>
-              );
-            })}
+              ) : (
+                tradeHistory.slice(0, 50).map((trade) => {
+                  const isWin = trade.status === 'WON';
+                  return (
+                    <div key={trade.id} className={`p-4 rounded-2xl border ${isDark ? 'bg-black/20 border-white/5' : 'bg-[#f0f9f4]/50 border-[#3CB371]/10'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
+                            {trade.direction}
+                          </div>
+                          <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
+                        </div>
+                        <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : (trade.status === 'LOST' ? 'text-[#FF7F50]' : 'opacity-40')}`}>
+                          {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-[10px] opacity-40">
+                          ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }} className="p-1.5 rounded-lg bg-white/5"><Share2 size={12} /></button>
+                          <a href={`https://testnet.arcscan.app/tx/${trade.tx}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg bg-white/5"><ExternalLink size={12} /></a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
-        )}
-      </div>
-    </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
@@ -167,26 +166,28 @@ const ThemeTransitionOverlay = ({ isAnimating, targetTheme }) => {
 
   return (
     <div className="fixed inset-0 z-[10000] pointer-events-none overflow-hidden">
-      {/* Wave sweep effect */}
+      {/* Laser Scanner Line */}
       <motion.div
-        initial={{ y: isLight ? '100%' : '-100%' }}
-        animate={{ y: isLight ? '-100%' : '100%' }}
-        transition={{ duration: 1.8, ease: [0.45, 0, 0.55, 1] }}
-        className="absolute inset-0 z-10"
+        initial={{ y: isLight ? '105vh' : '-5vh' }}
+        animate={{ y: isLight ? '-5vh' : '105vh' }}
+        transition={{ duration: 1.2, ease: [0.6, 0.05, 0.1, 0.9] }}
+        className="absolute left-0 right-0 z-20 h-[1.5px]"
         style={{
-          background: isLight
-            ? 'linear-gradient(to top, #f0f9f4 0%, #f0f9f4 40%, rgba(60, 179, 113, 0.2) 50%, transparent 60%)'
-            : 'linear-gradient(to bottom, #030303 0%, #030303 40%, rgba(60, 179, 113, 0.2) 50%, transparent 60%)',
-          height: '200%'
+          background: '#3CB371',
+          boxShadow: '0 0 15px 2px #3CB371, 0 0 30px 4px #3CB37180'
         }}
       />
 
-      {/* Particles or sparkles could be added here for extra magic */}
+      {/* Background fill following the line */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 1, 0] }}
-        transition={{ duration: 1.8 }}
-        className="absolute inset-0 bg-white/5 backdrop-blur-[2px]"
+        initial={{ y: isLight ? '100vh' : '-100vh' }}
+        animate={{ y: isLight ? '-100vh' : '100vh' }}
+        transition={{ duration: 1.4, ease: [0.6, 0.05, 0.1, 0.9] }}
+        className="absolute inset-0 z-10"
+        style={{
+          background: isLight ? '#f0f9f4' : '#030303',
+          height: '100%'
+        }}
       />
     </div>
   );
@@ -344,6 +345,7 @@ export default function UserApp() {
   });
   const [isPnLOpen, setIsPnLOpen] = useState(false);
   const [showSideHistory, setShowSideHistory] = useState(false);
+  const [showMobileHistory, setShowMobileHistory] = useState(false);
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
   const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
@@ -2069,7 +2071,7 @@ export default function UserApp() {
 
   if (!authenticated) return (
     <div className={themeClass}>
-      <LandingPage theme={theme} />
+      <LandingPage theme={theme} onToggle={toggleTheme} />
       <AnimatePresence>
         {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} theme={theme} />}
       </AnimatePresence>
@@ -2113,7 +2115,7 @@ export default function UserApp() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className={`min-h-screen ${uiVersion === 'v2' ? 'h-screen overflow-hidden' : 'overflow-x-hidden'} font-sans flex flex-col items-center ${themeClass}`}
+      className={`min-h-screen ${uiVersion === 'v2' && !isSmallScreen ? 'h-screen overflow-hidden' : 'overflow-x-hidden'} font-sans flex flex-col items-center ${themeClass}`}
       style={{
         color: theme === 'light' ? '#1f2937' : '#ffffff',
         transition: "color 0.3s ease"
@@ -2148,7 +2150,7 @@ export default function UserApp() {
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-14 lg:h-24' : 'h-10 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-14 lg:h-24' : 'h-14 lg:h-16'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
             <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
@@ -2166,6 +2168,20 @@ export default function UserApp() {
 
             <div className="flex lg:hidden landscape:hidden items-center gap-2">
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
+
+              {uiVersion === 'v2' && (
+                <button
+                  onClick={() => setShowMobileHistory(!showMobileHistory)}
+                  className={`p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
+                  style={{
+                    backgroundColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)') : undefined,
+                    borderColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)') : undefined,
+                  }}
+                >
+                  <History size={18} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
+                </button>
+              )}
+
               <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
@@ -2179,20 +2195,20 @@ export default function UserApp() {
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
           {uiVersion === 'v2' && (
-            <div className="w-full flex flex-col mt-[-15px] mb-[10px] relative z-[60]">
+            <div className="w-full flex flex-col mt-[2px] mb-[4px] relative z-[60]">
               <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
               <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)] mt-[2px]" />
             </div>
           )}
 
           {uiVersion === 'v1' && (
-            <div className={`w-full relative z-[45] overflow-hidden border-y ${isLight ? 'bg-[#f0f9f4]/95 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
+            <div className={`w-full relative z-[45] overflow-hidden border-y my-2 py-1 ${isLight ? 'bg-[#f0f9f4]/95 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
               <GlobalTradeScroller theme={theme} isV1={true} />
             </div>
           )}
 
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-1.5 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-0 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
               <div className="w-full flex-none grid grid-cols-12 gap-4 lg:gap-6 mb-8 relative z-0 mt-2 h-auto lg:h-[calc(100vh-150px)] lg:min-h-0">
                 {/* Chart Widget - First in stack on mobile */}
@@ -2245,7 +2261,7 @@ export default function UserApp() {
                   className="w-full md:w-[70%] flex flex-col gap-1.5 h-full min-h-0 transition-all duration-500 relative"
                   style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
-                  {uiVersion === 'v2' && (
+                  {uiVersion === 'v2' && !isSmallScreen && (
                     <SideHistoryPane
                       isOpen={showSideHistory}
                       onToggle={() => setShowSideHistory(!showSideHistory)}
@@ -2261,7 +2277,7 @@ export default function UserApp() {
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className="flex-1 min-h-[290px] md:min-h-[350px] lg:h-full lg:min-h-0 rounded-[28px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col"
+                  <div className="flex-1 min-h-[280px] md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[28px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col"
                     style={{
                       background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
@@ -2299,7 +2315,7 @@ export default function UserApp() {
 
                 <motion.div
                   layout
-                  className={`w-full md:w-[30%] flex flex-row lg:flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0`}
+                  className={`w-full md:w-[30%] flex flex-row lg:flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-1`}
                 >
                   {/* Trading Terminal Box */}
                   <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
@@ -2344,18 +2360,35 @@ export default function UserApp() {
                     </div>
                   </div>
                 </motion.div>
+
+                {/* Mobile Bottom History Revealed - Extends view downwards */}
+                {uiVersion === 'v2' && isSmallScreen && (
+                  <div className="w-full mt-4 pb-20">
+                    <button
+                      onClick={() => setShowMobileHistory(!showMobileHistory)}
+                      className={`w-full py-3 mb-2 rounded-xl border flex items-center justify-center gap-2 transition-all ${theme === 'light' ? 'bg-white border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/5 text-white/40'}`}
+                    >
+                      <History size={14} />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                        {showMobileHistory ? 'Hide Trade History' : 'Expand Trade History'}
+                      </span>
+                      {showMobileHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    {showMobileHistory && (
+                      <MobileHistorySection
+                        isOpen={showMobileHistory}
+                        tradeHistory={tradeHistory}
+                        theme={theme}
+                        setSelectedPnLTrade={setSelectedPnLTrade}
+                        setIsPnLOpen={setIsPnLOpen}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Mobile Bottom History Drawer for V2 */}
-            {uiVersion === 'v2' && isSmallScreen && (
-              <MobileHistoryDrawer
-                tradeHistory={tradeHistory}
-                theme={theme}
-                setSelectedPnLTrade={setSelectedPnLTrade}
-                setIsPnLOpen={setIsPnLOpen}
-              />
-            )}
+
 
             {/* Forced Orientation Overlay for V2 Mobile */}
             {showPortraitLock && <PortraitPrompt theme={theme} />}
