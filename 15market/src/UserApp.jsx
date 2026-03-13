@@ -2191,18 +2191,18 @@ export default function UserApp() {
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-14 lg:h-24' : 'h-14 lg:h-16'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-17 lg:h-29' : 'h-17 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
-            <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
+            <div className={`hidden lg:flex items-center gap-2 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
-              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-1.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={16} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
               <UnifiedWalletButton theme={theme} />
             </div>
@@ -2212,22 +2212,22 @@ export default function UserApp() {
               {uiVersion === 'v2' && (
                 <button
                   onClick={() => setShowMobileHistory(!showMobileHistory)}
-                  className={`p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
+                  className={`p-1.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
                   style={{
                     backgroundColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)') : undefined,
                     borderColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)') : undefined,
                   }}
                 >
-                  <History size={18} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
+                  <History size={16} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
                 </button>
               )}
 
-              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-1.5 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={16} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
               <UnifiedWalletButton theme={theme} />
             </div>
@@ -2359,7 +2359,7 @@ export default function UserApp() {
                 >
                   {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                   <div className={`w-full flex-row gap-1.5 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
-                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                    <div className={`flex-1 min-h-0 h-[210px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2380,7 +2380,7 @@ export default function UserApp() {
                         uiVersion={uiVersion}
                       />
                     </div>
-                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel shadow-lg`}
+                    <div className={`flex-1 min-h-0 h-[210px] rounded-[22px] overflow-hidden border glass-panel shadow-lg`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2394,8 +2394,7 @@ export default function UserApp() {
                       </div>
                     </div>
                   </div>
-                  {/* Compact spacer */}
-                  {isSmallScreen && <div className="h-6 shrink-0" />}
+                  {/* Pinned to bottom */}
 
                   {!isSmallScreen && (
                     /* Existing Desktop V2 Layout */
