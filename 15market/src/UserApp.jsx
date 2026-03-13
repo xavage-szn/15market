@@ -216,18 +216,6 @@ const ThemeTransitionOverlay = ({ isAnimating, targetTheme }) => {
           boxShadow: '0 0 15px 2px #3CB371, 0 0 30px 4px #3CB37180'
         }}
       />
-
-      {/* Background fill following the line */}
-      <motion.div
-        initial={{ y: isLight ? '100vh' : '-100vh' }}
-        animate={{ y: isLight ? '-100vh' : '100vh' }}
-        transition={{ duration: 1.4, ease: [0.6, 0.05, 0.1, 0.9] }}
-        className="absolute inset-0 z-10"
-        style={{
-          background: isLight ? '#f0f9f4' : '#030303',
-          height: '100%'
-        }}
-      />
     </div>
   );
 };
@@ -254,16 +242,14 @@ export default function UserApp() {
     setTargetTheme(nextTheme);
     setIsAnimatingTheme(true);
 
-    // Swap actual theme exactly when the transition fully covers the screen
-    setTimeout(() => {
-      setTheme(nextTheme);
-    }, 1100);
+    // Swap actual theme immediately so components CSS-transition seamlessly as the line passes
+    setTheme(nextTheme);
 
-    // End animation and clean up
+    // End animation and clean up once scanner completes (1.2s duration)
     setTimeout(() => {
       setIsAnimatingTheme(false);
       setTargetTheme(null);
-    }, 2200);
+    }, 1400);
   }, [theme, isAnimatingTheme]);
 
   // Keep-Alive Heartbeat (Prevents Backend from Sleeping while user is active)
