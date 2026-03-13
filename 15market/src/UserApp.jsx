@@ -124,7 +124,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         >
           <div className="flex items-center justify-center gap-3 w-full">
             <History size={16} className={isOpen ? 'text-[#3CB371]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')} />
-            <span className={`text-[10px] font-black uppercase tracking-[0.2em] relative top-[0.5px] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
+            <span className={`text-[10px] font-black uppercase tracking-[0.2em] relative top-[-2px] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
               Trade History ({userProfile?.stats?.totalTrades || tradeHistory.length})
             </span>
             {isOpen ? <ChevronDown size={14} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronUp size={14} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
