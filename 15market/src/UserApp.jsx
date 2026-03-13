@@ -122,12 +122,12 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
             ${isDark ? 'border-white/5' : 'border-[#3CB371]/10'}
           `}
         >
-          <div className="flex items-center gap-4">
-            <History size={18} className={isOpen ? 'text-[#3CB371]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')} />
-            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
+          <div className="flex items-center justify-center gap-3 w-full">
+            <History size={16} className={isOpen ? 'text-[#3CB371]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')} />
+            <span className={`text-[10px] font-black uppercase tracking-[0.2em] relative top-[0.5px] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
               Trade History ({userProfile?.stats?.totalTrades || tradeHistory.length})
             </span>
-            {isOpen ? <ChevronDown size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronUp size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
+            {isOpen ? <ChevronDown size={14} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronUp size={14} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
           </div>
         </div>
 
@@ -607,7 +607,7 @@ export default function UserApp() {
         }
       });
 
-      return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 100);
+      return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 1000);
     });
 
     // 4. Update Active Trades (Monotonic Status)
@@ -2359,7 +2359,7 @@ export default function UserApp() {
                 >
                   {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                   <div className={`w-full flex-row gap-1.5 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
-                    <div className={`flex-1 min-h-0 h-[255px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2380,7 +2380,7 @@ export default function UserApp() {
                         uiVersion={uiVersion}
                       />
                     </div>
-                    <div className={`flex-1 min-h-0 h-[255px] rounded-[22px] overflow-hidden border glass-panel shadow-lg`}
+                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel shadow-lg`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2394,7 +2394,8 @@ export default function UserApp() {
                       </div>
                     </div>
                   </div>
-                  {/* Spacer removed to reach red line */}
+                  {/* Compact spacer */}
+                  {isSmallScreen && <div className="h-6 shrink-0" />}
 
                   {!isSmallScreen && (
                     /* Existing Desktop V2 Layout */
