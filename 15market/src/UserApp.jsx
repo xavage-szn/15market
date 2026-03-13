@@ -2191,43 +2191,43 @@ export default function UserApp() {
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[78px] lg:h-[142px]' : 'h-18 lg:h-22'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[78px] lg:h-24' : 'h-14 lg:h-16'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
-            <div className={`hidden lg:flex items-center gap-2 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
+            <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
-              <button onClick={() => setView("dashboard")} className="p-1.5 rounded-xl w-8 h-8 flex items-center justify-center border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={16} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
               <UnifiedWalletButton theme={theme} />
             </div>
 
-            <div className="flex lg:hidden landscape:hidden items-center gap-1.5">
+            <div className="flex lg:hidden landscape:hidden items-center gap-2">
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               {uiVersion === 'v2' && (
                 <button
                   onClick={() => setShowMobileHistory(!showMobileHistory)}
-                  className={`p-1.5 rounded-xl w-8 h-8 flex items-center justify-center border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
+                  className={`p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
                   style={{
                     backgroundColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)') : undefined,
                     borderColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)') : undefined,
                   }}
                 >
-                  <History size={16} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
+                  <History size={18} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
                 </button>
               )}
 
-              <button onClick={() => setView("dashboard")} className="p-1.5 rounded-xl w-8 h-8 flex items-center justify-center border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={16} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
               <UnifiedWalletButton theme={theme} />
             </div>
@@ -2317,7 +2317,7 @@ export default function UserApp() {
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className={`flex-[2] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+                  <div className={`${isSmallScreen ? 'h-[240px] flex-none' : 'flex-[2] min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
                     style={{
                       background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
