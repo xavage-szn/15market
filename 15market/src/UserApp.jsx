@@ -2298,7 +2298,7 @@ export default function UserApp() {
                 {/* V2: Integrated One Screen Layout */}
                 <motion.div
                   layout
-                  className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-[calc(100%-235px)]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
+                  className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-[calc(100%-240px)]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
                   style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
                   {uiVersion === 'v2' && !isSmallScreen && (
@@ -2355,11 +2355,11 @@ export default function UserApp() {
 
                 <motion.div
                   layout
-                  className={`w-full md:w-[30%] flex ${isSmallScreen ? 'flex-row' : 'flex-row lg:flex-col'} ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
+                  className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
                 >
                   {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                  <div className={`w-full flex-row gap-1.5 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
-                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                  <div className={`w-full grid grid-cols-2 gap-2 ${isSmallScreen ? '' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2380,7 +2380,7 @@ export default function UserApp() {
                         uiVersion={uiVersion}
                       />
                     </div>
-                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                    <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
