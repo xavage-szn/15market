@@ -2317,7 +2317,7 @@ export default function UserApp() {
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className={`${isSmallScreen ? 'h-[240px] flex-none' : 'flex-[2] min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+                  <div className={`${isSmallScreen ? 'h-[200px] flex-none mt-1' : 'flex-[2] min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
                     style={{
                       background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
