@@ -76,9 +76,14 @@ function LiveExecutionComponent({
     const [tick, setTick] = useState(0);
     const isLight = theme === 'light';
 
-    // Higher frequency clock (100ms) for butter-smooth countdown and precise expiry freezing
+    // Higher frequency clock (33ms ~ 30fps) for butter-smooth countdown and precise expiry freezing
+    const startTimeRef = useRef(Date.now());
+    const [elapsed, setElapsed] = useState(0);
+
     useEffect(() => {
-        const interval = setInterval(() => setTick(t => t + 1), 100);
+        const interval = setInterval(() => {
+            setElapsed(Date.now() - startTimeRef.current);
+        }, 33);
         return () => clearInterval(interval);
     }, []);
 
@@ -158,10 +163,10 @@ function LiveExecutionComponent({
                                         key={visibleTrade.id}
                                         className={idx > 0 ? 'opacity-80 scale-95 origin-top transition-all hover:opacity-100 hover:scale-100' : ''}
                                     >
-                                        {/* Render each trade */}
+                                            // Render each trade
                                         {(() => {
                                             const trade = visibleTrade;
-                                            const now = Date.now();
+                                            const now = startTimeRef.current + elapsed;
                                             const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000) || now;
                                             const duration = trade.duration || 30;
                                             const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));

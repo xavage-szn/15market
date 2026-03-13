@@ -9,7 +9,7 @@ import { TransactionReceiptModal } from "./components/TransactionReceiptModal";
 import {
   MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
-  History, ChevronUp, ChevronDown, Share2, ExternalLink
+  History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { parseEther, parseUnits, formatUnits } from "viem";
@@ -359,6 +359,11 @@ export default function UserApp() {
   // Main Network State
   const [network, setNetwork] = useState("arc");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
+  const [v2MobileTab, setV2MobileTab] = useState(() => localStorage.getItem("15market_v2_mobile_tab") || "trade"); // "trade", "active", "history"
+
+  useEffect(() => {
+    localStorage.setItem("15market_v2_mobile_tab", v2MobileTab);
+  }, [v2MobileTab]);
 
   useEffect(() => {
     localStorage.setItem("15market_ui_version", uiVersion);
@@ -2315,76 +2320,167 @@ export default function UserApp() {
 
                 <motion.div
                   layout
-                  className={`w-full md:w-[30%] flex flex-row lg:flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-1`}
+                  className={`w-full md:w-[30%] flex ${isSmallScreen ? 'flex-col' : 'flex-row lg:flex-col'} ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-1`}
                 >
-                  {/* Trading Terminal Box */}
-                  <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
-                    style={{
-                      background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
-                    }}>
-                    <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : 'p-2 lg:p-4'} flex flex-col min-h-0`}>
-                      <TradeTerminal
-                        transparent={true}
-                        activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                        sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                        setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                        sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                        theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                        refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                        CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                        evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                        activeMarket={activeMarket}
-                        maintenanceMode={platformSettings.maintenanceMode}
-                        showManagement={showManagement} setShowManagement={setShowManagement}
-                        uiVersion={uiVersion}
-                      />
-                    </div>
-                  </div>
+                  {isSmallScreen ? (
+                    /* Mobile V2 Bottom Pane Refactor */
+                    <div className="w-full h-full flex flex-col min-h-0 bg-transparent">
+                      <div className="flex-1 min-h-0 overflow-hidden relative">
+                        <AnimatePresence mode="wait">
+                          {v2MobileTab === 'trade' && (
+                            <motion.div
+                              key="trade"
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 20 }}
+                              className="h-full overflow-y-auto px-2 pb-24"
+                            >
+                              <div className={`rounded-[22px] overflow-hidden border glass-panel p-2 mt-2`}
+                                style={{
+                                  background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                                }}>
+                                <TradeTerminal
+                                  transparent={true}
+                                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                                  refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                                  activeMarket={activeMarket}
+                                  maintenanceMode={platformSettings.maintenanceMode}
+                                  showManagement={showManagement} setShowManagement={setShowManagement}
+                                  uiVersion={uiVersion}
+                                />
+                              </div>
+                            </motion.div>
+                          )}
 
-                  {/* Active Trade / Controls Box */}
-                  <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-1/2 lg:w-full'} shadow-lg`}
-                    style={{
-                      background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
-                    }}>
-                    <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
-                      <LiveExecution
-                        activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                        setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                        theme={theme} currentNetwork={network}
-                        isTruncated={uiVersion === 'v2' && showManagement && !showActiveExpanded}
-                        isExpanded={showActiveExpanded}
-                        setIsExpanded={setShowActiveExpanded}
-                      />
+                          {v2MobileTab === 'active' && (
+                            <motion.div
+                              key="active"
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 20 }}
+                              className="h-full overflow-y-auto px-2 pb-24"
+                            >
+                              <div className={`rounded-[22px] overflow-hidden border glass-panel p-4 mt-2 min-h-[300px]`}
+                                style={{
+                                  background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                                }}>
+                                <LiveExecution
+                                  activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                                  theme={theme} currentNetwork={network}
+                                  isExpanded={true}
+                                />
+                              </div>
+                            </motion.div>
+                          )}
+
+                          {v2MobileTab === 'history' && (
+                            <motion.div
+                              key="history"
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 20 }}
+                              className="h-full overflow-y-auto px-2 pb-24"
+                            >
+                              <TradeHistory
+                                wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+                                tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+                                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                                GREEN={GREEN} CORAL={CORAL}
+                                evmSessionWallet={evmSessionWallet}
+                                theme={theme} currentNetwork={network}
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Fixed V2 Mobile Bottom Navigation */}
+                      <div className="fixed bottom-0 left-0 right-0 z-[120] px-6 pb-6 pt-2 pointer-events-none">
+                        <div className={`w-full max-w-sm mx-auto flex items-center justify-around p-1.5 rounded-full border backdrop-blur-2xl pointer-events-auto shadow-2xl transition-all duration-300 ${theme === 'light' ? 'bg-white/80 border-[#3CB371]/20 shadow-[#3CB371]/10' : 'bg-black/80 border-white/10 shadow-black'}`}>
+                          <button
+                            onClick={() => setV2MobileTab('trade')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-full transition-all ${v2MobileTab === 'trade' ? 'bg-[#3CB371] text-white shadow-lg' : (theme === 'light' ? 'text-black/40 hover:text-[#3CB371]' : 'text-white/30 hover:text-white')}`}
+                          >
+                            <Zap size={16} />
+                            <span className="text-[8px] font-black uppercase tracking-widest">Trade</span>
+                          </button>
+                          <button
+                            onClick={() => setV2MobileTab('active')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-full transition-all relative ${v2MobileTab === 'active' ? 'bg-[#3CB371] text-white shadow-lg' : (theme === 'light' ? 'text-black/40 hover:text-[#3CB371]' : 'text-white/30 hover:text-white')}`}
+                          >
+                            <Activity size={16} />
+                            <span className="text-[8px] font-black uppercase tracking-widest">Live</span>
+                            {activeTrades.length > 0 && !['active'].includes(v2MobileTab) && (
+                              <span className="absolute top-1 right-1/3 w-2 h-2 rounded-full bg-[#3CB371] border-2 border-black animate-pulse" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setV2MobileTab('history')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-full transition-all ${v2MobileTab === 'history' ? 'bg-[#3CB371] text-white shadow-lg' : (theme === 'light' ? 'text-black/40 hover:text-[#3CB371]' : 'text-white/30 hover:text-white')}`}
+                          >
+                            <History size={16} />
+                            <span className="text-[8px] font-black uppercase tracking-widest">History</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Existing Desktop V2 Layout */
+                    <>
+                      {/* Trading Terminal Box */}
+                      <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
+                        style={{
+                          background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                          borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                        }}>
+                        <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : 'p-2 lg:p-4'} flex flex-col min-h-0`}>
+                          <TradeTerminal
+                            transparent={true}
+                            activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                            sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                            setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                            sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                            theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                            refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                            CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                            evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                            activeMarket={activeMarket}
+                            maintenanceMode={platformSettings.maintenanceMode}
+                            showManagement={showManagement} setShowManagement={setShowManagement}
+                            uiVersion={uiVersion}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Active Trade / Controls Box */}
+                      <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-1/2 lg:w-full'} shadow-lg`}
+                        style={{
+                          background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                          borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                        }}>
+                        <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
+                          <LiveExecution
+                            activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                            setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                            theme={theme} currentNetwork={network}
+                            isTruncated={uiVersion === 'v2' && showManagement && !showActiveExpanded}
+                            isExpanded={showActiveExpanded}
+                            setIsExpanded={setShowActiveExpanded}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </motion.div>
-
-                {/* Mobile Bottom History Revealed - Extends view downwards */}
-                {uiVersion === 'v2' && isSmallScreen && (
-                  <div className="w-full mt-4 pb-20">
-                    <button
-                      onClick={() => setShowMobileHistory(!showMobileHistory)}
-                      className={`w-full py-3 mb-2 rounded-xl border flex items-center justify-center gap-2 transition-all ${theme === 'light' ? 'bg-white border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/5 text-white/40'}`}
-                    >
-                      <History size={14} />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-                        {showMobileHistory ? 'Hide Trade History' : 'Expand Trade History'}
-                      </span>
-                      {showMobileHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </button>
-                    {showMobileHistory && (
-                      <MobileHistorySection
-                        isOpen={showMobileHistory}
-                        tradeHistory={tradeHistory}
-                        theme={theme}
-                        setSelectedPnLTrade={setSelectedPnLTrade}
-                        setIsPnLOpen={setIsPnLOpen}
-                      />
-                    )}
-                  </div>
-                )}
               </div>
             )}
 
@@ -2516,7 +2612,7 @@ export default function UserApp() {
         {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
       </AnimatePresence>
 
-      <footer className={`${uiVersion === 'v2' ? 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none' : 'w-full max-w-7xl mt-10 mb-6 px-4 py-6 border-t border-white/5'} flex items-center justify-between gap-6 flex-none bg-transparent`}
+      <footer className={`${uiVersion === 'v2' ? (isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none') : 'w-full max-w-7xl mt-10 mb-6 px-4 py-6 border-t border-white/5'} flex items-center justify-between gap-6 flex-none bg-transparent`}
         style={{ fontFamily: 'Arial, sans-serif' }}>
         <div className="flex items-center gap-4 pointer-events-auto">
           <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
