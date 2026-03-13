@@ -90,71 +90,110 @@ const PortraitPrompt = ({ theme }) => (
 );
 
 /**
- * Mobile Bottom History Drawer for V2
+ * Mobile Bottom History Pane for V2 (Slide-up drawer style)
  */
-const MobileHistorySection = ({ isOpen, tradeHistory, theme, setSelectedPnLTrade, setIsPnLOpen }) => {
+const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSelectedPnLTrade, setIsPnLOpen, userProfile }) => {
   const isDark = theme !== 'light';
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full flex flex-col mt-4 overflow-hidden"
+    <motion.div
+      initial={false}
+      animate={{
+        y: isOpen ? 0 : 'calc(100% - 48px)',
+      }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className="fixed bottom-[-16px] left-0 right-0 z-[110] flex flex-col pointer-events-none"
+      style={{ height: '70vh' }}
+    >
+      <div className={`
+        w-full h-full pointer-events-auto
+        backdrop-blur-3xl border-t border-x rounded-t-[40px] shadow-[0_-20px_50px_rgba(0,0,0,0.3)]
+        transition-all duration-500 flex flex-col overflow-hidden
+        ${isDark
+          ? 'bg-[#0a0a0a]/90 border-white/10'
+          : 'coral-green-gradient-light border-[#3CB371]/20'}
+      `}>
+        {/* Horizontal Toggle Handle Bar */}
+        <div
+          onClick={onToggle}
+          className={`
+            w-full h-12 flex items-center justify-center cursor-pointer 
+            hover:bg-white/5 transition-colors relative shrink-0 border-b
+            ${isDark ? 'border-white/5' : 'border-[#3CB371]/10'}
+          `}
         >
-          <div className={`p-4 rounded-[28px] border ${isDark ? 'bg-white/5 border-white/5' : 'bg-white border-[#3CB371]/10 shadow-sm'}`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <History size={16} className="text-[#3CB371]" />
-                <span className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
-                  Trade History ({tradeHistory.length})
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {tradeHistory.length === 0 ? (
-                <div className="py-12 flex flex-col items-center justify-center opacity-20">
-                  <History size={40} className="mb-2" />
-                  <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
-                </div>
-              ) : (
-                tradeHistory.slice(0, 50).map((trade) => {
-                  const isWin = trade.status === 'WON';
-                  return (
-                    <div key={trade.id} className={`p-4 rounded-2xl border ${isDark ? 'bg-black/20 border-white/5' : 'bg-[#f0f9f4]/50 border-[#3CB371]/10'}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
-                            {trade.direction}
-                          </div>
-                          <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
-                        </div>
-                        <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : (trade.status === 'LOST' ? 'text-[#FF7F50]' : 'opacity-40')}`}>
-                          {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-[10px] opacity-40">
-                          ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }} className="p-1.5 rounded-lg bg-white/5"><Share2 size={12} /></button>
-                          <a href={`https://testnet.arcscan.app/tx/${trade.tx}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg bg-white/5"><ExternalLink size={12} /></a>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+          <div className="flex items-center gap-4">
+            <History size={18} className={isOpen ? 'text-[#3CB371]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')} />
+            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
+              Trade History ({userProfile?.stats?.totalTrades || tradeHistory.length})
+            </span>
+            {isOpen ? <ChevronDown size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronUp size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
+          {tradeHistory.length === 0 ? (
+            <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
+              <History size={48} className="mb-4" />
+              <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
+            </div>
+          ) : (
+            tradeHistory.slice(0, 50).map((trade) => {
+              const isWin = trade.status === 'WON';
+              const isLoss = trade.status === 'LOST';
+
+              return (
+                <div
+                  key={trade.id}
+                  className={`
+                    p-4 rounded-2xl border transition-all active:scale-[0.98]
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#f0f9f4]/50 border-[#3CB371]/10 shadow-sm'}
+                  `}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`
+                        text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter
+                        ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
+                      `}>
+                        {trade.direction}
+                      </div>
+                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
+                    </div>
+                    <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                      {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] opacity-40">
+                      ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
+                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                      >
+                        <Share2 size={12} />
+                      </button>
+                      <a
+                        href={`https://testnet.arcscan.app/tx/${trade.tx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 };
 
@@ -359,11 +398,7 @@ export default function UserApp() {
   // Main Network State
   const [network, setNetwork] = useState("arc");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
-  const [v2MobileTab, setV2MobileTab] = useState(() => localStorage.getItem("15market_v2_mobile_tab") || "trade"); // "trade", "active", "history"
 
-  useEffect(() => {
-    localStorage.setItem("15market_v2_mobile_tab", v2MobileTab);
-  }, [v2MobileTab]);
 
   useEffect(() => {
     localStorage.setItem("15market_ui_version", uiVersion);
@@ -653,10 +688,11 @@ export default function UserApp() {
           }
           throw e;
         }
-        const { profile, history, transactions } = userData;
+        const { profile, history, transactions, stats } = userData;
         if (profile) {
-          setUserProfile(profile);
-          localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profile));
+          const profileWithStats = { ...profile, stats };
+          setUserProfile(profileWithStats);
+          localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profileWithStats));
         }
         if (history) reconcileTrades(history);
         if (transactions) setTransactionHistory(transactions);
@@ -2173,7 +2209,6 @@ export default function UserApp() {
 
             <div className="flex lg:hidden landscape:hidden items-center gap-2">
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
-
               {uiVersion === 'v2' && (
                 <button
                   onClick={() => setShowMobileHistory(!showMobileHistory)}
@@ -2213,7 +2248,7 @@ export default function UserApp() {
           )}
 
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-0 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
             {uiVersion === 'v1' ? (
               <div className="w-full flex-none grid grid-cols-12 gap-4 lg:gap-6 mb-8 relative z-0 mt-2 h-auto lg:h-[calc(100vh-150px)] lg:min-h-0">
                 {/* Chart Widget - First in stack on mobile */}
@@ -2259,11 +2294,11 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className="w-full flex lg:flex-row landscape:flex-row flex-col gap-2 lg:gap-4 mb-2 md:mb-6 relative z-0 h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)] min-h-0">
+              <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-64px)] overflow-hidden pb-12' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
                 {/* V2: Integrated One Screen Layout */}
                 <motion.div
                   layout
-                  className="w-full md:w-[70%] flex flex-col gap-1.5 h-full min-h-0 transition-all duration-500 relative"
+                  className="w-full md:w-[70%] flex flex-col gap-0.5 h-full min-h-0 transition-all duration-500 relative"
                   style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
                   {uiVersion === 'v2' && !isSmallScreen && (
@@ -2282,7 +2317,7 @@ export default function UserApp() {
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className="flex-1 min-h-[280px] md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[28px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col"
+                  <div className={`flex-[1.8] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
                     style={{
                       background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
@@ -2320,120 +2355,48 @@ export default function UserApp() {
 
                 <motion.div
                   layout
-                  className={`w-full md:w-[30%] flex ${isSmallScreen ? 'flex-col' : 'flex-row lg:flex-col'} ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-1`}
+                  className={`w-full md:w-[30%] flex ${isSmallScreen ? 'flex-row' : 'flex-row lg:flex-col'} ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
                 >
-                  {isSmallScreen ? (
-                    /* Mobile V2 Bottom Pane Refactor */
-                    <div className="w-full h-full flex flex-col min-h-0 bg-transparent">
-                      <div className="flex-1 min-h-0 overflow-hidden relative">
-                        <AnimatePresence mode="wait">
-                          {v2MobileTab === 'trade' && (
-                            <motion.div
-                              key="trade"
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 20 }}
-                              className="h-full overflow-y-auto px-2 pb-24"
-                            >
-                              <div className={`rounded-[22px] overflow-hidden border glass-panel p-2 mt-2`}
-                                style={{
-                                  background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
-                                }}>
-                                <TradeTerminal
-                                  transparent={true}
-                                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                                  refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                                  activeMarket={activeMarket}
-                                  maintenanceMode={platformSettings.maintenanceMode}
-                                  showManagement={showManagement} setShowManagement={setShowManagement}
-                                  uiVersion={uiVersion}
-                                />
-                              </div>
-                            </motion.div>
-                          )}
-
-                          {v2MobileTab === 'active' && (
-                            <motion.div
-                              key="active"
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 20 }}
-                              className="h-full overflow-y-auto px-2 pb-24"
-                            >
-                              <div className={`rounded-[22px] overflow-hidden border glass-panel p-4 mt-2 min-h-[300px]`}
-                                style={{
-                                  background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                                  borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
-                                }}>
-                                <LiveExecution
-                                  activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                                  theme={theme} currentNetwork={network}
-                                  isExpanded={true}
-                                />
-                              </div>
-                            </motion.div>
-                          )}
-
-                          {v2MobileTab === 'history' && (
-                            <motion.div
-                              key="history"
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 20 }}
-                              className="h-full overflow-y-auto px-2 pb-24"
-                            >
-                              <TradeHistory
-                                wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-                                tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-                                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                                GREEN={GREEN} CORAL={CORAL}
-                                evmSessionWallet={evmSessionWallet}
-                                theme={theme} currentNetwork={network}
-                              />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      {/* Fixed V2 Mobile Bottom Navigation */}
-                      <div className="fixed bottom-0 left-0 right-0 z-[120] px-6 pb-6 pt-2 pointer-events-none">
-                        <div className={`w-full max-w-sm mx-auto flex items-center justify-around p-1.5 rounded-full border backdrop-blur-2xl pointer-events-auto shadow-2xl transition-all duration-300 ${theme === 'light' ? 'bg-white/80 border-[#3CB371]/20 shadow-[#3CB371]/10' : 'bg-black/80 border-white/10 shadow-black'}`}>
-                          <button
-                            onClick={() => setV2MobileTab('trade')}
-                            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-full transition-all ${v2MobileTab === 'trade' ? 'bg-[#3CB371] text-white shadow-lg' : (theme === 'light' ? 'text-black/40 hover:text-[#3CB371]' : 'text-white/30 hover:text-white')}`}
-                          >
-                            <Zap size={16} />
-                            <span className="text-[8px] font-black uppercase tracking-widest">Trade</span>
-                          </button>
-                          <button
-                            onClick={() => setV2MobileTab('active')}
-                            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-full transition-all relative ${v2MobileTab === 'active' ? 'bg-[#3CB371] text-white shadow-lg' : (theme === 'light' ? 'text-black/40 hover:text-[#3CB371]' : 'text-white/30 hover:text-white')}`}
-                          >
-                            <Activity size={16} />
-                            <span className="text-[8px] font-black uppercase tracking-widest">Live</span>
-                            {activeTrades.length > 0 && !['active'].includes(v2MobileTab) && (
-                              <span className="absolute top-1 right-1/3 w-2 h-2 rounded-full bg-[#3CB371] border-2 border-black animate-pulse" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => setV2MobileTab('history')}
-                            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-full transition-all ${v2MobileTab === 'history' ? 'bg-[#3CB371] text-white shadow-lg' : (theme === 'light' ? 'text-black/40 hover:text-[#3CB371]' : 'text-white/30 hover:text-white')}`}
-                          >
-                            <History size={16} />
-                            <span className="text-[8px] font-black uppercase tracking-widest">History</span>
-                          </button>
-                        </div>
+                  {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
+                  <div className={`w-full flex-row gap-1.5 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`flex-1 min-h-0 h-[290px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                      style={{
+                        background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                      }}>
+                      <TradeTerminal
+                        transparent={true}
+                        activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                        sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                        setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                        sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                        theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                        refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                        CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                        evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                        activeMarket={activeMarket}
+                        maintenanceMode={platformSettings.maintenanceMode}
+                        showManagement={showManagement} setShowManagement={setShowManagement}
+                        uiVersion={uiVersion}
+                      />
+                    </div>
+                    <div className={`flex-1 min-h-0 h-[290px] rounded-[22px] overflow-hidden border glass-panel shadow-lg`}
+                      style={{
+                        background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                      }}>
+                      <div className="p-1 flex flex-col h-full min-h-0">
+                        <LiveExecution
+                          activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                          setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                          theme={theme} currentNetwork={network}
+                        />
                       </div>
                     </div>
-                  ) : (
+                  </div>
+                  {/* Space eliminated as padding handles it */}
+
+                  {!isSmallScreen && (
                     /* Existing Desktop V2 Layout */
                     <>
                       {/* Trading Terminal Box */}
@@ -2580,6 +2543,20 @@ export default function UserApp() {
                   ))}
                 </div>
               </div>
+            )}
+
+
+            {/* V2 Mobile History Bottom Drawer */}
+            {uiVersion === 'v2' && isSmallScreen && (
+              <MobileBottomHistoryPane
+                isOpen={showMobileHistory}
+                onToggle={() => setShowMobileHistory(!showMobileHistory)}
+                tradeHistory={tradeHistory}
+                theme={theme}
+                setSelectedPnLTrade={setSelectedPnLTrade}
+                setIsPnLOpen={setIsPnLOpen}
+                userProfile={userProfile}
+              />
             )}
 
           </div>

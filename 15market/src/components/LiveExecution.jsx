@@ -338,7 +338,7 @@ function LiveExecutionComponent({
                         );
                     })()
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center p-6 text-center opacity-20">
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-20 h-full">
                         <div className="text-[9px] uppercase font-black tracking-[0.4em] mb-2">
                             Awaiting Signal
                         </div>

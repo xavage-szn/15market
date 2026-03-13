@@ -113,6 +113,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 background: { type: ColorType.Solid, color: 'transparent' },
                 textColor: textColor,
             },
+            localization: {
+                priceFormatter: price => price.toFixed(2),
+            },
             grid: {
                 vertLines: { color: gridMode === 'all' ? gridColor : 'transparent' },
                 horzLines: { color: (gridMode === 'horz' || gridMode === 'all') ? gridColor : 'transparent' },
@@ -148,6 +151,15 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 borderColor: gridColor,
                 autoScale: true,
                 alignLabels: true,
+                borderVisible: false,
+            },
+            handleScale: {
+                mouseWheel: true,
+                pinch: true,
+            },
+            handleScroll: {
+                mouseWheel: true,
+                pressedMouseMove: true,
             },
         });
 
@@ -503,8 +515,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 }} />
             </div>
 
-            <div className="absolute inset-0 overflow-hidden rounded-[inherit] z-10">
-                <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'relative' }} />
+            <div className="absolute inset-0 z-10">
+                <div ref={chartContainerRef} className="w-full h-full" />
 
                 {/* Chart Crocodile Loading Overlay */}
                 <AnimatePresence>
