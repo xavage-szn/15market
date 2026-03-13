@@ -80,7 +80,7 @@ function TradeTerminalComponent({
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("UP"); }}
                 disabled={maintenanceMode}
-                className={`flex flex-col items-center justify-center ${transparent ? 'py-3' : 'py-1.5 lg:py-2'} rounded-xl border transition-all duration-300 active:scale-95 ${direction === "UP"
+                className={`flex flex-col items-center justify-center py-1.5 lg:py-2 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "UP"
                     ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
                     : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                     }`}
@@ -93,7 +93,7 @@ function TradeTerminalComponent({
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("DOWN"); }}
                 disabled={maintenanceMode}
-                className={`flex flex-col items-center justify-center ${transparent ? 'py-3' : 'py-1.5 lg:py-2'} rounded-xl border transition-all duration-300 active:scale-95 ${direction === "DOWN"
+                className={`flex flex-col items-center justify-center py-1.5 lg:py-2 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "DOWN"
                     ? (isLight ? 'bg-[#FF7F50] text-white border-transparent' : 'bg-[#FF7F50]/20 border-[#FF7F50] text-[#FF7F50]')
                     : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
                     }`}
@@ -139,13 +139,13 @@ function TradeTerminalComponent({
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1.5 ${transparent ? 'p-2' : 'p-1'} rounded-2xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
+            <div className={`flex items-center gap-1.5 p-1 rounded-2xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
                 <input
                     type="number"
                     value={amount}
                     onChange={handleAmountChange}
                     placeholder="0.00"
-                    className={`w-full bg-transparent ${transparent ? 'text-sm' : 'text-[10px]'} lg:text-sm font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
+                    className={`w-full bg-transparent text-[10px] lg:text-sm font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
                 />
             </div>
             <div className="relative pt-3 pb-1 px-1">
@@ -167,7 +167,7 @@ function TradeTerminalComponent({
             id="trade-confirm-button"
             onClick={(e) => { e.stopPropagation(); executeTrade(); }}
             disabled={isExecuting || maintenanceMode}
-            className={`w-full ${transparent ? 'py-4' : 'py-2.5 lg:py-3'} rounded-xl font-black ${transparent ? 'text-xs' : 'text-[8px]'} lg:text-[10px] uppercase tracking-[0.2em] lg:tracking-[0.3em] transition-all pointer-events-auto
+            className={`w-full py-2.5 lg:py-3 rounded-xl font-black text-[8px] lg:text-[10px] uppercase tracking-[0.2em] lg:tracking-[0.3em] transition-all pointer-events-auto
             ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "hover:brightness-110 active:scale-[0.99] shadow-xl"}`}
             style={{
                 background: maintenanceMode ? "#333" : (direction === "DOWN" ? '#FF7F50' : '#3CB371'),

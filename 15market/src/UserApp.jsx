@@ -2294,7 +2294,7 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-64px)] overflow-hidden pb-12' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
+              <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1.5 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-100px)] overflow-hidden pb-4' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
                 {/* V2: Integrated One Screen Layout */}
                 <motion.div
                   layout
@@ -2317,7 +2317,7 @@ export default function UserApp() {
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className={`flex-[1.8] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+                  <div className={`flex-[2] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
                     style={{
                       background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
@@ -2359,7 +2359,7 @@ export default function UserApp() {
                 >
                   {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                   <div className={`w-full flex-row gap-1.5 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
-                    <div className={`flex-1 min-h-0 h-[290px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2380,7 +2380,7 @@ export default function UserApp() {
                         uiVersion={uiVersion}
                       />
                     </div>
-                    <div className={`flex-1 min-h-0 h-[290px] rounded-[22px] overflow-hidden border glass-panel shadow-lg`}
+                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel shadow-lg`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2394,7 +2394,8 @@ export default function UserApp() {
                       </div>
                     </div>
                   </div>
-                  {/* Space eliminated as padding handles it */}
+                  {/* Compact spacer */}
+                  {isSmallScreen && <div className="h-6 shrink-0" />}
 
                   {!isSmallScreen && (
                     /* Existing Desktop V2 Layout */
