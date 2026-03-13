@@ -69,5 +69,3 @@ export function ThemeToggle({ theme, onToggle }) {
         </motion.button>
     );
 };
-    );
-};
