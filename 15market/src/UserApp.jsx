@@ -2191,7 +2191,7 @@ export default function UserApp() {
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[78px] lg:h-24' : 'h-14 lg:h-16'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[70px] lg:h-[132px]' : 'h-16 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
             <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
@@ -2294,11 +2294,11 @@ export default function UserApp() {
                 </div>
               </div>
             ) : (
-              <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-2 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-55px)] overflow-hidden pb-1' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
+              <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1.5 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-100px)] overflow-hidden pb-1' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
                 {/* V2: Integrated One Screen Layout */}
                 <motion.div
                   layout
-                  className="w-full md:w-[70%] flex flex-col gap-0.5 flex-1 lg:flex-none lg:h-full min-h-0 transition-all duration-500 relative"
+                  className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-[calc(100%-235px)]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
                   style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
                   {uiVersion === 'v2' && !isSmallScreen && (
@@ -2317,7 +2317,7 @@ export default function UserApp() {
                   <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
                     <GlobalTradeScroller theme={theme} />
                   </div>
-                  <div className={`${isSmallScreen ? 'h-[200px] flex-none mt-1' : 'flex-[2] min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+                  <div className={`flex-[2] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
                     style={{
                       background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                       boxShadow: theme === 'light'
@@ -2358,8 +2358,8 @@ export default function UserApp() {
                   className={`w-full md:w-[30%] flex ${isSmallScreen ? 'flex-row' : 'flex-row lg:flex-col'} ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
                 >
                   {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                  <div className={`w-full flex-row gap-2 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
-                    <div className={`flex-1 min-h-0 h-[230px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                  <div className={`w-full flex-row gap-1.5 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2380,7 +2380,7 @@ export default function UserApp() {
                         uiVersion={uiVersion}
                       />
                     </div>
-                    <div className={`flex-1 min-h-0 h-[230px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                    <div className={`flex-1 min-h-0 h-[220px] rounded-[22px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                       style={{
                         background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
