@@ -283,13 +283,22 @@ app.post('/settle', async (req, res) => {
             const payout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
 
             // Mark as settled in Redis immediately
-            await redis.addHistoricalTrade({
+            const settlementData = {
                 id: id,
                 status: isWin ? "WON" : "LOST",
                 settlementPrice: exitPriceNum.toFixed(8),
                 payout: payout,
                 settled: true,
                 lockedExitPrice: exitPriceNum.toFixed(8) // Save this so background processor uses it too
+            };
+
+            // Update history
+            await redis.addHistoricalTrade(settlementData);
+
+            // Update active trade so current session/polls see the finalized result
+            await redis.setTrade(id, {
+                ...trade,
+                ...settlementData
             });
 
             // Trigger on-chain settlement in the BACKGROUND

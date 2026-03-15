@@ -474,12 +474,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     });
 
     const tradeResults = useMemo(() => {
+        const now = Date.now();
         return activeTrades.map(trade => {
             const entryPrice = parseFloat(trade.entryPrice);
-            const spotPrice = parseFloat(currentPrice);
-            const isCall = trade.direction === "UP" || trade.direction === "buy";
-            const won = isCall ? spotPrice > entryPrice : spotPrice < entryPrice;
-            const diff = Math.abs(spotPrice - entryPrice).toFixed(4);
+            // If trade has a locked price or is settled, use that. Otherwise use live spot.
+            // Or if it's expired, it should be frozen.
+            const isExpired = trade.expiry ? (now > trade.expiry) : false;
+            const referencePrice = (trade.lockedExitPrice || trade.settlementPrice)
+                ? parseFloat(trade.lockedExitPrice || trade.settlementPrice)
+                : parseFloat(currentPrice);
+
+            const isCall = trade.direction === "UP" || trade.direction === "buy" || trade.direction === 1;
+            const won = isCall ? referencePrice > entryPrice : referencePrice < entryPrice;
+            const diff = Math.abs(referencePrice - entryPrice).toFixed(4);
             return { id: trade.id, won, diff, amount: trade.amount };
         });
     }, [activeTrades, currentPrice]);

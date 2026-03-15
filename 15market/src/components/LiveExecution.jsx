@@ -87,6 +87,51 @@ function LiveExecutionComponent({
         return () => clearInterval(interval);
     }, []);
 
+    // --- SETTLEMENT CONTROLLER ---
+    // Monitors trades and triggers settlement + local state lock when timer expires
+    useEffect(() => {
+        const now = startTimeRef.current + elapsed;
+        let stateUpdated = false;
+        const priceVal = parseFloat(price);
+
+        activeTrades.forEach(trade => {
+            const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000) || now;
+            const duration = trade.duration || 30;
+            const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
+            const timerExpired = now >= expiryMs;
+            const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
+            const isResolving = trade.status === "RESOLVING";
+
+            if (timerExpired && !isFinal && !isResolving && !frozenPnL.current[trade.id] && !trade.lockedExitPrice) {
+                const entryPriceVal = parseFloat(trade.entryPrice);
+                const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+                const isWin = isUpTrade ? (priceVal > entryPriceVal) : (priceVal < entryPriceVal);
+                const lockedPrice = priceVal.toFixed(8);
+
+                // 1. Freeze locally for immediate UI response
+                frozenPnL.current[trade.id] = {
+                    status: isWin ? "WON" : "LOST",
+                    exitPrice: lockedPrice
+                };
+
+                // 2. Nudge Backend
+                fetch(`/api-arc/settle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: trade.id,
+                        exitPrice: lockedPrice
+                    })
+                }).catch(() => { });
+
+                // 3. Update Parent State (Syncs Chart & Other UI)
+                setActiveTrades(prev => prev.map(t =>
+                    t.id === trade.id ? { ...t, lockedExitPrice: lockedPrice, status: "RESOLVING" } : t
+                ));
+            }
+        });
+    }, [elapsed, activeTrades, price, setActiveTrades]);
+
     const removeTrade = (id) => {
         setActiveTrades(prev => prev.filter(t => t.id !== id));
     };
@@ -108,9 +153,11 @@ function LiveExecutionComponent({
             <div className="flex items-center justify-between px-2 flex-none">
                 <div className="flex items-center gap-1.5">
                     <div className={`w-1.5 h-1.5 rounded-full lcd-live-blink ${isLight ? 'lcd-live-dot-light' : 'lcd-live-dot-dark'}`} />
-                    <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
-                        ACTIVE TRADES
-                    </h4>
+                    {activeTrades.length === 0 && (
+                        <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
+                            ACTIVE TRADES
+                        </h4>
+                    )}
                     {activeTrades.length > 1 && (
                         <button
                             onClick={() => setIsExpanded(!isExpanded)}
@@ -194,39 +241,20 @@ function LiveExecutionComponent({
                                             const truncTo2dp = (p) => Math.floor(p * 100) / 100;
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
-                                            // CRITICAL: Settle Trigger Logic
-                                            // Once timer hits 0, we freeze the current price and result, then nudge the backend
                                             const frozen = frozenPnL.current[trade.id];
-                                            if (timerExpired && !isFinal && !frozen) {
-
-                                                // Determine result based on high precision (Protocol Standard) to match on-chain logic
-                                                const isWin = isUpTrade ? (currentPriceVal > entryPriceVal) : (currentPriceVal < entryPriceVal);
-
-                                                // Freeze it locally so the UI never flips back
-                                                frozenPnL.current[trade.id] = {
-                                                    status: isWin ? "WON" : "LOST",
-                                                    exitPrice: currentPriceVal.toFixed(8)
-                                                };
-
-                                                // PROACTIVE SYNC: Nudge backend to settle with OUR source-of-truth price (high precision)
-                                                fetch(`/api-arc/settle`, {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({
-                                                        id: trade.id,
-                                                        exitPrice: currentPriceVal.toFixed(8)
-                                                    })
-                                                }).catch(() => { });
-                                            }
-
                                             const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
                                                 ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
                                                 : false;
 
+                                            const displayTimeLeft = (frozen || trade.status !== "PENDING") ? "0.0" : rawTimeLeft.toFixed(1);
+                                            const showInstantResult = (timerExpired || !!frozen || trade.status !== "PENDING") && !isFinal;
 
-                                            const displayTimeLeft = frozen ? "0.0" : rawTimeLeft.toFixed(1);
-                                            const showInstantResult = (timerExpired || !!frozen) && !isFinal;
-                                            const instantStatus = showInstantResult ? (frozen ? frozen.status : (liveWinning ? "WON" : "LOST")) : trade.status;
+                                            // STABILITY FIX: Use locked price if available, otherwise frozen, otherwise live
+                                            const stableWinning = (trade.lockedExitPrice || (frozen?.exitPrice))
+                                                ? (isUpTrade ? parseFloat(trade.lockedExitPrice || frozen.exitPrice) > entryPriceVal : parseFloat(trade.lockedExitPrice || frozen.exitPrice) < entryPriceVal)
+                                                : liveWinning;
+
+                                            const instantStatus = showInstantResult ? (stableWinning ? "WON" : "LOST") : trade.status;
 
                                             const displayFinal = isFinal || showInstantResult;
 
