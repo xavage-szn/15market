@@ -286,14 +286,14 @@ app.post('/settle', async (req, res) => {
             await redis.addHistoricalTrade({
                 id: id,
                 status: isWin ? "WON" : "LOST",
-                settlementPrice: exitPriceNum.toFixed(2),
+                settlementPrice: exitPriceNum.toFixed(8),
                 payout: payout,
                 settled: true,
-                lockedExitPrice: exitPriceNum.toFixed(2) // Save this so background processor uses it too
+                lockedExitPrice: exitPriceNum.toFixed(8) // Save this so background processor uses it too
             });
 
             // Trigger on-chain settlement in the BACKGROUND
-            processor._settleSingleTrade(trade, exitPriceNum.toFixed(2)).catch(e => {
+            processor._settleSingleTrade(trade, exitPriceNum.toFixed(8)).catch(e => {
                 logToFile(`[SETTLE] ❌ Background settlement failed for ${id}: ${e.message}`);
             });
 

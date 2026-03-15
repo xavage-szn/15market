@@ -33,7 +33,7 @@ class NonceManager {
                     console.log(`[Nonce] Initializing ${addr} in Redis from Chain (Pending Mode)...`);
                     const count = await Promise.race([
                         provider.getTransactionCount(address, 'pending'),
-                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
                     ]);
                     await redisStore.redis.setnx(redisKey, count);
                 }
@@ -47,7 +47,7 @@ class NonceManager {
                     console.log(`[Nonce] Initializing ${addr} in Memory from Chain (Pending Mode)...`);
                     const count = await Promise.race([
                         provider.getTransactionCount(address, 'pending'),
-                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
                     ]);
                     this.nonces.set(addr, count);
                 }
@@ -63,7 +63,7 @@ class NonceManager {
             // On failure, fall back to chain as a last resort
             return await Promise.race([
                 provider.getTransactionCount(address, 'pending'),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
             ]).catch(() => 0);
         } finally {
             release();
@@ -76,7 +76,7 @@ class NonceManager {
             console.log(`[Nonce] Force syncing ${addr} from chain...`);
             const nonce = await Promise.race([
                 provider.getTransactionCount(address, 'pending'),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
             ]);
             if (redisStore.isCloud) {
                 await redisStore.redis.set(`nnc:${addr}`, nonce);

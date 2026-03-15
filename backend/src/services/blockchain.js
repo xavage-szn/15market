@@ -216,7 +216,7 @@ class BlockchainService {
 
         // Aggressive Strategy: 4x base + higher priority to ensure inclusion on Arc Testnet
         const maxFee = (baseGas * 40n / 10n) + (priorityFee * 12n / 10n);
-        const minGasFee = ethers.parseUnits("250", "gwei"); // Increased floor for stability
+        const minGasFee = ethers.parseUnits("50", "gwei"); // Lowered floor to prevent gas exhaustion
 
         const finalGasPrice = maxFee > minGasFee ? maxFee : minGasFee;
 
@@ -301,14 +301,17 @@ class BlockchainService {
             // SCALE FIX: Entry price is stored at 10^8 precision. Exit price must match.
             const settlementPriceBigInt = ethers.parseUnits(parseFloat(exitPrice).toFixed(8), 8);
 
-            const tx = await this.contract.settleBet(betId, settlementPriceBigInt, {
-                nonce: nonce,
-                maxFeePerGas: fees.maxFeePerGas,
-                maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 800000n, // Increased back for complex settlements with multiple payouts
-                type: 2, // EIP-1559
-                chainId: 5042002
-            });
+            const tx = await Promise.race([
+                this.contract.settleBet(betId, settlementPriceBigInt, {
+                    nonce: nonce,
+                    maxFeePerGas: fees.maxFeePerGas,
+                    maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+                    gasLimit: 800000n, // Increased back for complex settlements with multiple payouts
+                    type: 2, // EIP-1559
+                    chainId: 5042002
+                }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Broadcast TIMEOUT")), 20000))
+            ]);
 
             console.log(`[Blockchain] 🚀 TX Sent: ${tx.hash} for bet ${betId}`);
             this.pendingTxs.set(tx.hash, { betId: betId.toString(), sentAt: Date.now() });
