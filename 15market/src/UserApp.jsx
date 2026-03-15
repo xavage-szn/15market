@@ -198,24 +198,75 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
 };
 
 
-const ThemeTransitionOverlay = ({ isAnimating, targetTheme }) => {
+const FireBurnTransition = ({ isAnimating, targetTheme }) => {
   if (!isAnimating) return null;
 
   const isLight = targetTheme === 'light';
+  const bgColor = isLight ? '#f0f9f4' : '#030303';
 
   return (
     <div className="fixed inset-0 z-[10000] pointer-events-none overflow-hidden">
-      {/* Laser Scanner Line */}
+      {/* SVG Filter for charred edge texture */}
+      <svg style={{ visibility: 'hidden', position: 'absolute' }} width="0" height="0">
+        <filter id="charred-edge">
+          <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="1" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="35" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
+
+      {/* 1. The Expanding "Fire" Ring */}
       <motion.div
-        initial={{ y: isLight ? '105vh' : '-5vh' }}
-        animate={{ y: isLight ? '-5vh' : '105vh' }}
-        transition={{ duration: 1.2, ease: [0.6, 0.05, 0.1, 0.9] }}
-        className="absolute left-0 right-0 z-20 h-[1.5px]"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: [0, 1.8, 3.8], opacity: [0, 1, 1, 0] }}
+        transition={{ duration: 1.8, ease: [0.4, 0, 0.2, 1] }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[110vmax] h-[110vmax] rounded-full"
         style={{
-          background: '#3CB371',
-          boxShadow: '0 0 15px 2px #3CB371, 0 0 30px 4px #3CB37180'
+          background: 'radial-gradient(circle, transparent 40%, #FFD700 44%, #FF4500 48%, #8B0000 52%, transparent 58%)',
+          filter: 'blur(35px) contrast(180%) url(#charred-edge)',
+          mixBlendMode: isLight ? 'multiply' : 'screen',
         }}
       />
+
+      {/* 2. The New Background Reveal - Jagged Edge */}
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: [0, 1.7, 4.2], opacity: [0, 1, 1, 1] }}
+        transition={{ duration: 1.6, ease: [0.4, 0, 0.2, 1] }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vmax] h-[100vmax] rounded-full"
+        style={{
+          background: bgColor,
+          filter: 'url(#charred-edge)',
+          boxShadow: isLight
+            ? '0 0 120px 40px rgba(60, 179, 113, 0.4)'
+            : '0 0 120px 40px rgba(255, 69, 0, 0.3)',
+        }}
+      />
+
+      {/* 3. Dispersing Embers */}
+      {[...Array(25)].map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{
+            x: '50vw',
+            y: '50vh',
+            scale: 0,
+            opacity: 1
+          }}
+          animate={{
+            x: `${50 + (Math.random() - 0.5) * 180}vw`,
+            y: `${50 + (Math.random() - 0.5) * 180}vh`,
+            scale: Math.random() * 2.5,
+            opacity: 0,
+            rotate: Math.random() * 720
+          }}
+          transition={{ duration: 1.2 + Math.random(), delay: 0.2 + (Math.random() * 0.6) }}
+          className="absolute w-1.5 h-1.5 bg-yellow-400 rounded-full"
+          style={{
+            boxShadow: '0 0 12px 2px #FF4500',
+            mixBlendMode: 'screen'
+          }}
+        />
+      ))}
     </div>
   );
 };
@@ -245,11 +296,11 @@ export default function UserApp() {
     // Swap actual theme immediately so components CSS-transition seamlessly as the line passes
     setTheme(nextTheme);
 
-    // End animation and clean up once scanner completes (1.2s duration)
+    // End animation and clean up once burner completes (1.8s duration)
     setTimeout(() => {
       setIsAnimatingTheme(false);
       setTargetTheme(null);
-    }, 1400);
+    }, 1800);
   }, [theme, isAnimatingTheme]);
 
   // Keep-Alive Heartbeat (Prevents Backend from Sleeping while user is active)
@@ -2150,7 +2201,7 @@ export default function UserApp() {
 
 
 
-      <ThemeTransitionOverlay isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
+      <FireBurnTransition isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
 
       {view === "dashboard" ? (
         <DashboardPage
