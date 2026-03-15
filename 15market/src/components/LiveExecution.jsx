@@ -199,30 +199,28 @@ function LiveExecutionComponent({
                                             const frozen = frozenPnL.current[trade.id];
                                             if (timerExpired && !isFinal && !frozen) {
 
-                                                const exit2dp = truncTo2dp(currentPriceVal);
-                                                const entry2dp = truncTo2dp(entryPriceVal);
-                                                // Determine result based on truncated 2dp values (Protocol Standard)
-                                                const isWin = isUpTrade ? (exit2dp > entry2dp) : (exit2dp < entry2dp);
+                                                // Determine result based on high precision (Protocol Standard) to match on-chain logic
+                                                const isWin = isUpTrade ? (currentPriceVal > entryPriceVal) : (currentPriceVal < entryPriceVal);
 
                                                 // Freeze it locally so the UI never flips back
                                                 frozenPnL.current[trade.id] = {
                                                     status: isWin ? "WON" : "LOST",
-                                                    exitPrice: currentPriceVal.toFixed(2)
+                                                    exitPrice: currentPriceVal.toFixed(8)
                                                 };
 
-                                                // PROACTIVE SYNC: Nudge backend to settle with OUR source-of-truth price
+                                                // PROACTIVE SYNC: Nudge backend to settle with OUR source-of-truth price (high precision)
                                                 fetch(`/api-arc/settle`, {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
                                                     body: JSON.stringify({
                                                         id: trade.id,
-                                                        exitPrice: currentPriceVal.toFixed(2)
+                                                        exitPrice: currentPriceVal.toFixed(8)
                                                     })
                                                 }).catch(() => { });
                                             }
 
                                             const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                ? (isUpTrade ? truncTo2dp(currentPriceVal) > truncTo2dp(entryPriceVal) : truncTo2dp(currentPriceVal) < truncTo2dp(entryPriceVal))
+                                                ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
                                                 : false;
 
 
@@ -295,7 +293,7 @@ function LiveExecutionComponent({
                                                             <div className="flex flex-col gap-0.5">
                                                                 <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Entry</span>
                                                                 <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>
-                                                                    {!isNaN(entryPriceVal) ? `$${entryPriceVal}` : "..."}
+                                                                    {!isNaN(entryPriceVal) ? `$${entryPriceVal.toFixed(2)}` : "..."}
                                                                 </span>
                                                             </div>
                                                             <div className="flex flex-col gap-0.5">

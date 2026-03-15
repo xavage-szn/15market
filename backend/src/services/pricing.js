@@ -86,8 +86,8 @@ class PricingService {
 
                 const fastestPrice = await Promise.any(pricePromises);
                 const time = Date.now();
-                // Enforce 2 decimal models globally at source for outcome consistency
-                const finalPrice = Math.floor(fastestPrice * 100) / 100;
+                // Maintain full precision at source for outcome accuracy
+                const finalPrice = fastestPrice;
                 this.cache[symbol] = { price: finalPrice, time };
 
                 // Keep history for last 20 minutes (roughly 800-1200 entries at 1s-1.5s resolution)

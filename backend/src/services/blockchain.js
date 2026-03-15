@@ -27,27 +27,34 @@ const getRpcEndpoints = () => {
 
 async function createProvider(blockchainService) {
     const endpoints = getRpcEndpoints();
-    const currentRpcs = blockchainService?.lastGoodRpc
-        ? [blockchainService.lastGoodRpc, ...endpoints.filter(r => r !== blockchainService.lastGoodRpc)]
-        : endpoints;
+    let currentRpcs;
+
+    if (blockchainService?.lastGoodRpc) {
+        // When rotating, we actually want to MOVE the last good rpc to the END of the list
+        // because it's likely the one currently hitting limits.
+        const others = endpoints.filter(r => r !== blockchainService.lastGoodRpc);
+        currentRpcs = [...others, blockchainService.lastGoodRpc];
+    } else {
+        currentRpcs = endpoints;
+    }
 
     console.log(`[Blockchain] Initializing provider with ${currentRpcs.length} endpoints...`);
     for (const rpc of currentRpcs) {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 60000;
+            fetchReq.timeout = 25000; // Shorter timeout for faster failover during rotation
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
                 staticNetwork: true,
-                batchMaxCount: 1 // Disable batching for dRPC compatibility
+                batchMaxCount: 1
             });
 
-            // Race getBlockNumber against a 10s timeout for faster rotation
+            // Race getBlockNumber against a 6s timeout for faster rotation
             const block = await Promise.race([
                 provider.getBlockNumber(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 6000))
             ]);
 
             console.log(`[Blockchain] ✅ Connected to RPC: ${rpc} (Block: ${block})`);
@@ -57,8 +64,10 @@ async function createProvider(blockchainService) {
             console.warn(`[Blockchain] ⚠️ RPC failed: ${rpc} — ${e.message}`);
         }
     }
+
+    // Last ditch effort: use the first endpoint without complex logic
     const fallbackReq = new FetchRequest(endpoints[0]);
-    fallbackReq.timeout = 60000;
+    fallbackReq.timeout = 30000;
     return new ethers.JsonRpcProvider(fallbackReq, ethers.Network.from(5042002), { staticNetwork: true, batchMaxCount: 1 });
 }
 
@@ -136,7 +145,7 @@ class BlockchainService {
                                 user: user,
                                 amount: ethers.formatEther(amount),
                                 direction: Number(direction),
-                                entryPrice: normalizedEntry.toFixed(4),
+                                entryPrice: normalizedEntry.toFixed(8),
                                 duration: Number(duration),
                                 timestamp: Number(timestamp),
                                 marketId: Number(marketId),
@@ -218,22 +227,27 @@ class BlockchainService {
         };
     }
 
-    async rotateRpc() {
+    async rotateRpc(failedRpc = null) {
         if (this.isRotating) return;
         this.isRotating = true;
 
+        if (!failedRpc && this.lastGoodRpc) {
+            failedRpc = this.lastGoodRpc;
+        }
+
         try {
-            console.warn('[Blockchain] 🔄 Congestion detected. Background rotating RPC endpoints...');
+            console.warn(`[Blockchain] 🔄 Congestion detected on ${failedRpc || 'current RPC'}. Rotating endpoints...`);
+
+            // If we have a failed RPC, we should ensure the next provider attempt doesn't prioritize it
             const newProvider = await createProvider(this);
             const newWallet = new ethers.Wallet(process.env.PRIVATE_KEY, newProvider);
             const newContract = new ethers.Contract(this.contractAddress, this.abi, newWallet);
 
-            // Atomic swap to avoid race conditions or provider becoming null
             this.provider = newProvider;
             this.wallet = newWallet;
             this.contract = newContract;
 
-            console.log(`[Blockchain] ✅ RPC rotated and service updated.`);
+            console.log(`[Blockchain] ✅ RPC rotated and service updated. New RPC: ${this.lastGoodRpc}`);
             await this._resetNonce();
         } catch (e) {
             console.error(`[Blockchain] ❌ RPC rotation failed: ${e.message}`);
@@ -305,7 +319,7 @@ class BlockchainService {
             const msg = (e.message || "").toLowerCase();
             const fullError = JSON.stringify(e).toLowerCase();
 
-            if (msg.includes('nonce') || msg.includes('underpriced') || msg.includes('already been used') || msg.includes('replacement') || msg.includes('too low')) {
+            if (msg.includes('nonce') || msg.includes('underpriced') || msg.includes('already been used') || msg.includes('replacement') || msg.includes('too low') || msg.includes('txpool is full') || fullError.includes('txpool is full')) {
                 await this._resetNonce();
             }
 
@@ -313,8 +327,8 @@ class BlockchainService {
                 msg.includes('too many requests') || msg.includes('429') ||
                 fullError.includes('txpool is full') || fullError.includes('timeout') || fullError.includes('rate limit')) {
                 console.warn(`[Blockchain] ⏳ RPC Overloaded or Rate Limited for bet ${betId}. Rotating nodes...`);
-                // Force rotation to a fresh node
-                await this.rotateRpc();
+                // Force rotation to a fresh node, explicitly deprioritizing the one that just failed
+                await this.rotateRpc(this.lastGoodRpc);
             }
 
             if (msg.includes('already settled')) {

@@ -152,7 +152,7 @@ app.get('/settings', (req, res) => res.json(SETTINGS_RESPONSE));
 app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
 
 // Helper for history (Shared between /history and /profile)
-const getHistoryFor = async (address) => {
+const getHistoryFor = async (address, limit = 100) => {
     try {
         const [historical, active] = await Promise.all([
             redis.getFullHistory(),
@@ -176,7 +176,8 @@ const getHistoryFor = async (address) => {
             );
         }
 
-        return trades.sort((a, b) => (b.timestamp || b.startTime || 0) - (a.timestamp || a.startTime || 0)).slice(0, 100);
+        const sorted = trades.sort((a, b) => (b.timestamp || b.startTime || 0) - (a.timestamp || a.startTime || 0));
+        return limit > 0 ? sorted.slice(0, limit) : sorted;
     } catch (e) {
         console.error('[History API] Error:', e);
         return [];
@@ -229,13 +230,14 @@ app.get('/profile', async (req, res) => {
         const { address } = req.query;
         if (!address) return res.status(400).json({ error: 'Address required' });
 
-        const history = await getHistoryFor(address);
+        // Fetch FULL history for accurate stats
+        const allHistory = await getHistoryFor(address, 0);
 
-        // Stats calculation
+        // Stats calculation on ALL trades
         const stats = {
-            totalTrades: history.length,
-            totalWins: history.filter(t => t.status === 'WON').length,
-            totalVolume: history.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0).toFixed(2)
+            totalTrades: allHistory.length,
+            totalWins: allHistory.filter(t => t.status === 'WON').length,
+            totalVolume: allHistory.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0).toFixed(2)
         };
 
         res.json({
@@ -245,7 +247,7 @@ app.get('/profile', async (req, res) => {
                 address: address
             },
             stats,
-            history: history,
+            history: allHistory.slice(0, 100), // Return only latest 100 as display history
             transactions: [] // TODO: Implement if needed
         });
     } catch (e) {
@@ -267,11 +269,13 @@ app.post('/settle', async (req, res) => {
             // We use the exitPrice provided by the frontend if it exists. 
             // This ensures the outcome shown to the user is exactly what is settled on-chain.
 
-            const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
-            const entryPrice = trunc2(trade.entryPrice);
-            const exitPriceNum = trunc2(exitPrice || entryPrice);
+            const cleanPrice = (p) => parseFloat(p);
+            const entryPrice = cleanPrice(trade.entryPrice);
+            const exitPriceNum = cleanPrice(exitPrice || entryPrice);
 
             const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
+
+            // CRITICAL: Use high precision for win/loss determination to match on-chain contract logic
             const isWin = isUp ? (exitPriceNum > entryPrice) : (exitPriceNum < entryPrice);
 
             const duration = Number(trade.duration) || 15;
@@ -309,14 +313,14 @@ app.post('/settle', async (req, res) => {
 app.post('/trade-ping', async (req, res) => {
     try {
         const { id, address, amount, direction, duration, entryPrice, symbol } = req.body;
-        const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
         const tradeData = {
             id: id.toString(),
             user: address,
             amount: amount,
             direction: direction,
             duration: duration,
-            entryPrice: trunc2(Number(entryPrice) / 1e8).toFixed(2),
+            // Maintain 8 decimals for consistency with contract precision
+            entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
             symbol: symbol || 'BTC',
             expiry: Date.now() + (duration * 1000),
             confirmed: true,
@@ -534,7 +538,7 @@ app.post('/session/trade', async (req, res) => {
             amount: amount,
             direction: direction,
             duration: duration,
-            entryPrice: trunc2(Number(entryPrice) / 1e8).toFixed(2),
+            entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
             symbol: symbol,
             // Expiry/StartTime set pessimistically, will be updated strictly on confirmation
             expiry: Date.now() + (duration * 1000),

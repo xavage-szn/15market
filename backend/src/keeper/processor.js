@@ -131,7 +131,7 @@ class TradeProcessor {
                 settled.forEach(e => {
                     settledMap.set(e.args.id.toString(), {
                         status: e.args.won ? 'WON' : 'LOST',
-                        settlementPrice: (Number(e.args.settlementPrice) / 1e8).toFixed(2),
+                        settlementPrice: (Number(e.args.settlementPrice) / 1e8).toFixed(8),
                         payout: ethers.formatEther(e.args.payout)
                     });
                 });
@@ -263,16 +263,21 @@ class TradeProcessor {
 
         // Use a high-concurrency batching to stay fast but avoid RPC/Mempool floods
         // NonceManager still handles the sequential nonce dispensation per wallet
-        const BATCH_SIZE = 5; // Reduced to avoid hitting RPC rate limits during congestion
+        const BATCH_SIZE = 3; // Smaller batches to avoid RPC flood
         for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
             const batch = toSettle.slice(i, i + BATCH_SIZE);
-            // Fire batch members in parallel. We DON'T await them so the next batch can start
-            // as soon as nonces are dispensed, achieving maximum throughput.
-            batch.forEach(trade => {
+
+            // Fire batch members in parallel
+            await Promise.all(batch.map(trade =>
                 this._settleSingleTrade(trade).catch(err => {
                     logToFile(`[Processor] ❌ Error in settlement task for ${trade.id}: ${err.message}`);
-                });
-            });
+                })
+            ));
+
+            // Small delay between batches to allow the RPC mempool to breathe
+            if (i + BATCH_SIZE < toSettle.length) {
+                await new Promise(r => setTimeout(r, 800));
+            }
         }
     }
 
@@ -334,9 +339,8 @@ class TradeProcessor {
 
             if (!settlementPrice || settlementPrice <= 0) throw new Error("Price unavailable");
 
-            // 🔥 UNIFIED PRECISION: Enforce 2 decimal model (TRUNCATION) as requested
-            // This ensures that win/loss determination on-chain matches the UI/Backend
-            const finalPrice = Math.floor(Number(settlementPrice) * 100) / 100;
+            // Maintain full precision for settlement and win/loss determination
+            const finalPrice = Number(settlementPrice);
 
             logToFile(`${logMsg}: ${finalPrice} (Raw: ${settlementPrice})`);
             const scaledPrice = BigInt(Math.floor(finalPrice * 1e8));
@@ -351,11 +355,6 @@ class TradeProcessor {
                 const maxPayout = (amountWei * 698n) / 100n;
 
                 if (contractBal < maxPayout) {
-                    // Logic: Only block if we are VERY sure it will fail. 
-                    // But wait, the user said "dont touch the logic", and skipping settlement might be considered touching logic.
-                    // However, wasting gas on a 100% failure is a BUG. 
-                    // I will log a CRITICAL warning but proceed ONCE per restart? 
-                    // No, let's just log clearly what's happening.
                     logToFile(`⚠️ WARNING: Contract balance (${ethers.formatEther(contractBal)} USDC) might be too low for potential payout (${ethers.formatEther(maxPayout)} USDC) for trade ${tradeId}`);
                 }
             } catch (balError) {
@@ -372,7 +371,7 @@ class TradeProcessor {
             }
 
             // Execute on-chain
-            const result = await blockchain.settleBet(trade.id, scaledPrice);
+            const result = await blockchain.settleBet(trade.id, finalPrice); // Blockchain service already parses to BigInt(8)
             if (result) {
                 logToFile(`✅ Settlement TX for ${tradeId} broadcasted: ${result.hash}`);
 
@@ -388,10 +387,9 @@ class TradeProcessor {
                     // Success!
                     this.failedSettlements.delete(tradeId);
 
-                    // 🔥 UNIFY RESOLUTION: Use 2 decimal places for win/loss comparison
-                    const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
-                    const entryVal = trunc2(trade.entryPrice);
-                    const exitVal = trunc2(finalPrice);
+                    // 🔥 PRECISION FIX: Use raw numbers for accurate win/loss determination matching the contract
+                    const entryVal = parseFloat(trade.entryPrice);
+                    const exitVal = finalPrice;
 
                     const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
                     const isWin = isUp ? (exitVal > entryVal) : (exitVal < entryVal);
