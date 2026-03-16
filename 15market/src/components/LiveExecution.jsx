@@ -91,14 +91,16 @@ function LiveExecutionComponent({
     // Monitors trades and triggers settlement + local state lock when timer expires
     useEffect(() => {
         const now = startTimeRef.current + elapsed;
-        let stateUpdated = false;
         const priceVal = parseFloat(price);
 
         activeTrades.forEach(trade => {
-            const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000) || now;
+            const start = trade.startTime || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000)) || now;
             const duration = trade.duration || 30;
             const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
+
+            // STABILITY FIX: Ensure countdown doesn't exceed duration due to clock skew
             const timerExpired = now >= expiryMs;
+
             const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
             const isResolving = trade.status === "RESOLVING";
 
@@ -106,7 +108,11 @@ function LiveExecutionComponent({
                 const entryPriceVal = parseFloat(trade.entryPrice);
                 const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
                 const isWin = isUpTrade ? (priceVal > entryPriceVal) : (priceVal < entryPriceVal);
+
+                // Freeze at the current price exactly when the timer hits zero
                 const lockedPrice = priceVal.toFixed(8);
+
+                console.log(`🎯 [Finality] Trade ${trade.id} expired. Locking exit price: ${lockedPrice}`);
 
                 // 1. Freeze locally for immediate UI response
                 frozenPnL.current[trade.id] = {
@@ -126,7 +132,7 @@ function LiveExecutionComponent({
 
                 // 3. Update Parent State (Syncs Chart & Other UI)
                 setActiveTrades(prev => prev.map(t =>
-                    t.id === trade.id ? { ...t, lockedExitPrice: lockedPrice, status: "RESOLVING" } : t
+                    t.id === trade.id ? { ...t, lockedExitPrice: lockedPrice, status: isWin ? "WON" : "LOST" } : t
                 ));
             }
         });
@@ -214,15 +220,16 @@ function LiveExecutionComponent({
                                         {(() => {
                                             const trade = visibleTrade;
                                             const now = startTimeRef.current + elapsed;
-                                            const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000) || now;
+                                            const start = trade.startTime || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000)) || now;
                                             const duration = trade.duration || 30;
                                             const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
-                                            // STABLE TIMER: Ensure time left never increases (glitch protection)
-                                            const currentRawTime = Math.max(0, (expiryMs - now) / 1000);
+                                            // STABLE TIMER: Ensure time left never exceeds duration and never increases
+                                            const currentRawTime = (expiryMs - now) / 1000;
+                                            const stableRawTime = Math.min(duration, Math.max(0, currentRawTime));
 
                                             // Lock the time so it only goes down
-                                            if (lastTimeRef.current[trade.id] === undefined || currentRawTime < lastTimeRef.current[trade.id]) {
-                                                lastTimeRef.current[trade.id] = currentRawTime;
+                                            if (lastTimeRef.current[trade.id] === undefined || stableRawTime < lastTimeRef.current[trade.id]) {
+                                                lastTimeRef.current[trade.id] = stableRawTime;
                                             }
                                             const rawTimeLeft = lastTimeRef.current[trade.id];
 

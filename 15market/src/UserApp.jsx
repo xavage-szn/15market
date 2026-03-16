@@ -1745,7 +1745,7 @@ export default function UserApp() {
 
             // Determine Outcome Locally
             const ePrice = parseFloat(trade.entryPrice);
-            const isUp = parseInt(trade.direction) === 0;
+            const isUp = String(trade.direction) === "1" || String(trade.direction).toUpperCase() === "UP";
             const diff = capturedPrice - ePrice;
             const isWon = isUp ? diff > 0 : diff < 0;
             const finalStatus = isWon ? "WON" : "LOST";
@@ -1930,6 +1930,47 @@ export default function UserApp() {
     });
     return () => unwatch();
   }, [address, evmSessionWallet, notify, aggressiveRefresh, updateEvmSessionBal, refetchEvmBalance]);
+
+  // --- OPTIMISTIC PAYOUT CREDITOR ---
+  // If a trade hits WON status (from LiveExecution or Resolver), credit balance immediately
+  useEffect(() => {
+    const winningTrades = activeTrades.filter(t => t.status === "WON" && !t.balanceApplied);
+
+    winningTrades.forEach(trade => {
+      const betId = (trade.id || trade.nonce || trade.tx).toString();
+      if (creditedPayouts.current.has(betId)) return;
+
+      // Calculate payout: Stake * Multiplier
+      const amt = parseFloat(trade.amount);
+      const duration = trade.duration || 15;
+      const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+      const payout = amt * multiplier;
+
+      creditedPayouts.current.add(betId);
+      // Clean up tracking after 10 mins (plenty of time for on-chain event to confirm)
+      setTimeout(() => creditedPayouts.current.delete(betId), 600000);
+
+      const isSession = trade.isSessionTrade || trade.sessionOwner;
+
+      if (isSession) {
+        setSessionBalance(prev => prev + payout);
+        console.log(`🚀 [INSTANT WIN] +${payout.toFixed(3)} credited to AUTO-SIGNER for trade ${betId}`);
+      } else {
+        setEvmBalance(prev => {
+          const current = parseFloat(prev || '0');
+          return (current + payout).toFixed(6);
+        });
+        console.log(`🚀 [INSTANT WIN] +${payout.toFixed(3)} credited to MAIN WALLET for trade ${betId}`);
+      }
+
+      // Mark as applied so the chain listener doesn't double-credit
+      setActiveTrades(prev => prev.map(t =>
+        (t.id?.toString() === betId || t.nonce?.toString() === betId) ? { ...t, balanceApplied: true, payout: payout.toString() } : t
+      ));
+
+      notify(`INSTANT WIN! +${payout.toFixed(2)} USDC`, "success");
+    });
+  }, [activeTrades, evmSessionWallet, notify]);
 
   const handleRefill = useCallback(async (amt) => {
     if (isExecuting) return;

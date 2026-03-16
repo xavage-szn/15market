@@ -320,20 +320,17 @@ class TradeProcessor {
 
             if (!settlementPrice) {
                 // ATTEMPT 1: Get HISTORICAL price at the exact moment of expiry
-                // This is the most accurate for settlement to match user expectations
                 settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
                 if (settlementPrice) {
                     logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
                 } else {
-                    // ATTEMPT 2: Fallback to FRESH oracle price ONLY if it's been more than 15s since expiry
-                    // Otherwise, we wait for history or manual settle.
+                    // ATTEMPT 2: Fallback to a very safe buffer or WAIT
+                    // 🔥 CRITICAL FIX: Removed 'pricing.getPrice(symbol)' fallback.
+                    // Using the current price for an old trade is what caused the $2k exploit.
+                    // We now throw an error to trigger a retry in the next loop, 
+                    // allowing history to catch up or frontend to send a manual price.
                     const age = Date.now() - trade.expiry;
-                    if (age > 15000) {
-                        settlementPrice = await pricing.getPrice(symbol);
-                        logMsg = `[Processor] Using EMERGENCY FRESH oracle price for ${tradeId}`;
-                    } else {
-                        throw new Error(`Price for ${symbol} at ${trade.expiry} not in history yet (age: ${age}ms). Waiting.`);
-                    }
+                    throw new Error(`⚠️ NO PRICE DATA for ${symbol} at ${trade.expiry} yet (Age: ${Math.floor(age / 1000)}s). REFUSING to use fresh price for old trade.`);
                 }
             }
 
