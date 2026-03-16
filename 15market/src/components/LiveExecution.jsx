@@ -94,9 +94,9 @@ function LiveExecutionComponent({
         const priceVal = parseFloat(price);
 
         activeTrades.forEach(trade => {
-            const start = trade.startTime || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000)) || now;
-            const duration = trade.duration || 30;
-            const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
+            const start = trade.startTime || trade.timestamp || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000));
+            const duration = trade.duration || 15;
+            const expiryMs = trade.expiry || trade.expiryMs || (start ? (start + (duration * 1000)) : (now + (duration * 1000)));
 
             // STABILITY FIX: Ensure countdown doesn't exceed duration due to clock skew
             const timerExpired = now >= expiryMs;

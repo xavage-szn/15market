@@ -310,6 +310,7 @@ export default function UserApp() {
     if (address && address === lastAddressRef.current) {
       localStorage.setItem(`15market_active_${address.toLowerCase()}`, JSON.stringify(activeTrades));
     }
+    activeTradesRef.current = activeTrades;
   }, [activeTrades, address]);
 
   const [timerActive, setTimerActive] = useState(false);
@@ -441,6 +442,10 @@ export default function UserApp() {
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
+  const activeTradesRef = useRef([]);
+  const priceRef = useRef("0.00");
+  const priceHistoryRef = useRef([]);
+  const lastOptimisticActionTime = useRef(0);
 
   // Orientation & Device Detection for V2 Forced Landscape
   const [isPortrait, setIsPortrait] = useState(
@@ -602,9 +607,14 @@ export default function UserApp() {
       const GHOST_GRACE = 5000;
 
       const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status)).map(t => {
-        const startTime = (t.timestamp || t.startTime || now);
+        // Find existing local copy to preserve its STABLE startTime
+        const local = prev.find(p => String(p.id) === String(t.id));
+        const startTime = (t.timestamp || t.startTime || local?.startTime || now);
         const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
-        const expiryMs = t.expiryMs || (normStart + (t.duration * 1000));
+
+        // CRITICAL: Prefer current local expiryMs if it exists to prevent countdown jumping
+        const expiryMs = local?.expiryMs || t.expiryMs || (normStart + (t.duration * 1000));
+
         return { ...t, startTime: normStart, expiryMs, confirmed: true };
       });
 
