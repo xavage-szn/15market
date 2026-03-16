@@ -43,7 +43,7 @@ async function createProvider(blockchainService) {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 25000; // Shorter timeout for faster failover during rotation
+            fetchReq.timeout = 60000; // Increased to 60s for unstable Arc RPCs
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
@@ -94,7 +94,7 @@ class BlockchainService {
         this.abi = [
             "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
             "function settleBet(uint256 _betId, uint256 _exitPrice) external",
-            "function bets(uint256) view returns (address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 settlementPrice, uint256 duration, uint256 timestamp, uint8 marketId, bool settled)",
+            "function bets(uint256) view returns (uint256 id, address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 timestamp, uint256 duration, uint8 marketId, uint256 settlementPrice, bool settled, bool won)",
             "function owner() view returns (address)",
             "event BetPlaced(uint256 indexed id, address indexed user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 duration, uint256 timestamp, uint8 marketId)",
             "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
@@ -257,6 +257,7 @@ class BlockchainService {
             this.contract = newContract;
 
             console.log(`[Blockchain] ✅ RPC rotated and service updated. New RPC: ${this.lastGoodRpc}`);
+            logToFile(`[Blockchain] 🔄 Switched to RPC: ${this.lastGoodRpc} due to congestion/timeouts`);
             await this._resetNonce();
         } catch (e) {
             console.error(`[Blockchain] ❌ RPC rotation failed: ${e.message}`);
@@ -319,7 +320,7 @@ class BlockchainService {
                     type: 2, // EIP-1559
                     chainId: 5042002
                 }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Broadcast TIMEOUT")), 20000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Broadcast TIMEOUT (45s)")), 45000))
             ]);
 
             console.log(`[Blockchain] 🚀 TX Sent: ${tx.hash} for bet ${betId}`);
@@ -418,6 +419,16 @@ class BlockchainService {
             return onChainBet.settled;
         } catch (e) {
             return false;
+        }
+    }
+
+    async getNativeBalance(address) {
+        try {
+            await this._ensureReady();
+            const balance = await this.provider.getBalance(address);
+            return balance;
+        } catch (e) {
+            return 0n;
         }
     }
 }

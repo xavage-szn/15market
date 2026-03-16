@@ -352,7 +352,15 @@ class TradeProcessor {
                 const maxPayout = (amountWei * 698n) / 100n;
 
                 if (contractBal < maxPayout) {
-                    logToFile(`⚠️ WARNING: Contract balance (${ethers.formatEther(contractBal)} USDC) might be too low for potential payout (${ethers.formatEther(maxPayout)} USDC) for trade ${tradeId}`);
+                    const msg = `🚩 CRITICAL FUNDING: Contract balance (${ethers.formatEther(contractBal)} USDC) is insufficient for payout (${ethers.formatEther(maxPayout)} USDC) for trade ${tradeId}. Settlement will likely REVERT.`;
+                    console.error(`[Processor] ${msg}`);
+                    logToFile(msg);
+
+                    // If balance is extremely low, skip broadcast to save gas on certain revert
+                    if (contractBal < ethers.parseUnits("5", 18)) {
+                        logToFile(`[Processor] 🛑 Skipping broadcast for ${tradeId} to prevent gas loss on empty contract.`);
+                        return; // Wait for next loop/funding
+                    }
                 }
             } catch (balError) {
                 console.warn(`[Processor] Could not check contract balance: ${balError.message}`);
