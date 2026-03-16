@@ -337,30 +337,31 @@ class TradeProcessor {
             if (!settlementPrice || settlementPrice <= 0) throw new Error("Price unavailable");
 
             // Maintain full precision for settlement and win/loss determination
-            const finalPrice = Number(settlementPrice);
+            // Determine outcome and expected payout FIRST to check affordability
+            const entryVal = parseFloat(trade.entryPrice);
+            const exitVal = Number(settlementPrice);
+            logToFile(`${logMsg}: ${exitVal} (Raw: ${settlementPrice})`);
+            const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
+            const isWin = isUp ? (exitVal > entryVal) : (exitVal < entryVal);
 
-            logToFile(`${logMsg}: ${finalPrice} (Raw: ${settlementPrice})`);
-            const scaledPrice = BigInt(Math.floor(finalPrice * 1e8));
+            const duration = Number(trade.duration) || 15;
+            const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+            const expectedPayout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 1e8) / 1e8) : 0;
 
             // --- FINAL SAFETY GUARD: CONTRACT BALANCE ---
             // If the payout is large and contract empty, don't waste gas retrying
             try {
                 const contractBal = await blockchain.getNativeBalance(process.env.ARC_CONTRACT_ADDRESS);
-                const amountWei = ethers.parseUnits(trade.amount.toString(), 18);
+                const payoutWei = ethers.parseUnits(expectedPayout.toFixed(18), 18);
 
-                // Estimate multiplier (worst case 6.98x)
-                const maxPayout = (amountWei * 698n) / 100n;
-
-                if (contractBal < maxPayout) {
-                    const msg = `🚩 CRITICAL FUNDING: Contract balance (${ethers.formatEther(contractBal)} USDC) is insufficient for payout (${ethers.formatEther(maxPayout)} USDC) for trade ${tradeId}. Settlement will likely REVERT.`;
-                    console.error(`[Processor] ${msg}`);
+                if (isWin && contractBal < payoutWei) {
+                    const msg = `🚩 INSUFFICIENT TREASURY: Contract balance (${ethers.formatEther(contractBal)} USDC) cannot cover ${expectedPayout} payout for ${tradeId}. Skipping this trade for now so others can settle.`;
+                    console.warn(`[Processor] ${msg}`);
                     logToFile(msg);
-
-                    // If balance is extremely low, skip broadcast to save gas on certain revert
-                    if (contractBal < ethers.parseUnits("5", 18)) {
-                        logToFile(`[Processor] 🛑 Skipping broadcast for ${tradeId} to prevent gas loss on empty contract.`);
-                        return; // Wait for next loop/funding
-                    }
+                    return; // Skip this one, allow next in loop to process
+                } else if (!isWin) {
+                    // Proceeding with LOSER settlement as it cost 0 treasury balance (good for platform health)
+                    logToFile(`[Processor] 📉 Trade ${tradeId} is a LOSER. Proceeding with settlement (0 Treasury Cost).`);
                 }
             } catch (balError) {
                 console.warn(`[Processor] Could not check contract balance: ${balError.message}`);
@@ -377,7 +378,7 @@ class TradeProcessor {
 
             // Execute on-chain
             const retryCount = this.failedSettlements.get(tradeId)?.count || 0;
-            const result = await blockchain.settleBet(trade.id, finalPrice, retryCount); // Blockchain service already parses to BigInt(8)
+            const result = await blockchain.settleBet(trade.id, exitVal, retryCount); // Blockchain service already parses to BigInt(8)
             if (result) {
                 logToFile(`✅ Settlement TX for ${tradeId} broadcasted: ${result.hash}`);
 
@@ -393,15 +394,7 @@ class TradeProcessor {
                     // Success!
                     this.failedSettlements.delete(tradeId);
 
-                    // 🔥 PRECISION FIX: Use raw numbers for accurate win/loss determination matching the contract
-                    const entryVal = parseFloat(trade.entryPrice);
-                    const exitVal = finalPrice;
-
-                    const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
-                    const isWin = isUp ? (exitVal > entryVal) : (exitVal < entryVal);
-
-                    const duration = Number(trade.duration) || 15;
-                    const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+                    // 🔥 RECORD HISTORY
                     const instantVal = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
 
                     await redis.addHistoricalTrade({
