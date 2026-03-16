@@ -443,6 +443,7 @@ export default function UserApp() {
   const [toast, setToast] = useState(null); // { message, type }
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   const activeTradesRef = useRef([]);
+  const tradeHistoryRef = useRef([]);
   const priceRef = useRef("0.00");
   const priceHistoryRef = useRef([]);
   const lastOptimisticActionTime = useRef(0);
@@ -467,11 +468,7 @@ export default function UserApp() {
 
   const isSmallScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
   const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
-  const lastOptimisticActionTime = useRef(0); // Protects optimistic balance from stale polling
-  const tradeHistoryRef = useRef([]);
-  const activeTradesRef = useRef([]);
-  const priceHistoryRef = useRef([]); // [{p, t}] buffer for accurate expiry snapshots
-  const priceRef = useRef("0.00");
+
 
   useEffect(() => {
     tradeHistoryRef.current = tradeHistory;
