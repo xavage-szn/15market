@@ -199,9 +199,11 @@ class BlockchainService {
         }
     }
 
-    async _getGasPrice() {
+    async _getGasPrice(options = {}) {
         const now = Date.now();
-        if (!this.cachedGasPrice || (now - this.lastGasUpdate > this.GAS_CACHE_TTL)) {
+        const force = options.force === true;
+
+        if (force || !this.cachedGasPrice || (now - this.lastGasUpdate > this.GAS_CACHE_TTL)) {
             // Dedup concurrent requests
             if (!this.gasRefreshPromise) {
                 this.gasRefreshPromise = this._refreshGasPrice().finally(() => {
@@ -215,8 +217,15 @@ class BlockchainService {
         const priorityFee = this.cachedPriorityFee || ethers.parseUnits("150", "gwei");
 
         // Aggressive Strategy: 4x base + higher priority to ensure inclusion on Arc Testnet
-        const maxFee = (baseGas * 40n / 10n) + (priorityFee * 12n / 10n);
+        let maxFee = (baseGas * 40n / 10n) + (priorityFee * 12n / 10n);
         const minGasFee = ethers.parseUnits("50", "gwei"); // Lowered floor to prevent gas exhaustion
+
+        // RETRY SCALING: If this is a retry, bump gas aggressively (+20% per attempt)
+        if (options.retryCount > 0) {
+            const bumpFactor = 100n + BigInt(options.retryCount * 20);
+            maxFee = (maxFee * bumpFactor) / 100n;
+            console.log(`[Blockchain] 🔥 Scaling gas for retry ${options.retryCount} (Bump: ${bumpFactor}%): ${ethers.formatUnits(maxFee, 'gwei')} gwei`);
+        }
 
         const finalGasPrice = maxFee > minGasFee ? maxFee : minGasFee;
 
@@ -289,11 +298,11 @@ class BlockchainService {
         }, 3000);
     }
 
-    async settleBet(betId, exitPrice) {
+    async settleBet(betId, exitPrice, retryCount = 0) {
         await this._ensureReady();
 
         const nonce = await nonceManager.getNonce(this.wallet.address, this.provider);
-        const fees = await this._getGasPrice();
+        const fees = await this._getGasPrice({ retryCount });
 
         console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei) - Bet ${betId}`);
 
@@ -322,7 +331,10 @@ class BlockchainService {
             const msg = (e.message || "").toLowerCase();
             const fullError = JSON.stringify(e).toLowerCase();
 
+            // REPLACEMENT_UNDERPRICED or Nonce issues
             if (msg.includes('nonce') || msg.includes('underpriced') || msg.includes('already been used') || msg.includes('replacement') || msg.includes('too low') || msg.includes('txpool is full') || fullError.includes('txpool is full')) {
+                // Force a clean state refresh for the next attempt
+                await this._getGasPrice({ force: true });
                 await this._resetNonce();
             }
 

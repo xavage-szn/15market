@@ -368,7 +368,8 @@ class TradeProcessor {
             }
 
             // Execute on-chain
-            const result = await blockchain.settleBet(trade.id, finalPrice); // Blockchain service already parses to BigInt(8)
+            const retryCount = this.failedSettlements.get(tradeId)?.count || 0;
+            const result = await blockchain.settleBet(trade.id, finalPrice, retryCount); // Blockchain service already parses to BigInt(8)
             if (result) {
                 logToFile(`✅ Settlement TX for ${tradeId} broadcasted: ${result.hash}`);
 

@@ -70,22 +70,39 @@ class NonceManager {
         }
     }
 
-    async syncWithChain(address, provider) {
+    async syncWithChain(address, provider, force = false) {
         const addr = address.toLowerCase();
         try {
-            console.log(`[Nonce] Force syncing ${addr} from chain...`);
-            const nonce = await Promise.race([
+            console.log(`[Nonce] Force syncing ${addr} from chain (Mode: pending)...`);
+            const chainNonce = await Promise.race([
                 provider.getTransactionCount(address, 'pending'),
                 new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
             ]);
+
+            const currentKey = `nnc:${addr}`;
+            let currentLocal;
             if (redisStore.isCloud) {
-                await redisStore.redis.set(`nnc:${addr}`, nonce);
-                console.log(`[Nonce] Sync: Updated Redis for ${addr} to ${nonce}`);
+                const val = await redisStore.redis.get(currentKey);
+                currentLocal = val !== null ? Number(val) : -1;
             } else {
-                this.nonces.set(addr, nonce);
-                console.log(`[Nonce] Sync: Updated Memory for ${addr} to ${nonce}`);
+                currentLocal = this.nonces.has(addr) ? this.nonces.get(addr) : -1;
             }
-            return nonce;
+
+            // High Water Mark protection: Never set nonce backwards unless explicitly forced
+            // Stale RPCs often return a lower 'pending' count than reality.
+            if (!force && chainNonce < currentLocal) {
+                console.warn(`[Nonce] ⚠️ Chain returned LOWER nonce (${chainNonce}) than cached (${currentLocal}) for ${addr}. Skipping sync to prevent collisions.`);
+                return currentLocal;
+            }
+
+            if (redisStore.isCloud) {
+                await redisStore.redis.set(currentKey, chainNonce);
+            } else {
+                this.nonces.set(addr, chainNonce);
+            }
+            console.log(`[Nonce] ✅ Sync Complete: Updated ${addr} to ${chainNonce} (Previous: ${currentLocal})`);
+            return chainNonce;
+
         } catch (e) {
             console.error(`[Nonce] Sync failed for ${addr}:`, e.message);
             // Fallback to latest if pending fails
