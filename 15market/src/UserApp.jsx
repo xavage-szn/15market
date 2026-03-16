@@ -304,6 +304,7 @@ export default function UserApp() {
     if (address && address === lastAddressRef.current) {
       localStorage.setItem(`15market_history_${address.toLowerCase()}`, JSON.stringify(tradeHistory));
     }
+    tradeHistoryRef.current = tradeHistory;
   }, [tradeHistory, address]);
 
   useEffect(() => {
@@ -470,13 +471,7 @@ export default function UserApp() {
   const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
 
 
-  useEffect(() => {
-    tradeHistoryRef.current = tradeHistory;
-  }, [tradeHistory]);
 
-  useEffect(() => {
-    activeTradesRef.current = activeTrades;
-  }, [activeTrades]);
 
   // Custom balance fetcher (Replaces Wagmi useBalance)
   // 1. Core Balance Fetchers
