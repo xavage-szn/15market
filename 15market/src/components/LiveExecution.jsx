@@ -216,7 +216,7 @@ function LiveExecutionComponent({
                                         key={visibleTrade.id}
                                         className={idx > 0 ? 'opacity-80 scale-95 origin-top transition-all hover:opacity-100 hover:scale-100' : ''}
                                     >
-                                            // Render each trade
+
                                         {(() => {
                                             const trade = visibleTrade;
                                             const now = startTimeRef.current + elapsed;
