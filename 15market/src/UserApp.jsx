@@ -448,6 +448,12 @@ export default function UserApp() {
   const priceRef = useRef("0.00");
   const priceHistoryRef = useRef([]);
   const lastOptimisticActionTime = useRef(0);
+  // 🔒 RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
+  // The reconciler will NEVER downgrade a locked result, preventing glitches.
+  const lockedResults = useRef(new Map()); // tradeId → { status, settlementPrice }
+  // 🗑️ REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
+  // Prevents the reconciler from re-inserting them from backend data.
+  const removedTradeIds = useRef(new Set());
 
   // Orientation & Device Detection for V2 Forced Landscape
   const [isPortrait, setIsPortrait] = useState(
@@ -598,7 +604,12 @@ export default function UserApp() {
       const now = Date.now();
       const GHOST_GRACE = 5000;
 
-      const backendActive = backendAll.filter(t => ["PENDING", "RESOLVING"].includes(t.status)).map(t => {
+      const backendActive = backendAll.filter(t => {
+        const tid = String(t.id || t.tx || t.nonce);
+        // 🗑️ Never re-insert trades that have been fully removed from active view
+        if (removedTradeIds.current.has(tid)) return false;
+        return ["PENDING", "RESOLVING"].includes(t.status);
+      }).map(t => {
         // Find existing local copy to preserve its STABLE startTime
         const local = prev.find(p => String(p.id) === String(t.id));
         const startTime = (t.timestamp || t.startTime || local?.startTime || now);
@@ -613,13 +624,24 @@ export default function UserApp() {
       const updatedActive = [];
 
       backendActive.forEach(bt => {
-        const local = prev.find(p => String(p.id || p.tx || p.nonce) === String(bt.id || bt.tx || bt.nonce));
+        const btId = String(bt.id || bt.tx || bt.nonce);
+        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
+
+        // 🔒 CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
+        // the backend revert it to PENDING/RESOLVING. The local lock is ground truth.
+        const locked = lockedResults.current.get(btId);
+        if (locked) {
+          // Trade is already resolved — skip re-adding it as PENDING from backend
+          console.log(`🔒 [LOCK] Skipping backend overwrite for locked trade ${btId} (${locked.status})`);
+          return;
+        }
+
         let finalStatus = bt.status;
 
         // Monotonic Status Hierarchy: WON/LOST > RESOLVING > PENDING
         if (local) {
           const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1 };
-          if (statusOrder[local.status] > statusOrder[bt.status]) {
+          if ((statusOrder[local.status] || 0) > (statusOrder[bt.status] || 0)) {
             finalStatus = local.status;
           }
         }
@@ -634,6 +656,7 @@ export default function UserApp() {
             sessionOwner: local?.sessionOwner || bt.sessionOwner,
             isSessionTrade: local?.isSessionTrade || bt.isSessionTrade,
             entryPrice: local?.entryPrice || bt.entryPrice, // prefer local high-precision price
+            settlementPrice: local?.settlementPrice || bt.settlementPrice,
           });
         }
       });
@@ -1700,12 +1723,30 @@ export default function UserApp() {
             const diff = capturedPrice - ePrice;
             const isWon = isUp ? diff > 0 : diff < 0;
             const finalStatus = isWon ? "WON" : "LOST";
+            const settlementPriceStr = capturedPrice.toFixed(2);
 
-            console.log(`🎯 [RESOLVER] Captured exact result for ${trade.id}: ${finalStatus} at $${capturedPrice}`);
+            console.log(`🎯 [RESOLVER] LOCKED result for trade ${trade.id}: ${finalStatus} at $${capturedPrice}`);
 
-            // Optimistic UI Update to FINAL Result immediately
+            // 🔒 LOCK THE RESULT: Store in ref so reconciler never overwrites this
+            const tradeIdStr = String(trade.id);
+            lockedResults.current.set(tradeIdStr, { status: finalStatus, settlementPrice: settlementPriceStr });
+
+            // Also record in tradeHistory immediately with locked result
+            setTradeHistory(prev => {
+              const existing = prev.find(t => String(t.id || t.tx || t.nonce) === tradeIdStr);
+              if (existing) {
+                return prev.map(t =>
+                  String(t.id || t.tx || t.nonce) === tradeIdStr
+                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr }
+                    : t
+                );
+              }
+              return [{ ...trade, status: finalStatus, settlementPrice: settlementPriceStr }, ...prev];
+            });
+
+            // Update activeTrades with locked final status
             setActiveTrades(prev => prev.map(t =>
-              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: capturedPrice.toFixed(2) } : t
+              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr } : t
             ));
 
             // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches
@@ -1735,8 +1776,12 @@ export default function UserApp() {
       if (tid && !cleanupTimers.current[tid]) {
         // Start a removal timer ONLY if one doesn't exist for this specific trade
         cleanupTimers.current[tid] = setTimeout(() => {
+          // 🗑️ Mark as permanently removed so the reconciler never re-adds it
+          removedTradeIds.current.add(String(tid));
           setActiveTrades(prev => prev.filter(t => (t.id || t.tx || t.nonce) !== tid));
           delete cleanupTimers.current[tid];
+          // Auto-cleanup the removed set after 10 minutes to keep memory bounded
+          setTimeout(() => removedTradeIds.current.delete(String(tid)), 10 * 60 * 1000);
         }, 3500); // 3.5 seconds of glory on screen
       }
     });
