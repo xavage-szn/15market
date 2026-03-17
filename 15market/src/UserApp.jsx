@@ -2220,7 +2220,7 @@ export default function UserApp() {
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[70px] lg:h-[132px]' : 'h-16 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[42px] lg:h-[58px]' : 'h-16 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
             <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
@@ -2264,7 +2264,7 @@ export default function UserApp() {
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
           {uiVersion === 'v2' && (
-            <div className="w-full flex flex-col mt-[2px] mb-[4px] relative z-[60]">
+            <div className="w-full flex flex-col mt-0 mb-[4px] relative z-[60]">
               <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
               <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)] mt-[2px]" />
             </div>
