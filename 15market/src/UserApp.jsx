@@ -2351,7 +2351,10 @@ export default function UserApp() {
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[42px] lg:h-[58px]' : 'h-16 lg            {/* Game Mode Switcher — centered in navbar (responsive) */}
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[42px] lg:h-[58px]' : 'h-16 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+            </div>
+
+            {/* Game Mode Switcher — centered in navbar (responsive) */}
             <div className="flex items-center gap-1 md:gap-2 absolute left-1/2 -translate-x-1/2">
               {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
                 <button
