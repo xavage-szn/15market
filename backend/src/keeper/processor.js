@@ -198,6 +198,11 @@ class TradeProcessor {
                         payout: s.payout,
                         ...(symbol ? { symbol } : {})
                     });
+
+                    // Cleanup active memory if it was settled on-chain
+                    await redis.delTrade(id);
+                    this.settlingIds.delete(id);
+                    this.settledCache.delete(id); 
                 }
 
                 // If we scanned everything up to endBlock successfully
@@ -252,26 +257,31 @@ class TradeProcessor {
 
                 if (now - failed.lastAttempt < backoff) return false;
             }
-            // CRITICAL: Reduced grace period to 1s for faster settlement
-            // This still allows a brief window for frontend sync but responds much quicker.
-            return now >= (t.expiry + 1000) && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
+            // CRITICAL: Removed grace period for INSTANT settlement.
+            // Settle as soon as expiry is reached.
+            return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
         });
 
         if (toSettle.length === 0) return;
 
         console.log(`[Processor] ⚡ Mass settling ${toSettle.length} trades (Concurrency: ${Math.min(toSettle.length, 25)})...`);
 
-        // Use moderate concurrency to speed up mass settlements
-        const BATCH_SIZE = 10; 
+        // Use smaller concurrency to prevent txpool exhaustion on the private node
+        const BATCH_SIZE = 5; 
         for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
             const batch = toSettle.slice(i, i + BATCH_SIZE);
 
-            // Fire batch members in parallel with no artificial delay
-            await Promise.all(batch.map(trade =>
+            // Fire batch members in parallel
+            await Promise.all(batch.map(trade => 
                 this._settleSingleTrade(trade).catch(err => {
                     logToFile(`[Processor] ❌ Error in settlement task for ${trade.id}: ${err.message}`);
                 })
             ));
+
+            // Small delay between batches to let the mempool breathe
+            if (toSettle.length > BATCH_SIZE) {
+                await new Promise(r => setTimeout(r, 1000));
+            }
         }
     }
 
@@ -279,15 +289,7 @@ class TradeProcessor {
         const tradeId = trade.id.toString();
         if (this.settlingIds.has(tradeId) || this.settledCache.has(tradeId)) return;
 
-        // Grace Period: Reduced to 1.5s to ensure background loop picks up quickly if frontend fails
-        const delayNeeded = (trade.expiry + 1500) - Date.now();
-        if (delayNeeded > 0) {
-            if (manualPrice) {
-                // If frontend provided a synced manual exit price, proceed immediately
-            } else {
-                return;
-            }
-        }
+        // REMOVED GRACE PERIOD for instant payout
 
         this.settlingIds.add(tradeId);
         await redis.markAsSettling(tradeId);
@@ -347,7 +349,18 @@ class TradeProcessor {
                     const msg = `🚩 INSUFFICIENT TREASURY: Contract balance (${ethers.formatEther(contractBal)} USDC) cannot cover ${expectedPayout} payout for ${tradeId}. Skipping this trade for now so others can settle.`;
                     console.warn(`[Processor] ${msg}`);
                     logToFile(msg);
-                    return; // Skip this one, allow next in loop to process
+                    
+                    // Cleanup settling status so it can be picked up later if balance increases
+                    this.settlingIds.delete(tradeId);
+                    this.markSettled(tradeId); // Temporarily cache as settled to skip in this cycle
+                    
+                    // Reset Redis status so frontend doesn't show "RESOLVING" forever
+                    if (currentTrade) {
+                        await redis.setTrade(tradeId, { ...currentTrade, isSettling: false, status: 'PENDING' });
+                    }
+
+                    setTimeout(() => this.settledCache.delete(tradeId.toString()), 60000); // Try again in 60s
+                    return; 
                 } else if (!isWin) {
                     // Proceeding with LOSER settlement as it cost 0 treasury balance (good for platform health)
                     logToFile(`[Processor] 📉 Trade ${tradeId} is a LOSER. Proceeding with settlement (0 Treasury Cost).`);

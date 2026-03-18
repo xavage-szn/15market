@@ -43,14 +43,10 @@ app.get('/time', (req, res) => {
     res.json({ time: Date.now() });
 });
 
-// Support both /arc/session/init and /session/init
+// Support various API prefixes used by the frontend (arc, arc-api, api-arc)
 app.use((req, res, next) => {
-    if (req.url.startsWith('/arc/')) {
-        req.url = req.url.replace('/arc/', '/');
-    }
-    if (req.url.startsWith('/arc-api/')) {
-        req.url = req.url.replace('/arc-api/', '/');
-    }
+    // Regex to strip any of the common prefixes: /arc/, /arc-api/, /api-arc/
+    req.url = req.url.replace(/^\/(arc|arc-api|api-arc)\//, '/');
     next();
 });
 

@@ -16,21 +16,16 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const getRpcEndpoints = () => {
-    return [
-        `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`,
-        "https://rpc.testnet.arc.network",
-        "https://rpc.arc.network",
-        "https://arc-testnet.alt.technology",
-        "https://arc-testnet.drpc.org",
-        "https://rpc.drpc.testnet.arc.network"
-    ];
+    // FORCE Thirdweb as the ONLY endpoint for stability as requested
+    const thirdwebUrl = `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`;
+    return [thirdwebUrl];
 };
 
 async function createProvider(blockchainService) {
     const endpoints = getRpcEndpoints();
     let currentRpcs;
 
-    if (blockchainService?.lastGoodRpc) {
+    if (currentRpcs.length > 1 && blockchainService?.lastGoodRpc) {
         // When rotating, we actually want to MOVE the last good rpc to the END of the list
         // because it's likely the one currently hitting limits.
         const others = endpoints.filter(r => r !== blockchainService.lastGoodRpc);
@@ -67,6 +62,11 @@ async function createProvider(blockchainService) {
             return provider;
         } catch (e) {
             console.warn(`[Blockchain] ⚠️ RPC failed: ${rpc} — ${e.message}`);
+            // If it's a critical RPC like Thirdweb, maybe sleep a bit before retry?
+            if (currentRpcs.length === 1) {
+                console.log("[Blockchain] ⏳ Only one RPC available. Waiting 2s before retry...");
+                await new Promise(r => setTimeout(r, 2000));
+            }
         }
     }
 
@@ -251,7 +251,6 @@ class BlockchainService {
 
         try {
             console.warn(`[Blockchain] 🔄 Congestion detected on ${failedRpc || 'current RPC'}. Rotating endpoints...`);
-
             // If we have a failed RPC, we should ensure the next provider attempt doesn't prioritize it
             const newProvider = await createProvider(this);
             const newWallet = new ethers.Wallet(process.env.PRIVATE_KEY, newProvider);
@@ -260,6 +259,7 @@ class BlockchainService {
             this.provider = newProvider;
             this.wallet = newWallet;
             this.contract = newContract;
+            this.providerReady = true;
 
             console.log(`[Blockchain] ✅ RPC rotated and service updated. New RPC: ${this.lastGoodRpc}`);
             logToFile(`[Blockchain] 🔄 Switched to RPC: ${this.lastGoodRpc} due to congestion/timeouts`);
@@ -347,7 +347,8 @@ class BlockchainService {
             if (msg.includes('txpool is full') || msg.includes('timeout') || msg.includes('limit reached') ||
                 msg.includes('too many requests') || msg.includes('429') ||
                 fullError.includes('txpool is full') || fullError.includes('timeout') || fullError.includes('rate limit')) {
-                console.warn(`[Blockchain] ⏳ RPC Overloaded or Rate Limited for bet ${betId}. Rotating nodes...`);
+                const rotationMsg = (getRpcEndpoints().length > 1) ? ". Rotating nodes..." : ". Waiting for congestion to clear...";
+                console.warn(`[Blockchain] ⏳ RPC Overloaded or Rate Limited for bet ${betId}${rotationMsg}`);
                 // Force rotation to a fresh node, explicitly deprioritizing the one that just failed
                 await this.rotateRpc(this.lastGoodRpc);
             }
