@@ -17,6 +17,7 @@ function logToFile(msg) {
 }
 const getRpcEndpoints = () => {
     return [
+        `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`,
         "https://rpc.testnet.arc.network",
         "https://rpc.arc.network",
         "https://arc-testnet.alt.technology",
@@ -44,6 +45,10 @@ async function createProvider(blockchainService) {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
             fetchReq.timeout = 60000; // Increased to 60s for unstable Arc RPCs
+            
+            if (rpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
+                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+            }
 
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
