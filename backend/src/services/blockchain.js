@@ -16,9 +16,14 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const getRpcEndpoints = () => {
-    // FORCE Thirdweb as the ONLY endpoint for stability as requested
-    const thirdwebUrl = `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`;
-    return [thirdwebUrl];
+    return [
+        `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`,
+        "https://rpc.testnet.arc.network",
+        "https://rpc.arc.network",
+        "https://arc-testnet.alt.technology",
+        "https://arc-testnet.drpc.org",
+        "https://rpc.drpc.testnet.arc.network"
+    ];
 };
 
 async function createProvider(blockchainService) {
@@ -114,6 +119,20 @@ class BlockchainService {
         this.provider = await createProvider(this);
         this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
         this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
+
+        // --- DEDICATED SETTLEMENT PROVIDER (Thirdweb Only) ---
+        try {
+            const twRpc = `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`;
+            const fetchReq = new FetchRequest(twRpc);
+            if (process.env.THIRDWEB_SECRET_KEY) fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+            this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
+            this.settleWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.settleProvider);
+            this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);
+            console.log(`[Blockchain] ⚡ Settlement isolated to ThirdWeb RPC.`);
+        } catch (e) {
+            console.warn(`[Blockchain] ⚠️ Could not isolate settlement provider: ${e.message}`);
+        }
+
         this.providerReady = true;
 
         this._refreshGasPrice();
@@ -310,18 +329,18 @@ class BlockchainService {
         const nonce = await nonceManager.getNonce(this.wallet.address, this.provider);
         const fees = await this._getGasPrice({ retryCount });
 
-        console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei) - Bet ${betId}`);
-
         try {
-            // SCALE FIX: Entry price is stored at 10^8 precision. Exit price must match.
+            console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei) - Bet ${betId}`);
+
+            const useContract = this.settleContract || this.contract;
             const settlementPriceBigInt = ethers.parseUnits(parseFloat(exitPrice).toFixed(8), 8);
 
             const tx = await Promise.race([
-                this.contract.settleBet(betId, settlementPriceBigInt, {
+                useContract.settleBet(betId, settlementPriceBigInt, {
                     nonce: nonce,
                     maxFeePerGas: fees.maxFeePerGas,
                     maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                    gasLimit: 800000n, // Increased back for complex settlements with multiple payouts
+                    gasLimit: 800000n,
                     type: 2, // EIP-1559
                     chainId: 5042002
                 }),
@@ -360,11 +379,6 @@ class BlockchainService {
 
             throw e;
         }
-    }
-
-    async getNativeBalance(address) {
-        await this._ensureReady();
-        return await this.provider.getBalance(address);
     }
 
     onBetPlaced(callback) {

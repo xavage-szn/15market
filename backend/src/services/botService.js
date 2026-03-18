@@ -8,12 +8,7 @@ const BOT_DATA_FILE = path.join(__dirname, '..', '..', 'bot_wallets.json');
 
 class BotService {
     constructor() {
-        const rpc = `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`;
-        const fetchReq = new ethers.FetchRequest(rpc);
-        if (process.env.THIRDWEB_SECRET_KEY) {
-            fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-        }
-        this.provider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
+        this.provider = new ethers.JsonRpcProvider(process.env.ARC_RPC || 'https://rpc.testnet.arc.network');
         this.treasuryWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
         this.bots = [];
         this.contractAddress = null;
