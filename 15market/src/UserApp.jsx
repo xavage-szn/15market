@@ -477,6 +477,7 @@ export default function UserApp() {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
       setIsPortrait(window.innerHeight > window.innerWidth);
+      setIsSmallScreen(window.innerWidth < 768);
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -486,7 +487,9 @@ export default function UserApp() {
     };
   }, []);
 
-  const isSmallScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+  const [isSmallScreen, setIsSmallScreen] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
   const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
 
 

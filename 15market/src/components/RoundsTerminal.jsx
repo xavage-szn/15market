@@ -124,7 +124,7 @@ function RoundsTerminalComponent({
     const activeBal = sessionMode ? sessionBalance : balance;
 
     return (
-        <div className={`w-full h-full p-2 lg:p-3 rounded-[24px] lg:rounded-[32px] glass-panel flex flex-col gap-2 relative overflow-hidden transition-all duration-500 ${isLight ? 'static-panel-light !shadow-xl' : ''}`}>
+        <div className={`w-full h-full p-1.5 md:p-2 lg:p-3 rounded-[24px] lg:rounded-[32px] glass-panel flex flex-col gap-1.5 lg:gap-2 relative overflow-hidden transition-all duration-500 ${isLight ? 'static-panel-light !shadow-xl' : ''}`}>
 
             {/* COMPACT HEADER */}
             <div className="flex items-center justify-between shrink-0">
@@ -209,9 +209,9 @@ function RoundsTerminalComponent({
                         </div>
 
                         <div className="relative">
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-lg font-black opacity-20">$</span>
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-base md:text-lg font-black opacity-20">$</span>
                             <input type="number" value={amount} onChange={e => handleAmountChange(e.target.value)}
-                                placeholder="0.00" className={`w-full bg-transparent text-2xl font-black outline-none pl-6 ${isLight ? 'text-[#0a261a]' : 'text-white'}`} />
+                                placeholder="0.00" className={`w-full bg-transparent text-xl md:text-2xl font-black outline-none pl-5 md:pl-6 ${isLight ? 'text-[#0a261a]' : 'text-white'}`} />
                         </div>
 
                         <div className="mt-2.5">

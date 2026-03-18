@@ -34,7 +34,7 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock }) 
             <motion.div 
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                className={`relative z-10 max-w-md w-full p-8 rounded-[40px] border shadow-[0_20px_50px_rgba(0,0,0,0.5)] ${
+                className={`relative z-10 max-w-md w-full p-6 sm:p-8 rounded-[32px] sm:rounded-[40px] border shadow-[0_20px_50px_rgba(0,0,0,0.5)] ${
                     isDark ? 'bg-[#0f110f] border-white/10' : 'bg-white border-[#3CB371]/20'
                 }`}
             >

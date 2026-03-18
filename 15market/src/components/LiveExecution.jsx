@@ -271,7 +271,7 @@ function LiveExecutionComponent({
 
                                             return (
                                                 <div
-                                                    className={`rounded-[16px] p-2 lg:p-3 flex flex-col relative transition-all duration-500 border-2 ${!isExpanded && activeTrades.length === 1 ? 'h-full flex-1' : 'h-auto'} ${isLight
+                                                    className={`rounded-[16px] p-2 md:p-3 flex flex-col relative transition-all duration-500 border-2 ${!isExpanded && activeTrades.length === 1 ? 'h-full flex-1' : 'h-auto'} ${isLight
                                                         ? 'bg-[#f0f9f4]/90 backdrop-blur-xl border-[#3CB371]/20 shadow-sm hover:shadow-md'
                                                         : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
                                                     style={displayFinal ? {
@@ -303,11 +303,11 @@ function LiveExecutionComponent({
 
                                                     {/* Central Hero Countdown - Tighter vertical scaling */}
                                                     {!displayFinal ? (
-                                                        <div className="flex-1 flex flex-col items-center justify-center py-0">
-                                                            <div className={`text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-[#0a261a] opacity-80' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.5)]'}`}>
-                                                                {displayTimeLeft}<span className="text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
+                                                        <div className="flex-1 flex flex-col items-center justify-center py-1 md:py-2">
+                                                            <div className={`text-xl md:text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-[#0a261a] opacity-80' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.5)]'}`}>
+                                                                {displayTimeLeft}<span className="text-[10px] md:text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
-                                                            <div className="mt-0 px-1.5 py-0 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-90">
+                                                            <div className="mt-0 px-1 py-0.5 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-75 md:scale-90">
                                                                 <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
                                                                     {liveWinning ? "WINNING" : "LOSING"}
                                                                 </span>
