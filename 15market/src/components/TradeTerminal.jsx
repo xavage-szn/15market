@@ -32,8 +32,8 @@ function TradeTerminalComponent({
     const isLight = theme === 'light';
 
     const containerClass = transparent
-        ? "flex flex-col h-full justify-between gap-1 lg:gap-2"
-        : `w-full h-full p-2 lg:p-3 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-1.5 lg:gap-2.5 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
+        ? "flex flex-col h-full justify-between gap-1 lg:gap-2 overflow-y-auto no-scrollbar"
+        : `w-full h-full p-1.5 md:p-2 lg:p-3 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-1 lg:gap-1.5 lg:gap-2.5 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
 
     const renderHeader = () => (
         <div className="flex items-center justify-between pointer-events-auto mb-0.5">
@@ -109,8 +109,8 @@ function TradeTerminalComponent({
     const renderTime = () => (
         <div className="flex flex-col gap-0.5 lg:gap-0.5 pointer-events-auto">
             <div className="flex items-center justify-between px-0.5">
-                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
-                <span className="text-[6px] lg:text-[7px] font-mono font-bold" style={{ color: '#3CB371' }}>
+                <span className={`text-[6px] md:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
+                <span className="text-[6px] md:text-[7px] font-mono font-bold" style={{ color: '#3CB371' }}>
                     {duration === 5 ? '6.98x' : duration === 10 ? '4.98x' : '1.98x'}
                 </span>
             </div>
@@ -139,13 +139,13 @@ function TradeTerminalComponent({
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1.5 p-1 rounded-2xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
+            <div className={`flex items-center gap-1 md:gap-1.5 p-1 rounded-2xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
                 <input
                     type="number"
                     value={amount}
                     onChange={handleAmountChange}
                     placeholder="0.00"
-                    className={`w-full bg-transparent text-[10px] lg:text-sm font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
+                    className={`w-full bg-transparent text-[10px] md:text-xs lg:text-sm font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
                 />
             </div>
             <div className="relative pt-3 pb-1 px-1">

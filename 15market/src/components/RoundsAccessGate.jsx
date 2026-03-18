@@ -62,7 +62,7 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock }) 
                                 value={inputCode}
                                 onChange={(e) => setInputCode(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-                                placeholder="Enter Master Access Code"
+                                placeholder="Enter Access Code"
                                 className={`w-full px-8 py-5 rounded-[24px] text-sm font-black transition-all outline-none border-2 text-center tracking-widest ${
                                     isDark 
                                     ? 'bg-white/5 border-white/5 focus:border-[#3CB371]/50 focus:bg-white/10 text-white' 

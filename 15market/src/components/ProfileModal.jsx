@@ -135,7 +135,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className={`w-full max-w-md ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/30'} border rounded-[32px] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.1)] relative overflow-hidden`}
+                    className={`w-full max-w-[90%] md:max-w-md ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/30'} border rounded-[24px] md:rounded-[32px] p-5 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.1)] relative overflow-y-auto max-h-[90vh] custom-scrollbar`}
                 >
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent" />
 

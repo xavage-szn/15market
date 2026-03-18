@@ -180,7 +180,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     return (
         <div className={`min-h-screen w-full flex flex-col ${isLight ? 'bg-[#f0f9f4] text-[#0a261a]' : 'bg-transparent text-white'}`}>
             <div className={`sticky top-0 z-40 ${isLight ? 'bg-[#f0f9f4]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
-                <div className="max-w-4xl lg:max-w-7xl mx-auto p-4 md:p-8">
+                <div className="max-w-4xl lg:max-w-7xl mx-auto p-3 md:p-8">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <button
@@ -257,7 +257,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                 <span className="text-[10px] text-[#3CB371] font-bold">Real-time</span>
                                             </div>
                                         </div>
-                                        <div className="h-[300px] w-full">
+                                        <div className="h-[200px] md:h-[300px] w-full">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <AreaChart data={chartData}>
                                                     <defs>
@@ -313,7 +313,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         )}
 
                         {activeTab === "profile" && (
-                            <div className={`max-w-2xl mx-auto ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[32px] p-8`}>
+                            <div className={`max-w-2xl mx-auto ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[24px] md:rounded-[32px] p-4 md:p-8`}>
                                 <div className="flex flex-col items-center mb-8">
                                     <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[2px] mb-4 overflow-hidden">
                                         <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>

@@ -2351,20 +2351,17 @@ export default function UserApp() {
           <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[42px] lg:h-[58px]' : 'h-16 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
-            </div>
-
-            {/* Game Mode Switcher — centered in navbar */}
-            <div className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[42px] lg:h-[58px]' : 'h-16 lg            {/* Game Mode Switcher — centered in navbar (responsive) */}
+            <div className="flex items-center gap-1 md:gap-2 absolute left-1/2 -translate-x-1/2">
               {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
                 <button
                   key={key}
                   onClick={() => { setGameMode(key); setView('trading'); }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 relative group`}
+                  className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full transition-all duration-300 relative group`}
                 >
                   <div className="absolute inset-0 rounded-full blur-md opacity-0 group-hover:opacity-20 bg-[#3CB371] transition-opacity" />
-                  <Icon size={13} className={gameMode === key ? 'text-[#3CB371]' : 'text-white/20'} />
-                  <span className={`text-[10px] font-black uppercase tracking-[0.18em] ${gameMode === key ? (theme === 'light' ? 'text-[#0a261a]' : 'text-white') : 'text-white/20'}`}>{label}</span>
+                  <Icon size={12} className={gameMode === key ? 'text-[#3CB371]' : 'text-white/20'} />
+                  <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.18em] ${gameMode === key ? (theme === 'light' ? 'text-[#0a261a]' : 'text-white') : (theme === 'light' ? 'text-black/20' : 'text-white/20')}`}>{label}</span>
                   {gameMode === key && (
                     <motion.div layoutId="nav-mode-dot" className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#3CB371] shadow-[0_0_8px_#3CB371]" />
                   )}
@@ -2385,27 +2382,27 @@ export default function UserApp() {
               <UnifiedWalletButton theme={theme} />
             </div>
 
-            <div className="flex lg:hidden landscape:hidden items-center gap-2">
+            <div className="flex lg:hidden landscape:hidden items-center gap-1 md:gap-2">
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               {uiVersion === 'v2' && (
                 <button
                   onClick={() => setShowMobileHistory(!showMobileHistory)}
-                  className={`p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
+                  className={`p-1.5 md:p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
                   style={{
                     backgroundColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)') : undefined,
                     borderColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)') : undefined,
                   }}
                 >
-                  <History size={18} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
+                  <History size={16} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
                 </button>
               )}
 
-              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-1.5 md:p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={16} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
               <UnifiedWalletButton theme={theme} />
             </div>

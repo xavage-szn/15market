@@ -60,12 +60,12 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="relative max-w-sm w-full"
+                    className="relative max-w-[90vw] sm:max-w-sm w-full"
                 >
                     {/* The PnL Card (Receipt Style) */}
                     <div
                         ref={cardRef}
-                        className="bg-[#f8f8f8] text-[#1a1a1a] p-5 sm:p-8 font-mono shadow-2xl relative overflow-y-auto max-h-[95vh] rounded-sm custom-scrollbar"
+                        className="bg-[#f8f8f8] text-[#1a1a1a] p-4 sm:p-8 font-mono shadow-2xl relative overflow-y-auto max-h-[90vh] rounded-sm custom-scrollbar"
                         style={{
                             backgroundImage: 'linear-gradient(#eee 1px, transparent 1px), linear-gradient(90deg, #eee 1px, transparent 1px)',
                             backgroundSize: '18px 18px',

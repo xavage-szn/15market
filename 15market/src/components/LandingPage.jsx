@@ -85,7 +85,7 @@ export function LandingPage({ theme, onToggle }) {
                     <img
                         src="/logo.png"
                         alt="15market"
-                        className={`h-24 md:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)] ${isLight ? 'invert hue-rotate-180' : ''}`}
+                        className={`h-16 md:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)] ${isLight ? 'invert hue-rotate-180' : ''}`}
                     />
                 </motion.div>
 
