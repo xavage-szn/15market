@@ -5,6 +5,7 @@ import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock
 
 import { MascotLoader } from './MascotLoader';
 import { KEEPER_URL_ARC } from "../constants";
+import LiveStreamingChart from './LiveStreamingChart';
 
 export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1' }) {
     const chartContainerRef = useRef(null);
@@ -16,7 +17,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const lastCandleTime = useRef(null);
 
     const [timeframe, setTimeframe] = useState('1m');
-    const [chartType, setChartType] = useState(uiVersion === 'v1' ? 'candles' : 'line'); // 'candles' or 'line'
+    const [chartType, setChartType] = useState(uiVersion === 'v2' ? 'line' : 'candles'); // Allow both versions to toggle
     const current1sCandle = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [chartProgress, setChartProgress] = useState(0);
@@ -523,7 +524,20 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             </div>
 
             <div className="absolute inset-0 z-10">
-                <div ref={chartContainerRef} className="w-full h-full" />
+                {/* Standard Lightweight Chart */}
+                <div
+                    ref={chartContainerRef}
+                    className={`w-full h-full ${timeframe === '1s' && chartType === 'line' ? 'hidden' : 'block'}`}
+                />
+
+                {/* Live Streaming Engine for 1s Line Mode */}
+                {timeframe === '1s' && chartType === 'line' && (
+                    <LiveStreamingChart
+                        theme={theme}
+                        currentPrice={currentPrice}
+                        symbol={symbol}
+                    />
+                )}
 
                 {/* Chart Crocodile Loading Overlay */}
                 <AnimatePresence>
@@ -577,23 +591,21 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         ))}
                     </div>
 
-                    {/* CHART TYPE TOGGLE - Expert Options Style (Exclusive to V2) */}
-                    {uiVersion === 'v2' && (
-                        <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
-                            <button
-                                onClick={() => setChartType('line')}
-                                className={`p-1.5 transition-all rounded-lg ${chartType === 'line' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
-                            >
-                                <TrendingUp size={14} />
-                            </button>
-                            <button
-                                onClick={() => setChartType('candles')}
-                                className={`p-1.5 transition-all rounded-lg ${chartType === 'candles' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
-                            >
-                                <BarChart3 size={14} />
-                            </button>
-                        </div>
-                    )}
+                    {/* CHART TYPE TOGGLE */}
+                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
+                        <button
+                            onClick={() => setChartType('line')}
+                            className={`p-1.5 transition-all rounded-lg ${chartType === 'line' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
+                        >
+                            <TrendingUp size={14} />
+                        </button>
+                        <button
+                            onClick={() => setChartType('candles')}
+                            className={`p-1.5 transition-all rounded-lg ${chartType === 'candles' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
+                        >
+                            <BarChart3 size={14} />
+                        </button>
+                    </div>
 
                     <div className="ml-auto flex items-center gap-2 relative">
                         <div className="relative">

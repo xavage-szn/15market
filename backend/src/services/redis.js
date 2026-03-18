@@ -65,6 +65,24 @@ class RedisStore {
         return filterSettling ? trades.filter(t => !t.isSettling) : trades;
     }
 
+    async getRound(id) {
+        if (this.isCloud) {
+            const data = await this.redis.hget('15market_rounds', id.toString());
+            return data ? JSON.parse(data) : null;
+        }
+        if (!this.rounds) this.rounds = new Map();
+        return this.rounds.get(id.toString());
+    }
+
+    async setRound(id, data) {
+        if (this.isCloud) {
+            await this.redis.hset('15market_rounds', id.toString(), JSON.stringify(data));
+        } else {
+            if (!this.rounds) this.rounds = new Map();
+            this.rounds.set(id.toString(), data);
+        }
+    }
+
     async markAsSettling(id) {
         const trade = await this.getTrade(id);
         if (trade) {

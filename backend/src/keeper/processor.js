@@ -252,32 +252,26 @@ class TradeProcessor {
 
                 if (now - failed.lastAttempt < backoff) return false;
             }
-            // CRITICAL: Give frontend 3s grace period to settle with its local price before background loop takes over
-            // This prevents the 'result change' glitch where frontend sees one thing and backend sees another half-second later.
-            return now >= (t.expiry + 3000) && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
+            // CRITICAL: Reduced grace period to 1s for faster settlement
+            // This still allows a brief window for frontend sync but responds much quicker.
+            return now >= (t.expiry + 1000) && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
         });
 
         if (toSettle.length === 0) return;
 
         console.log(`[Processor] ⚡ Mass settling ${toSettle.length} trades (Concurrency: ${Math.min(toSettle.length, 25)})...`);
 
-        // Use a high-concurrency batching to stay fast but avoid RPC/Mempool floods
-        // NonceManager still handles the sequential nonce dispensation per wallet
-        const BATCH_SIZE = 3; // Smaller batches to avoid RPC flood
+        // Use moderate concurrency to speed up mass settlements
+        const BATCH_SIZE = 10; 
         for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
             const batch = toSettle.slice(i, i + BATCH_SIZE);
 
-            // Fire batch members in parallel
+            // Fire batch members in parallel with no artificial delay
             await Promise.all(batch.map(trade =>
                 this._settleSingleTrade(trade).catch(err => {
                     logToFile(`[Processor] ❌ Error in settlement task for ${trade.id}: ${err.message}`);
                 })
             ));
-
-            // Small delay between batches to allow the RPC mempool to breathe
-            if (i + BATCH_SIZE < toSettle.length) {
-                await new Promise(r => setTimeout(r, 800));
-            }
         }
     }
 
@@ -285,17 +279,12 @@ class TradeProcessor {
         const tradeId = trade.id.toString();
         if (this.settlingIds.has(tradeId) || this.settledCache.has(tradeId)) return;
 
-        // Grace Period: Give the frontend a generous 4-second window to submit its exact price lock
-        // so that the on-chain settlement strictly matches the user's visual outcome.
-        const delayNeeded = (trade.expiry + 4000) - Date.now();
+        // Grace Period: Reduced to 1.5s to ensure background loop picks up quickly if frontend fails
+        const delayNeeded = (trade.expiry + 1500) - Date.now();
         if (delayNeeded > 0) {
             if (manualPrice) {
-                // If frontend provided a synced manual exit price, proceed immediately to execute the user's locked result
-                // We don't sleep here, we just execute it because it's the explicit nudge from the UI
+                // If frontend provided a synced manual exit price, proceed immediately
             } else {
-                // If it's the background loop, skip and let the next cycle pick it up
-                // BUT we log it for visibility
-                if (delayNeeded < 2500) console.log(`[Processor] ⏳ Buffering trade ${tradeId} (${delayNeeded}ms remaining)`);
                 return;
             }
         }

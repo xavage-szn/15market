@@ -9,10 +9,11 @@ import { TransactionReceiptModal } from "./components/TransactionReceiptModal";
 import {
   MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
-  History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp
+  History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp,
+  Maximize2, RotateCw, Layers
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
-import { parseEther, parseUnits, formatUnits } from "viem";
+import { parseEther, parseUnits, formatUnits, encodeFunctionData } from "viem";
 // Solana imports removed
 import ArcABI from "./abi/ArcPrediction.json";
 import * as ethers from "ethers";
@@ -38,7 +39,10 @@ import CustomChart from './components/CustomChart';
 import Toast from "./components/Toast";
 import { ThemeToggle } from "./components/ThemeToggle";
 import SideHistoryPane from "./components/SideHistoryPane";
-import { Maximize2, RotateCw } from "lucide-react";
+
+import { RoundsTerminal } from "./components/RoundsTerminal";
+import RoundsChart from "./components/RoundsChart";
+import RoundsAccessGate from "./components/RoundsAccessGate";
 
 /**
  * Mobile Portrait Lock Component
@@ -386,6 +390,15 @@ export default function UserApp() {
   // Main Network State
   const [network, setNetwork] = useState("arc");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
+  const [gameMode, setGameMode] = useState("classic"); // "classic" | "rounds"
+
+  // Rounds chart state — populated by RoundsTerminal via onRoundPhaseChange
+  const [roundsChartState, setRoundsChartState] = useState(null);
+  // { phase:'entry'|'locked', entryPrice, pools, userDirection, timeLeft, odds }
+
+  const handleRoundPhaseChange = useCallback((phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled) => {
+    setRoundsChartState({ phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled });
+  }, []);
 
 
   useEffect(() => {
@@ -932,20 +945,26 @@ export default function UserApp() {
   }, []); // Keeping original dep array
 
   // Execute trade
-  const executeTrade = async () => {
+  const executeTrade = async (params = null) => {
     if (isExecuting) return;
 
     if (platformSettings.tradingHalted) {
       return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
     }
 
+    // Extract values from params (for Rounds) or state (for Classic)
+    const activeType = params?.type || 'classic';
+    const activeDirection = params?.direction || direction;
+    const activeAmount = params?.amount || amount;
+    const activeDuration = params?.duration || duration;
+
     let activePrice = parseFloat(price);
     if (!activePrice || activePrice <= 0) return;
-    if (!direction) return notify("Select UP or DOWN first", "error");
-    if (!amount || parseFloat(amount) <= 0) return notify("Enter a valid amount", "error");
+    if (!activeDirection) return notify("Select UP or DOWN first", "error");
+    if (!activeAmount || parseFloat(activeAmount) <= 0) return notify("Enter a valid amount", "error");
 
     const currentBal = sessionMode ? sessionBalance : balance;
-    const stakeAmt = parseFloat(amount);
+    const stakeAmt = parseFloat(activeAmount);
 
     // For session trades, require a small margin (0.1 USDC) for gas to avoid "Insufficient funds for gas" errors
     const gasMargin = sessionMode ? 0.1 : 0;
@@ -954,7 +973,7 @@ export default function UserApp() {
       return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. ${sessionMode ? `Session wallet needs at least ${stakeAmt + gasMargin} USDC (Stake + Gas room)` : `Balance: ${currentBal.toFixed(3)}`}`, "error");
     }
 
-    if (Number(amount) < parseFloat(platformSettings.minBet)) {
+    if (Number(activeAmount) < parseFloat(platformSettings.minBet) && activeType !== 'rounds') {
       return notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
     }
 
@@ -966,14 +985,13 @@ export default function UserApp() {
     // Generate truly unique bet ID immediately
     const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
     const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
-    const dirVal = (direction === "buy" || direction === "UP") ? 1 : 0;
+    const dirVal = (activeDirection === "buy" || activeDirection === "UP") ? 1 : 0;
     const entryPriceParams = Math.floor(activePrice * 100000000);
     const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 };
     const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
     const activeUserAddr = (sessionMode && evmSessionWallet) ? evmSessionWallet.address : address;
     const now = Date.now();
-    const expiryMs = now + (duration * 1000);
-    const amtNum = parseFloat(amount);
+    const amtNum = parseFloat(activeAmount);
 
     setIsExecuting(true);
     notify("Processing Trade...", "pending");
@@ -982,8 +1000,76 @@ export default function UserApp() {
       if (!isConnected) {
         throw new Error("Please connect wallet first");
       }
-      const amountWei = parseUnits(parseFloat(amount).toFixed(18), 18);
+      const amountWei = parseUnits(parseFloat(activeAmount).toFixed(18), 18);
       let txHash;
+
+      // ─── ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ───
+      if (activeType === 'rounds') {
+        const roundId = params.poolId;
+        const dirVal = (activeDirection === "UP" ? 1 : 0);
+        const amountWei = parseEther(parseFloat(activeAmount).toFixed(6));
+
+        console.log(`🏟️ [ROUNDS] Entering P2P Pool with ${activeAmount} USDC. ID: ${roundId}`);
+
+        if (sessionMode && evmSessionWallet) {
+          // AUTO-SIGNER MODE
+          const res = await fetch(`${KEEPER_URL_ARC}/rounds/session-enter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address, // main address
+              roundId: roundId.toString(),
+              direction: dirVal,
+              amount: activeAmount
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Auto-signer failed to enter round");
+          txHash = data.txHash;
+          console.log(`✅ [ROUNDS] Auto-signer broadcasted tx: ${txHash}`);
+        } else {
+          // STANDARD WALLET MODE
+          if (!walletClient) throw new Error("Wallet not connected");
+
+          const ROUND_CONTRACT = ARC_ROUNDS_CONTRACT_ADDRESS;
+          txHash = await walletClient.sendTransaction({
+            to: ROUND_CONTRACT,
+            value: amountWei,
+            account: address,
+            data: encodeFunctionData({
+              abi: [{ name: "enterRound", type: "function", inputs: [{ name: "_roundId", type: "uint256" }, { name: "_direction", type: "uint8" }] }],
+              functionName: 'enterRound',
+              args: [BigInt(roundId), dirVal]
+            })
+          });
+        }
+
+        notify("Broadcasting Entry...", "pending");
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
+        if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+          throw new Error("Round entry failed on-chain.");
+        }
+
+        // Add to history
+        const roundTrade = {
+          id: `round-${roundId}-${Date.now()}`,
+          type: 'rounds',
+          amount: activeAmount,
+          entryPrice: activePrice,
+          direction: activeDirection,
+          timestamp: new Date().toLocaleTimeString(),
+          symbol: activeMarket?.symbol || 'ETH',
+          status: 'LOCKED',
+          poolId: roundId,
+          tx: txHash
+        };
+        setTradeHistory(prev => [roundTrade, ...prev]);
+
+        notify("Joined the Round Successfully!", "success");
+        setIsExecuting(false);
+        triggerGlobalRefresh();
+        return;
+      }
 
       if (sessionMode) {
         console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper (Strict Mode)...`);
@@ -1005,10 +1091,10 @@ export default function UserApp() {
               tradeParams: {
                 id: tradeId.toString(),
                 direction: dirVal,
-                duration: Number(duration),
+                duration: Number(activeDuration),
                 entryPrice: entryPriceParams.toString(),
                 marketId: assetId,
-                amount
+                amount: activeAmount
               }
             })
           });
@@ -1048,10 +1134,10 @@ export default function UserApp() {
             userPublicKey: activeUserAddr,
             owner: address,
             sessionOwner: activeUserAddr,
-            duration,
+            duration: activeDuration,
             network: "arc",
             startTime: confirmedNow,
-            expiryMs: confirmedNow + (duration * 1000),
+            expiryMs: confirmedNow + (activeDuration * 1000),
             symbol: activeMarket?.symbol || 'ETH',
             isSessionTrade: true,
             confirmed: true,
@@ -1077,7 +1163,7 @@ export default function UserApp() {
           address: ARC_CONTRACT_ADDRESS,
           abi: ArcABI.abi,
           functionName: 'placeBet',
-          args: [BigInt(tradeId), Number(dirVal), BigInt(duration), BigInt(entryPriceParams), Number(assetId), address],
+          args: [BigInt(tradeId), Number(dirVal), BigInt(activeDuration), BigInt(entryPriceParams), Number(assetId), address],
           value: amountWei,
           account: address,
           gas: 800000n
@@ -1105,10 +1191,10 @@ export default function UserApp() {
           nonce: tradeId,
           userPublicKey: address,
           owner: address,
-          duration,
+          duration: activeDuration,
           network: "arc",
           startTime: confirmedNow,
-          expiryMs: confirmedNow + (duration * 1000),
+          expiryMs: confirmedNow + (activeDuration * 1000),
           symbol: activeMarket?.symbol || 'ETH',
           isSessionTrade: false,
           confirmed: true,
@@ -1131,11 +1217,11 @@ export default function UserApp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: tradeId.toString(),
-            address, amount, direction: dirVal, duration: Number(duration),
+            address, amount: activeAmount, direction: dirVal, duration: Number(activeDuration),
             entryPrice: entryPriceParams.toString(),
             symbol: activeMarket?.symbol || 'ETH'
           })
-        }).catch(e => console.warn("Ping failed", e));
+        }).catch(() => { });
 
         notify("Trade Confirmed & Started!", "success");
       }
@@ -2268,6 +2354,24 @@ export default function UserApp() {
               <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[42px] lg:h-[58px]' : 'h-16 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
+            {/* Game Mode Switcher — centered in navbar */}
+            <div className="hidden md:flex items-center gap-2 absolute left-1/2 -translate-x-1/2">
+              {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
+                <button
+                  key={key}
+                  onClick={() => { setGameMode(key); setView('trading'); }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 relative group`}
+                >
+                  <div className="absolute inset-0 rounded-full blur-md opacity-0 group-hover:opacity-20 bg-[#3CB371] transition-opacity" />
+                  <Icon size={13} className={gameMode === key ? 'text-[#3CB371]' : 'text-white/20'} />
+                  <span className={`text-[10px] font-black uppercase tracking-[0.18em] ${gameMode === key ? (theme === 'light' ? 'text-[#0a261a]' : 'text-white') : 'text-white/20'}`}>{label}</span>
+                  {gameMode === key && (
+                    <motion.div layoutId="nav-mode-dot" className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#3CB371] shadow-[0_0_8px_#3CB371]" />
+                  )}
+                </button>
+              ))}
+            </div>
+
             <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
@@ -2323,164 +2427,189 @@ export default function UserApp() {
 
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
-            {uiVersion === 'v1' ? (
-              <div className="w-full flex-none grid grid-cols-12 gap-4 lg:gap-6 mb-8 relative z-0 mt-2 h-auto lg:h-[calc(100vh-150px)] lg:min-h-0">
-                {/* Chart Widget - First in stack on mobile */}
-                <div className={`col-span-12 lg:col-span-8 flex flex-col gap-3 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border lg:h-full glass-panel chart-glow min-h-[280px] md:min-h-[400px] lg:min-h-0 w-full md:max-w-full mx-auto`}
-                  style={{
-                    background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
-                    boxShadow: theme === 'light'
-                      ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
-                      : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}05`,
-                    borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : `${GREEN}40`
-                  }}>
-                  <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
-                </div>
-
-                {/* Sidebar - Below chart on mobile, right side on desktop */}
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 lg:h-full min-h-0 w-full md:max-w-full mx-auto px-1 md:px-0">
-                  {/* Trade Terminal - Second in stack on mobile */}
-                  <div className="flex-none">
-                    <TradeTerminal
-                      activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                      sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                      setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                      sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                      theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                      refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                      CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                      evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                      activeMarket={activeMarket}
-                      maintenanceMode={platformSettings.maintenanceMode}
-                      showManagement={showManagement} setShowManagement={setShowManagement}
-                      uiVersion={uiVersion}
-                    />
-                  </div>
-
-                  {/* Active Section (Live Execution) - Third in stack on mobile */}
-                  <div className="flex-1 min-h-[250px] lg:min-h-0 glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col min-h-0 overflow-hidden">
-                    <LiveExecution
-                      activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                      setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                      theme={theme} currentNetwork={network}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1.5 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-100px)] overflow-hidden pb-1' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
-                {/* V2: Integrated One Screen Layout */}
-                <motion.div
-                  layout
-                  className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-[calc(100%-240px)]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
-                  style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
-
-                  {uiVersion === 'v2' && !isSmallScreen && (
-                    <SideHistoryPane
-                      isOpen={showSideHistory}
-                      onToggle={() => setShowSideHistory(!showSideHistory)}
-                      tradeHistory={tradeHistory}
-                      theme={theme}
-                      setSelectedPnLTrade={setSelectedPnLTrade}
-                      setIsPnLOpen={setIsPnLOpen}
-                    />
-                  )}
-
-
-                  {/* Scroller only above chart in V2 */}
-                  <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
-                    <GlobalTradeScroller theme={theme} />
-                  </div>
-                  <div className={`flex-[2] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'}>
+              {uiVersion === 'v1' ? (
+                <div className={`w-full flex-none grid grid-cols-12 gap-2 lg:gap-4 mb-4 relative z-0 mt-1 h-auto ${gameMode === 'rounds' ? 'lg:h-[calc(100vh-120px)]' : 'lg:h-[calc(100vh-150px)]'} lg:min-h-0`}>
+                  {/* Chart Widget - First in stack on mobile */}
+                  <div className={`col-span-12 lg:col-span-8 flex flex-col gap-2 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border lg:h-full glass-panel chart-glow min-h-[300px] md:min-h-[450px] lg:min-h-0 w-full md:max-w-full mx-auto`}
                     style={{
-                      background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
+                      background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.75)',
                       boxShadow: theme === 'light'
                         ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
-                        : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`,
-                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
+                        : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}08`,
+                      borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : `${GREEN}35`
                     }}>
-                    <div className="flex-1 w-full h-full flex relative">
-                      {/* Chart Area */}
-                      <div className="flex-1 w-full h-full relative min-w-0">
-                        <CustomChart
-                          symbol={activeMarket.binance}
-                          theme={theme}
-                          network={network}
-                          activeMarket={activeMarket}
-                          uiVersion={uiVersion}
-                          setActiveMarket={handleMarketChange}
-                          activeTrades={activeTrades}
-                          currentPrice={price}
-                        />
-                      </div>
-
-                      {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
-                      <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
-                        <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
-                          Order Book
-                        </div>
-                        <div className="flex-1 overflow-hidden p-2">
-                          <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  layout
-                  className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
-                >
-                  {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                  <div className={`w-full grid grid-cols-2 gap-2 ${isSmallScreen ? '' : 'hidden md:hidden lg:hidden'}`}>
-                    <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
-                      style={{
-                        background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
-                      }}>
-                      <TradeTerminal
-                        transparent={true}
-                        activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                        sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                        setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
-                        sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                        theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                        refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
-                        CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                        evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                        activeMarket={activeMarket}
-                        maintenanceMode={platformSettings.maintenanceMode}
-                        showManagement={showManagement} setShowManagement={setShowManagement}
-                        uiVersion={uiVersion}
+                    {gameMode === 'rounds' && roundsChartState?.phase === 'locked' ? (
+                      <RoundsChart
+                        theme={theme}
+                        currentPrice={price}
+                        entryPrice={roundsChartState.entryPrice}
+                        timeLeft={roundsChartState.timeLeft}
+                        totalDuration={15}
+                        pools={roundsChartState.pools}
+                        userDirection={roundsChartState.userDirection}
+                        odds={roundsChartState.odds}
+                        onResult={roundsChartState.onResult}
+                        isSettled={roundsChartState.isSettled}
                       />
+                    ) : (
+                      <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+                    )}
+                  </div>
+
+                  {/* Sidebar - Below chart on mobile, right side on desktop */}
+                  <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 lg:h-full min-h-0 w-full md:max-w-full mx-auto px-1 md:px-0">
+                    {/* Trade Terminal - Second in stack on mobile */}
+                    <div className="flex-none">
+                      {gameMode === 'rounds' ? (
+                        <RoundsTerminal
+                          price={price}
+                          balance={balance}
+                          executeTrade={executeTrade}
+                          isExecuting={isExecuting}
+                          theme={theme}
+                          sessionMode={sessionMode}
+                          sessionBalance={sessionBalance}
+                          amount={amount}
+                          handleAmountChange={handleAmountChange}
+                          sliderValue={sliderValue}
+                          handleSliderChange={handleSliderChange}
+                          activeMarket={activeMarket}
+                          onRoundPhaseChange={handleRoundPhaseChange}
+                        />
+                      ) : (
+                        <TradeTerminal
+                          activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                          sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                          setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                          sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                          theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                          refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                          CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                          evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                          activeMarket={activeMarket}
+                          maintenanceMode={platformSettings.maintenanceMode}
+                          showManagement={showManagement} setShowManagement={setShowManagement}
+                          uiVersion={uiVersion}
+                        />
+                      )}
                     </div>
-                    <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
-                      style={{
-                        background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
-                      }}>
-                      <div className="flex flex-col h-full min-h-0">
+
+                    {/* Active Section — hidden in Rounds mode */}
+                    {gameMode !== 'rounds' && (
+                      <div className="flex-1 min-h-[250px] lg:min-h-0 glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col min-h-0 overflow-hidden">
                         <LiveExecution
                           activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                           setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
                           theme={theme} currentNetwork={network}
                         />
                       </div>
-                    </div>
+                    )}
                   </div>
-                  {/* Compact spacer */}
-                  {isSmallScreen && <div className="h-1.5 shrink-0" />}
+                </div>
+              ) : (
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1.5 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-100px)] overflow-hidden pb-1' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
+                  {/* V2: Integrated One Screen Layout */}
+                  <motion.div
+                    layout
+                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-[calc(100%-240px)]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
+                    style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
-                  {!isSmallScreen && (
-                    /* Existing Desktop V2 Layout */
-                    <>
-                      {/* Trading Terminal Box */}
-                      <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
+                    {uiVersion === 'v2' && !isSmallScreen && (
+                      <SideHistoryPane
+                        isOpen={showSideHistory}
+                        onToggle={() => setShowSideHistory(!showSideHistory)}
+                        tradeHistory={tradeHistory}
+                        theme={theme}
+                        setSelectedPnLTrade={setSelectedPnLTrade}
+                        setIsPnLOpen={setIsPnLOpen}
+                      />
+                    )}
+
+
+                    {/* Scroller only above chart in V2 */}
+                    <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
+                      <GlobalTradeScroller theme={theme} />
+                    </div>
+                    <div className={`flex-[2] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+                      style={{
+                        background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
+                        boxShadow: theme === 'light'
+                          ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                          : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`,
+                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
+                      }}>
+                      <div className="flex-1 w-full h-full flex relative">
+                        {/* Chart Area */}
+                        <div className="flex-1 w-full h-full relative min-w-0">
+                          {gameMode === 'rounds' && roundsChartState?.phase === 'locked' ? (
+                            <RoundsChart
+                              theme={theme}
+                              currentPrice={price}
+                              entryPrice={roundsChartState.entryPrice}
+                              timeLeft={roundsChartState.timeLeft}
+                              totalDuration={15}
+                              pools={roundsChartState.pools}
+                              userDirection={roundsChartState.userDirection}
+                              odds={roundsChartState.odds}
+                              onResult={roundsChartState.onResult}
+                              isSettled={roundsChartState.isSettled}
+                            />
+                          ) : (
+                            <CustomChart
+                              symbol={activeMarket.binance}
+                              theme={theme}
+                              network={network}
+                              activeMarket={activeMarket}
+                              uiVersion={uiVersion}
+                              setActiveMarket={handleMarketChange}
+                              activeTrades={activeTrades}
+                              currentPrice={price}
+                            />
+                          )}
+                        </div>
+
+                        {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
+                        <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                          <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                            Order Book
+                          </div>
+                          <div className="flex-1 overflow-hidden p-2">
+                            <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    layout
+                    className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
+                  >
+                    {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
+                    <div className={`w-full grid grid-cols-2 gap-2 ${isSmallScreen ? '' : 'hidden md:hidden lg:hidden'}`}>
+                      <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
                         }}>
-                        <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : 'p-2 lg:p-4'} flex flex-col min-h-0`}>
+                        {gameMode === 'rounds' ? (
+                          <RoundsTerminal
+                            price={price}
+                            balance={balance}
+                            executeTrade={executeTrade}
+                            isExecuting={isExecuting}
+                            theme={theme}
+                            sessionMode={sessionMode}
+                            sessionBalance={sessionBalance}
+                            amount={amount}
+                            handleAmountChange={handleAmountChange}
+                            sliderValue={sliderValue}
+                            handleSliderChange={handleSliderChange}
+                            activeMarket={activeMarket}
+                            onRoundPhaseChange={handleRoundPhaseChange}
+                          />
+                        ) : (
                           <TradeTerminal
                             transparent={true}
                             activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
@@ -2496,32 +2625,97 @@ export default function UserApp() {
                             showManagement={showManagement} setShowManagement={setShowManagement}
                             uiVersion={uiVersion}
                           />
-                        </div>
+                        )}
                       </div>
-
-                      {/* Active Trade / Controls Box */}
-                      <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-1/2 lg:w-full'} shadow-lg`}
-                        style={{
-                          background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                          borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
-                        }}>
-                        <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
-                          <LiveExecution
-                            activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                            setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                            theme={theme} currentNetwork={network}
-                            isTruncated={uiVersion === 'v2' && showManagement && !showActiveExpanded}
-                            isExpanded={showActiveExpanded}
-                            setIsExpanded={setShowActiveExpanded}
-                          />
+                      {gameMode !== 'rounds' && (
+                        <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                          style={{
+                            background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                          }}>
+                          <div className="flex flex-col h-full min-h-0">
+                            <LiveExecution
+                              activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                              theme={theme} currentNetwork={network}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    </>
-                  )}
-                </motion.div>
-              </div>
-            )}
+                      )}
+                    </div>
+                    {/* Compact spacer */}
+                    {isSmallScreen && <div className="h-1.5 shrink-0" />}
 
+                    {!isSmallScreen && (
+                      /* Existing Desktop V2 Layout */
+                      <>
+                        {/* Trading Terminal Box */}
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
+                          style={{
+                            background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                          }}>
+                          <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : 'p-2 lg:p-4'} flex flex-col min-h-0`}>
+                            {gameMode === 'rounds' ? (
+                              <RoundsTerminal
+                                price={price}
+                                balance={balance}
+                                executeTrade={executeTrade}
+                                isExecuting={isExecuting}
+                                theme={theme}
+                                sessionMode={sessionMode}
+                                sessionBalance={sessionBalance}
+                                amount={amount}
+                                handleAmountChange={handleAmountChange}
+                                sliderValue={sliderValue}
+                                handleSliderChange={handleSliderChange}
+                                activeMarket={activeMarket}
+                                onRoundPhaseChange={handleRoundPhaseChange}
+                              />
+                            ) : (
+                              <TradeTerminal
+                                transparent={true}
+                                activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                                sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                                sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                                theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                                refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                                CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                                evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                                activeMarket={activeMarket}
+                                maintenanceMode={platformSettings.maintenanceMode}
+                                showManagement={showManagement} setShowManagement={setShowManagement}
+                                uiVersion={uiVersion}
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Active Trade / Controls Box — hidden in Rounds */}
+                        {gameMode !== 'rounds' && (
+                          <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-1/2 lg:w-full'} shadow-lg`}
+                            style={{
+                              background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                            }}>
+                            <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
+                              <LiveExecution
+                                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                                theme={theme} currentNetwork={network}
+                                isTruncated={uiVersion === 'v2' && showManagement && !showActiveExpanded}
+                                isExpanded={showActiveExpanded}
+                                setIsExpanded={setShowActiveExpanded}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </motion.div>
+                </div>
+              )}
 
 
             {/* Forced Orientation Overlay for V2 Mobile */}
@@ -2633,7 +2827,100 @@ export default function UserApp() {
                 userProfile={userProfile}
               />
             )}
+            </RoundsAccessGate>
 
+
+            {uiVersion === 'v1' && (
+              <div className="w-full max-w-4xl lg:max-w-7xl mx-auto px-4 sm:px-6 flex flex-col justify-center">
+                <TradeHistory
+                  wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+                  tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                  GREEN={GREEN} CORAL={CORAL}
+                  evmSessionWallet={evmSessionWallet}
+                  theme={theme} currentNetwork={network}
+                />
+                <div className="w-full mb-6 flex flex-col gap-4 mt-6">
+                  {winnerBanner && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
+                      style={{
+                        background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
+                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
+                      }}
+                    >
+                      <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                        <Trophy size={80} />
+                      </div>
+                      <div className="flex items-center gap-4 lg:gap-8 relative z-10">
+                        <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                          <Trophy size={32} className="text-yellow-500" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
+                            <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
+                          </div>
+                          <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                            Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
+                          </h3>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
+                    <motion.div
+                      key={camp.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
+                    >
+                      <div className="flex items-center gap-6">
+                        <div className={`p-4 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-white/5 border-white/10 text-[#3CB371]'} border rounded-2xl`}>
+                          <Trophy size={24} />
+                        </div>
+                        <div>
+                          <h3 className={`text-lg font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} uppercase tracking-tight`}>{camp.title}</h3>
+                          <div className="flex flex-wrap items-center gap-4 mt-1">
+                            <div className={`flex items-center gap-1.5 text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>
+                              <Calendar size={12} />
+                              Ends {new Date(camp.endTime).toLocaleString()}
+                            </div>
+                            <div className={`w-1 h-1 ${isLight ? 'bg-[#3CB371]/10' : 'bg-white/10'} rounded-full`} />
+                            <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
+                              Prize: {camp.prize || 'Pride'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => navigate(`/campaign/${camp.id}`)}
+                        className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
+                          ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
+                          : (isLight ? 'bg-[#3CB371] text-white' : 'bg-white text-black') + ' hover:scale-105 active:scale-95 shadow-xl'
+                          }`}
+                      >
+                        {enrollments[camp.id] ? (
+                          <>
+                            <CheckCircle size={14} />
+                            View Leaderboard
+                          </>
+                        ) : (
+                          <>
+                            View Campaign Details
+                            <ChevronRight size={14} />
+                          </>
+                        )}
+                      </button>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )

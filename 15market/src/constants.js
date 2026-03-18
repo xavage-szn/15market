@@ -13,6 +13,7 @@ export const ARC_RPCS = [
 export const ARC_RPC = ARC_RPCS[0];
 export const ARC_EXPLORER = "https://testnet.arcscan.app";
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
+export const ARC_ROUNDS_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_ROUNDS_CONTRACT_ADDRESS || "0x02AE9D2a7CEca436E7B3A482772EfB74C4fE4721";
 export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
 export const ARC_RPC_BACKUP = ARC_RPCS[1];
 export const ARC_RPC_THIRDWEB = ARC_RPCS[1];

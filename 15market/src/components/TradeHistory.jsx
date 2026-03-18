@@ -55,57 +55,72 @@ function TradeHistoryComponent({
                     <div className={`${isLight ? 'text-[#0a261a]/60' : 'text-white/40'} py-10 text-center uppercase text-[10px] font-black tracking-widest`}>No trades yet for this wallet.</div>
                 ) : (
                     <div className="space-y-2">
-                        {paginatedTrades.map((t) => (
-                            <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border transition-all group ${isLight
-                                ? 'bg-[#f0f9f4] border-[#3CB371]/10 shadow-sm hover:shadow-md hover:border-[#3CB371]/40'
-                                : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
-                                <div className="flex items-center gap-2 lg:gap-4">
-                                    <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{
-                                        background: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? `rgba(60, 179, 113, 0.2)` : `rgba(255, 127, 80, 0.2)`,
-                                        color: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? '#3CB371' : '#FF7F50'
-                                    }}>
-                                        {String(t.direction || "").toUpperCase()}
+                        {paginatedTrades.map((t) => {
+                            const isRounds = t.type === 'rounds';
+                            const side = (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "UP" : "DOWN";
+                            const sideColor = side === "UP" ? '#3CB371' : '#FF7F50';
+
+                            return (
+                                <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border transition-all group ${isLight
+                                    ? 'bg-[#f0f9f4] border-[#3CB371]/10 shadow-sm hover:shadow-md hover:border-[#3CB371]/40'
+                                    : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
+                                    <div className="flex items-center gap-2 lg:gap-4">
+                                        <div className="relative">
+                                            <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{
+                                                background: `${sideColor}20`,
+                                                color: sideColor
+                                            }}>
+                                                {side}
+                                            </div>
+                                            {isRounds && (
+                                                <div className="absolute -top-2 -left-1 bg-[#3CB371] text-white text-[5px] font-black px-1 rounded uppercase tracking-tighter">Round</div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>{Number(t.amount).toFixed(2)} USDC</div>
+                                            <div className="text-[7px] lg:text-[9px] uppercase font-black opacity-30">{t.symbol || 'ETH'} // {isRounds ? 'P2P Pool' : 'Binary'}</div>
+                                        </div>
                                     </div>
-                                    <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>{Number(t.amount).toFixed(2)} USDC</div>
-                                </div>
 
-                                <div className={`${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} text-[9px] lg:text-sm hidden sm:flex flex-col`}>
-                                    <span>Entry: ${Number(t.entryPrice).toFixed(2)}</span>
-                                    {t.settlementPrice > 0 && <span className="text-[8px] lg:text-xs opacity-60">Exit: ${Number(t.settlementPrice).toFixed(2)}</span>}
-                                </div>
+                                    <div className={`${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} text-[9px] lg:text-sm hidden sm:flex flex-col`}>
+                                        <span className="font-bold">{isRounds ? 'Lock' : 'Entry'}: ${Number(t.entryPrice).toFixed(2)}</span>
+                                        {t.settlementPrice > 0 && <span className="text-[8px] lg:text-xs opacity-60">Result: ${Number(t.settlementPrice).toFixed(2)}</span>}
+                                    </div>
 
-                                <div className="flex items-center gap-2 lg:gap-6">
-                                    <div className={`text-[8px] font-mono hidden lg:block ${isLight ? 'text-[#0a261a]/30' : 'text-white/20'}`}>{t.timestamp}</div>
+                                    <div className="flex items-center gap-2 lg:gap-6">
+                                        <div className={`text-[8px] font-mono hidden lg:block ${isLight ? 'text-[#0a261a]/30' : 'text-white/20'}`}>{t.timestamp}</div>
 
-                                    <a
-                                        href={`https://testnet.arcscan.app/tx/${t.tx}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
-                                            t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
-                                                (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
-                                            }`}
-                                    >
-                                        {t.status}
-                                        <span className="text-[8px] lg:text-[10px] opacity-40 group-hover:opacity-100 transition-opacity">↗</span>
-                                    </a>
-
-                                    {t.status !== "PENDING" && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                setSelectedPnLTrade(t);
-                                                setIsPnLOpen(true);
-                                            }}
-                                            className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#3CB371]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#3CB371]'}`}
-                                            title="Share PnL"
+                                        <div
+                                            className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
+                                                t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
+                                                    (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
+                                                }`}
                                         >
-                                            <Share2 size={16} />
-                                        </button>
-                                    )}
+                                            {t.status}
+                                            {t.tx && (
+                                                <a href={`https://testnet.arcscan.app/tx/${t.tx}`} target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 transition-opacity">
+                                                    ↗
+                                                </a>
+                                            )}
+                                        </div>
+
+                                        {t.status !== "PENDING" && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setSelectedPnLTrade(t);
+                                                    setIsPnLOpen(true);
+                                                }}
+                                                className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#3CB371]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#3CB371]'}`}
+                                                title="Share Receipt"
+                                            >
+                                                <Share2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {totalPages > 1 && (
                             <div className="flex items-center justify-center gap-2 mt-8 py-4 border-t border-dashed border-white/5">

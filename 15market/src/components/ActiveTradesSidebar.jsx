@@ -5,28 +5,42 @@ import { motion, AnimatePresence } from 'framer-motion';
 const GREEN_COLOR = "#3CB371"; // WON is Green
 const RED_COLOR = "#FF7F50";   // LOST is Coral
 
+// Cache server offset globally to avoid redundant fetches across multiple active trades
+let cachedServerOffset = 0;
+let isSyncingTime = false;
+
 function TradeCountdown({ expiry, isDark }) {
     const [timeLeft, setTimeLeft] = useState(0);
-    const [serverOffset, setServerOffset] = useState(0);
+    const [offset, setOffset] = useState(cachedServerOffset);
 
     useEffect(() => {
-        // Sync with server once
-        fetch('https://api.15market.online/time').then(r => r.json()).then(d => {
-            setServerOffset(d.time - Date.now());
-        }).catch(() => { });
+        if (cachedServerOffset === 0 && !isSyncingTime) {
+            isSyncingTime = true;
+            fetch('https://api.15market.online/time')
+                .then(r => r.json())
+                .then(d => {
+                    const newOffset = d.time - Date.now();
+                    cachedServerOffset = newOffset;
+                    setOffset(newOffset);
+                    isSyncingTime = false;
+                })
+                .catch(() => { isSyncingTime = false; });
+        }
     }, []);
 
     useEffect(() => {
         const updateTimer = () => {
-            const now = (Date.now() + serverOffset) / 1000;
-            const remaining = Math.max(0, expiry - now);
+            // Determine if expiry is in ms or seconds
+            const expirySec = expiry > 1e11 ? expiry / 1000 : expiry;
+            const nowSec = (Date.now() + offset) / 1000;
+            const remaining = Math.max(0, expirySec - nowSec);
             setTimeLeft(remaining);
         };
 
         updateTimer();
         const interval = setInterval(updateTimer, 100);
         return () => clearInterval(interval);
-    }, [expiry]);
+    }, [expiry, offset]);
 
     if (timeLeft === 0) return null;
 

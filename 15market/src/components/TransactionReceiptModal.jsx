@@ -91,6 +91,12 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     <span className="opacity-40 uppercase">TIMESTAMP:</span>
                                     <span>{new Date(transaction.timestamp).toLocaleString()}</span>
                                 </div>
+                                {transaction.type === 'rounds' && (
+                                    <div className="flex justify-between">
+                                        <span className="opacity-40 uppercase">POOL_ID:</span>
+                                        <span>#{transaction.poolId || 'N/A'}</span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="w-full border-t border-black/10 my-3" />
@@ -98,37 +104,48 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                             <div className="w-full space-y-3 py-1">
                                 <div className="flex justify-between items-end border-b border-black/5 pb-1.5">
                                     <div className="flex flex-col">
-                                        <span className="text-[9px] opacity-40 font-black">TRANSACTION_TYPE</span>
-                                        <span className={`text-base font-black tracking-tighter ${isDeposit ? 'text-green-600' : 'text-orange-600'}`}>
-                                            {transaction.type}
+                                        <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">{transaction.type === 'rounds' ? 'P2P_ROUND_TYPE' : 'TRANSACTION_TYPE'}</span>
+                                        <span className={`text-base font-black tracking-tighter ${transaction.type === 'rounds' ? 'text-[#3CB371]' : (isDeposit ? 'text-green-600' : 'text-orange-600')}`}>
+                                            {transaction.type === 'rounds' ? 'LIVE_ROUNDS_ENTRY' : transaction.type}
                                         </span>
                                     </div>
-                                    {transaction.type === 'TRADE' && (
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-[9px] opacity-40 font-black">ASSET_PAIR</span>
-                                            <span className="text-base font-black tracking-tighter">
-                                                {transaction.symbol ? `${transaction.symbol.toUpperCase()} // USD` : 'ETH // USD'}
-                                            </span>
-                                        </div>
-                                    )}
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">{transaction.type === 'rounds' ? 'ACTIVE_POOL' : 'ASSET_PAIR'}</span>
+                                        <span className="text-base font-black tracking-tighter">
+                                            {transaction.symbol ? `${transaction.symbol.toUpperCase()} // USD` : 'ETH // USD'}
+                                        </span>
+                                    </div>
                                     <div className="flex flex-col items-end">
-                                        <span className="text-[9px] opacity-40 font-black">AMOUNT</span>
+                                        <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">AMOUNT</span>
                                         <span className="font-black text-lg">
-                                            {isDeposit ? '+' : '-'}{Number(transaction.amount).toFixed(2)} {transaction.currency || (transaction.network === 'sol' || transaction.network === 'SOL' ? 'SOL' : 'USDC')}
+                                            {isDeposit ? '+' : '-'}{Number(transaction.amount).toFixed(2)} {transaction.currency || 'USDC'}
                                         </span>
                                     </div>
                                 </div>
 
+                                {transaction.type === 'rounds' && (
+                                    <div className="flex justify-between px-1 py-1 border-b border-black/5">
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">LOCKED_ENTRY</span>
+                                            <span className="text-xs font-black">${transaction.entryPrice?.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">DIRECTION</span>
+                                            <span className={`text-xs font-black ${transaction.direction === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>{transaction.direction}</span>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="p-4 bg-black/5 rounded-lg border border-black/10">
-                                    <p className="text-center text-sm font-black italic text-black/70">
-                                        "{message}"
+                                    <p className="text-center text-[11px] font-black italic text-black/70">
+                                        "{transaction.type === 'rounds' ? 'Predict the outcome, claim the pool! 🏁' : message}"
                                     </p>
                                 </div>
                             </div>
 
                             <div className="w-full border-t border-dashed border-black/20 my-4" />
 
-                            {transaction.tx && (
+                            {transaction.tx ? (
                                 <a
                                     href={`https://testnet.arcscan.app/tx/${transaction.tx}`}
                                     target="_blank"
@@ -138,7 +155,12 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     <ExternalLink size={14} />
                                     VIEW ON ARCSCAN
                                 </a>
-                            )}
+                            ) : transaction.type === 'rounds' ? (
+                                <div className="w-full mb-4 py-3 bg-black/5 text-black/30 border border-black/10 text-[9px] font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2">
+                                    <Lock size={12} />
+                                    P2P_LOCAL_AUTH_ONLY
+                                </div>
+                            ) : null}
 
                             <div className="w-full grid grid-cols-2 gap-3 mb-4 receipt-control">
                                 <button
