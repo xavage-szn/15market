@@ -25,7 +25,7 @@ import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 
 import MessagingSystem from "./components/MessagingSystem";
-import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID } from "./constants";
+import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID } from "./constants";
 
 
 // Memoized Sub-components
@@ -1030,7 +1030,7 @@ export default function UserApp() {
 
         if (sessionMode && evmSessionWallet) {
           // AUTO-SIGNER MODE
-          const res = await fetch(`${KEEPER_URL_ARC}/rounds/session-enter`, {
+          const res = await fetch(`${KEEPER_URL_ROUNDS}/rounds/session-enter`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

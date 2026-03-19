@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config();
 
 const processor = require('./src/processor');
 const botService = require('./src/botService');
@@ -11,6 +11,14 @@ const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3011;
+
+// Startup check: Log missing environment variables instead of crashing silently
+const requiredEnv = ['REDIS_URL', 'ADMIN_TOKEN', 'EMAIL_USER', 'EMAIL_PASS', 'PRIVATE_KEY', 'ROUNDS_CONTRACT_ADDRESS'];
+requiredEnv.forEach(env => {
+    if (!process.env[env]) {
+        console.warn(`[Startup] ⚠️ MISSING ENV VAR: ${env}. This will cause service failures.`);
+    }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -25,6 +33,23 @@ const transporter = nodemailer.createTransport({
 });
 
 const isAdmin = (req) => req.headers['authorization'] === `Bearer ${process.env.ADMIN_TOKEN}`;
+
+// --- SESSION WALLET DERIVATION ---
+const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
+if (!SESSION_MASTER_SECRET) {
+    console.warn("⚠️ [Startup] MISSING SESSION_MASTER_SECRET. Session trades will fail.");
+}
+
+async function deriveUserWallet(userAddress) {
+    const { ethers } = require('ethers');
+    const blockchain = require('./src/blockchain');
+    const addr = userAddress.toLowerCase();
+    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
+    const privateKey = ethers.keccak256(entropy);
+    const provider = blockchain.provider;
+    const wallet = new ethers.Wallet(privateKey, provider);
+    return { wallet, address: wallet.address };
+}
 
 // --- ACCESS ENDPOINTS ---
 
@@ -125,6 +150,40 @@ app.get('/access/admin/wallets', async (req, res) => {
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'rounds-backend', timestamp: Date.now() });
+});
+
+app.get('/rounds/status', async (req, res) => {
+    try {
+        const { asset } = req.query;
+        if (!asset) return res.status(400).json({ error: 'Asset required' });
+        // Normalize symbol (e.g. eth -> ETHUSDT)
+        const symbol = asset.length < 5 ? `${asset.toUpperCase()}USDT` : asset.toUpperCase();
+        const state = await redis.getRound(`${symbol}_state`);
+        res.json(state || { live: null, next: { pools: { long: 1, short: 1, participants: 0 } } });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/rounds/session-enter', async (req, res) => {
+    try {
+        const { address, direction, amount, poolId, asset } = req.body;
+        if (!address || !direction || !amount) return res.status(400).json({ error: 'Missing parameters' });
+
+        const { wallet } = await deriveUserWallet(address);
+        const blockchain = require('./src/blockchain');
+        const { ethers } = require('ethers');
+
+        const contract = new ethers.Contract(
+            process.env.ROUNDS_CONTRACT_ADDRESS,
+            ["function enterRound(uint256 _roundId, uint8 _direction) external payable"],
+            wallet
+        );
+
+        const dirMap = { 'UP': 0, 'DOWN': 1 };
+        const val = ethers.parseUnits(parseFloat(amount).toFixed(18), 18);
+        
+        const tx = await contract.enterRound(poolId, dirMap[direction], { value: val });
+        res.json({ success: true, txHash: tx.hash });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/active', async (req, res) => {

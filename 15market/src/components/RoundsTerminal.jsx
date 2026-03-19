@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Users, TrendingUp, TrendingDown, Lock, CheckCircle, XCircle, Timer, Activity, Zap } from 'lucide-react';
-import { KEEPER_URL_ARC } from '../constants';
+import { KEEPER_URL_ROUNDS } from '../constants';
 
 /**
  * ROUNDS P2P TERMINAL - SYNCED VERSION
@@ -57,7 +57,7 @@ function RoundsTerminalComponent({
 
     const fetchStatus = useCallback(async () => {
         try {
-            const res = await fetch(`${KEEPER_URL_ARC}/rounds/status?asset=${currentAssetId}`);
+            const res = await fetch(`${KEEPER_URL_ROUNDS}/rounds/status?asset=${currentAssetId}`);
             if (!res.ok) return;
             const data = await res.json();
             if (data && !data.error) {

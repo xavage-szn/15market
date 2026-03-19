@@ -1,6 +1,6 @@
 const { ethers, FetchRequest } = require('ethers');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config();
 
 const getRpcEndpoints = () => {
     // Official ARC RPCs first to save Thirdweb limits for settlements
