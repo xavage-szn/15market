@@ -113,8 +113,6 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             const nowPx = Date.now();
             const windowMs = 20000;
             const oldest = nowPx - windowMs;
-            const liveX = W * 0.95; 
-            const liveY = toY(latestPriceVal);
 
             // Y-Scale
             const visiblePts = history.filter(pt => pt.t >= oldest);
@@ -133,6 +131,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             const toY = (p) => H - ((p - lo) / (hi - lo)) * H;
             const liveX = W * 0.8; // Center it more to the right like trading charts
             const liveY = toY(latestPriceVal);
+
 
             // 1. Static Grid (Matching 1m)
             ctx.lineWidth = 1;
