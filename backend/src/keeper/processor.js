@@ -359,7 +359,7 @@ class TradeProcessor {
                         await redis.setTrade(tradeId, { ...currentTrade, isSettling: false, status: 'PENDING' });
                     }
 
-                    setTimeout(() => this.settledCache.delete(tradeId.toString()), 60000); // Try again in 60s
+                    setTimeout(() => this.settledCache.delete(tradeId.toString()), 10000); // Retry in 10s — continue other trades immediately
                     return; 
                 } else if (!isWin) {
                     // Proceeding with LOSER settlement as it cost 0 treasury balance (good for platform health)

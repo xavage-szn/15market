@@ -5,8 +5,8 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const processor = require('./keeper/processor');
-const roundsProcessor = require('./keeper/roundsProcessor');
-const botService = require('./services/botService');
+// const roundsProcessor = require('./keeper/roundsProcessor'); // Removed for separation
+// const botService = require('./services/botService'); // Removed for separation
 const blockchain = require('./services/blockchain');
 const pricing = require('./services/pricing');
 const redis = require('./services/redis');
@@ -149,63 +149,7 @@ async function deriveUserWallet(userAddress) {
 app.get('/settings', (req, res) => res.json(SETTINGS_RESPONSE));
 app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
 
-app.get('/rounds/status', async (req, res) => {
-    try {
-        const { asset } = req.query;
-        if (!asset) return res.status(400).json({ error: 'Asset required' });
-
-        const assetMap = { 'eth': 'ETHUSDT', 'btc': 'BTCUSDT', 'sol': 'SOLUSDT' };
-        const dataKey = assetMap[asset.toLowerCase()] || asset.toUpperCase();
-
-        const state = await redis.getRound(`${dataKey}_state`);
-        res.json(state || { error: 'No active rounds for this asset' });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.post('/rounds/session-enter', async (req, res) => {
-    try {
-        const { address, roundId, direction, amount } = req.body;
-        if (!address || !roundId) return res.status(400).json({ error: 'Missing parameters' });
-
-        const sessionWallet = deriveUserWallet(address);
-        const provider = getSessionProvider();
-        const connectedWallet = sessionWallet.connect(provider);
-
-        const ROUNDS_CONTRACT = process.env.ROUNDS_CONTRACT_ADDRESS;
-        if (!ROUNDS_CONTRACT) return res.status(500).json({ error: 'Rounds contract not configured' });
-
-        const abi = ["function enterRound(uint256 _roundId, uint8 _direction) external payable"];
-        const contract = new ethers.Contract(ROUNDS_CONTRACT, abi, connectedWallet);
-
-        const val = ethers.parseEther(parseFloat(amount).toFixed(6));
-
-        // Use a fixed gas limit for speed or estimate it
-        const tx = await contract.enterRound(roundId, direction, {
-            value: val,
-            gasLimit: 300000
-        });
-
-        res.json({ success: true, txHash: tx.hash });
-
-        // Update local pool state optimistically
-        const assetMap = { 'eth': 'ETHUSDT', 'btc': 'BTCUSDT', 'sol': 'SOLUSDT' };
-        const dataKey = assetMap[String(req.body.asset || 'eth').toLowerCase()] || 'ETHUSDT';
-
-        const state = await redis.getRound(`${dataKey}_state`);
-        if (state && state.next) {
-            const side = direction === 1 ? 'long' : 'short';
-            state.next.pools[side] += parseFloat(amount);
-            state.next.pools.participants += 1;
-            await redis.setRound(`${dataKey}_state`, state);
-        }
-
-    } catch (e) {
-        console.error('[Rounds] Session enter failed:', e.message);
-        res.status(500).json({ error: e.message });
-    }
-});
+// Rounds logic has been moved to a separate microservice (rounds-backend)
 
 // Helper for history (Shared between /history and /profile)
 const getHistoryFor = async (address, limit = 100) => {
@@ -733,7 +677,5 @@ app.get('/debug-logs', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Fast & Decentralized running on port ${PORT}`);
     processor.init();
-    roundsProcessor.start();
-    botService.init(); // Initialize bot protocol
     keepAlive.startKeepAlive();
 });

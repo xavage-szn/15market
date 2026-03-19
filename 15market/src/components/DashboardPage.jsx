@@ -23,7 +23,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart,
 import { LatencyMeter } from "./LatencyMeter";
 import { useAccount } from "wagmi";
 import ArcABI from "../abi/ArcPrediction.json";
-import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC } from "../constants";
+import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
 import { parseEther } from "viem";
 
 export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance,
@@ -175,6 +175,66 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
             }));
     }, [stats.recentTrades]);
 
+    const [adminApps, setAdminApps] = useState([]);
+    const [isAdminState, setIsAdminState] = useState(false);
+
+    // Fetch Admin Data
+    const fetchAdminData = async () => {
+        if (!address) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ROUNDS}/access/admin/applications`, {
+                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAdminApps(data);
+                setIsAdminState(true);
+            } else {
+                setIsAdminState(false);
+            }
+        } catch (e) {
+            console.error("Admin check failed - likely not an admin");
+        }
+    };
+
+    useEffect(() => {
+        fetchAdminData();
+    }, [address]);
+
+    const handleApprove = async (app) => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ROUNDS}/access/admin/approve`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                 },
+                body: JSON.stringify({ address: app.address, email: app.email })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Approved! Code ${data.code} sent to ${app.email}`);
+                fetchAdminData();
+            }
+        } catch (e) { alert("Approval failed"); }
+    };
+
+    const handleGenerateManual = async () => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ROUNDS}/access/admin/generate-independent`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                 }
+            });
+            const data = await res.json();
+            if (data.success) {
+                prompt("Code Generated! Share this with your user:", data.code);
+            }
+        } catch (e) { alert("Generation failed"); }
+    };
+
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
@@ -206,6 +266,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             <NavTab active={activeTab} id="overview" label="Overview" icon={<Activity size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="profile" label="My Profile" icon={<User size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="community" label="Community" icon={<MessageSquare size={14} />} onClick={setActiveTab} isLight={isLight} />
+                            {isAdminState && <NavTab active={activeTab} id="admin" label="Access Hub" icon={<Shield size={14} />} onClick={setActiveTab} isLight={isLight} />}
                         </div>
                     </div>
                 </div>
@@ -534,6 +595,57 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                     onClose={() => { }}
                                     userProfile={userProfile}
                                 />
+                            </div>
+                        )}
+
+                        {activeTab === "admin" && (
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center bg-[#3CB371]/10 p-4 rounded-2xl border border-[#3CB371]/20">
+                                    <div>
+                                        <h3 className="font-black uppercase text-sm text-[#3CB371]">Access Control Hub</h3>
+                                        <p className="text-[10px] font-bold text-white/40 uppercase">Manage Beta Invitations & Applications</p>
+                                    </div>
+                                    <button 
+                                        onClick={handleGenerateManual}
+                                        className="px-4 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase rounded-xl hover:brightness-110"
+                                    >
+                                        Generate Manual Code
+                                    </button>
+                                </div>
+
+                                <div className={`${isLight ? 'bg-white border-black/5' : 'bg-[#111] border-white/5'} border rounded-[24px] overflow-hidden`}>
+                                    <table className="w-full text-left">
+                                        <thead>
+                                            <tr className="border-b border-white/5">
+                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Applicant</th>
+                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">X Handle</th>
+                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Discord</th>
+                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Email</th>
+                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {adminApps.length === 0 ? (
+                                                <tr><td colSpan="5" className="p-8 text-center text-xs font-bold text-white/20">NO PENDING APPLICATIONS</td></tr>
+                                            ) : adminApps.map((app, i) => (
+                                                <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02] transition-all">
+                                                    <td className="p-4 font-mono text-[10px]">{truncate(app.address)}</td>
+                                                    <td className="p-4 text-xs font-bold text-[#3CB371]">{app.xHandle}</td>
+                                                    <td className="p-4 text-xs font-bold">{app.discord || '-'}</td>
+                                                    <td className="p-4 text-xs font-bold">{app.email}</td>
+                                                    <td className="p-4">
+                                                        <button 
+                                                            onClick={() => handleApprove(app)}
+                                                            className="px-3 py-1.5 bg-[#3CB371]/20 text-[#3CB371] text-[9px] font-black uppercase rounded-lg border border-[#3CB371]/30 hover:bg-[#3CB371] hover:text-white transition-all"
+                                                        >
+                                                            Approve
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
                     </div>

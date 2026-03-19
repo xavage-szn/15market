@@ -1,44 +1,64 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Lock, Timer } from 'lucide-react';
+import { TrendingUp, TrendingDown, Lock, Timer, Zap, Trophy, AlertCircle } from 'lucide-react';
 
 /**
- * RoundsChart — Live line chart shown during the LOCKED phase of a Rounds P2P round.
- * Tracks price in real-time from entry price, shading WIN/LOSS zones.
- * Shows Long/Short pool amounts as overlays.
+ * RoundsChart — Premium Live Chart with Split-Screen Animations.
+ * Handles Entry Countdown, Live Tracking, and Result Reveal.
  */
 export default function RoundsChart({
     theme,
     currentPrice,
     entryPrice,
-    timeLeft,        // seconds remaining in locked phase (0–15)
-    totalDuration,   // 15 seconds
-    pools,           // { long, short, participants }
-    userDirection,   // 'UP' | 'DOWN' | null (user's own direction)
-    onResult,        // callback(result: 'WON' | 'LOST') when time ends
+    timeLeft,        
+    totalDuration,   
+    pools,           
+    userDirection,   
+    onResult,        
     odds,
-    isSettled,       
+    isSettled,
+    result,
+    phase = 'locked', // 'entry' | 'locked'
+    priceHistory = []
 }) {
     const canvasRef = useRef(null);
-    const priceHistoryRef = useRef([]);
+    const priceHistoryRef = useRef(priceHistory || []);
     const rafRef = useRef(null);
     const isLight = theme === 'light';
     const ePriceNum = parseFloat(entryPrice);
     const cPriceNum = parseFloat(currentPrice);
-    const isAbove = !isNaN(ePriceNum) && !isNaN(cPriceNum) ? cPriceNum >= ePriceNum : false;
-
-    // Smooth range state
-    const smoothedLoRef = useRef(null);
-    const smoothedHiRef = useRef(null);
+ 
+    // Capture exit price locally for immediate result animation
+    const [localExitPrice, setLocalExitPrice] = useState(null);
+    useEffect(() => {
+        if (phase === 'locked' && timeLeft <= 0 && localExitPrice === null) {
+            setLocalExitPrice(cPriceNum);
+        } else if (phase === 'entry' && localExitPrice !== null) {
+            setLocalExitPrice(null);
+        }
+    }, [phase, timeLeft, cPriceNum, localExitPrice]);
+ 
+    const isAbove = result 
+        ? (result === 'WON') 
+        : (!isNaN(ePriceNum) && !isNaN(localExitPrice || cPriceNum) ? (localExitPrice || cPriceNum) > ePriceNum : false);
+    const isDraw = result 
+        ? (result === 'HOUSE') 
+        : (!isNaN(ePriceNum) && !isNaN(localExitPrice || cPriceNum) && ((localExitPrice || cPriceNum) === ePriceNum));
 
     // Build colour palette
     const GREEN = '#3CB371';
     const RED = '#FF7F50';
-    const GRID = isLight ? 'rgba(60,179,113,0.08)' : 'rgba(255,255,255,0.04)';
+    const NEUTRAL = '#808080';
+    // Remove grid as requested
+    const GRID = 'transparent';
+
+    const hasGeneratedSynthetic = useRef(false);
 
     // Track price history for drawing the line
     const targetPriceRef = useRef(null);
     const interpolatedPriceRef = useRef(null);
+    const smoothedLoRef = useRef(null);
+    const smoothedHiRef = useRef(null);
 
     useEffect(() => {
         const price = parseFloat(currentPrice);
@@ -49,36 +69,72 @@ export default function RoundsChart({
         }
     }, [currentPrice]);
 
+    // Generate synthetic history for "always-there" effect
+    useEffect(() => {
+        if (!currentPrice || hasGeneratedSynthetic.current) return;
+        const now = Date.now();
+        const startPrice = parseFloat(currentPrice);
+        
+        // Generate synthetic history ONLY ONCE
+        const history = [];
+        for (let i = 240; i >= 0; i--) {
+            const t = now - (i * 500);
+            const p = startPrice + (Math.random() - 0.5) * (startPrice * 0.0003);
+            history.push({ t, p: parseFloat(p.toFixed(2)) });
+        }
+        priceHistoryRef.current = history;
+        hasGeneratedSynthetic.current = true;
+    }, [currentPrice]);
+
     // Record history
     useEffect(() => {
         const historyInterval = setInterval(() => {
             if (interpolatedPriceRef.current !== null) {
                 const now = Date.now();
-                priceHistoryRef.current.push({ t: now, p: interpolatedPriceRef.current });
-                // Window + safety padding
-                const cutoff = now - 30000;
-                priceHistoryRef.current = priceHistoryRef.current.filter(pt => pt.t >= cutoff);
+                const lastPt = priceHistoryRef.current[priceHistoryRef.current.length - 1];
+                
+                // Strict Monotonicity to prevent wrapping glitches
+                if (!lastPt || now > lastPt.t) {
+                    priceHistoryRef.current.push({ t: now, p: interpolatedPriceRef.current });
+                }
+                
+                // Keep 120s window + 500 point cap for performance
+                const cutoff = now - 120000;
+                if (priceHistoryRef.current.length > 500) {
+                    priceHistoryRef.current = priceHistoryRef.current.filter(pt => pt.t >= cutoff);
+                }
             }
         }, 50);
         return () => clearInterval(historyInterval);
     }, []);
 
-    // Particle system
+    // Sync history from prop on mount
+    useEffect(() => {
+        if (priceHistory && priceHistory.length > 0 && priceHistoryRef.current.length <= 1) {
+            // Ensure monotonic if merging
+            const incoming = [...priceHistory].sort((a,b) => a.t - b.t);
+            priceHistoryRef.current = incoming;
+        }
+    }, [priceHistory]);
+
+    // Particles system
     const particlesRef = useRef([]);
     useEffect(() => {
-        particlesRef.current = Array.from({ length: 20 }, () => ({
+        particlesRef.current = Array.from({ length: 30 }, () => ({
             x: Math.random() * 100,
             y: Math.random() * 100,
-            s: 0.1 + Math.random() * 0.3,
-            o: 0.05 + Math.random() * 0.15,
-            size: 1 + Math.random() * 2
+            s: 0.05 + Math.random() * 0.2,
+            o: 0.1 + Math.random() * 0.2,
+            size: 0.5 + Math.random() * 1.5,
+            direction: Math.random() > 0.5 ? 1 : -1
         }));
     }, []);
 
+    // Canvas Draw Loop
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext('2d', { alpha: false }); // Slightly better perf
+        const ctx = canvas.getContext('2d', { alpha: false });
 
         const draw = () => {
             const W = canvas.offsetWidth;
@@ -94,222 +150,377 @@ export default function RoundsChart({
                 ctx.scale(dpr, dpr);
             }
 
-            // Lerp current price for smooth scrolling
+            // Lerp current price
             if (targetPriceRef.current !== null && interpolatedPriceRef.current !== null) {
                 const diff = targetPriceRef.current - interpolatedPriceRef.current;
-                interpolatedPriceRef.current += diff * 0.12;
+                interpolatedPriceRef.current += diff * 0.15;
             }
 
             const ePrice = parseFloat(entryPrice);
             const history = priceHistoryRef.current;
             const latestPriceVal = interpolatedPriceRef.current || ePrice;
 
-            if (!ePrice || isNaN(ePrice)) {
-                rafRef.current = requestAnimationFrame(draw);
-                return;
-            }
-
-            // ─── SMOOTH DYNAMIC RANGE ───
-            const dist = Math.max(Math.abs(latestPriceVal - ePrice), ePrice * 0.0002);
-            const rawLo = ePrice - dist * 2.5;
-            const rawHi = ePrice + dist * 2.5;
-            
-            if (smoothedLoRef.current === null) smoothedLoRef.current = rawLo;
-            if (smoothedHiRef.current === null) smoothedHiRef.current = rawHi;
-            
-            // Damping (Lerp) for the Y-scale itself to fix glitching bouncy chart
-            smoothedLoRef.current += (rawLo - smoothedLoRef.current) * 0.05;
-            smoothedHiRef.current += (rawHi - smoothedHiRef.current) * 0.05;
-            
-            const lo = smoothedLoRef.current;
-            const hi = smoothedHiRef.current;
-            const hRange = hi - lo;
-
-            const toY = (p) => H - ((p - lo) / hRange) * H;
-            const entryY = toY(ePrice);
-            const nowPx = Date.now();
-
-            // Time window: 20s visible
-            const windowMs = 20000;
-            const oldest = nowPx - (windowMs * 0.7); // Latest price at 70% mark
-            const liveX = W * 0.7;
-            const liveY = toY(latestPriceVal);
-
             // 1. Clear & Background
             ctx.fillStyle = isLight ? '#ffffff' : '#050505';
-            ctx.fillRect(0, 0, W, H);
+            ctx.fillRect(0, 0, W, H);            // 2. Fixed Center on Entry (locked phase)
+            if (phase === 'locked' && !isNaN(ePrice)) {
+                // Determine symmetrical distance to ensure ePrice is at EXACT center
+                const maxDist = Math.max(Math.abs(latestPriceVal - ePrice), ePrice * 0.0006);
+                const rawLo = ePrice - maxDist * 1.5;
+                const rawHi = ePrice + maxDist * 1.5;
+                
+                if (smoothedLoRef.current === null) smoothedLoRef.current = rawLo;
+                if (smoothedHiRef.current === null) smoothedHiRef.current = rawHi;
+                
+                // Keep the center locked by smoothing DISTANCE, not raw lo/hi independently
+                smoothedLoRef.current += (rawLo - smoothedLoRef.current) * 0.1;
+                smoothedHiRef.current += (rawHi - smoothedHiRef.current) * 0.1;
+                
+                const lo = smoothedLoRef.current;
+                const hi = smoothedHiRef.current;
+                const hRange = hi - lo;
+ 
+                const toY = (p) => H - ((p - lo) / hRange) * H;
+                const entryY = H / 2; // Locked to center 0-line
+                const nowPx = Date.now();
+                const windowMs = 15000; 
+                const liveX = W * 0.95; 
+                const oldest = nowPx - windowMs;
+                const liveY = toY(latestPriceVal);
 
-            // 2. Grid lines
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = GRID;
-            for (let x = 0; x < W; x += 60) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+                // Grid removed as requested
+
+
+                // Shaded Zones
+                const isPriceAbove = latestPriceVal >= ePrice;
+                const statusColor = isPriceAbove ? GREEN : RED;
+                ctx.fillStyle = isPriceAbove ? `${GREEN}08` : `${RED}08`;
+                if (isPriceAbove) ctx.fillRect(0, 0, W, entryY);
+                else ctx.fillRect(0, entryY, W, H - entryY);
+
+                // Entry line & Marker
+                ctx.setLineDash([8, 8]);
+                ctx.strokeStyle = `${GREEN}b0`; // Brighter for marking
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, entryY); ctx.lineTo(W, entryY); ctx.stroke();
+                ctx.setLineDash([]);
+ 
+                // Entry Label Box
+                ctx.fillStyle = GREEN;
+                ctx.beginPath();
+                ctx.roundRect(10, entryY - 10, 50, 20, 4);
+                ctx.fill();
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 10px Inter, sans-serif';
+                ctx.fillText('ENTRY', 18, entryY + 4);
+ 
+                // Exit Marker (if settled)
+                if (isSettled) {
+                    const exitY = toY(cPriceNum);
+                    ctx.fillStyle = isAbove ? GREEN : RED;
+                    ctx.beginPath();
+                    ctx.roundRect(W - 70, exitY - 10, 60, 20, 4);
+                    ctx.fill();
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 10px Inter, sans-serif';
+                    ctx.fillText('EXIT', W - 52, exitY + 4);
+ 
+                    // Dashed Exit Line
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeStyle = isAbove ? `${GREEN}80` : `${RED}80`;
+                    ctx.beginPath(); ctx.moveTo(0, exitY); ctx.lineTo(W, exitY); ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Path Drawing
+                if (history.length >= 1) {
+                    const getX = (t) => liveX - ((nowPx - t) / windowMs) * W;
+                    const grad = ctx.createLinearGradient(0, 0, 0, H);
+                    grad.addColorStop(0, `${statusColor}25`);
+                    grad.addColorStop(1, 'transparent');
+
+                    // 1. Separate Fill Path (No Stroke)
+                    ctx.beginPath();
+                    let firstX = -1;
+                    history.forEach(pt => {
+                        const x = getX(pt.t);
+                        const y = toY(pt.p);
+                        // Inclusion buffer to prevent edge buffering
+                        if (x < -100 || x > W + 100) return;
+                        if (firstX === -1) { ctx.moveTo(x, y); firstX = x; }
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.lineTo(liveX, liveY);
+                    if (firstX !== -1) {
+                        ctx.save();
+                        // Close the path to the bottom for FILL only
+                        ctx.lineTo(liveX, H); 
+                        ctx.lineTo(firstX, H); 
+                        ctx.closePath();
+                        ctx.fillStyle = grad; 
+                        ctx.fill();
+                        ctx.restore();
+                    }
+
+                    // 2. Separate Stroke Path (The actual price line)
+                    ctx.beginPath();
+                    let started = false;
+                    history.forEach(pt => {
+                        const x = getX(pt.t);
+                        const y = toY(pt.p);
+                        if (x < -100 || x > W + 100) return;
+                        if (!started) {
+                            ctx.moveTo(x, y);
+                            started = true;
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    });
+                    ctx.lineTo(liveX, liveY);
+                    
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = statusColor;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.stroke();
+
+                    // Price Dot
+                    ctx.fillStyle = statusColor;
+                    ctx.shadowBlur = 15; ctx.shadowColor = statusColor;
+                    ctx.beginPath(); ctx.arc(liveX, liveY, 6, 0, Math.PI * 2); ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            } else {
+                // Entry Phase View (Static/Abstract)
+                // Removed grid
+
             }
-            for (let y = 0; y < H; y += 40) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-            }
 
-            // 3. Shaded Zones
-            const isPriceAbove = latestPriceVal >= ePrice;
-            const statusColor = isPriceAbove ? GREEN : RED;
-            
-            ctx.fillStyle = isPriceAbove ? `${GREEN}10` : `${RED}10`;
-            if (isPriceAbove) ctx.fillRect(0, 0, W, entryY);
-            else ctx.fillRect(0, entryY, W, H - entryY);
-
-            // 4. Particles
+            // Particles (Always on)
             particlesRef.current.forEach(p => {
-                p.y -= p.s;
+                p.y -= p.s * p.direction;
                 if (p.y < -5) p.y = 105;
+                if (p.y > 105) p.y = -5;
                 const px = (p.x / 100) * W;
                 const py = (p.y / 100) * H;
                 ctx.fillStyle = isLight ? `rgba(60,179,113,${p.o})` : `rgba(255,255,255,${p.o})`;
                 ctx.beginPath(); ctx.arc(px, py, p.size, 0, Math.PI * 2); ctx.fill();
             });
 
-            // 5. Entry line
-            ctx.setLineDash([6, 6]);
-            ctx.strokeStyle = GREEN;
-            ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(0, entryY); ctx.lineTo(W, entryY); ctx.stroke();
-            ctx.setLineDash([]);
-
-            // 6. Price Path
-            if (history.length >= 1) {
-                const getX = (t) => liveX - ((nowPx - t) / windowMs) * W;
-
-                // Gradient Flow
-                const pathGrad = ctx.createLinearGradient(0, 0, 0, H);
-                pathGrad.addColorStop(0, `${statusColor}30`);
-                pathGrad.addColorStop(1, 'transparent');
-
-                ctx.beginPath();
-                let firstVal = -1;
-                history.forEach(pt => {
-                    const x = getX(pt.t);
-                    const y = toY(pt.p);
-                    if (x < 0 || x > W) return;
-                    if (firstVal === -1) { ctx.moveTo(x, y); firstVal = x; }
-                    else ctx.lineTo(x, y);
-                });
-                ctx.lineTo(liveX, liveY);
-                if (firstVal !== -1) {
-                    ctx.lineTo(liveX, H);
-                    ctx.lineTo(firstVal, H);
-                    ctx.closePath();
-                    ctx.fillStyle = pathGrad;
-                    ctx.fill();
-                }
-
-                // Sharp Line
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = statusColor;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.beginPath();
-                let started = false;
-                history.forEach(pt => {
-                    const x = getX(pt.t);
-                    const y = toY(pt.p);
-                    if (x < 0 || x > W) return;
-                    if (!started) { ctx.moveTo(x, y); started = true; }
-                    else ctx.lineTo(x, y);
-                });
-                ctx.lineTo(liveX, liveY);
-                ctx.stroke();
-
-                // Live Dot
-                const pulse = Math.sin(nowPx / 200) * 4;
-                ctx.fillStyle = statusColor;
-                ctx.beginPath(); ctx.arc(liveX, liveY, 6, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.arc(liveX, liveY, 8 + pulse, 0, Math.PI * 2);
-                ctx.lineWidth = 2; ctx.strokeStyle = `${statusColor}40`; ctx.stroke();
-            }
-
             rafRef.current = requestAnimationFrame(draw);
         };
 
         draw();
         return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-    }, [entryPrice, theme, isLight]);
+    }, [entryPrice, theme, isLight, phase]);
 
-    // Result Trigger
+    // Result Logic
     const resultTriggered = useRef(false);
     useEffect(() => {
         if (timeLeft > 0) resultTriggered.current = false;
-        if (timeLeft <= 0 && !resultTriggered.current && !isSettled) {
+        if (timeLeft <= 0 && !resultTriggered.current && !isSettled && phase === 'locked') {
             resultTriggered.current = true;
             onResult?.(isAbove ? 'WON' : 'LOST', cPriceNum);
         }
-    }, [timeLeft, isAbove, cPriceNum, onResult, isSettled]);
+    }, [timeLeft, isAbove, cPriceNum, onResult, isSettled, phase]);
+
+    const showEntrySplit = phase === 'entry' && timeLeft <= 5;
+    const showLockedCountdown = phase === 'locked' && timeLeft >= 13;
+    const showWinnerAnimation = isSettled || (phase === 'locked' && timeLeft <= 0);
 
     const totalPool = (pools?.long || 0) + (pools?.short || 0);
     const longPct = totalPool > 0 ? ((pools.long / totalPool) * 100).toFixed(0) : 50;
     const shortPct = totalPool > 0 ? ((pools.short / totalPool) * 100).toFixed(0) : 50;
-    const progressPct = totalDuration > 0 ? ((totalDuration - timeLeft) / totalDuration) * 100 : 100;
 
     return (
-        <div className="relative w-full h-full flex flex-col overflow-hidden">
+        <div className="relative w-full h-full flex flex-col overflow-hidden bg-black select-none">
             <canvas ref={canvasRef} className="flex-1 w-full h-full" />
 
-            {/* Overlays */}
-            <div className="absolute top-3 left-3 right-3 flex items-center gap-3 z-10">
-                <motion.div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-black/70 backdrop-blur-xl border transition-all ${isAbove ? 'border-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]' : 'border-white/10 opacity-60'}`}>
-                    <TrendingUp size={10} className={isAbove ? 'text-[#3CB371]' : 'text-white/40'} />
-                    <span className={`text-[10px] font-black ${isAbove ? 'text-[#3CB371]' : 'text-white/40'}`}>{longPct}%</span>
-                    <span className="text-[8px] font-bold text-white/40">${(pools?.long || 0).toFixed(0)}</span>
-                </motion.div>
-
-                <div className="flex-1 flex justify-center">
-                    <div className="relative w-12 h-12">
-                        <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
-                            <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
-                            <circle 
-                                cx="28" cy="28" r="22" fill="none" 
-                                stroke={timeLeft > 5 ? '#3CB371' : '#FF7F50'} 
-                                strokeWidth="4" 
-                                strokeDasharray={138} 
-                                strokeDashoffset={138 * (1 - progressPct / 100)} 
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[10px] font-black font-mono text-white">{timeLeft}</span>
+            {/* LIVE PRICE OVERLAY (LOCKED PHASE) */}
+            {phase === 'locked' && !showLockedCountdown && (
+                <div className="absolute top-4 left-4 flex flex-col gap-1 z-20">
+                    <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]'}`} />
+                        <span className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Active Market</span>
+                        <div className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest transition-all duration-500 scale-90 ${isAbove ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-[#FF7F50]/10 border-[#FF7F50]/30 text-[#FF7F50]'}`}>
+                            {isAbove ? 'BULLISH' : 'BEARISH'}
                         </div>
+                    </div>
+                    <span className={`text-xl font-black font-mono tabular-nums leading-none ${isAbove ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                        ${parseFloat(currentPrice).toFixed(2)}
+                    </span>
+                    <span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">Target: ${parseFloat(entryPrice).toFixed(2)}</span>
+                </div>
+            )}
+
+            {/* POOLS OVERLAY (TOP) */}
+            <div className={`absolute top-4 left-0 right-0 flex justify-center gap-4 px-4 transition-all duration-500 z-30 ${showEntrySplit ? 'opacity-0 translate-y-[-20px]' : 'opacity-100'}`}>
+                <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-xl border ${isAbove ? 'border-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.2)]' : 'border-white/5 opacity-50'}`}>
+                    <TrendingUp size={12} className="text-[#3CB371]" />
+                    <span className="text-xs font-black text-white">{longPct}%</span>
+                    <span className="text-[9px] font-bold text-white/30">${(pools?.long || 0).toFixed(0)}</span>
+                </div>
+                
+                <div className="relative w-12 h-12 shrink-0">
+                    <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
+                        <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
+                        <circle cx="28" cy="28" r="22" fill="none" stroke={timeLeft > 5 ? '#3CB371' : '#FF7F50'} strokeWidth="4" strokeDasharray={138} strokeDashoffset={138 * (1 - (timeLeft / totalDuration))} strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-[12px] font-black font-mono text-white">{timeLeft}s</span>
                     </div>
                 </div>
 
-                <motion.div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-black/70 backdrop-blur-xl border transition-all ${!isAbove ? 'border-[#FF7F50] shadow-[0_0_15px_rgba(255,127,80,0.3)]' : 'border-white/10 opacity-60'}`}>
-                    <span className="text-[8px] font-bold text-white/40">${(pools?.short || 0).toFixed(0)}</span>
-                    <span className={`text-[10px] font-black ${!isAbove ? 'text-[#FF7F50]' : 'text-white/40'}`}>{shortPct}%</span>
-                    <TrendingDown size={10} className={!isAbove ? 'text-[#FF7F50]' : 'text-white/40'} />
-                </motion.div>
+                <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-xl border ${!isAbove ? 'border-[#FF7F50] shadow-[0_0_20px_rgba(255,127,80,0.2)]' : 'border-white/5 opacity-50'}`}>
+                    <span className="text-[9px] font-bold text-white/30">${(pools?.short || 0).toFixed(0)}</span>
+                    <span className="text-xs font-black text-white">{shortPct}%</span>
+                    <TrendingDown size={12} className="text-[#FF7F50]" />
+                </div>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5 overflow-hidden">
-                <motion.div 
-                    className={`h-full ${timeLeft > 5 ? 'bg-[#3CB371]' : 'bg-[#FF7F50]'}`}
-                    style={{ width: `${progressPct}%` }}
-                />
-            </div>
-
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                <AnimatePresence>
-                    {isSettled && (
+            {/* ─── ANIMATION LAYERS ────────────────────────────────────────────── */}
+            <AnimatePresence>
+                {/* 1. ENTRY COUNTDOWN SLIT SCREEN (Last 5s of Entry) */}
+                {showEntrySplit && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-50 flex overflow-hidden"
+                    >
+                        {/* LEFT: LONG */}
                         <motion.div 
-                            initial={{ scale: 0.8, opacity: 0 }} 
-                            animate={{ scale: 1, opacity: 1 }}
-                            className={`px-8 py-4 rounded-[32px] backdrop-blur-2xl border flex flex-col items-center gap-1 shadow-2xl ${isAbove === (userDirection === 'UP') ? 'border-[#3CB371] bg-[#3CB371]/10' : 'border-[#FF7F50] bg-[#FF7F50]/10'}`}
+                            initial={{ x: '-100%', skewX: -20 }} animate={{ x: 0, skewX: -20 }} 
+                            className="absolute inset-y-0 left-[-20%] w-[75%] bg-[#3CB371] z-10 flex items-center justify-center border-r-[12px] border-white/40 shadow-[20px_0_40px_rgba(0,0,0,0.5)] overflow-hidden"
+                            transition={{ type: "spring", damping: 25, stiffness: 80 }}
                         >
-                            <h2 className={`text-2xl font-black uppercase tracking-tighter ${isAbove === (userDirection === 'UP') ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                {isAbove === (userDirection === 'UP') ? 'YOU WON!' : 'ROUND OVER'}
-                            </h2>
-                            <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-white/40">Settlement Complete</span>
+                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
+                            <div className="skew-x-[20%] flex flex-col items-center relative z-10">
+                                <TrendingUp size={80} className="text-white mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
+                                <h2 className="text-6xl font-black text-white italic tracking-tighter">LONG</h2>
+                            </div>
                         </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
+ 
+                        {/* RIGHT: SHORT */}
+                        <motion.div 
+                            initial={{ x: '100%', skewX: -20 }} animate={{ x: 0, skewX: -20 }} 
+                            className="absolute inset-y-0 right-[-20%] w-[75%] bg-[#FF7F50] z-0 flex items-center justify-center overflow-hidden"
+                            transition={{ type: "spring", damping: 25, stiffness: 80 }}
+                        >
+                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
+                            <div className="skew-x-[20%] flex flex-col items-center relative z-10">
+                                <TrendingDown size={80} className="text-white mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
+                                <h2 className="text-6xl font-black text-white italic tracking-tighter pl-12">SHORT</h2>
+                            </div>
+                        </motion.div>
+
+                        {/* CENTER RELOADED COUNTDOWN */}
+                        <motion.div 
+                            initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }}
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 z-[55]"
+                        >
+                            <div className="absolute inset-0 rounded-full bg-black/80 backdrop-blur-3xl border-4 border-white/20 flex flex-col items-center justify-center shadow-2xl">
+                                <span className="text-[11px] font-black text-[#3CB371] mb-1 tracking-[0.4em] uppercase">Lock In</span>
+                                <motion.span 
+                                    key={timeLeft} initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                                    className="text-6xl font-black text-white font-mono italic"
+                                >
+                                    {timeLeft}
+                                </motion.span>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* 2. ROUND START COUNTDOWN (Big Overlay) */}
+                {showLockedCountdown && (
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 1.2 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                        className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm"
+                    >
+                        <div className="flex flex-col items-center gap-4">
+                            <motion.div 
+                                animate={{ rotate: [0, 360] }} transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                                className="w-32 h-32 rounded-full border-4 border-dashed border-[#3CB371]/30 flex items-center justify-center"
+                            >
+                                <Lock size={40} className="text-[#3CB371]" />
+                            </motion.div>
+                            <motion.h2 
+                                key={timeLeft} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+                                className="text-7xl font-black text-white italic tracking-tighter"
+                            >
+                                {timeLeft > 15 ? 'BATTLE' : 'LOCKED'}
+                            </motion.h2>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* 3. RESULT REVEAL SLANT SLASH SCREEN (Full Screen) */}
+                {showWinnerAnimation && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }}
+                        className="absolute inset-0 z-[70] flex overflow-hidden bg-black"
+                    >
+                        <motion.div 
+                            initial={{ 
+                                x: isDraw ? '100%' : (isAbove ? '-100%' : '100%'), 
+                                skewX: isDraw ? 0 : (isAbove ? 15 : -15) 
+                            }} 
+                            animate={{ 
+                                x: 0, 
+                                skewX: 0 
+                            }}
+                            transition={{ 
+                                x: { type: "spring", damping: 25, stiffness: 80, mass: 1 },
+                                skewX: { delay: 0.3, duration: 0.8, ease: "easeInOut" }
+                            }}
+                            className={`absolute inset-0 z-10 shadow-[0_0_150px_rgba(0,0,0,1)] border-white/20 ${isDraw ? 'bg-neutral-900' : (isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')} w-full h-full overflow-hidden`}
+                            style={{ willChange: 'transform' }}
+                        >
+                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
+                            <div className={`flex flex-col items-center justify-center h-full w-full relative z-10`}>
+                                <motion.div 
+                                    animate={{ 
+                                        scale: [1, 1.2, 1], 
+                                        rotate: [0, 5, -5, 0],
+                                        filter: ["drop-shadow(0 0 20px white)", `drop-shadow(0 0 40px ${isDraw ? 'gray' : 'gold'})`, "drop-shadow(0 0 20px white)"]
+                                    }} 
+                                    transition={{ repeat: Infinity, duration: 3 }}
+                                >
+                                    {isDraw ? (
+                                        <AlertCircle size={120} className="text-white mb-8 drop-shadow-2xl" />
+                                    ) : (
+                                        <Trophy size={120} className="text-white mb-8 drop-shadow-2xl" />
+                                    )}
+                                </motion.div>
+                                <h1 className="text-7xl md:text-9xl font-black text-white italic tracking-tighter drop-shadow-2xl uppercase">
+                                    {isDraw ? 'House Wins' : (isAbove ? 'Long Wins' : 'Short Wins')}
+                                </h1>
+                                <span className="text-xl font-bold text-white/40 uppercase tracking-[0.5em] mt-4">
+                                    {isDraw ? 'Price Did Not Move' : 'Round Settled'}
+                                </span>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+    {/* USER WIN ALERT OVERLAY */}
+            <AnimatePresence>
+                {!isDraw && userDirection !== null && isSettled && (isAbove === (userDirection === 'UP')) && (
+                    <motion.div 
+                        initial={{ scale: 0.5, y: 100, opacity: 0 }} 
+                        animate={{ scale: 1, y: 0, opacity: 1 }} 
+                        exit={{ scale: 0.8, y: 50, opacity: 0 }}
+                        className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[80] px-10 py-5 rounded-[40px] bg-gradient-to-r from-[#3CB371] to-[#2E8B57] shadow-2xl border-4 border-white/30 flex items-center gap-6"
+                    >
+                        <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center"><Zap size={32} className="text-white fill-white" /></div>
+                        <div className="flex flex-col">
+                            <h3 className="text-3xl font-black text-white italic tracking-tighter leading-none">YOU WON!</h3>
+                            <span className="text-sm font-bold text-white/80 uppercase tracking-widest mt-1">Payout Credited</span>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
-

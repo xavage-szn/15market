@@ -16,13 +16,15 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const getRpcEndpoints = () => {
+    // Priority: Official ARC RPCs first for general traffic to save Thirdweb limits
     return [
-        `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`,
         "https://rpc.testnet.arc.network",
         "https://rpc.arc.network",
         "https://arc-testnet.alt.technology",
+        "https://arc-testnet.alt.technology",
         "https://arc-testnet.drpc.org",
-        "https://rpc.drpc.testnet.arc.network"
+        "https://rpc.drpc.testnet.arc.network",
+        `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}` // Fallback last
     ];
 };
 

@@ -4,9 +4,9 @@ import React, { useEffect, useRef } from 'react';
  * LiveStreamingChart — A specialized Canvas-based line chart for 1s timeframe.
  * UPDATED: Branding aligned with 1m Lightweight Chart.
  */
-export default function LiveStreamingChart({ theme, currentPrice, symbol }) {
+export default function LiveStreamingChart({ theme, currentPrice, symbol, priceHistory = [] }) {
     const canvasRef = useRef(null);
-    const priceHistoryRef = useRef([]);
+    const priceHistoryRef = useRef(priceHistory || []);
     const rafRef = useRef(null);
     const targetPriceRef = useRef(null);
     const interpolatedPriceRef = useRef(null);
@@ -14,8 +14,8 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol }) {
     const isLight = theme === 'light';
     const GREEN = '#3CB371';
     const RED = '#FF7F50';
-    // Match grid color from CustomChart
-    const GRID_COLOR = isLight ? 'rgba(60, 179, 113, 0.08)' : 'rgba(255, 255, 255, 0.03)';
+    // Remove grid as requested
+    const GRID_COLOR = 'transparent';
 
     useEffect(() => {
         const price = parseFloat(currentPrice);
@@ -26,17 +26,54 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol }) {
         }
     }, [currentPrice]);
 
+    const hasGeneratedSynthetic = useRef(false);
+
+    // Generate synthetic history for "always-there" effect
+    useEffect(() => {
+        if (!currentPrice || hasGeneratedSynthetic.current) return;
+        const now = Date.now();
+        const startPrice = parseFloat(currentPrice);
+        
+        // Generate synthetic history ONLY ONCE
+        const history = [];
+        for (let i = 240; i >= 0; i--) {
+            const t = now - (i * 500);
+            const p = startPrice + (Math.random() - 0.5) * (startPrice * 0.0003);
+            history.push({ t, p: parseFloat(p.toFixed(2)) });
+        }
+        priceHistoryRef.current = history;
+        hasGeneratedSynthetic.current = true;
+    }, [currentPrice]);
+
     useEffect(() => {
         const historyInterval = setInterval(() => {
             if (interpolatedPriceRef.current !== null) {
                 const now = Date.now();
-                priceHistoryRef.current.push({ t: now, p: interpolatedPriceRef.current });
-                const cutoff = now - 60000;
-                priceHistoryRef.current = priceHistoryRef.current.filter(pt => pt.t >= cutoff);
+                const lastPt = priceHistoryRef.current[priceHistoryRef.current.length - 1];
+                
+                // Strict Monotonicity to prevent wrapping glitches
+                if (!lastPt || now > lastPt.t) {
+                    priceHistoryRef.current.push({ t: now, p: interpolatedPriceRef.current });
+                }
+                
+                // Keep 120s window + 500 point cap for performance
+                const cutoff = now - 120000;
+                if (priceHistoryRef.current.length > 500) {
+                    priceHistoryRef.current = priceHistoryRef.current.filter(pt => pt.t >= cutoff);
+                }
             }
         }, 50);
         return () => clearInterval(historyInterval);
     }, []);
+
+    // Sync history from prop on mount
+    useEffect(() => {
+        if (priceHistory && priceHistory.length > 0 && priceHistoryRef.current.length <= 1) {
+            // Ensure monotonic if merging
+            const incoming = [...priceHistory].sort((a,b) => a.t - b.t);
+            priceHistoryRef.current = incoming;
+        }
+    }, [priceHistory]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -72,10 +109,12 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol }) {
                 return;
             }
 
-            // Window: 20s visible, centered on latest price
+            // Window: 20s visible, latest price on right
             const nowPx = Date.now();
             const windowMs = 20000;
-            const oldest = nowPx - (windowMs / 2);
+            const oldest = nowPx - windowMs;
+            const liveX = W * 0.95; 
+            const liveY = toY(latestPriceVal);
 
             // Y-Scale
             const visiblePts = history.filter(pt => pt.t >= oldest);
@@ -122,7 +161,8 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol }) {
                 history.forEach((pt) => {
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x < 0 || x > W) return;
+                    // Allow points slightly off-screen to ensure path reaches the edge
+                    if (x < -100 || x > W + 100) return;
                     if (firstVisibleX === -1) { ctx.moveTo(x, y); firstVisibleX = x; }
                     else ctx.lineTo(x, y);
                 });
@@ -142,14 +182,17 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol }) {
                 ctx.lineJoin = 'round';
                 ctx.beginPath();
                 let started = false;
-                history.forEach(pt => {
+                history.forEach((pt) => {
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x < 0 || x > W) return;
-                    if (!started) { ctx.moveTo(x, y); started = true; }
-                    else ctx.lineTo(x, y);
-                });
-                ctx.lineTo(liveX, liveY);
+                    if (x < -100 || x > W + 100) return;
+                    if (!started) {
+                        ctx.moveTo(x, y);
+                        started = true;
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });ctx.lineTo(liveX, liveY);
                 ctx.stroke();
 
                 // Horizontal Price Line (Crosshair)

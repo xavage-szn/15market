@@ -7,7 +7,7 @@ import { MascotLoader } from './MascotLoader';
 import { KEEPER_URL_ARC } from "../constants";
 import LiveStreamingChart from './LiveStreamingChart';
 
-export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1' }) {
+export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [] }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const seriesRef = useRef(null);
@@ -419,8 +419,25 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
             if (typeof currentSeries.setMarkers === 'function') {
                 try {
-                    currentSeries.setMarkers(markers);
-                } catch (e) { }
+                    // Filter out zero times and sort chronologically
+                    const validMarkers = markers
+                        .filter(m => m.time && m.time > 0)
+                        .sort((a, b) => a.time - b.time);
+
+                    // Ensure unique times for markers (lightweight-charts requirement)
+                    const uniqueMarkers = [];
+                    const seenTimes = new Set();
+                    for (const m of validMarkers) {
+                        if (!seenTimes.has(m.time)) {
+                            uniqueMarkers.push(m);
+                            seenTimes.add(m.time);
+                        }
+                    }
+
+                    currentSeries.setMarkers(uniqueMarkers);
+                } catch (e) {
+                    console.warn("[Chart] Marker Update Error:", e.message);
+                }
             }
         };
 
@@ -439,14 +456,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             return;
         }
 
+        const time = timeframe === '1s' ? now : Math.floor(now / 60) * 60;
+
+        // FINAL SAFETY: Never update with an older timestamp
+        if (lastCandleTime.current && time < lastCandleTime.current) {
+            return;
+        }
+
         if (timeframe === '1s' || chartType === 'line') {
-            const time = timeframe === '1s' ? now : Math.floor(now / 5) * 5;
             if (chartType === 'candles') {
-                if (!current1sCandle.current) {
+                if (!current1sCandle.current || time > current1sCandle.current.time) {
                     current1sCandle.current = { time, open: price, high: price, low: price, close: price };
-                } else if (time > current1sCandle.current.time) {
-                    seriesRef.current.update(current1sCandle.current);
-                    current1sCandle.current = { time, open: current1sCandle.current.close, high: price, low: price, close: price };
                 } else {
                     current1sCandle.current.high = Math.max(current1sCandle.current.high, price);
                     current1sCandle.current.low = Math.min(current1sCandle.current.low, price);
@@ -457,11 +477,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 seriesRef.current.update({ time, value: price });
             }
         } else {
-            const time = Math.floor(now / 60) * 60;
             seriesRef.current.update({ time, close: price });
         }
 
-        lastCandleTime.current = now;
+        lastCandleTime.current = time;
     }, [currentPrice, timeframe, chartType]);
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -536,6 +555,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         theme={theme}
                         currentPrice={currentPrice}
                         symbol={symbol}
+                        priceHistory={priceHistory}
                     />
                 )}
 

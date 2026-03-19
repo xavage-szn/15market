@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
+import { RoundsTradeScroller } from "./components/RoundsTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
 import { PnLModal } from "./components/PnLModal";
 import { TransactionReceiptModal } from "./components/TransactionReceiptModal";
@@ -31,6 +32,7 @@ import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, ADM
 import { TradeTerminal } from "./components/TradeTerminal";
 import { LiveExecution } from "./components/LiveExecution";
 import { TradeHistory } from "./components/TradeHistory";
+import { RoundsTradeHistory } from "./components/RoundsTradeHistory";
 import { UnifiedWalletButton } from "./components/UnifiedWalletButton";
 import { OrderBook } from "./components/OrderBook";
 import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
@@ -281,10 +283,11 @@ export default function UserApp() {
   const [sliderValue, setSliderValue] = useState(0);
   // const [balance, setBalance] = useState(0); // Removed in favor of evmBalance/sessionBalance logic
   const [direction, setDirection] = useState(null);
-  const loadLocalTrades = (userAddress, isHistory) => {
+  const loadLocalTrades = (userAddress, isHistory, type = 'classic') => {
     try {
       if (!userAddress) return [];
-      const key = isHistory ? `15market_history_${userAddress.toLowerCase()}` : `15market_active_${userAddress.toLowerCase()}`;
+      const prefix = type === 'rounds' ? '15market_rounds' : '15market';
+      const key = isHistory ? `${prefix}_history_${userAddress.toLowerCase()}` : `${prefix}_active_${userAddress.toLowerCase()}`;
       const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : [];
     } catch { return []; }
@@ -298,8 +301,9 @@ export default function UserApp() {
   // Preserve local device history by scooping it to the actively connected wallet address
   useEffect(() => {
     if (address && address !== lastAddressRef.current) {
-      setTradeHistory(loadLocalTrades(address, true));
-      setActiveTrades(loadLocalTrades(address, false));
+      setTradeHistory(loadLocalTrades(address, true, 'classic'));
+      setActiveTrades(loadLocalTrades(address, false, 'classic'));
+      setRoundsTradeHistory(loadLocalTrades(address, true, 'rounds'));
       lastAddressRef.current = address;
     }
   }, [address]);
@@ -391,13 +395,15 @@ export default function UserApp() {
   const [network, setNetwork] = useState("arc");
   const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
   const [gameMode, setGameMode] = useState("classic"); // "classic" | "rounds"
+  const [roundsTradeHistory, setRoundsTradeHistory] = useState(() => loadLocalTrades(address, true, 'rounds'));
+  const [activeRounds, setActiveRounds] = useState(() => loadLocalTrades(address, false, 'rounds'));
 
   // Rounds chart state — populated by RoundsTerminal via onRoundPhaseChange
   const [roundsChartState, setRoundsChartState] = useState(null);
   // { phase:'entry'|'locked', entryPrice, pools, userDirection, timeLeft, odds }
 
-  const handleRoundPhaseChange = useCallback((phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled) => {
-    setRoundsChartState({ phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled });
+  const handleRoundPhaseChange = useCallback((phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled, result) => {
+    setRoundsChartState({ phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled, result });
   }, []);
 
 
@@ -1014,6 +1020,14 @@ export default function UserApp() {
 
         console.log(`🏟️ [ROUNDS] Entering P2P Pool with ${activeAmount} USDC. ID: ${roundId}`);
 
+        // --- OPTIMISTIC BALANCE DEDUCTION (instant UI feedback) ---
+        if (sessionMode) {
+          setSessionBalance(prev => Math.max(0, prev - amtNum));
+        } else {
+          setEvmBalance(prev => Math.max(0, parseFloat(prev || '0') - amtNum).toString());
+        }
+        lastOptimisticActionTime.current = Date.now();
+
         if (sessionMode && evmSessionWallet) {
           // AUTO-SIGNER MODE
           const res = await fetch(`${KEEPER_URL_ARC}/rounds/session-enter`, {
@@ -1050,6 +1064,12 @@ export default function UserApp() {
         notify("Broadcasting Entry...", "pending");
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
         if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+          // Restore balance if tx failed
+          if (sessionMode) {
+            setSessionBalance(prev => prev + amtNum);
+          } else {
+            setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
+          }
           throw new Error("Round entry failed on-chain.");
         }
 
@@ -1079,10 +1099,13 @@ export default function UserApp() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
           controller.abort();
-          // Safety: ensure UI is reset if backend doesn't respond in time
           setIsExecuting(false);
           notify("Trade timed out. The network may be slow — checking status in background...", "error");
-        }, 120000); // 120 second timeout (to accommodate backend retries)
+        }, 120000);
+
+        // --- OPTIMISTIC DEDUCTION: Deduct before sending (instant feedback) ---
+        setSessionBalance(prev => Math.max(0, prev - amtNum));
+        lastOptimisticActionTime.current = Date.now();
 
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
@@ -1150,13 +1173,14 @@ export default function UserApp() {
           setActiveTrades(prev => dedupeAndAdd(prev, strictTrade));
           setTradeHistory(prev => dedupeAndAdd(prev, strictTrade));
 
-          setSessionBalance(prev => Math.max(0, prev - amtNum));
-          lastOptimisticActionTime.current = Date.now();
+          // Balance already deducted optimistically above — DON'T deduct again
           triggerGlobalRefresh(true);
           notify("Trade Confirmed & Started!", "success");
 
         } catch (fetchErr) {
           clearTimeout(timeoutId);
+          // Restore balance on failure
+          setSessionBalance(prev => prev + amtNum);
           throw fetchErr;
         }
       } else {
@@ -1172,11 +1196,17 @@ export default function UserApp() {
           gas: 800000n
         });
 
-        notify("Trade Signed! Waiting for block confirmation...", "pending");
+        notify("Trade Signed! Confirming on-chain...", "pending");
 
-        // STRICT MODE: Wait for confirmation BEFORE adding to UI
+        // --- OPTIMISTIC DEDUCTION: Deduct right after signing (not after confirmation) ---
+        setEvmBalance(prev => Math.max(0, parseFloat(prev || '0') - amtNum).toString());
+        lastOptimisticActionTime.current = Date.now();
+
+        // Wait for on-chain confirmation
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 });
         if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+          // Restore balance on revert
+          setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
           throw new Error("Transaction Reverted on-chain");
         }
 
@@ -1207,11 +1237,7 @@ export default function UserApp() {
         setActiveTrades(prev => dedupeAndAdd(prev, strictTrade));
         setTradeHistory(prev => dedupeAndAdd(prev, strictTrade));
 
-        setEvmBalance(prev => {
-          const current = parseFloat(prev || "0");
-          return Math.max(0, current - amtNum).toString();
-        });
-        lastOptimisticActionTime.current = Date.now();
+        // Balance already deducted optimistically above — DON'T deduct again
         triggerGlobalRefresh(true);
 
         // Tell backend to track it (Ping handles updating backend startTime correctly)
@@ -1460,10 +1486,10 @@ export default function UserApp() {
         priceRef.current = pStr;
         setIsLoading(false);
 
-        // Record history for precise expiry price retrieval (keep 10s buffer)
+        // Record history for precise expiry price retrieval (keep 200-item buffer for chart context)
         const now = Date.now();
         priceHistoryRef.current.push({ p: truncated, t: now });
-        if (priceHistoryRef.current.length > 50) priceHistoryRef.current.shift();
+        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
 
         return fastestPrice;
       }
@@ -1570,6 +1596,7 @@ export default function UserApp() {
     console.log(`🎯 User switched market to: ${newMarket.symbol}`);
     localStorage.setItem('15market_active_token_id', newMarket.id);
     setActiveMarket(newMarket);
+    priceHistoryRef.current = []; // Clear history to avoid phantom lines when switching tokens
 
     // Sync with keeper
     try {
@@ -2351,31 +2378,31 @@ export default function UserApp() {
         />
       ) : (
         <div className={`w-full flex-1 flex flex-col items-center flex-shrink-0 ${uiVersion === 'v2' ? 'py-0 overflow-hidden' : 'py-4 lg:py-6'}`}>
-          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''}`}>
+          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''} ${isSmallScreen ? 'flex-wrap gap-y-1' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? 'h-[42px] lg:h-[58px]' : 'h-16 lg:h-20'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? (isSmallScreen ? 'h-[28px]' : 'h-[42px] lg:h-[58px]') : (isSmallScreen ? 'h-10' : 'h-16 lg:h-20')} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
-            {/* Game Mode Switcher — centered in navbar (responsive) */}
-            <div className="flex items-center gap-1 md:gap-2 absolute left-1/2 -translate-x-1/2">
-              {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
-                <button
-                  key={key}
-                  onClick={() => { setGameMode(key); setView('trading'); }}
-                  className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full transition-all duration-300 relative group`}
-                >
-                  <div className="absolute inset-0 rounded-full blur-md opacity-0 group-hover:opacity-20 bg-[#3CB371] transition-opacity" />
-                  <Icon size={12} className={gameMode === key ? 'text-[#3CB371]' : 'text-white/20'} />
-                  <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.18em] ${gameMode === key ? (theme === 'light' ? 'text-[#0a261a]' : 'text-white') : (theme === 'light' ? 'text-black/20' : 'text-white/20')}`}>{label}</span>
-                  {gameMode === key && (
-                    <motion.div layoutId="nav-mode-dot" className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#3CB371] shadow-[0_0_8px_#3CB371]" />
-                  )}
-                </button>
-              ))}
-            </div>
+
 
             <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
+              {/* Branded Game Mode Switcher - Large Screens */}
+              <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
+                <motion.div 
+                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
+                  initial={false}
+                  animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+                {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
+                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                    className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
+                    <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                    <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
+                  </button>
+                ))}
+              </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
               <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
@@ -2389,6 +2416,21 @@ export default function UserApp() {
             </div>
 
             <div className="flex lg:hidden landscape:hidden items-center gap-1 md:gap-2">
+              {/* Branded Game Mode Switcher - Mobile */}
+              <div className={`flex items-center p-1 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-75 origin-right`}>
+                <motion.div 
+                  className="absolute top-1 bottom-1 rounded-full bg-[#3CB371]"
+                  initial={false}
+                  animate={{ x: gameMode === 'classic' ? 0 : 65, width: 65 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+                {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
+                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                    className={`relative z-10 flex items-center justify-center h-6 w-[65px] transition-all duration-300`}>
+                    <Icon size={10} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                  </button>
+                ))}
+              </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               {uiVersion === 'v2' && (
                 <button
@@ -2424,7 +2466,11 @@ export default function UserApp() {
 
           {uiVersion === 'v1' && (
             <div className={`w-full relative z-[45] overflow-hidden border-y my-2 py-1 ${isLight ? 'bg-[#f0f9f4]/95 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
-              <GlobalTradeScroller theme={theme} isV1={true} />
+              {gameMode === 'rounds' ? (
+                <RoundsTradeScroller theme={theme} />
+              ) : (
+                <GlobalTradeScroller theme={theme} isV1={true} />
+              )}
             </div>
           )}
 
@@ -2442,21 +2488,33 @@ export default function UserApp() {
                         : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}08`,
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : `${GREEN}35`
                     }}>
-                    {gameMode === 'rounds' && roundsChartState?.phase === 'locked' ? (
+                    {gameMode === 'rounds' ? (
                       <RoundsChart
                         theme={theme}
                         currentPrice={price}
-                        entryPrice={roundsChartState.entryPrice}
-                        timeLeft={roundsChartState.timeLeft}
-                        totalDuration={15}
-                        pools={roundsChartState.pools}
-                        userDirection={roundsChartState.userDirection}
-                        odds={roundsChartState.odds}
-                        onResult={roundsChartState.onResult}
-                        isSettled={roundsChartState.isSettled}
+                        entryPrice={roundsChartState?.entryPrice || price}
+                        timeLeft={roundsChartState?.timeLeft || 0}
+                        totalDuration={roundsChartState?.phase === 'entry' ? 10 : 15}
+                        pools={roundsChartState?.pools || { long: 0, short: 0 }}
+                        userDirection={roundsChartState?.userDirection}
+                        odds={roundsChartState?.odds}
+                        onResult={roundsChartState?.onResult}
+                        isSettled={roundsChartState?.isSettled}
+                        phase={roundsChartState?.phase || 'entry'}
+                        result={roundsChartState?.result}
+                        priceHistory={priceHistoryRef.current}
                       />
                     ) : (
-                      <CustomChart symbol={activeMarket.binance} theme={theme} network={network} activeMarket={activeMarket} uiVersion={uiVersion} setActiveMarket={handleMarketChange} activeTrades={activeTrades} />
+                      <CustomChart 
+                        symbol={activeMarket.binance} 
+                        theme={theme} 
+                        network={network} 
+                        activeMarket={activeMarket} 
+                        uiVersion={uiVersion} 
+                        setActiveMarket={handleMarketChange} 
+                        activeTrades={activeTrades} 
+                        priceHistory={priceHistoryRef.current}
+                      />
                     )}
                   </div>
 
@@ -2511,18 +2569,18 @@ export default function UserApp() {
                   </div>
                 </div>
               ) : (
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1.5 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'h-[calc(100dvh-100px)] overflow-hidden pb-1' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1.5 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[calc(100dvh-100px)] pb-1' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
                   {/* V2: Integrated One Screen Layout */}
                   <motion.div
                     layout
-                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-[calc(100%-240px)]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
+                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto min-h-[380px]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
                     style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
                     {uiVersion === 'v2' && !isSmallScreen && (
                       <SideHistoryPane
                         isOpen={showSideHistory}
                         onToggle={() => setShowSideHistory(!showSideHistory)}
-                        tradeHistory={tradeHistory}
+                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                         theme={theme}
                         setSelectedPnLTrade={setSelectedPnLTrade}
                         setIsPnLOpen={setIsPnLOpen}
@@ -2532,7 +2590,11 @@ export default function UserApp() {
 
                     {/* Scroller only above chart in V2 */}
                     <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
-                      <GlobalTradeScroller theme={theme} />
+                      {gameMode === 'rounds' ? (
+                        <RoundsTradeScroller theme={theme} />
+                      ) : (
+                        <GlobalTradeScroller theme={theme} />
+                      )}
                     </div>
                     <div className={`flex-[2] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
                       style={{
@@ -2545,18 +2607,21 @@ export default function UserApp() {
                       <div className="flex-1 w-full h-full flex relative">
                         {/* Chart Area */}
                         <div className="flex-1 w-full h-full relative min-w-0">
-                          {gameMode === 'rounds' && roundsChartState?.phase === 'locked' ? (
+                          {gameMode === 'rounds' ? (
                             <RoundsChart
                               theme={theme}
                               currentPrice={price}
-                              entryPrice={roundsChartState.entryPrice}
-                              timeLeft={roundsChartState.timeLeft}
-                              totalDuration={15}
-                              pools={roundsChartState.pools}
-                              userDirection={roundsChartState.userDirection}
-                              odds={roundsChartState.odds}
-                              onResult={roundsChartState.onResult}
-                              isSettled={roundsChartState.isSettled}
+                              entryPrice={roundsChartState?.entryPrice || price}
+                              timeLeft={roundsChartState?.timeLeft || 0}
+                              totalDuration={roundsChartState?.phase === 'entry' ? 10 : 15}
+                              pools={roundsChartState?.pools || { long: 0, short: 0 }}
+                              userDirection={roundsChartState?.userDirection}
+                              odds={roundsChartState?.odds}
+                              onResult={roundsChartState?.onResult}
+                              isSettled={roundsChartState?.isSettled}
+                              phase={roundsChartState?.phase || 'entry'}
+                              result={roundsChartState?.result}
+                              priceHistory={priceHistoryRef.current}
                             />
                           ) : (
                             <CustomChart
@@ -2568,6 +2633,7 @@ export default function UserApp() {
                               setActiveMarket={handleMarketChange}
                               activeTrades={activeTrades}
                               currentPrice={price}
+                              priceHistory={priceHistoryRef.current}
                             />
                           )}
                         </div>
@@ -2590,8 +2656,9 @@ export default function UserApp() {
                     className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    <div className={`w-full grid grid-cols-2 gap-2 ${isSmallScreen ? '' : 'hidden md:hidden lg:hidden'}`}>
-                      <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                    <div className={`w-full flex-col gap-2 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                      {/* Terminal Area */}
+                      <div className={`w-full min-h-0 min-h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2630,8 +2697,33 @@ export default function UserApp() {
                           />
                         )}
                       </div>
+
+                      {/* ROUNDS: History after Terminal on Mobile */}
+                      {gameMode === 'rounds' && (
+                        <div className={`w-full min-h-[300px] h-auto rounded-[24px] overflow-hidden border glass-panel p-2 shadow-lg flex flex-col`}
+                          style={{
+                            background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                          }}>
+                          <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center justify-between ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                            <span>Round History</span>
+                            <History size={12} />
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <RoundsTradeHistory 
+                              tradeHistory={roundsTradeHistory}
+                              theme={theme}
+                              setSelectedPnLTrade={setSelectedPnLTrade}
+                              setIsPnLOpen={setIsPnLOpen}
+                              compact={true}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CLASSIC: Active Execution on Mobile */}
                       {gameMode !== 'rounds' && (
-                        <div className={`w-full min-h-0 h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                        <div className={`w-full min-h-0 min-h-[220px] h-auto rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2647,13 +2739,13 @@ export default function UserApp() {
                       )}
                     </div>
                     {/* Compact spacer */}
-                    {isSmallScreen && <div className="h-1.5 shrink-0" />}
+                    {isSmallScreen && <div className="h-4 shrink-0" />}
 
                     {!isSmallScreen && (
                       /* Existing Desktop V2 Layout */
                       <>
                         {/* Trading Terminal Box */}
-                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'flex-1 w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 shadow-lg`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2726,14 +2818,23 @@ export default function UserApp() {
 
             {uiVersion === 'v1' && (
               <div className="w-full max-w-4xl lg:max-w-7xl mx-auto px-4 sm:px-6 flex flex-col justify-center">
-                <TradeHistory
-                  wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-                  tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                  GREEN={GREEN} CORAL={CORAL}
-                  evmSessionWallet={evmSessionWallet}
-                  theme={theme} currentNetwork={network}
-                />
+                {gameMode === 'rounds' ? (
+                  <RoundsTradeHistory
+                    theme={theme}
+                    tradeHistory={roundsTradeHistory}
+                    setSelectedPnLTrade={setSelectedPnLTrade}
+                    setIsPnLOpen={setIsPnLOpen}
+                  />
+                ) : (
+                  <TradeHistory
+                    wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+                    tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+                    setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                    GREEN={GREEN} CORAL={CORAL}
+                    evmSessionWallet={evmSessionWallet}
+                    theme={theme} currentNetwork={network}
+                  />
+                )}
                 {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
                 <div className="w-full mb-6 flex flex-col gap-4 mt-6">
                   {winnerBanner && (
