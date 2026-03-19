@@ -40,4 +40,19 @@ services:
       - key: VITE_KEEPER_URL_ROUNDS
         value: https://15market-backend.onrender.com/rounds
 
+  # Admin Frontend Service (Static Site)
+  - type: static
+    name: 15market-admin
+    env: static
+    rootDir: 15market-admin
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    envVars:
+      - key: VITE_KEEPER_URL
+        value: https://15market-backend.onrender.com
+      - key: VITE_KEEPER_URL_ARC
+        value: https://15market-backend.onrender.com
+      - key: VITE_KEEPER_URL_ROUNDS
+        value: https://15market-backend.onrender.com/rounds
+
 

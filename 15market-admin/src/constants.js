@@ -21,9 +21,8 @@ export const KEEPER_URL_ARC = isLocal ? "http://localhost:3010" : (import.meta.e
 const envUrlRounds = import.meta.env.VITE_KEEPER_URL_ROUNDS;
 export const KEEPER_URL_ROUNDS = envUrlRounds 
     ? (envUrlRounds.startsWith('http') ? envUrlRounds : `https://${envUrlRounds}`)
-    : (KEEPER_URL_ARC 
-        ? KEEPER_URL_ARC.replace('api.15market', 'api2.15market').replace(':3010', ':3011') 
-        : "http://localhost:3011");
+    : `${KEEPER_URL_ARC}/rounds`;
+
 
 
 // Chain Definition for Arc
