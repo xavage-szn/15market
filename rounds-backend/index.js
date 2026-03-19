@@ -48,12 +48,19 @@ app.post('/access/redeem', async (req, res) => {
         const { address, code } = req.body;
         if (!address || !code) return res.status(400).json({ error: 'Missing parameters' });
         
-        const codeData = await redis.verifyCode(code.trim().toUpperCase());
-        if (!codeData) return res.status(403).json({ error: 'Invalid or expired access code' });
+        const result = await redis.redeemCode(code.trim(), address);
         
-        await redis.grantAccess(address);
-        await redis.consumeCode(code.trim().toUpperCase());
-        res.json({ success: true, message: 'Access granted! Welcome to the Rounds terminal.' });
+        if (result.ok) {
+            return res.json({ success: true, message: 'Access granted! Welcome to the Rounds terminal.' });
+        }
+
+        // Return specific error messages for each failure mode
+        if (result.reason === 'invalid_code') return res.status(403).json({ error: 'Invalid or expired access code.' });
+        if (result.reason === 'already_used') return res.status(403).json({ error: 'This access code has already been redeemed by another wallet.' });
+        if (result.reason === 'wrong_wallet') return res.status(403).json({ error: 'This access code was not issued to your wallet address.' });
+        if (result.reason === 'already_authorized') return res.status(400).json({ error: 'This wallet already has Rounds access.' });
+        
+        return res.status(403).json({ error: 'Access denied.' });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -68,33 +75,52 @@ app.get('/access/admin/applications', async (req, res) => {
 app.post('/access/admin/approve', async (req, res) => {
     if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
     const { address, email } = req.body;
+    if (!address || !email) return res.status(400).json({ error: 'address and email required' });
     
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    await redis.saveCode(code, { address, email });
+    // Generate a code bound to this specific address — cannot be redeemed by anyone else
+    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+    await redis.saveCode(code, { address: address.toLowerCase(), email });
     await redis.deleteApplication(address);
 
     const mailOptions = {
         from: process.env.EMAIL_FROM,
         to: email,
         subject: 'Your 15Market Rounds Access Code',
-        text: `Your application has been approved!\n\nAccess Code: ${code}\n\nRedeem it at https://15market.online to unlock the Rounds terminal.`,
-        html: `<p>Your application has been approved!</p><h3>Access Code: <strong>${code}</strong></h3><p>Redeem it at <a href="https://15market.online">15market.online</a> to unlock the Rounds terminal.</p>`
+        text: `Your application has been approved!\n\nAccess Code: ${code}\n\nIMPORTANT: This code is bound to your wallet address (${address}) and can only be redeemed once.\n\nRedeem it at https://15market.online to unlock the Rounds terminal.`,
+        html: `<div style="font-family:sans-serif;max-width:480px"><h2>You're In! 🎉</h2><p>Your application to Rounds Beta has been approved.</p><h3 style="background:#f5f5f5;padding:16px;border-radius:8px;letter-spacing:4px;text-align:center">${code}</h3><p style="font-size:12px;color:#888">⚠️ This code is bound to wallet <strong>${address}</strong> and is single-use. It will expire in 30 days.</p><p>Redeem at <a href="https://15market.online">15market.online</a></p></div>`
     };
 
     try {
         await transporter.sendMail(mailOptions);
         res.json({ success: true, code });
     } catch (e) {
-        // Still return code if mail fails, so admin can manually give it
         res.json({ success: true, code, mailError: e.message });
     }
 });
 
 app.post('/access/admin/generate-independent', async (req, res) => {
     if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    await redis.saveCode(code, { type: 'independent' });
+    // Independent codes have NO pre-bound address — first wallet to redeem owns it
+    // But it is still SINGLE-USE — once redeemed, it is locked to that wallet forever
+    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+    await redis.saveCode(code, { type: 'independent', address: null });
     res.json({ success: true, code });
+});
+
+// Admin: Revoke a wallet's access
+app.post('/access/admin/revoke', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const { address } = req.body;
+    if (!address) return res.status(400).json({ error: 'address required' });
+    await redis.revokeAccess(address);
+    res.json({ success: true, message: `Access revoked for ${address}` });
+});
+
+// Admin: List all authorized wallets
+app.get('/access/admin/wallets', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const wallets = await redis.getAuthorizedWallets();
+    res.json(wallets);
 });
 
 app.get('/health', (req, res) => {

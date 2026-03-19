@@ -2476,7 +2476,7 @@ export default function UserApp() {
 
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
-            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'}>
+            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
               {uiVersion === 'v1' ? (
                 <div className={`w-full flex-none grid grid-cols-12 gap-2 lg:gap-4 mb-4 relative z-0 mt-1 h-auto ${gameMode === 'rounds' ? 'lg:h-[calc(100vh-120px)]' : 'lg:h-[calc(100vh-150px)]'} lg:min-h-0`}>
                   {/* Chart Widget - First in stack on mobile */}
