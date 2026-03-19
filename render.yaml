@@ -20,6 +20,10 @@ services:
         key: ARC_CONTRACT_ADDRESS
       - fromContext: env
         key: REDIS_URL
+      - fromContext: env
+        key: ROUNDS_CONTRACT_ADDRESS
+      - fromContext: env
+        key: ADMIN_TOKEN
 
   # Frontend Service (Static Site)
   - type: web
@@ -31,29 +35,8 @@ services:
     envVars:
       - key: VITE_KEEPER_URL
         value: https://15market-backend.onrender.com
+      - key: VITE_KEEPER_URL_ARC
+        value: https://15market-backend.onrender.com
       - key: VITE_KEEPER_URL_ROUNDS
-        value: https://15market-rounds.onrender.com
+        value: https://15market-backend.onrender.com/rounds
 
-  # Rounds Backend Service
-  - type: web
-    name: 15market-rounds
-    env: node
-    rootDir: rounds-backend
-    port: 3011
-    buildCommand: npm install
-    startCommand: node index.js
-    envVars:
-      - key: PORT
-        value: 3011
-      - key: NODE_ENV
-        value: production
-      - fromContext: env
-        key: REDIS_URL
-      - fromContext: env
-        key: ADMIN_TOKEN
-      - fromContext: env
-        key: SESSION_MASTER_SECRET
-      - fromContext: env
-        key: PRIVATE_KEY
-      - fromContext: env
-        key: ROUNDS_CONTRACT_ADDRESS

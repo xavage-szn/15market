@@ -67,9 +67,8 @@ export const KEEPER_URL_ARC = ensureAbsolute(rawKeeperUrlArc).endsWith('/') ? en
 const envUrlRounds = import.meta.env.VITE_KEEPER_URL_ROUNDS;
 export const KEEPER_URL_ROUNDS = envUrlRounds 
     ? ensureAbsolute(envUrlRounds)
-    : (KEEPER_URL_ARC 
-        ? KEEPER_URL_ARC.replace('api.15market', 'api2.15market').replace(':3010', ':3011') 
-        : "http://localhost:3011");
+    : `${KEEPER_URL_ARC}/rounds`;
+
 
 // PRODUCTION DIAGNOSTIC - Helps find "Failed to Fetch" causes
 console.log(`🌐 [Config] API Endpoint: ${KEEPER_URL_ARC}`);

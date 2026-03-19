@@ -65,24 +65,6 @@ class RedisStore {
         return filterSettling ? trades.filter(t => !t.isSettling) : trades;
     }
 
-    async getRound(id) {
-        if (this.isCloud) {
-            const data = await this.redis.hget('15market_rounds', id.toString());
-            return data ? JSON.parse(data) : null;
-        }
-        if (!this.rounds) this.rounds = new Map();
-        return this.rounds.get(id.toString());
-    }
-
-    async setRound(id, data) {
-        if (this.isCloud) {
-            await this.redis.hset('15market_rounds', id.toString(), JSON.stringify(data));
-        } else {
-            if (!this.rounds) this.rounds = new Map();
-            this.rounds.set(id.toString(), data);
-        }
-    }
-
     async markAsSettling(id) {
         const trade = await this.getTrade(id);
         if (trade) {
@@ -189,9 +171,101 @@ class RedisStore {
         }
     }
 
+
+    // ─── ROUNDS MANAGEMENT ─────────────────────────────────────────────────────
+
+    async getRound(id) {
+        if (this.isCloud) {
+            const data = await this.redis.hget('15market_rounds', id.toString());
+            return data ? JSON.parse(data) : null;
+        }
+        if (!this.rounds) this.rounds = new Map();
+        return this.rounds.get(id.toString());
+    }
+
+    async setRound(id, data) {
+        if (this.isCloud) {
+            await this.redis.hset('15market_rounds', id.toString(), JSON.stringify(data));
+        } else {
+            if (!this.rounds) this.rounds = new Map();
+            this.rounds.set(id.toString(), data);
+        }
+    }
+
+    // ─── ACCESS MANAGEMENT (Rounds / Private Access) ───────────────────────────
+
+    async grantAccess(address) {
+        if (this.isCloud) {
+            await this.redis.sadd('rounds:authorized_users', address.toLowerCase());
+        } else {
+            if (!this._authUsers) this._authUsers = new Set();
+            this._authUsers.add(address.toLowerCase());
+        }
+    }
+
+    async isAuthorized(address) {
+        if (!address) return false;
+        if (this.isCloud) {
+            const result = await this.redis.sismember('rounds:authorized_users', address.toLowerCase());
+            return result === 1;
+        }
+        return this._authUsers?.has(address.toLowerCase()) || false;
+    }
+
+    async revokeAccess(address) {
+        if (this.isCloud) {
+            await this.redis.srem('rounds:authorized_users', address.toLowerCase());
+        } else {
+            this._authUsers?.delete(address.toLowerCase());
+        }
+    }
+
+    async getAuthorizedWallets() {
+        if (this.isCloud) {
+            return await this.redis.smembers('rounds:authorized_users');
+        }
+        return Array.from(this._authUsers || []);
+    }
+
+    async saveCode(code, data) {
+        const key = `rounds:code:${code.toUpperCase()}`;
+        if (this.isCloud) {
+            await this.redis.set(key, JSON.stringify({ ...data, redeemedBy: null }), 'EX', 86400 * 30);
+        }
+    }
+
+    async verifyCode(code) {
+        const key = `rounds:code:${code.toUpperCase()}`;
+        if (this.isCloud) {
+            const data = await this.redis.get(key);
+            return data ? JSON.parse(data) : null;
+        }
+        return null;
+    }
+
+    async redeemCode(code, walletAddress) {
+        const normalizedCode = code.toUpperCase();
+        const normalizedAddress = walletAddress.toLowerCase();
+        const key = `rounds:code:${normalizedCode}`;
+
+        if (!this.isCloud) return { ok: false, reason: 'redis_offline' };
+
+        const raw = await this.redis.get(key);
+        if (!raw) return { ok: false, reason: 'invalid_code' };
+
+        const data = JSON.parse(raw);
+        if (data.redeemedBy) return { ok: false, reason: 'already_used' };
+
+        data.redeemedBy = normalizedAddress;
+        data.redeemedAt = Date.now();
+        
+        await this.redis.set(key, JSON.stringify(data), 'EX', 86400 * 7);
+        await this.grantAccess(normalizedAddress);
+        return { ok: true };
+    }
+
     async saveToDisk() {
-        // No-op for Redis Cloud, but maybe we should keep it for local fallback?
-        // For now, minimal.
+        // No-op for Redis Cloud
     }
 
     // Unused but kept for compatibility
@@ -205,3 +279,4 @@ const store = new RedisStore();
 if (store.isCloud) store.syncLastBlock();
 
 module.exports = store;
+

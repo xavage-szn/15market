@@ -674,8 +674,22 @@ app.get('/debug-logs', (req, res) => {
     }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const roundsRouter = require('./rounds/router');
+const roundsProcessor = require('./rounds/processor');
+
+app.use('/rounds', roundsRouter);
+
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`[Server] Fast & Decentralized running on port ${PORT}`);
+    
+    // Start Binary Options Processor
     processor.init();
+    
+    // Start Rounds Microservice Processor
+    roundsProcessor.start().catch(e => {
+        console.error('[Rounds] ❌ Processor failed to start:', e.message);
+    });
+
     keepAlive.startKeepAlive();
 });
+
