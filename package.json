@@ -17,7 +17,9 @@
         "start:admin": "cd 15market-admin && npm run dev",
         "start:ui": "cd 15market && npm run dev",
         "render:build:backend": "cd backend && npm install",
-        "render:start:backend": "cd backend && node src/index.js"
+        "render:start:backend": "cd backend && node src/index.js",
+        "render:build:rounds": "cd rounds-backend && npm install",
+        "render:start:rounds": "cd rounds-backend && node index.js"
     },
     "devDependencies": {
         "concurrently": "^9.1.2"

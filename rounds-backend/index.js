@@ -182,6 +182,23 @@ app.post('/rounds/session-enter', async (req, res) => {
         const val = ethers.parseUnits(parseFloat(amount).toFixed(18), 18);
         
         const tx = await contract.enterRound(poolId, dirMap[direction], { value: val });
+
+        // --- OPTIMISTIC REDIS UPDATE FOR PARTICIPANT COUNT ---
+        try {
+            const symbol = asset.length < 5 ? `${asset.toUpperCase()}USDT` : asset.toUpperCase();
+            const state = await redis.getRound(`${symbol}_state`);
+            if (state && state.next && state.next.id === poolId) {
+                const side = direction === 'UP' ? 'long' : 'short';
+                if (!state.next.pools) state.next.pools = { long: 0, short: 0, participants: 0 };
+                state.next.pools[side] = (state.next.pools[side] || 0) + parseFloat(amount);
+                state.next.pools.participants = (state.next.pools.participants || 0) + 1;
+                await redis.setRound(`${symbol}_state`, state);
+                console.log(`[Rounds] 👤 Updated state via session-enter: ${symbol} ${side} +${amount}`);
+            }
+        } catch (redisErr) {
+            console.warn(`[Rounds] ⚠️ Optimistic update failed:`, redisErr.message);
+        }
+
         res.json({ success: true, txHash: tx.hash });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
