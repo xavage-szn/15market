@@ -63,7 +63,9 @@ const ensureAbsolute = (url) => {
 
 export const KEEPER_URL = ensureAbsolute(rawKeeperUrl).endsWith('/') ? ensureAbsolute(rawKeeperUrl).slice(0, -1) : ensureAbsolute(rawKeeperUrl);
 export const KEEPER_URL_ARC = ensureAbsolute(rawKeeperUrlArc).endsWith('/') ? ensureAbsolute(rawKeeperUrlArc).slice(0, -1) : ensureAbsolute(rawKeeperUrlArc);
-export const KEEPER_URL_ROUNDS = KEEPER_URL_ARC ? KEEPER_URL_ARC.replace(':3010', ':3011') : "http://localhost:3011";
+export const KEEPER_URL_ROUNDS = KEEPER_URL_ARC 
+    ? KEEPER_URL_ARC.replace('api.15market', 'api2.15market').replace(':3010', ':3011') 
+    : "http://localhost:3011";
 
 // PRODUCTION DIAGNOSTIC - Helps find "Failed to Fetch" causes
 console.log(`🌐 [Config] API Endpoint: ${KEEPER_URL_ARC}`);

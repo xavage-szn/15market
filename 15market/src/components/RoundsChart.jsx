@@ -458,7 +458,7 @@ export default function RoundsChart({
                     <motion.div 
                         initial={{ opacity: 0 }} 
                         animate={{ opacity: 1 }}
-                        className="absolute inset-0 z-[70] flex overflow-hidden bg-black"
+                        className="absolute inset-0 z-[70] flex overflow-hidden"
                     >
                         <motion.div 
                             initial={{ 
@@ -473,7 +473,7 @@ export default function RoundsChart({
                                 x: { type: "spring", damping: 25, stiffness: 80, mass: 1 },
                                 skewX: { delay: 0.3, duration: 0.8, ease: "easeInOut" }
                             }}
-                            className={`absolute inset-0 z-10 shadow-[0_0_150px_rgba(0,0,0,1)] border-white/20 ${isDraw ? 'bg-neutral-900' : (isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')} w-full h-full overflow-hidden`}
+                            className={`absolute inset-0 z-10 shadow-[0_0_150px_rgba(0,0,0,1)] border-white/20 backdrop-blur-xl ${isDraw ? 'bg-neutral-900/80' : (isAbove ? 'bg-[#3CB371]/80' : 'bg-[#FF7F50]/80')} w-full h-full overflow-hidden`}
                             style={{ willChange: 'transform' }}
                         >
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
