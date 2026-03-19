@@ -30,15 +30,13 @@ const getRpcEndpoints = () => {
 
 async function createProvider(blockchainService) {
     const endpoints = getRpcEndpoints();
-    let currentRpcs;
+    let currentRpcs = endpoints;
 
     if (currentRpcs.length > 1 && blockchainService?.lastGoodRpc) {
         // When rotating, we actually want to MOVE the last good rpc to the END of the list
         // because it's likely the one currently hitting limits.
         const others = endpoints.filter(r => r !== blockchainService.lastGoodRpc);
         currentRpcs = [...others, blockchainService.lastGoodRpc];
-    } else {
-        currentRpcs = endpoints;
     }
 
     console.log(`[Blockchain] Initializing provider with ${currentRpcs.length} endpoints...`);

@@ -133,6 +133,7 @@ const getSessionRpcs = () => {
 
 let sessionProvider = null;
 async function getSessionProvider() {
+    await blockchain._ensureReady();
     return blockchain.provider;
 }
 
@@ -141,6 +142,7 @@ async function deriveUserWallet(userAddress) {
     const addr = userAddress.toLowerCase();
     const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
     const privateKey = ethers.keccak256(entropy);
+    await blockchain._ensureReady();
     const provider = blockchain.provider || await getSessionProvider();
     const wallet = new ethers.Wallet(privateKey, provider);
     return { wallet, address: wallet.address };
