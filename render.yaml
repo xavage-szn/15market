@@ -26,12 +26,12 @@ services:
         key: ADMIN_TOKEN
 
   # Frontend Service (Static Site)
-  - type: web
+  - type: static
     name: 15market-frontend
     env: static
     rootDir: 15market
     buildCommand: npm install && npm run build
-    staticPublishDir: dist
+    publishDir: dist
     envVars:
       - key: VITE_KEEPER_URL
         value: https://15market-backend.onrender.com
@@ -39,4 +39,5 @@ services:
         value: https://15market-backend.onrender.com
       - key: VITE_KEEPER_URL_ROUNDS
         value: https://15market-backend.onrender.com/rounds
+
 
