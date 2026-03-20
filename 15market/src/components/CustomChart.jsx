@@ -17,11 +17,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const lastCandleTime = useRef(null);
 
     const [timeframe, setTimeframe] = useState('1s');
-    const [chartType, setChartType] = useState('line'); // Default to line for 1s streaming
+    const [chartType, setChartType] = useState('line');
     const current1sCandle = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [chartProgress, setChartProgress] = useState(0);
-    const [loaderStatus, setLoaderStatus] = useState('walking'); // 'walking' or 'running'
+    const [loaderStatus, setLoaderStatus] = useState('walking');
     const errorRef = useRef(null);
     const isFirstLoad = useRef(true);
 
@@ -53,15 +53,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         try {
             const apiInterval = getApiInterval(tf);
             const targetCount = 1000;
-            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
             let url = `/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
-
-            // In production Vercel, relative paths for APIs usually fail without complex proxy config. 
-            // We'll fallback to direct MEXC if the proxy isn't set up.
             const res = await fetch(url);
 
-            // CHECK FOR VERCEL SPA REDIRECT (HTML instead of JSON)
             const contentType = res.headers.get('content-type');
             if (contentType && contentType.includes('text/html')) {
                 console.warn("[CHART] Proxy returned HTML. Falling back to direct API fetch.");
@@ -91,7 +86,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 high: parseFloat(d[2]),
                 low: parseFloat(d[3]),
                 close: parseFloat(d[4]),
-                value: parseFloat(d[4]), // for line series
+                value: parseFloat(d[4]),
                 volume: parseFloat(d[5] || 0)
             }));
         } catch (e) {
@@ -100,9 +95,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         }
     }, [symbol]);
 
-    // Track active trade lines
-    const tradePriceLines = useRef(new Map()); // tradeId -> priceLine
-    const tradeExpiryLines = useRef(new Map()); // tradeId -> timeLine
+    const tradePriceLines = useRef(new Map());
+    const tradeExpiryLines = useRef(new Map());
 
     useEffect(() => {
         if (!chartContainerRef.current) return;
@@ -127,7 +121,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 mode: CrosshairMode.Normal,
                 vertLine: {
                     labelBackgroundColor: '#3CB371',
-                    style: 0, // Solid
+                    style: 0,
                     width: 1,
                     color: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(60, 179, 113, 0.2)',
                     labelVisible: true,
@@ -169,7 +163,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             minBarSpacing: 0.5,
         });
 
-        // Setup series based on type
         if (chartType === 'candles') {
             const candlestickSeries = chart.addSeries(CandlestickSeries, {
                 upColor: upColor,
@@ -177,11 +170,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 borderVisible: false,
                 wickUpColor: upColor,
                 wickDownColor: downColor,
-                priceFormat: {
-                    type: 'price',
-                    precision: 2,
-                    minMove: 0.01,
-                },
+                priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
             });
             seriesRef.current = candlestickSeries;
         } else {
@@ -190,11 +179,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 topColor: 'rgba(60, 179, 113, 0.4)',
                 bottomColor: 'rgba(60, 179, 113, 0.0)',
                 lineWidth: 3,
-                priceFormat: {
-                    type: 'price',
-                    precision: 2,
-                    minMove: 0.01,
-                },
+                priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
             });
             seriesRef.current = areaSeries;
         }
@@ -204,7 +189,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             priceFormat: { type: 'volume' },
             priceScaleId: '',
         });
-
         volumeSeries.priceScale().applyOptions({
             scaleMargins: { top: 0.8, bottom: 0 },
         });
@@ -225,7 +209,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         setChartProgress(0);
         setLoaderStatus('walking');
 
-        // Initial progress crawl
         const progressInterval = setInterval(() => {
             setChartProgress(prev => {
                 if (prev < 75) return prev + Math.random() * 2;
@@ -237,6 +220,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             clearInterval(progressInterval);
             if (data && data.length > 0 && seriesRef.current) {
                 seriesRef.current.setData(data);
+
                 const volumeData = data.map(d => ({
                     time: d.time,
                     value: d.volume || (Math.random() * 100),
@@ -266,7 +250,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     }, 200);
                 }
 
-                // Finalize loading with a "run" to 100
                 setLoaderStatus('running');
                 setChartProgress(75);
 
@@ -327,18 +310,14 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         };
     }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType, gridMode]);
 
-    // Handle Fullscreen Escape
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.key === 'Escape' && isFullscreen) {
-                setIsFullscreen(false);
-            }
+            if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isFullscreen]);
 
-    // Live Trade Markers & Price Lines
     useEffect(() => {
         if (!seriesRef.current || !chartRef.current) return;
 
@@ -349,13 +328,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
             const currentTradeIds = new Set(activeTrades.map(t => String(t.id)));
 
-            // Remove price lines for closed trades
             for (const [id, line] of tradePriceLines.current.entries()) {
                 if (!currentTradeIds.has(id)) {
                     if (typeof currentSeries.removePriceLine === 'function') {
-                        try {
-                            currentSeries.removePriceLine(line);
-                        } catch (e) { }
+                        try { currentSeries.removePriceLine(line); } catch (e) { }
                     }
                     tradePriceLines.current.delete(id);
                 }
@@ -377,7 +353,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 const expiryTime = startTime + durationMs;
                 const secondsLeft = Math.max(0, Math.floor((expiryTime - now) / 1000));
 
-                // Add Price Line
                 if (!tradePriceLines.current.has(id)) {
                     if (typeof currentSeries.createPriceLine === 'function') {
                         try {
@@ -394,7 +369,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     }
                 }
 
-                // Entry Marker
                 markers.push({
                     time: Math.floor(startTime / 1000),
                     position: isCall ? 'belowBar' : 'aboveBar',
@@ -404,7 +378,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     size: 1,
                 });
 
-                // Live Bubble Placeholder (at Current Time)
                 if (secondsLeft > 0) {
                     markers.push({
                         time: Math.floor(now / 1000),
@@ -419,12 +392,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
             if (typeof currentSeries.setMarkers === 'function') {
                 try {
-                    // Filter out zero times and sort chronologically
                     const validMarkers = markers
                         .filter(m => m.time && m.time > 0)
                         .sort((a, b) => a.time - b.time);
 
-                    // Ensure unique times for markers (lightweight-charts requirement)
                     const uniqueMarkers = [];
                     const seenTimes = new Set();
                     for (const m of validMarkers) {
@@ -433,7 +404,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             seenTimes.add(m.time);
                         }
                     }
-
                     currentSeries.setMarkers(uniqueMarkers);
                 } catch (e) {
                     console.warn("[Chart] Marker Update Error:", e.message);
@@ -451,17 +421,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         const now = Math.floor(Date.now() / 1000);
         const price = parseFloat(currentPrice);
 
-        // SAFETY: Prevent "Cannot update oldest data" error in lightweight-charts
-        if (lastCandleTime.current && now <= lastCandleTime.current) {
-            return;
-        }
+        if (lastCandleTime.current && now <= lastCandleTime.current) return;
 
         const time = timeframe === '1s' ? now : Math.floor(now / 60) * 60;
 
-        // FINAL SAFETY: Never update with an older timestamp
-        if (lastCandleTime.current && time < lastCandleTime.current) {
-            return;
-        }
+        if (lastCandleTime.current && time < lastCandleTime.current) return;
 
         if (timeframe === '1s' || chartType === 'line') {
             if (chartType === 'candles') {
@@ -497,8 +461,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         const now = Date.now();
         return activeTrades.map(trade => {
             const entryPrice = parseFloat(trade.entryPrice);
-            // If trade has a locked price or is settled, use that. Otherwise use live spot.
-            // Or if it's expired, it should be frozen.
             const isExpired = trade.expiry ? (now > trade.expiry) : false;
             const referencePrice = (trade.lockedExitPrice || trade.settlementPrice)
                 ? parseFloat(trade.lockedExitPrice || trade.settlementPrice)
@@ -514,24 +476,25 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const toggleFullscreen = () => {
         if (!isFullscreen) {
             const elem = chartContainerRef.current.parentElement.parentElement;
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) {
-                elem.msRequestFullscreen();
-            }
+            if (elem.requestFullscreen) elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+            else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
             setIsFullscreen(true);
         } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            }
+            if (document.exitFullscreen) document.exitFullscreen();
             setIsFullscreen(false);
         }
     };
 
     return (
-        <div className={`relative w-full h-full ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`} style={{ backgroundColor: isDark ? '#0d0d0d' : '#b8d1c0', borderRadius: isFullscreen ? '0' : 'inherit', minHeight: isFullscreen ? '100vh' : '220px' }}>
+        <div
+            className={`relative w-full h-full ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`}
+            style={{
+                backgroundColor: isDark ? '#0d0d0d' : '#b8d1c0',
+                borderRadius: isFullscreen ? '0' : 'inherit',
+                minHeight: isFullscreen ? '100vh' : '220px'
+            }}
+        >
             {/* Branded Background Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <img src="/logo.png" alt="15market" style={{
@@ -542,14 +505,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 }} />
             </div>
 
+            {/* Chart Area */}
             <div className="absolute inset-0 z-10">
-                {/* Standard Lightweight Chart */}
                 <div
                     ref={chartContainerRef}
                     className={`w-full h-full ${timeframe === '1s' && chartType === 'line' ? 'hidden' : 'block'}`}
                 />
 
-                {/* Live Streaming Engine for 1s Line Mode */}
                 {timeframe === '1s' && chartType === 'line' && (
                     <LiveStreamingChart
                         theme={theme}
@@ -559,7 +521,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     />
                 )}
 
-                {/* Chart Crocodile Loading Overlay */}
+                {/* Loading Overlay */}
                 <AnimatePresence>
                     {isLoading && (
                         <motion.div
@@ -581,7 +543,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 </AnimatePresence>
             </div>
 
-            {/* LIVE RESULTS FLOATING OVERLAY */}
+            {/* Live Results Floating Overlay */}
             <div className="absolute top-24 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
                 <AnimatePresence>
                     {tradeResults.map((result) => (
@@ -590,8 +552,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${result.won ? 'bg-[#3CB371]/20 border-[#3CB371]/30' : 'bg-[#FF4444]/20 border-[#FF4444]/30'
-                                }`}
+                            className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${
+                                result.won
+                                    ? 'bg-[#3CB371]/20 border-[#3CB371]/30'
+                                    : 'bg-[#FF4444]/20 border-[#FF4444]/30'
+                            }`}
                         >
                             <div className={`w-2 h-2 rounded-full animate-pulse ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
                             <span className={`text-[10px] font-black uppercase ${isDark ? 'text-white' : 'text-[#0a261a]'} tracking-widest`}>
@@ -602,24 +567,41 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 </AnimatePresence>
             </div>
 
+            {/* Top Controls */}
             <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
                 <div className="flex items-center justify-between gap-2 pointer-events-auto">
+
+                    {/* LEFT: Live badge + symbol selector */}
                     <div className="flex items-center gap-2">
-                    {/* 1s Timeframe Indicator (Fixed) */}
-                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl px-3 py-1.5`}>
-                         <div className="flex items-center gap-2">
-                             <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-pulse" />
-                             <span className="text-[10px] font-black tracking-widest text-[#3CB371]">1S LIVE</span>
-                         </div>
+                        <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl px-3 py-1.5`}>
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-pulse" />
+                                <span className="text-[10px] font-black tracking-widest text-[#3CB371]">1S LIVE</span>
+                            </div>
+                        </div>
+
+                        <div
+                            className={`flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:${controlBorder} pointer-events-auto group`}
+                            onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                        >
+                            <h2 className={`text-[14px] lg:text-lg font-black ${controlText} tracking-widest uppercase flex items-center gap-2`}>
+                                {symbol.replace('USDT', '')}
+                            </h2>
+                            <ChevronDown size={14} className="text-[#3CB371] transition-transform duration-300 group-hover:scale-110" />
+                        </div>
                     </div>
+                    {/* END LEFT */}
 
-                    {/* CHART TYPE TOGGLE REMOVED - Forcing 1s Line Streaming */}
-
-                    <div className="ml-auto flex items-center gap-2 relative">
+                    {/* RIGHT: Settings + Fullscreen */}
+                    <div className="flex items-center gap-2 relative">
                         <div className="relative">
                             <button
                                 onClick={() => setShowSettings(!showSettings)}
-                                className={`p-2 ${controlBg} border ${controlBorder} rounded-xl transition-all shadow-2xl pointer-events-auto ${showSettings ? 'text-[#3CB371] border-[#3CB371]/50' : `${controlTextDim} hover:${controlText}`}`}
+                                className={`p-2 ${controlBg} border ${controlBorder} rounded-xl transition-all shadow-2xl pointer-events-auto ${
+                                    showSettings
+                                        ? 'text-[#3CB371] border-[#3CB371]/50'
+                                        : `${controlTextDim} hover:${controlText}`
+                                }`}
                             >
                                 <Settings size={16} />
                             </button>
@@ -632,7 +614,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                         exit={{ opacity: 0, scale: 0.95, y: -10 }}
                                         className={`absolute top-12 right-0 w-48 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-2xl z-[110] flex flex-col gap-1 pointer-events-auto`}
                                     >
-                                        <div className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest ${controlTextDim} border-b ${controlBorder} mb-1`}>Chart Settings</div>
+                                        <div className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest ${controlTextDim} border-b ${controlBorder} mb-1`}>
+                                            Chart Settings
+                                        </div>
                                         <div className={`px-3 py-1.5 flex flex-col gap-2 border-b ${controlBorder} pb-3 mb-1`}>
                                             <span className={`text-[9px] font-bold uppercase tracking-widest ${controlTextDim}`}>Grid Display</span>
                                             <div className="flex gap-1">
@@ -644,7 +628,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                                     <button
                                                         key={opt.id}
                                                         onClick={() => { setGridMode(opt.id); setShowSettings(false); }}
-                                                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg border ${gridMode === opt.id ? 'bg-[#3CB371] text-white border-[#3CB371]' : `${isDark ? 'bg-white/5' : 'bg-[#3CB371]/5'} ${controlTextDim} border-transparent hover:${isDark ? 'bg-white/10' : 'bg-[#3CB371]/10'}`}`}
+                                                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg border ${
+                                                            gridMode === opt.id
+                                                                ? 'bg-[#3CB371] text-white border-[#3CB371]'
+                                                                : `${isDark ? 'bg-white/5' : 'bg-[#3CB371]/5'} ${controlTextDim} border-transparent`
+                                                        }`}
                                                     >
                                                         {opt.label}
                                                     </button>
@@ -656,7 +644,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                                 onClick={() => { setChartType(chartType === 'candles' ? 'line' : 'candles'); setShowSettings(false); }}
                                                 className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'} transition-all ${controlTextDim} hover:${controlText}`}
                                             >
-                                                <span className="text-[10px] font-black uppercase tracking_widest">Candles</span>
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Candles</span>
                                                 <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : (isDark ? 'bg-white/10' : 'bg-[#3CB371]/10')}`}>
                                                     <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${chartType === 'candles' ? 'translate-x-4' : 'translate-x-0'}`} />
                                                 </div>
@@ -666,6 +654,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                 )}
                             </AnimatePresence>
                         </div>
+
                         <button
                             onClick={toggleFullscreen}
                             className={`p-2 ${controlBg} border ${controlBorder} rounded-xl ${controlTextDim} hover:${controlText} transition-all shadow-2xl pointer-events-auto`}
@@ -673,30 +662,44 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             <Maximize2 size={16} />
                         </button>
                     </div>
-                </div>
+                    {/* END RIGHT */}
 
-                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 lg:gap-4 px-1">
-                    <div className="flex items-center gap-3">
-                        <div className={`flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:${controlBorder} pointer-events-auto group`} onClick={() => setIsSelectorOpen(!isSelectorOpen)}>
-                            <h2 className={`text-[14px] lg:text-lg font-black ${controlText} tracking-widest uppercase flex items-center gap-2`}>{symbol.replace('USDT', '')}</h2>
-                            <ChevronDown size={14} className="text-[#3CB371] transition-transform duration-300 group-hover:scale-110" />
-                        </div>
-                    </div>
                 </div>
-
-                <AnimatePresence>
-                    {isSelectorOpen && (
-                        <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`absolute top-16 left-4 z-[100] w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto`}>
-                            {tokens.map(t => (
-                                <button key={t.id} onClick={() => { setActiveMarket(t); setIsSelectorOpen(false); }} className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}>
-                                    <div className="flex flex-col items-start"><span className="text-xs font-black uppercase tracking-widest">{t.symbol}</span><span className="text-[8px] opacity-60 font-medium">{t.name || 'Crypto'}</span></div>
-                                    {activeMarket?.id === t.id && <Zap size={10} className="fill-current text-white animate-pulse" />}
-                                </button>
-                            ))}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
+            {/* END Top Controls */}
+
+            {/* Symbol Dropdown */}
+            <AnimatePresence>
+                {isSelectorOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className={`absolute top-16 left-4 z-[100] w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto`}
+                    >
+                        {tokens.map(t => (
+                            <button
+                                key={t.id}
+                                onClick={() => { setActiveMarket(t); setIsSelectorOpen(false); }}
+                                className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${
+                                    activeMarket?.id === t.id
+                                        ? 'bg-[#3CB371] text-white'
+                                        : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`
+                                }`}
+                            >
+                                <div className="flex flex-col items-start">
+                                    <span className="text-xs font-black uppercase tracking-widest">{t.symbol}</span>
+                                    <span className="text-[8px] opacity-60 font-medium">{t.name || 'Crypto'}</span>
+                                </div>
+                                {activeMarket?.id === t.id && (
+                                    <Zap size={10} className="fill-current text-white animate-pulse" />
+                                )}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
         </div>
     );
 }
