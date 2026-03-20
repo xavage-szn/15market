@@ -24,7 +24,8 @@ async function main() {
     const rpcs = [
         { url: 'https://5042002.rpc.thirdweb.com', name: 'ThirdWeb' },
         { url: 'https://rpc.testnet.arc.network', name: 'Arc Official' },
-        { url: 'https://rpc-test-1.arc.market', name: 'Arc Market' }
+        { url: 'https://arc-testnet.drpc.org', name: 'dRPC' },
+        { url: 'https://arc-testnet.alt.technology', name: 'Alt.Tech' }
     ];
 
     const results = {};

@@ -129,7 +129,8 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             }
 
             const toY = (p) => H - ((p - lo) / (hi - lo)) * H;
-            const liveX = W * 0.8; // Center it more to the right like trading charts
+            const isMobile = W < 600;
+            const liveX = isMobile ? W * 0.7 : W * 0.8; // Give more room for labels on mobile
             const liveY = toY(latestPriceVal);
 
 
@@ -205,26 +206,30 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
                 // Live Badge
                 const labelText = latestPriceVal.toFixed(2);
-                ctx.font = 'bold 12px IBM Plex Mono, monospace';
+                const isMobile = W < 600;
+                const fontSize = isMobile ? 14 : 12;
+                ctx.font = `bold ${fontSize}px IBM Plex Mono, monospace`;
                 const metrics = ctx.measureText(labelText);
-                const labelW = metrics.width + 12;
-                const labelH = 20;
+                const labelW = metrics.width + 16;
+                const labelH = isMobile ? 24 : 20;
 
                 ctx.fillStyle = GREEN;
                 ctx.beginPath();
-                ctx.roundRect(W - labelW - 10, liveY - 10, labelW, labelH, 4);
+                ctx.roundRect(W - labelW - 10, liveY - labelH/2, labelW, labelH, 6);
                 ctx.fill();
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText(labelText, W - labelW - 10 + 6, liveY + 4);
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, W - labelW - 10 + 8, liveY);
 
                 // Pulse Dot
                 const pulse = Math.sin(nowPx / 200) * 3;
+                const dotSize = isMobile ? 5 : 4;
                 ctx.beginPath();
-                ctx.arc(liveX, liveY, 4, 0, Math.PI * 2);
+                ctx.arc(liveX, liveY, dotSize, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
                 ctx.beginPath();
-                ctx.arc(liveX, liveY, 6 + pulse, 0, Math.PI * 2);
+                ctx.arc(liveX, liveY, (dotSize + 2) + pulse, 0, Math.PI * 2);
                 ctx.strokeStyle = `${GREEN}60`;
                 ctx.lineWidth = 2;
                 ctx.stroke();

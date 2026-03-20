@@ -16,8 +16,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const smaSeriesRef = useRef(null);
     const lastCandleTime = useRef(null);
 
-    const [timeframe, setTimeframe] = useState('1m');
-    const [chartType, setChartType] = useState(uiVersion === 'v2' ? 'line' : 'candles'); // Allow both versions to toggle
+    const [timeframe, setTimeframe] = useState('1s');
+    const [chartType, setChartType] = useState('line'); // Default to line for 1s streaming
     const current1sCandle = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [chartProgress, setChartProgress] = useState(0);
@@ -603,29 +603,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             </div>
 
             <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
-                <div className="flex flex-wrap items-center gap-2 lg:gap-4 pointer-events-auto">
-                    {/* Timeframe Selector */}
-                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
-                        {['1s', '1m', '1h', 'D'].map(tf => (
-                            <button key={tf} onClick={() => setTimeframe(tf)} className={`px-2 lg:px-4 py-1.5 text-[8px] lg:text-[10px] font-black tracking-widest transition-all rounded-lg ${timeframe === tf ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText} ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'}`}`}>{tf}</button>
-                        ))}
+                <div className="flex items-center justify-between gap-2 pointer-events-auto">
+                    <div className="flex items-center gap-2">
+                    {/* 1s Timeframe Indicator (Fixed) */}
+                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl px-3 py-1.5`}>
+                         <div className="flex items-center gap-2">
+                             <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-pulse" />
+                             <span className="text-[10px] font-black tracking-widest text-[#3CB371]">1S LIVE</span>
+                         </div>
                     </div>
 
-                    {/* CHART TYPE TOGGLE */}
-                    <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl`}>
-                        <button
-                            onClick={() => setChartType('line')}
-                            className={`p-1.5 transition-all rounded-lg ${chartType === 'line' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
-                        >
-                            <TrendingUp size={14} />
-                        </button>
-                        <button
-                            onClick={() => setChartType('candles')}
-                            className={`p-1.5 transition-all rounded-lg ${chartType === 'candles' ? 'bg-[#3CB371] text-white' : `${controlTextDim} hover:${controlText}`}`}
-                        >
-                            <BarChart3 size={14} />
-                        </button>
-                    </div>
+                    {/* CHART TYPE TOGGLE REMOVED - Forcing 1s Line Streaming */}
 
                     <div className="ml-auto flex items-center gap-2 relative">
                         <div className="relative">
