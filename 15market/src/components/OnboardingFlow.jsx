@@ -73,14 +73,14 @@ export const OnboardingFlow = ({ address, onComplete, theme }) => {
                                 exit={{ opacity: 0, x: -20 }}
                                 className="space-y-6 text-center"
                             >
-                                <div className="w-20 h-20 bg-[#3CB371]/10 rounded-3xl flex items-center justify-center mx-auto mb-8">
-                                    <Sparkles className="text-[#3CB371] w-10 h-10" />
+                                <div className="w-20 h-20 bg-[#3CB371]/5 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-[#3CB371]/10">
+                                    <img src="/logo.png" alt="15market" className="w-12 h-auto" />
                                 </div>
                                 <h2 className={`text-3xl font-black uppercase tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                                    Welcome to 15Market
+                                    Welcome to 15market
                                 </h2>
                                 <p className={`text-sm ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'} font-medium leading-relaxed`}>
-                                    The world's fastest decentralized prediction market on Arc Network. 
+                                    The decentralized momentum driven prediction market. 
                                     Let's get your identity set up before you start trading.
                                 </p>
                                 <button 

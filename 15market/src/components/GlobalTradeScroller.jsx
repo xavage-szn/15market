@@ -70,8 +70,9 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
         fetchGlobalData();
         const interval = setInterval(fetchGlobalData, 3000);
 
-        const checkBroadcast = () => {
+        const fetchBroadcast = async () => {
             try {
+                // 1. Check Maintenance Mode Local Cache
                 const settingsSaved = localStorage.getItem('15market_citadel_settings');
                 if (settingsSaved) {
                     const settings = JSON.parse(settingsSaved);
@@ -85,12 +86,24 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                         return;
                     }
                 }
-                setActiveBroadcast(null);
+
+                // 2. Fetch Live Global Broadcast
+                const res = await fetch(`${KEEPER_URL_ARC}/broadcast`);
+                if (res.ok) {
+                    const b = await res.json();
+                    if (b && b.text && b.expiry > Date.now()) {
+                        setActiveBroadcast(b);
+                    } else {
+                        setActiveBroadcast(null);
+                    }
+                } else {
+                    setActiveBroadcast(null);
+                }
             } catch (e) { setActiveBroadcast(null); }
         };
 
-        checkBroadcast();
-        const bInterval = setInterval(checkBroadcast, 5000);
+        fetchBroadcast();
+        const bInterval = setInterval(fetchBroadcast, 5000);
 
         return () => {
             clearInterval(interval);

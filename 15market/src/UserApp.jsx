@@ -438,7 +438,7 @@ export default function UserApp() {
 
   useEffect(() => {
     fetchGlobalSettings();
-    const interval = setInterval(fetchGlobalSettings, 15000); // 15s sync
+    const interval = setInterval(fetchGlobalSettings, 3000); // 3s sync for real-time maintenance
 
     const syncLocal = () => {
       try {
