@@ -145,7 +145,16 @@ router.post('/access/admin/approve', async (req, res) => {
     
     const code = Math.random().toString(36).substring(2, 10).toUpperCase();
     await redis.saveCode(code, { address: address.toLowerCase(), email });
-    await redis.deleteApplication(address);
+    
+    // Instead of deleting, mark as approved
+    const apps = await redis.getApplications();
+    const app = apps.find(a => a.address.toLowerCase() === address.toLowerCase());
+    if (app) {
+        app.status = 'approved';
+        app.approvedCode = code;
+        app.approvedAt = Date.now();
+        await redis.saveApplication(app);
+    }
 
     // TODO: Send email (Nodemailer is already in dependencies)
     res.json({ success: true, code });
