@@ -488,15 +488,15 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
     return (
         <div
-            className={`relative w-full h-full ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`}
+            className={`relative w-full h-full flex flex-col flex-1 ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`}
             style={{
                 backgroundColor: isDark ? '#0d0d0d' : '#b8d1c0',
                 borderRadius: isFullscreen ? '0' : 'inherit',
-                minHeight: isFullscreen ? '100vh' : '220px'
+                minHeight: isFullscreen ? '100vh' : (uiVersion === 'v2' ? '120px' : '220px')
             }}
         >
             {/* Branded Background Watermark */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 hidden md:flex items-center justify-center pointer-events-none">
                 <img src="/logo.png" alt="15market" style={{
                     width: '65%',
                     opacity: isDark ? 0.05 : 0.04,
@@ -506,7 +506,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             </div>
 
             {/* Chart Area */}
-            <div className="absolute inset-0 z-10">
+            <div className="absolute inset-0 z-10 flex-1 h-full">
                 <div
                     ref={chartContainerRef}
                     className={`w-full h-full ${timeframe === '1s' && chartType === 'line' ? 'hidden' : 'block'}`}
@@ -665,14 +665,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 </div>
             </div>
 
-            <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 lg:gap-4 px-1">
-                <div className="flex items-center gap-3">
-                    <div className={`flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:${controlBorder} pointer-events-auto group`} onClick={() => setIsSelectorOpen(!isSelectorOpen)}>
-                        <h2 className={`text-[14px] lg:text-lg font-black ${controlText} tracking-widest uppercase flex items-center gap-2`}>{symbol.replace('USDT', '')}</h2>
-                        <ChevronDown size={14} className="text-[#3CB371] transition-transform duration-300 group-hover:scale-110" />
-                    </div>
-                </div>
-            </div>
 
             <AnimatePresence>
                 {isSelectorOpen && (
@@ -687,6 +679,5 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 )}
             </AnimatePresence>
         </div>
-    </div>
 );
 }

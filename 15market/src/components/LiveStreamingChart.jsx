@@ -116,23 +116,28 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
             // Y-Scale
             const visiblePts = history.filter(pt => pt.t >= oldest);
-            let lo = latestPriceVal * 0.9995;
-            let hi = latestPriceVal * 1.0005;
+            let lo = latestPriceVal * 0.9998;
+            let hi = latestPriceVal * 1.0002;
 
             if (visiblePts.length > 0) {
                 const prices = visiblePts.map(pt => pt.p);
-                lo = Math.min(...prices, latestPriceVal);
-                hi = Math.max(...prices, latestPriceVal);
-                const padding = (hi - lo) * 0.3 || latestPriceVal * 0.0005;
-                lo -= padding;
-                hi += padding;
+                const pMin = Math.min(...prices, latestPriceVal);
+                const pMax = Math.max(...prices, latestPriceVal);
+                
+                // Centering Logic: find max deviation from current price
+                const deviation = Math.max(pMax - latestPriceVal, latestPriceVal - pMin);
+                // Use a minimum deviation of 0.05% of price to avoid flat lines
+                const minDev = latestPriceVal * 0.0005;
+                const finalDev = Math.max(deviation, minDev);
+
+                lo = latestPriceVal - finalDev;
+                hi = latestPriceVal + finalDev;
             }
 
             const toY = (p) => H - ((p - lo) / (hi - lo)) * H;
             const isMobile = W < 600;
-            const liveX = isMobile ? W * 0.7 : W * 0.8; // Give more room for labels on mobile
+            const liveX = isMobile ? W - 60 : W - 80; // Expand to fill more width
             const liveY = toY(latestPriceVal);
-
 
             // 1. Static Grid (Matching 1m)
             ctx.lineWidth = 1;
@@ -175,8 +180,8 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                     ctx.fill();
                 }
 
-                // Sharp Line (Matching 3px AreaSeries)
-                ctx.lineWidth = 3;
+                // Sharp Line (Drawing Thicker for better fill presence)
+                ctx.lineWidth = 4;
                 ctx.strokeStyle = mainColor;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -243,13 +248,8 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
     }, [theme, isLight, symbol]);
 
     return (
-        <div className="w-full h-full relative overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <canvas ref={canvasRef} className="w-full h-full" style={{ touchAction: 'none' }} />
-
-            <div className="absolute bottom-4 left-4 flex items-center gap-2 pointer-events-none">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/40' : 'text-white/30'}`}>Direct Feed Active</span>
-            </div>
         </div>
     );
 }

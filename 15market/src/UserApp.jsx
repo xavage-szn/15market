@@ -406,10 +406,10 @@ export default function UserApp() {
       const saved = localStorage.getItem("15market_citadel_settings");
       if (saved) return JSON.parse(saved);
     } catch (e) { }
-    return { 
-      minBet: 1.0, 
-      maxBet: 1000000.0, 
-      maintenanceMode: false, 
+    return {
+      minBet: 1.0,
+      maxBet: 1000000.0,
+      maintenanceMode: false,
       tradingHalted: false,
       systemBanner: "",
       bannerLevel: "info"
@@ -439,7 +439,7 @@ export default function UserApp() {
   useEffect(() => {
     fetchGlobalSettings();
     const interval = setInterval(fetchGlobalSettings, 15000); // 15s sync
-    
+
     const syncLocal = () => {
       try {
         const loaded = JSON.parse(localStorage.getItem('15market_citadel_settings'));
@@ -447,7 +447,7 @@ export default function UserApp() {
       } catch (e) { }
     };
     window.addEventListener('storage', syncLocal);
-    
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('storage', syncLocal);
@@ -497,7 +497,7 @@ export default function UserApp() {
 
   useEffect(() => {
     if (userProfile?.isInitial && !showOnboarding) {
-        setShowOnboarding(true);
+      setShowOnboarding(true);
     }
   }, [userProfile, showOnboarding]);
 
@@ -2413,10 +2413,10 @@ export default function UserApp() {
         />
       ) : (
         <div className={`w-full flex-1 flex flex-col items-center flex-shrink-0 ${uiVersion === 'v2' ? 'py-0 overflow-hidden' : 'py-4 lg:py-6'}`}>
-          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-0' : ''} ${isSmallScreen ? 'flex-wrap gap-y-1' : ''}`}>
+          <header className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6' : 'max-w-7xl px-4 lg:px-6'} flex items-center justify-between mb-0 relative z-50 ${uiVersion === 'v2' ? 'py-1 lg:py-0' : ''} ${isSmallScreen ? 'flex-wrap gap-y-1 mt-2 md:mt-0' : ''}`}>
             <div className={`flex items-center transition-all duration-500`}
               style={{ paddingLeft: uiVersion === 'v2' && !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? (isSmallScreen ? 'h-[28px]' : 'h-[42px] lg:h-[58px]') : (isSmallScreen ? 'h-10' : 'h-16 lg:h-20')} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${uiVersion === 'v2' ? (isSmallScreen ? 'h-[40px]' : 'h-[42px] lg:h-[58px]') : (isSmallScreen ? 'h-10' : 'h-16 lg:h-20')} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
 
@@ -2424,7 +2424,7 @@ export default function UserApp() {
             <div className={`hidden lg:flex items-center gap-3 ${uiVersion === 'v2' ? 'px-2 py-1' : ''}`}>
               {/* Branded Game Mode Switcher - Large Screens */}
               <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
-                <motion.div 
+                <motion.div
                   className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
                   initial={false}
                   animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
@@ -2453,7 +2453,7 @@ export default function UserApp() {
             <div className="flex lg:hidden landscape:hidden items-center gap-1 md:gap-2">
               {/* Branded Game Mode Switcher - Mobile */}
               <div className={`flex items-center p-1 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-75 origin-right`}>
-                <motion.div 
+                <motion.div
                   className="absolute top-1 bottom-1 rounded-full bg-[#3CB371]"
                   initial={false}
                   animate={{ x: gameMode === 'classic' ? 0 : 65, width: 65 }}
@@ -2540,14 +2540,14 @@ export default function UserApp() {
                         priceHistory={priceHistoryRef.current}
                       />
                     ) : (
-                      <CustomChart 
-                        symbol={activeMarket.binance} 
-                        theme={theme} 
-                        network={network} 
-                        activeMarket={activeMarket} 
-                        uiVersion={uiVersion} 
-                        setActiveMarket={handleMarketChange} 
-                        activeTrades={activeTrades} 
+                      <CustomChart
+                        symbol={activeMarket.binance}
+                        theme={theme}
+                        network={network}
+                        activeMarket={activeMarket}
+                        uiVersion={uiVersion}
+                        setActiveMarket={handleMarketChange}
+                        activeTrades={activeTrades}
                         currentPrice={price}
                         priceHistory={priceHistoryRef.current}
                       />
@@ -2605,11 +2605,11 @@ export default function UserApp() {
                   </div>
                 </div>
               ) : (
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1.5 lg:gap-4 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[calc(100dvh-100px)] pb-1' : 'h-auto lg:h-[calc(100vh-95px)] landscape:h-[calc(100vh-95px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-2' : 'gap-1.5 lg:gap-4'} mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-1' : 'h-auto lg:h-[calc(100vh-150px)] landscape:h-[calc(100vh-150px)]'} min-h-0`}>
                   {/* V2: Integrated One Screen Layout */}
                   <motion.div
                     layout
-                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto min-h-[380px]' : 'h-full'} min-h-0 transition-all duration-500 relative`}
+                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto min-h-0' : 'h-full'} min-h-0 transition-all duration-500 relative`}
                     style={{ paddingLeft: !isSmallScreen && showSideHistory ? '220px' : (!isSmallScreen ? '36px' : '0px') }}>
 
                     {uiVersion === 'v2' && !isSmallScreen && (
@@ -2632,12 +2632,12 @@ export default function UserApp() {
                         <GlobalTradeScroller theme={theme} />
                       )}
                     </div>
-                    <div className={`flex-[2] ${isSmallScreen ? 'min-h-[350px]' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[220px] min-h-[220px]' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
-                        background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
-                        boxShadow: theme === 'light'
+                        background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)'),
+                        boxShadow: isSmallScreen ? 'none' : (theme === 'light'
                           ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
-                          : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`,
+                          : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
                         borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
                       }}>
                       <div className="flex-1 w-full h-full flex relative">
@@ -2692,9 +2692,9 @@ export default function UserApp() {
                     className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    <div className={`w-full flex-col gap-2 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full flex-row gap-1.5 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`w-full min-h-0 min-h-[220px] rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                      <div className={`flex-1 min-h-0 min-h-[240px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2748,7 +2748,7 @@ export default function UserApp() {
                             <History size={12} />
                           </div>
                           <div className="flex-1 overflow-hidden">
-                            <RoundsTradeHistory 
+                            <RoundsTradeHistory
                               tradeHistory={roundsTradeHistory}
                               theme={theme}
                               setSelectedPnLTrade={setSelectedPnLTrade}
@@ -2761,7 +2761,7 @@ export default function UserApp() {
 
                       {/* CLASSIC: Active Execution on Mobile */}
                       {gameMode !== 'rounds' && (
-                        <div className={`w-full min-h-0 min-h-[220px] h-auto rounded-[24px] overflow-hidden border glass-panel p-1.5 shadow-lg flex flex-col`}
+                        <div className={`flex-1 min-h-0 min-h-[240px] h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2777,48 +2777,44 @@ export default function UserApp() {
                       )}
                     </div>
                     {/* Compact spacer */}
-                    {isSmallScreen && <div className="h-4 shrink-0" />}
 
                     {!isSmallScreen && (
                       /* Existing Desktop V2 Layout */
                       <>
                         {/* Global System Banner */}
-        <AnimatePresence>
-          {platformSettings.systemBanner && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className={`w-full overflow-hidden relative z-[100] border-b ${
-                platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
-                platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
-                platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
-                'bg-blue-500/10 border-blue-500/20'
-              }`}
-            >
-              <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full animate-pulse ${
-                    platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
-                    platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
-                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
-                    'bg-blue-500'
-                  }`} />
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${
-                    platformSettings.bannerLevel === 'error' ? 'text-red-500' :
-                    platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
-                    platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
-                    'text-blue-500'
-                  }`}>
-                    {platformSettings.systemBanner}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                        <AnimatePresence>
+                          {platformSettings.systemBanner && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
+                                  platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
+                                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
+                                      'bg-blue-500/10 border-blue-500/20'
+                                }`}
+                            >
+                              <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
+                                      platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
+                                          'bg-blue-500'
+                                    }`} />
+                                  <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
+                                      platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
+                                          'text-blue-500'
+                                    }`}>
+                                    {platformSettings.systemBanner}
+                                  </span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
 
-        {/* Navigation Bar - TOP BAR */}
+                        {/* Navigation Bar - TOP BAR */}
                         {/* Trading Terminal Box */}
                         <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'flex-1 w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 shadow-lg`}
                           style={{
@@ -2890,124 +2886,124 @@ export default function UserApp() {
               )}
 
 
-            {/* Forced Orientation Overlay for V2 Mobile */}
-            {showPortraitLock && <PortraitPrompt theme={theme} />}
+              {/* Forced Orientation Overlay for V2 Mobile */}
+              {showPortraitLock && <PortraitPrompt theme={theme} />}
 
-            {uiVersion === 'v1' && (
-              <div className="w-full max-w-4xl lg:max-w-7xl mx-auto px-4 sm:px-6 flex flex-col justify-center">
-                {gameMode === 'rounds' ? (
-                  <RoundsTradeHistory
-                    theme={theme}
-                    tradeHistory={roundsTradeHistory}
-                    setSelectedPnLTrade={setSelectedPnLTrade}
-                    setIsPnLOpen={setIsPnLOpen}
-                  />
-                ) : (
-                  <TradeHistory
-                    wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-                    tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-                    setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                    GREEN={GREEN} CORAL={CORAL}
-                    evmSessionWallet={evmSessionWallet}
-                    theme={theme} currentNetwork={network}
-                  />
-                )}
-                {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
-                <div className="w-full mb-6 flex flex-col gap-4 mt-6">
-                  {winnerBanner && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
-                      style={{
-                        background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
-                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
-                      }}
-                    >
-                      <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                        <Trophy size={80} />
-                      </div>
-                      <div className="flex items-center gap-4 lg:gap-8 relative z-10">
-                        <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
-                          <Trophy size={32} className="text-yellow-500" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
-                            <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
-                          </div>
-                          <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                            Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
-                          </h3>
-                        </div>
-                      </div>
-                    </motion.div>
+              {uiVersion === 'v1' && (
+                <div className="w-full max-w-4xl lg:max-w-7xl mx-auto px-4 sm:px-6 flex flex-col justify-center">
+                  {gameMode === 'rounds' ? (
+                    <RoundsTradeHistory
+                      theme={theme}
+                      tradeHistory={roundsTradeHistory}
+                      setSelectedPnLTrade={setSelectedPnLTrade}
+                      setIsPnLOpen={setIsPnLOpen}
+                    />
+                  ) : (
+                    <TradeHistory
+                      wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
+                      tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
+                      setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                      GREEN={GREEN} CORAL={CORAL}
+                      evmSessionWallet={evmSessionWallet}
+                      theme={theme} currentNetwork={network}
+                    />
                   )}
-
-                  {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
-                    <motion.div
-                      key={camp.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
-                    >
-                      <div className="flex items-center gap-6">
-                        <div className={`p-4 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/10 text-[#3CB371]'} border rounded-2xl`}>
-                          <Trophy size={24} />
+                  {/* Campaign / Winner Banners - Moved below trading for better mobile flow */}
+                  <div className="w-full mb-6 flex flex-col gap-4 mt-6">
+                    {winnerBanner && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
+                        style={{
+                          background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
+                          borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
+                        }}
+                      >
+                        <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                          <Trophy size={80} />
                         </div>
-                        <div>
-                          <h3 className={`text-lg font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} uppercase tracking-tight`}>{camp.title}</h3>
-                          <div className="flex flex-wrap items-center gap-4 mt-1">
-                            <div className={`flex items-center gap-1.5 text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>
-                              <Calendar size={12} />
-                              Ends {new Date(camp.endTime).toLocaleString()}
+                        <div className="flex items-center gap-4 lg:gap-8 relative z-10">
+                          <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
+                            <Trophy size={32} className="text-yellow-500" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
+                              <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
                             </div>
-                            <div className={`w-1 h-1 ${isLight ? 'bg-[#3CB371]/10' : 'bg-white/10'} rounded-full`} />
-                            <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
-                              Prize: {camp.prize || 'Pride'}
+                            <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                              Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
+                            </h3>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
+                      <motion.div
+                        key={camp.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
+                      >
+                        <div className="flex items-center gap-6">
+                          <div className={`p-4 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border-white/10 text-[#3CB371]'} border rounded-2xl`}>
+                            <Trophy size={24} />
+                          </div>
+                          <div>
+                            <h3 className={`text-lg font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} uppercase tracking-tight`}>{camp.title}</h3>
+                            <div className="flex flex-wrap items-center gap-4 mt-1">
+                              <div className={`flex items-center gap-1.5 text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>
+                                <Calendar size={12} />
+                                Ends {new Date(camp.endTime).toLocaleString()}
+                              </div>
+                              <div className={`w-1 h-1 ${isLight ? 'bg-[#3CB371]/10' : 'bg-white/10'} rounded-full`} />
+                              <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
+                                Prize: {camp.prize || 'Pride'}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      <button
-                        onClick={() => navigate(`/campaign/${camp.id}`)}
-                        className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
-                          ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
-                          : (isLight ? 'bg-[#3CB371] text-white' : 'bg-white text-black') + ' hover:scale-105 active:scale-95 shadow-xl'
-                          }`}
-                      >
-                        {enrollments[camp.id] ? (
-                          <>
-                            <CheckCircle size={14} />
-                            View Leaderboard
-                          </>
-                        ) : (
-                          <>
-                            View Campaign Details
-                            <ChevronRight size={14} />
-                          </>
-                        )}
-                      </button>
-                    </motion.div>
-                  ))}
+                        <button
+                          onClick={() => navigate(`/campaign/${camp.id}`)}
+                          className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
+                            ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
+                            : (isLight ? 'bg-[#3CB371] text-white' : 'bg-white text-black') + ' hover:scale-105 active:scale-95 shadow-xl'
+                            }`}
+                        >
+                          {enrollments[camp.id] ? (
+                            <>
+                              <CheckCircle size={14} />
+                              View Leaderboard
+                            </>
+                          ) : (
+                            <>
+                              View Campaign Details
+                              <ChevronRight size={14} />
+                            </>
+                          )}
+                        </button>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
 
-            {/* V2 Mobile History Bottom Drawer */}
-            {uiVersion === 'v2' && isSmallScreen && (
-              <MobileBottomHistoryPane
-                isOpen={showMobileHistory}
-                onToggle={() => setShowMobileHistory(!showMobileHistory)}
-                tradeHistory={tradeHistory}
-                theme={theme}
-                setSelectedPnLTrade={setSelectedPnLTrade}
-                setIsPnLOpen={setIsPnLOpen}
-                userProfile={userProfile}
-              />
-            )}
+              {/* V2 Mobile History Bottom Drawer */}
+              {uiVersion === 'v2' && isSmallScreen && (
+                <MobileBottomHistoryPane
+                  isOpen={showMobileHistory}
+                  onToggle={() => setShowMobileHistory(!showMobileHistory)}
+                  tradeHistory={tradeHistory}
+                  theme={theme}
+                  setSelectedPnLTrade={setSelectedPnLTrade}
+                  setIsPnLOpen={setIsPnLOpen}
+                  userProfile={userProfile}
+                />
+              )}
             </RoundsAccessGate>
 
 
@@ -3062,13 +3058,13 @@ export default function UserApp() {
 
       {/* Onboarding Flow for new users */}
       {showOnboarding && address && (
-        <OnboardingFlow 
-          address={address} 
+        <OnboardingFlow
+          address={address}
           theme={theme}
           onComplete={(profile) => {
             setShowOnboarding(false);
             fetchMyProfile(); // Refresh profile state
-          }} 
+          }}
         />
       )}
     </motion.div >
