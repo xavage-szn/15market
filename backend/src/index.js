@@ -750,6 +750,21 @@ app.post('/admin/settings', express.json(), async (req, res) => {
     res.json({ success: true });
 });
 
+// Broadcast Management
+app.get('/broadcast', async (req, res) => {
+    const b = await redis.getBroadcast();
+    res.json(b || {});
+});
+
+app.post('/admin/broadcast', express.json(), async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const b = req.body; // { text, type, expiry, sender }
+    await redis.saveBroadcast(b);
+    res.json({ success: true });
+});
+
 // Admin: Staff Management
 app.get('/admin/staff', async (req, res) => {
     if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {

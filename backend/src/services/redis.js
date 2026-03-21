@@ -390,6 +390,22 @@ class RedisStore {
         return this._settings || null;
     }
 
+    async saveBroadcast(broadcast) {
+        if (this.isCloud) {
+            await this.redis.set('15market_global_broadcast', JSON.stringify(broadcast), 'EX', 86400); // 24h max
+        } else {
+            this._broadcast = broadcast;
+        }
+    }
+
+    async getBroadcast() {
+        if (this.isCloud) {
+            const data = await this.redis.get('15market_global_broadcast');
+            return data ? JSON.parse(data) : null;
+        }
+        return this._broadcast || null;
+    }
+
     async saveToDisk() { }
     async syncFromRedis() { }
 }
