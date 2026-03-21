@@ -327,7 +327,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 fetchStats();
                 fetchStaff();
                 fetchProfiles();
-            }, 10000);
+            }, 3000);
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchStaff, fetchProfiles]);
@@ -669,21 +669,37 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         return () => clearInterval(timer);
     }, []);
 
-    const handleSendBroadcast = () => {
+    const handleSendBroadcast = async () => {
         if (!newBroadcast.message) return;
         const msg = {
             id: Date.now(),
             text: newBroadcast.message,
             expiry: Date.now() + (newBroadcast.duration * 1000),
             type: newBroadcast.type,
-            sender: currentUser?.username || 'SYSTEM'
+            sender: currentStaffMember?.username || 'SYSTEM'
         };
-        const updated = [msg]; // Only one active broadcast at a time for the marquee
-        setBroadcasts(updated);
-        localStorage.setItem('15market_admin_broadcast', JSON.stringify(updated));
-        setIsBroadcastModalOpen(false);
-        setNewBroadcast({ message: '', duration: 30, type: 'EMERGENCY' });
-        notify('success', 'SIGNAL BROADCAST', 'The announcement has been pushed to all active terminals.');
+
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/broadcast`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify(msg)
+            });
+            if (res.ok) {
+                setBroadcasts([msg]);
+                localStorage.setItem('15market_admin_broadcast', JSON.stringify([msg]));
+                setIsBroadcastModalOpen(false);
+                setNewBroadcast({ message: '', duration: 30, type: 'EMERGENCY' });
+                notify('success', 'SIGNAL BROADCAST', 'The announcement has been pushed to all active terminals.');
+            } else {
+                notify('error', 'BROADCAST FAILED', 'Could not sync announcement to backend.');
+            }
+        } catch (e) {
+            notify('error', 'BROADCAST ERROR', e.message);
+        }
     };
 
     // --- TOKEN LISTING ENGINE ---
@@ -2048,6 +2064,62 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                     <p className="text-[8px] lg:text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">VOLUME</p>
                                                     <p className="text-lg lg:text-xl font-bold font-mono leading-none" style={{ color: '#3CB371' }}>{unifiedMetrics.currentStats.volume} {unifiedMetrics.currencyUnit}</p>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SYSTEM CONTROLS QUICK PANEL */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                        <div className="bg-[#111] border border-[#3CB371]/20 p-6 rounded-[32px] relative overflow-hidden group">
+                                            <div className="absolute top-0 right-0 h-full w-1/4 bg-gradient-to-l from-[#3CB371]/5 to-transparent pointer-events-none" />
+                                            <div className="flex items-center justify-between relative z-10">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${platformSettings.maintenanceMode ? 'bg-[#FF7F50]/20' : 'bg-[#3CB371]/20'}`}>
+                                                        <Settings className={platformSettings.maintenanceMode ? 'text-[#FF7F50]' : 'text-[#3CB371]'} size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">PLATFORM STATUS</p>
+                                                        <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                                                            {platformSettings.maintenanceMode ? 'MAINTENANCE ACTIVE' : 'SYSTEM OPERATIONAL'}
+                                                        </h3>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        const newState = !platformSettings.maintenanceMode;
+                                                        setConfirmAction({
+                                                            title: newState ? 'ACTIVATE MAINTENANCE' : 'RESTORE OPERATIONS',
+                                                            message: newState 
+                                                                ? 'This will suspend all trading and notify all active users. Markets will be locked for maintenance.' 
+                                                                : 'This will restore live trading and remove maintenance banners from all terminals.',
+                                                            onConfirm: () => handleSaveSettings({ ...platformSettings, maintenanceMode: newState })
+                                                        });
+                                                    }}
+                                                    className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${platformSettings.maintenanceMode ? 'bg-[#3CB371] text-white shadow-[0_10px_30px_rgba(60,179,113,0.3)]' : 'bg-[#FF7F50] text-white shadow-[0_10px_30px_rgba(255,127,80,0.3)]'}`}
+                                                >
+                                                    {platformSettings.maintenanceMode ? 'RESUME TRADING' : 'START MAINTENANCE'}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#111] border border-blue-500/20 p-6 rounded-[32px] relative overflow-hidden group">
+                                            <div className="absolute top-0 right-0 h-full w-1/4 bg-gradient-to-l from-blue-500/5 to-transparent pointer-events-none" />
+                                            <div className="flex items-center justify-between relative z-10">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center">
+                                                        <Radio className="text-blue-500 animate-pulse" size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">GLOBAL SIGNAL</p>
+                                                        <h3 className="text-lg font-black text-white uppercase tracking-tight">BROADCAST CENTER</h3>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setIsBroadcastModalOpen(true)}
+                                                    className="px-6 py-3 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(59,130,246,0.3)] hover:scale-105 transition-all"
+                                                >
+                                                    PUSH ANNOUNCEMENT
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
