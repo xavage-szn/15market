@@ -41,9 +41,6 @@ export default function RoundsChart({
     const isAbove = result 
         ? (result === 'WON') 
         : (!isNaN(ePriceNum) && !isNaN(localExitPrice || cPriceNum) ? (localExitPrice || cPriceNum) > ePriceNum : false);
-    const isDraw = result 
-        ? (result === 'HOUSE') 
-        : (!isNaN(ePriceNum) && !isNaN(localExitPrice || cPriceNum) && ((localExitPrice || cPriceNum) === ePriceNum));
 
     // Build colour palette
     const GREEN = '#3CB371';
@@ -502,7 +499,7 @@ export default function RoundsChart({
 
     {/* USER WIN ALERT OVERLAY */}
             <AnimatePresence>
-                {!isDraw && userDirection !== null && isSettled && (isAbove === (userDirection === 'UP')) && (
+                {userDirection !== null && isSettled && (isAbove === (userDirection === 'UP')) && (
                     <motion.div 
                         initial={{ scale: 0.5, y: 100, opacity: 0 }} 
                         animate={{ scale: 1, y: 0, opacity: 1 }} 
