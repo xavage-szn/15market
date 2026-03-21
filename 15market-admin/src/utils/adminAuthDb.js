@@ -12,9 +12,9 @@ export const AdminAuthDB = {
      * @returns {Promise<{success: boolean, message?: string, user?: {id: string, username: string}}>}
      */
     verifyCoordinates: async (username, password) => {
-        // Root credentials
-        const ROOT_USER = "xavageszn-root";
-        const ROOT_PASS = "NORgate123+";
+        // Root credentials from env
+        const ROOT_USER = import.meta.env.VITE_ROOT_USER || "xavageszn-root";
+        const ROOT_PASS = import.meta.env.VITE_ROOT_PASS;
 
         if (username === ROOT_USER && password === ROOT_PASS) {
             return {

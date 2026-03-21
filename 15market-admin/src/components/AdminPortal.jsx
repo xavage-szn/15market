@@ -239,7 +239,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 id: 1,
                 address: ROOT_WALLET,
                 role: ROLES.ROOT,
-                username: 'xavageszn-root',
+                username: import.meta.env.VITE_ROOT_USER || 'xavageszn-root',
+                password: import.meta.env.VITE_ROOT_PASS,
                 status: 'ACTIVE',
                 onboardingComplete: true
             };
