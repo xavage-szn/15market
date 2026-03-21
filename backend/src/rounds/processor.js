@@ -2,7 +2,6 @@ const { ethers } = require('ethers');
 const blockchain = require('./blockchain');
 const redis = require('../services/redis');
 const pricing = require('../services/pricing');
-const botService = require('./botService');
 
 class RoundsProcessor {
     constructor() {
@@ -16,7 +15,6 @@ class RoundsProcessor {
         console.log('[Rounds] 🟢 Starting Rounds Processor...');
         // Wait for services to be ready
         await blockchain.ensureReady();
-        await botService.init();
         
         this.timer = setInterval(() => this.tick(), 1000);
     }
@@ -31,20 +29,6 @@ class RoundsProcessor {
         } else if (seconds === 15 && this.lastStep !== 15) {
             this.lastStep = 15;
             await this.handleSettle();
-        } else if (seconds >= 20 && seconds <= 28 && seconds % 4 === 0 && this.lastStep !== seconds) {
-            this.lastStep = seconds;
-            await this.handleBots();
-        }
-    }
-
-    async handleBots() {
-        const nextRoundId = Math.floor(Date.now() / 30000) + 1;
-        for (const asset of this.assets) {
-            try {
-                const state = await redis.getRound(`${asset}_state`);
-                const participants = state?.next?.pools?.participants || 0;
-                botService.act(asset, nextRoundId, participants).catch(() => {});
-            } catch (e) { }
         }
     }
 

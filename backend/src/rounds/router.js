@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const processor = require('./processor');
-const botService = require('./botService');
 const redis = require('../services/redis'); 
+const { deriveUserWallet } = require('../services/walletDerivation');
+const blockchainService = require('./blockchain');
+const { ethers } = require('ethers');
 
 // Health check
 router.get('/health', (req, res) => {
@@ -29,6 +31,10 @@ router.get('/status', async (req, res) => {
 // Register session wallet entry (User betting in a round)
 router.post('/session-enter', async (req, res) => {
     try {
+        const settings = await redis.getSettings();
+        if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
+        if (settings?.tradingHalted) return res.status(503).json({ error: 'Trading Halted by Admin' });
+
         const { address, asset, side, amount } = req.body;
         if (!address || !asset || !side || !amount) {
             return res.status(400).json({ error: 'Missing parameters' });
@@ -43,35 +49,120 @@ router.post('/session-enter', async (req, res) => {
             return res.status(400).json({ error: 'No active betting round for this asset' });
         }
 
-        // 📝 Optimistic UI update: Increment participants and pools in Redis
-        // This keeps the UI snappy while the blockchain transaction processes
-        if (state.next.pools) {
-            const sideKey = side.toLowerCase();
-            state.next.pools[sideKey] = (state.next.pools[sideKey] || 0) + parseFloat(amount);
-            state.next.pools.participants = (state.next.pools.participants || 0) + 1;
-            await redis.setRound(`${assetUpper}_state`, state);
-            console.log(`[RoundsApi] 📊 Updated Redis ${assetUpper} pools: +${amount} to ${sideKey}`);
+        const roundId = state.next.id;
+        const direction = side.toLowerCase() === 'up' ? 1 : 0;
+
+        // 1. Derive Session Wallet
+        const { wallet: sessionWallet, address: sessionAddr } = await deriveUserWallet(address);
+        
+        // 2. Transact on Blockchain
+        const val = ethers.parseEther(amount.toString());
+        await blockchainService.ensureReady();
+        const connectedWallet = sessionWallet.connect(blockchainService.blockchain.provider);
+        
+        console.log(`[RoundsApi] 🚀 Dispatched relayer for ${address} -> Session: ${sessionAddr} | Round: ${roundId}`);
+
+        // We use a high gas limit since sessions might be complex
+        const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet);
+        
+        console.log(`[RoundsApi] ✅ On-chain Success: ${tx.hash}`);
+
+        // 3. 📝 Update Redis state (Actual count)
+        const sideKey = side.toLowerCase() === 'up' ? 'long' : 'short';
+        
+        // Refetch state to prevent race conditions
+        const latestState = await redis.getRound(`${assetUpper}_state`);
+        if (latestState && latestState.next && Number(latestState.next.id) === Number(roundId)) {
+            if (!latestState.next.pools) latestState.next.pools = { long: 1.0, short: 1.0, participants: 0 };
+            latestState.next.pools[sideKey] = (latestState.next.pools[sideKey] || 1.0) + parseFloat(amount);
+            latestState.next.pools.participants = (latestState.next.pools.participants || 0) + 1;
+            await redis.setRound(`${assetUpper}_state`, latestState);
+            console.log(`[RoundsApi] 📊 State Updated: ${assetUpper} Participants: ${latestState.next.pools.participants}`);
         }
 
-        // Logic to trigger the actual contract transaction via BotService (acting as a transaction relayer for sessions)
-        // or just return success and let the frontend poll.
-        // Actually, the main backend index.js has /session/trade for Binary Options. 
-        // For Rounds, we'll implement a similar relay if needed, but for now we confirm the intent.
-        
-        res.json({ success: true, roundId: state.next.id, status: 'optimistic_registered' });
+        res.json({ 
+            success: true, 
+            roundId, 
+            txHash: tx.hash,
+            status: 'confirmed_on_chain' 
+        });
     } catch (e) {
-        console.error(`[RoundsApi] Session enter error:`, e);
+        console.error(`[RoundsApi] Session enter error:`, e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// Admin: Manually fund bots
-router.post('/access/admin/fund-bots', async (req, res) => {
-    const { token } = req.body;
-    if (token !== process.env.ADMIN_TOKEN) return res.status(403).send("Unauthorized");
+// --- ACCESS ENDPOINTS (Consolidated from rounds-backend) ---
+
+router.post('/access/apply', async (req, res) => {
+    try {
+        const { address, xHandle, discord, email } = req.body;
+        if (!address || !xHandle || !email) return res.status(400).json({ error: 'Missing required fields' });
+        
+        await redis.saveApplication({ address, xHandle, discord, email, timestamp: Date.now(), status: 'pending' });
+        res.json({ success: true, message: 'Application submitted! Please check your email periodically for your access code.' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/access/check/:address', async (req, res) => {
+    const authorized = await redis.isAuthorized(req.params.address);
+    res.json({ authorized });
+});
+
+router.post('/access/redeem', async (req, res) => {
+    try {
+        const { address, code } = req.body;
+        if (!address || !code) return res.status(400).json({ error: 'Missing parameters' });
+        
+        const result = await redis.redeemCode(code.trim(), address);
+        
+        if (result.ok) {
+            return res.json({ success: true, message: 'Access granted! Welcome to the Rounds terminal.' });
+        }
+
+        if (result.reason === 'invalid_code') return res.status(403).json({ error: 'Invalid or expired access code.' });
+        if (result.reason === 'already_used') return res.status(403).json({ error: 'This access code has already been redeemed by another wallet.' });
+        if (result.reason === 'wrong_wallet') return res.status(403).json({ error: 'This access code was not issued to your wallet address.' });
+        if (result.reason === 'already_authorized') return res.status(400).json({ error: 'This wallet already has Rounds access.' });
+        
+        return res.status(403).json({ error: 'Access denied.' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ADMIN ONLY (Requires ADMIN_TOKEN)
+const isAdmin = (req) => req.headers['authorization'] === `Bearer ${process.env.ADMIN_TOKEN}`;
+
+router.get('/access/admin/applications', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const apps = await redis.getApplications();
+    res.json(apps);
+});
+
+router.post('/access/admin/approve', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const { address, email } = req.body;
+    if (!address || !email) return res.status(400).json({ error: 'address and email required' });
     
-    botService.checkAndFundBots();
-    res.json({ success: true, message: "Bot funding triggered in background" });
+    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+    await redis.saveCode(code, { address: address.toLowerCase(), email });
+    await redis.deleteApplication(address);
+
+    // TODO: Send email (Nodemailer is already in dependencies)
+    res.json({ success: true, code });
+});
+
+router.get('/access/admin/authorized', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const wallets = await redis.getAuthorizedWallets();
+    res.json(wallets);
+});
+
+router.post('/access/admin/revoke', async (req, res) => {
+    if (!isAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const { address } = req.body;
+    if (!address) return res.status(400).json({ error: 'address required' });
+    await redis.revokeAccess(address.toLowerCase());
+    res.json({ success: true });
 });
 
 module.exports = router;

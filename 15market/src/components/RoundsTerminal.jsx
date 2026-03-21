@@ -19,6 +19,8 @@ function RoundsTerminalComponent({
     sessionBalance,
     activeMarket,
     onRoundPhaseChange,
+    maintenanceMode = false,
+    tradingHalted = false,
 }) {
     const isLight = theme === 'light';
     const currentAssetId = activeMarket?.id || 'eth';
@@ -114,7 +116,7 @@ function RoundsTerminalComponent({
 
     const handleConfirm = useCallback(() => {
         const amt = parseFloat(localAmount);
-        if (!selectedDirection || isExecuting || !localAmount || amt <= 0) return;
+        if (maintenanceMode || tradingHalted || !selectedDirection || isExecuting || !localAmount || amt <= 0) return;
         if (activeBal > 0 && amt > activeBal) {
             return; // Silently cap — let UI show warning
         }
@@ -310,11 +312,11 @@ function RoundsTerminalComponent({
                             <button
                                 onClick={handleConfirm}
                                 disabled={!selectedDirection || isExecuting || !localAmount || parseFloat(localAmount) <= 0}
-                                className={`w-full py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-[0.98] ${!selectedDirection || !localAmount || parseFloat(localAmount) <= 0
+                                className={`w-full py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-[0.98] ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
                                     ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'
                                     : selectedDirection === 'DOWN' ? 'bg-gradient-to-r from-[#FF7F50] to-[#FF4500] text-white shadow-[#FF7F50]/20' : 'bg-gradient-to-r from-[#3CB371] to-[#2E8B57] text-white shadow-[#3CB371]/20'
                                     }`}>
-                                {isExecuting ? 'SIGNING TXN...' : `CONFIRM ${selectedDirection || ''}`}
+                                {maintenanceMode || tradingHalted ? (tradingHalted ? 'HALTED' : 'PAUSED') : (isExecuting ? 'SIGNING TXN...' : `CONFIRM ${selectedDirection || ''}`)}
                             </button>
                         )}
                     </div>

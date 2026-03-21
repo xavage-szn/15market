@@ -74,9 +74,9 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                         <div className="relative z-10 flex flex-col items-center">
                             <div className="flex flex-col items-center mb-5">
                                 <img src="/logo.png" alt="15market" className="h-20 w-auto mb-2 drop-shadow-sm" />
-                                <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">15MARKET</h1>
+                                <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">{transaction.type === 'rounds' ? 'ROUNDS ENTRY' : '15MARKET'}</h1>
                                 <p className="text-[8px] font-black mt-1.5 tracking-[0.2em] text-black/50 uppercase">
-                                    TRANSACTION RECEIPT • ARC_NETWORK
+                                    {transaction.type === 'rounds' ? 'P2P POOLED ENTRY' : 'TRANSACTION RECEIPT'} • ARC_NETWORK
                                 </p>
                             </div>
 
@@ -127,11 +127,11 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     <div className="flex justify-between px-1 py-1 border-b border-black/5">
                                         <div className="flex flex-col">
                                             <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">LOCKED_ENTRY</span>
-                                            <span className="text-xs font-black">${transaction.entryPrice?.toFixed(2)}</span>
+                                            <span className="text-xs font-black">${Number(transaction.entryPrice).toFixed(2)}</span>
                                         </div>
                                         <div className="flex flex-col items-end">
-                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">DIRECTION</span>
-                                            <span className={`text-xs font-black ${transaction.direction === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>{transaction.direction}</span>
+                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">POOL_DIRECTION</span>
+                                            <span className={`text-xs font-black ${transaction.direction === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>{transaction.direction === 'UP' ? 'LONG' : 'SHORT'}</span>
                                         </div>
                                     </div>
                                 )}

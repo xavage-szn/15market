@@ -20,6 +20,7 @@ function TradeTerminalComponent({
     wallet,
     theme,
     maintenanceMode = false,
+    tradingHalted = false,
     refillAmount,
     setRefillAmount,
     onRefill,
@@ -176,7 +177,7 @@ function TradeTerminalComponent({
                 cursor: maintenanceMode ? "not-allowed" : "pointer"
             }}
         >
-            {maintenanceMode ? "PAUSED" : (isExecuting ? "Wait" : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect")}
+            {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "Wait" : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect")}
         </button>
     );
 

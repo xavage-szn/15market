@@ -16,14 +16,12 @@ function logToFile(msg) {
     fs.appendFile(LOG_FILE, entry, () => { });
 }
 const getRpcEndpoints = () => {
-    // Priority: Official ARC RPCs first as they proved fastest (339ms)
+    // Official ARC RPCs as they proved most reliable
     return [
         "https://rpc.testnet.arc.network",
-        "https://rpc.arc.network",
-        "https://arc-testnet.drpc.org",
         "https://arc-testnet.alt.technology",
-        "https://rpc.drpc.testnet.arc.network",
-        `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}` // Fallback last
+        "https://arc-testnet.drpc.org",
+        "https://rpc.drpc.testnet.arc.network"
     ];
 };
 
@@ -32,8 +30,7 @@ async function createProvider(blockchainService) {
     let currentRpcs = endpoints;
 
     if (currentRpcs.length > 1 && blockchainService?.lastGoodRpc) {
-        // When rotating, we actually want to MOVE the last good rpc to the END of the list
-        // because it's likely the one currently hitting limits.
+        // When rotating, we move the last good rpc to the END
         const others = endpoints.filter(r => r !== blockchainService.lastGoodRpc);
         currentRpcs = [...others, blockchainService.lastGoodRpc];
     }
@@ -43,12 +40,8 @@ async function createProvider(blockchainService) {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 60000; // Increased to 60s for unstable Arc RPCs
+            fetchReq.timeout = 60000;
             
-            if (rpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
-                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-            }
-
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
                 staticNetwork: true,
@@ -66,7 +59,6 @@ async function createProvider(blockchainService) {
             return provider;
         } catch (e) {
             console.warn(`[Blockchain] ⚠️ RPC failed: ${rpc} — ${e.message}`);
-            // If it's a critical RPC like Thirdweb, maybe sleep a bit before retry?
             if (currentRpcs.length === 1) {
                 console.log("[Blockchain] ⏳ Only one RPC available. Waiting 2s before retry...");
                 await new Promise(r => setTimeout(r, 2000));
@@ -74,7 +66,7 @@ async function createProvider(blockchainService) {
         }
     }
 
-    // Last ditch effort: use the first endpoint without complex logic
+    // Last ditch effort: use the first endpoint
     const fallbackReq = new FetchRequest(endpoints[0]);
     fallbackReq.timeout = 30000;
     return new ethers.JsonRpcProvider(fallbackReq, ethers.Network.from(5042002), { staticNetwork: true, batchMaxCount: 1 });
@@ -121,13 +113,10 @@ class BlockchainService {
 
         // --- DEDICATED SETTLEMENT PROVIDER (High Reliability) ---
         try {
-            // Instead of isolating to Thirdweb (which is slow), we use the last good RPC 
-            // or the top-priority 'Arc Official' to ensure instant settlement.
+            // Use the last good RPC or the top-priority 'Arc Official'
+            // to ensure instant settlement.
             const bestRpc = this.lastGoodRpc || getRpcEndpoints()[0];
             const fetchReq = new FetchRequest(bestRpc);
-            if (bestRpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
-                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-            }
             this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
             this.settleWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.settleProvider);
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);

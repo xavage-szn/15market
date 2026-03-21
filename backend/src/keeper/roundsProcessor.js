@@ -1,7 +1,6 @@
 const { ethers } = require('ethers');
 const redis = require('../services/redis');
 const pricing = require('../services/pricing');
-const botService = require('../services/botService');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 

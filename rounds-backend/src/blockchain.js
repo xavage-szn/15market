@@ -3,14 +3,12 @@ const path = require('path');
 require('dotenv').config();
 
 const getRpcEndpoints = () => {
-    // Official ARC RPCs first to save Thirdweb limits for settlements
+    // Official ARC RPCs
     return [
         "https://rpc.testnet.arc.network",
-        "https://rpc.arc.network",
         "https://arc-testnet.alt.technology",
         "https://arc-testnet.drpc.org",
-        "https://rpc.drpc.testnet.arc.network",
-        `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`
+        "https://rpc.drpc.testnet.arc.network"
     ];
 };
 
@@ -20,9 +18,6 @@ async function createProvider() {
         try {
             const fetchReq = new FetchRequest(rpc);
             fetchReq.timeout = 30000;
-            if (rpc.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
-                fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-            }
             const provider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
             await provider.getBlockNumber();
             return provider;
@@ -51,15 +46,14 @@ class BlockchainService {
         this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
         this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
 
-        // --- DEDICATED SETTLEMENT PROVIDER (Thirdweb Only) ---
+        // --- DEDICATED SETTLEMENT PROVIDER (High Performance) ---
         try {
-            const twRpc = `https://5042002.rpc.thirdweb.com/${process.env.THIRDWEB_CLIENT_ID}`;
-            const fetchReq = new FetchRequest(twRpc);
-            if (process.env.THIRDWEB_SECRET_KEY) fetchReq.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+            const bestRpc = getRpcEndpoints()[0]; // Use top official RPC
+            const fetchReq = new FetchRequest(bestRpc);
             this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
             this.settleWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.settleProvider);
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);
-            console.log(`[Blockchain] ⚡ High-priority Settlement isolated to ThirdWeb RPC.`);
+            console.log(`[Blockchain] ⚡ High-priority Settlement optimized to use official RPC: ${bestRpc}`);
         } catch (e) {
             console.warn(`[Blockchain] Could not isolate settlement provider: ${e.message}`);
         }

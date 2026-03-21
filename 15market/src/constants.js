@@ -3,10 +3,10 @@ import { defineChain } from 'viem'
 
 // ARC TESTNET
 export const ARC_CHAIN_ID = 5042002;
-export const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33df2adaf240de11d97651104a14c461";
 
 export const ARC_RPCS = [
     "https://rpc.testnet.arc.network",
+    "https://arc-testnet.alt.technology",
     "https://arc-testnet.drpc.org",
     "https://rpc.drpc.testnet.arc.network"
 ];
@@ -16,7 +16,6 @@ export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
 export const ARC_ROUNDS_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_ROUNDS_CONTRACT_ADDRESS || "0x02AE9D2a7CEca436E7B3A482772EfB74C4fE4721";
 export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
 export const ARC_RPC_BACKUP = ARC_RPCS[1];
-export const ARC_RPC_THIRDWEB = ARC_RPCS[1];
 // 2. Keeper Configuration
 const isNative = typeof window !== 'undefined' && !!window.Capacitor;
 const isLocal = typeof window !== 'undefined' &&
@@ -64,10 +63,7 @@ const ensureAbsolute = (url) => {
 export const KEEPER_URL = ensureAbsolute(rawKeeperUrl).endsWith('/') ? ensureAbsolute(rawKeeperUrl).slice(0, -1) : ensureAbsolute(rawKeeperUrl);
 export const KEEPER_URL_ARC = ensureAbsolute(rawKeeperUrlArc).endsWith('/') ? ensureAbsolute(rawKeeperUrlArc).slice(0, -1) : ensureAbsolute(rawKeeperUrlArc);
 
-const envUrlRounds = import.meta.env.VITE_KEEPER_URL_ROUNDS;
-export const KEEPER_URL_ROUNDS = envUrlRounds 
-    ? ensureAbsolute(envUrlRounds)
-    : `${KEEPER_URL_ARC}/rounds`;
+export const KEEPER_URL_ROUNDS = `${KEEPER_URL_ARC}/rounds`;
 
 
 // PRODUCTION DIAGNOSTIC - Helps find "Failed to Fetch" causes

@@ -12,6 +12,7 @@ const pricing = require('./services/pricing');
 const redis = require('./services/redis');
 const nonceManager = require('./services/nonceManager');
 const keepAlive = require('./services/keepAlive'); // Pulse service to prevent sleep
+const { deriveUserWallet } = require('./services/walletDerivation');
 const fs = require('fs');
 
 const LOG_FILE = path.join(__dirname, '..', 'settlement_activity.log');
@@ -137,18 +138,10 @@ async function getSessionProvider() {
     return blockchain.provider;
 }
 
-async function deriveUserWallet(userAddress) {
-    if (!userAddress) return null;
-    const addr = userAddress.toLowerCase();
-    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
-    const privateKey = ethers.keccak256(entropy);
-    await blockchain._ensureReady();
-    const provider = blockchain.provider || await getSessionProvider();
-    const wallet = new ethers.Wallet(privateKey, provider);
-    return { wallet, address: wallet.address };
-}
-
-app.get('/settings', (req, res) => res.json(SETTINGS_RESPONSE));
+app.get('/settings', async (req, res) => {
+    const settings = await redis.getSettings();
+    res.json(settings || SETTINGS_RESPONSE);
+});
 app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
 
 // Rounds logic has been moved to a separate microservice (rounds-backend)
@@ -205,13 +198,7 @@ app.post('/active-market', (req, res) => {
     res.json({ success: true, activeId });
 });
 
-app.get('/settings', (req, res) => {
-    res.json(SETTINGS_RESPONSE);
-});
-
-app.get('/listings', (req, res) => {
-    res.json(LISTINGS_RESPONSE);
-});
+// (Duplicate route declarations removed — /settings and /listings already registered above)
 
 // ===== HISTORY ENDPOINT =====
 app.get('/history/:address?', async (req, res) => {
@@ -232,6 +219,9 @@ app.get('/profile', async (req, res) => {
         const { address } = req.query;
         if (!address) return res.status(400).json({ error: 'Address required' });
 
+        // Fetch stored profile from Redis
+        const storedProfile = await redis.getProfile(address);
+
         // Fetch FULL history for accurate stats
         const allHistory = await getHistoryFor(address, 0);
 
@@ -243,15 +233,29 @@ app.get('/profile', async (req, res) => {
         };
 
         res.json({
-            profile: {
+            profile: storedProfile || {
                 username: `Trader_${address.slice(2, 6)}`,
                 avatar: ``,
-                address: address
+                address: address,
+                isInitial: true // Flag for frontend to trigger onboarding
             },
             stats,
-            history: allHistory.slice(0, 100), // Return only latest 100 as display history
-            transactions: [] // TODO: Implement if needed
+            history: allHistory.slice(0, 100),
+            transactions: []
         });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Update profile
+app.post('/profile', async (req, res) => {
+    try {
+        const { address, profile } = req.body;
+        if (!address || !profile) return res.status(400).json({ error: 'Address and profile data required' });
+        
+        await redis.saveProfile(address, profile);
+        res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -260,6 +264,9 @@ app.get('/profile', async (req, res) => {
 // ===== SETTLEMENT TRIGGER (Frontend calls this when timer hits 0) =====
 app.post('/settle', async (req, res) => {
     try {
+        const settings = await redis.getSettings();
+        if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
+
         const { id, exitPrice } = req.body;
         if (!id) return res.status(400).json({ error: 'Missing bet ID' });
 
@@ -323,6 +330,10 @@ app.post('/settle', async (req, res) => {
 // ===== HIGH-SPEED TRADE REGISTRATION =====
 app.post('/trade-ping', async (req, res) => {
     try {
+        const settings = await redis.getSettings();
+        if (settings?.maintenanceMode || settings?.tradingHalted) {
+            return res.status(503).json({ error: 'Trading is currently paused' });
+        }
         const { id, address, amount, direction, duration, entryPrice, symbol } = req.body;
         const tradeData = {
             id: id.toString(),
@@ -347,21 +358,51 @@ app.post('/trade-ping', async (req, res) => {
 
 app.get('/protocol-stats', async (req, res) => {
     try {
-        const history = await getHistoryFor();
-        const activeTrades = await redis.getAllActiveTrades(true); // Filter settling trades so UI doesn't glitch
-
+        // 1. Classic Binary Options Stats
+        const history = await redis.getFullHistory();
+        const activeTrades = await redis.getAllActiveTrades(true);
         const totalVolume = history.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-        const uniqueWallets = new Set(history.map(t => t.user.toLowerCase())).size;
+        const uniqueWallets = new Set(history.map(t => t.user?.toLowerCase())).size;
+
+        // 2. Rounds Stats (Unified)
+        const assets = ['ETHUSDT', 'BTCUSDT', 'SOLUSDT'];
+        let roundsVolume = 0;
+        let roundsParticipants = 0;
+        let activeRoundsCount = 0;
+
+        for (const asset of assets) {
+            const state = await redis.getRound(`${asset}_state`);
+            if (state) {
+                activeRoundsCount++;
+                // Add next round participants (currently betting)
+                roundsParticipants += state.next?.pools?.participants || 0;
+                // Add live round participants
+                roundsParticipants += state.live?.pools?.participants || 0;
+                
+                // Estimate volume from pools
+                if (state.next?.pools) {
+                    roundsVolume += (state.next.pools.long || 0) + (state.next.pools.short || 0) - 2.0; // Subtract initial 1.0/1.0
+                }
+                if (state.live?.pools) {
+                    roundsVolume += (state.live.pools.long || 0) + (state.live.pools.short || 0) - 2.0;
+                }
+            }
+        }
 
         res.json({
-            totalVolume: totalVolume.toFixed(2),
+            totalVolume: (totalVolume + roundsVolume).toFixed(2),
+            classicVolume: totalVolume.toFixed(2),
+            roundsVolume: roundsVolume.toFixed(2),
             wallets: uniqueWallets,
-            activeCount: activeTrades.length,
+            activeCount: activeTrades.length + roundsParticipants,
+            classicActive: activeTrades.length,
+            roundsActive: roundsParticipants,
             totalTrades: history.length,
-            activeStakes: activeTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0),
-            autoSignerFees: { arc: (totalVolume * 0.01).toFixed(2) } // Estimate 1% fee for display
+            activeStakes: activeTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) + roundsVolume,
+            autoSignerFees: { arc: ((totalVolume + roundsVolume) * 0.01).toFixed(2) }
         });
     } catch (e) {
+        console.error('[Stats] Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
@@ -385,6 +426,10 @@ app.post('/session/init', async (req, res) => {
 
 app.post('/session/trade', async (req, res) => {
     try {
+        const settings = await redis.getSettings();
+        if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
+        if (settings?.tradingHalted) return res.status(503).json({ error: 'Trading Halted by Admin' });
+
         const { address, tradeParams } = req.body;
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
@@ -677,17 +722,114 @@ app.get('/debug-logs', (req, res) => {
 });
 
 const roundsRouter = require('./rounds/router');
-const roundsProcessor = require('./rounds/processor');
+const roundsProcessor = require('./rounds/processor'); 
 
 app.use('/rounds', roundsRouter);
+
+// Admin: Global Settings
+app.get('/admin/settings', async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const settings = await redis.getSettings();
+    res.json(settings || {
+        maintenanceMode: false,
+        tradingHalted: false,
+        minBet: 0.1,
+        maxBet: 100,
+        systemBanner: "",
+        bannerLevel: "info"
+    });
+});
+
+app.post('/admin/settings', express.json(), async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    await redis.saveSettings(req.body);
+    res.json({ success: true });
+});
+
+// Admin: Staff Management
+app.get('/admin/staff', async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const staff = await redis.getAllStaff();
+    res.json(staff);
+});
+
+app.post('/admin/staff', express.json(), async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const staff = req.body;
+    if (!staff.address) return res.status(400).json({ error: 'Address required' });
+    await redis.saveStaff(staff);
+    res.json({ success: true });
+});
+
+app.delete('/admin/staff/:address', async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    await redis.deleteStaff(req.params.address);
+    res.json({ success: true });
+});
+
+// User Profiles & Onboarding
+app.get('/profiles/:address', async (req, res) => {
+    const profile = await redis.getProfile(req.params.address.toLowerCase());
+    res.json(profile || { error: 'Profile not found' });
+});
+
+app.post('/profiles', express.json(), async (req, res) => {
+    // Accept both flat format { address, username, bio, avatar }
+    // and the nested format from OnboardingFlow { address, profile: { username, avatar, xHandle } }
+    const { address } = req.body;
+    const flat = req.body;
+    const nested = req.body.profile || {};
+
+    const username = nested.username || flat.username;
+    const bio = nested.bio || flat.bio || '';
+    const avatar = nested.avatar || flat.avatar;
+    const xHandle = nested.xHandle || flat.xHandle || '';
+    const discordHandle = nested.discordHandle || flat.discordHandle || '';
+    const onboardedAt = nested.onboardedAt || flat.onboardedAt || null;
+
+    if (!address || !username) return res.status(400).json({ error: 'Address and username required' });
+    
+    const profile = {
+        address: address.toLowerCase(),
+        username,
+        bio,
+        xHandle,
+        discordHandle,
+        avatar: avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+        onboardedAt,
+        createdAt: Date.now()
+    };
+    
+    await redis.saveProfile(address.toLowerCase(), profile);
+    res.json({ success: true, profile });
+});
+
+// Admin: All Profiles (Directory)
+app.get('/admin/profiles', async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const profiles = await redis.getAllProfiles();
+    res.json(profiles);
+});
 
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`[Server] Fast & Decentralized running on port ${PORT}`);
     
-    // Start Binary Options Processor
+    // Start Binary Options (Classic) Processor
     processor.init();
     
-    // Start Rounds Microservice Processor
+    // Start Rounds Processor (Unified in main backend)
     roundsProcessor.start().catch(e => {
         console.error('[Rounds] ❌ Processor failed to start:', e.message);
     });

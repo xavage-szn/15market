@@ -45,6 +45,7 @@ import SideHistoryPane from "./components/SideHistoryPane";
 import { RoundsTerminal } from "./components/RoundsTerminal";
 import RoundsChart from "./components/RoundsChart";
 import RoundsAccessGate from "./components/RoundsAccessGate";
+import { OnboardingFlow } from "./components/OnboardingFlow";
 
 /**
  * Mobile Portrait Lock Component
@@ -400,7 +401,58 @@ export default function UserApp() {
 
   // Rounds chart state — populated by RoundsTerminal via onRoundPhaseChange
   const [roundsChartState, setRoundsChartState] = useState(null);
-  // { phase:'entry'|'locked', entryPrice, pools, userDirection, timeLeft, odds }
+  const [platformSettings, setPlatformSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem("15market_citadel_settings");
+      if (saved) return JSON.parse(saved);
+    } catch (e) { }
+    return { 
+      minBet: 1.0, 
+      maxBet: 1000000.0, 
+      maintenanceMode: false, 
+      tradingHalted: false,
+      systemBanner: "",
+      bannerLevel: "info"
+    };
+  });
+
+  const fetchGlobalSettings = useCallback(async () => {
+    try {
+      const res = await fetch(`${KEEPER_URL_ARC}/settings`); // Uses normalized endpoint
+      if (res.ok) {
+        const data = await res.json();
+        // Update both React state and localStorage
+        setPlatformSettings(prev => {
+          const updated = { ...prev, ...data };
+          if (JSON.stringify(prev) !== JSON.stringify(updated)) {
+            localStorage.setItem("15market_citadel_settings", JSON.stringify(updated));
+            window.dispatchEvent(new Event('storage')); // Notify other tabs
+          }
+          return updated;
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch global settings:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGlobalSettings();
+    const interval = setInterval(fetchGlobalSettings, 15000); // 15s sync
+    
+    const syncLocal = () => {
+      try {
+        const loaded = JSON.parse(localStorage.getItem('15market_citadel_settings'));
+        if (loaded) setPlatformSettings(loaded);
+      } catch (e) { }
+    };
+    window.addEventListener('storage', syncLocal);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', syncLocal);
+    };
+  }, [fetchGlobalSettings]);
 
   const handleRoundPhaseChange = useCallback((phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled, result) => {
     setRoundsChartState({ phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled, result });
@@ -440,6 +492,14 @@ export default function UserApp() {
 
     localStorage.setItem("15market_theme", theme);
   }, [theme, network]);
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (userProfile?.isInitial && !showOnboarding) {
+        setShowOnboarding(true);
+    }
+  }, [userProfile, showOnboarding]);
 
   // Auto-switch to Arc Testnet if wallet is on the wrong network
   useEffect(() => {
@@ -708,30 +768,33 @@ export default function UserApp() {
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
     try {
-      const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
+      const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
       if (res.ok) {
-        const text = await res.text();
-        let userData;
-        try {
-          userData = JSON.parse(text);
-        } catch (e) {
-          if (text.includes("<html") || text.includes("<!DOCTYPE")) {
-            console.error("[Backend] Proxy error (HTML returned). Check KEEPER_URL.");
-            return;
-          }
-          throw e;
+        const data = await res.json();
+
+        // Profile not found on backend → always trigger onboarding (strict)
+        if (!data || data.error) {
+          setUserProfile({ address, isInitial: true });
+          setShowOnboarding(true);
+        } else {
+          // Valid profile — clear onboarding gate, set profile globally
+          setUserProfile(data);
+          setShowOnboarding(false);
         }
-        const { profile, history, transactions, stats } = userData;
-        if (profile) {
-          const profileWithStats = { ...profile, stats };
-          setUserProfile(profileWithStats);
-          localStorage.setItem(`15market_profile_${address.toLowerCase()}`, JSON.stringify(profileWithStats));
-        }
-        if (history) reconcileTrades(history);
-        if (transactions) setTransactionHistory(transactions);
+      } else {
+        // Non-200 response — treat as no profile, force onboarding
+        setUserProfile({ address, isInitial: true });
+        setShowOnboarding(true);
       }
-    } catch (e) { } finally { setProfileChecked(true); }
-  }, [address, reconcileTrades]);
+    } catch (e) {
+      console.warn("Profile fetch failed:", e.message);
+      // Network error — show onboarding so they can register
+      setUserProfile({ address, isInitial: true });
+      setShowOnboarding(true);
+    } finally {
+      setProfileChecked(true);
+    }
+  }, [address]);
 
   // 3. Aggressive Logic (Optimized: fewer redundant refreshes)
   const aggressiveRefresh = useCallback((force = false) => {
@@ -1086,7 +1149,9 @@ export default function UserApp() {
           poolId: roundId,
           tx: txHash
         };
-        setTradeHistory(prev => [roundTrade, ...prev]);
+        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+        setTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
+        setRoundsTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
 
         notify("Joined the Round Successfully!", "success");
         setIsExecuting(false);
@@ -1264,53 +1329,6 @@ export default function UserApp() {
     }
   };
 
-  const [platformSettings, setPlatformSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem("15market_citadel_settings");
-      return saved ? JSON.parse(saved) : { minBet: 1.0, maxBet: 1000000.0, maintenanceMode: false, tradingHalted: false };
-    } catch (e) { return { minBet: 1.0, maxBet: 1000000.0, maintenanceMode: false, tradingHalted: false }; }
-  });
-
-  // Sync settings across tabs (Optimized: 5s instead of 1s, relies on storage events for real-time)
-  useEffect(() => {
-    const syncSettings = () => {
-      try {
-        const loaded = JSON.parse(localStorage.getItem('15market_citadel_settings'));
-        if (loaded) setPlatformSettings(loaded);
-      } catch (e) { }
-    };
-    window.addEventListener('storage', syncSettings);
-    const interval = setInterval(syncSettings, 5000);
-    return () => {
-      window.removeEventListener('storage', syncSettings);
-      clearInterval(interval);
-    };
-  }, []);
-
-  // Sync settings with Backend (Keeper) — Merged into syncMarket effect to avoid duplicate polling
-  // Settings are now fetched inside the syncMarket effect below (every 5s) which already fetches /settings
-  useEffect(() => {
-    const fetchRemoteSettings = async () => {
-      try {
-        const res = await fetch(`${KEEPER_URL_ARC}/settings`);
-        if (res && res.ok) {
-          const remoteSettings = await res.json();
-          if (JSON.stringify(remoteSettings) !== JSON.stringify(platformSettings)) {
-            setPlatformSettings(remoteSettings);
-            localStorage.setItem('15market_citadel_settings', JSON.stringify(remoteSettings));
-            window.dispatchEvent(new Event('storage'));
-          }
-        }
-      } catch (e) { /* Will retry next cycle */ }
-    };
-    fetchRemoteSettings();
-    const settingsInterval = setInterval(fetchRemoteSettings, 15000); // 15s — settings rarely change
-    return () => clearInterval(settingsInterval);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("15market_citadel_settings", JSON.stringify(platformSettings));
-  }, [platformSettings]);
 
   // Fetch and Index Trade History
   useEffect(() => {
@@ -1331,8 +1349,6 @@ export default function UserApp() {
         console.error("Failed to fetch trade history:", e);
       }
     };
-
-    fetchTradeHistory();
 
     fetchTradeHistory();
     const interval = setInterval(fetchTradeHistory, 3000); // Poll every 3s for fast result sync
@@ -2300,6 +2316,25 @@ export default function UserApp() {
     </div>
   );
 
+  if (platformSettings.maintenanceMode) {
+    return (
+      <div className={`fixed inset-0 z-[1000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
+        <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
+          <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
+        </div>
+        <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+          Under Maintenance
+        </h1>
+        <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+          We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
+        </p>
+        <div className="mt-12 py-2 px-6 rounded-full border border-[#3CB371]/10 text-[10px] font-black uppercase tracking-widest text-[#3CB371]">
+          Precision V2 Upgrade in Progress
+        </div>
+      </div>
+    );
+  }
+
   if (!authenticated) return (
     <div className={themeClass}>
       <LandingPage theme={theme} onToggle={toggleTheme} />
@@ -2513,6 +2548,7 @@ export default function UserApp() {
                         uiVersion={uiVersion} 
                         setActiveMarket={handleMarketChange} 
                         activeTrades={activeTrades} 
+                        currentPrice={price}
                         priceHistory={priceHistoryRef.current}
                       />
                     )}
@@ -2596,7 +2632,7 @@ export default function UserApp() {
                         <GlobalTradeScroller theme={theme} />
                       )}
                     </div>
-                    <div className={`flex-[2] ${isSmallScreen ? 'min-h-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
+                    <div className={`flex-[2] ${isSmallScreen ? 'min-h-[350px]' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 glass-panel chart-glow flex flex-col w-full`}
                       style={{
                         background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
                         boxShadow: theme === 'light'
@@ -2678,6 +2714,7 @@ export default function UserApp() {
                             handleSliderChange={handleSliderChange}
                             activeMarket={activeMarket}
                             onRoundPhaseChange={handleRoundPhaseChange}
+                            maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                           />
                         ) : (
                           <TradeTerminal
@@ -2691,7 +2728,8 @@ export default function UserApp() {
                             CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
                             evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                             activeMarket={activeMarket}
-                            maintenanceMode={platformSettings.maintenanceMode}
+                            maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                            tradingHalted={platformSettings.tradingHalted}
                             showManagement={showManagement} setShowManagement={setShowManagement}
                             uiVersion={uiVersion}
                           />
@@ -2744,6 +2782,43 @@ export default function UserApp() {
                     {!isSmallScreen && (
                       /* Existing Desktop V2 Layout */
                       <>
+                        {/* Global System Banner */}
+        <AnimatePresence>
+          {platformSettings.systemBanner && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className={`w-full overflow-hidden relative z-[100] border-b ${
+                platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
+                platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
+                platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
+                'bg-blue-500/10 border-blue-500/20'
+              }`}
+            >
+              <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${
+                    platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
+                    platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
+                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
+                    'bg-blue-500'
+                  }`} />
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${
+                    platformSettings.bannerLevel === 'error' ? 'text-red-500' :
+                    platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
+                    platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
+                    'text-blue-500'
+                  }`}>
+                    {platformSettings.systemBanner}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Navigation Bar - TOP BAR */}
                         {/* Trading Terminal Box */}
                         <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'flex-1 w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 shadow-lg`}
                           style={{
@@ -2766,6 +2841,7 @@ export default function UserApp() {
                                 handleSliderChange={handleSliderChange}
                                 activeMarket={activeMarket}
                                 onRoundPhaseChange={handleRoundPhaseChange}
+                                maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                               />
                             ) : (
                               <TradeTerminal
@@ -2779,7 +2855,8 @@ export default function UserApp() {
                                 CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
                                 evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                                 activeMarket={activeMarket}
-                                maintenanceMode={platformSettings.maintenanceMode}
+                                maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                                tradingHalted={platformSettings.tradingHalted}
                                 showManagement={showManagement} setShowManagement={setShowManagement}
                                 uiVersion={uiVersion}
                               />
@@ -2934,97 +3011,7 @@ export default function UserApp() {
             </RoundsAccessGate>
 
 
-            {uiVersion === 'v1' && (
-              <div className="w-full max-w-4xl lg:max-w-7xl mx-auto px-4 sm:px-6 flex flex-col justify-center">
-                <TradeHistory
-                  wallet={wallet} sessionMode={sessionMode} sessionBalance={sessionBalance}
-                  tradeHistory={tradeHistory} setTradeHistory={setTradeHistory}
-                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                  GREEN={GREEN} CORAL={CORAL}
-                  evmSessionWallet={evmSessionWallet}
-                  theme={theme} currentNetwork={network}
-                />
-                <div className="w-full mb-6 flex flex-col gap-4 mt-6">
-                  {winnerBanner && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`w-full glass-panel !rounded-2xl mb-6 p-4 lg:p-6 border relative`}
-                      style={{
-                        background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)',
-                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.2)' : 'rgba(255, 255, 255, 0.05)'
-                      }}
-                    >
-                      <div className={`absolute top-0 right-0 p-8 opacity-5 pointer-events-none ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                        <Trophy size={80} />
-                      </div>
-                      <div className="flex items-center gap-4 lg:gap-8 relative z-10">
-                        <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center shrink-0">
-                          <Trophy size={32} className="text-yellow-500" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-500 bg-yellow-500/5 px-2 py-0.5 rounded">Winner Detected</span>
-                            <span className={`text-[10px] font-black uppercase tracking-widest truncate max-w-[100px] lg:max-w-none ${theme === 'light' ? 'text-black/40' : 'text-white/20'}`}>{winnerBanner.owner}</span>
-                          </div>
-                          <h3 className={`text-lg lg:text-xl font-black tracking-tighter uppercase ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                            Payout Propagated: <span className="text-yellow-500">+{(parseFloat(winnerBanner.amount) * 1.95).toFixed(4)} USDC</span>
-                          </h3>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
 
-                  {campaigns.filter(c => Date.now() < c.endTime && (c.network === 'general' || c.network === network)).map(camp => (
-                    <motion.div
-                      key={camp.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className={`w-full glass-panel !rounded-2xl p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500`}
-                    >
-                      <div className="flex items-center gap-6">
-                        <div className={`p-4 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-white/5 border-white/10 text-[#3CB371]'} border rounded-2xl`}>
-                          <Trophy size={24} />
-                        </div>
-                        <div>
-                          <h3 className={`text-lg font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} uppercase tracking-tight`}>{camp.title}</h3>
-                          <div className="flex flex-wrap items-center gap-4 mt-1">
-                            <div className={`flex items-center gap-1.5 text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>
-                              <Calendar size={12} />
-                              Ends {new Date(camp.endTime).toLocaleString()}
-                            </div>
-                            <div className={`w-1 h-1 ${isLight ? 'bg-[#3CB371]/10' : 'bg-white/10'} rounded-full`} />
-                            <div className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">
-                              Prize: {camp.prize || 'Pride'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => navigate(`/campaign/${camp.id}`)}
-                        className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 ${enrollments[camp.id]
-                          ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 shadow-inner'
-                          : (isLight ? 'bg-[#3CB371] text-white' : 'bg-white text-black') + ' hover:scale-105 active:scale-95 shadow-xl'
-                          }`}
-                      >
-                        {enrollments[camp.id] ? (
-                          <>
-                            <CheckCircle size={14} />
-                            View Leaderboard
-                          </>
-                        ) : (
-                          <>
-                            View Campaign Details
-                            <ChevronRight size={14} />
-                          </>
-                        )}
-                      </button>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )
@@ -3072,6 +3059,18 @@ export default function UserApp() {
         onClose={() => setIsTransactionReceiptOpen(false)}
         transaction={selectedTransaction}
       />
+
+      {/* Onboarding Flow for new users */}
+      {showOnboarding && address && (
+        <OnboardingFlow 
+          address={address} 
+          theme={theme}
+          onComplete={(profile) => {
+            setShowOnboarding(false);
+            fetchMyProfile(); // Refresh profile state
+          }} 
+        />
+      )}
     </motion.div >
   );
 }

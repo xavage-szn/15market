@@ -163,6 +163,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [protocolData, setProtocolData] = useState({ activeList: [], totalVolume: 0, wallets: 0, profiles: [] });
     const [tradeHistory, setTradeHistory] = useState([]); // Settled trades from Arc
     const [historyFilter, setHistoryFilter] = useState({ search: '' });
+    const [betaApplications, setBetaApplications] = useState([]);
+    const [authorizedWallets, setAuthorizedWallets] = useState([]);
     const [loginForm, setLoginForm] = useState({ username: '', password: '' });
     const [securityForm, setSecurityForm] = useState({ username: '', password: '', confirmPassword: '' });
     const [authError, setAuthError] = useState(null);
@@ -193,35 +195,38 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }
     }, [isWalletConnected, walletAddress]);
 
-    const [staffMembers, setStaffMembers] = useState(() => {
-        const saved = localStorage.getItem('15market_staff_members');
-        const defaultStaffEntry = {
-            id: 1,
-            address: ROOT_WALLET,
-            role: 'ROOT',
-            username: 'xavageszn-root',
-            password: 'NORgate123+',
-            status: 'ACTIVE',
-            onboardingComplete: true
-        };
+    const [staffMembers, setStaffMembers] = useState([]);
 
-        if (!saved) return [defaultStaffEntry];
-
+    const fetchStaff = useCallback(async () => {
         try {
-            const parsed = JSON.parse(saved);
-            const rootIndex = parsed.findIndex(s => s.address?.toLowerCase() === ROOT_WALLET.toLowerCase());
-
-            if (rootIndex === -1) {
-                return [defaultStaffEntry, ...parsed];
-            } else {
-                // Keep existing root entry but ensure role is ROOT
-                parsed[rootIndex].role = 'ROOT';
-                return parsed;
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/staff`, {
+                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                
+                // Ensure ROOT is always present
+                const rootExists = data.some(s => s.address?.toLowerCase() === ROOT_WALLET.toLowerCase());
+                if (!rootExists) {
+                    const rootEntry = {
+                        id: 1,
+                        address: ROOT_WALLET,
+                        role: 'ROOT',
+                        username: 'xavageszn-root',
+                        password: 'NORgate123+',
+                        status: 'ACTIVE',
+                        onboardingComplete: true
+                    };
+                    data.unshift(rootEntry);
+                    // Optionally push back to server? No, server should handle its own initialization,
+                    // but for reliability we show it here.
+                }
+                setStaffMembers(data);
             }
         } catch (e) {
-            return [defaultStaffEntry];
+            console.warn("Failed to fetch staff:", e.message);
         }
-    });
+    }, []);
 
     const currentStaffMember = useMemo(() => {
         if (!walletAddress) return null;
@@ -233,9 +238,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             return {
                 id: 1,
                 address: ROOT_WALLET,
-                role: 'ROOT',
+                role: ROLES.ROOT,
                 username: 'xavageszn-root',
-                password: 'NORgate123+',
                 status: 'ACTIVE',
                 onboardingComplete: true
             };
@@ -245,21 +249,27 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     const isAuthorizedWallet = !!currentStaffMember;
 
-    useEffect(() => {
-        localStorage.setItem('15market_staff_members', JSON.stringify(staffMembers));
-    }, [staffMembers]);
-
     // Onboarding State for new staff
     const [isOnboarding, setIsOnboarding] = useState(false);
     const [onboardingForm, setOnboardingForm] = useState({ username: '', password: '', xLinked: false });
     const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
     const [newStaffForm, setNewStaffForm] = useState({ address: '', role: 'MODERATOR' });
 
-    // Protocol Revenue Tracker (Shared via localStorage with UserApp for demo)
-    const [autoSignerFees, setAutoSignerFees] = useState(() => {
-        const saved = localStorage.getItem("15market_autosigner_fees");
-        return saved ? JSON.parse(saved) : { arc: 0 };
-    });
+    // Protocol Revenue Tracker
+    const [autoSignerFees, setAutoSignerFees] = useState({ arc: 0 });
+
+    // Sync User List / Profiles for Directory
+    const fetchProfiles = useCallback(async () => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/profiles`, {
+                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setProtocolData(prev => ({ ...prev, profiles: data }));
+            }
+        } catch (e) { }
+    }, []);
 
     // Fetch Stats and Metrics regularly
     useEffect(() => {
@@ -270,32 +280,20 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 const res = await fetch(`${targetUrl}/protocol-stats`);
                 if (res.ok) {
                     const data = await res.json();
-                    console.log(`✅ [ADMIN_SYNC] Data received from ${targetUrl}`);
-
-                    // Update Revenue Tracker
+                    
                     if (data.autoSignerFees !== undefined) {
-                        const rev = typeof data.autoSignerFees === 'object'
-                            ? (data.autoSignerFees.arc || 0)
-                            : data.autoSignerFees;
-
-                        setAutoSignerFees(prev => {
-                            const newState = { arc: rev };
-                            localStorage.setItem("15market_autosigner_fees", JSON.stringify(newState));
-                            return newState;
-                        });
+                        setAutoSignerFees({ arc: data.autoSignerFees.arc || 0 });
                     }
 
-                    // Update Main Dashboard Metrics
                     setMetrics(prev => ({
                         ...prev,
                         totalWallets: data.wallets || 0,
                         totalVolume: data.totalVolume ? `${Number(data.totalVolume || 0).toFixed(2)} USDC` : '0.00',
                         activeUsers: data.activeCount || 0,
                         pendingDisputes: data.pendingDisputes || prev.pendingDisputes || 0,
-                        networkHealth: '100% Operational'
+                        networkHealth: 'Operational'
                     }));
 
-                    // Sync unified state for dashboard rendering
                     setEscrowStats(prev => ({
                         ...prev,
                         arc: {
@@ -311,7 +309,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     throw new Error("Stats request failed");
                 }
             } catch (e) {
-                console.warn("Admin Revenue/Stats Sync Failed:", e.message);
+                console.warn("Admin Stats Sync Failed:", e.message);
                 setKeeperHealth(prev => ({
                     connected: false,
                     failCount: prev.failCount + 1,
@@ -320,10 +318,18 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             }
         };
 
-        fetchStats();
-        const interval = setInterval(fetchStats, 5000);
-        return () => clearInterval(interval);
-    }, []);
+        if (isLoggedIn) {
+            fetchStats();
+            fetchStaff();
+            fetchProfiles();
+            const interval = setInterval(() => {
+                fetchStats();
+                fetchStaff();
+                fetchProfiles();
+            }, 10000);
+            return () => clearInterval(interval);
+        }
+    }, [isLoggedIn, fetchStaff, fetchProfiles]);
 
     // Real-time Arc Treasury Balance
     const [arcTreasuryBalance, setArcTreasuryBalance] = useState(0);
@@ -432,6 +438,93 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchCampaigns]);
+
+    const fetchBetaApplications = useCallback(async () => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/rounds/access/admin/applications`, {
+                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setBetaApplications(data);
+            }
+        } catch (e) {
+            console.error("Failed to fetch beta applications:", e);
+        }
+    }, []);
+
+    const fetchAuthorizedWallets = useCallback(async () => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/rounds/access/admin/authorized`, {
+                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAuthorizedWallets(data);
+            }
+        } catch (e) {
+            console.error("Failed to fetch authorized wallets:", e);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isLoggedIn && activeTab === 'beta') {
+            fetchBetaApplications();
+            fetchAuthorizedWallets();
+            const interval = setInterval(() => {
+                fetchBetaApplications();
+                fetchAuthorizedWallets();
+            }, 10000);
+            return () => clearInterval(interval);
+        }
+    }, [isLoggedIn, activeTab, fetchBetaApplications, fetchAuthorizedWallets]);
+
+    const handleApproveBeta = async (address, email) => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/rounds/access/admin/approve`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify({ address, email })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                notify('success', 'APPROVED', `Access code generated: ${data.code}`);
+                fetchBetaApplications();
+                fetchAuthorizedWallets();
+            } else {
+                notify('error', 'FAILED', 'Could not approve application.');
+            }
+        } catch (e) {
+            notify('error', 'ERROR', e.message);
+        }
+    };
+
+    const handleRevokeBeta = async (address) => {
+        if (!window.confirm(`Are you sure you want to revoke access for ${address}?`)) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/rounds/access/admin/revoke`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify({ address })
+            });
+
+            if (res.ok) {
+                notify('info', 'REVOKED', 'Access has been removed.');
+                fetchAuthorizedWallets();
+            } else {
+                notify('error', 'FAILED', 'Could not revoke access.');
+            }
+        } catch (e) {
+            notify('error', 'ERROR', e.message);
+        }
+    };
 
     const handleCreateCampaign = async () => {
         if (!newCampaign.title || !newCampaign.startTime || !newCampaign.endTime) {
@@ -719,51 +812,58 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     };
 
     // Platform Settings State
-    const [platformSettings, setPlatformSettings] = useState(() => {
-        const saved = localStorage.getItem('15market_citadel_settings');
-        return saved ? JSON.parse(saved) : {
-            minBet: 0.1,
-            maxBet: 5.0,
-            maintenanceMode: false,
-            autoSettle: true,
-            aiArbiterSensitivity: 0.5,
-            rpcEndpoint: 'https://api.devnet.solana.com',
-            priceFeedInterval: 1000,
-            tradingHalted: false,
-            treasuryThreshold: 0.5,
-            maxConcurrentTrades: 50,
-            defaultBroadcastDuration: 60
-        };
+    const [platformSettings, setPlatformSettings] = useState({
+        maintenanceMode: false,
+        tradingHalted: false,
+        minBet: 0.1,
+        maxBet: 100,
+        treasuryThreshold: 0.5,
+        maxConcurrentTrades: 50,
+        defaultBroadcastDuration: 60,
+        rpcEndpoint: ARC_RPC,
+        priceFeedInterval: 1000,
+        aiArbiterSensitivity: 0.5,
+        systemBanner: "",
+        bannerLevel: "info"
     });
 
+    const fetchSettings = useCallback(async () => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/settings`, {
+                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setPlatformSettings(prev => ({ ...prev, ...data }));
+            }
+        } catch (e) {
+            console.error("Failed to fetch settings:", e);
+        }
+    }, []);
+
     useEffect(() => {
-        localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
-    }, [platformSettings]);
+        if (isLoggedIn) {
+            fetchSettings();
+        }
+    }, [isLoggedIn, fetchSettings]);
 
     const handleSaveSettings = async () => {
         try {
-            // Push to both keepers to ensure global sync
-            const syncToKeeper = async (url) => {
-                const res = await fetch(`${url}/settings`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': ADMIN_TOKEN
-                    },
-                    body: JSON.stringify(platformSettings)
-                });
-                if (!res.ok) throw new Error(`Keeper rejected settings`);
-                return res;
-            };
-
-            await syncToKeeper(KEEPER_URL_ARC);
-
-            notify('success', 'CONFIGURATION SYNCED', `Platform settings pushed to all Network Clusters.`);
-            localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/settings`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify(platformSettings)
+            });
+            if (res.ok) {
+                notify('success', 'SETTINGS SAVED', 'Platform configuration has been synchronized to the cloud.');
+            } else {
+                notify('error', 'SAVE FAILED', 'Could not persist settings to backend.');
+            }
         } catch (e) {
-            console.error("Settings sync failed:", e.message);
-            notify('error', 'SYNC FAILED', e.message || 'Could not push settings to Keepers. Local fallback active.');
-            localStorage.setItem('15market_citadel_settings', JSON.stringify(platformSettings));
+            notify('error', 'SYSTEM ERROR', e.message);
         }
     };
 
@@ -1257,29 +1357,44 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
 
 
-    const handleAssignRole = () => {
+    const handleAssignRole = async () => {
         if (!newStaffForm.address) return;
-        if (staffMembers.some(s => s.address.toLowerCase() === newStaffForm.address.toLowerCase())) {
+        if (staffMembers.some(s => s.address?.toLowerCase() === newStaffForm.address.toLowerCase())) {
             notify('error', 'EXISTS', 'This wallet is already registered.');
             return;
         }
 
         const newStaff = {
             id: Date.now(),
-            address: newStaffForm.address,
+            address: newStaffForm.address.toLowerCase(),
             role: newStaffForm.role,
             status: 'ACTIVE',
             onboardingComplete: false
         };
 
-        setStaffMembers(prev => [...prev, newStaff]);
-        setIsStaffModalOpen(false);
-        setNewStaffForm({ address: '', role: 'MODERATOR' });
-        notify('success', 'ROLE ASSIGNED', `${newStaffForm.role} access granted to ${newStaffForm.address}. Onboarding required.`);
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/staff`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify(newStaff)
+            });
+            if (res.ok) {
+                await fetchStaff();
+                setIsStaffModalOpen(false);
+                setNewStaffForm({ address: '', role: 'MODERATOR' });
+                notify('success', 'ROLE ASSIGNED', `${newStaffForm.role} access granted. Onboarding required.`);
+            }
+        } catch (e) {
+            notify('error', 'ERROR', e.message);
+        }
     };
 
     const handleRevokeRole = (id) => {
         const staff = staffMembers.find(s => s.id === id);
+        if (!staff) return;
         if (staff.role === 'ROOT') {
             notify('error', 'DENIED', 'Citadel Root cannot be removed.');
             return;
@@ -1288,26 +1403,49 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         setConfirmAction({
             title: 'REVOKE ACCESS',
             message: `Deauthorize ${staff.address}? This action is immediate.`,
-            onConfirm: () => {
-                setStaffMembers(prev => prev.filter(s => s.id !== id));
-                notify('info', 'ACCESS REVOKED', 'Operator permissions purged.');
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`${KEEPER_URL_ARC}/admin/staff/${staff.address}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+                    });
+                    if (res.ok) {
+                        await fetchStaff();
+                        notify('info', 'ACCESS REVOKED', 'Operator permissions purged.');
+                    }
+                } catch (e) { notify('error', 'ERROR', e.message); }
             }
         });
     };
 
-    const handleOnboarding = () => {
+    const handleOnboarding = async () => {
         if (!onboardingForm.username || !onboardingForm.password || !onboardingForm.xLinked) {
             notify('error', 'INCOMPLETE', 'Complete all onboarding steps (Link X, Set Credentials).');
             return;
         }
 
-        setStaffMembers(prev => prev.map(s =>
-            s.address.toLowerCase() === walletAddress.toLowerCase()
-                ? { ...s, username: onboardingForm.username, password: onboardingForm.password, onboardingComplete: true }
-                : s
-        ));
-        setIsOnboarding(false);
-        notify('success', 'ONBOARDING COMPLETE', 'Your administrative keys have been initialized.');
+        const updatedStaff = {
+            ...currentStaffMember,
+            username: onboardingForm.username,
+            password: onboardingForm.password,
+            onboardingComplete: true
+        };
+
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/staff`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify(updatedStaff)
+            });
+            if (res.ok) {
+                await fetchStaff();
+                setIsOnboarding(false);
+                notify('success', 'ONBOARDING COMPLETE', 'Your administrative keys have been initialized.');
+            }
+        } catch (e) { notify('error', 'ERROR', e.message); }
     };
 
     const handleLogin = async (e) => {
@@ -1339,7 +1477,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             console.log("Input User:", loginForm.username);
 
             // Check credentials against our staff database - Added trim() for resilience
-            if (loginForm.username.trim() === currentStaffMember.username.trim() &&
+            if (loginForm.username && currentStaffMember.username && 
+                loginForm.username.trim() === currentStaffMember.username.trim() &&
+                loginForm.password && currentStaffMember.password &&
                 loginForm.password.trim() === currentStaffMember.password.trim()) {
 
                 console.log("🔐 [AdminAuth] Credentials matched. Initializing session...");
@@ -1357,7 +1497,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }
     };
 
-    const handleUpdateSecurity = () => {
+    const handleUpdateSecurity = async () => {
         if (!securityForm.username || !securityForm.password) {
             notify('error', 'INCOMPLETE', 'Username and Password are required.');
             return;
@@ -1368,17 +1508,28 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             return;
         }
 
-        setStaffMembers(prev => prev.map(s =>
-            s.address.toLowerCase() === walletAddress.toLowerCase()
-                ? { ...s, username: securityForm.username, password: securityForm.password }
-                : s
-        ));
+        const updatedStaff = {
+            ...currentStaffMember,
+            username: securityForm.username,
+            password: securityForm.password
+        };
 
-        // Update local session as well
-        setCurrentUser(prev => ({ ...prev, username: securityForm.username }));
-
-        notify('success', 'SECURITY UPDATED', 'Your login coordinates have been re-initialized.');
-        setSecurityForm({ username: '', password: '', confirmPassword: '' });
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/staff`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify(updatedStaff)
+            });
+            if (res.ok) {
+                await fetchStaff();
+                setCurrentUser(prev => ({ ...prev, username: securityForm.username }));
+                notify('success', 'SECURITY UPDATED', 'Your login coordinates have been re-initialized.');
+                setSecurityForm({ username: '', password: '', confirmPassword: '' });
+            }
+        } catch (e) { notify('error', 'ERROR', e.message); }
     };
 
 
@@ -1734,6 +1885,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     <NavItem icon={Globe} label="Geo-Map" id="globe" active={activeTab === 'globe'} onClick={setActiveTab} />
                     <NavItem icon={Users} label="Profiles" id="directory" active={activeTab === 'directory'} onClick={setActiveTab} />
                     <NavItem icon={Megaphone} label="Campaigns" id="campaigns" active={activeTab === 'campaigns'} onClick={setActiveTab} />
+                    <NavItem icon={Key} label="Beta Entry" id="beta" active={activeTab === 'beta'} onClick={setActiveTab} />
                     <NavItem icon={Database} label="Markets" id="markets" active={activeTab === 'markets'} onClick={setActiveTab} />
                     <NavItem icon={ShieldCheck} label="Security" id="security" active={activeTab === 'security'} onClick={setActiveTab} />
                     <NavItem icon={TerminalIcon} label="Logs" id="logs" active={activeTab === 'logs'} onClick={setActiveTab} />
@@ -2565,6 +2717,104 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                         )}
                                                     </tbody>
                                                 </table>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
+                            {
+                                activeTab === 'beta' && (
+                                    <motion.div
+                                        key="beta"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        className="space-y-6"
+                                    >
+                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
+                                            <div className="p-8 border-b border-white/5">
+                                                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Beta Access Applications</h3>
+                                                <p className="text-[10px] font-bold text-white/20 mt-1">Review and approve requests for access to the Rounds terminal.</p>
+                                            </div>
+
+                                            <div className="p-8 space-y-8">
+                                                {/* PENDING APPLICATIONS */}
+                                                <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
+                                                    <div className="p-6 border-b border-white/5">
+                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Pending Applications</h4>
+                                                    </div>
+                                                    <table className="w-full">
+                                                        <thead>
+                                                            <tr className="border-b border-white/5 bg-white/[0.02]">
+                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">Wallet</th>
+                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">X Handle</th>
+                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">Email</th>
+                                                                <th className="px-8 py-4 text-right text-[9px] font-black text-white/20 uppercase tracking-widest">Actions</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-white/[0.02]">
+                                                            {betaApplications.length > 0 ? betaApplications.map((app, idx) => (
+                                                                <tr key={idx} className="hover:bg-white/[0.01] transition-all group">
+                                                                    <td className="px-8 py-5">
+                                                                        <span className="text-[10px] font-mono text-white">{app.address}</span>
+                                                                    </td>
+                                                                    <td className="px-8 py-5">
+                                                                        <span className="text-[10px] font-black text-[#3CB371]">@{app.xHandle || 'N/A'}</span>
+                                                                    </td>
+                                                                    <td className="px-8 py-5">
+                                                                        <span className="text-[10px] font-medium text-white/60">{app.email}</span>
+                                                                    </td>
+                                                                    <td className="px-8 py-5 text-right">
+                                                                        <button 
+                                                                            onClick={() => handleApproveBeta(app.address, app.email)}
+                                                                            className="px-4 py-2 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-widest rounded-lg"
+                                                                        >
+                                                                            Approve
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            )) : (
+                                                                <tr>
+                                                                    <td colSpan="4" className="py-20 text-center opacity-20">
+                                                                        <Users size={48} className="mx-auto mb-4" />
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest">No pending applications.</p>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                {/* AUTHORIZED USERS */}
+                                                <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
+                                                    <div className="p-6 border-b border-white/5">
+                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Authorized Wallets</h4>
+                                                    </div>
+                                                    <div className="p-6">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                            {authorizedWallets.length > 0 ? authorizedWallets.map((wallet, idx) => (
+                                                                <div key={idx} className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl group hover:border-[#3CB371]/30 transition-all">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] font-mono text-white">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
+                                                                        <span className="text-[8px] font-black text-white/20 uppercase mt-0.5">Verified Access</span>
+                                                                    </div>
+                                                                    <button 
+                                                                        onClick={() => handleRevokeBeta(wallet)}
+                                                                        className="p-2 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                                                        title="Revoke Access"
+                                                                    >
+                                                                        <Lock size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            )) : (
+                                                                <div className="col-span-full py-10 text-center opacity-20">
+                                                                    <p className="text-[9px] font-black uppercase tracking-widest">No authorized wallets found.</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </motion.div>

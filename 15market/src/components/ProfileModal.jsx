@@ -35,8 +35,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
     const fetchMetrics = async () => {
         try {
-            // Fetch from Keeper
-            const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
+            const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address}`);
             if (res.ok) {
                 const data = await res.json();
                 if (data && data.stats) {
@@ -47,7 +46,6 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                         volume: data.stats.totalVolume ? (parseFloat(data.stats.totalVolume)).toFixed(2) : "0.00"
                     });
                 }
-                // Store full trade history (includes auto-signer trades)
                 if (data.history && Array.isArray(data.history)) {
                     setTradeHistory(data.history.filter(t => t.status === 'WON' || t.status === 'LOST').slice(0, 20));
                 }
@@ -65,14 +63,16 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
         setIsSaving(true);
         notify("Syncing Profile...", "pending");
         try {
-            const res = await fetch(`${KEEPER_URL_ARC}/sync-profile`, {
+            const res = await fetch(`${KEEPER_URL_ARC}/profiles`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    address: address,
-                    username: username,
-                    xHandle: xHandle,
-                    discordHandle: discordHandle
+                    address: address.toLowerCase(),
+                    profile: {
+                        username: username,
+                        xHandle: xHandle,
+                        discordHandle: discordHandle
+                    }
                 })
             });
 
@@ -80,8 +80,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
             notify("Profile synced successfully!", "success");
             onClose();
-            // Trigger a refresh in UserApp if possible, or assume UserApp polling will catch it
-            setTimeout(() => window.location.reload(), 1500);
+            // UserApp polling will catch this within 2s, but we can trigger a manual fetch if we had a prop for it
         } catch (err) {
             console.error("Save profile error:", err);
             notify("Failed to save profile: " + err.message, "error");

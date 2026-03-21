@@ -1,27 +1,29 @@
 import { defineChain } from 'viem'
-const THIRDWEB_CLIENT_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID || "33df2adaf240de11d97651104a14c461";
-
 // Arc Network Constants
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
 export const ARC_RPC_DRPC_OFFICIAL = "https://rpc.drpc.testnet.arc.network";
 export const ARC_RPC_DRPC_PROXY = "https://arc-testnet.drpc.org";
 export const ARC_RPC_OFFICIAL = "https://rpc.testnet.arc.network";
 export const ARC_RPC = ARC_RPC_DRPC_OFFICIAL;
-export const ARC_RPC_THIRDWEB = `https://5042002.rpc.thirdweb.com/${THIRDWEB_CLIENT_ID}`;
 export const ARC_RPC_FALLBACK = ARC_RPC_DRPC_PROXY;
 
 // Project ID
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
-const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const rawKeeperUrl = import.meta.env.VITE_KEEPER_URL || (isLocal ? "http://localhost:3010" : "https://api.15market.online");
-export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
-export const KEEPER_URL_ARC = isLocal ? "http://localhost:3010" : (import.meta.env.VITE_KEEPER_URL_ARC || `${KEEPER_URL}/arc`);
+const isLocal = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || 
+     window.location.hostname === '127.0.0.1' || 
+     window.location.hostname.startsWith('192.168.'));
 
-const envUrlRounds = import.meta.env.VITE_KEEPER_URL_ROUNDS;
-export const KEEPER_URL_ROUNDS = envUrlRounds 
-    ? (envUrlRounds.startsWith('http') ? envUrlRounds : `https://${envUrlRounds}`)
-    : `${KEEPER_URL_ARC}/rounds`;
+// Priority Detection: If on localhost, attempt to use the local node port 3010 
+// even if VITE_KEEPER_URL is set in .env (which usually contains production staging URL)
+const rawKeeperUrl = isLocal 
+    ? "http://localhost:3010" 
+    : (import.meta.env.VITE_KEEPER_URL || "https://api.15market.online");
+
+export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
+export const KEEPER_URL_ARC = KEEPER_URL; // Unified backend
+export const KEEPER_URL_ROUNDS = KEEPER_URL; // Unified backend
 
 
 
@@ -36,10 +38,10 @@ export const arcTestnet = defineChain({
     },
     rpcUrls: {
         default: {
-            http: [ARC_RPC_DRPC_OFFICIAL, ARC_RPC_DRPC_PROXY, ARC_RPC_OFFICIAL, ARC_RPC_THIRDWEB],
+            http: [ARC_RPC_DRPC_OFFICIAL, ARC_RPC_DRPC_PROXY, ARC_RPC_OFFICIAL],
         },
         public: {
-            http: [ARC_RPC_DRPC_OFFICIAL, ARC_RPC_DRPC_PROXY, ARC_RPC_OFFICIAL, ARC_RPC_THIRDWEB],
+            http: [ARC_RPC_DRPC_OFFICIAL, ARC_RPC_DRPC_PROXY, ARC_RPC_OFFICIAL],
         },
     },
     blockExplorers: {

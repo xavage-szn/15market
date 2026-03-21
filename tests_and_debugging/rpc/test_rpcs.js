@@ -3,8 +3,7 @@ const { ethers } = require('ethers');
 const RPCs = [
     { name: "Alchemy", url: "https://arc-testnet.g.alchemy.com/v2/gmklUsP-qeITLeu6a8Pw1" },
     { name: "Arc Official 1", url: "https://rpc.testnet.arc.network" },
-    { name: "Arc Official 2", url: "https://rpc-test-1.arc.market" },
-    { name: "Thirdweb", url: "https://5042002.rpc.thirdweb.com" }
+    { name: "Arc Official 2", url: "https://rpc-test-1.arc.market" }
 ];
 
 async function test() {

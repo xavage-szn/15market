@@ -90,9 +90,9 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                         <div className="relative z-10 flex flex-col items-center">
                             <div className="flex flex-col items-center mb-5">
                                 <img src="/logo.png" alt="15market" className="h-20 w-auto mb-2 drop-shadow-sm" />
-                                <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">15MARKET</h1>
+                                <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">{trade.type === 'rounds' ? 'ROUNDS SETTLE' : '15MARKET'}</h1>
                                 <p className="text-[8px] font-black mt-1.5 tracking-[0.2em] text-black/50 uppercase">
-                                    VERIFIED PREDICTION • ARC_NETWORK
+                                    {trade.type === 'rounds' ? 'P2P POOLED SETTLEMENT' : 'VERIFIED PREDICTION'} • ARC_NETWORK
                                 </p>
                             </div>
 
@@ -104,9 +104,15 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                     <span>{trade.tx ? `${trade.tx.slice(0, 8)}...${trade.tx.slice(-6)}` : 'OFF_CHAIN'}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="opacity-40 uppercase">BLOCK_TIME:</span>
-                                    <span>{new Date().toLocaleDateString()}</span>
+                                    <span className="opacity-40 uppercase">TIMESTAMP:</span>
+                                    <span>{new Date().toLocaleString()}</span>
                                 </div>
+                                {trade.type === 'rounds' && (
+                                    <div className="flex justify-between">
+                                        <span className="opacity-40 uppercase">POOL_ID:</span>
+                                        <span>#{trade.poolId || 'N/A'}</span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="w-full border-t border-black/10 my-3" />
@@ -114,15 +120,15 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                             <div className="w-full space-y-3 py-1">
                                 <div className="flex justify-between items-end border-b border-black/5 pb-1.5">
                                     <div className="flex flex-col">
-                                        <span className="text-[9px] opacity-40 font-black">ASSET_PAIR</span>
+                                        <span className="text-[9px] opacity-40 font-black">{trade.type === 'rounds' ? 'ACTIVE_POOL' : 'ASSET_PAIR'}</span>
                                         <span className="text-base font-black tracking-tighter">
                                             {trade.symbol ? `${trade.symbol.toUpperCase()} // USD` : 'ETH // USD'}
                                         </span>
                                     </div>
                                     <div className="flex flex-col items-end">
-                                        <span className="text-[9px] opacity-40 font-black">EXECUTION</span>
+                                        <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">{trade.type === 'rounds' ? 'P2P_DIRECTION' : 'EXECUTION'}</span>
                                         <span className={`font-black uppercase text-sm ${isUp ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                            {isUp ? 'CALL_OPTION' : 'PUT_OPTION'}
+                                            {trade.type === 'rounds' ? (isUp ? 'LONG_POOL' : 'SHORT_POOL') : (isUp ? 'CALL_OPTION' : 'PUT_OPTION')}
                                         </span>
                                     </div>
                                 </div>

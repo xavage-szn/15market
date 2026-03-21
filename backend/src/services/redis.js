@@ -194,6 +194,8 @@ class RedisStore {
 
     // ─── ACCESS MANAGEMENT (Rounds / Private Access) ───────────────────────────
 
+    // ─── ACCESS MANAGEMENT (Rounds / Private Access) ───────────────────────────
+
     async grantAccess(address) {
         if (this.isCloud) {
             await this.redis.sadd('rounds:authorized_users', address.toLowerCase());
@@ -231,6 +233,9 @@ class RedisStore {
         const key = `rounds:code:${code.toUpperCase()}`;
         if (this.isCloud) {
             await this.redis.set(key, JSON.stringify({ ...data, redeemedBy: null }), 'EX', 86400 * 30);
+        } else {
+            if (!this._codes) this._codes = new Map();
+            this._codes.set(code.toUpperCase(), { ...data, redeemedBy: null });
         }
     }
 
@@ -240,7 +245,7 @@ class RedisStore {
             const data = await this.redis.get(key);
             return data ? JSON.parse(data) : null;
         }
-        return null;
+        return this._codes?.get(code.toUpperCase()) || null;
     }
 
     async redeemCode(code, walletAddress) {
@@ -248,30 +253,144 @@ class RedisStore {
         const normalizedAddress = walletAddress.toLowerCase();
         const key = `rounds:code:${normalizedCode}`;
 
-        if (!this.isCloud) return { ok: false, reason: 'redis_offline' };
+        let data;
+        if (this.isCloud) {
+            const raw = await this.redis.get(key);
+            if (!raw) return { ok: false, reason: 'invalid_code' };
+            data = JSON.parse(raw);
+        } else {
+            data = this._codes?.get(normalizedCode);
+            if (!data) return { ok: false, reason: 'invalid_code' };
+        }
 
-        const raw = await this.redis.get(key);
-        if (!raw) return { ok: false, reason: 'invalid_code' };
-
-        const data = JSON.parse(raw);
         if (data.redeemedBy) return { ok: false, reason: 'already_used' };
+
+        // If code was generated for a specific address, enforce it
+        if (data.address && data.address.toLowerCase() !== normalizedAddress) {
+            return { ok: false, reason: 'wrong_wallet' };
+        }
+
+        // Check if already authorized
+        const alreadyAuthorized = await this.isAuthorized(normalizedAddress);
+        if (alreadyAuthorized) return { ok: false, reason: 'already_authorized' };
 
         data.redeemedBy = normalizedAddress;
         data.redeemedAt = Date.now();
         
-        await this.redis.set(key, JSON.stringify(data), 'EX', 86400 * 7);
+        if (this.isCloud) {
+            await this.redis.set(key, JSON.stringify(data), 'EX', 86400 * 7);
+        } else {
+            this._codes.set(normalizedCode, data);
+        }
+
         await this.grantAccess(normalizedAddress);
         return { ok: true };
     }
 
-    async saveToDisk() {
-        // No-op for Redis Cloud
+    async saveApplication(app) {
+        if (this.isCloud) {
+            await this.redis.hset('rounds:applications', app.address.toLowerCase(), JSON.stringify(app));
+        } else {
+            if (!this._apps) this._apps = new Map();
+            this._apps.set(app.address.toLowerCase(), app);
+        }
     }
 
-    // Unused but kept for compatibility
-    async getUserData() { return null; }
-    async saveProfile() { return true; }
-    async getProfile() { return null; }
+    async getApplications() {
+        if (this.isCloud) {
+            const data = await this.redis.hgetall('rounds:applications');
+            if (!data) return [];
+            return Object.values(data).map(JSON.parse);
+        }
+        return Array.from(this._apps?.values() || []);
+    }
+
+    async deleteApplication(address) {
+        if (this.isCloud) {
+            await this.redis.hdel('rounds:applications', address.toLowerCase());
+        } else {
+            this._apps?.delete(address.toLowerCase());
+        }
+    }
+
+    // ─── PROFILE & STAFF MANAGEMENT ──────────────────────────────────────────────
+
+    async saveProfile(address, profile) {
+        if (this.isCloud) {
+            await this.redis.hset('15market_profiles', address.toLowerCase(), JSON.stringify(profile));
+        } else {
+            if (!this._profiles) this._profiles = new Map();
+            this._profiles.set(address.toLowerCase(), profile);
+        }
+    }
+
+    async getProfile(address) {
+        if (this.isCloud) {
+            const data = await this.redis.hget('15market_profiles', address.toLowerCase());
+            return data ? JSON.parse(data) : null;
+        }
+        return this._profiles?.get(address.toLowerCase()) || null;
+    }
+
+    async getAllProfiles() {
+        if (this.isCloud) {
+            const data = await this.redis.hgetall('15market_profiles');
+            return Object.values(data || {}).map(JSON.parse);
+        }
+        return Array.from(this._profiles?.values() || []);
+    }
+
+    async saveStaff(staff) {
+        if (this.isCloud) {
+            await this.redis.hset('15market_staff', staff.address.toLowerCase(), JSON.stringify(staff));
+        } else {
+            if (!this._staff) this._staff = new Map();
+            this._staff.set(staff.address.toLowerCase(), staff);
+        }
+    }
+
+    async getStaff(address) {
+        if (this.isCloud) {
+            const data = await this.redis.hget('15market_staff', address.toLowerCase());
+            return data ? JSON.parse(data) : null;
+        }
+        return this._staff?.get(address.toLowerCase()) || null;
+    }
+
+    async getAllStaff() {
+        if (this.isCloud) {
+            const data = await this.redis.hgetall('15market_staff');
+            if (!data) return [];
+            return Object.values(data).map(JSON.parse);
+        }
+        return Array.from(this._staff?.values() || []);
+    }
+
+    async deleteStaff(address) {
+        if (this.isCloud) {
+            await this.redis.hdel('15market_staff', address.toLowerCase());
+        } else {
+            this._staff?.delete(address.toLowerCase());
+        }
+    }
+
+    async saveSettings(settings) {
+        if (this.isCloud) {
+            await this.redis.set('15market_platform_settings', JSON.stringify(settings));
+        } else {
+            this._settings = settings;
+        }
+    }
+
+    async getSettings() {
+        if (this.isCloud) {
+            const data = await this.redis.get('15market_platform_settings');
+            return data ? JSON.parse(data) : null;
+        }
+        return this._settings || null;
+    }
+
+    async saveToDisk() { }
     async syncFromRedis() { }
 }
 

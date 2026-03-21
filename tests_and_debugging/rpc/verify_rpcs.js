@@ -1,7 +1,6 @@
 const { ethers } = require('ethers');
 
 const rpcs = [
-    "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network"
 ];
 
