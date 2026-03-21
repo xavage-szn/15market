@@ -394,8 +394,8 @@ export default function RoundsChart({
                         >
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
                             <div className="skew-x-[20%] flex flex-col items-center relative z-10">
-                                <TrendingUp size={80} className="text-white mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
-                                <h2 className="text-6xl font-black text-white italic tracking-tighter">LONG</h2>
+                                <TrendingUp size={40} className="md:size-[80px] text-white mb-2 md:mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
+                                <h2 className="text-3xl md:text-6xl font-black text-white italic tracking-tighter">LONG</h2>
                             </div>
                         </motion.div>
  
@@ -407,8 +407,8 @@ export default function RoundsChart({
                         >
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
                             <div className="skew-x-[20%] flex flex-col items-center relative z-10">
-                                <TrendingDown size={80} className="text-white mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
-                                <h2 className="text-6xl font-black text-white italic tracking-tighter pl-12">SHORT</h2>
+                                <TrendingDown size={40} className="md:size-[80px] text-white mb-2 md:mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
+                                <h2 className="text-3xl md:text-6xl font-black text-white italic tracking-tighter pl-6 md:pl-12">SHORT</h2>
                             </div>
                         </motion.div>
 
@@ -482,21 +482,17 @@ export default function RoundsChart({
                                     animate={{ 
                                         scale: [1, 1.2, 1], 
                                         rotate: [0, 5, -5, 0],
-                                        filter: ["drop-shadow(0 0 20px white)", `drop-shadow(0 0 40px ${isDraw ? 'gray' : 'gold'})`, "drop-shadow(0 0 20px white)"]
+                                        filter: ["drop-shadow(0 0 20px white)", `drop-shadow(0 0 40px gold)`, "drop-shadow(0 0 20px white)"]
                                     }} 
                                     transition={{ repeat: Infinity, duration: 3 }}
                                 >
-                                    {isDraw ? (
-                                        <AlertCircle size={120} className="text-white mb-8 drop-shadow-2xl" />
-                                    ) : (
-                                        <Trophy size={120} className="text-white mb-8 drop-shadow-2xl" />
-                                    )}
+                                    <Trophy size={80} className="md:size-[120px] text-white mb-4 md:mb-8 drop-shadow-2xl" />
                                 </motion.div>
-                                <h1 className="text-7xl md:text-9xl font-black text-white italic tracking-tighter drop-shadow-2xl uppercase">
-                                    {isDraw ? 'House Wins' : (isAbove ? 'Long Wins' : 'Short Wins')}
+                                <h1 className="text-4xl md:text-9xl font-black text-white italic tracking-tighter drop-shadow-2xl uppercase">
+                                    {isAbove ? 'Long Wins' : 'Short Wins'}
                                 </h1>
-                                <span className="text-xl font-bold text-white/40 uppercase tracking-[0.5em] mt-4">
-                                    {isDraw ? 'Price Did Not Move' : 'Round Settled'}
+                                <span className="text-[10px] md:text-xl font-bold text-white/40 uppercase tracking-[0.5em] mt-2 md:mt-4">
+                                    Round Settled
                                 </span>
                             </div>
                         </motion.div>
