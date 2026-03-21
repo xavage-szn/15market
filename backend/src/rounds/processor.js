@@ -97,12 +97,9 @@ class RoundsProcessor {
                     const sPrice = parseFloat(price);
                     state.live.settlePrice = sPrice;
                     
-                    const diff = Math.abs(sPrice - lPrice);
-                    if (diff < 0.00000001) {
-                        state.live.result = 'HOUSE';
-                    } else {
-                        state.live.result = sPrice > lPrice ? 'WON' : 'LOST';
-                    }
+                    // Removed HOUSE win rule. 
+                    // sPrice > lPrice is WON (Long), everything else is LOST (Short).
+                    state.live.result = sPrice > lPrice ? 'WON' : 'LOST';
                     
                     await redis.setRound(`${asset}_state`, state);
                     this.lastSettledId[asset] = roundId;
