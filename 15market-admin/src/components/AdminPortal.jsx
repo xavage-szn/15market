@@ -240,7 +240,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 address: ROOT_WALLET,
                 role: ROLES.ROOT,
                 username: import.meta.env.VITE_ROOT_USER || 'xavageszn-root',
-                password: import.meta.env.VITE_ROOT_PASS,
+                password: import.meta.env.VITE_ROOT_PASS_ENC ? atob(import.meta.env.VITE_ROOT_PASS_ENC) : null,
                 status: 'ACTIVE',
                 onboardingComplete: true
             };

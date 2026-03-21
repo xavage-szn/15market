@@ -14,7 +14,7 @@ export const AdminAuthDB = {
     verifyCoordinates: async (username, password) => {
         // Root credentials from env
         const ROOT_USER = import.meta.env.VITE_ROOT_USER || "xavageszn-root";
-        const ROOT_PASS = import.meta.env.VITE_ROOT_PASS;
+        const ROOT_PASS = import.meta.env.VITE_ROOT_PASS_ENC ? atob(import.meta.env.VITE_ROOT_PASS_ENC) : null;
 
         if (username === ROOT_USER && password === ROOT_PASS) {
             return {
