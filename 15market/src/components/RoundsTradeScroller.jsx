@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { KEEPER_URL_ARC, KEEPER_URL_ROUNDS } from '../constants';
 import { Radio, ArrowUp, ArrowDown, Check, X } from 'lucide-react';
 
