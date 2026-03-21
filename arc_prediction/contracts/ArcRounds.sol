@@ -98,10 +98,7 @@ contract ArcRounds is Ownable, ReentrancyGuard {
         round.settleTimestamp = block.timestamp;
         round.settled = true;
 
-        uint8 result = 0; // 0 = DOWN, 1 = UP, 2 = DRAW
-        if (_price > round.lockPrice) result = 1;
-        else if (_price < round.lockPrice) result = 0;
-        else result = 2;
+        uint8 result = (_price > round.lockPrice) ? 1 : 0; // 0 = DOWN (Short), 1 = UP (Long)
 
         emit RoundSettled(_roundId, _price, block.timestamp, result);
         
@@ -119,7 +116,7 @@ contract ArcRounds is Ownable, ReentrancyGuard {
 
         uint256 winningPool = (_result == 1) ? round.totalLong : round.totalShort;
 
-        if (winningPool == 0 || _result == 2) {
+        if (winningPool == 0) {
             // Refund everyone (minus fee or full refund?) 
             // In case of draw or no winners, refund stakes minus small fee for gas or full.
             for (uint256 i = 0; i < participants[_roundId].length; i++) {
