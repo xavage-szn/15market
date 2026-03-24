@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Lock, Timer, Zap, Trophy, AlertCircle } from 'lucide-react';
 
 /**
- * RoundsChart — Premium Live Chart with Split-Screen Animations.
+ * RoundsChart â€” Premium Live Chart with Split-Screen Animations.
  * Handles Entry Countdown, Live Tracking, and Result Reveal.
  */
 export default function RoundsChart({
@@ -159,8 +159,10 @@ export default function RoundsChart({
 
             // 1. Clear & Background
             ctx.fillStyle = isLight ? '#ffffff' : '#050505';
-            ctx.fillRect(0, 0, W, H);            // 2. Fixed Center on Entry (locked phase)
-            if (phase === 'locked' && !isNaN(ePrice)) {
+            ctx.fillRect(0, 0, W, H);
+            // Determine lo/hi for the window
+            let lo, hi, hRange;
+            if (!isNaN(ePrice) && phase === 'locked') {
                 // Determine symmetrical distance to ensure ePrice is at EXACT center
                 const maxDist = Math.max(Math.abs(latestPriceVal - ePrice), ePrice * 0.0006);
                 const rawLo = ePrice - maxDist * 1.5;
@@ -169,26 +171,45 @@ export default function RoundsChart({
                 if (smoothedLoRef.current === null) smoothedLoRef.current = rawLo;
                 if (smoothedHiRef.current === null) smoothedHiRef.current = rawHi;
                 
-                // Keep the center locked by smoothing DISTANCE, not raw lo/hi independently
                 smoothedLoRef.current += (rawLo - smoothedLoRef.current) * 0.1;
                 smoothedHiRef.current += (rawHi - smoothedHiRef.current) * 0.1;
                 
-                const lo = smoothedLoRef.current;
-                const hi = smoothedHiRef.current;
-                const hRange = hi - lo;
- 
-                const toY = (p) => H - ((p - lo) / hRange) * H;
-                const entryY = H / 2; // Locked to center 0-line
-                const nowPx = Date.now();
-                const windowMs = 15000; 
-                const liveX = W * 0.95; 
-                const oldest = nowPx - windowMs;
-                const liveY = toY(latestPriceVal);
+                lo = smoothedLoRef.current;
+                hi = smoothedHiRef.current;
+            } else {
+                // Floating view for entry phase (Auto-scaling based on history)
+                const prices = history.map(p => p.p);
+                if (prices.length > 0) {
+                    const minP = Math.min(...prices, latestPriceVal);
+                    const maxP = Math.max(...prices, latestPriceVal);
+                    const pad = (maxP - minP) * 0.2 || latestPriceVal * 0.0005;
+                    const rawLo = minP - pad;
+                    const rawHi = maxP + pad;
 
-                // Grid removed as requested
+                    if (smoothedLoRef.current === null) smoothedLoRef.current = rawLo;
+                    if (smoothedHiRef.current === null) smoothedHiRef.current = rawHi;
+                    
+                    smoothedLoRef.current += (rawLo - smoothedLoRef.current) * 0.05;
+                    smoothedHiRef.current += (rawHi - smoothedHiRef.current) * 0.05;
+                } else {
+                    smoothedLoRef.current = latestPriceVal * 0.999;
+                    smoothedHiRef.current = latestPriceVal * 1.001;
+                }
+                lo = smoothedLoRef.current;
+                hi = smoothedHiRef.current;
+            }
 
+            hRange = hi - lo;
+            const toY = (p) => H - ((p - lo) / hRange) * H;
+            const entryY = !isNaN(ePrice) ? toY(ePrice) : H / 2;
+            const nowPx = Date.now();
+            const windowMs = 15000; 
+            const liveX = W * 0.95; 
+            const oldest = nowPx - windowMs;
+            const liveY = toY(latestPriceVal);
 
-                // Shaded Zones
+            // Shaded Zones (Only if we have entry price and are locked)
+            if (!isNaN(ePrice) && phase === 'locked') {
                 const isPriceAbove = latestPriceVal >= ePrice;
                 const statusColor = isPriceAbove ? GREEN : RED;
                 ctx.fillStyle = isPriceAbove ? `${GREEN}08` : `${RED}08`;
@@ -197,100 +218,85 @@ export default function RoundsChart({
 
                 // Entry line & Marker
                 ctx.setLineDash([8, 8]);
-                ctx.strokeStyle = `${GREEN}b0`; // Brighter for marking
+                ctx.strokeStyle = `${GREEN}b0`;
                 ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.moveTo(0, entryY); ctx.lineTo(W, entryY); ctx.stroke();
                 ctx.setLineDash([]);
- 
+
                 // Entry Label Box
                 ctx.fillStyle = GREEN;
-                ctx.beginPath();
-                ctx.roundRect(10, entryY - 10, 50, 20, 4);
-                ctx.fill();
+                ctx.beginPath(); ctx.roundRect(10, entryY - 10, 50, 20, 4); ctx.fill();
                 ctx.fillStyle = '#FFFFFF';
                 ctx.font = 'bold 10px Inter, sans-serif';
                 ctx.fillText('ENTRY', 18, entryY + 4);
- 
-                // Exit Marker (if settled)
-                if (isSettled) {
-                    const exitY = toY(cPriceNum);
-                    ctx.fillStyle = isAbove ? GREEN : RED;
-                    ctx.beginPath();
-                    ctx.roundRect(W - 70, exitY - 10, 60, 20, 4);
-                    ctx.fill();
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.font = 'bold 10px Inter, sans-serif';
-                    ctx.fillText('EXIT', W - 52, exitY + 4);
- 
-                    // Dashed Exit Line
-                    ctx.setLineDash([4, 4]);
-                    ctx.strokeStyle = isAbove ? `${GREEN}80` : `${RED}80`;
-                    ctx.beginPath(); ctx.moveTo(0, exitY); ctx.lineTo(W, exitY); ctx.stroke();
-                    ctx.setLineDash([]);
+            }
+
+            // Exit Marker (if settled)
+            if (isSettled) {
+                const exitY = toY(cPriceNum);
+                ctx.fillStyle = isAbove ? GREEN : RED;
+                ctx.beginPath(); ctx.roundRect(W - 70, exitY - 10, 60, 20, 4); ctx.fill();
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 10px Inter, sans-serif';
+                ctx.fillText('EXIT', W - 52, exitY + 4);
+
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = isAbove ? `${GREEN}80` : `${RED}80`;
+                ctx.beginPath(); ctx.moveTo(0, exitY); ctx.lineTo(W, exitY); ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Path Drawing
+            if (history.length >= 1) {
+                const getX = (t) => liveX - ((nowPx - t) / windowMs) * W;
+                const statusColor = (phase === 'locked' && !isNaN(ePrice)) 
+                    ? (latestPriceVal >= ePrice ? GREEN : RED)
+                    : '#3CB371'; // Default green for entry streaming
+
+                const grad = ctx.createLinearGradient(0, 0, 0, H);
+                grad.addColorStop(0, `${statusColor}25`);
+                grad.addColorStop(1, 'transparent');
+
+                // Fill Path
+                ctx.beginPath();
+                let firstX = -1;
+                history.forEach(pt => {
+                    const x = getX(pt.t);
+                    const y = toY(pt.p);
+                    if (x < -100 || x > W + 100) return;
+                    if (firstX === -1) { ctx.moveTo(x, y); firstX = x; }
+                    else ctx.lineTo(x, y);
+                });
+                ctx.lineTo(liveX, liveY);
+                if (firstX !== -1) {
+                    ctx.save();
+                    ctx.lineTo(liveX, H); ctx.lineTo(firstX, H); ctx.closePath();
+                    ctx.fillStyle = grad; ctx.fill();
+                    ctx.restore();
                 }
 
-                // Path Drawing
-                if (history.length >= 1) {
-                    const getX = (t) => liveX - ((nowPx - t) / windowMs) * W;
-                    const grad = ctx.createLinearGradient(0, 0, 0, H);
-                    grad.addColorStop(0, `${statusColor}25`);
-                    grad.addColorStop(1, 'transparent');
+                // Stroke Path
+                ctx.beginPath();
+                let started = false;
+                history.forEach(pt => {
+                    const x = getX(pt.t);
+                    const y = toY(pt.p);
+                    if (x < -100 || x > W + 100) return;
+                    if (!started) { ctx.moveTo(x, y); started = true; }
+                    else ctx.lineTo(x, y);
+                });
+                ctx.lineTo(liveX, liveY);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = statusColor;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
 
-                    // 1. Separate Fill Path (No Stroke)
-                    ctx.beginPath();
-                    let firstX = -1;
-                    history.forEach(pt => {
-                        const x = getX(pt.t);
-                        const y = toY(pt.p);
-                        // Inclusion buffer to prevent edge buffering
-                        if (x < -100 || x > W + 100) return;
-                        if (firstX === -1) { ctx.moveTo(x, y); firstX = x; }
-                        else ctx.lineTo(x, y);
-                    });
-                    ctx.lineTo(liveX, liveY);
-                    if (firstX !== -1) {
-                        ctx.save();
-                        // Close the path to the bottom for FILL only
-                        ctx.lineTo(liveX, H); 
-                        ctx.lineTo(firstX, H); 
-                        ctx.closePath();
-                        ctx.fillStyle = grad; 
-                        ctx.fill();
-                        ctx.restore();
-                    }
-
-                    // 2. Separate Stroke Path (The actual price line)
-                    ctx.beginPath();
-                    let started = false;
-                    history.forEach(pt => {
-                        const x = getX(pt.t);
-                        const y = toY(pt.p);
-                        if (x < -100 || x > W + 100) return;
-                        if (!started) {
-                            ctx.moveTo(x, y);
-                            started = true;
-                        } else {
-                            ctx.lineTo(x, y);
-                        }
-                    });
-                    ctx.lineTo(liveX, liveY);
-                    
-                    ctx.lineWidth = 4;
-                    ctx.strokeStyle = statusColor;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                    ctx.stroke();
-
-                    // Price Dot
-                    ctx.fillStyle = statusColor;
-                    ctx.shadowBlur = 15; ctx.shadowColor = statusColor;
-                    ctx.beginPath(); ctx.arc(liveX, liveY, 6, 0, Math.PI * 2); ctx.fill();
-                    ctx.shadowBlur = 0;
-                }
-            } else {
-                // Entry Phase View (Static/Abstract)
-                // Removed grid
-
+                // Price Dot
+                ctx.fillStyle = statusColor;
+                ctx.shadowBlur = 15; ctx.shadowColor = statusColor;
+                ctx.beginPath(); ctx.arc(liveX, liveY, 6, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
             }
 
             // Particles (Always on)
@@ -333,20 +339,26 @@ export default function RoundsChart({
         <div className="relative w-full h-full flex flex-col overflow-hidden bg-black select-none">
             <canvas ref={canvasRef} className="flex-1 w-full h-full" />
 
-            {/* LIVE PRICE OVERLAY (LOCKED PHASE) */}
-            {phase === 'locked' && !showLockedCountdown && (
+            {/* LIVE PRICE OVERLAY (Entry & Locked Phases) */}
+            {!showLockedCountdown && !showWinnerAnimation && (
                 <div className="absolute top-4 left-4 flex flex-col gap-1 z-20">
                     <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]'}`} />
-                        <span className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">Active Market</span>
-                        <div className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest transition-all duration-500 scale-90 ${isAbove ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-[#FF7F50]/10 border-[#FF7F50]/30 text-[#FF7F50]'}`}>
-                            {isAbove ? 'BULLISH' : 'BEARISH'}
-                        </div>
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${phase === 'entry' ? 'bg-[#3CB371]' : (isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')}`} />
+                        <span className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">
+                            {phase === 'entry' ? 'Pre-Round Preview' : 'Active Market'}
+                        </span>
+                        {phase === 'locked' && (
+                            <div className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest transition-all duration-500 scale-90 ${isAbove ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-[#FF7F50]/10 border-[#FF7F50]/30 text-[#FF7F50]'}`}>
+                                {isAbove ? 'BULLISH' : 'BEARISH'}
+                            </div>
+                        )}
                     </div>
-                    <span className={`text-xl font-black font-mono tabular-nums leading-none ${isAbove ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                    <span className={`text-xl font-black font-mono tabular-nums leading-none ${phase === 'entry' ? 'text-[#3CB371]' : (isAbove ? 'text-[#3CB371]' : 'text-[#FF7F50]')}`}>
                         ${parseFloat(currentPrice).toFixed(2)}
                     </span>
-                    <span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">Target: ${parseFloat(entryPrice).toFixed(2)}</span>
+                    {phase === 'locked' && !isNaN(ePrice) && (
+                        <span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">Target: ${parseFloat(entryPrice).toFixed(2)}</span>
+                    )}
                 </div>
             )}
 
@@ -375,7 +387,7 @@ export default function RoundsChart({
                 </div>
             </div>
 
-            {/* ─── ANIMATION LAYERS ────────────────────────────────────────────── */}
+            {/* ANIMATION LAYERS */}
             <AnimatePresence>
                 {/* 1. ENTRY COUNTDOWN SLIT SCREEN (Last 5s of Entry) */}
                 {showEntrySplit && (
@@ -385,43 +397,52 @@ export default function RoundsChart({
                     >
                         {/* LEFT: LONG */}
                         <motion.div 
-                            initial={{ x: '-100%', skewX: -20 }} animate={{ x: 0, skewX: -20 }} 
-                            className="absolute inset-y-0 left-[-20%] w-[75%] bg-[#3CB371] z-10 flex items-center justify-center border-r-[12px] border-white/40 shadow-[20px_0_40px_rgba(0,0,0,0.5)] overflow-hidden"
+                            initial={{ x: '-100%', skewX: -15 }} animate={{ x: 0, skewX: -15 }} 
+                            className="absolute inset-y-0 left-[-15%] w-[65%] bg-[#3CB371] z-10 flex items-center justify-center border-r-[15px] border-white/20 shadow-[30px_0_60px_rgba(0,0,0,0.6)] overflow-hidden"
                             transition={{ type: "spring", damping: 25, stiffness: 80 }}
                         >
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
-                            <div className="skew-x-[20%] flex flex-col items-center relative z-10">
-                                <TrendingUp size={40} className="md:size-[80px] text-white mb-2 md:mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
-                                <h2 className="text-3xl md:text-6xl font-black text-white italic tracking-tighter">LONG</h2>
+                            <div className="skew-x-[15%] flex flex-col items-center relative z-10 mr-10">
+                                <TrendingUp size={40} className="md:size-[100px] text-white mb-2 md:mb-6 drop-shadow-[0_0_40px_rgba(255,255,255,0.6)]" />
+                                <h2 className="text-4xl md:text-8xl font-black text-white italic tracking-tighter uppercase">LONG</h2>
                             </div>
                         </motion.div>
  
                         {/* RIGHT: SHORT */}
                         <motion.div 
-                            initial={{ x: '100%', skewX: -20 }} animate={{ x: 0, skewX: -20 }} 
-                            className="absolute inset-y-0 right-[-20%] w-[75%] bg-[#FF7F50] z-0 flex items-center justify-center overflow-hidden"
+                            initial={{ x: '100%', skewX: -15 }} animate={{ x: 0, skewX: -15 }} 
+                            className="absolute inset-y-0 right-[-15%] w-[65%] bg-[#FF7F50] z-0 flex items-center justify-center overflow-hidden"
                             transition={{ type: "spring", damping: 25, stiffness: 80 }}
                         >
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
-                            <div className="skew-x-[20%] flex flex-col items-center relative z-10">
-                                <TrendingDown size={40} className="md:size-[80px] text-white mb-2 md:mb-4 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]" />
-                                <h2 className="text-3xl md:text-6xl font-black text-white italic tracking-tighter pl-6 md:pl-12">SHORT</h2>
+                            <div className="skew-x-[15%] flex flex-col items-center relative z-10 ml-10">
+                                <TrendingDown size={40} className="md:size-[100px] text-white mb-2 md:mb-6 drop-shadow-[0_0_40px_rgba(255,255,255,0.6)]" />
+                                <h2 className="text-4xl md:text-8xl font-black text-white italic tracking-tighter uppercase">SHORT</h2>
                             </div>
                         </motion.div>
-
-                        {/* CENTER RELOADED COUNTDOWN */}
+ 
+                        {/* CENTER RELOADED COUNTDOWN - Corrected Position */}
                         <motion.div 
-                            initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }}
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 z-[55]"
+                            initial={{ scale: 0, y: 100, rotate: -90 }} 
+                            animate={{ scale: 1, y: 0, rotate: 0 }}
+                            exit={{ scale: 0, y: -100 }}
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 z-[55] flex items-center justify-center"
                         >
-                            <div className="absolute inset-0 rounded-full bg-black/80 backdrop-blur-3xl border-4 border-white/20 flex flex-col items-center justify-center shadow-2xl">
-                                <span className="text-[11px] font-black text-[#3CB371] mb-1 tracking-[0.4em] uppercase">Lock In</span>
-                                <motion.span 
-                                    key={timeLeft} initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                                    className="text-6xl font-black text-white font-mono italic"
-                                >
-                                    {timeLeft}
-                                </motion.span>
+                            <div className="relative w-full h-full flex items-center justify-center">
+                                {/* Glow Background */}
+                                <div className="absolute inset-0 bg-[#3CB371] blur-[60px] opacity-20 animate-pulse rounded-full" />
+                                
+                                <div className="relative w-40 h-40 rounded-full bg-black/90 backdrop-blur-3xl border-4 border-[#3CB371]/30 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+                                    <span className="text-[10px] font-black text-[#3CB371] mb-1 tracking-[0.5em] uppercase">Lock In</span>
+                                    <motion.span 
+                                        key={timeLeft} 
+                                        initial={{ scale: 1.5, opacity: 0 }} 
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        className="text-7xl font-black text-white font-mono italic leading-none"
+                                    >
+                                        {timeLeft}
+                                    </motion.span>
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>
@@ -450,7 +471,7 @@ export default function RoundsChart({
                     </motion.div>
                 )}
 
-                {/* 3. RESULT REVEAL SLANT SLASH SCREEN (Full Screen) */}
+                {/* 3. RESULT REVEAL SLANT SLASH SCREEN (Styled Textured Card) */}
                 {showWinnerAnimation && (
                     <motion.div 
                         initial={{ opacity: 0 }} 
@@ -459,36 +480,39 @@ export default function RoundsChart({
                     >
                         <motion.div 
                             initial={{ 
-                                x: isDraw ? '100%' : (isAbove ? '-100%' : '100%'), 
-                                skewX: isDraw ? 0 : (isAbove ? 15 : -15) 
+                                x: isAbove ? '-100%' : '100%', 
+                                skewX: isAbove ? 20 : -20 
                             }} 
                             animate={{ 
                                 x: 0, 
                                 skewX: 0 
                             }}
                             transition={{ 
-                                x: { type: "spring", damping: 25, stiffness: 80, mass: 1 },
-                                skewX: { delay: 0.3, duration: 0.8, ease: "easeInOut" }
+                                x: { type: "spring", damping: 15, stiffness: 120, mass: 1 },
+                                skewX: { delay: 0.1, duration: 0.8, ease: "easeOut" }
                             }}
-                            className={`absolute inset-0 z-10 shadow-[0_0_150px_rgba(0,0,0,1)] border-white/20 backdrop-blur-xl ${isDraw ? 'bg-neutral-900/80' : (isAbove ? 'bg-[#3CB371]/80' : 'bg-[#FF7F50]/80')} w-full h-full overflow-hidden`}
+                            className={`absolute inset-0 z-10 shadow-[0_0_150px_rgba(0,0,0,1)] border-white/20 ${isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]'} w-full h-full overflow-hidden`}
                             style={{ willChange: 'transform' }}
                         >
-                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
+                            {/* Texture & Glare */}
+                            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-40 mix-blend-overlay pointer-events-none" />
+                            <div className={`absolute inset-0 bg-gradient-to-${isAbove ? 'r' : 'l'} from-white/20 via-transparent to-black/30 pointer-events-none`} />
+                            
                             <div className={`flex flex-col items-center justify-center h-full w-full relative z-10`}>
                                 <motion.div 
                                     animate={{ 
-                                        scale: [1, 1.2, 1], 
+                                        scale: [1, 1.15, 1], 
                                         rotate: [0, 5, -5, 0],
                                         filter: ["drop-shadow(0 0 20px white)", `drop-shadow(0 0 40px gold)`, "drop-shadow(0 0 20px white)"]
                                     }} 
-                                    transition={{ repeat: Infinity, duration: 3 }}
+                                    transition={{ repeat: Infinity, duration: 2.5 }}
                                 >
-                                    <Trophy size={80} className="md:size-[120px] text-white mb-4 md:mb-8 drop-shadow-2xl" />
+                                    <Trophy size={80} className="md:size-[140px] text-white mb-4 md:mb-10 drop-shadow-[0_0_30px_rgba(255,255,255,0.4)]" />
                                 </motion.div>
-                                <h1 className="text-4xl md:text-9xl font-black text-white italic tracking-tighter drop-shadow-2xl uppercase">
+                                <h1 className="text-5xl md:text-[10rem] font-black text-white italic tracking-tighter drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] uppercase leading-none">
                                     {isAbove ? 'Long Wins' : 'Short Wins'}
                                 </h1>
-                                <span className="text-[10px] md:text-xl font-bold text-white/40 uppercase tracking-[0.5em] mt-2 md:mt-4">
+                                <span className="text-[12px] md:text-2xl font-black text-white/40 uppercase tracking-[0.6em] mt-4 md:mt-8 bg-black/20 px-6 py-2 rounded-full backdrop-blur-sm">
                                     Round Settled
                                 </span>
                             </div>

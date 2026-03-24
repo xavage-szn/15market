@@ -99,14 +99,37 @@ router.post('/access/apply', async (req, res) => {
         const { address, xHandle, discord, email } = req.body;
         if (!address || !xHandle || !email) return res.status(400).json({ error: 'Missing required fields' });
         
-        await redis.saveApplication({ address, xHandle, discord, email, timestamp: Date.now(), status: 'pending' });
+        const normalizedAddress = address.toLowerCase();
+
+        // 1. Check if already authorized
+        const alreadyAuthorized = await redis.isAuthorized(normalizedAddress);
+        if (alreadyAuthorized) {
+            return res.status(400).json({ error: 'Your wallet is already whitelisted for Rounds access.' });
+        }
+
+        // 2. Check if already has a pending or approved application
+        const allApps = await redis.getApplications();
+        const existingApp = allApps.find(a => a.address.toLowerCase() === normalizedAddress);
+        if (existingApp) {
+            if (existingApp.status === 'approved') {
+                return res.status(400).json({ error: 'Your application was already approved! Please check your email for the access code.' });
+            }
+            return res.status(400).json({ error: 'You already have a pending application. Please wait for the admin to review it.' });
+        }
+        
+        await redis.saveApplication({ address: normalizedAddress, xHandle, discord, email, timestamp: Date.now(), status: 'pending' });
         res.json({ success: true, message: 'Application submitted! Please check your email periodically for your access code.' });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/access/check/:address', async (req, res) => {
-    const authorized = await redis.isAuthorized(req.params.address);
-    res.json({ authorized });
+    try {
+        const addr = req.params.address.toLowerCase();
+        const authorized = await redis.isAuthorized(addr);
+        res.json({ authorized });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 router.post('/access/redeem', async (req, res) => {

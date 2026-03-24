@@ -44,7 +44,8 @@ import {
     Shield,
     Image as ImageIcon,
     Copy,
-    Key
+    Key,
+    Radio
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import MessagingSystem from './MessagingSystem';
@@ -2822,32 +2823,47 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                             <tr className="border-b border-white/5 bg-white/[0.02]">
                                                                 <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">Wallet</th>
                                                                 <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">X Handle</th>
-                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">Email</th>
+                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">Status</th>
                                                                 <th className="px-8 py-4 text-right text-[9px] font-black text-white/20 uppercase tracking-widest">Actions</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-white/[0.02]">
-                                                            {betaApplications.length > 0 ? betaApplications.map((app, idx) => (
-                                                                <tr key={idx} className="hover:bg-white/[0.01] transition-all group">
-                                                                    <td className="px-8 py-5">
-                                                                        <span className="text-[10px] font-mono text-white">{app.address}</span>
-                                                                    </td>
-                                                                    <td className="px-8 py-5">
-                                                                        <span className="text-[10px] font-black text-[#3CB371]">@{app.xHandle || 'N/A'}</span>
-                                                                    </td>
-                                                                    <td className="px-8 py-5">
-                                                                        <span className="text-[10px] font-medium text-white/60">{app.email}</span>
-                                                                    </td>
-                                                                    <td className="px-8 py-5 text-right">
-                                                                        <button 
-                                                                            onClick={() => handleApproveBeta(app.address, app.email)}
-                                                                            className="px-4 py-2 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-widest rounded-lg"
-                                                                        >
-                                                                            Approve
-                                                                        </button>
-                                                                    </td>
-                                                                </tr>
-                                                            )) : (
+                                                            {betaApplications.length > 0 ? betaApplications.map((app, idx) => {
+                                                                const isApproved = app.status === 'approved' || authorizedWallets.includes(app.address.toLowerCase());
+                                                                
+                                                                return (
+                                                                    <tr key={idx} className="hover:bg-white/[0.01] transition-all group">
+                                                                        <td className="px-8 py-5">
+                                                                            <span className="text-[10px] font-mono text-white">{app.address.toLowerCase().slice(0, 8)}...{app.address.toLowerCase().slice(-6)}</span>
+                                                                        </td>
+                                                                        <td className="px-8 py-5">
+                                                                            <span className="text-[10px] font-black text-[#3CB371]">@{app.xHandle || 'N/A'}</span>
+                                                                        </td>
+                                                                        <td className="px-8 py-5">
+                                                                            <span className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-tight ${isApproved ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-yellow-500/10 text-yellow-500'}`}>
+                                                                                {isApproved ? 'Approved' : 'Pending'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-8 py-5 text-right">
+                                                                            {isApproved ? (
+                                                                                <button
+                                                                                    onClick={() => handleRevokeBeta(app.address)}
+                                                                                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                                                                >
+                                                                                    Revoke
+                                                                                </button>
+                                                                            ) : (
+                                                                                <button 
+                                                                                    onClick={() => handleApproveBeta(app.address, app.email)}
+                                                                                    className="px-4 py-2 bg-[#3CB371] hover:bg-[#2E8B57] text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                                                                >
+                                                                                    Approve
+                                                                                </button>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            }) : (
                                                                 <tr>
                                                                     <td colSpan="4" className="py-20 text-center opacity-20">
                                                                         <Users size={48} className="mx-auto mb-4" />

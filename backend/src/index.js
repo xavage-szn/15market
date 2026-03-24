@@ -417,7 +417,7 @@ app.post('/session/init', async (req, res) => {
         const { address } = req.body;
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
         logToFile(`[SESSION_INIT] 🛠️ Initializing for ${address} -> Session: ${sessionAddr}`);
-        const balance = await wallet.provider.getBalance(sessionAddr);
+        const balance = await blockchain.getNativeBalance(sessionAddr);
         res.json({ sessionAddress: sessionAddr, balance: ethers.formatEther(balance) });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -478,7 +478,7 @@ app.post('/session/trade', async (req, res) => {
         // 3. Get Balance (Most likely to timeout, use optimistic fallback)
         try {
             balance = await Promise.race([
-                blockchain.provider.getBalance(sessionAddr),
+                blockchain.getNativeBalance(sessionAddr),
                 new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
             ]);
             // Cache for reliability
@@ -542,6 +542,7 @@ app.post('/session/trade', async (req, res) => {
             attempts++;
             try {
                 logToFile(`[SESSION_TRADE] ✍️ Broadcast attempt ${attempts} for bet ${id} (Nonce: ${txArgs.nonce})...`);
+                await blockchain._ensureReady();
                 tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
                 break; // Success!
             } catch (err) {
@@ -664,12 +665,14 @@ app.post('/session/withdraw', async (req, res) => {
 
         logToFile(`[WITHDRAW] 💸 Request from ${address} for ${amount} USDC`);
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        const nonce = await nonceManager.getNonce(sessionAddr, wallet.provider);
-
-        const balance = await wallet.provider.getBalance(sessionAddr);
+        // 1. Gas & Nonce (Parallel Ready)
+        const [fees, nonce, balance] = await Promise.all([
+            blockchain._getGasPrice(),
+            nonceManager.getNonce(sessionAddr, blockchain.provider),
+            blockchain.getNativeBalance(sessionAddr)
+        ]);
         const amountWei = amount ? ethers.parseUnits(amount.toString(), 18) : balance;
 
-        const fees = await blockchain._getGasPrice();
         let gasPrice = fees.gasPrice;
         const minGasPrice = ethers.parseUnits("50", "gwei");
         if (gasPrice < minGasPrice) gasPrice = minGasPrice;
