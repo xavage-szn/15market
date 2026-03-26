@@ -509,6 +509,21 @@ input[type="range"]::-moz-range-thumb:hover {
   bottom: 2px;
 }
 
+/* Zig-Zag (Scalloped/Stamp Edge) Ticker Tape Effect for V1 */
+.zigzag-ticker {
+  --radius: 3px;
+  --mask: 
+    radial-gradient(var(--radius) at center, #000 99%, #0000) 0 0 / calc(var(--radius) * 2) calc(var(--radius) * 2) repeat-x,
+    radial-gradient(var(--radius) at center, #000 99%, #0000) 0 100% / calc(var(--radius) * 2) calc(var(--radius) * 2) repeat-x,
+    linear-gradient(#000 0 0) center / 100% calc(100% - (var(--radius) * 1.5)) no-repeat;
+  -webkit-mask: var(--mask);
+  mask: var(--mask);
+}
+
+.zigzag-outline {
+  box-shadow: inset 0 2px 0 0 #3cb371, inset 0 -2px 0 0 #3cb371;
+}
+
 .scalloped-ticker-border {
   position: relative;
 }
