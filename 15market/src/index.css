@@ -473,3 +473,52 @@ input[type="range"]::-moz-range-thumb:hover {
   text-transform: uppercase !important;
   letter-spacing: 0.1em !important;
 }
+
+/* Scalloped Ticker Tape Effect for V2 (Deprecated but keeping for ref) */
+.scalloped-ticker {
+  --mask: radial-gradient(6px at 50% 0, #000 98%, #0000) 50% -6px/12px 100% repeat-x,
+    radial-gradient(6px at 50% 100%, #000 98%, #0000) 50% calc(100% + 6px)/12px 100% repeat-x,
+    linear-gradient(#000 0 0) 50%/100% calc(100% - 12px) no-repeat;
+  -webkit-mask: var(--mask);
+  mask: var(--mask);
+}
+
+/* Zig-Zag (Scalloped/Stamp Edge) Ticker Tape Effect for V2 */
+.zigzag-ticker {
+  --radius: 3px;
+  --mask: 
+    radial-gradient(var(--radius) at center, #000 99%, #0000) 0 0 / calc(var(--radius) * 2) calc(var(--radius) * 2) repeat-x,
+    radial-gradient(var(--radius) at center, #000 99%, #0000) 0 100% / calc(var(--radius) * 2) calc(var(--radius) * 2) repeat-x,
+    linear-gradient(#000 0 0) center / 100% calc(100% - (var(--radius) * 1.5)) no-repeat;
+  -webkit-mask: var(--mask);
+  mask: var(--mask);
+}
+
+.zigzag-outline {
+  box-shadow: inset 0 2px 0 0 #3cb371, inset 0 -2px 0 0 #3cb371;
+}
+
+.scalloped-ticker-border {
+  position: relative;
+}
+
+.scalloped-ticker-border::before,
+.scalloped-ticker-border::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background-image: radial-gradient(circle at 6px 0, transparent 6px, #3CB371 6px);
+  background-size: 12px 6px;
+  z-index: 10;
+}
+
+.scalloped-ticker-border::before {
+  top: -6px;
+}
+
+.scalloped-ticker-border::after {
+  bottom: -6px;
+  transform: rotate(180deg);
+}

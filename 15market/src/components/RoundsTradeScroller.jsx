@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { KEEPER_URL_ARC, KEEPER_URL_ROUNDS } from '../constants';
 import { Radio, ArrowUp, ArrowDown, Check, X } from 'lucide-react';
 
-function RoundsTradeScrollerComponent({ theme }) {
+function RoundsTradeScrollerComponent({ theme, isV1 = false }) {
     const [history, setHistory] = useState([]);
     const [activeBroadcast, setActiveBroadcast] = useState(null);
 
@@ -79,8 +79,11 @@ function RoundsTradeScrollerComponent({ theme }) {
 
     if (history.length === 0) return null;
 
+    const v1Bg = isLight ? 'bg-gradient-to-r from-[#3CB371]/5 via-[#3CB371]/10 to-[#3CB371]/5 border-[#3CB371]/20' : 'bg-gradient-to-r from-[#0d0d0d] via-[#1a1a1a] to-[#0d0d0d] border-white/5';
+    const v2Bg = isLight ? 'bg-gradient-to-b from-[#3CB371] to-[#2E8B57] zigzag-ticker' : 'bg-gradient-to-b from-[#0a0a0a] to-[#050505] zigzag-ticker zigzag-outline';
+
     return (
-        <div className={`w-full h-8 lg:h-10 border-y relative z-[45] overflow-hidden transition-all duration-500 ${isLight ? 'bg-white/95 border-black/5' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
+        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 border-y-2 ' + v1Bg : 'h-10 lg:h-12 ' + v2Bg} relative z-[45] overflow-hidden transition-all duration-500`}>
             <AnimatePresence mode="wait">
                 {activeBroadcast ? (
                     <motion.div
@@ -88,7 +91,7 @@ function RoundsTradeScrollerComponent({ theme }) {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 flex items-center bg-[#FF7F50]/10"
+                        className={`absolute inset-0 flex items-center ${isV1 ? 'bg-amber-500/10' : (isLight ? 'bg-[#3CB371]' : 'bg-[#0a0a0a]')}`}
                     >
                         <motion.div
                             animate={{ x: [0, -1000] }}
@@ -97,8 +100,8 @@ function RoundsTradeScrollerComponent({ theme }) {
                         >
                             {[...Array(10)].map((_, i) => (
                                 <div key={i} className="flex items-center gap-2">
-                                    <Radio size={12} className="text-[#FF7F50] animate-pulse" />
-                                    <span className="text-[10px] uppercase tracking-[0.2em] text-[#FF7F50]">
+                                    <Radio size={12} className={`${isV1 ? 'text-amber-500 animate-pulse' : 'text-white animate-pulse'}`} />
+                                    <span className={`text-[10px] uppercase tracking-[0.2em] ${isV1 ? 'text-amber-500' : 'text-white'}`}>
                                         {activeBroadcast.text}
                                     </span>
                                 </div>
@@ -118,21 +121,30 @@ function RoundsTradeScrollerComponent({ theme }) {
                                 const isUp = event.settlePrice > event.lockPrice;
 
                                 return (
-                                    <div key={`${event.id}-${i}`} className="flex items-center gap-4 px-6 border-r border-white/10 h-full">
-                                        <span className="text-[8px] font-black bg-white/10 px-1 rounded text-white/40">ROUND</span>
-                                        <div className="flex items-center gap-2">
-                                            <div className="p-0.5 rounded-sm bg-white/5">
-                                                {isUp ? <ArrowUp size={8} className="text-[#3CB371]" /> : <ArrowDown size={8} className="text-[#FF7F50]" />}
+                                    <div key={`${event.id}-${i}`} className={`flex items-center gap-6 ${isV1 ? 'px-10 border-r-2' : 'px-12 border-r'} border-white/10 h-full transition-all`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-1 rounded bg-white/10`}>
+                                                {isUp ? <ArrowUp size={isV1 ? 10 : 12} className="text-white" /> : <ArrowDown size={isV1 ? 10 : 12} className="text-white" />}
                                             </div>
-                                            <span className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white/60'}`}>
-                                                {event.symbol.replace('USDT', '')}
-                                            </span>
+                                            <div className="flex flex-col leading-none">
+                                                <span className="text-[7px] font-black text-white/40 uppercase tracking-tighter mb-0.5">ROUND</span>
+                                                <span className={`${isV1 ? 'text-[10px]' : 'text-[11px]'} font-black uppercase tracking-[0.2em] text-white`}>
+                                                    {event.symbol.replace('USDT', '')}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="px-1.5 py-0.5 text-[7px] rounded-sm font-black uppercase tracking-wider flex items-center gap-1 shadow-sm"
-                                                style={{ backgroundColor: `${color}25`, color, border: `1px solid ${color}40` }}>
-                                                {isWon ? <Check size={7} /> : <X size={7} />}
-                                                {event.status}
+
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex flex-col items-start leading-tight">
+                                                <span className={`${isV1 ? 'text-[8px]' : 'text-[9px]'} font-black tracking-[0.2em] text-white/50`}>STAKE</span>
+                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${event.amount || '1.00'}</span>
+                                            </div>
+                                            <div className="h-6 w-px bg-white/10" />
+                                            <div className="flex items-center gap-2">
+                                                {isWon ? <Check size={isV1 ? 10 : 12} className="text-white" /> : <X size={isV1 ? 10 : 12} className="text-white/60" />}
+                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black uppercase tracking-widest text-white`}>
+                                                    {event.status}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>

@@ -2451,6 +2451,16 @@ export default function UserApp() {
             </div>
 
             <div className="flex lg:hidden landscape:hidden items-center gap-1 md:gap-2">
+              {/* V2 Mobile Asset Selector */}
+              {uiVersion === 'v2' && (
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-3xl transition-all ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                    {activeMarket.symbol ? activeMarket.symbol.split('/')[0] : 'ETH'}
+                  </span>
+                  <ChevronDown size={10} className="opacity-40" />
+                </div>
+              )}
+
               {/* Branded Game Mode Switcher - Mobile */}
               <div className={`flex items-center p-1 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-75 origin-right`}>
                 <motion.div
@@ -2467,25 +2477,12 @@ export default function UserApp() {
                 ))}
               </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              {uiVersion === 'v2' && (
-                <button
-                  onClick={() => setShowMobileHistory(!showMobileHistory)}
-                  className={`p-1.5 md:p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95 ${showMobileHistory ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : ''}`}
-                  style={{
-                    backgroundColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)') : undefined,
-                    borderColor: !showMobileHistory ? (theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)') : undefined,
-                  }}
-                >
-                  <History size={16} className={showMobileHistory ? 'text-[#3CB371]' : (theme === 'light' ? 'text-black/60' : 'text-white/60')} />
-                </button>
-              )}
-
-              <button onClick={() => setView("dashboard")} className="p-1.5 md:p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-1 px-1.5 md:p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={16} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
               <UnifiedWalletButton theme={theme} />
             </div>
@@ -2499,15 +2496,7 @@ export default function UserApp() {
             </div>
           )}
 
-          {uiVersion === 'v1' && (
-            <div className={`w-full relative z-[45] overflow-hidden border-y my-2 py-1 ${isLight ? 'bg-[#f0f9f4]/95 border-[#3CB371]/10' : 'bg-[#0d0d0d]/80 border-white/5 backdrop-blur-md'}`}>
-              {gameMode === 'rounds' ? (
-                <RoundsTradeScroller theme={theme} />
-              ) : (
-                <GlobalTradeScroller theme={theme} isV1={true} />
-              )}
-            </div>
-          )}
+
 
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
@@ -2523,6 +2512,9 @@ export default function UserApp() {
                         : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}08`,
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : `${GREEN}35`
                     }}>
+                    <div className="w-full relative z-[45] overflow-hidden py-1">
+                      {gameMode === 'rounds' ? <RoundsTradeScroller theme={theme} /> : <GlobalTradeScroller theme={theme} />}
+                    </div>
                     {gameMode === 'rounds' ? (
                       <RoundsChart
                         theme={theme}
@@ -2605,7 +2597,7 @@ export default function UserApp() {
                   </div>
                 </div>
               ) : (
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-2' : 'gap-1.5 lg:gap-4'} mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-1' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-2' : 'gap-1.5 lg:gap-4'} mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-16' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -2623,16 +2615,13 @@ export default function UserApp() {
                       />
                     )}
 
-
-                    {/* Scroller only above chart in V2 */}
-                    <div className={`w-full overflow-hidden border-b transition-colors duration-300 ${theme === 'light' ? 'border-[#3CB371]/5 bg-transparent' : 'border-white/[0.03] bg-transparent'}`}>
-                      {gameMode === 'rounds' ? (
-                        <RoundsTradeScroller theme={theme} />
-                      ) : (
-                        <GlobalTradeScroller theme={theme} />
-                      )}
+                    <div className={`w-full relative z-[45] overflow-hidden mb-1 rounded-2xl`}>
+                      {gameMode === 'rounds' ? <RoundsTradeScroller theme={theme} /> : <GlobalTradeScroller theme={theme} />}
                     </div>
-                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[220px] min-h-[220px]' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
+
+
+                    {/* Chart Container */}
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[220px] min-h-[220px] mt-2' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
                         background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
@@ -2689,13 +2678,12 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-1.5 md:gap-3'} h-auto lg:h-full min-h-0 flex-none`}
+                    className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-auto lg:h-full min-h-0 flex-1 ${uiVersion === 'v2' ? 'pb-16 lg:pb-12' : ''}`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    {/* Sidebar Area: Terminal & Active Section */}
-                    <div className={`w-full flex ${gameMode === 'rounds' ? 'flex-col' : 'flex-row'} gap-1.5 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full flex ${uiVersion === 'v2' && isSmallScreen ? 'flex-row' : (gameMode === 'rounds' ? 'flex-col' : 'flex-row')} gap-1.5 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`w-full min-h-0 min-h-[300px] md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'flex-1' : 'w-full'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[180px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2737,9 +2725,9 @@ export default function UserApp() {
                         )}
                       </div>
 
-                      {/* CLASSIC: Active Execution — only visible in classic mode for mobile */}
-                      {gameMode !== 'rounds' && (
-                        <div className={`flex-1 min-h-0 min-h-[240px] h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                      {/* ACTIVE EXECUTION - Visible on Mobile V2 or when not in Rounds */}
+                      {(gameMode !== 'rounds' || (uiVersion === 'v2' && isSmallScreen)) && (
+                        <div className={`flex-1 min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[160px]' : 'min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2794,7 +2782,7 @@ export default function UserApp() {
 
                         {/* Navigation Bar - TOP BAR */}
                         {/* Trading Terminal Box */}
-                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'flex-1 w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 shadow-lg`}
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
