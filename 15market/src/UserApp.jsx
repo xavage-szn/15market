@@ -2597,7 +2597,7 @@ export default function UserApp() {
                   </div>
                 </div>
               ) : (
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-2' : 'gap-1.5 lg:gap-4'} mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-16' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-1' : 'gap-1.5 lg:gap-4'} mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-1' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -2621,7 +2621,7 @@ export default function UserApp() {
 
 
                     {/* Chart Container */}
-                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[220px] min-h-[220px] mt-2' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[320px] min-h-[320px] mt-0.5' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
                         background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
@@ -2678,12 +2678,12 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-auto lg:h-full min-h-0 flex-1 ${uiVersion === 'v2' ? 'pb-16 lg:pb-12' : ''}`}
+                    className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-auto lg:h-full min-h-0 flex-1 ${uiVersion === 'v2' && isSmallScreen ? 'pb-14' : (uiVersion === 'v2' ? 'pb-12' : '')}`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    <div className={`w-full flex ${uiVersion === 'v2' && isSmallScreen ? 'flex-row' : (gameMode === 'rounds' ? 'flex-col' : 'flex-row')} gap-1.5 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full flex ${uiVersion === 'v2' && isSmallScreen ? 'flex-row' : (gameMode === 'rounds' ? 'flex-col' : 'flex-row')} gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'flex-1' : 'w-full'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[180px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'flex-1' : 'w-full'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[220px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2727,7 +2727,7 @@ export default function UserApp() {
 
                       {/* ACTIVE EXECUTION - Visible on Mobile V2 or when not in Rounds */}
                       {(gameMode !== 'rounds' || (uiVersion === 'v2' && isSmallScreen)) && (
-                        <div className={`flex-1 min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[160px]' : 'min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                        <div className={`flex-1 min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
