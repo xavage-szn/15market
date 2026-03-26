@@ -1125,18 +1125,8 @@ export default function UserApp() {
         }
 
         notify("Broadcasting Entry...", "pending");
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
-        if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
-          // Restore balance if tx failed
-          if (sessionMode) {
-            setSessionBalance(prev => prev + amtNum);
-          } else {
-            setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
-          }
-          throw new Error("Round entry failed on-chain.");
-        }
 
-        // Add to history
+        // --- INSTANT UI START FOR ROUNDS ---
         const roundTrade = {
           id: `round-${roundId}-${Date.now()}`,
           type: 'rounds',
@@ -1147,14 +1137,37 @@ export default function UserApp() {
           symbol: activeMarket?.symbol || 'ETH',
           status: 'LOCKED',
           poolId: roundId,
-          tx: txHash
+          tx: txHash,
+          confirmed: false // Marker for pending confirmation
         };
         const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
         setTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
         setRoundsTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
+        setIsExecuting(false); // RELEASE BLOCK IMMEDIATELY for burst mode
+
+        // Background Confirmation
+        publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 }).then((receipt) => {
+          if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+            // Restore balance if tx failed
+            if (sessionMode) {
+              setSessionBalance(prev => prev + amtNum);
+            } else {
+              setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
+            }
+            notify("Round entry failed on-chain.", "error");
+            // Optionally remove from state if failed
+            setRoundsTradeHistory(prev => prev.filter(t => t.tx !== txHash));
+          } else {
+            console.log(`⛓️ [ROUNDS] Confirmed: ${txHash}`);
+            setRoundsTradeHistory(prev => prev.map(t => t.tx === txHash ? { ...t, confirmed: true } : t));
+          }
+        }).catch(err => {
+          console.error("Rounds confirmation error:", err);
+          if (sessionMode) setSessionBalance(prev => prev + amtNum);
+          else setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
+        });
 
         notify("Joined the Round Successfully!", "success");
-        setIsExecuting(false);
         triggerGlobalRefresh();
         return;
       }
@@ -1202,17 +1215,9 @@ export default function UserApp() {
           txHash = data.txHash;
           console.log(`✅ [SESSION] Backend broadcasted tx: ${txHash}. Waiting for on-chain confirmation...`);
 
-          notify("Transaction broadcasted! Confirming on-chain...", "pending");
-
-          // Frontend waits for on-chain confirmation before starting the trade
-          const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 });
-          if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
-            throw new Error("Transaction reverted on-chain. Stake not deducted.");
-          }
+          notify("Transaction broadcasted! Starting trade...", "pending");
 
           const confirmedNow = Date.now();
-          console.log(`⛓️ [SESSION] Confirmed on-chain: ${txHash}`);
-
           const strictTrade = {
             id: tradeId,
             direction: (dirVal === 1 ? "UP" : "DOWN"),
@@ -1231,16 +1236,33 @@ export default function UserApp() {
             expiryMs: confirmedNow + (activeDuration * 1000),
             symbol: activeMarket?.symbol || 'ETH',
             isSessionTrade: true,
-            confirmed: true,
+            confirmed: false, // Pending on-chain confirmation
           };
 
           const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
           setActiveTrades(prev => dedupeAndAdd(prev, strictTrade));
           setTradeHistory(prev => dedupeAndAdd(prev, strictTrade));
 
-          // Balance already deducted optimistically above — DON'T deduct again
+          // RELEASE BLOCK IMMEDIATELY for burst mode
+          setIsExecuting(false);
           triggerGlobalRefresh(true);
-          notify("Trade Confirmed & Started!", "success");
+
+          // Background Confirmation
+          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
+            if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+              setSessionBalance(prev => prev + amtNum);
+              setActiveTrades(prev => prev.filter(t => t.tx !== txHash));
+              notify("Transaction reverted on-chain.", "error");
+            } else {
+              console.log(`⛓️ [SESSION] Confirmed: ${txHash}`);
+              setActiveTrades(prev => prev.map(t => t.tx === txHash ? { ...t, confirmed: true } : t));
+            }
+          }).catch(() => {
+            setSessionBalance(prev => prev + amtNum);
+            setActiveTrades(prev => prev.filter(t => t.tx !== txHash));
+          });
+
+          notify("Trade Started!", "success");
 
         } catch (fetchErr) {
           clearTimeout(timeoutId);
@@ -2597,7 +2619,7 @@ export default function UserApp() {
                   </div>
                 </div>
               ) : (
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-1' : 'gap-1.5 lg:gap-4'} mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-1' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-0' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -2621,7 +2643,7 @@ export default function UserApp() {
 
 
                     {/* Chart Container */}
-                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[320px] min-h-[320px] mt-0.5' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[233px] min-h-[233px] mt-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
                         background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
@@ -2678,7 +2700,7 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full md:w-[30%] flex flex-col ${showActiveExpanded ? 'gap-0' : 'gap-3'} h-auto lg:h-full min-h-0 flex-1 ${uiVersion === 'v2' && isSmallScreen ? 'pb-14' : (uiVersion === 'v2' ? 'pb-12' : '')}`}
+                    className={`w-full md:w-[30%] flex flex-col gap-1 h-auto lg:h-full min-h-0 flex-1 ${uiVersion === 'v2' && isSmallScreen ? 'pb-12' : (uiVersion === 'v2' ? 'pb-12' : '')}`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                     <div className={`w-full flex ${uiVersion === 'v2' && isSmallScreen ? 'flex-row' : (gameMode === 'rounds' ? 'flex-col' : 'flex-row')} gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
