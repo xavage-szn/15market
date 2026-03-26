@@ -483,19 +483,30 @@ input[type="range"]::-moz-range-thumb:hover {
   mask: var(--mask);
 }
 
-/* Zig-Zag (Scalloped/Stamp Edge) Ticker Tape Effect for V2 */
-.zigzag-ticker {
-  --radius: 3px;
-  --mask: 
-    radial-gradient(var(--radius) at center, #000 99%, #0000) 0 0 / calc(var(--radius) * 2) calc(var(--radius) * 2) repeat-x,
-    radial-gradient(var(--radius) at center, #000 99%, #0000) 0 100% / calc(var(--radius) * 2) calc(var(--radius) * 2) repeat-x,
-    linear-gradient(#000 0 0) center / 100% calc(100% - (var(--radius) * 1.5)) no-repeat;
-  -webkit-mask: var(--mask);
-  mask: var(--mask);
+/* Refined Minimal Ticker for V2 */
+.ticker-v2 {
+  border-top: 1px solid #3CB371;
+  border-bottom: 1px solid #3CB371;
+  position: relative;
 }
 
-.zigzag-outline {
-  box-shadow: inset 0 2px 0 0 #3cb371, inset 0 -2px 0 0 #3cb371;
+.ticker-v2::before,
+.ticker-v2::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(60, 179, 113, 0.3);
+  z-index: 10;
+}
+
+.ticker-v2::before {
+  top: 2px;
+}
+
+.ticker-v2::after {
+  bottom: 2px;
 }
 
 .scalloped-ticker-border {
