@@ -1253,103 +1253,96 @@ export default function UserApp() {
       }
 
       if (sessionMode) {
-        console.log(`📡 [SESSION] Sending trade ${tradeId} to keeper (Strict Mode)...`);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-          setIsExecuting(false);
-          notify("Trade timed out. The network may be slow — checking status in background...", "error");
-        }, 120000);
+        console.log(`📡 [SESSION] Initiating Optimistic Trade ${tradeId}...`);
+        
+        // --- STEP 1: INSTANT UI FEEDBACK (OPTIMISTIC) ---
+        const confirmedNow = Date.now();
+        const optimisticTrade = {
+          id: tradeId,
+          direction: (dirVal === 1 ? "UP" : "DOWN"),
+          amount: Number(amount).toFixed(3),
+          entryPrice: activePrice.toFixed(8),
+          timestamp: confirmedNow,
+          status: "PENDING",
+          tx: null, // Filled later
+          nonce: tradeId,
+          userPublicKey: activeUserAddr,
+          owner: address,
+          sessionOwner: activeUserAddr,
+          duration: activeDuration,
+          network: "arc",
+          startTime: confirmedNow,
+          expiryMs: confirmedNow + (activeDuration * 1000),
+          symbol: activeMarket?.symbol || 'ETH',
+          isSessionTrade: true,
+          confirmed: false, 
+          isOptimistic: true // Marker for local cleanup if failed
+        };
 
-        // --- OPTIMISTIC DEDUCTION: Deduct before sending (instant feedback) ---
+        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
+        
         setSessionBalance(prev => Math.max(0, prev - amtNum));
-        lastOptimisticActionTime.current = Date.now();
+        setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
+        setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
+        setIsExecuting(false); // RELEASE BUTTON IMMEDIATELY FOR INSTANT FEEL
+        triggerGlobalRefresh(true);
+        notify("Broadcasting Trade...", "pending");
 
-        try {
-          const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              address,
-              tradeParams: {
-                id: tradeId.toString(),
-                direction: dirVal,
-                duration: Number(activeDuration),
-                entryPrice: entryPriceParams.toString(),
-                marketId: assetId,
-                amount: activeAmount
-              }
-            })
-          });
-          clearTimeout(timeoutId);
-          const responseText = await res.text();
-          let data;
+        // --- STEP 2: BACKGROUND EXECUTION ---
+        (async () => {
           try {
-            data = JSON.parse(responseText);
-          } catch (e) {
-            throw new Error(`Invalid JSON response: ${responseText.slice(0, 100)}`);
-          }
+            const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                address,
+                tradeParams: {
+                  id: tradeId.toString(),
+                  direction: dirVal,
+                  duration: Number(activeDuration),
+                  entryPrice: entryPriceParams.toString(),
+                  marketId: assetId,
+                  amount: activeAmount
+                }
+              })
+            });
 
-          if (!res.ok) throw new Error(data.error || "Session trade failed");
-          txHash = data.txHash;
-          console.log(`✅ [SESSION] Backend broadcasted tx: ${txHash}. Waiting for on-chain confirmation...`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Session trade failed");
+            
+            txHash = data.txHash;
+            console.log(`✅ [SESSION] Backend broadcasted tx: ${txHash}`);
 
-          notify("Transaction broadcasted! Starting trade...", "pending");
+            // Update optimistic trade with real TX hash
+            setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
+            setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
 
-          const confirmedNow = Date.now();
-          const strictTrade = {
-            id: tradeId,
-            direction: (dirVal === 1 ? "UP" : "DOWN"),
-            amount: Number(amount).toFixed(3),
-            entryPrice: activePrice.toFixed(8),
-            timestamp: confirmedNow,
-            status: "PENDING",
-            tx: txHash,
-            nonce: tradeId,
-            userPublicKey: activeUserAddr,
-            owner: address,
-            sessionOwner: activeUserAddr,
-            duration: activeDuration,
-            network: "arc",
-            startTime: confirmedNow,
-            expiryMs: confirmedNow + (activeDuration * 1000),
-            symbol: activeMarket?.symbol || 'ETH',
-            isSessionTrade: true,
-            confirmed: false, // Pending on-chain confirmation
-          };
-
-          const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
-          setActiveTrades(prev => dedupeAndAdd(prev, strictTrade));
-          setTradeHistory(prev => dedupeAndAdd(prev, strictTrade));
-
-          // RELEASE BLOCK IMMEDIATELY for burst mode
-          setIsExecuting(false);
-          triggerGlobalRefresh(true);
-
-          // Background Confirmation
-          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
-            if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+            // Background Confirmation
+            publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
+              if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+                setSessionBalance(prev => prev + amtNum);
+                setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+                notify("Transaction reverted on-chain.", "error");
+              } else {
+                console.log(`⛓️ [SESSION] Confirmed: ${txHash}`);
+                setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+              }
+            }).catch(() => {
               setSessionBalance(prev => prev + amtNum);
-              setActiveTrades(prev => prev.filter(t => t.tx !== txHash));
-              notify("Transaction reverted on-chain.", "error");
-            } else {
-              console.log(`⛓️ [SESSION] Confirmed: ${txHash}`);
-              setActiveTrades(prev => prev.map(t => t.tx === txHash ? { ...t, confirmed: true } : t));
-            }
-          }).catch(() => {
+              setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+            });
+
+          } catch (err) {
+            console.error("❌ Session background trade failed:", err);
+            // ROLLBACK OPTIMISTIC STATE
             setSessionBalance(prev => prev + amtNum);
-            setActiveTrades(prev => prev.filter(t => t.tx !== txHash));
-          });
+            setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+            setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+            notify(`Execution Error: ${err.message}`, "error");
+          }
+        })();
 
-          notify("Trade Started!", "success");
-
-        } catch (fetchErr) {
-          clearTimeout(timeoutId);
-          // Restore balance on failure
-          setSessionBalance(prev => prev + amtNum);
-          throw fetchErr;
-        }
+        return; // Exit main flow as background process is running
       } else {
         if (!walletClient) throw new Error("Wallet not connected");
         console.log(`✍️ [MAIN] Requesting signature...`);

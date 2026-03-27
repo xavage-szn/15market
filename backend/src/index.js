@@ -452,47 +452,35 @@ app.post('/session/trade', async (req, res) => {
 
         redis.saveSessionMapping(sessionAddr, address).catch(() => { });
 
-        // Pre-flight consistency check (Decoupled & More Resilient)
-        logToFile(`[SESSION_TRADE] 📡 Preparing pre-flight for ${sessionAddr}...`);
+        // Pre-flight consistency check (Parallelized for Ultra-Low Latency)
         const preflightStart = Date.now();
-        let balance = 0n, nonce, fees;
+        let balance, nonce, fees;
 
-        // 1. Get Fees (Fastest)
         try {
-            fees = await blockchain._getGasPrice();
-        } catch (e) {
-            fees = { maxFeePerGas: 300000000000n, maxPriorityFeePerGas: 150000000000n, gasPrice: 300000000000n }; // Safe fallback
-        }
-
-        // 2. Get Nonce (Crucial for broadcast)
-        for (let i = 0; i < 3; i++) {
-            try {
-                nonce = await nonceManager.getNonce(sessionAddr, blockchain.provider);
-                break;
-            } catch (e) {
-                if (i === 2) throw new Error("Nonce sync failed: " + e.message);
-                await blockchain.rotateRpc();
-            }
-        }
-
-        // 3. Get Balance (Most likely to timeout, use optimistic fallback)
-        try {
-            balance = await Promise.race([
-                blockchain.getNativeBalance(sessionAddr),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
+            // FIRE ALL NETWORK CALLS IN PARALLEL
+            const [fetchedFees, fetchedNonce, fetchedBalance] = await Promise.all([
+                blockchain._getGasPrice().catch(() => ({ maxFeePerGas: 400000000000n, maxPriorityFeePerGas: 200000000000n, gasPrice: 400000000000n })),
+                nonceManager.getNonce(sessionAddr, blockchain.provider),
+                Promise.race([
+                    blockchain.getNativeBalance(sessionAddr),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+                ]).catch(async () => {
+                   const cached = await redis.redis.get(`bal:${sessionAddr}`);
+                   return cached ? BigInt(cached) : ethers.parseUnits("1000", 18);
+                })
             ]);
-            // Cache for reliability
-            await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 300);
+
+            fees = fetchedFees;
+            nonce = fetchedNonce;
+            balance = fetchedBalance;
+
+            // Update balance cache
+            await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 30);
         } catch (e) {
-            logToFile(`[SESSION_TRADE] ⚠️ Balance check failed, using optimistic cloud cache...`);
-            const cached = await redis.redis.get(`bal:${sessionAddr}`);
-            if (cached) balance = BigInt(cached);
-            else {
-                // Final desperation: assume balance is sufficient if we just refilled
-                logToFile(`[SESSION_TRADE] ⚠️ No cached balance. Proceeding optimistically...`);
-                balance = ethers.parseUnits("1000", 18); // Assume success to let the TX flow
-            }
+            logToFile(`[SESSION_TRADE] ⚠️ Pre-flight error: ${e.message}`);
+            throw e;
         }
+
         logToFile(`[SESSION_TRADE] 📡 Pre-flight ready in ${Date.now() - preflightStart}ms (Nonce: ${nonce})`);
 
         const amtNum = parseFloat(amount);

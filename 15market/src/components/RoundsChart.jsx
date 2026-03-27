@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react'; // Build Fix V3 - Full File Sync
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Lock, Timer, Zap, Trophy, AlertCircle } from 'lucide-react';
 
