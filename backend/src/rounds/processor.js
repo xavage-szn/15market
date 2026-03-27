@@ -92,7 +92,7 @@ class RoundsProcessor {
                 }
 
                 const state = await redis.getRound(`${asset}_state`);
-                if (state && state.live && state.live.id === roundId) {
+                if (state && state.live && state.live.id === roundId && !state.live.settlePrice) {
                     const lPrice = state.live.lockPrice;
                     const sPrice = parseFloat(price);
                     state.live.settlePrice = sPrice;

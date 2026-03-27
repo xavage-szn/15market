@@ -197,4 +197,39 @@ router.post('/access/admin/revoke', async (req, res) => {
     res.json({ success: true });
 });
 
+// Settle a round (Frontend reports final result for settlement)
+router.post('/settle', async (req, res) => {
+    try {
+        const { asset, roundId, settlePrice, result } = req.body;
+        if (!asset || !roundId || !settlePrice) return res.status(400).json({ error: 'Missing parameters' });
+
+        const assetUpper = asset.toUpperCase();
+        console.log(`[RoundsApi] 🏁 Settlement report from frontend for ${assetUpper} Round ${roundId}: ${result} at $${settlePrice}`);
+
+        const state = await redis.getRound(`${assetUpper}_state`);
+        if (state && state.live && Number(state.live.id) === Number(roundId)) {
+            // Already settled check
+            if (state.live.settlePrice) return res.json({ success: true, note: 'Already settled' });
+
+            state.live.settlePrice = parseFloat(settlePrice);
+            state.live.result = result;
+            await redis.setRound(`${assetUpper}_state`, state);
+
+            // Trigger on-chain settlement
+            const priceFixed = ethers.parseUnits(parseFloat(settlePrice).toFixed(8), 8);
+            await blockchainService.ensureReady();
+            blockchainService.settleRound(roundId, priceFixed).then(tx => {
+                console.log(`[RoundsApi] ✅ On-chain Settle Success: ${tx.hash}`);
+            }).catch(e => {
+                console.warn(`[RoundsApi] On-chain Settle Warning: ${e.message}`);
+            });
+
+            return res.json({ success: true, result });
+        }
+        res.status(404).json({ error: 'Mismatch or already settled' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;

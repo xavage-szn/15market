@@ -149,7 +149,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
 
     const v1Bg = isLight ? 'bg-white zigzag-ticker shadow-sm' : 'bg-[#0a0a0a] zigzag-ticker zigzag-outline';
     const v1TextClass = isLight ? 'text-[#0a261a]' : 'text-white';
-    const v2Bg = isLight ? 'bg-white ticker-v2 shadow-sm' : 'bg-[#050505] ticker-v2';
+    const v2Bg = isLight ? 'bg-white zigzag-ticker ticker-v2 shadow-sm' : 'bg-[#050505] ticker-v2';
     const v2TextClass = isLight ? 'text-black' : 'text-white';
 
     return (

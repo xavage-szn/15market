@@ -105,6 +105,26 @@ function RoundsTerminalComponent({
     // ─── USER INTERACTION ───────────────────────────────────────────────────────
     const [selectedDirection, setSelectedDirection] = useState(null);
     const [hasEnteredThisRound, setHasEnteredThisRound] = useState(false);
+    const reportedRounds = useRef(new Set());
+
+    const handleRoundResult = useCallback((result, exitPrice) => {
+        if (!liveData || !liveData.id || reportedRounds.current.has(liveData.id)) return;
+        reportedRounds.current.add(liveData.id);
+        
+        console.log(`📡 [Rounds] Reporting Result for #${liveData.id}: ${result} at $${exitPrice}`);
+        
+        // Report to backend (Frontend Source of Truth)
+        fetch(`${KEEPER_URL_ROUNDS}/rounds/settle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                asset: currentAssetId,
+                roundId: liveData.id,
+                settlePrice: exitPrice,
+                result: result // 'WON' or 'LOST'
+            })
+        }).catch(err => console.warn('[Rounds] Result report failed:', err.message));
+    }, [liveData, currentAssetId]);
 
     // Reset entry flag when a new entry phase starts (at T=20)
     useEffect(() => {
@@ -146,7 +166,7 @@ function RoundsTerminalComponent({
                 hasEnteredThisRound ? selectedDirection : (liveData?.userDirection || null),
                 isLockedPhase ? (15 - cyclePos) : (isResultPhase ? (20 - cyclePos) : (30 - cyclePos)),
                 odds,
-                () => { },
+                handleRoundResult,
                 isResultPhase,
                 liveData?.result
             );
@@ -156,7 +176,7 @@ function RoundsTerminalComponent({
     // activeBal already defined above
 
     return (
-        <div className={`w-full h-full p-1.5 md:p-2 lg:p-3 rounded-[24px] lg:rounded-[32px] glass-panel flex flex-col gap-1.5 lg:gap-2 relative overflow-hidden transition-all duration-500 ${isLight ? 'static-panel-light !shadow-xl' : ''}`}>
+        <div className={`w-full min-h-0 h-auto lg:h-full p-1.5 md:p-2 lg:p-3 rounded-[24px] lg:rounded-[32px] glass-panel flex flex-col gap-1.5 lg:gap-2 relative overflow-hidden transition-all duration-500 ${isLight ? 'static-panel-light !shadow-xl' : ''}`}>
 
             {/* COMPACT HEADER */}
             <div className="flex items-center justify-between shrink-0">

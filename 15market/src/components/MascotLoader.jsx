@@ -126,18 +126,6 @@ export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loadin
                 <p className="text-[11px] font-black uppercase text-[#3CB371] tracking-[0.5em] animate-pulse text-center">
                     {progress >= 100 ? "V1 ROTATE • AIRBORNE" : label}
                 </p>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-ping" />
-                        <span className={`text-[9px] font-mono ${isLight ? 'text-[#0f2618]/40' : 'text-white/40'} tabular-nums tracking-widest uppercase`}>
-                            THRUST: {Math.floor(progress)}%
-                        </span>
-                    </div>
-                    <div className={`w-[1px] h-3 ${isLight ? 'bg-[#0f2618]/10' : 'bg-white/10'}`} />
-                    <span className={`text-[9px] font-mono ${isLight ? 'text-[#0f2618]/40' : 'text-white/40'} tabular-nums tracking-widest uppercase`}>
-                        ALT: {progress > 70 ? Math.floor((progress - 70) * 100) : 0} FT
-                    </span>
-                </div>
             </div>
         </div>
     );

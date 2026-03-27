@@ -356,7 +356,7 @@ export default function RoundsChart({
                     <span className={`text-xl font-black font-mono tabular-nums leading-none ${phase === 'entry' ? 'text-[#3CB371]' : (isAbove ? 'text-[#3CB371]' : 'text-[#FF7F50]')}`}>
                         ${parseFloat(currentPrice).toFixed(2)}
                     </span>
-                    {phase === 'locked' && !isNaN(ePrice) && (
+                    {phase === 'locked' && !isNaN(ePriceNum) && (
                         <span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">Target: ${parseFloat(entryPrice).toFixed(2)}</span>
                     )}
                 </div>

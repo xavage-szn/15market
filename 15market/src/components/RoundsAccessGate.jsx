@@ -11,13 +11,13 @@ import { KEEPER_URL_ROUNDS } from '../constants';
  * Access is verified against the backend on mount and re-checked every 60s.
  * The gate cannot be bypassed by localStorage manipulation.
  */
-export default function RoundsAccessGate({ children, theme, active, onUnlock }) {
+export default function RoundsAccessGate({ children, theme, active, onUnlock, verified = null }) {
     const { address } = useAccount();
-    const [hasAccess, setHasAccess] = useState(false);
+    const [hasAccess, setHasAccess] = useState(verified === true);
     const [view, setView] = useState('gate'); // 'gate' | 'apply' | 'success'
     const [inputCode, setInputCode] = useState('');
     const [error, setError] = useState('');
-    const [isChecking, setIsChecking] = useState(true);
+    const [isChecking, setIsChecking] = useState(verified === null);
     const [isVerifying, setIsVerifying] = useState(false);
     const [isApplying, setIsApplying] = useState(false);
     const [appSuccess, setAppSuccess] = useState(false);
@@ -26,16 +26,27 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock }) 
     const recheckRef = useRef(null);
     const [formData, setFormData] = useState({ xHandle: '', discord: '', email: '' });
 
-    // ─── Server-Side Access Check ─────────────────────────────────────────────
+    // ─── Sync with Global Verified Prop ─────────────────────────────────────────
+    useEffect(() => {
+        if (verified !== null) {
+            setHasAccess(verified);
+            setIsChecking(false);
+            if (verified) onUnlock?.();
+        }
+    }, [verified, onUnlock]);
+
+    // ─── Server-Side Access Check (Periodic Only) ───────────────────────────────
     const checkAccess = useCallback(async () => {
         if (!address) {
             setIsChecking(false);
             setHasAccess(false);
             return;
         }
+        // If we already have global verification, we skip the initial fetch 
+        // but keep the function for periodic background re-checks.
         try {
             const res = await fetch(`${KEEPER_URL_ROUNDS}/access/check/${address}`, {
-                cache: 'no-store' // Always fresh — never serve cached result
+                cache: 'no-store'
             });
             if (!res.ok) throw new Error('Server error');
             const data = await res.json();
@@ -43,10 +54,7 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock }) 
             setHasAccess(authorized);
             if (authorized) onUnlock?.();
         } catch (e) {
-            // If backend is unreachable do NOT fall back to localStorage.
-            // Keep hasAccess = false to enforce the gate.
-            console.warn('[AccessGate] Backend check failed — access denied by default:', e.message);
-            setHasAccess(false);
+            console.warn('[AccessGate] Backend re-check failed:', e.message);
         } finally {
             setIsChecking(false);
         }
@@ -58,24 +66,32 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock }) 
             setIsChecking(false);
             return;
         }
-        checkAccess();
+
+        // Only trigger initial fetch if verified is null (initial state)
+        if (verified === null) {
+            checkAccess();
+        } else {
+            setIsChecking(false);
+        }
 
         // Re-verify every 60s — revoked wallets lose access on next cycle
         recheckRef.current = setInterval(checkAccess, 60000);
         return () => clearInterval(recheckRef.current);
-    }, [active, checkAccess]);
+    }, [active, checkAccess, verified]);
 
-    // If the wallet changes, reset and re-check immediately
+    // If the wallet changes, reset and re-check...
     useEffect(() => {
-        setHasAccess(false);
-        setIsChecking(true);
+        if (verified === null) {
+            setHasAccess(false);
+            setIsChecking(true);
+        }
         setInputCode('');
         setError('');
         setView('gate');
-        if (active && address) {
+        if (active && address && verified === null) {
             checkAccess();
         }
-    }, [address]);
+    }, [address, verified]);
 
     // ─── Code Redemption ─────────────────────────────────────────────────────
     const handleVerify = async () => {

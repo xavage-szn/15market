@@ -416,6 +416,86 @@ export default function UserApp() {
     };
   });
 
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
+  const [hasRoundsAccess, setHasRoundsAccess] = useState(null); // null = unknown, true/false = verified
+
+  const performStealthChecks = useCallback(async (addr) => {
+    if (!addr) return;
+    
+    console.log(`🕵️ [STEALTH] Starting identity verification for ${addr}...`);
+    setIsGlobalLoading(true);
+    setGlobalLoadingProgress(0);
+
+    const startTime = Date.now();
+    const MIN_LOAD_TIME = 5000; // 5s "premium" feel as requested
+    
+    // Progress bar simulation for the stealth checks
+    const progressInterval = setInterval(() => {
+      setGlobalLoadingProgress(prev => {
+        if (prev < 90) return prev + (Math.random() * 5);
+        return prev;
+      });
+    }, 200);
+
+    try {
+      // PROMISE 1: Check if user exists (Onboarding check)
+      const profilePromise = fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`);
+      
+      // PROMISE 2: Check if user has Rounds access
+      const roundsPromise = fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`);
+
+      const [pRes, rRes] = await Promise.all([profilePromise, roundsPromise]);
+      
+      let pData = null;
+      if (pRes.ok) pData = await pRes.json();
+      
+      let rData = { authorized: false };
+      if (rRes.ok) rData = await rRes.json();
+
+      // Update Profile & Onboarding State Stealthily
+      if (!pData || pData.error) {
+        // New user detected
+        setUserProfile({ address: addr, isInitial: true });
+        setShowOnboarding(true);
+      } else {
+        // Returning user
+        setUserProfile(pData);
+        setShowOnboarding(false);
+      }
+
+      // Update Rounds Access State
+      setHasRoundsAccess(rData.authorized === true);
+      console.log(`🕵️ [STEALTH] Verification complete. Rounds Access: ${rData.authorized}`);
+
+    } catch (e) {
+      console.warn("🕵️ [STEALTH] Verification encounterd an error:", e.message);
+      // Fallback: Default to restricted but let them manually retry if needed
+      setHasRoundsAccess(false);
+    } finally {
+      clearInterval(progressInterval);
+      setGlobalLoadingProgress(100);
+      
+      // Ensure we hit the 5s target for aesthetics
+      const elapsed = Date.now() - startTime;
+      const remains = Math.max(0, MIN_LOAD_TIME - elapsed);
+      
+      setTimeout(() => {
+        setIsGlobalLoading(false);
+      }, remains);
+    }
+  }, []);
+
+  // Trigger stealth checks when wallet connects or changes
+  useEffect(() => {
+    if (address) {
+      performStealthChecks(address);
+    } else {
+      setIsGlobalLoading(false);
+      setHasRoundsAccess(null);
+    }
+  }, [address, performStealthChecks]);
+
   const fetchGlobalSettings = useCallback(async () => {
     try {
       const res = await fetch(`${KEEPER_URL_ARC}/settings`); // Uses normalized endpoint
@@ -2447,7 +2527,7 @@ export default function UserApp() {
               {/* Branded Game Mode Switcher - Large Screens */}
               <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
                 <motion.div
-                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
+                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
                   initial={false}
                   animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -2486,7 +2566,7 @@ export default function UserApp() {
               {/* Branded Game Mode Switcher - Mobile */}
               <div className={`flex items-center p-1 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-75 origin-right`}>
                 <motion.div
-                  className="absolute top-1 bottom-1 rounded-full bg-[#3CB371]"
+                  className="absolute top-1 bottom-1 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
                   initial={false}
                   animate={{ x: gameMode === 'classic' ? 0 : 65, width: 65 }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -2522,7 +2602,7 @@ export default function UserApp() {
 
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
-            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
+            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} verified={hasRoundsAccess} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
               {uiVersion === 'v1' ? (
                 <div className={`w-full flex-none grid grid-cols-12 gap-2 lg:gap-4 mb-4 relative z-0 mt-1 h-auto ${gameMode === 'rounds' ? 'lg:h-[calc(100vh-120px)]' : 'lg:h-[calc(100vh-150px)]'} lg:min-h-0`}>
                   {/* Chart Widget - First in stack on mobile */}
@@ -2623,7 +2703,7 @@ export default function UserApp() {
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
-                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto min-h-0' : 'h-full'} min-h-0 transition-all duration-500 relative`}
+                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto flex-none' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
                     style={{ paddingLeft: !isSmallScreen && showSideHistory ? (isSmallScreen ? '0px' : '220px') : (!isSmallScreen ? '36px' : '0px') }}>
 
                     {uiVersion === 'v2' && !isSmallScreen && (
@@ -2637,7 +2717,7 @@ export default function UserApp() {
                       />
                     )}
 
-                    <div className={`w-full relative z-[45] overflow-hidden mb-1 rounded-2xl`}>
+                    <div className={`w-[calc(100%+16px)] md:w-full -mx-2 md:mx-0 relative z-[45] overflow-hidden mb-1 md:rounded-2xl`}>
                       {gameMode === 'rounds' ? <RoundsTradeScroller theme={theme} /> : <GlobalTradeScroller theme={theme} />}
                     </div>
 
@@ -2700,12 +2780,12 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full md:w-[30%] flex flex-col gap-1 h-auto lg:h-full min-h-0 flex-1 ${uiVersion === 'v2' && isSmallScreen ? 'pb-12' : (uiVersion === 'v2' ? 'pb-12' : '')}`}
+                    className={`w-full md:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-14' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                     <div className={`w-full flex ${uiVersion === 'v2' && isSmallScreen ? 'flex-row' : (gameMode === 'rounds' ? 'flex-col' : 'flex-row')} gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'flex-1' : 'w-full'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[220px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'w-1/2 flex-none' : 'w-full flex-1'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2749,7 +2829,7 @@ export default function UserApp() {
 
                       {/* ACTIVE EXECUTION - Visible on Mobile V2 or when not in Rounds */}
                       {(gameMode !== 'rounds' || (uiVersion === 'v2' && isSmallScreen)) && (
-                        <div className={`flex-1 min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                        <div className={`min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'w-1/2 flex-none min-h-[160px]' : 'flex-1 min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -3044,14 +3124,42 @@ export default function UserApp() {
         transaction={selectedTransaction}
       />
 
+      {/* GET STEALTH VERIFICATION OVERLAY */}
+      <AnimatePresence>
+        {isGlobalLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+          >
+            <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
+              <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
+              <MascotLoader 
+                progress={globalLoadingProgress} 
+                status="running" 
+                label="INITIALIZING..." 
+                theme="dark" 
+              />
+            </div>
+            
+            {/* Visual Flair */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden origin-center">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#3CB371]/5 rounded-full blur-[120px] animate-pulse" />
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#3CB371]/30 to-transparent animate-scanLine" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Onboarding Flow for new users */}
-      {showOnboarding && address && (
+      {showOnboarding && address && !isGlobalLoading && (
         <OnboardingFlow
           address={address}
           theme={theme}
           onComplete={(profile) => {
             setShowOnboarding(false);
-            fetchMyProfile(); // Refresh profile state
+            performStealthChecks(address); // Final refresh
           }}
         />
       )}

@@ -34,7 +34,7 @@ function TradeTerminalComponent({
 
     const containerClass = transparent
         ? "flex flex-col h-full justify-between gap-1 lg:gap-2 overflow-y-auto no-scrollbar"
-        : `w-full h-full p-1.5 md:p-2 lg:p-3 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-1 lg:gap-1.5 lg:gap-2.5 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
+        : `w-full min-h-0 h-auto lg:h-full p-1.5 md:p-2 lg:p-3 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-1 lg:gap-1.5 lg:gap-2.5 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
 
     const renderHeader = () => (
         <div className="flex items-center justify-between pointer-events-auto mb-0.5">

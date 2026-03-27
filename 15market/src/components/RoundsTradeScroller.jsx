@@ -80,7 +80,7 @@ function RoundsTradeScrollerComponent({ theme, isV1 = false }) {
     if (history.length === 0) return null;
 
     const v1Bg = isLight ? 'bg-white zigzag-ticker shadow-sm' : 'bg-[#0a0a0a] zigzag-ticker zigzag-outline';
-    const v2Bg = isLight ? 'bg-white ticker-v2 shadow-sm' : 'bg-[#050505] ticker-v2';
+    const v2Bg = isLight ? 'bg-white zigzag-ticker ticker-v2 shadow-sm' : 'bg-[#050505] ticker-v2';
 
     return (
         <div className={`w-full ${isV1 ? 'h-10 lg:h-12 border-y-2 ' + v1Bg : 'h-10 lg:h-12 ' + v2Bg} relative z-[45] overflow-hidden transition-all duration-500`}>
