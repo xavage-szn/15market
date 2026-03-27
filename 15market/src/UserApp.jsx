@@ -25,7 +25,7 @@ import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 
 import MessagingSystem from "./components/MessagingSystem";
-import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID } from "./constants";
+import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
 
 
 // Memoized Sub-components
@@ -2696,7 +2696,7 @@ export default function UserApp() {
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
-                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto flex-none' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
+                    className={`w-full ${gameMode === 'rounds' ? 'md:w-[80%]' : 'md:w-[70%]'} flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto flex-none' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
                     style={{ paddingLeft: !isSmallScreen && showSideHistory ? (isSmallScreen ? '0px' : '220px') : (!isSmallScreen ? '36px' : '0px') }}>
 
                     {uiVersion === 'v2' && !isSmallScreen && (
@@ -2773,7 +2773,7 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full md:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-14' : 'h-full flex-1'} min-h-0`}
+                    className={`w-full ${gameMode === 'rounds' ? 'md:w-[20%]' : 'md:w-[30%]'} flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-14' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                     <div className={`w-full flex ${uiVersion === 'v2' && isSmallScreen ? 'flex-row' : (gameMode === 'rounds' ? 'flex-col' : 'flex-row')} gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
@@ -2877,7 +2877,7 @@ export default function UserApp() {
 
                         {/* Navigation Bar - TOP BAR */}
                         {/* Trading Terminal Box */}
-                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : 'h-auto w-1/2 lg:w-full'} min-h-0 shadow-lg`}
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : `h-auto ${gameMode === 'rounds' ? 'w-full' : 'w-1/2 lg:w-full'}`} min-h-0 shadow-lg`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'

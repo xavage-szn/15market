@@ -94,18 +94,32 @@ function RoundsTerminalComponent({
     const entryData = roundState.next || { pools: { long: 10, short: 10, participants: 0 } };
     const liveData = roundState.live || null;
 
-    const odds = useMemo(() => {
-        const total = (entryData.pools.long || 1) + (entryData.pools.short || 1);
-        return {
-            long: ((total / (entryData.pools.long || 1)) * 0.90).toFixed(2),
-            short: ((total / (entryData.pools.short || 1)) * 0.90).toFixed(2),
-        };
-    }, [entryData.pools]);
-
     // ─── USER INTERACTION ───────────────────────────────────────────────────────
     const [selectedDirection, setSelectedDirection] = useState(null);
     const [hasEnteredThisRound, setHasEnteredThisRound] = useState(false);
     const reportedRounds = useRef(new Set());
+
+    const odds = useMemo(() => {
+        const amt = parseFloat(localAmount) || 0;
+        
+        // Add user's potential stake to the pool if they haven't entered yet
+        // If they have entered, we assume the backend already includes it in `entryData.pools`
+        const isPendingBet = !hasEnteredThisRound && amt > 0 && selectedDirection;
+        
+        const longPool = (entryData.pools.long || 0) + (isPendingBet && selectedDirection === 'UP' ? amt : 0);
+        const shortPool = (entryData.pools.short || 0) + (isPendingBet && selectedDirection === 'DOWN' ? amt : 0);
+        
+        const total = Math.max(longPool + shortPool, 1); // Avoid div zero
+
+        // Effective pools (minimum 1 to avoid div by zero, but default to equal odds if empty)
+        const effLong = longPool || (total / 2);
+        const effShort = shortPool || (total / 2);
+
+        return {
+            long: ((total / effLong) * 0.90).toFixed(2),
+            short: ((total / effShort) * 0.90).toFixed(2),
+        };
+    }, [entryData.pools, localAmount, selectedDirection, hasEnteredThisRound]);
 
     const handleRoundResult = useCallback((result, exitPrice) => {
         if (!liveData || !liveData.id || reportedRounds.current.has(liveData.id)) return;
