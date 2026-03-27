@@ -38,14 +38,12 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 const PRODUCTION_BACKEND = "https://api.15market.online";
 
 const getBaseUrl = (envValue) => {
-    if (isLocal) {
-        if (!envValue || envValue.includes('api.15market.online') || envValue.startsWith('/')) {
-            console.log("🛠️ [Config] Local fallback enabled: Using localhost:3010");
-            return `http://${window.location.hostname}:3010`;
-        }
-    }
-    // Production: Use env var if set, otherwise use the backend domain
+    // Directly use the provided environment variable, or fallback to the production backend.
+    // This allows localhost to test against production by simply setting it in .env
     const final = envValue || PRODUCTION_BACKEND;
+    if (isLocal && final === PRODUCTION_BACKEND) {
+        console.log("🛠️ [Config] Connecting to Production Backend from Localhost");
+    }
     return final;
 };
 
