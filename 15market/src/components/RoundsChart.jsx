@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react'; // Build Fix V3 - Full File Sync
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Lock, Timer, Zap, Trophy, AlertCircle } from 'lucide-react';
 
 /**
- * RoundsChart â€” Premium Live Chart with Split-Screen Animations.
+ * RoundsChart — Premium Live Chart with Split-Screen Animations.
  * Handles Entry Countdown, Live Tracking, and Result Reveal.
  */
 export default function RoundsChart({
