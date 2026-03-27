@@ -25,7 +25,26 @@ export default function RoundsChart({
     const priceHistoryRef = useRef(priceHistory || []);
     const rafRef = useRef(null);
     const isLight = theme === 'light';
-    const ePriceNum = parseFloat(entryPrice);
+    
+    // Freeze the entry price locally as soon as the phase transitions to locked.
+    // This stops the entry line from constantly following the live price!
+    const frozenEntryPriceRef = useRef(null);
+    useEffect(() => {
+        if (phase === 'locked') {
+            if (frozenEntryPriceRef.current === null) {
+                const p = parseFloat(entryPrice);
+                if (!isNaN(p)) frozenEntryPriceRef.current = p;
+            }
+        } else {
+            frozenEntryPriceRef.current = null;
+        }
+    }, [phase, entryPrice]);
+
+    const effectiveEntryPrice = (phase === 'locked' && frozenEntryPriceRef.current !== null) 
+        ? frozenEntryPriceRef.current 
+        : parseFloat(entryPrice);
+
+    const ePriceNum = effectiveEntryPrice;
     const cPriceNum = parseFloat(currentPrice);
  
     // Capture exit price locally for immediate result animation
@@ -147,13 +166,12 @@ export default function RoundsChart({
                 ctx.scale(dpr, dpr);
             }
 
-            // Lerp current price
+            const ePrice = effectiveEntryPrice;
             if (targetPriceRef.current !== null && interpolatedPriceRef.current !== null) {
                 const diff = targetPriceRef.current - interpolatedPriceRef.current;
                 interpolatedPriceRef.current += diff * 0.15;
             }
 
-            const ePrice = parseFloat(entryPrice);
             const history = priceHistoryRef.current;
             const latestPriceVal = interpolatedPriceRef.current || ePrice;
 
@@ -422,29 +440,31 @@ export default function RoundsChart({
                         </motion.div>
  
                         {/* CENTER RELOADED COUNTDOWN - Corrected Position */}
-                        <motion.div 
-                            initial={{ scale: 0, y: 100, rotate: -90 }} 
-                            animate={{ scale: 1, y: 0, rotate: 0 }}
-                            exit={{ scale: 0, y: -100 }}
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 z-[55] flex items-center justify-center"
-                        >
-                            <div className="relative w-full h-full flex items-center justify-center">
-                                {/* Glow Background */}
-                                <div className="absolute inset-0 bg-[#3CB371] blur-[60px] opacity-20 animate-pulse rounded-full" />
-                                
-                                <div className="relative w-40 h-40 rounded-full bg-black/90 backdrop-blur-3xl border-4 border-[#3CB371]/30 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
-                                    <span className="text-[10px] font-black text-[#3CB371] mb-1 tracking-[0.5em] uppercase">Lock In</span>
-                                    <motion.span 
-                                        key={timeLeft} 
-                                        initial={{ scale: 1.5, opacity: 0 }} 
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        className="text-7xl font-black text-white font-mono italic leading-none"
-                                    >
-                                        {timeLeft}
-                                    </motion.span>
+                        <div className="absolute inset-0 z-[55] flex items-center justify-center pointer-events-none">
+                            <motion.div 
+                                initial={{ scale: 0, rotate: -90 }} 
+                                animate={{ scale: 1, rotate: 0 }}
+                                exit={{ scale: 0 }}
+                                className="w-48 h-48 flex items-center justify-center pointer-events-auto"
+                            >
+                                <div className="relative w-full h-full flex items-center justify-center">
+                                    {/* Glow Background */}
+                                    <div className="absolute inset-0 bg-[#3CB371] blur-[60px] opacity-20 animate-pulse rounded-full" />
+                                    
+                                    <div className="relative w-40 h-40 rounded-full bg-black/90 backdrop-blur-3xl border-4 border-[#3CB371]/30 flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+                                        <span className="text-[10px] font-black text-[#3CB371] mb-1 tracking-[0.5em] uppercase">Lock In</span>
+                                        <motion.span 
+                                            key={timeLeft} 
+                                            initial={{ scale: 1.5, opacity: 0 }} 
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            className="text-7xl font-black text-white font-mono italic leading-none"
+                                        >
+                                            {timeLeft}
+                                        </motion.span>
+                                    </div>
                                 </div>
-                            </div>
-                        </motion.div>
+                            </motion.div>
+                        </div>
                     </motion.div>
                 )}
 
