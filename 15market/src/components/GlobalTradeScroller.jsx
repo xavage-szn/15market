@@ -209,7 +209,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                                         <div className="flex items-center gap-3">
                                             <div className="flex flex-col items-start leading-tight">
                                                 <span className={`${isV1 ? 'text-[8px]' : 'text-[9px]'} font-black tracking-[0.2em] text-white/50`}>STAKE</span>
-                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${event.amount}</span>
+                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${parseFloat(event.amount || 0).toFixed(2)}</span>
                                             </div>
                                             <div className="h-6 w-px bg-white/10" />
                                             <div className="flex items-center gap-2">
