@@ -136,7 +136,10 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
             const toY = (p) => H - ((p - lo) / (hi - lo)) * H;
             const isMobile = W < 600;
-            const liveX = isMobile ? W - 60 : W - 80; // Expand to fill more width
+            const labelText = latestPriceVal.toFixed(2);
+            ctx.font = `bold ${isMobile ? 14 : 12}px IBM Plex Mono, monospace`;
+            const labelW = ctx.measureText(labelText).width + 16;
+            const liveX = W - labelW - 30; // Increased space like desktop
             const liveY = toY(latestPriceVal);
 
             // 1. Static Grid (Matching 1m)
@@ -151,14 +154,19 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
             // 2. Price Line Path
             if (history.length >= 1) {
-                const mainColor = GREEN;
+                let mainColor = GREEN;
+                if (isLight) {
+                    mainColor = ctx.createLinearGradient(0, liveY - 100, 0, liveY + 100);
+                    mainColor.addColorStop(0, '#48c97f');
+                    mainColor.addColorStop(1, '#1e5a38');
+                }
 
                 // Flow logic (latest on right, trailing on left)
                 const getX = (t) => liveX - ((nowPx - t) / windowMs) * W;
 
                 // Fill Area (Matching Lightweight AreaSeries)
                 const fillGrad = ctx.createLinearGradient(0, 0, 0, H);
-                fillGrad.addColorStop(0, `${mainColor}40`);
+                fillGrad.addColorStop(0, isLight ? 'rgba(72,201,127,0.4)' : `${GREEN}40`);
                 fillGrad.addColorStop(1, 'transparent');
 
                 ctx.beginPath();
@@ -210,15 +218,9 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 ctx.setLineDash([]);
 
                 // Live Badge
-                const labelText = latestPriceVal.toFixed(2);
-                const isMobile = W < 600;
-                const fontSize = isMobile ? 14 : 12;
-                ctx.font = `bold ${fontSize}px IBM Plex Mono, monospace`;
-                const metrics = ctx.measureText(labelText);
-                const labelW = metrics.width + 16;
                 const labelH = isMobile ? 24 : 20;
 
-                ctx.fillStyle = GREEN;
+                ctx.fillStyle = isLight ? '#1e5a38' : GREEN;
                 ctx.beginPath();
                 ctx.roundRect(W - labelW - 10, liveY - labelH/2, labelW, labelH, 6);
                 ctx.fill();
@@ -231,11 +233,11 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 const dotSize = isMobile ? 5 : 4;
                 ctx.beginPath();
                 ctx.arc(liveX, liveY, dotSize, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = isLight ? '#48c97f' : '#ffffff';
                 ctx.fill();
                 ctx.beginPath();
                 ctx.arc(liveX, liveY, (dotSize + 2) + pulse, 0, Math.PI * 2);
-                ctx.strokeStyle = `${GREEN}60`;
+                ctx.strokeStyle = isLight ? 'rgba(72,201,127,0.6)' : `${GREEN}60`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
             }

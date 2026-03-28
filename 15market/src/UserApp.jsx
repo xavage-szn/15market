@@ -109,24 +109,24 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         y: isOpen ? 0 : 'calc(100% - 48px)',
       }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed bottom-[-16px] left-0 right-0 z-[110] flex flex-col pointer-events-none"
+      className="fixed bottom-0 left-0 right-0 z-[110] flex flex-col pointer-events-none"
       style={{ height: '70vh' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
-        backdrop-blur-3xl border-t border-x rounded-t-[40px] shadow-[0_-20px_50px_rgba(0,0,0,0.3)]
+        backdrop-blur-xl border-t border-x rounded-t-[40px] shadow-[0_-20px_50px_rgba(0,0,0,0.3)]
         transition-all duration-500 flex flex-col overflow-hidden
         ${isDark
           ? 'bg-[#0a0a0a]/90 border-white/10'
-          : 'coral-green-gradient-light border-[#3CB371]/20'}
+          : 'bg-[#d4e6dc]/90 border-[#3CB371]/20'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
           onClick={onToggle}
           className={`
             w-full h-12 flex items-center justify-center cursor-pointer 
-            hover:bg-white/5 transition-colors relative shrink-0 border-b
-            ${isDark ? 'border-white/5' : 'border-[#3CB371]/10'}
+            hover:bg-black/5 transition-colors relative shrink-0 border-b
+            ${isDark ? 'border-white/5 hover:bg-white/5' : 'border-[#3CB371]/10'}
           `}
         >
           <div className="flex items-center justify-center gap-3 w-full">
@@ -155,7 +155,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                   key={trade.id}
                   className={`
                     p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#f0f9f4]/50 border-[#3CB371]/10 shadow-sm'}
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#cce0d5] border-[#3CB371]/10 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -621,7 +621,7 @@ export default function UserApp() {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
       setIsPortrait(window.innerHeight > window.innerWidth);
-      setIsSmallScreen(window.innerWidth < 768);
+      setIsSmallScreen(window.innerWidth < 1025);
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -632,7 +632,7 @@ export default function UserApp() {
   }, []);
 
   const [isSmallScreen, setIsSmallScreen] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+    typeof window !== 'undefined' ? window.innerWidth < 1025 : false
   );
   const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
 
@@ -2509,7 +2509,7 @@ export default function UserApp() {
           <header className="w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 py-1 lg:py-0">
             <div className="flex items-center transition-all duration-500"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[40px]' : 'h-[42px] lg:h-[58px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[52px]' : 'h-[42px] lg:h-[58px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
 
@@ -2543,43 +2543,40 @@ export default function UserApp() {
               <UnifiedWalletButton theme={theme} />
             </div>
 
-            <div className="flex lg:hidden landscape:hidden items-center gap-1 md:gap-2">
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-3xl transition-all ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                    {activeMarket.symbol ? activeMarket.symbol.split('/')[0] : 'ETH'}
-                  </span>
-                  <ChevronDown size={10} className="opacity-40" />
-                </div>
-
+            <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
               {/* Branded Game Mode Switcher - Mobile */}
-              <div className={`flex items-center p-1 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-75 origin-right`}>
+              <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
                 <motion.div
-                  className="absolute top-1 bottom-1 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
+                  className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
                   initial={false}
-                  animate={{ x: gameMode === 'classic' ? 0 : 65, width: 65 }}
+                  animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
                 {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
                   <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                    className={`relative z-10 flex items-center justify-center h-6 w-[65px] transition-all duration-300`}>
-                    <Icon size={10} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                    className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
+                    <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
                   </button>
                 ))}
               </div>
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <button onClick={() => setView("dashboard")} className="p-1 px-1.5 md:p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
+              <div className="scale-[0.8] origin-center -mx-1.5">
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              </div>
+              <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
                 <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
               </button>
-              <UnifiedWalletButton theme={theme} />
+              <div className="scale-[0.9] origin-right ml-[-2px]">
+                <UnifiedWalletButton theme={theme} />
+              </div>
             </div>
           </header>
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
-          <div className="w-full flex flex-col mt-0 mb-[4px] relative z-[60]">
+          <div className="w-full flex flex-col -mt-1 md:mt-0 mb-[2px] md:mb-[4px] relative z-[60]">
             <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
             <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)] mt-[2px]" />
           </div>
@@ -2607,13 +2604,13 @@ export default function UserApp() {
                       />
                     )}
 
-                    <div className={`w-[calc(100%+16px)] md:w-full -mx-2 md:mx-0 relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
+                    <div className={`w-[calc(100%+16px)] md:w-full -mx-2 md:mx-0 relative z-[45] overflow-hidden mb-0 md:mb-1 md:rounded-full`}>
                       <GlobalTradeScroller theme={theme} />
                     </div>
 
 
                     {/* Chart Container */}
-                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[233px] min-h-[233px] mt-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[222px] min-h-[222px] mt-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
                         background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#8faf9a' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
@@ -2845,9 +2842,6 @@ export default function UserApp() {
 
               {/* Forced Orientation Overlay for V2 Mobile */}
               {showPortraitLock && <PortraitPrompt theme={theme} />}
-
-
-
 
               {/* V2 Mobile History Bottom Drawer */}
               {isSmallScreen && (

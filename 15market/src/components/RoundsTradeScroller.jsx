@@ -82,7 +82,7 @@ function RoundsTradeScrollerComponent({ theme, isV1 = false }) {
     const v2Bg = isLight ? 'bg-white zigzag-ticker ticker-v2 shadow-sm' : 'bg-[#050505] ticker-v2';
 
     return (
-        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 border-y-2 ' + v1Bg : 'h-10 lg:h-12 ' + v2Bg} relative z-[45] overflow-hidden`}>
+        <div className={`w-full ${isV1 ? 'h-7 md:h-8 lg:h-12 border-y-2 ' + v1Bg : 'h-7 md:h-8 lg:h-12 ' + v2Bg} relative z-[45] overflow-hidden`}>
             {activeBroadcast ? (
                 <div className={`absolute inset-0 flex items-center ${isV1 ? 'bg-amber-500/10' : (isLight ? 'bg-[#3CB371]' : 'bg-[#0a0a0a]')}`} style={{ animation: 'fadeIn 0.3s ease' }}>
                     <div

@@ -153,7 +153,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
         : 'bg-gradient-to-br from-[#1B5E3C] to-[#0D2B1D] shadow-[0_0_40px_rgba(27,94,60,0.5)] border-white/5';
 
     return (
-        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 ' + v1Bg : 'h-10 lg:h-12 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden`}>
+        <div className={`w-full ${isV1 ? 'h-7 md:h-8 lg:h-12 ' + v1Bg : 'h-7 md:h-8 lg:h-12 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden`}>
             {activeBroadcast ? (
                 <div className="absolute inset-0 flex items-center" style={{ animation: 'fadeIn 0.3s ease' }}>
                     <div

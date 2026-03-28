@@ -175,9 +175,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             seriesRef.current = candlestickSeries;
         } else {
             const areaSeries = chart.addSeries(AreaSeries, {
-                lineColor: isDark ? '#3CB371' : '#1a7a42',
-                topColor: isDark ? 'rgba(60, 179, 113, 0.4)' : 'rgba(26, 122, 66, 0.5)',
-                bottomColor: isDark ? 'rgba(60, 179, 113, 0.0)' : 'rgba(26, 122, 66, 0.05)',
+                lineColor: isDark ? '#2E8B57' : '#1e5a38',
+                topColor: isDark ? 'rgba(46, 139, 87, 0.4)' : 'rgba(30, 90, 56, 0.5)',
+                bottomColor: isDark ? 'rgba(46, 139, 87, 0.0)' : 'rgba(30, 90, 56, 0.05)',
                 lineWidth: 3,
                 priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
             });
