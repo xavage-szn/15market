@@ -193,10 +193,10 @@ input[type=number] {
 /* ===== PREMIUM LIGHT MODE — Light Coral Green Branding ===== */
 html.light,
 body.light {
-  background-color: #f0f9f4 !important;
+  background-color: #c8ddd2 !important;
   background-image:
-    radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.05) 1px, transparent 0),
-    linear-gradient(180deg, #f0f9f4 0%, #e6f4ed 100%) !important;
+    radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.08) 1px, transparent 0),
+    linear-gradient(180deg, #c8ddd2 0%, #bcd4c9 100%) !important;
   background-size: 32px 32px, 100% 100% !important;
   background-attachment: fixed !important;
 }
@@ -560,3 +560,39 @@ input[type="range"]::-moz-range-thumb:hover {
   bottom: -6px;
   transform: rotate(180deg);
 }
+
+/* ===== PERFORMANCE: GPU-accelerated ticker animation ===== */
+@keyframes ticker-move {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Promote animated ticker to its own compositor layer */
+[style*="ticker-move"] {
+  will-change: transform;
+  contain: layout style;
+}
+
+/* ===== PERFORMANCE: Downgrade excessive blur tiers ===== */
+/* backdrop-blur-3xl is very expensive; cap at a cheaper level site-wide */
+.backdrop-blur-3xl {
+  --tw-backdrop-blur: blur(12px) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+/* blur-[60px] and blur-[120px] decorative divs — bring them down */
+.blur-\[60px\]  { filter: blur(30px)  !important; }
+.blur-\[80px\]  { filter: blur(40px)  !important; }
+.blur-\[120px\] { filter: blur(50px)  !important; }
+
+/* ===== PERFORMANCE: Contain layout on scroll containers ===== */
+.overflow-y-auto,
+.overflow-hidden {
+  contain: layout style;
+}

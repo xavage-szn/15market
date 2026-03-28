@@ -81,7 +81,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
         }
 
         fetchMetrics();
-        const interval = setInterval(fetchMetrics, 2000); // Poll every 2s for real-time feel
+        const interval = setInterval(fetchMetrics, 20000); // Poll every 20s — analytics data is not real-time
         return () => clearInterval(interval);
     }, [address]);
 
@@ -179,8 +179,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`h-screen w-full flex flex-col overflow-hidden ${isLight ? 'bg-[#f0f9f4] text-[#0a261a]' : 'bg-transparent text-white'}`}>
-            <div className={`flex-none ${isLight ? 'bg-[#f0f9f4]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
+        <div className={`h-screen w-full flex flex-col overflow-hidden ${isLight ? 'bg-[#c8ddd2] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+            <div className={`flex-none ${isLight ? 'bg-[#c8ddd2]/90 border-[#3CB371]/20' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
                 <div className="max-w-[1600px] mx-auto p-3 md:px-8 md:py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -215,10 +215,10 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         {/* COL 1: Profile + Auto-Signer + Activity (lg:col-span-4) */}
                         <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
                             {/* Profile & Auto-Signer Compact Card */}
-                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
+                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px]">
-                                        <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
+                                        <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#c8ddd2]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                             {userProfile?.xProfileImage ? (
                                                 <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                             ) : (
@@ -260,7 +260,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             </div>
 
                             {/* Activity Pulse Chart */}
-                            <div className={`flex-1 min-h-[120px] ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex flex-col`}>
+                            <div className={`flex-1 min-h-[120px] ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex flex-col`}>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
                                     <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
@@ -285,14 +285,14 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
 
                         {/* COL 2: Transaction Matrix - Narrow (lg:col-span-3) */}
                         <div className="lg:col-span-3 flex flex-col gap-5 min-h-0">
-                            <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
+                            <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Transactions</h3>
                                     <div className="flex items-center gap-1.5">
                                         <button
                                             disabled={currentPage === 1}
                                             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                            className={`p-1 rounded-lg border ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
+                                            className={`p-1 rounded-lg border ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
                                         >
                                             <ArrowLeft size={10} />
                                         </button>
@@ -300,7 +300,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         <button
                                             disabled={currentPage >= Math.ceil((transactionHistory?.length || 0) / 5)}
                                             onClick={() => setCurrentPage(prev => prev + 1)}
-                                            className={`p-1 rounded-lg border ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
+                                            className={`p-1 rounded-lg border ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
                                         >
                                             <ArrowRight size={10} />
                                         </button>
@@ -311,7 +311,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                     {!transactionHistory || transactionHistory.length === 0 ? (
                                         <div className={`flex-1 flex items-center justify-center ${isLight ? 'text-[#0a261a]/20' : 'text-white/10'} text-[9px] uppercase font-black text-center`}>No transactions<br />recognized</div>
                                     ) : transactionHistory.slice((currentPage - 1) * 5, currentPage * 5).map((tx, i) => (
-                                        <div key={tx.id || i} className={`p-3 ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/5' : 'bg-white/[0.03] border-white/5'} border rounded-2xl flex flex-col gap-1 transition-all hover:border-[#3CB371]/20`}>
+                                        <div key={tx.id || i} className={`p-3 ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/15' : 'bg-white/[0.03] border-white/5'} border rounded-2xl flex flex-col gap-1 transition-all hover:border-[#3CB371]/40`}>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <div className={`p-1 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/20 text-[#3CB371]" : "bg-[#FF7F50]/20 text-[#FF7F50]"}`}>
@@ -337,22 +337,22 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         <div className="lg:col-span-5 flex flex-col gap-5 min-h-0">
                             {/* Analytics Quick Stats */}
                             <div className="grid grid-cols-2 gap-3 flex-none">
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
                                     <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">24h Volume</div>
                                     <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketTotalVol}</div>
                                     <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
                                 </div>
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
                                     <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Sentiment</div>
                                     <div className="text-base font-black text-[#3CB371]">{stats.marketSentiment}%</div>
                                     <div className="text-[7px] opacity-20 uppercase font-bold">Bullish</div>
                                 </div>
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
                                     <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Win Rate</div>
                                     <div className="text-base font-black text-[#FF7F50]">{stats.userWinRate}%</div>
                                     <div className="text-[7px] opacity-20 uppercase font-bold">Efficiency</div>
                                 </div>
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
                                     <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Avg Stake</div>
                                     <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketAvgStake}</div>
                                     <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
@@ -360,7 +360,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             </div>
 
                             {/* Community Chat */}
-                            <div className={`flex-1 ${isLight ? 'bg-white border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
+                            <div className={`flex-1 ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
                                 <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <MessageSquare size={14} className="text-[#3CB371]" />
@@ -411,7 +411,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 {modalConfig.type === 'confirm' && (
                                     <button
                                         onClick={() => setModalConfig(null)}
-                                        className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-full transition-all`}
+                                        className={`py-4 ${isLight ? 'bg-[#cce0d5] hover:bg-[#bed9ce] border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-full transition-all`}
                                     >
                                         Cancel
                                     </button>
@@ -448,7 +448,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                     type="number"
                                     autoFocus
                                     placeholder={promptConfig.placeholder}
-                                    className={`w-full ${isLight ? 'bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-300' : 'bg-white/5 border-white/10 text-white placeholder:text-white/10'} border rounded-2xl py-4 px-6 font-black text-center focus:border-[#3CB371]/50 outline-none transition-all`}
+                                    className={`w-full ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20 text-[#0a261a] placeholder:text-[#0a261a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/10'} border rounded-2xl py-4 px-6 font-black text-center focus:border-[#3CB371]/50 outline-none transition-all`}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             promptConfig.onConfirm(e.target.value);

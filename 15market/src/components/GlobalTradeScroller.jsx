@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Radio, ArrowUp, ArrowDown, Check, X } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
@@ -68,7 +67,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
 
     useEffect(() => {
         fetchGlobalData();
-        const interval = setInterval(fetchGlobalData, 3000);
+        const interval = setInterval(fetchGlobalData, 8000);
 
         const fetchBroadcast = async () => {
             try {
@@ -103,7 +102,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
         };
 
         fetchBroadcast();
-        const bInterval = setInterval(fetchBroadcast, 5000);
+        const bInterval = setInterval(fetchBroadcast, 15000);
 
         return () => {
             clearInterval(interval);
@@ -154,78 +153,64 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
         : 'bg-gradient-to-br from-[#1B5E3C] to-[#0D2B1D] shadow-[0_0_40px_rgba(27,94,60,0.5)] border-white/5';
 
     return (
-        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 ' + v1Bg : 'h-10 lg:h-12 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden transition-all duration-500`}>
-            <AnimatePresence mode="wait">
-                {activeBroadcast ? (
-                    <motion.div
-                        key="broadcast"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className={`absolute inset-0 flex items-center ${isV1 ? 'bg-amber-500/10' : 'bg-transparent'}`}
+        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 ' + v1Bg : 'h-10 lg:h-12 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden`}>
+            {activeBroadcast ? (
+                <div className="absolute inset-0 flex items-center" style={{ animation: 'fadeIn 0.3s ease' }}>
+                    <div
+                        className={`flex items-center gap-10 whitespace-nowrap px-10 ${isV1 ? 'bg-amber-500/10' : ''}`}
+                        style={{ animation: 'ticker-move 30s linear infinite', willChange: 'transform' }}
                     >
-                        <motion.div
-                            animate={{ x: [0, -1000] }}
-                            transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                            className="flex items-center gap-10 whitespace-nowrap px-10"
-                        >
-                            {[...Array(10)].map((_, i) => (
-                                <div key={i} className="flex items-center gap-2">
-                                    <Radio size={isV1 ? 14 : 12} className={`${isV1 ? 'text-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'text-white'} animate-pulse`} />
-                                    <span className={`${isV1 ? 'text-[11px] font-black' : 'text-[10px]'} uppercase tracking-[0.2em] ${isV1 ? 'text-amber-500' : 'text-white'}`}>
-                                        {activeBroadcast.text}
-                                    </span>
-                                </div>
-                            ))}
-                        </motion.div>
-                    </motion.div>
-                ) : (
-                    <motion.div
-                        key={`ticker-${scrollerKey}`}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex items-center h-full"
+                        {[...Array(10)].map((_, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <Radio size={isV1 ? 14 : 12} className={`${isV1 ? 'text-amber-500' : 'text-white'}`} />
+                                <span className={`${isV1 ? 'text-[11px] font-black' : 'text-[10px]'} uppercase tracking-[0.2em] ${isV1 ? 'text-amber-500' : 'text-white'}`}>
+                                    {activeBroadcast.text}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : (
+                <div className="flex items-center h-full" style={{ animation: 'fadeIn 0.2s ease' }}>
+                    <div
+                        key={scrollerKey}
+                        className="flex items-center h-full whitespace-nowrap"
+                        style={{ animation: 'ticker-move 100s linear infinite', willChange: 'transform' }}
                     >
-                        <motion.div
-                            animate={{ x: [0, -1500] }}
-                            transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
-                            className="flex items-center h-full whitespace-nowrap"
-                        >
-                            {repeatedHistory.map((event, i) => {
-                                const isUp = event.direction === "UP" || event.direction === 1 || String(event.direction) === "1";
-                                const isWon = event.status === "WON";
+                        {repeatedHistory.map((event, i) => {
+                            const isUp = event.direction === "UP" || event.direction === 1 || String(event.direction) === "1";
+                            const isWon = event.status === "WON";
 
-                                return (
-                                    <div key={`${event.id}-${i}`} className={`flex items-center gap-6 ${isV1 ? 'px-10 border-r-2' : 'px-12 border-r'} border-white/10 h-full transition-all`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-1 rounded-full bg-white/10`}>
-                                                {isUp ? <ArrowUp size={isV1 ? 10 : 12} className="text-white" /> : <ArrowDown size={isV1 ? 10 : 12} className="text-white" />}
-                                            </div>
-                                            <span className={`${isV1 ? 'text-[10px]' : 'text-[11px]'} font-black uppercase tracking-[0.2em] text-white`}>
-                                                {event.symbol ? event.symbol.split('/')[0] : 'BTC'}
+                            return (
+                                <div key={`${event.id}-${i}`} className={`flex items-center gap-6 ${isV1 ? 'px-10 border-r-2' : 'px-12 border-r'} border-white/10 h-full`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-1 rounded-full bg-white/10">
+                                            {isUp ? <ArrowUp size={isV1 ? 10 : 12} className="text-white" /> : <ArrowDown size={isV1 ? 10 : 12} className="text-white" />}
+                                        </div>
+                                        <span className={`${isV1 ? 'text-[10px]' : 'text-[11px]'} font-black uppercase tracking-[0.2em] text-white`}>
+                                            {event.symbol ? event.symbol.split('/')[0] : 'BTC'}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex flex-col items-start leading-tight">
+                                            <span className={`${isV1 ? 'text-[8px]' : 'text-[9px]'} font-black tracking-[0.2em] text-white/50`}>STAKE</span>
+                                            <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${parseFloat(event.amount || 0).toFixed(2)}</span>
+                                        </div>
+                                        <div className="h-6 w-px bg-white/10" />
+                                        <div className="flex items-center gap-2">
+                                            {isWon ? <Check size={isV1 ? 10 : 12} className="text-white" /> : <X size={isV1 ? 10 : 12} className="text-white/60" />}
+                                            <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black uppercase tracking-widest text-white`}>
+                                                {event.status}
                                             </span>
                                         </div>
-
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex flex-col items-start leading-tight">
-                                                <span className={`${isV1 ? 'text-[8px]' : 'text-[9px]'} font-black tracking-[0.2em] text-white/50`}>STAKE</span>
-                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${parseFloat(event.amount || 0).toFixed(2)}</span>
-                                            </div>
-                                            <div className="h-6 w-px bg-white/10" />
-                                            <div className="flex items-center gap-2">
-                                                {isWon ? <Check size={isV1 ? 10 : 12} className="text-white" /> : <X size={isV1 ? 10 : 12} className="text-white/60" />}
-                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black uppercase tracking-widest text-white`}>
-                                                    {event.status}
-                                                </span>
-                                            </div>
-                                        </div>
                                     </div>
-                                );
-                            })}
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

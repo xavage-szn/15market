@@ -153,7 +153,7 @@ function TradeTerminalComponent({
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex flex-col gap-2 p-3 rounded-[32px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-white border-[#3CB371]/30 shadow-lg' : 'bg-white/10 border-[#3CB371]/30 shadow-[0_0_20px_rgba(60,179,113,0.1)]') : (isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5')}`}>
+            <div className={`flex flex-col gap-2 p-3 rounded-[32px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-[#d4e6dc] border-[#3CB371]/30 shadow-lg' : 'bg-white/10 border-[#3CB371]/30 shadow-[0_0_20px_rgba(60,179,113,0.1)]') : (isLight ? 'bg-[#cce0d5] border-[#3CB371]/15' : 'bg-white/5 border-white/5')}`}>
                 <div className="flex items-center gap-1 md:gap-1.5 transition-all">
                     <span className={`text-[10px] md:text-sm font-black transition-opacity duration-300 ${isFocused ? 'opacity-40 text-[#3CB371]' : 'opacity-20'}`}>$</span>
                     <input

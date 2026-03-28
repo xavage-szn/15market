@@ -263,7 +263,7 @@ function RoundsTerminalComponent({
                     </div>
 
                     {/* Compact Input */}
-                    <div className={`p-3 rounded-[24px] border transition-all ${isLight ? 'bg-white border-[#3CB371]/10 shadow-sm' : 'bg-white/5 border-white/5'}`}>
+                    <div className={`p-3 rounded-[24px] border transition-all ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/15 shadow-sm' : 'bg-white/5 border-white/5'}`}>
                         <div className="flex items-center justify-between mb-2 px-1">
                             <span className="text-[8px] font-black opacity-30 uppercase tracking-[0.2em]">Stake Amount</span>
                             <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/5 border border-white/5">

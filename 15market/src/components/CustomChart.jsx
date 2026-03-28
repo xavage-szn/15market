@@ -33,9 +33,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const textColor = isDark ? '#D9D9D9' : '#0f2618';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(60, 179, 113, 0.1)';
 
-    const controlBg = isDark ? 'bg-black/60' : 'bg-[#f0f9f4]/80';
-    const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#e6f4ed]/95';
-    const controlBorder = isDark ? 'border-white/10' : 'border-[#3CB371]/15';
+    const controlBg = isDark ? 'bg-black/60' : 'bg-[#bed9ce]/90';
+    const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#b5d3c7]/95';
+    const controlBorder = isDark ? 'border-white/10' : 'border-[#3CB371]/25';
     const controlText = isDark ? 'text-white' : 'text-[#0a261a]';
     const controlTextDim = isDark ? 'text-white/40' : 'text-[#0a261a]/60';
 
@@ -175,9 +175,9 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             seriesRef.current = candlestickSeries;
         } else {
             const areaSeries = chart.addSeries(AreaSeries, {
-                lineColor: '#3CB371',
-                topColor: 'rgba(60, 179, 113, 0.4)',
-                bottomColor: 'rgba(60, 179, 113, 0.0)',
+                lineColor: isDark ? '#3CB371' : '#1a7a42',
+                topColor: isDark ? 'rgba(60, 179, 113, 0.4)' : 'rgba(26, 122, 66, 0.5)',
+                bottomColor: isDark ? 'rgba(60, 179, 113, 0.0)' : 'rgba(26, 122, 66, 0.05)',
                 lineWidth: 3,
                 priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
             });
