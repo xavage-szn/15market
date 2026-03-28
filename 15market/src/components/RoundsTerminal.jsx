@@ -396,23 +396,21 @@ function RoundsTerminalComponent({
                             whileTap={{ scale: 0.98 }}
                             onClick={handleConfirm}
                             disabled={!selectedDirection || isExecuting || !localAmount || parseFloat(localAmount) <= 0}
-                            className={`w-full py-4 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl relative overflow-hidden group ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
+                            className={`w-full py-4 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl relative overflow-hidden group hover:brightness-110 ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
                                 ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'
-                                : 'text-white cursor-pointer'
+                                : 'text-white cursor-pointer active:scale-95'
                                 }`}
                             style={{
                                 background: (!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted) 
                                     ? '' 
-                                    : (selectedDirection === 'DOWN' ? 'linear-gradient(to right, #FF7F50, #D2691E)' : 'linear-gradient(to right, #3CB371, #2E8B57)'),
+                                    : (selectedDirection === 'DOWN' ? 'linear-gradient(135deg, #FF7F50, #D2691E)' : 'linear-gradient(135deg, #48C97F, #1E5A38)'),
                                 boxShadow: (!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
                                     ? 'none'
-                                    : `0 10px 25px ${selectedDirection === 'DOWN' ? 'rgba(255, 127, 80, 0.3)' : 'rgba(60, 179, 113, 0.3)'}`
+                                    : (selectedDirection === 'DOWN' ? '0 0 30px rgba(255, 127, 80, 0.4)' : '0 0 30px rgba(60, 179, 113, 0.4)')
                             }}
                         >
-                            <motion.div 
-                                className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                            />
-                            <span className="relative z-10">
+                            <span className="relative z-10 flex items-center justify-center gap-2">
+                                {isExecuting && <RotateCw className="animate-spin" size={12} />}
                                 {maintenanceMode || tradingHalted ? (tradingHalted ? 'HALTED' : 'PAUSED') : (isExecuting ? 'SIGNING TXN...' : `CONFIRM ${selectedDirection || ''}`)}
                             </span>
                         </motion.button>

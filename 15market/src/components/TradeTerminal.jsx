@@ -228,7 +228,7 @@ function TradeTerminalComponent({
             whileTap={{ scale: 0.98 }}
             onClick={(e) => { e.stopPropagation(); executeTrade(); }}
             disabled={isExecuting || maintenanceMode}
-            className={`w-full py-2.5 lg:py-3.5 rounded-full font-black text-[9px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group shadow-2xl
+            className={`w-full py-2.5 lg:py-3.5 rounded-full font-black text-[9px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group shadow-2xl hover:brightness-110
             ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
             style={{
                 background: maintenanceMode ? "#333" : (direction === "DOWN" ? 'linear-gradient(to right, #FF7F50, #D2691E)' : 'linear-gradient(to right, #3CB371, #2E8B57)'),
@@ -236,13 +236,8 @@ function TradeTerminalComponent({
                 boxShadow: maintenanceMode ? "none" : `0 10px 25px ${direction === "DOWN" ? 'rgba(255, 127, 80, 0.3)' : 'rgba(60, 179, 113, 0.3)'}`,
             }}
         >
-            <motion.div 
-                className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                initial={false}
-                animate={{ x: isExecuting ? '100%' : '0%' }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            />
-            <span className="relative z-10">
+            <span className="relative z-10 flex items-center justify-center gap-2">
+                {isExecuting && <div className="w-2 h-2 rounded-full border-2 border-white border-t-transparent animate-spin" />}
                 {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "SIGNING..." : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? `CONFIRM ${direction || ''}` : "CONNECT WALLET")}
             </span>
         </motion.button>

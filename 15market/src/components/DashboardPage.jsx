@@ -175,65 +175,6 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
             }));
     }, [stats.recentTrades]);
 
-    const [adminApps, setAdminApps] = useState([]);
-    const [isAdminState, setIsAdminState] = useState(false);
-
-    // Fetch Admin Data
-    const fetchAdminData = async () => {
-        if (!address) return;
-        try {
-            const res = await fetch(`${KEEPER_URL_ROUNDS}/access/admin/applications`, {
-                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setAdminApps(data);
-                setIsAdminState(true);
-            } else {
-                setIsAdminState(false);
-            }
-        } catch (e) {
-            console.error("Admin check failed - likely not an admin");
-        }
-    };
-
-    useEffect(() => {
-        fetchAdminData();
-    }, [address]);
-
-    const handleApprove = async (app) => {
-        try {
-            const res = await fetch(`${KEEPER_URL_ROUNDS}/access/admin/approve`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${ADMIN_TOKEN}`
-                 },
-                body: JSON.stringify({ address: app.address, email: app.email })
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert(`Approved! Code ${data.code} sent to ${app.email}`);
-                fetchAdminData();
-            }
-        } catch (e) { alert("Approval failed"); }
-    };
-
-    const handleGenerateManual = async () => {
-        try {
-            const res = await fetch(`${KEEPER_URL_ROUNDS}/access/admin/generate-independent`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${ADMIN_TOKEN}`
-                 }
-            });
-            const data = await res.json();
-            if (data.success) {
-                prompt("Code Generated! Share this with your user:", data.code);
-            }
-        } catch (e) { alert("Generation failed"); }
-    };
 
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
@@ -251,7 +192,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             </button>
                             <div>
                                 <h1 className="text-lg md:text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
-                                    Command Center
+                                    Dashboard
                                     <span className={`text-[8px] md:text-[10px] ${isLight ? 'bg-[#3CB371]/10 text-[#3CB371] border-[#3CB371]/20' : 'bg-[#3CB371]/20 text-[#3CB371] border-[#3CB371]/30'} px-2 py-0.5 rounded border`}>ARC LIVE</span>
                                 </h1>
                                 <p className={`text-[10px] md:text-xs ${isLight ? 'text-[#3D5A4C]/60' : 'text-white/40'} font-bold uppercase tracking-widest hidden md:block`}>
@@ -266,7 +207,6 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             <NavTab active={activeTab} id="overview" label="Overview" icon={<Activity size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="profile" label="My Profile" icon={<User size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="community" label="Community" icon={<MessageSquare size={14} />} onClick={setActiveTab} isLight={isLight} />
-                            {isAdminState && <NavTab active={activeTab} id="admin" label="Access Hub" icon={<Shield size={14} />} onClick={setActiveTab} isLight={isLight} />}
                         </div>
                     </div>
                 </div>
