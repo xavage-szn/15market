@@ -166,46 +166,6 @@ function TradeTerminalComponent({
                         className={`w-full bg-transparent text-sm md:text-base font-black outline-none transition-all ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'} ${isFocused ? 'tracking-tight translate-x-1' : ''}`}
                     />
                 </div>
-
-                <AnimatePresence>
-                    {isFocused && (
-                        <motion.div 
-                            initial={{ opacity: 0, height: 0, filter: 'blur(10px)' }}
-                            animate={{ opacity: 1, height: 'auto', filter: 'blur(0px)' }}
-                            exit={{ opacity: 0, height: 0, filter: 'blur(5px)' }}
-                            className="overflow-hidden"
-                        >
-                            <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                                <div className="relative flex-1 flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden me-2">
-                                    {/* 4-way Sliding Pill Background */}
-                                    <motion.div
-                                        className="absolute top-0.5 bottom-0.5 w-[calc(25%-1px)] rounded-full bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all"
-                                        initial={false}
-                                        animate={{ 
-                                            x: sliderValue === 25 ? 0 : sliderValue === 50 ? '100%' : sliderValue === 75 ? '200%' : '300%',
-                                        }}
-                                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
-                                    />
-                                    {[25, 50, 75, 100].map(pct => (
-                                        <button 
-                                            key={pct}
-                                            onClick={() => handleSliderChange({ target: { value: pct } })}
-                                            className={`flex-1 relative z-10 py-1 flex flex-col items-center justify-center transition-all duration-300 ${sliderValue === pct ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
-                                        >
-                                            <span className="text-[8px] font-black uppercase tracking-widest leading-none">{pct === 100 ? 'MAX' : `${pct}%`}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="flex flex-col items-end leading-none">
-                                    <span className="text-[6px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Estimated Return</span>
-                                    <span className="text-[9px] font-black text-[#3CB371]">
-                                        +${(parseFloat(amount || 0) * (duration === 5 ? 6.98 : duration === 10 ? 4.98 : 1.98)).toFixed(2)}
-                                    </span>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
             <div className="relative pt-3 pb-1 px-1">
                 <div className="relative h-1.5">
@@ -228,12 +188,11 @@ function TradeTerminalComponent({
             whileTap={{ scale: 0.98 }}
             onClick={(e) => { e.stopPropagation(); executeTrade(); }}
             disabled={isExecuting || maintenanceMode}
-            className={`w-full py-2.5 lg:py-3.5 rounded-full font-black text-[9px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group shadow-2xl hover:brightness-110
+            className={`w-full py-2.5 lg:py-3.5 rounded-full font-black text-[9px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group hover:brightness-110
             ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
             style={{
                 background: maintenanceMode ? "#333" : (direction === "DOWN" ? 'linear-gradient(to right, #FF7F50, #D2691E)' : 'linear-gradient(to right, #3CB371, #2E8B57)'),
                 color: "white",
-                boxShadow: maintenanceMode ? "none" : `0 10px 25px ${direction === "DOWN" ? 'rgba(255, 127, 80, 0.3)' : 'rgba(60, 179, 113, 0.3)'}`,
             }}
         >
             <span className="relative z-10 flex items-center justify-center gap-2">

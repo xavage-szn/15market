@@ -10,6 +10,7 @@ import {
     User,
     Settings,
     ArrowLeft,
+    ArrowRight,
     TrendingUp,
     TrendingDown,
     Zap,
@@ -39,7 +40,6 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     const isLight = theme === 'light';
     const { isConnected, address } = useAccount();
 
-    const [activeTab, setActiveTab] = useState("overview"); // overview, profile, community
     const [stats, setStats] = useState({
         userWinRate: 0,
         userTotalTrades: 0,
@@ -179,376 +179,208 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`min-h-screen w-full flex flex-col ${isLight ? 'bg-[#f0f9f4] text-[#0a261a]' : 'bg-transparent text-white'}`}>
-            <div className={`sticky top-0 z-40 ${isLight ? 'bg-[#f0f9f4]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
-                <div className="max-w-4xl lg:max-w-7xl mx-auto p-3 md:p-8">
-                    <div className="flex items-center justify-between mb-4">
+        <div className={`h-screen w-full flex flex-col overflow-hidden ${isLight ? 'bg-[#f0f9f4] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+            <div className={`flex-none ${isLight ? 'bg-[#f0f9f4]/80 border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
+                <div className="max-w-[1600px] mx-auto p-3 md:px-8 md:py-4">
+                    <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={onBack}
-                                className={`p-2 md:p-3 rounded-full ${isLight ? 'bg-[#3CB371]/5 hover:bg-[#3CB371]/10 border-[#3CB371]/10 text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 border-white/5 text-white'} border transition-colors group px-4 md:px-6`}
+                                className={`p-2 md:p-2.5 rounded-full ${isLight ? 'bg-[#3CB371]/5 hover:bg-[#3CB371]/10 border-[#3CB371]/10 text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 border-white/5 text-white'} border transition-colors group px-4 md:px-5`}
                             >
                                 <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
                             </button>
                             <div>
-                                <h1 className="text-lg md:text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
+                                <h1 className="text-lg md:text-xl font-black uppercase tracking-tighter flex items-center gap-2">
                                     Dashboard
-                                    <span className={`text-[8px] md:text-[10px] ${isLight ? 'bg-[#3CB371]/10 text-[#3CB371] border-[#3CB371]/20' : 'bg-[#3CB371]/20 text-[#3CB371] border-[#3CB371]/30'} px-2 py-0.5 rounded border`}>ARC LIVE</span>
+                                    <span className={`text-[8px] md:text-[9px] ${isLight ? 'bg-[#3CB371]/10 text-[#3CB371] border-[#3CB371]/20' : 'bg-[#3CB371]/20 text-[#3CB371] border-[#3CB371]/30'} px-2 py-0.5 rounded border`}>Live</span>
                                 </h1>
-                                <p className={`text-[10px] md:text-xs ${isLight ? 'text-[#3D5A4C]/60' : 'text-white/40'} font-bold uppercase tracking-widest hidden md:block`}>
-                                    {address ? truncate(address) : "Guest View"}
-                                </p>
                             </div>
                         </div>
-                    </div>
-
-                    <div className="overflow-x-auto no-scrollbar -mx-4 px-4">
-                        <div className={`flex ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10' : 'bg-[#111] border-white/5'} p-1 rounded-full border w-max md:w-auto`}>
-                            <NavTab active={activeTab} id="overview" label="Overview" icon={<Activity size={14} />} onClick={setActiveTab} isLight={isLight} />
-                            <NavTab active={activeTab} id="profile" label="My Profile" icon={<User size={14} />} onClick={setActiveTab} isLight={isLight} />
-                            <NavTab active={activeTab} id="community" label="Community" icon={<MessageSquare size={14} />} onClick={setActiveTab} isLight={isLight} />
+                        <div className="flex items-center gap-6">
+                           <div className="flex flex-col items-end">
+                               <p className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/20'}`}>Authorized Wallet</p>
+                               <p className={`text-[10px] font-bold font-mono ${isLight ? 'text-[#3CB371]' : 'text-[#3CB371]'}`}>{truncate(address)}</p>
+                           </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
-                <div className="max-w-4xl lg:max-w-7xl mx-auto p-4 md:p-8">
-                    <div>
-                        {activeTab === "overview" && (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <StatCard
-                                        label="Market Volume"
-                                        value={`${stats.marketTotalVol} USDC`}
-                                        sub="24h Observed"
-                                        icon={<Globe size={16} className="text-[#3CB371]" />}
-                                        isLight={isLight}
-                                    />
-                                    <StatCard
-                                        label="Bullish Sentiment"
-                                        value={`${stats.marketSentiment}%`}
-                                        sub={`${stats.bullsInfo} Calls vs ${stats.bearsInfo} Puts`}
-                                        icon={<TrendingUp size={16} className={Number(stats.marketSentiment) > 50 ? "text-[#FF7F50]" : isLight ? "text-[#3CB371]/20" : "text-white/20"} />}
-                                        isLight={isLight}
-                                    />
-                                    <StatCard
-                                        label="Avg. Stake Size"
-                                        value={`${stats.marketAvgStake} USDC`}
-                                        sub="Per Trade"
-                                        icon={<DollarSign size={16} className="text-[#3CB371]" />}
-                                        isLight={isLight}
-                                    />
-                                    <StatCard
-                                        label="Your Win Rate"
-                                        value={`${stats.userWinRate}%`}
-                                        sub={`${stats.userTotalWins} / ${stats.userTotalTrades} Trades`}
-                                        icon={<Award size={16} className="text-[#FF7F50]" />}
-                                        highlight
-                                        isLight={isLight}
-                                    />
-                                </div>
+            <div className="flex-1 overflow-hidden">
+                <div className="max-w-[1700px] mx-auto h-full p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+                    {/* Unified Grid Layout - 3 Column: Controls | Transactions | Analytics+Chat */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0">
 
-                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                                    <div className={`lg:col-span-2 ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 relative overflow-hidden`}>
-                                        <div className="flex justify-between items-center mb-6">
-                                            <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/40'}`}>Market Activity Pulse</h3>
-                                            <div className="flex gap-2">
-                                                <span className="h-2 w-2 rounded-full bg-[#3CB371] animate-pulse" />
-                                                <span className="text-[10px] text-[#3CB371] font-bold">Real-time</span>
-                                            </div>
-                                        </div>
-                                        <div className="h-[200px] md:h-[300px] w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={chartData}>
-                                                    <defs>
-                                                        <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#3CB371" stopOpacity={0.3} />
-                                                            <stop offset="95%" stopColor="#3CB371" stopOpacity={0} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <Tooltip
-                                                        contentStyle={{ backgroundColor: isLight ? '#f0f9f4' : '#000', border: isLight ? '1px solid rgba(60, 179, 113, 0.2)' : '1px solid #333', borderRadius: '8px' }}
-                                                        itemStyle={{ color: isLight ? '#0a261a' : '#fff' }}
-                                                    />
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey="amount"
-                                                        stroke="#3CB371"
-                                                        fillOpacity={1}
-                                                        fill="url(#colorAmt)"
-                                                        strokeWidth={2}
-                                                    />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-col gap-6 lg:col-span-2">
-                                        <div className={`${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[24px] p-6 flex flex-col h-full`}>
-                                            <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/40'} mb-4`}>Recent Signals</h3>
-                                            <div className="flex-1 overflow-y-auto space-y-3 max-h-[180px] custom-scrollbar">
-                                                {stats.recentTrades.length === 0 ? (
-                                                    <div className={`text-center py-4 ${isLight ? 'text-[#0a261a]/20' : 'text-white/10'} text-[10px] uppercase font-black`}>No active signals</div>
-                                                ) : stats.recentTrades.map((t, i) => (
-                                                    <div key={i} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10' : 'bg-white/[0.02] border-white/5'} border`}>
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-lg ${(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "bg-[#FF7F50]/10 text-[#FF7F50]" : "bg-[#3CB371]/10 text-[#3CB371]"}`}>
-                                                                {(t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-[10px] font-bold">{t.user?.slice(0, 6) || "Trader"}</div>
-                                                                <div className={`text-[8px] ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'} uppercase`}>{t.direction}</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="text-[10px] font-mono font-bold text-[#3CB371]">{t.amount} USDC</div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === "profile" && (
-                            <div className={`max-w-2xl mx-auto ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[24px] md:rounded-[32px] p-4 md:p-8`}>
-                                <div className="flex flex-col items-center mb-8">
-                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[2px] mb-4 overflow-hidden">
+                        {/* COL 1: Profile + Auto-Signer + Activity (lg:col-span-4) */}
+                        <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
+                            {/* Profile & Auto-Signer Compact Card */}
+                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px]">
                                         <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                             {userProfile?.xProfileImage ? (
                                                 <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                             ) : (
-                                                <User size={40} className={isLight ? 'text-[#3CB371]/40' : 'text-white/50'} />
+                                                <User size={20} className={isLight ? 'text-[#3CB371]/40' : 'text-white/50'} />
                                             )}
                                         </div>
                                     </div>
-                                    <h2 className={`text-2xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{userProfile?.username || (address ? "Trader" : "Guest User")}</h2>
-                                    <div className={`text-sm ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} font-mono mb-4 text-center`}>
-                                        {address}
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        {userProfile?.xHandle ? (
-                                            <div className="flex items-center gap-2 px-4 py-2 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-xl text-[#3CB371]">
-                                                <Globe size={14} />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">@{userProfile.xHandle}</span>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const CLIENT_ID = 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
-                                                        const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL_ARC}/auth/twitter/callback`);
-                                                        const SCOPE = encodeURIComponent('users.read tweet.read offline.access');
-
-                                                        const prepareRes = await fetch(`${KEEPER_URL_ARC}/auth/twitter/prepare`, {
-                                                            method: 'POST',
-                                                            headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify({ address })
-                                                        });
-                                                        const { state: stateId } = await prepareRes.json();
-
-                                                        if (!stateId) throw new Error("Failed to prepare secure state");
-
-                                                        const url = `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&state=${stateId}&code_challenge=challenge&code_challenge_method=plain`;
-                                                        window.location.href = url;
-                                                    } catch (e) {
-                                                        console.error("X Auth Preparation Failed:", e);
-                                                        setModalConfig({
-                                                            title: "Auth Error",
-                                                            message: "Failed to initiate secure login. Please try again.",
-                                                            type: 'alert'
-                                                        });
-                                                    }
-                                                }}
-                                                className="flex items-center gap-2 px-4 py-2 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-xl text-[#3CB371] hover:bg-[#3CB371]/20 transition-all"
-                                            >
-                                                <MessageSquare size={14} />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Link Twitter (X)</span>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 mb-8">
-                                    <div className={`p-4 ${isLight ? 'bg-[#8faf9a]/20 border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
-                                        <div className="text-3xl font-black text-[#3CB371]">{stats.userTotalWins}</div>
-                                        <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>Total Wins</div>
-                                    </div>
-                                    <div className={`p-4 ${isLight ? 'bg-[#8faf9a]/20 border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
-                                        <div className={`text-3xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.userTotalTrades}</div>
-                                        <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>Total Trades</div>
-                                    </div>
-                                </div>
-
-                                <div className={`p-6 ${isLight ? 'bg-white border-[#3CB371]/20 shadow-sm' : 'bg-black/40 border-white/5'} border rounded-[24px] mb-8`}>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-orange-500/10 text-orange-500 rounded-lg">
-                                                <Zap size={18} />
-                                            </div>
-                                            <div>
-                                                <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/80' : 'text-white/80'} flex items-center gap-2`}>
-                                                    Auto-Signer Module
-                                                </h4>
-                                                <p className={`text-[10px] ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'} font-bold uppercase`}>
-                                                    {evmSessionWallet ? `Active: ${evmSessionWallet.address.slice(0, 6)}...${evmSessionWallet.address.slice(-4)}` : "Initializing..."}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right flex flex-col items-end">
-                                            <div className="text-xl font-black text-[#3CB371] tabular-nums">{(sessionBalance || 0).toFixed(3)} USDC</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <button
-                                            onClick={() => {
-                                                setPromptConfig({
-                                                    title: `Refill Auto-Signer`,
-                                                    placeholder: "Enter amount (e.g. 1.0)",
-                                                    onConfirm: (val) => {
-                                                        const amt = parseFloat(val);
-                                                        if (isNaN(amt) || amt <= 0) return;
-                                                        setModalConfig({
-                                                            title: "Confirm Refill",
-                                                            message: `Deposit ${amt.toFixed(3)} USDC to auto-signer?\n\nA 1% protocol fee (${(amt * 0.01).toFixed(3)} USDC) will be added to the treasury.`,
-                                                            onConfirm: () => onRefill(amt),
-                                                            confirmText: "Refill Now",
-                                                            type: 'confirm'
-                                                        });
-                                                    }
-                                                });
-                                            }}
-                                            className="py-4 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-[#3CB371]/10"
-                                        >
-                                            Refill Funds
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setPromptConfig({
-                                                    title: `Sweep to Main`,
-                                                    placeholder: "Enter amount (e.g. 0.5)",
-                                                    onConfirm: (val) => {
-                                                        const amt = parseFloat(val);
-                                                        if (isNaN(amt) || amt <= 0) return;
-                                                        setModalConfig({
-                                                            title: "Confirm Withdrawal",
-                                                            message: `Withdraw ${amt.toFixed(3)} USDC to your main wallet?\n\nProtocol Fee (1%) will be deducted.`,
-                                                            onConfirm: () => onWithdraw(amt.toFixed(3)),
-                                                            confirmText: "Sweep Now",
-                                                            type: 'confirm'
-                                                        });
-                                                    }
-                                                });
-                                            }}
-                                            className={`py-4 ${isLight ? 'bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'} text-[10px] font-black uppercase tracking-widest rounded-full active:scale-[0.98] transition-all border shadow-lg`}
-                                        >
-                                            Sweep to Main
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <h3 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} mb-4`}>Transaction History</h3>
-                                    <div className="space-y-3">
-                                        {!transactionHistory || transactionHistory.length === 0 ? (
-                                            <div className={`text-center py-8 ${isLight ? 'text-[#0a261a]/20 bg-[#f0f9f4] border-[#3CB371]/10' : 'text-white/20 bg-white/[0.02] border-white/5'} text-xs uppercase font-black border rounded-2xl`}>No transactions found</div>
-                                        ) : transactionHistory.map((tx, i) => (
-                                            <div key={tx.id || i} className={`p-4 ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 hover:border-[#3CB371]/20' : 'bg-white/5 border-white/5 hover:border-white/10'} border rounded-2xl flex items-center justify-between group transition-all`}>
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/20 text-[#3CB371]" : "bg-orange-500/20 text-orange-500"}`}>
-                                                        {tx.type === "DEPOSIT" ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
-                                                    </div>
-                                                    <div>
-                                                        <div className={`text-xs font-black uppercase ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{tx.type === "DEPOSIT" ? "Auto-Signer Deposit" : "Auto-Signer Withdrawal"}</div>
-                                                        <div className={`text-[10px] ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'} font-mono uppercase`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center gap-6">
-                                                    <div className="text-right">
-                                                        <div className={`text-xs font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : "text-white/80"}`}>
-                                                            {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount} USDC
-                                                        </div>
-                                                        <button
-                                                            onClick={() => onViewReceipt && onViewReceipt(tx)}
-                                                            className="text-[8px] font-black text-[#3CB371] uppercase underline hover:opacity-70 transition-opacity"
-                                                        >
-                                                            View Receipt
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === "community" && (
-                            <div className="max-w-4xl mx-auto">
-                                <MessagingSystem
-                                    isOpen={true}
-                                    embedded={true}
-                                    onClose={() => { }}
-                                    userProfile={userProfile}
-                                />
-                            </div>
-                        )}
-
-                        {activeTab === "admin" && (
-                            <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-[#3CB371]/10 p-4 rounded-2xl border border-[#3CB371]/20">
                                     <div>
-                                        <h3 className="font-black uppercase text-sm text-[#3CB371]">Access Control Hub</h3>
-                                        <p className="text-[10px] font-bold text-white/40 uppercase">Manage Beta Invitations & Applications</p>
+                                        <h2 className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} leading-tight`}>{userProfile?.username || "Trader"}</h2>
+                                        <div className={`text-[8px] font-mono uppercase tracking-widest opacity-40`}>{truncate(address)}</div>
                                     </div>
-                                    <button 
-                                        onClick={handleGenerateManual}
-                                        className="px-4 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase rounded-xl hover:brightness-110"
-                                    >
-                                        Generate Manual Code
-                                    </button>
                                 </div>
 
-                                <div className={`${isLight ? 'bg-white border-black/5' : 'bg-[#111] border-white/5'} border rounded-[24px] overflow-hidden`}>
-                                    <table className="w-full text-left">
-                                        <thead>
-                                            <tr className="border-b border-white/5">
-                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Applicant</th>
-                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">X Handle</th>
-                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Discord</th>
-                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Email</th>
-                                                <th className="p-4 text-[10px] font-black uppercase text-white/40">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {adminApps.length === 0 ? (
-                                                <tr><td colSpan="5" className="p-8 text-center text-xs font-bold text-white/20">NO PENDING APPLICATIONS</td></tr>
-                                            ) : adminApps.map((app, i) => (
-                                                <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02] transition-all">
-                                                    <td className="p-4 font-mono text-[10px]">{truncate(app.address)}</td>
-                                                    <td className="p-4 text-xs font-bold text-[#3CB371]">{app.xHandle}</td>
-                                                    <td className="p-4 text-xs font-bold">{app.discord || '-'}</td>
-                                                    <td className="p-4 text-xs font-bold">{app.email}</td>
-                                                    <td className="p-4">
-                                                        <button 
-                                                            onClick={() => handleApprove(app)}
-                                                            className="px-3 py-1.5 bg-[#3CB371]/20 text-[#3CB371] text-[9px] font-black uppercase rounded-full border border-[#3CB371]/30 hover:bg-[#3CB371] hover:text-white transition-all"
-                                                        >
-                                                            Approve
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="h-px bg-white/5 w-full" />
+
+                                {/* Auto-Signer Control Section */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h4 className="text-[9px] font-black uppercase tracking-widest opacity-40">Auto-Signer Asset</h4>
+                                        <div className="text-base font-black text-[#3CB371] tabular-nums">${(sessionBalance || 0).toFixed(2)}</div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={() => setPromptConfig({
+                                            title: "Refill Asset",
+                                            placeholder: "USDC Amount",
+                                            onConfirm: (val) => onRefill(parseFloat(val))
+                                        })} className="py-2.5 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
+                                            Refill
+                                        </button>
+                                        <button onClick={() => setPromptConfig({
+                                            title: "Sweep Asset",
+                                            placeholder: "Withdraw Amount",
+                                            onConfirm: (val) => onWithdraw(val)
+                                        })} className="py-2.5 bg-white/5 border border-white/10 text-white text-[9px] font-black uppercase tracking-widest rounded-2xl hover:bg-white/10 active:scale-95 transition-all">
+                                            Sweep
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        )}
+
+                            {/* Activity Pulse Chart */}
+                            <div className={`flex-1 min-h-[120px] ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex flex-col`}>
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
+                                    <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
+                                </div>
+                                <div className="flex-1 w-full min-h-0">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={chartData}>
+                                            <defs>
+                                                <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#3CB371" stopOpacity={0.2} />
+                                                    <stop offset="95%" stopColor="#3CB371" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <XAxis dataKey="name" hide />
+                                            <YAxis hide domain={['auto', 'auto']} />
+                                            <Area type="monotone" dataKey="amount" stroke="#3CB371" fillOpacity={1} fill="url(#colorAmt)" strokeWidth={2} />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* COL 2: Transaction Matrix - Narrow (lg:col-span-3) */}
+                        <div className="lg:col-span-3 flex flex-col gap-5 min-h-0">
+                            <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Transactions</h3>
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            disabled={currentPage === 1}
+                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                            className={`p-1 rounded-lg border ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
+                                        >
+                                            <ArrowLeft size={10} />
+                                        </button>
+                                        <span className="text-[8px] font-black opacity-30 uppercase tabular-nums">{currentPage}/{Math.max(1, Math.ceil((transactionHistory?.length || 0) / 5))}</span>
+                                        <button
+                                            disabled={currentPage >= Math.ceil((transactionHistory?.length || 0) / 5)}
+                                            onClick={() => setCurrentPage(prev => prev + 1)}
+                                            className={`p-1 rounded-lg border ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
+                                        >
+                                            <ArrowRight size={10} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-hidden flex flex-col gap-2">
+                                    {!transactionHistory || transactionHistory.length === 0 ? (
+                                        <div className={`flex-1 flex items-center justify-center ${isLight ? 'text-[#0a261a]/20' : 'text-white/10'} text-[9px] uppercase font-black text-center`}>No transactions<br />recognized</div>
+                                    ) : transactionHistory.slice((currentPage - 1) * 5, currentPage * 5).map((tx, i) => (
+                                        <div key={tx.id || i} className={`p-3 ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/5' : 'bg-white/[0.03] border-white/5'} border rounded-2xl flex flex-col gap-1 transition-all hover:border-[#3CB371]/20`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`p-1 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/20 text-[#3CB371]" : "bg-[#FF7F50]/20 text-[#FF7F50]"}`}>
+                                                        {tx.type === "DEPOSIT" ? <Zap size={10} /> : <Shield size={10} />}
+                                                    </div>
+                                                    <div className="text-[9px] font-black uppercase">{tx.type === "DEPOSIT" ? "In" : "Out"}</div>
+                                                </div>
+                                                <div className={`text-[10px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                                    {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className={`text-[7px] opacity-30 font-bold uppercase`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
+                                                <button onClick={() => onViewReceipt?.(tx)} className="text-[7px] font-black text-[#3CB371]/50 underline uppercase hover:text-[#3CB371]">Receipt</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* COL 3: Analytics Stats + Community Chat (lg:col-span-5) */}
+                        <div className="lg:col-span-5 flex flex-col gap-5 min-h-0">
+                            {/* Analytics Quick Stats */}
+                            <div className="grid grid-cols-2 gap-3 flex-none">
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">24h Volume</div>
+                                    <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketTotalVol}</div>
+                                    <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
+                                </div>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Sentiment</div>
+                                    <div className="text-base font-black text-[#3CB371]">{stats.marketSentiment}%</div>
+                                    <div className="text-[7px] opacity-20 uppercase font-bold">Bullish</div>
+                                </div>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Win Rate</div>
+                                    <div className="text-base font-black text-[#FF7F50]">{stats.userWinRate}%</div>
+                                    <div className="text-[7px] opacity-20 uppercase font-bold">Efficiency</div>
+                                </div>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}>
+                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Avg Stake</div>
+                                    <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketAvgStake}</div>
+                                    <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
+                                </div>
+                            </div>
+
+                            {/* Community Chat */}
+                            <div className={`flex-1 ${isLight ? 'bg-white border-[#3CB371]/10 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
+                                <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <MessageSquare size={14} className="text-[#3CB371]" />
+                                        <h3 className={`text-[9px] font-black uppercase tracking-widest opacity-40`}>Market Community</h3>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
+                                        <span className="text-[8px] text-[#3CB371] font-bold uppercase tracking-widest">Live</span>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-hidden relative">
+                                    <MessagingSystem
+                                        isOpen={true}
+                                        embedded={true}
+                                        onClose={() => { }}
+                                        userProfile={userProfile}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -666,15 +498,15 @@ const NavTab = React.memo(({ active, id, label, icon, onClick, isLight }) => {
     );
 });
 
-const StatCard = React.memo(({ label, value, sub, icon, highlight, isLight }) => {
+const StatCard = React.memo(({ label, value, sub, icon, highlight, isLight, compact }) => {
     return (
-        <div className={`p-4 md:p-6 rounded-[24px] border ${highlight ? 'bg-[#FF7F50]/10 border-[#FF7F50]/30 shadow-lg' : `${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}`}>
-            <div className="flex justify-between items-start mb-4">
-                <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>{label}</div>
-                <div className={`p-2 ${isLight ? 'bg-[#3CB371]/5' : 'bg-white/5'} rounded-lg`}>{icon}</div>
+        <div className={`${compact ? 'p-3 md:p-4' : 'p-4 md:p-6'} rounded-[24px] border ${highlight ? 'bg-[#FF7F50]/10 border-[#FF7F50]/30 shadow-lg' : `${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}`}>
+            <div className="flex justify-between items-start mb-2 md:mb-4">
+                <div className={`text-[7px] md:text-[9px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>{label}</div>
+                <div className={`p-1.5 ${isLight ? 'bg-[#3CB371]/5' : 'bg-white/5'} rounded-lg`}>{icon}</div>
             </div>
-            <div className={`text-xl md:text-2xl font-black mb-1 tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{value}</div>
-            <div className={`text-[8px] md:text-[10px] font-bold ${isLight ? 'text-[#0a261a]/20' : 'text-white/20'} uppercase`}>{sub}</div>
+            <div className={`${compact ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'} font-black mb-1 tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{value}</div>
+            <div className={`text-[7px] md:text-[9px] font-bold ${isLight ? 'text-[#0a261a]/20' : 'text-white/20'} uppercase`}>{sub}</div>
         </div>
     );
 });

@@ -293,27 +293,13 @@ function RoundsTerminalComponent({
                                     exit={{ opacity: 0, y: 5, filter: 'blur(5px)' }}
                                     className="flex items-center justify-between mt-3 pt-3 border-t border-white/5"
                                 >
-                                <div className="relative flex-1 flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden">
-                                    {/* 4-way Sliding Pill Background */}
-                                    <motion.div
-                                        className="absolute top-0.5 bottom-0.5 w-[calc(25%-1px)] rounded-full bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all"
-                                        initial={false}
-                                        animate={{ 
-                                            x: localSlider === 25 ? 0 : localSlider === 50 ? '100%' : localSlider === 75 ? '200%' : '300%',
-                                        }}
-                                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
-                                    />
-                                    {[25, 50, 75, 100].map(pct => (
-                                        <button 
-                                            key={pct}
-                                            onClick={() => handleLocalSliderChange(pct)}
-                                            className={`flex-1 relative z-10 py-1 flex items-center justify-center transition-all duration-300 ${localSlider === pct ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
-                                        >
-                                            <span className="text-[8px] font-black uppercase tracking-tighter">{pct === 100 ? 'MAX' : `${pct}%`}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                                    <div className="flex flex-col items-end leading-none">
+                                    <div className="flex flex-col items-end w-full leading-none">
+                                        <span className="text-[6px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Est. Payout</span>
+                                        <span className="text-[10px] font-black text-[#3CB371] italic">
+                                            +${(parseFloat(localAmount || 0) * (selectedDirection === 'DOWN' ? parseFloat(odds.short) : parseFloat(odds.long))).toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col items-end w-full leading-none">
                                         <span className="text-[6px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Est. Payout</span>
                                         <span className="text-[10px] font-black text-[#3CB371] italic">
                                             +${(parseFloat(localAmount || 0) * (selectedDirection === 'DOWN' ? parseFloat(odds.short) : parseFloat(odds.long))).toFixed(2)}
@@ -325,78 +311,72 @@ function RoundsTerminalComponent({
                     </div>
 
                     <div className="mt-2.5">
-                            <input type="range" min="0" max="100" value={localSlider} onChange={e => handleLocalSliderChange(e.target.value)}
-                                className="w-full accent-[#3CB371] h-1 rounded-full cursor-pointer" />
-                            <div className="flex justify-between mt-1 px-1">
-                                {[0, 50, 100].map(v => (
-                                    <button key={v} onClick={() => handleLocalSliderChange(v)} className="text-[7px] font-black opacity-20 hover:opacity-50">{v}%</button>
-                                ))}
-                            </div>
-                        </div>
+                        <input type="range" min="0" max="100" value={localSlider} onChange={e => handleLocalSliderChange(e.target.value)}
+                            className="w-full accent-[#3CB371] h-1 rounded-full cursor-pointer" />
                     </div>
+                </div>
 
-                    {/* Direction Buttons */}
-                    {/* Direction Buttons - Sliding Tab Effect */}
-                    <div className="relative flex items-center p-1 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden mb-1">
-                        <motion.div
-                            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-[0_0_15px_rgba(60,179,113,0.3)]`}
-                            initial={false}
-                            animate={{ 
-                                x: selectedDirection === 'UP' ? 4 : 'calc(100% + 4px)',
-                                background: selectedDirection === 'UP' ? 'linear-gradient(to bottom right, #48c97f, #1e5a38)' : 'linear-gradient(to bottom right, #FF7F50, #D2691E)'
-                            }}
-                            transition={{ type: "spring", stiffness: 400, damping: 35 }}
-                        />
-                        <button onClick={() => setSelectedDirection('UP')}
-                            disabled={hasEnteredThisRound}
-                            className={`flex-1 relative z-10 py-3 flex flex-col items-center gap-0.5 transition-all duration-300 ${selectedDirection === 'UP' ? 'text-white scale-110' : 'text-white/20 hover:text-white/40'}`}>
-                            <TrendingUp size={14} className={selectedDirection === 'UP' ? 'text-white' : 'text-[#3CB371]/60'} />
-                            <span className="text-[10px] font-black">{odds.long}x</span>
-                        </button>
+                {/* Direction Buttons - Sliding Tab Effect */}
+                <div className="relative flex items-center p-1 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden mb-1">
+                    <motion.div
+                        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-[0_0_15px_rgba(60,179,113,0.3)]`}
+                        initial={false}
+                        animate={{ 
+                            x: selectedDirection === 'UP' ? 4 : 'calc(100% + 4px)',
+                            background: selectedDirection === 'UP' ? 'linear-gradient(to bottom right, #48c97f, #1e5a38)' : 'linear-gradient(to bottom right, #FF7F50, #D2691E)'
+                        }}
+                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                    />
+                    <button onClick={() => setSelectedDirection('UP')}
+                        disabled={hasEnteredThisRound}
+                        className={`flex-1 relative z-10 py-3 flex flex-col items-center gap-0.5 transition-all duration-300 ${selectedDirection === 'UP' ? 'text-white scale-110' : 'text-white/20 hover:text-white/40'}`}>
+                        <TrendingUp size={14} className={selectedDirection === 'UP' ? 'text-white' : 'text-[#3CB371]/60'} />
+                        <span className="text-[10px] font-black">{odds.long}x</span>
+                    </button>
 
-                        <button onClick={() => setSelectedDirection('DOWN')}
-                            disabled={hasEnteredThisRound}
-                            className={`flex-1 relative z-10 py-3 flex flex-col items-center gap-0.5 transition-all duration-300 ${selectedDirection === 'DOWN' ? 'text-white scale-110' : 'text-white/20 hover:text-white/40'}`}>
-                            <TrendingDown size={14} className={selectedDirection === 'DOWN' ? 'text-white' : 'text-[#FF7F50]/60'} />
-                            <span className="text-[10px] font-black">{odds.short}x</span>
-                        </button>
-                    </div>
-                    
-                    {/* Action Button / Prediction Confirmation */}
-                    <div className="mt-1">
-                        {hasEnteredThisRound ? (
-                            <motion.div 
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className={`p-3 rounded-[24px] border flex items-center justify-center gap-3 px-3 ${selectedDirection === 'UP' ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : 'bg-[#FF7F50]/10 border-[#FF7F50]/40'}`}>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <div className={`p-1 rounded-full ${selectedDirection === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
-                                        {selectedDirection === 'UP' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                                    </div>
-                                    <div className="flex flex-col leading-tight">
-                                        <span className={`text-[9px] font-black uppercase tracking-widest ${selectedDirection === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                            {selectedDirection}
-                                        </span>
-                                        <span className={`text-[6px] font-bold uppercase opacity-30`}>Pred.</span>
-                                    </div>
+                    <button onClick={() => setSelectedDirection('DOWN')}
+                        disabled={hasEnteredThisRound}
+                        className={`flex-1 relative z-10 py-3 flex flex-col items-center gap-0.5 transition-all duration-300 ${selectedDirection === 'DOWN' ? 'text-white scale-110' : 'text-white/20 hover:text-white/40'}`}>
+                        <TrendingDown size={14} className={selectedDirection === 'DOWN' ? 'text-white' : 'text-[#FF7F50]/60'} />
+                        <span className="text-[10px] font-black">{odds.short}x</span>
+                    </button>
+                </div>
+                
+                {/* Action Button / Prediction Confirmation */}
+                <div className="mt-1">
+                    {hasEnteredThisRound ? (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`p-3 rounded-[24px] border flex items-center justify-center gap-3 px-3 ${selectedDirection === 'UP' ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : 'bg-[#FF7F50]/10 border-[#FF7F50]/40'}`}>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <div className={`p-1 rounded-full ${selectedDirection === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
+                                    {selectedDirection === 'UP' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                                 </div>
-                                
-                                <div className="w-px h-6 bg-white/10" />
-
-                                <div className="flex flex-col items-center leading-tight min-w-0 flex-1 overflow-hidden">
-                                    <span className={`text-[10px] font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} truncate w-full text-center`}>{localAmount} USDC</span>
-                                    <span className={`text-[8px] font-bold ${selectedDirection === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'} uppercase truncate w-full text-center`}>
-                                        +{(parseFloat(localAmount || 0) * (selectedDirection === 'UP' ? parseFloat(odds.long) : parseFloat(odds.short))).toFixed(0)} PAY
+                                <div className="flex flex-col leading-tight">
+                                    <span className={`text-[9px] font-black uppercase tracking-widest ${selectedDirection === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                        {selectedDirection}
                                     </span>
+                                    <span className={`text-[6px] font-bold uppercase opacity-30`}>Pred.</span>
                                 </div>
-                            </motion.div>
+                            </div>
+                            
+                            <div className="w-px h-6 bg-white/10" />
+
+                            <div className="flex flex-col items-center leading-tight min-w-0 flex-1 overflow-hidden">
+                                <span className={`text-[10px] font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} truncate w-full text-center`}>{localAmount} USDC</span>
+                                <span className={`text-[8px] font-bold ${selectedDirection === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'} uppercase truncate w-full text-center`}>
+                                    +{(parseFloat(localAmount || 0) * (selectedDirection === 'UP' ? parseFloat(odds.long) : parseFloat(odds.short))).toFixed(0)} PAY
+                                </span>
+                            </div>
+                        </motion.div>
                     ) : (
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={handleConfirm}
                             disabled={!selectedDirection || isExecuting || !localAmount || parseFloat(localAmount) <= 0}
-                            className={`w-full py-4 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl relative overflow-hidden group hover:brightness-110 ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
+                            className={`w-full py-4 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all relative overflow-hidden group hover:brightness-110 ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
                                 ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'
                                 : 'text-white cursor-pointer active:scale-95'
                                 }`}
@@ -404,9 +384,6 @@ function RoundsTerminalComponent({
                                 background: (!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted) 
                                     ? '' 
                                     : (selectedDirection === 'DOWN' ? 'linear-gradient(135deg, #FF7F50, #D2691E)' : 'linear-gradient(135deg, #48C97F, #1E5A38)'),
-                                boxShadow: (!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
-                                    ? 'none'
-                                    : (selectedDirection === 'DOWN' ? '0 0 30px rgba(255, 127, 80, 0.4)' : '0 0 30px rgba(60, 179, 113, 0.4)')
                             }}
                         >
                             <span className="relative z-10 flex items-center justify-center gap-2">
@@ -415,7 +392,6 @@ function RoundsTerminalComponent({
                             </span>
                         </motion.button>
                     )}
-                    </div>
                 </div>
             </div>
         </div>

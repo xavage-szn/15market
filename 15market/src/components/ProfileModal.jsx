@@ -4,7 +4,7 @@ import { KEEPER_URL_ARC } from '../constants';
 
 import { Zap, Shield, TrendingUp, TrendingDown } from 'lucide-react';
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, uiVersion = 'v1', setUiVersion, theme }) {
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -283,23 +283,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                             </div>
                         </div>
 
-                        <div>
-                            <label className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-2 block`}>Interface Mode</label>
-                            <div className={`flex ${isLight ? 'bg-white border-black/10' : 'bg-black border-white/10'} border rounded-full p-1 gap-1`}>
-                                <button
-                                    onClick={() => setUiVersion('v1')}
-                                    className={`flex-1 py-3 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v1' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
-                                >
-                                    Standard V1
-                                </button>
-                                <button
-                                    onClick={() => setUiVersion('v2')}
-                                    className={`flex-1 py-3 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v2' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
-                                >
-                                    Pro V2
-                                </button>
-                            </div>
-                        </div>
+
                     </div>
 
                     <div className="mt-6 flex flex-col gap-3">
