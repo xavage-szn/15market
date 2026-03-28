@@ -2535,7 +2535,7 @@ export default function UserApp() {
               </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
-              <button onClick={() => setView("dashboard")} className="p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
@@ -2572,7 +2572,7 @@ export default function UserApp() {
                 ))}
               </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <button onClick={() => setView("dashboard")} className="p-1 px-1.5 md:p-2 rounded-xl border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="p-1 px-1.5 md:p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
@@ -2608,7 +2608,7 @@ export default function UserApp() {
                       borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : `${GREEN}35`
                     }}>
                     <div className="w-full relative z-[45] overflow-hidden py-1">
-                      {gameMode === 'rounds' ? <RoundsTradeScroller theme={theme} /> : <GlobalTradeScroller theme={theme} />}
+                      <GlobalTradeScroller theme={theme} />
                     </div>
                     {gameMode === 'rounds' ? (
                       <RoundsChart
@@ -2642,9 +2642,9 @@ export default function UserApp() {
                   </div>
 
                   {/* Sidebar - Below chart on mobile, right side on desktop */}
-                  <div className="col-span-12 lg:col-span-4 flex flex-col gap-4 lg:h-full min-h-0 w-full md:max-w-full mx-auto px-1 md:px-0">
+                  <div className={`col-span-12 lg:col-span-4 flex flex-col gap-4 lg:h-full min-h-0 w-full md:max-w-full mx-auto px-1 md:px-0`}>
                     {/* Trade Terminal - Second in stack on mobile */}
-                    <div className="flex-none">
+                    <div className={gameMode === 'rounds' ? "flex-1 min-h-0 flex flex-col" : "flex-none"}>
                       {gameMode === 'rounds' ? (
                         <RoundsTerminal
                           price={price}
@@ -2681,7 +2681,7 @@ export default function UserApp() {
 
                     {/* Active Section — hidden in Rounds mode */}
                     {gameMode !== 'rounds' && (
-                      <div className="flex-1 min-h-[250px] lg:min-h-0 glass-panel rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col min-h-0 overflow-hidden">
+                      <div className="flex-1 min-h-[250px] lg:min-h-0 glass-panel rounded-[24px] lg:rounded-[32px] p-2 lg:p-3 flex flex-col min-h-0 overflow-hidden">
                         <LiveExecution
                           activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                           setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
@@ -2710,8 +2710,8 @@ export default function UserApp() {
                       />
                     )}
 
-                    <div className={`w-[calc(100%+16px)] md:w-full -mx-2 md:mx-0 relative z-[45] overflow-hidden mb-1 md:rounded-2xl`}>
-                      {gameMode === 'rounds' ? <RoundsTradeScroller theme={theme} /> : <GlobalTradeScroller theme={theme} />}
+                    <div className={`w-[calc(100%+16px)] md:w-full -mx-2 md:mx-0 relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
+                      <GlobalTradeScroller theme={theme} />
                     </div>
 
 
@@ -2776,7 +2776,7 @@ export default function UserApp() {
                     className={`w-full md:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-14' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    <div className={`w-full flex ${uiVersion === 'v2' && isSmallScreen ? 'flex-row' : (gameMode === 'rounds' ? 'flex-col' : 'flex-row')} gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full flex flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
                       <div className={`${uiVersion === 'v2' && isSmallScreen ? 'w-1/2 flex-none' : 'w-full flex-1'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                         style={{
@@ -2877,12 +2877,12 @@ export default function UserApp() {
 
                         {/* Navigation Bar - TOP BAR */}
                         {/* Trading Terminal Box */}
-                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'flex-1 w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 shadow-lg`}
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel shadow-lg'}`}
                           style={{
-                            background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                            background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
+                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)')
                           }}>
-                          <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `p-2 lg:p-4 ${gameMode === 'rounds' ? 'flex-1 h-full' : ''}`} flex flex-col min-h-0`}>
+                          <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
                             {gameMode === 'rounds' ? (
                               <RoundsTerminal
                                 price={price}

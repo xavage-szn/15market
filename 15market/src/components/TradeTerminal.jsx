@@ -1,4 +1,6 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 
 function TradeTerminalComponent({
     mode,
@@ -30,6 +32,7 @@ function TradeTerminalComponent({
     setShowManagement,
     uiVersion = 'v1',
 }) {
+    const [isFocused, setIsFocused] = useState(false);
     const isLight = theme === 'light';
 
     const containerClass = transparent
@@ -77,55 +80,65 @@ function TradeTerminalComponent({
     );
 
     const renderCallPut = () => (
-        <div className="grid grid-cols-2 gap-1 lg:gap-1 pointer-events-auto">
+        <div className={`relative flex items-center p-1 rounded-full border border-[#3CB371]/10 bg-white/5 backdrop-blur-3xl overflow-hidden pointer-events-auto`}>
+            {/* Sliding Pill Background */}
+            <motion.div
+                className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all`}
+                initial={false}
+                animate={{ 
+                    x: direction === "UP" ? 4 : 'calc(100% + 4px)',
+                    background: direction === "UP" ? 'linear-gradient(to bottom right, #48c97f, #1e5a38)' : 'linear-gradient(to bottom right, #FF7F50, #D2691E)'
+                }}
+                transition={{ type: "spring", stiffness: 400, damping: 35 }}
+            />
+            
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("UP"); }}
                 disabled={maintenanceMode}
-                className={`flex flex-col items-center justify-center py-1.5 lg:py-2 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "UP"
-                    ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
-                    : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
-                    }`}
-                style={{
-                    boxShadow: direction === "UP" ? `0 0 20px rgba(60, 179, 113, 0.2)` : 'none'
-                }}
+                className={`flex-1 relative z-10 py-1.5 lg:py-2 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "UP" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
             >
+                <TrendingUp size={12} className={direction === "UP" ? "text-white" : "text-[#3CB371]/60"} />
                 <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">Call</span>
             </button>
+            
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("DOWN"); }}
                 disabled={maintenanceMode}
-                className={`flex flex-col items-center justify-center py-1.5 lg:py-2 rounded-xl border transition-all duration-300 active:scale-95 ${direction === "DOWN"
-                    ? (isLight ? 'bg-[#FF7F50] text-white border-transparent' : 'bg-[#FF7F50]/20 border-[#FF7F50] text-[#FF7F50]')
-                    : (isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/[0.02] border-white/5 text-white/20 hover:text-white/40')
-                    }`}
-                style={{
-                    boxShadow: direction === "DOWN" ? `0 0 20px rgba(255, 127, 80, 0.2)` : 'none'
-                }}
+                className={`flex-1 relative z-10 py-1.5 lg:py-2 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "DOWN" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
             >
+                <TrendingDown size={12} className={direction === "DOWN" ? "text-white" : "text-[#FF7F50]/60"} />
                 <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">Put</span>
             </button>
         </div>
     );
 
     const renderTime = () => (
-        <div className="flex flex-col gap-0.5 lg:gap-0.5 pointer-events-auto">
-            <div className="flex items-center justify-between px-0.5">
+        <div className="flex flex-col gap-1 pointer-events-auto">
+            <div className="flex items-center justify-between px-1">
                 <span className={`text-[6px] md:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
                 <span className="text-[6px] md:text-[7px] font-mono font-bold" style={{ color: '#3CB371' }}>
                     {duration === 5 ? '6.98x' : duration === 10 ? '4.98x' : '1.98x'}
                 </span>
             </div>
-            <div className="grid grid-cols-3 gap-1 lg:gap-1">
+            
+            <div className="relative flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden">
+                {/* 3-way Sliding Pill Background */}
+                <motion.div
+                    className="absolute top-0.5 bottom-0.5 w-[calc(33.33%-2px)] rounded-full bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all"
+                    initial={false}
+                    animate={{ 
+                        x: duration === 15 ? 1 : duration === 10 ? 'calc(100% + 1px)' : 'calc(200% + 1px)',
+                    }}
+                    transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                />
+                
                 {[15, 10, 5].map(d => (
                     <button
                         key={d}
                         onClick={(e) => { e.stopPropagation(); setDuration(d); }}
-                        className={`flex flex-col items-center justify-center py-0.5 rounded-full border transition-all duration-300 active:scale-95 ${duration === d
-                            ? (isLight ? 'bg-[#3CB371] text-white border-transparent' : 'bg-[#3CB371]/20 border-[#3CB371] text-[#3CB371]')
-                            : (isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/60 hover:bg-[#e6f4ed]' : 'bg-white/[0.03] border-white/5 text-white/40 hover:bg-white/5')
-                            }`}
+                        className={`flex-1 relative z-10 py-1.5 flex flex-col items-center justify-center transition-all duration-300 ${duration === d ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
                     >
-                        <span className="text-[9px] lg:text-xs font-black tracking-tighter">{d}s</span>
+                        <span className="text-[9px] lg:text-xs font-black tracking-tighter leading-none">{d}s</span>
                     </button>
                 ))}
             </div>
@@ -140,14 +153,59 @@ function TradeTerminalComponent({
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex items-center gap-1 md:gap-1.5 p-1 rounded-2xl border ${isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
-                <input
-                    type="number"
-                    value={amount}
-                    onChange={handleAmountChange}
-                    placeholder="0.00"
-                    className={`w-full bg-transparent text-[10px] md:text-xs lg:text-sm font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
-                />
+            <div className={`flex flex-col gap-2 p-3 rounded-[32px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-white border-[#3CB371]/30 shadow-lg' : 'bg-white/10 border-[#3CB371]/30 shadow-[0_0_20px_rgba(60,179,113,0.1)]') : (isLight ? 'bg-[#e6f4ed] border-[#3CB371]/10' : 'bg-white/5 border-white/5')}`}>
+                <div className="flex items-center gap-1 md:gap-1.5 transition-all">
+                    <span className={`text-[10px] md:text-sm font-black transition-opacity duration-300 ${isFocused ? 'opacity-40 text-[#3CB371]' : 'opacity-20'}`}>$</span>
+                    <input
+                        type="number"
+                        value={amount}
+                        onChange={handleAmountChange}
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+                        placeholder="0.00"
+                        className={`w-full bg-transparent text-sm md:text-base font-black outline-none transition-all ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'} ${isFocused ? 'tracking-tight translate-x-1' : ''}`}
+                    />
+                </div>
+
+                <AnimatePresence>
+                    {isFocused && (
+                        <motion.div 
+                            initial={{ opacity: 0, height: 0, filter: 'blur(10px)' }}
+                            animate={{ opacity: 1, height: 'auto', filter: 'blur(0px)' }}
+                            exit={{ opacity: 0, height: 0, filter: 'blur(5px)' }}
+                            className="overflow-hidden"
+                        >
+                            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                <div className="relative flex-1 flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden me-2">
+                                    {/* 4-way Sliding Pill Background */}
+                                    <motion.div
+                                        className="absolute top-0.5 bottom-0.5 w-[calc(25%-1px)] rounded-full bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all"
+                                        initial={false}
+                                        animate={{ 
+                                            x: sliderValue === 25 ? 0 : sliderValue === 50 ? '100%' : sliderValue === 75 ? '200%' : '300%',
+                                        }}
+                                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                                    />
+                                    {[25, 50, 75, 100].map(pct => (
+                                        <button 
+                                            key={pct}
+                                            onClick={() => handleSliderChange({ target: { value: pct } })}
+                                            className={`flex-1 relative z-10 py-1 flex flex-col items-center justify-center transition-all duration-300 ${sliderValue === pct ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
+                                        >
+                                            <span className="text-[8px] font-black uppercase tracking-widest leading-none">{pct === 100 ? 'MAX' : `${pct}%`}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex flex-col items-end leading-none">
+                                    <span className="text-[6px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Estimated Return</span>
+                                    <span className="text-[9px] font-black text-[#3CB371]">
+                                        +${(parseFloat(amount || 0) * (duration === 5 ? 6.98 : duration === 10 ? 4.98 : 1.98)).toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
             <div className="relative pt-3 pb-1 px-1">
                 <div className="relative h-1.5">
@@ -164,21 +222,30 @@ function TradeTerminalComponent({
     );
 
     const renderConfirm = () => (
-        <button
+        <motion.button
             id="trade-confirm-button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={(e) => { e.stopPropagation(); executeTrade(); }}
             disabled={isExecuting || maintenanceMode}
-            className={`w-full py-2.5 lg:py-3 rounded-xl font-black text-[8px] lg:text-[10px] uppercase tracking-[0.2em] lg:tracking-[0.3em] transition-all pointer-events-auto
-            ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "hover:brightness-110 active:scale-[0.99] shadow-xl"}`}
+            className={`w-full py-2.5 lg:py-3.5 rounded-full font-black text-[9px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group shadow-2xl
+            ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
             style={{
-                background: maintenanceMode ? "#333" : (direction === "DOWN" ? '#FF7F50' : '#3CB371'),
+                background: maintenanceMode ? "#333" : (direction === "DOWN" ? 'linear-gradient(to right, #FF7F50, #D2691E)' : 'linear-gradient(to right, #3CB371, #2E8B57)'),
                 color: "white",
-                boxShadow: maintenanceMode ? "none" : `0 5px 15px ${direction === "DOWN" ? 'rgba(255, 127, 80, 0.2)' : 'rgba(59, 130, 246, 0.2)'}`,
-                cursor: maintenanceMode ? "not-allowed" : "pointer"
+                boxShadow: maintenanceMode ? "none" : `0 10px 25px ${direction === "DOWN" ? 'rgba(255, 127, 80, 0.3)' : 'rgba(60, 179, 113, 0.3)'}`,
             }}
         >
-            {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "Wait" : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? "Confirm" : "Connect")}
-        </button>
+            <motion.div 
+                className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                initial={false}
+                animate={{ x: isExecuting ? '100%' : '0%' }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <span className="relative z-10">
+                {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "SIGNING..." : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? `CONFIRM ${direction || ''}` : "CONNECT WALLET")}
+            </span>
+        </motion.button>
     );
 
     return (
@@ -186,7 +253,7 @@ function TradeTerminalComponent({
             {renderHeader()}
 
             {sessionMode && showManagement && uiVersion !== 'v1' && (
-                <div className={`px-2 py-1.5 lg:px-3 lg:py-2 rounded-xl border flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-300 ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
+                <div className={`px-2 py-1.5 lg:px-4 lg:py-2 rounded-[22px] border flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-300 ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex flex-col">
                             <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Auto Balance</span>
@@ -196,7 +263,7 @@ function TradeTerminalComponent({
                         </div>
                     </div>
 
-                    <div className={`mt-0.5 flex items-center gap-1 p-1 rounded-2xl border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
+                    <div className={`mt-0.5 flex items-center gap-1 p-1 rounded-full border ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/5'}`}>
                         <input
                             type="number"
                             value={refillAmount}
@@ -204,7 +271,7 @@ function TradeTerminalComponent({
                             placeholder="0.00"
                             className={`w-full bg-transparent text-[8px] lg:text-[10px] font-black outline-none ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'}`}
                         />
-                        <div className={`px-1 py-0.5 rounded text-[4px] lg:text-[6px] font-black uppercase tracking-tight ${isLight ? 'bg-black/10 text-black/60' : 'bg-white/10 text-white/60'}`}>
+                        <div className={`px-2 py-0.5 rounded-full text-[4px] lg:text-[6px] font-black uppercase tracking-tight ${isLight ? 'bg-black/10 text-black/60' : 'bg-white/10 text-white/60'}`}>
                             USDC
                         </div>
                     </div>

@@ -245,9 +245,9 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={onBack}
-                                className={`p-2 md:p-3 rounded-xl ${isLight ? 'bg-[#3CB371]/5 hover:bg-[#3CB371]/10 border-[#3CB371]/10 text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 border-white/5 text-white'} border transition-colors group`}
+                                className={`p-2 md:p-3 rounded-full ${isLight ? 'bg-[#3CB371]/5 hover:bg-[#3CB371]/10 border-[#3CB371]/10 text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 border-white/5 text-white'} border transition-colors group px-4 md:px-6`}
                             >
-                                <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+                                <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
                             </button>
                             <div>
                                 <h1 className="text-lg md:text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
@@ -262,7 +262,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                     </div>
 
                     <div className="overflow-x-auto no-scrollbar -mx-4 px-4">
-                        <div className={`flex ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10' : 'bg-[#111] border-white/5'} p-1 rounded-xl border w-max md:w-auto`}>
+                        <div className={`flex ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10' : 'bg-[#111] border-white/5'} p-1 rounded-full border w-max md:w-auto`}>
                             <NavTab active={activeTab} id="overview" label="Overview" icon={<Activity size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="profile" label="My Profile" icon={<User size={14} />} onClick={setActiveTab} isLight={isLight} />
                             <NavTab active={activeTab} id="community" label="Community" icon={<MessageSquare size={14} />} onClick={setActiveTab} isLight={isLight} />
@@ -521,7 +521,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                     }
                                                 });
                                             }}
-                                            className="py-4 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-[#3CB371]/10"
+                                            className="py-4 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-[#3CB371]/10"
                                         >
                                             Refill Funds
                                         </button>
@@ -543,7 +543,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                     }
                                                 });
                                             }}
-                                            className={`py-4 ${isLight ? 'bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'} text-[10px] font-black uppercase tracking-widest rounded-2xl active:scale-[0.98] transition-all border shadow-lg`}
+                                            className={`py-4 ${isLight ? 'bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border-[#3CB371]/20 text-[#3CB371]' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'} text-[10px] font-black uppercase tracking-widest rounded-full active:scale-[0.98] transition-all border shadow-lg`}
                                         >
                                             Sweep to Main
                                         </button>
@@ -636,7 +636,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                                     <td className="p-4">
                                                         <button 
                                                             onClick={() => handleApprove(app)}
-                                                            className="px-3 py-1.5 bg-[#3CB371]/20 text-[#3CB371] text-[9px] font-black uppercase rounded-lg border border-[#3CB371]/30 hover:bg-[#3CB371] hover:text-white transition-all"
+                                                            className="px-3 py-1.5 bg-[#3CB371]/20 text-[#3CB371] text-[9px] font-black uppercase rounded-full border border-[#3CB371]/30 hover:bg-[#3CB371] hover:text-white transition-all"
                                                         >
                                                             Approve
                                                         </button>
@@ -678,7 +678,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 {modalConfig.type === 'confirm' && (
                                     <button
                                         onClick={() => setModalConfig(null)}
-                                        className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-2xl transition-all`}
+                                        className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-full transition-all`}
                                     >
                                         Cancel
                                     </button>
@@ -688,7 +688,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         if (modalConfig.onConfirm) modalConfig.onConfirm();
                                         setModalConfig(null);
                                     }}
-                                    className={`py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all ${modalConfig.type === 'alert' ? 'col-span-2' : ''}`}
+                                    className={`py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all ${modalConfig.type === 'alert' ? 'col-span-2' : ''}`}
                                 >
                                     {modalConfig.confirmText || "OK"}
                                 </button>
@@ -727,7 +727,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             <div className="grid grid-cols-2 gap-4 w-full">
                                 <button
                                     onClick={() => setPromptConfig(null)}
-                                    className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-2xl transition-all font-sans`}
+                                    className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-full transition-all font-sans`}
                                 >
                                     Cancel
                                 </button>
@@ -737,7 +737,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                         promptConfig.onConfirm(val);
                                         setPromptConfig(null);
                                     }}
-                                    className="py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all font-sans"
+                                    className="py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all font-sans"
                                 >
                                     Confirm
                                 </button>
@@ -754,7 +754,7 @@ const NavTab = React.memo(({ active, id, label, icon, onClick, isLight }) => {
     return (
         <button
             onClick={() => onClick(id)}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${active === id
+            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${active === id
                 ? 'bg-[#3CB371] text-white shadow-lg'
                 : `${isLight ? 'text-[#0a261a]/40 hover:text-[#0a261a] hover:bg-[#3CB371]/5' : 'text-white/40 hover:text-white hover:bg-white/5'}`
                 }`}

@@ -243,7 +243,7 @@ export default function RoundsChart({
 
                 // Entry Label Box
                 ctx.fillStyle = GREEN;
-                ctx.beginPath(); ctx.roundRect(10, entryY - 10, 50, 20, 4); ctx.fill();
+                ctx.beginPath(); ctx.roundRect(10, entryY - 10, 50, 20, 10); ctx.fill();
                 ctx.fillStyle = '#FFFFFF';
                 ctx.font = 'bold 10px Inter, sans-serif';
                 ctx.fillText('ENTRY', 18, entryY + 4);
@@ -253,7 +253,7 @@ export default function RoundsChart({
             if (isSettled) {
                 const exitY = toY(cPriceNum);
                 ctx.fillStyle = isAbove ? GREEN : RED;
-                ctx.beginPath(); ctx.roundRect(W - 70, exitY - 10, 60, 20, 4); ctx.fill();
+                ctx.beginPath(); ctx.roundRect(W - 70, exitY - 10, 60, 20, 10); ctx.fill();
                 ctx.fillStyle = '#FFFFFF';
                 ctx.font = 'bold 10px Inter, sans-serif';
                 ctx.fillText('EXIT', W - 52, exitY + 4);
@@ -382,10 +382,12 @@ export default function RoundsChart({
 
             {/* POOLS OVERLAY (TOP) */}
             <div className={`absolute top-4 left-0 right-0 flex justify-center gap-4 px-4 transition-all duration-500 z-30 ${showEntrySplit ? 'opacity-0 translate-y-[-20px]' : 'opacity-100'}`}>
-                <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-xl border ${isAbove ? 'border-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.2)]' : 'border-white/5 opacity-50'}`}>
-                    <TrendingUp size={12} className="text-[#3CB371]" />
-                    <span className="text-xs font-black text-white">{longPct}%</span>
-                    <span className="text-[9px] font-bold text-white/30">${(pools?.long || 0).toFixed(0)}</span>
+                <div className={`flex items-center justify-center gap-3 px-5 py-3 rounded-full bg-black/40 backdrop-blur-xl border min-w-[120px] max-w-[160px] flex-1 transition-all duration-300 ${isAbove ? 'border-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.2)]' : 'border-white/5 opacity-40'}`}>
+                    <TrendingUp size={12} className={isAbove ? 'text-[#3CB371]' : 'text-white/20'} />
+                    <div className="flex flex-col leading-none">
+                        <span className="text-[11px] font-black text-white">{longPct}%</span>
+                        <span className="text-[7px] font-bold text-white/30 mt-0.5">${(pools?.long || 0).toFixed(0)}</span>
+                    </div>
                 </div>
                 
                 <div className="relative w-12 h-12 shrink-0">
@@ -398,10 +400,12 @@ export default function RoundsChart({
                     </div>
                 </div>
 
-                <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-xl border ${!isAbove ? 'border-[#FF7F50] shadow-[0_0_20px_rgba(255,127,80,0.2)]' : 'border-white/5 opacity-50'}`}>
-                    <span className="text-[9px] font-bold text-white/30">${(pools?.short || 0).toFixed(0)}</span>
-                    <span className="text-xs font-black text-white">{shortPct}%</span>
-                    <TrendingDown size={12} className="text-[#FF7F50]" />
+                <div className={`flex items-center justify-center gap-3 px-5 py-3 rounded-full bg-black/40 backdrop-blur-xl border min-w-[120px] max-w-[160px] flex-1 transition-all duration-300 ${!isAbove ? 'border-[#FF7F50] shadow-[0_0_20px_rgba(255,127,80,0.2)]' : 'border-white/5 opacity-40'}`}>
+                    <div className="text-right flex flex-col leading-none">
+                        <span className="text-[11px] font-black text-white">{shortPct}%</span>
+                        <span className="text-[7px] font-bold text-white/30 mt-0.5">${(pools?.short || 0).toFixed(0)}</span>
+                    </div>
+                    <TrendingDown size={12} className={!isAbove ? 'text-[#FF7F50]' : 'text-white/20'} />
                 </div>
             </div>
 
@@ -412,30 +416,29 @@ export default function RoundsChart({
                     <motion.div 
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         className="absolute inset-0 z-50 flex overflow-hidden"
-                    >
-                        {/* LEFT: LONG */}
+                    >                        {/* LEFT: LONG */}
                         <motion.div 
                             initial={{ x: '-100%', skewX: -15 }} animate={{ x: 0, skewX: -15 }} 
-                            className="absolute inset-y-0 left-[-15%] w-[65%] bg-[#3CB371] z-10 flex items-center justify-center border-r-[15px] border-white/20 shadow-[30px_0_60px_rgba(0,0,0,0.6)] overflow-hidden"
+                            className="absolute inset-y-0 left-[-20%] w-[70%] bg-[#3CB371] z-10 flex items-center justify-center border-r-[15px] border-white/20 shadow-[30px_0_60px_rgba(0,0,0,0.6)] overflow-hidden"
                             transition={{ type: "spring", damping: 25, stiffness: 80 }}
                         >
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
-                            <div className="skew-x-[15%] flex flex-col items-center relative z-10 mr-10">
-                                <TrendingUp size={40} className="md:size-[100px] text-white mb-2 md:mb-6 drop-shadow-[0_0_40px_rgba(255,255,255,0.6)]" />
-                                <h2 className="text-4xl md:text-8xl font-black text-white italic tracking-tighter uppercase">LONG</h2>
+                            <div className="skew-x-[15%] flex flex-col items-center relative z-10 ml-4 md:ml-10 lg:ml-14 max-w-[60%] overflow-hidden text-center">
+                                <TrendingUp className="size-12 md:size-24 lg:size-32 text-white mb-2 md:mb-4 drop-shadow-[0_0_40px_rgba(255,255,255,0.6)] shrink-0" />
+                                <h2 className="text-3xl md:text-5xl lg:text-7xl font-black text-white italic tracking-tighter uppercase whitespace-nowrap overflow-hidden text-ellipsis">LONG</h2>
                             </div>
                         </motion.div>
- 
+
                         {/* RIGHT: SHORT */}
                         <motion.div 
                             initial={{ x: '100%', skewX: -15 }} animate={{ x: 0, skewX: -15 }} 
-                            className="absolute inset-y-0 right-[-15%] w-[65%] bg-[#FF7F50] z-0 flex items-center justify-center overflow-hidden"
+                            className="absolute inset-y-0 right-[-20%] w-[70%] bg-[#FF7F50] z-0 flex items-center justify-center overflow-hidden"
                             transition={{ type: "spring", damping: 25, stiffness: 80 }}
                         >
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30 pointer-events-none mix-blend-overlay" />
-                            <div className="skew-x-[15%] flex flex-col items-center relative z-10 ml-10">
-                                <TrendingDown size={40} className="md:size-[100px] text-white mb-2 md:mb-6 drop-shadow-[0_0_40px_rgba(255,255,255,0.6)]" />
-                                <h2 className="text-4xl md:text-8xl font-black text-white italic tracking-tighter uppercase">SHORT</h2>
+                            <div className="skew-x-[15%] flex flex-col items-center relative z-10 mr-4 md:mr-10 lg:mr-14 max-w-[60%] overflow-hidden text-center">
+                                <TrendingDown className="size-12 md:size-24 lg:size-32 text-white mb-2 md:mb-4 drop-shadow-[0_0_40px_rgba(255,255,255,0.6)] shrink-0" />
+                                <h2 className="text-3xl md:text-5xl lg:text-7xl font-black text-white italic tracking-tighter uppercase whitespace-nowrap overflow-hidden text-ellipsis">SHORT</h2>
                             </div>
                         </motion.div>
  
@@ -518,21 +521,22 @@ export default function RoundsChart({
                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-40 mix-blend-overlay pointer-events-none" />
                             <div className={`absolute inset-0 bg-gradient-to-${isAbove ? 'r' : 'l'} from-white/20 via-transparent to-black/30 pointer-events-none`} />
                             
-                            <div className={`flex flex-col items-center justify-center h-full w-full relative z-10`}>
+                            <div className={`flex flex-col items-center justify-center h-full w-full relative z-10 px-4 md:px-10 text-center overflow-hidden`}>
                                 <motion.div 
                                     animate={{ 
-                                        scale: [1, 1.15, 1], 
+                                        scale: [1, 1.1, 1], 
                                         rotate: [0, 5, -5, 0],
                                         filter: ["drop-shadow(0 0 20px white)", `drop-shadow(0 0 40px gold)`, "drop-shadow(0 0 20px white)"]
                                     }} 
                                     transition={{ repeat: Infinity, duration: 2.5 }}
+                                    className="shrink-0"
                                 >
-                                    <Trophy size={80} className="md:size-[140px] text-white mb-4 md:mb-10 drop-shadow-[0_0_30px_rgba(255,255,255,0.4)]" />
+                                    <Trophy className="size-16 md:size-32 lg:size-40 text-white mb-4 md:mb-8 drop-shadow-[0_0_30px_rgba(255,255,255,0.4)]" />
                                 </motion.div>
-                                <h1 className="text-5xl md:text-[10rem] font-black text-white italic tracking-tighter drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] uppercase leading-none">
+                                <h1 className="text-3xl md:text-6xl lg:text-8xl font-black text-white italic tracking-tighter drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] uppercase leading-none max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
                                     {isAbove ? 'Long Wins' : 'Short Wins'}
                                 </h1>
-                                <span className="text-[12px] md:text-2xl font-black text-white/40 uppercase tracking-[0.6em] mt-4 md:mt-8 bg-black/20 px-6 py-2 rounded-full backdrop-blur-sm">
+                                <span className="text-[10px] md:text-lg font-black text-white/40 uppercase tracking-[0.4em] mt-4 md:mt-6 bg-black/20 px-6 py-2 rounded-full backdrop-blur-sm shrink-0">
                                     Round Settled
                                 </span>
                             </div>

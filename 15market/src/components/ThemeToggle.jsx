@@ -9,7 +9,7 @@ export function ThemeToggle({ theme, onToggle }) {
         <motion.button
             onClick={onToggle}
             className={`
-                relative h-10 w-20 rounded-2xl overflow-hidden border transition-all duration-500
+                relative h-10 w-20 rounded-full overflow-hidden border transition-all duration-500
                 ${isDark
                     ? 'bg-black/40 border-white/10 shadow-[inner_0_2px_10px_rgba(0,0,0,0.5)]'
                     : 'bg-[#e6f4ed] border-[#3CB371]/20 shadow-[inner_0_2px_10px_rgba(60,179,113,0.1)]'}
@@ -30,7 +30,7 @@ export function ThemeToggle({ theme, onToggle }) {
             {/* Branded Thumb */}
             <motion.div
                 className={`
-                    absolute top-1 left-1 bottom-1 w-8 rounded-xl shadow-lg flex items-center justify-center
+                    absolute top-1 left-1 bottom-1 w-8 rounded-full shadow-lg flex items-center justify-center
                     ${isDark ? 'bg-[#3CB371]' : 'bg-[#3CB371]'}
                 `}
                 animate={{

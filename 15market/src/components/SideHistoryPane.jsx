@@ -64,7 +64,7 @@ const SideHistoryPane = ({
                         >
                             <div className="flex items-center justify-between mb-6 px-2">
                                 <h2 className={`text-lg font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>Trade History</h2>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 uppercase tracking-widest">
                                     {tradeHistory.length} Trades
                                 </span>
                             </div>
@@ -84,14 +84,14 @@ const SideHistoryPane = ({
                                             <div
                                                 key={trade.id}
                                                 className={`
-                                                    p-3 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
+                                                    p-3 rounded-[22px] border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
                                                     ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#f0f9f4] border-[#3CB371]/10 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
                                                 `}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2">
                                                         <div className={`
-                                                            text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter
+                                                            text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter
                                                             ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
                                                         `}>
                                                             {trade.direction}
@@ -117,7 +117,7 @@ const SideHistoryPane = ({
                                                                 setSelectedPnLTrade(trade);
                                                                 setIsPnLOpen(true);
                                                             }}
-                                                            className={`p-1.5 rounded-lg transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
+                                                            className={`p-1.5 rounded-full transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
                                                         >
                                                             <Share2 size={12} />
                                                         </button>
@@ -125,7 +125,7 @@ const SideHistoryPane = ({
                                                             href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className={`p-1.5 rounded-lg transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
+                                                            className={`p-1.5 rounded-full transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
                                                         >
                                                             <ExternalLink size={12} />
                                                         </a>

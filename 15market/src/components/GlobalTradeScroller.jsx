@@ -149,11 +149,12 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
 
     const v1Bg = isLight ? 'bg-white zigzag-ticker shadow-sm' : 'bg-[#0a0a0a] zigzag-ticker zigzag-outline';
     const v1TextClass = isLight ? 'text-[#0a261a]' : 'text-white';
-    const v2Bg = isLight ? 'bg-white zigzag-ticker ticker-v2 shadow-sm' : 'bg-[#050505] ticker-v2';
-    const v2TextClass = isLight ? 'text-black' : 'text-white';
+    const switchEffectBg = isLight 
+        ? 'bg-[#3CB371] shadow-lg border-[#3CB371]/20' 
+        : 'bg-gradient-to-br from-[#1B5E3C] to-[#0D2B1D] shadow-[0_0_40px_rgba(27,94,60,0.5)] border-white/5';
 
     return (
-        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 border-y-2 ' + v1Bg : 'h-10 lg:h-12 ' + v2Bg} relative z-[45] overflow-hidden transition-all duration-500`}>
+        <div className={`w-full ${isV1 ? 'h-10 lg:h-12 ' + v1Bg : 'h-10 lg:h-12 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden transition-all duration-500`}>
             <AnimatePresence mode="wait">
                 {activeBroadcast ? (
                     <motion.div
@@ -161,7 +162,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className={`absolute inset-0 flex items-center ${isV1 ? 'bg-amber-500/10' : (isLight ? 'bg-[#3CB371]' : 'bg-[#0a0a0a]')}`}
+                        className={`absolute inset-0 flex items-center ${isV1 ? 'bg-amber-500/10' : 'bg-transparent'}`}
                     >
                         <motion.div
                             animate={{ x: [0, -1000] }}
@@ -193,12 +194,11 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                             {repeatedHistory.map((event, i) => {
                                 const isUp = event.direction === "UP" || event.direction === 1 || String(event.direction) === "1";
                                 const isWon = event.status === "WON";
-                                const color = isWon ? WIN_COLOR : LOSS_COLOR;
 
                                 return (
                                     <div key={`${event.id}-${i}`} className={`flex items-center gap-6 ${isV1 ? 'px-10 border-r-2' : 'px-12 border-r'} border-white/10 h-full transition-all`}>
                                         <div className="flex items-center gap-3">
-                                            <div className={`p-1 rounded bg-white/10`}>
+                                            <div className={`p-1 rounded-full bg-white/10`}>
                                                 {isUp ? <ArrowUp size={isV1 ? 10 : 12} className="text-white" /> : <ArrowDown size={isV1 ? 10 : 12} className="text-white" />}
                                             </div>
                                             <span className={`${isV1 ? 'text-[10px]' : 'text-[11px]'} font-black uppercase tracking-[0.2em] text-white`}>

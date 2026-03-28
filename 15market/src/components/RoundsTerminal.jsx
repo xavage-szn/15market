@@ -26,6 +26,7 @@ function RoundsTerminalComponent({
     const currentAssetId = activeMarket?.id || 'eth';
 
     // Local amount state — Rounds manages its own stake independently
+    const [isFocused, setIsFocused] = useState(false);
     const [localAmount, setLocalAmount] = useState('');
     const [localSlider, setLocalSlider] = useState(0);
 
@@ -195,7 +196,7 @@ function RoundsTerminalComponent({
             {/* COMPACT HEADER */}
             <div className="flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-[#3CB371]/10 border border-[#3CB371]/20">
+                    <div className="p-1.5 rounded-full bg-[#3CB371]/10 border border-[#3CB371]/20">
                         <Layers size={12} className="text-[#3CB371]" />
                     </div>
                     <div>
@@ -207,7 +208,7 @@ function RoundsTerminalComponent({
                     </div>
                 </div>
 
-                <div className={`px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-widest ${isLockedPhase ? 'border-[#FF7F50]/30 text-[#FF7F50] bg-[#FF7F50]/5' : 'border-[#3CB371]/30 text-[#3CB371] bg-[#3CB371]/5'}`}>
+                <div className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest ${isLockedPhase ? 'border-[#FF7F50]/30 text-[#FF7F50] bg-[#FF7F50]/5' : 'border-[#3CB371]/30 text-[#3CB371] bg-[#3CB371]/5'}`}>
                     {isLockedPhase ? 'LIVE' : (isResultPhase ? 'END' : 'OPEN')}
                 </div>
             </div>
@@ -221,37 +222,29 @@ function RoundsTerminalComponent({
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className={`p-2.5 rounded-2xl border mb-1 transition-colors ${liveData.result === 'WON' ? 'bg-[#3CB371]/15 border-[#3CB371]/30' : (liveData.result === 'LOST' ? 'bg-[#FF7F50]/15 border-[#FF7F50]/40' : (liveData.result === 'HOUSE' ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/10'))}`}>
-                            <div className="flex items-center justify-between uppercase font-black tracking-tighter mb-1.5">
-                                <span className="text-[7px] opacity-40">Active Round #{liveData.id}</span>
-                                <div className="flex items-center gap-1.5">
-                                    {!isResultPhase && (
-                                        <div className={`px-1.5 py-0.5 rounded-full border text-[6px] font-black transition-all ${parseFloat(price) >= (liveData.lockPrice || 0) ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-[#FF7F50]/10 border-[#FF7F50]/30 text-[#FF7F50]'}`}>
-                                            {parseFloat(price) >= (liveData.lockPrice || 0) ? 'BULLISH' : 'BEARISH'}
-                                        </div>
-                                    )}
-                                    <div className={`w-1 h-1 rounded-full ${isResultPhase ? 'bg-gray-400' : (parseFloat(price) >= (liveData.lockPrice || 0) ? 'bg-[#3CB371] animate-ping' : 'bg-[#FF7F50] animate-ping')}`} />
-                                    <span className={`text-[7px] ${liveData.result === 'WON' || (parseFloat(price) >= (liveData.lockPrice || 0) && !isResultPhase) ? 'text-[#3CB371]' : (liveData.result === 'LOST' || (!isResultPhase) ? 'text-[#FF7F50]' : (liveData.result === 'HOUSE' ? 'text-white/60' : 'text-white/40'))}`}>
-                                        {isResultPhase ? (liveData.result === 'HOUSE' ? 'HOUSE WINS' : 'SETTLED') : 'LOCKED'}
-                                    </span>
+                            className={`p-3 rounded-[24px] border mb-1 transition-colors px-3 flex items-center justify-center gap-2 ${liveData.result === 'WON' ? 'bg-[#3CB371]/15 border-[#3CB371]/30' : (liveData.result === 'LOST' ? 'bg-[#FF7F50]/15 border-[#FF7F50]/40' : (liveData.result === 'HOUSE' ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/10'))}`}>
+                            <div className="flex items-center gap-2 uppercase font-black tracking-tighter shrink-0">
+                                <span className="text-[7px] opacity-40">#{liveData.id}</span>
+                                <div className={`px-1.5 py-0.5 rounded-full border text-[6px] font-black ${parseFloat(price) >= (liveData.lockPrice || 0) ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-[#FF7F50]/10 border-[#FF7F50]/30 text-[#FF7F50]'}`}>
+                                    {parseFloat(price) >= (liveData.lockPrice || 0) ? 'BULL' : 'BEAR'}
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex flex-col leading-none">
-                                        <span className="text-[9px] font-black text-white/80 uppercase">Target: ${liveData.lockPrice?.toFixed(2)}</span>
-                                        <span className="text-[7px] opacity-30 mt-1">Pool: ${(liveData.pools.long + liveData.pools.short).toFixed(0)} USDC</span>
-                                    </div>
+                            <div className="flex-1 flex flex-col items-center justify-center leading-tight text-center min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5 overflow-hidden whitespace-nowrap">
+                                    <span className="text-[8px] font-black text-white/50 uppercase tracking-widest truncate">Trgt: ${liveData.lockPrice?.toFixed(1)}</span>
+                                    {isResultPhase && <span className="text-[8px] font-black text-white/50 uppercase tracking-widest truncate">Ex: ${liveData.settlePrice?.toFixed(1)}</span>}
                                 </div>
-                                <div className="text-right">
+                                <div className="flex items-center gap-2 justify-center">
                                     {isResultPhase ? (
-                                        <div className="flex flex-col items-end">
-                                            <span className={`text-xs font-black italic ${liveData.result === 'WON' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>{liveData.result}</span>
-                                            <span className="text-[7px] opacity-30">Exit: ${liveData.settlePrice?.toFixed(2)}</span>
-                                        </div>
+                                        <span className={`text-[11px] font-black italic tracking-widest ${liveData.result === 'WON' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                            {liveData.result === 'WON' ? 'WIN' : 'LOSS'}
+                                        </span>
                                     ) : (
-                                        <span className="text-xs font-black font-mono tabular-nums text-white/80">{15 - cyclePos}s</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <Timer size={10} className="text-[#3CB371] animate-pulse" />
+                                            <span className="text-[11px] font-black font-mono tabular-nums text-white/90">{15 - cyclePos}s</span>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -270,28 +263,68 @@ function RoundsTerminalComponent({
                     </div>
 
                     {/* Compact Input */}
-                    <div className={`p-3 rounded-2xl border transition-all ${isLight ? 'bg-white border-[#3CB371]/10 shadow-sm' : 'bg-white/5 border-white/5'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-[8px] font-black opacity-30 uppercase">Stake</span>
-                            <div className="flex items-center gap-1">
+                    <div className={`p-3 rounded-[24px] border transition-all ${isLight ? 'bg-white border-[#3CB371]/10 shadow-sm' : 'bg-white/5 border-white/5'}`}>
+                        <div className="flex items-center justify-between mb-2 px-1">
+                            <span className="text-[8px] font-black opacity-30 uppercase tracking-[0.2em]">Stake Amount</span>
+                            <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/5 border border-white/5">
                                 {sessionMode && <Zap size={8} className="text-[#3CB371] animate-pulse" />}
                                 <span className={`text-[8px] font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{(activeBal || 0).toFixed(2)} USDC</span>
                             </div>
                         </div>
 
-                        <div className="relative">
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-base md:text-lg font-black opacity-20">$</span>
-                            <input
-                                type="number"
-                                value={localAmount}
-                                onChange={e => handleLocalAmountChange(e.target.value)}
-                                placeholder="0.00"
-                                inputMode="decimal"
-                                className={`w-full bg-transparent text-xl md:text-2xl font-black outline-none pl-5 md:pl-6 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
-                            />
-                        </div>
+                    <div className={`relative transition-all duration-300 ${isFocused ? 'scale-[1.02]' : ''}`}>
+                        <span className={`absolute left-0 top-1/2 -translate-y-1/2 text-base md:text-lg font-black transition-opacity duration-300 ${isFocused ? 'opacity-40 text-[#3CB371]' : 'opacity-20 '}`}>$</span>
+                        <input
+                            type="number"
+                            value={localAmount}
+                            onChange={e => handleLocalAmountChange(e.target.value)}
+                            onFocus={() => setIsFocused(true)}
+                            onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+                            placeholder="0.00"
+                            inputMode="decimal"
+                            className={`w-full bg-transparent text-xl md:text-2xl font-black outline-none pl-5 md:pl-6 transition-all ${isLight ? 'text-[#0a261a]' : 'text-white'} ${isFocused ? 'tracking-tight' : ''}`}
+                        />
+                        
+                        <AnimatePresence>
+                            {isFocused && (
+                                <motion.div 
+                                    initial={{ opacity: 0, y: 10, filter: 'blur(10px)' }}
+                                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                                    exit={{ opacity: 0, y: 5, filter: 'blur(5px)' }}
+                                    className="flex items-center justify-between mt-3 pt-3 border-t border-white/5"
+                                >
+                                <div className="relative flex-1 flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden">
+                                    {/* 4-way Sliding Pill Background */}
+                                    <motion.div
+                                        className="absolute top-0.5 bottom-0.5 w-[calc(25%-1px)] rounded-full bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all"
+                                        initial={false}
+                                        animate={{ 
+                                            x: localSlider === 25 ? 0 : localSlider === 50 ? '100%' : localSlider === 75 ? '200%' : '300%',
+                                        }}
+                                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                                    />
+                                    {[25, 50, 75, 100].map(pct => (
+                                        <button 
+                                            key={pct}
+                                            onClick={() => handleLocalSliderChange(pct)}
+                                            className={`flex-1 relative z-10 py-1 flex items-center justify-center transition-all duration-300 ${localSlider === pct ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
+                                        >
+                                            <span className="text-[8px] font-black uppercase tracking-tighter">{pct === 100 ? 'MAX' : `${pct}%`}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                    <div className="flex flex-col items-end leading-none">
+                                        <span className="text-[6px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Est. Payout</span>
+                                        <span className="text-[10px] font-black text-[#3CB371] italic">
+                                            +${(parseFloat(localAmount || 0) * (selectedDirection === 'DOWN' ? parseFloat(odds.short) : parseFloat(odds.long))).toFixed(2)}
+                                        </span>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
 
-                        <div className="mt-2.5">
+                    <div className="mt-2.5">
                             <input type="range" min="0" max="100" value={localSlider} onChange={e => handleLocalSliderChange(e.target.value)}
                                 className="w-full accent-[#3CB371] h-1 rounded-full cursor-pointer" />
                             <div className="flex justify-between mt-1 px-1">
@@ -303,56 +336,87 @@ function RoundsTerminalComponent({
                     </div>
 
                     {/* Direction Buttons */}
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Direction Buttons - Sliding Tab Effect */}
+                    <div className="relative flex items-center p-1 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden mb-1">
+                        <motion.div
+                            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-[0_0_15px_rgba(60,179,113,0.3)]`}
+                            initial={false}
+                            animate={{ 
+                                x: selectedDirection === 'UP' ? 4 : 'calc(100% + 4px)',
+                                background: selectedDirection === 'UP' ? 'linear-gradient(to bottom right, #48c97f, #1e5a38)' : 'linear-gradient(to bottom right, #FF7F50, #D2691E)'
+                            }}
+                            transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                        />
                         <button onClick={() => setSelectedDirection('UP')}
                             disabled={hasEnteredThisRound}
-                            className={`py-3 rounded-xl border transition-all flex flex-col items-center gap-0.5 relative overflow-hidden ${selectedDirection === 'UP' ? 'bg-[#3CB371] border-[#3CB371] shadow-lg' : 'bg-white/5 border-white/10 hover:border-[#3CB371]/40'} ${hasEnteredThisRound ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}>
-                            <TrendingUp size={14} className={`relative z-10 ${selectedDirection === 'UP' ? 'text-white scale-110' : 'text-[#3CB371]'}`} />
-                            <span className={`text-[8px] font-black relative z-10 ${selectedDirection === 'UP' ? 'text-white' : 'text-[#3CB371]'}`}>{odds.long}x</span>
+                            className={`flex-1 relative z-10 py-3 flex flex-col items-center gap-0.5 transition-all duration-300 ${selectedDirection === 'UP' ? 'text-white scale-110' : 'text-white/20 hover:text-white/40'}`}>
+                            <TrendingUp size={14} className={selectedDirection === 'UP' ? 'text-white' : 'text-[#3CB371]/60'} />
+                            <span className="text-[10px] font-black">{odds.long}x</span>
                         </button>
 
                         <button onClick={() => setSelectedDirection('DOWN')}
                             disabled={hasEnteredThisRound}
-                            className={`py-3 rounded-xl border transition-all flex flex-col items-center gap-0.5 relative overflow-hidden ${selectedDirection === 'DOWN' ? 'bg-[#FF7F50] border-[#FF7F50] shadow-lg' : 'bg-white/5 border-white/10 hover:border-[#FF7F50]/40'} ${hasEnteredThisRound ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}>
-                            <TrendingDown size={14} className={`relative z-10 ${selectedDirection === 'DOWN' ? 'text-white scale-110' : 'text-[#FF7F50]'}`} />
-                            <span className={`text-[8px] font-black relative z-10 ${selectedDirection === 'DOWN' ? 'text-white' : 'text-[#FF7F50]'}`}>{odds.short}x</span>
+                            className={`flex-1 relative z-10 py-3 flex flex-col items-center gap-0.5 transition-all duration-300 ${selectedDirection === 'DOWN' ? 'text-white scale-110' : 'text-white/20 hover:text-white/40'}`}>
+                            <TrendingDown size={14} className={selectedDirection === 'DOWN' ? 'text-white' : 'text-[#FF7F50]/60'} />
+                            <span className="text-[10px] font-black">{odds.short}x</span>
                         </button>
                     </div>
-
+                    
                     {/* Action Button / Prediction Confirmation */}
                     <div className="mt-1">
                         {hasEnteredThisRound ? (
                             <motion.div 
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className={`p-3 rounded-2xl border flex items-center justify-between ${selectedDirection === 'UP' ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : 'bg-[#FF7F50]/10 border-[#FF7F50]/30'}`}>
-                                <div className="flex items-center gap-2.5">
-                                    <div className={`p-1.5 rounded-lg ${selectedDirection === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
-                                        {selectedDirection === 'UP' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                className={`p-3 rounded-[24px] border flex items-center justify-center gap-3 px-3 ${selectedDirection === 'UP' ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : 'bg-[#FF7F50]/10 border-[#FF7F50]/40'}`}>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <div className={`p-1 rounded-full ${selectedDirection === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
+                                        {selectedDirection === 'UP' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                                     </div>
                                     <div className="flex flex-col leading-tight">
                                         <span className={`text-[9px] font-black uppercase tracking-widest ${selectedDirection === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                            Predicition: {selectedDirection === 'UP' ? 'LONG' : 'SHORT'}
+                                            {selectedDirection}
                                         </span>
-                                        <span className={`text-[7px] font-bold uppercase ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>Awaiting Next Round</span>
+                                        <span className={`text-[6px] font-bold uppercase opacity-30`}>Pred.</span>
                                     </div>
                                 </div>
-                                <div className="text-right flex flex-col items-end leading-tight">
-                                    <span className={`text-[10px] font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{localAmount} USDC</span>
-                                    <span className={`text-[7px] font-bold ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>PAYOUT: +{(parseFloat(localAmount || 0) * (selectedDirection === 'UP' ? parseFloat(odds.long) : parseFloat(odds.short))).toFixed(2)}</span>
+                                
+                                <div className="w-px h-6 bg-white/10" />
+
+                                <div className="flex flex-col items-center leading-tight min-w-0 flex-1 overflow-hidden">
+                                    <span className={`text-[10px] font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} truncate w-full text-center`}>{localAmount} USDC</span>
+                                    <span className={`text-[8px] font-bold ${selectedDirection === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'} uppercase truncate w-full text-center`}>
+                                        +{(parseFloat(localAmount || 0) * (selectedDirection === 'UP' ? parseFloat(odds.long) : parseFloat(odds.short))).toFixed(0)} PAY
+                                    </span>
                                 </div>
                             </motion.div>
-                        ) : (
-                            <button
-                                onClick={handleConfirm}
-                                disabled={!selectedDirection || isExecuting || !localAmount || parseFloat(localAmount) <= 0}
-                                className={`w-full py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-[0.98] ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
-                                    ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'
-                                    : selectedDirection === 'DOWN' ? 'bg-gradient-to-r from-[#FF7F50] to-[#FF4500] text-white shadow-[#FF7F50]/20' : 'bg-gradient-to-r from-[#3CB371] to-[#2E8B57] text-white shadow-[#3CB371]/20'
-                                    }`}>
+                    ) : (
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={handleConfirm}
+                            disabled={!selectedDirection || isExecuting || !localAmount || parseFloat(localAmount) <= 0}
+                            className={`w-full py-4 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-2xl relative overflow-hidden group ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
+                                ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'
+                                : 'text-white cursor-pointer'
+                                }`}
+                            style={{
+                                background: (!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted) 
+                                    ? '' 
+                                    : (selectedDirection === 'DOWN' ? 'linear-gradient(to right, #FF7F50, #D2691E)' : 'linear-gradient(to right, #3CB371, #2E8B57)'),
+                                boxShadow: (!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
+                                    ? 'none'
+                                    : `0 10px 25px ${selectedDirection === 'DOWN' ? 'rgba(255, 127, 80, 0.3)' : 'rgba(60, 179, 113, 0.3)'}`
+                            }}
+                        >
+                            <motion.div 
+                                className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                            />
+                            <span className="relative z-10">
                                 {maintenanceMode || tradingHalted ? (tradingHalted ? 'HALTED' : 'PAUSED') : (isExecuting ? 'SIGNING TXN...' : `CONFIRM ${selectedDirection || ''}`)}
-                            </button>
-                        )}
+                            </span>
+                        </motion.button>
+                    )}
                     </div>
                 </div>
             </div>

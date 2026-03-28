@@ -54,7 +54,7 @@ export function UnifiedWalletButton({ theme }) {
         return (
             <button
                 onClick={handleClick}
-                className="px-4 lg:px-8 py-2.5 lg:py-3 font-black uppercase text-xs lg:text-sm tracking-widest rounded-xl transition-all active:scale-95 text-white relative overflow-hidden group"
+                className="px-4 lg:px-8 py-2.5 lg:py-3 font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] rounded-full transition-all active:scale-95 text-white relative overflow-hidden group shadow-xl"
                 style={{
                     backgroundColor: '#3CB371',
                     boxShadow: `0 0 20px #3CB37150`,
@@ -70,7 +70,7 @@ export function UnifiedWalletButton({ theme }) {
     return (
         <button
             onClick={handleClick}
-            className={`flex items-center gap-2 lg:gap-3 px-2 lg:px-4 py-1.5 lg:py-2 rounded-xl border backdrop-blur-md transition-all duration-300 group`}
+            className={`flex items-center gap-2 lg:gap-3 px-2 lg:px-4 py-1.5 lg:py-2 rounded-full border backdrop-blur-md transition-all duration-300 group`}
             style={{
                 backgroundColor: theme === 'light' ? `${currentColor}08` : `${currentColor}15`,
                 borderColor: theme === 'light' ? `${currentColor}20` : `${currentColor}30`,

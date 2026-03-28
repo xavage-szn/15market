@@ -140,8 +140,8 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#3CB371] to-black p-[1px] overflow-hidden">
-                                <div className={`w-full h-full rounded-2xl ${isLight ? 'bg-[#e6f4ed]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px] overflow-hidden">
+                                <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#e6f4ed]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                     {userProfile?.xProfileImage ? (
                                         <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                     ) : (
@@ -163,7 +163,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                     {metrics && (
                         <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
+                            <div className={`p-4 rounded-[22px] ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
                                 <p className="text-[8px] font-bold text-[#3CB371] uppercase tracking-widest mb-1">Win Rate</p>
                                 <div className="flex items-baseline gap-1">
                                     <p className={`text-2xl font-black ${isLight ? 'text-[#05140b]' : 'text-white'}`}>
@@ -173,7 +173,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                 </div>
                                 <p className={`text-[7px] ${isLight ? 'text-[#05140b]/20' : 'text-white/20'} font-bold uppercase mt-1`}>{metrics.wins} W // {metrics.trades - metrics.wins} L</p>
                             </div>
-                            <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
+                            <div className={`p-4 rounded-[22px] ${isLight ? 'bg-black/5 border-black/5' : 'bg-white/5 border-white/5'} border flex flex-col justify-center`}>
                                 <p className={`text-[8px] font-bold ${isLight ? 'text-[#05140b]/40' : 'text-white/40'} uppercase tracking-widest mb-1`}>Total Volume</p>
                                 <div className="flex items-baseline gap-1">
                                     <p className={`text-2xl font-black ${isLight ? 'text-[#05140b]' : 'text-white'}`}>{metrics.volume}</p>
@@ -198,7 +198,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                         return (
                                             <div key={t.id || `trade-${i}`} className={`flex items-center justify-between p-3 rounded-xl ${isLight ? 'bg-white/60 border-black/5' : 'bg-white/[0.02] border-white/5'} border`}>
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`p-1.5 rounded-lg ${isUp ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-[#FF7F50]/10 text-[#FF7F50]'}`}>
+                                                    <div className={`p-1.5 rounded-full ${isUp ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-[#FF7F50]/10 text-[#FF7F50]'}`}>
                                                         {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                                     </div>
                                                     <div>
@@ -275,7 +275,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                 {!xHandle && (
                                     <button
                                         onClick={handleLinkTwitter}
-                                        className={`px-4 rounded-2xl ${isLight ? 'bg-[#3CB371] text-black' : 'bg-white text-black'} text-[10px] font-black transition-transform active:scale-95 hover:bg-[#3CB371]`}
+                                        className={`px-4 rounded-full ${isLight ? 'bg-[#3CB371] text-black' : 'bg-white text-black'} text-[10px] font-black transition-transform active:scale-95 hover:bg-[#3CB371]`}
                                     >
                                         LINK X
                                     </button>
@@ -285,16 +285,16 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                         <div>
                             <label className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-2 block`}>Interface Mode</label>
-                            <div className={`flex ${isLight ? 'bg-white border-black/10' : 'bg-black border-white/10'} border rounded-2xl p-1 gap-1`}>
+                            <div className={`flex ${isLight ? 'bg-white border-black/10' : 'bg-black border-white/10'} border rounded-full p-1 gap-1`}>
                                 <button
                                     onClick={() => setUiVersion('v1')}
-                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v1' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
+                                    className={`flex-1 py-3 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v1' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
                                 >
                                     Standard V1
                                 </button>
                                 <button
                                     onClick={() => setUiVersion('v2')}
-                                    className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v2' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
+                                    className={`flex-1 py-3 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${uiVersion === 'v2' ? (isLight ? 'bg-[#3CB371] text-white shadow-[0_0_20px_#3CB37140]' : 'bg-[#3CB371] text-black shadow-[0_0_20px_#3CB37140]') : (isLight ? 'text-black/40 hover:text-black' : 'text-white/40 hover:text-white')}`}
                                 >
                                     Pro V2
                                 </button>
@@ -306,7 +306,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className={`w-full bg-[#3CB371] ${isLight ? 'text-white' : 'text-black'} font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
+                            className={`w-full bg-[#3CB371] ${isLight ? 'text-white' : 'text-black'} font-black py-4 rounded-full transition-all flex items-center justify-center gap-2 ${isSaving ? 'opacity-50' : 'hover:scale-[1.02] active:scale-[0.98]'}`}
                         >
                             {isSaving ? "SYNCING..." : "SAVE PROFILE"}
                         </button>

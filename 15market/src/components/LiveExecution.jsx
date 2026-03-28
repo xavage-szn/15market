@@ -171,7 +171,7 @@ function LiveExecutionComponent({
                     {activeTrades.length > 1 && (
                         <button
                             onClick={() => setIsExpanded(!isExpanded)}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg transition-all duration-300 ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full transition-all duration-300 ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}
                         >
                             <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>
                                 {isExpanded ? 'Collapse' : 'Expand'}
@@ -186,7 +186,7 @@ function LiveExecutionComponent({
                 </div>
                 {/* ── LCD Digital Active Counter ── */}
                 {activeTrades.length > 0 && (
-                    <div className={`lcd-digit flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-[9px] tracking-widest ${isLight ? 'lcd-counter-light' : 'lcd-counter-dark'}`}>
+                    <div className={`lcd-digit flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] tracking-widest ${isLight ? 'lcd-counter-light' : 'lcd-counter-dark'}`}>
                         <span style={{
                             display: 'inline-block',
                             minWidth: '1ch',
@@ -363,7 +363,7 @@ function LiveExecutionComponent({
                                 {othersCount > 0 && !isExpanded && (
                                     <button
                                         onClick={() => setIsExpanded(true)}
-                                        className={`w-full mt-1 py-1.5 px-2 rounded-lg border flex items-center justify-center gap-1.5 transition-all hover:scale-[0.99] active:scale-95 ${isLight ? 'bg-black/5 border-black/10 text-black/50' : 'bg-white/5 border-white/10 text-white/40'}`}
+                                        className={`w-full mt-1 py-1.5 px-2 rounded-full border flex items-center justify-center gap-1.5 transition-all hover:scale-[0.99] active:scale-95 ${isLight ? 'bg-black/5 border-black/10 text-black/50' : 'bg-white/5 border-white/10 text-white/40'}`}
                                     >
                                         <div className="w-1 h-1 rounded-full bg-[#3CB371] animate-pulse" />
                                         <span className="text-[7px] font-black uppercase tracking-widest">
