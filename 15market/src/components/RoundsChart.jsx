@@ -354,8 +354,17 @@ export default function RoundsChart({
     const shortPct = totalPool > 0 ? ((pools.short / totalPool) * 100).toFixed(0) : 50;
 
     return (
-        <div className="relative w-full h-full flex flex-col overflow-hidden bg-black select-none">
-            <canvas ref={canvasRef} className="flex-1 w-full h-full" />
+        <div className={`relative w-full h-full flex flex-col overflow-hidden bg-[#0d0d0d] select-none ${!isDark ? 'bg-[#8faf9a]' : ''}`}>
+            {/* Branded Background Watermark */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                <img src="/logo.png" alt="15market" style={{
+                    width: '85%',
+                    opacity: isDark ? 0.08 : 0.05,
+                    filter: isDark ? 'grayscale(1) brightness(0.7)' : 'grayscale(1) brightness(0.1)',
+                    mixBlendMode: isDark ? 'screen' : 'multiply'
+                }} />
+            </div>
+            <canvas ref={canvasRef} className="flex-1 w-full h-full relative z-10" />
 
             {/* LIVE PRICE OVERLAY (Entry & Locked Phases) */}
             {!showLockedCountdown && !showWinnerAnimation && (

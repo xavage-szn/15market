@@ -219,7 +219,7 @@ const DissolveTransition = ({ isAnimating, targetTheme }) => {
       }}
       className="fixed inset-0 z-[10000] pointer-events-none"
       style={{
-        backgroundColor: targetTheme === 'light' ? '#f0f9f4' : '#030303',
+        backgroundColor: targetTheme === 'light' ? '#8faf9a' : '#030303',
       }}
     />
   );
@@ -394,7 +394,7 @@ export default function UserApp() {
 
   // Main Network State
   const [network, setNetwork] = useState("arc");
-  const [uiVersion, setUiVersion] = useState(() => localStorage.getItem("15market_ui_version") || "v1"); // "v1" or "v2"
+  const [uiVersion, setUiVersion] = useState("v2"); // Sunsetting v1, V2 is now the only authoritative UI
   const [gameMode, setGameMode] = useState("classic"); // "classic" | "rounds"
   const [roundsTradeHistory, setRoundsTradeHistory] = useState(() => loadLocalTrades(address, true, 'rounds'));
   const [activeRounds, setActiveRounds] = useState(() => loadLocalTrades(address, false, 'rounds'));
@@ -2601,7 +2601,7 @@ export default function UserApp() {
                   {/* Chart Widget - First in stack on mobile */}
                   <div className={`col-span-12 lg:col-span-8 flex flex-col gap-2 rounded-[24px] lg:rounded-[32px] relative z-0 shadow-2xl transition-all duration-300 overflow-hidden border lg:h-full glass-panel chart-glow min-h-[300px] md:min-h-[450px] lg:min-h-0 w-full md:max-w-full mx-auto`}
                     style={{
-                      background: theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.75)',
+                      background: theme === 'light' ? '#8faf9a' : 'rgba(10, 10, 10, 0.75)',
                       boxShadow: theme === 'light'
                         ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                         : `0 0 60px ${GREEN}30, 0 0 20px ${GREEN}20, inset 0 0 40px ${GREEN}08`,
@@ -2718,7 +2718,7 @@ export default function UserApp() {
                     {/* Chart Container */}
                     <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[233px] min-h-[233px] mt-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
-                        background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#f0f9f4' : 'rgba(10, 10, 10, 0.7)'),
+                        background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#8faf9a' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
                           ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                           : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),

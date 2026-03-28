@@ -490,17 +490,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         <div
             className={`relative w-full h-full flex flex-col flex-1 ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`}
             style={{
-                backgroundColor: isDark ? '#0d0d0d' : '#b8d1c0',
+                backgroundColor: isDark ? '#0d0d0d' : '#8faf9a',
                 borderRadius: isFullscreen ? '0' : 'inherit',
                 minHeight: isFullscreen ? '100vh' : (uiVersion === 'v2' ? '120px' : '220px')
             }}
         >
             {/* Branded Background Watermark */}
-            <div className="absolute inset-0 hidden md:flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                 <img src="/logo.png" alt="15market" style={{
-                    width: '65%',
-                    opacity: isDark ? 0.05 : 0.04,
-                    filter: isDark ? 'grayscale(1) brightness(0.8)' : 'grayscale(1) brightness(0.05)',
+                    width: '85%',
+                    opacity: isDark ? 0.12 : 0.08,
+                    filter: isDark ? 'grayscale(1) brightness(0.7)' : 'grayscale(1) brightness(0.1)',
                     mixBlendMode: isDark ? 'screen' : 'multiply'
                 }} />
             </div>

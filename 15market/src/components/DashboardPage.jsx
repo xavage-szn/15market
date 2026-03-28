@@ -433,52 +433,13 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 mb-8">
-                                    <div className={`p-4 ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
+                                    <div className={`p-4 ${isLight ? 'bg-[#8faf9a]/20 border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
                                         <div className="text-3xl font-black text-[#3CB371]">{stats.userTotalWins}</div>
                                         <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>Total Wins</div>
                                     </div>
-                                    <div className={`p-4 ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
+                                    <div className={`p-4 ${isLight ? 'bg-[#8faf9a]/20 border-[#3CB371]/10' : 'bg-white/5 border-white/5'} border rounded-2xl text-center`}>
                                         <div className={`text-3xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.userTotalTrades}</div>
                                         <div className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]/30' : 'text-white/30'}`}>Total Trades</div>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 rounded-xl bg-[#3CB371]/10 border border-[#3CB371]/20 flex gap-4 mb-4">
-                                    <Shield className="text-[#3CB371] shrink-0" />
-                                    <div>
-                                        <h4 className="font-bold text-[#3CB371] mb-1">Account Status: Good</h4>
-                                        <p className={`text-xs ${isLight ? 'text-[#0a261a]/60' : 'text-white/60'} leading-relaxed`}>
-                                            Your account is active. You can now dispute trades below if you find discrepancies.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className={`p-6 ${isLight ? 'bg-white border-[#3CB371]/20 shadow-sm' : 'bg-black/40 border-white/5'} border rounded-[24px] mb-6`}>
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="p-2 bg-[#3CB371]/10 text-[#3CB371] rounded-lg">
-                                            <Settings size={18} />
-                                        </div>
-                                        <h4 className={`text-sm font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/80' : 'text-white/80'}`}>Interface Version</h4>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <button
-                                            onClick={() => setUiVersion('v1')}
-                                            className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v1'
-                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-lg'
-                                                : isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/50 hover:bg-[#e6f4ed]' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
-                                        >
-                                            <span className="text-[10px] font-black uppercase tracking-widest">V1 CLASSIC</span>
-                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v1' ? 'text-white/70' : isLight ? 'text-[#0a261a]/40' : 'text-white/20'}`}>Basic Terminal</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setUiVersion('v2')}
-                                            className={`flex-1 py-4 px-4 rounded-2xl border transition-all flex flex-col items-center gap-2 group ${uiVersion === 'v2'
-                                                ? 'bg-[#3CB371] text-white border-[#3CB371] shadow-lg'
-                                                : isLight ? 'bg-[#f0f9f4] border-[#3CB371]/10 text-[#0a261a]/50 hover:bg-[#e6f4ed]' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}
-                                        >
-                                            <span className="text-[10px] font-black uppercase tracking-widest">V2 ADVANCED</span>
-                                            <span className={`text-[8px] font-bold uppercase tracking-tighter ${uiVersion === 'v2' ? 'text-white/70' : isLight ? 'text-[#0a261a]/40' : 'text-white/20'}`}>High Speed Execution</span>
-                                        </button>
                                     </div>
                                 </div>
 
