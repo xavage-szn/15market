@@ -548,7 +548,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': ADMIN_TOKEN
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
                 },
                 body: JSON.stringify(updated)
             });
@@ -568,7 +568,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': ADMIN_TOKEN
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
                 },
                 body: JSON.stringify(updated)
             });
@@ -600,7 +600,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': ADMIN_TOKEN
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
                 },
                 body: JSON.stringify(banner)
             });
@@ -3125,7 +3125,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                         </div>
                                                                         <div className="flex flex-col">
                                                                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1.5">Enrollment</p>
-                                                                            <p className="text-[10px] font-black text-white uppercase tracking-widest bg-white/5 py-1.5 px-3 rounded-lg border border-white/5 w-fit">{enrollmentsMap[camp.id] || 0} OPERATORS</p>
+                                                                            <p className="text-[10px] font-black text-white uppercase tracking-widest bg-white/5 py-1.5 px-3 rounded-lg border border-white/5 w-fit">{(camp.enrollmentCount || enrollmentsMap[camp.id] || 0)} OPERATORS</p>
                                                                         </div>
                                                                     </div>
                                                                 </div>

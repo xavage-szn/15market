@@ -180,7 +180,127 @@ const getHistoryFor = async (address, limit = 100) => {
 };
 
 // Support for historical/missing frontend routes
-app.get('/campaigns', (req, res) => res.json([]));
+// --- CAMPAIGN & WINNER BANNER ENDPOINTS ---
+app.get('/campaigns', async (req, res) => {
+    try {
+        const campaigns = await redis.getCampaigns();
+        // Enrich with enrollment counts
+        const enriched = await Promise.all(campaigns.map(async (c) => {
+            const count = await redis.getEnrollmentCount(c.id);
+            return { ...c, enrollmentCount: count };
+        }));
+        res.json(enriched);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/campaigns', express.json(), async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+        await redis.saveCampaigns(req.body);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/winner-banner', async (req, res) => {
+    try {
+        const banner = await redis.getWinnerBanner();
+        res.json(banner || {});
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/winner-banner', express.json(), async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+        await redis.saveWinnerBanner(req.body);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/enroll', express.json(), async (req, res) => {
+    try {
+        const { campaignId, address } = req.body;
+        if (!campaignId || !address) return res.status(400).json({ error: 'Missing parameters' });
+        await redis.enrollUser(campaignId, address);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/enroll', async (req, res) => {
+    try {
+        const { campaignId, address } = req.query;
+        if (!campaignId || !address) return res.status(400).json({ error: 'Missing parameters' });
+        const enrolled = await redis.isUserEnrolled(campaignId, address);
+        res.json({ enrolled });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/leaderboard', async (req, res) => {
+    try {
+        const { campaignId } = req.query;
+        if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
+
+        const campaigns = await redis.getCampaigns();
+        const campaign = campaigns.find(c => c.id === campaignId);
+        if (!campaign) return res.json([]);
+
+        // Filter history by campaign timeframe
+        const history = await redis.getFullHistory();
+        const campaignTrades = history.filter(t => 
+            t.timestamp >= campaign.startTime && 
+            t.timestamp <= campaign.endTime
+        );
+
+        // Calculate rankings
+        const rankings = {};
+        campaignTrades.forEach(t => {
+            const user = t.user?.toLowerCase();
+            if (!user) return;
+            if (!rankings[user]) rankings[user] = { address: user, volume: 0, wins: 0, trades: 0, pnl: 0 };
+            
+            const amount = parseFloat(t.amount || 0);
+            rankings[user].volume += amount;
+            rankings[user].trades += 1;
+            
+            if (t.status === 'WON') {
+                rankings[user].wins += 1;
+                rankings[user].pnl += parseFloat(t.payout || 0) - amount;
+            } else if (t.status === 'LOST') {
+                rankings[user].pnl -= amount;
+            }
+        });
+
+        const sorted = Object.values(rankings).map(r => ({
+            ...r,
+            winRate: r.trades > 0 ? (r.wins / r.trades) * 100 : 0
+        })).sort((a, b) => b.pnl - a.pnl); // Sort by PnL or volume as per your campaign rules
+        
+        res.json(sorted.slice(0, 50));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/campaign-trades', async (req, res) => {
+    try {
+        const { campaignId } = req.query;
+        if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
+        
+        const campaigns = await redis.getCampaigns();
+        const campaign = campaigns.find(c => c.id === campaignId);
+        if (!campaign) return res.json([]);
+
+        const history = await redis.getFullHistory();
+        const campaignTrades = history.filter(t => 
+            t.timestamp >= campaign.startTime && 
+            t.timestamp <= campaign.endTime
+        ).sort((a, b) => b.timestamp - a.timestamp);
+
+        res.json(campaignTrades.slice(0, 100));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/stats', (req, res) => res.json({ status: 'active', network: 'arc-testnet' }));
 
 // --- MARKET SYNC (Missing in early versions) ---

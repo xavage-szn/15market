@@ -406,6 +406,76 @@ class RedisStore {
         return this._broadcast || null;
     }
 
+    // ─── CAMPAIGN MANAGEMENT ──────────────────────────────────────────────────
+
+    async saveCampaigns(campaigns) {
+        if (this.isCloud) {
+            await this.redis.set('15market_campaigns', JSON.stringify(campaigns));
+        } else {
+            this._campaigns = campaigns;
+        }
+    }
+
+    async getCampaigns() {
+        if (this.isCloud) {
+            const data = await this.redis.get('15market_campaigns');
+            return data ? JSON.parse(data) : [];
+        }
+        return this._campaigns || [];
+    }
+
+    async saveWinnerBanner(banner) {
+        if (this.isCloud) {
+            await this.redis.set('15market_winner_banner', JSON.stringify(banner));
+        } else {
+            this._winnerBanner = banner;
+        }
+    }
+
+    async getWinnerBanner() {
+        if (this.isCloud) {
+            const data = await this.redis.get('15market_winner_banner');
+            return data ? JSON.parse(data) : null;
+        }
+        return this._winnerBanner || null;
+    }
+
+    async enrollUser(campaignId, address) {
+        const key = `campaign:enrollments:${campaignId}`;
+        if (this.isCloud) {
+            await this.redis.sadd(key, address.toLowerCase());
+        } else {
+            if (!this._enrollments) this._enrollments = new Map();
+            if (!this._enrollments.has(campaignId)) this._enrollments.set(campaignId, new Set());
+            this._enrollments.get(campaignId).add(address.toLowerCase());
+        }
+    }
+
+    async getEnrollmentCount(campaignId) {
+        const key = `campaign:enrollments:${campaignId}`;
+        if (this.isCloud) {
+            return await this.redis.scard(key);
+        }
+        return this._enrollments?.get(campaignId)?.size || 0;
+    }
+
+    async isUserEnrolled(campaignId, address) {
+        const key = `campaign:enrollments:${campaignId}`;
+        if (this.isCloud) {
+            const res = await this.redis.sismember(key, address.toLowerCase());
+            return res === 1;
+        }
+        return this._enrollments?.get(campaignId)?.has(address.toLowerCase()) || false;
+    }
+
+    async getEnrolledUsers(campaignId) {
+        const key = `campaign:enrollments:${campaignId}`;
+        if (this.isCloud) {
+            return await this.redis.smembers(key);
+        }
+        return Array.from(this._enrollments?.get(campaignId) || []);
+    }
+
     async saveToDisk() { }
     async syncFromRedis() { }
 }

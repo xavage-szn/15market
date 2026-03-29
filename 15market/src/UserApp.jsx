@@ -1728,6 +1728,12 @@ export default function UserApp() {
       if (!res.ok) return;
       const data = await res.json();
       setCampaigns(data);
+      
+      const wbRes = await fetch(`${targetUrl}/winner-banner`);
+      if (wbRes.ok) {
+        const wbData = await wbRes.json();
+        setWinnerBanner(wbData);
+      }
 
       if (address && data.length > 0) {
         // Check enrollments for all active campaigns
