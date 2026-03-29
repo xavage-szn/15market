@@ -158,7 +158,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                 <div className="absolute inset-0 flex items-center" style={{ animation: 'fadeIn 0.3s ease' }}>
                     <div
                         className={`flex items-center gap-10 whitespace-nowrap px-10 ${isV1 ? 'bg-amber-500/10' : ''}`}
-                        style={{ animation: 'ticker-move 30s linear infinite', willChange: 'transform' }}
+                        style={{ animation: 'ticker-move 90s linear infinite', willChange: 'transform' }}
                     >
                         {[...Array(10)].map((_, i) => (
                             <div key={i} className="flex items-center gap-2">
@@ -175,7 +175,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                     <div
                         key={scrollerKey}
                         className="flex items-center h-full whitespace-nowrap"
-                        style={{ animation: 'ticker-move 100s linear infinite', willChange: 'transform' }}
+                        style={{ animation: 'ticker-move 300s linear infinite', willChange: 'transform' }}
                     >
                         {repeatedHistory.map((event, i) => {
                             const isUp = event.direction === "UP" || event.direction === 1 || String(event.direction) === "1";

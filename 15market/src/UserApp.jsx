@@ -364,7 +364,6 @@ export default function UserApp() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [showManagement, setShowManagement] = useState(false);
   const [showActiveExpanded, setShowActiveExpanded] = useState(false);
   const [transactionHistory, setTransactionHistory] = useState(() => {
     try {
@@ -2670,9 +2669,9 @@ export default function UserApp() {
                     className={`w-full md:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-14' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    <div className={`w-full flex flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full flex flex-col lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'w-1/2 flex-none' : 'w-full flex-1'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'w-full flex-none' : 'w-full flex-1'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2708,7 +2707,6 @@ export default function UserApp() {
                             activeMarket={activeMarket}
                             maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                             tradingHalted={platformSettings.tradingHalted}
-                            showManagement={showManagement} setShowManagement={setShowManagement}
                             uiVersion={uiVersion}
                           />
                         )}
@@ -2716,7 +2714,7 @@ export default function UserApp() {
 
                       {/* ACTIVE EXECUTION - Visible on Mobile V2 or when not in Rounds */}
                       {(gameMode !== 'rounds' || (uiVersion === 'v2' && isSmallScreen)) && (
-                        <div className={`min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'w-1/2 flex-none min-h-[160px]' : 'flex-1 min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                        <div className={`min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'w-full flex-none min-h-[160px]' : 'flex-1 min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2808,7 +2806,6 @@ export default function UserApp() {
                                 activeMarket={activeMarket}
                                 maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                                 tradingHalted={platformSettings.tradingHalted}
-                                showManagement={showManagement} setShowManagement={setShowManagement}
                                 uiVersion={uiVersion}
                               />
                             )}
@@ -2827,7 +2824,7 @@ export default function UserApp() {
                                 activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                                 setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
                                 theme={theme} currentNetwork={network}
-                                isTruncated={uiVersion === 'v2' && showManagement && !showActiveExpanded}
+                                isTruncated={uiVersion === 'v2' && !showActiveExpanded}
                                 isExpanded={showActiveExpanded}
                                 setIsExpanded={setShowActiveExpanded}
                               />
