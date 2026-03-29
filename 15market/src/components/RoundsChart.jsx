@@ -25,6 +25,7 @@ export default function RoundsChart({
     const priceHistoryRef = useRef(priceHistory || []);
     const rafRef = useRef(null);
     const isLight = theme === 'light';
+    const isDark = !isLight;
     
     // Freeze the entry price locally as soon as the phase transitions to locked.
     // This stops the entry line from constantly following the live price!
