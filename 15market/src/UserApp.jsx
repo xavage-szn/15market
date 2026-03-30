@@ -1,0 +1,2700 @@
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
+import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
+import { RoundsTradeScroller } from "./components/RoundsTradeScroller";
+import { ProfileModal } from "./components/ProfileModal";
+import { PnLModal } from "./components/PnLModal";
+import { TransactionReceiptModal } from "./components/TransactionReceiptModal";
+import {
+  MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
+  Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
+  History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp,
+  Maximize2, RotateCw, Layers
+} from "lucide-react";
+import { Stamp } from "./components/Stamp";
+import { parseEther, parseUnits, formatUnits, encodeFunctionData } from "viem";
+import ArcABI from "./abi/ArcPrediction.json";
+import * as ethers from "ethers";
+import { publicClient } from "./client";
+
+import { WalletBalance } from "./components/WalletBalance";
+import { LandingPage } from "./components/LandingPage";
+import { DashboardPage } from "./components/DashboardPage";
+
+import MessagingSystem from "./components/MessagingSystem";
+import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
+
+
+// Memoized Sub-components
+import { TradeTerminal } from "./components/TradeTerminal";
+import { LiveExecution } from "./components/LiveExecution";
+import { TradeHistory } from "./components/TradeHistory";
+import { RoundsTradeHistory } from "./components/RoundsTradeHistory";
+import { UnifiedWalletButton } from "./components/UnifiedWalletButton";
+import { OrderBook } from "./components/OrderBook";
+import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
+import { MascotLoader } from "./components/MascotLoader";
+import CustomChart from './components/CustomChart';
+import Toast from "./components/Toast";
+import { ThemeToggle } from "./components/ThemeToggle";
+import SideHistoryPane from "./components/SideHistoryPane";
+
+import { RoundsTerminal } from "./components/RoundsTerminal";
+import RoundsChart from "./components/RoundsChart";
+import RoundsAccessGate from "./components/RoundsAccessGate";
+import { OnboardingFlow } from "./components/OnboardingFlow";
+
+/**
+ * Mobile Portrait Lock Component
+ * Shown when a mobile/small screen user is in portrait mode.
+ * Forces landscape orientation for better V2 UI experience.
+ */
+const PortraitPrompt = ({ theme }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center p-8 text-center backdrop-blur-3xl`}
+    style={{
+      background: theme === 'light' ? 'rgba(238, 249, 241, 0.98)' : 'rgba(5, 5, 5, 0.98)'
+    }}
+  >
+    <div className="relative mb-12">
+      <motion.div
+        animate={{ rotate: 90 }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1 }}
+        className="relative"
+      >
+        <div className="w-32 h-20 rounded-2xl border-4 border-[#3CB371]/30 flex items-center justify-center">
+          <div className="w-1 h-8 rounded-full bg-[#3CB371]/20 absolute -right-1" />
+          <div className="w-2 h-2 rounded-full bg-[#3CB371]/20 absolute left-4" />
+        </div>
+      </motion.div>
+      <motion.div
+        animate={{ opacity: [0, 1, 0], x: [20, 0, -20] }}
+        transition={{ duration: 2, repeat: Infinity }}
+        className="absolute -top-8 left-1/2 -translate-x-1/2"
+      >
+        <RotateCw className="w-8 h-8 text-[#3CB371]" />
+      </motion.div>
+    </div>
+
+    <h2 className="text-3xl font-black text-[#3CB371] uppercase tracking-tighter mb-4">
+      Rotate Your Device
+    </h2>
+    <p className="text-white/40 text-sm font-medium max-w-xs leading-relaxed"
+      style={{ color: theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>
+      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#3CB371] font-bold">Landscape</span> to access the Precision V2 Terminal.
+    </p>
+
+    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#3CB371]/10 border border-[#3CB371]/20">
+      <Maximize2 className="w-4 h-4 text-[#3CB371]" />
+      <span className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Desktop Mode Optimization</span>
+    </div>
+  </motion.div>
+);
+
+/**
+ * Mobile Bottom History Pane for V2 (Slide-up drawer style)
+ */
+const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSelectedPnLTrade, setIsPnLOpen, userProfile }) => {
+  const isDark = theme !== 'light';
+
+  return (
+    <motion.div
+      initial={false}
+      animate={{
+        y: isOpen ? 0 : 'calc(100% - 56px)',
+      }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className="fixed bottom-0 left-0 right-0 z-[110] flex flex-col pointer-events-none"
+      style={{ height: '80vh' }}
+    >
+      <div className={`
+        w-full h-full pointer-events-auto
+        backdrop-blur-xl border-t border-x rounded-t-[40px] shadow-[0_-20px_50px_rgba(0,0,0,0.3)]
+        transition-all duration-500 flex flex-col overflow-hidden
+        ${isDark
+          ? 'bg-[#0a0a0a]/90 border-white/10'
+          : 'bg-[#d4e6dc]/90 border-[#3CB371]/20'}
+      `}>
+        {/* Horizontal Toggle Handle Bar */}
+        <div
+          onClick={onToggle}
+          className={`
+            w-full h-14 flex items-center justify-center cursor-pointer 
+            transition-all duration-300 relative shrink-0 border-t
+            ${isDark 
+              ? 'bg-[#0a0a0a]/95 border-[#3CB371]/40 shadow-[0_-15px_40px_rgba(60,179,113,0.2)]' 
+              : 'bg-[#f0f9f4]/95 border-[#3CB371]/30 shadow-[0_-10px_30px_rgba(60,179,113,0.1)]'}
+          `}
+        >
+          {/* Branded "Glow Line" at the top edge */}
+          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#3CB371] to-transparent opacity-60" />
+          
+          <div className="flex items-center justify-center gap-3 w-full -translate-y-3">
+            <History size={16} className="text-[#3CB371]" style={{ filter: 'drop-shadow(0 0 10px rgba(60,179,113,0.6))' }} />
+            <span className={`text-[12px] font-black uppercase tracking-[0.25em] bg-gradient-to-r from-[#48c97f] to-[#1e5a38] bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(60,179,113,0.4)]`}>
+              TRADE HISTORY ({userProfile?.stats?.totalTrades || tradeHistory.length})
+            </span>
+            {isOpen ? <ChevronDown size={14} className="text-[#3CB371]/60" /> : <ChevronUp size={14} className="text-[#3CB371]/60" />}
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
+          {tradeHistory.length === 0 ? (
+            <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
+              <History size={48} className="mb-4" />
+              <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
+            </div>
+          ) : (
+            tradeHistory.slice(0, 50).map((trade) => {
+              const isWin = trade.status === 'WON';
+              const isLoss = trade.status === 'LOST';
+
+              return (
+                <div
+                  key={trade.id}
+                  className={`
+                    p-4 rounded-2xl border transition-all active:scale-[0.98]
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#cce0d5] border-[#3CB371]/10 shadow-sm'}
+                  `}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`
+                        text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter
+                        ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
+                      `}>
+                        {trade.direction}
+                      </div>
+                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
+                    </div>
+                    <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                      {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] opacity-40">
+                      ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
+                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                      >
+                        <Share2 size={12} />
+                      </button>
+                      <a
+                        href={`https://testnet.arcscan.app/tx/${trade.tx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+
+const DissolveTransition = ({ isAnimating, targetTheme }) => {
+  if (!isAnimating) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: [0, 1, 1, 0] }}
+      transition={{
+        duration: 0.8,
+        times: [0, 0.4, 0.6, 1],
+        ease: "easeInOut"
+      }}
+      className="fixed inset-0 z-[10000] pointer-events-none"
+      style={{
+        backgroundColor: targetTheme === 'light' ? '#8faf9a' : '#030303',
+      }}
+    />
+  );
+};
+
+export default function UserApp() {
+  const { isConnected, address, chainId: connectedChainId } = useAccount();
+  const { switchChain } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
+
+  const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
+  const [isAnimatingTheme, setIsAnimatingTheme] = useState(false);
+  const [targetTheme, setTargetTheme] = useState(null);
+
+  useEffect(() => {
+    localStorage.setItem('15market_theme', theme);
+  }, [theme]);
+
+  const isLight = theme === 'light';
+
+  const toggleTheme = useCallback(() => {
+    if (isAnimatingTheme) return;
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+
+    setTargetTheme(nextTheme);
+    setIsAnimatingTheme(true);
+
+    setTimeout(() => {
+      setTheme(nextTheme);
+    }, 400);
+
+    setTimeout(() => {
+      setIsAnimatingTheme(false);
+      setTargetTheme(null);
+    }, 800);
+  }, [theme, isAnimatingTheme]);
+
+  // Keep-Alive Heartbeat
+  useEffect(() => {
+    const isLocal = window.location.hostname === 'localhost';
+    if (isLocal) return;
+
+    const pulse = async () => {
+      try {
+        await fetch(`${KEEPER_URL_ARC}/health`).catch(() => { });
+        await fetch(`${KEEPER_URL_ARC}/protocol-stats`).catch(() => { });
+      } catch (e) { }
+    };
+
+    pulse();
+    const interval = setInterval(pulse, 120000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const [price, setPrice] = useState("0.00");
+  const staticPriceFails = useRef(0);
+  const [amount, setAmount] = useState("");
+  const [sliderValue, setSliderValue] = useState(0);
+  const [direction, setDirection] = useState(null);
+  const loadLocalTrades = (userAddress, isHistory, type = 'classic') => {
+    try {
+      if (!userAddress) return [];
+      const prefix = type === 'rounds' ? '15market_rounds' : '15market';
+      const key = isHistory ? `${prefix}_history_${userAddress.toLowerCase()}` : `${prefix}_active_${userAddress.toLowerCase()}`;
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  };
+
+  const [tradeHistory, setTradeHistory] = useState(() => loadLocalTrades(address, true));
+  const [activeTrades, setActiveTrades] = useState(() => loadLocalTrades(address, false));
+
+  const lastAddressRef = useRef(address);
+
+  useEffect(() => {
+    if (address && address !== lastAddressRef.current) {
+      setTradeHistory(loadLocalTrades(address, true, 'classic'));
+      setActiveTrades(loadLocalTrades(address, false, 'classic'));
+      setRoundsTradeHistory(loadLocalTrades(address, true, 'rounds'));
+      lastAddressRef.current = address;
+    }
+  }, [address]);
+
+  useEffect(() => {
+    if (address && address === lastAddressRef.current) {
+      localStorage.setItem(`15market_history_${address.toLowerCase()}`, JSON.stringify(tradeHistory));
+    }
+    tradeHistoryRef.current = tradeHistory;
+  }, [tradeHistory, address]);
+
+  useEffect(() => {
+    if (address && address === lastAddressRef.current) {
+      localStorage.setItem(`15market_active_${address.toLowerCase()}`, JSON.stringify(activeTrades));
+    }
+    activeTradesRef.current = activeTrades;
+  }, [activeTrades, address]);
+
+  const [timerActive, setTimerActive] = useState(false);
+  const [duration, setDuration] = useState(15);
+  const [timeLeft, setTimeLeft] = useState(15);
+
+  const activeTrade = activeTrades[0] || null;
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const loadingTimeoutRef = useRef(null);
+  const lastTradeTimeRef = useRef(0);
+
+  useEffect(() => {
+    loadingTimeoutRef.current = setTimeout(() => {
+      if (isLoading) {
+        console.warn("⚠️ Price feed sync taking too long, entering fallback load state...");
+        setIsLoading(false);
+      }
+    }, 5000);
+    return () => clearTimeout(loadingTimeoutRef.current);
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (isLoading) {
+      const interval = setInterval(() => {
+        setLoadingProgress(prev => {
+          if (prev < 95) {
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 50);
+      return () => clearInterval(interval);
+    } else {
+      setLoadingProgress(100);
+    }
+  }, [isLoading]);
+
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [showActiveExpanded, setShowActiveExpanded] = useState(false);
+  const [transactionHistory, setTransactionHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem("15market_transactions_v1");
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(tx =>
+        tx &&
+        typeof tx === 'object' &&
+        (typeof tx.amount === 'string' || typeof tx.amount === 'number')
+      );
+    } catch (e) { return []; }
+  });
+  const [isPnLOpen, setIsPnLOpen] = useState(false);
+  const [showSideHistory, setShowSideHistory] = useState(false);
+  const [showMobileHistory, setShowMobileHistory] = useState(false);
+  const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
+  const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [view, setView] = useState("trading");
+  
+  // LOCK SCROLL for Mobile History Drawer
+  useEffect(() => {
+    if (showMobileHistory) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.height = '100vh';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+    };
+  }, [showMobileHistory]);
+
+  const [campaigns, setCampaigns] = useState([]);
+  const [winnerBanner, setWinnerBanner] = useState(null);
+  const [enrollments, setEnrollments] = useState({});
+  const [userLocation, setUserLocation] = useState(null);
+
+  const [network, setNetwork] = useState("arc");
+  const uiVersion = "v2";
+  const [gameMode, setGameMode] = useState("classic");
+  const [roundsTradeHistory, setRoundsTradeHistory] = useState(() => loadLocalTrades(address, true, 'rounds'));
+  const [activeRounds, setActiveRounds] = useState(() => loadLocalTrades(address, false, 'rounds'));
+
+  const [roundsChartState, setRoundsChartState] = useState(null);
+  const [platformSettings, setPlatformSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem("15market_citadel_settings");
+      if (saved) return JSON.parse(saved);
+    } catch (e) { }
+    return {
+      minBet: 1.0,
+      maxBet: 1000000.0,
+      maintenanceMode: false,
+      tradingHalted: false,
+      systemBanner: "",
+      bannerLevel: "info"
+    };
+  });
+
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
+  const [hasRoundsAccess, setHasRoundsAccess] = useState(null);
+
+  const performStealthChecks = useCallback(async (addr) => {
+    if (!addr) return;
+    
+    console.log(`🕵️ [STEALTH] Starting identity verification for ${addr}...`);
+    setIsGlobalLoading(true);
+    setGlobalLoadingProgress(0);
+
+    const startTime = Date.now();
+    const MIN_LOAD_TIME = 5000;
+    
+    const progressInterval = setInterval(() => {
+      setGlobalLoadingProgress(prev => {
+        if (prev < 90) return prev + (Math.random() * 5);
+        return prev;
+      });
+    }, 200);
+
+    try {
+      const profilePromise = fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`);
+      const roundsPromise = fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`);
+
+      const [pRes, rRes] = await Promise.all([profilePromise, roundsPromise]);
+      
+      let pData = null;
+      if (pRes.ok) pData = await pRes.json();
+      
+      let rData = { authorized: false };
+      if (rRes.ok) rData = await rRes.json();
+
+      if (!pData || pData.error) {
+        setUserProfile({ address: addr, isInitial: true });
+        setShowOnboarding(true);
+      } else {
+        setUserProfile(pData);
+        setShowOnboarding(false);
+      }
+
+      setHasRoundsAccess(rData.authorized === true);
+      console.log(`🕵️ [STEALTH] Verification complete. Rounds Access: ${rData.authorized}`);
+
+    } catch (e) {
+      console.warn("🕵️ [STEALTH] Verification encounterd an error:", e.message);
+      setHasRoundsAccess(false);
+    } finally {
+      clearInterval(progressInterval);
+      setGlobalLoadingProgress(100);
+      
+      const elapsed = Date.now() - startTime;
+      const remains = Math.max(0, MIN_LOAD_TIME - elapsed);
+      
+      setTimeout(() => {
+        setIsGlobalLoading(false);
+      }, remains);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (address) {
+      performStealthChecks(address);
+    } else {
+      setIsGlobalLoading(false);
+      setHasRoundsAccess(null);
+    }
+  }, [address, performStealthChecks]);
+
+  const fetchGlobalSettings = useCallback(async () => {
+    try {
+      const res = await fetch(`${KEEPER_URL_ARC}/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        setPlatformSettings(prev => {
+          const updated = { ...prev, ...data };
+          if (JSON.stringify(prev) !== JSON.stringify(updated)) {
+            localStorage.setItem("15market_citadel_settings", JSON.stringify(updated));
+            window.dispatchEvent(new Event('storage'));
+          }
+          return updated;
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch global settings:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGlobalSettings();
+    const interval = setInterval(fetchGlobalSettings, 3000);
+
+    const syncLocal = () => {
+      try {
+        const loaded = JSON.parse(localStorage.getItem('15market_citadel_settings'));
+        if (loaded) setPlatformSettings(loaded);
+      } catch (e) { }
+    };
+    window.addEventListener('storage', syncLocal);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', syncLocal);
+    };
+  }, [fetchGlobalSettings]);
+
+  const handleRoundPhaseChange = useCallback((phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled, result) => {
+    setRoundsChartState({ phase, entryPrice, pools, userDirection, timeLeft, odds, onResult, isSettled, result });
+  }, []);
+
+  useEffect(() => {
+    const htmlElement = document.documentElement;
+    const bodyElement = document.body;
+    const rootElement = document.getElementById('root');
+
+    if (theme === 'light') {
+      htmlElement.classList.add('light');
+      bodyElement.classList.add('light');
+      if (rootElement) rootElement.classList.add('light');
+    } else {
+      htmlElement.classList.remove('light');
+      bodyElement.classList.remove('light');
+      if (rootElement) rootElement.classList.remove('light');
+    }
+
+    if (network === 'arc') {
+      htmlElement.classList.add('theme-arc');
+      bodyElement.classList.add('theme-arc');
+      if (rootElement) rootElement.classList.add('theme-arc');
+    } else {
+      htmlElement.classList.remove('theme-arc');
+      bodyElement.classList.remove('theme-arc');
+      if (rootElement) rootElement.classList.remove('theme-arc');
+    }
+
+    localStorage.setItem("15market_theme", theme);
+  }, [theme, network]);
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (userProfile?.isInitial && !showOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, [userProfile, showOnboarding]);
+
+  useEffect(() => {
+    if (isConnected && connectedChainId && connectedChainId !== ARC_CHAIN_ID) {
+      console.log(`🔄 [NETWORK] Auto-switching from chain ${connectedChainId} to Arc Testnet (${ARC_CHAIN_ID})`);
+      switchChain?.({ chainId: ARC_CHAIN_ID });
+    }
+  }, [isConnected, connectedChainId, switchChain]);
+
+  const [evmBalance, setEvmBalance] = useState("0");
+  const [pendingStakes, setPendingStakes] = useState({});
+  const [sessionMode, setSessionMode] = useState(false);
+  const [evmSessionWallet, setEvmSessionWallet] = useState(null);
+  const [sessionBalance, setSessionBalance] = useState(0);
+  const [refillAmount, setRefillAmount] = useState("0.1");
+  const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
+  const [isSignerInitializing, setIsSignerInitializing] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
+  const [treasuryBalance, setTreasuryBalance] = useState(0);
+  const [toast, setToast] = useState(null);
+  const resolvingInProgress = useRef(new Set());
+  const activeTradesRef = useRef([]);
+  const tradeHistoryRef = useRef([]);
+  const priceRef = useRef("0.00");
+  const priceHistoryRef = useRef([]);
+  const lastOptimisticActionTime = useRef(0);
+  const lockedResults = useRef(new Map());
+  const removedTradeIds = useRef(new Set());
+
+  const [isPortrait, setIsPortrait] = useState(
+    typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+      setIsSmallScreen(window.innerWidth < 1025);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  const [isSmallScreen, setIsSmallScreen] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 1025 : false
+  );
+  const showPortraitLock = false;
+
+  const refetchEvmBalance = useCallback(async (force = false) => {
+    if (!address) return;
+
+    try {
+      const b = await publicClient.getBalance({ address });
+      const formatted = formatUnits(b, 18);
+      const newBalNum = parseFloat(formatted);
+
+      const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+      if (!force && msSinceLastAction < 30000) {
+        return;
+      }
+
+      if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001) {
+        setEvmBalance(formatted);
+      }
+    } catch (e) { }
+  }, [address, evmBalance]);
+
+  const updateEvmSessionBal = useCallback(async (force = false) => {
+    if (!evmSessionWallet) return;
+
+    try {
+      const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
+      const bal = parseFloat(formatUnits(balanceWei, 18));
+
+      const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+      if (!force && msSinceLastAction < 30000) {
+        return;
+      }
+
+      if (Math.abs(bal - sessionBalance) > 0.0001) {
+        setSessionBalance(bal);
+        console.log(`💰 [SESSION_BAL] Synced from on-chain: ${bal.toFixed(4)} USDC`);
+      }
+    } catch (err) { }
+  }, [evmSessionWallet, sessionBalance]);
+
+  const triggerGlobalRefresh = useCallback((force = false) => {
+    refetchEvmBalance(force);
+    updateEvmSessionBal(force);
+  }, [refetchEvmBalance, updateEvmSessionBal]);
+
+  const reconcileTrades = useCallback((backendAllRaw) => {
+    if (!backendAllRaw) return;
+
+    const uniqueBackendById = new Map();
+    backendAllRaw.forEach(t => {
+      const id = String(t.id);
+      const existing = uniqueBackendById.get(id);
+      const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+      const newStatus = t.status || (t.settled ? (t.won ? "WON" : "LOST") : "PENDING");
+
+      if (!existing || statusOrder[newStatus] > statusOrder[existing.status]) {
+        const isUpTrade = (t.direction === 1 || String(t.direction) === "1" || t.direction === "UP" || t.direction === "buy");
+        uniqueBackendById.set(id, {
+          ...t,
+          direction: isUpTrade ? "UP" : "DOWN",
+          status: newStatus,
+          owner: t.owner || t.user || t.userPublicKey || t.userAddress
+        });
+      }
+    });
+
+    const backendAll = Array.from(uniqueBackendById.values());
+
+    setTradeHistory(prev => {
+      const merged = [];
+      const backendGate = new Set();
+
+      backendAll.forEach(bt => {
+        const btId = String(bt.id);
+        backendGate.add(btId);
+
+        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
+        if (local) {
+          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+          if (statusOrder[local.status] > statusOrder[bt.status]) {
+            merged.push({ ...bt, status: local.status, payout: local.payout, balanceApplied: local.balanceApplied });
+          } else {
+            merged.push({ ...bt, balanceApplied: local.balanceApplied });
+          }
+        } else {
+          merged.push(bt);
+        }
+      });
+
+      prev.forEach(local => {
+        const lid = String(local.id || local.tx || local.nonce);
+        if (!backendGate.has(lid)) {
+          const isFinal = ["WON", "LOST"].includes(local.status);
+          const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
+
+          if (isFinal || isRecent) {
+            merged.push(local);
+          }
+        }
+      });
+
+      return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 1000);
+    });
+
+    setActiveTrades(prev => {
+      const now = Date.now();
+      const GHOST_GRACE = 5000;
+
+      const backendActive = backendAll.filter(t => {
+        const tid = String(t.id || t.tx || t.nonce);
+        if (removedTradeIds.current.has(tid)) return false;
+        return ["PENDING", "RESOLVING"].includes(t.status);
+      }).map(t => {
+        const local = prev.find(p => String(p.id) === String(t.id));
+        const startTime = (t.timestamp || t.startTime || local?.startTime || now);
+        const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
+        const expiryMs = local?.expiryMs || t.expiryMs || (normStart + (t.duration * 1000));
+
+        return { ...t, startTime: normStart, expiryMs, confirmed: true };
+      });
+
+      const updatedActive = [];
+
+      backendActive.forEach(bt => {
+        const btId = String(bt.id || bt.tx || bt.nonce);
+        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
+
+        const locked = lockedResults.current.get(btId);
+        if (locked) {
+          console.log(`🔒 [LOCK] Skipping backend overwrite for locked trade ${btId} (${locked.status})`);
+          return;
+        }
+
+        let finalStatus = bt.status;
+
+        if (local) {
+          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1 };
+          if ((statusOrder[local.status] || 0) > (statusOrder[bt.status] || 0)) {
+            finalStatus = local.status;
+          }
+        }
+
+        if (now <= (bt.expiryMs + GHOST_GRACE)) {
+          updatedActive.push({
+            ...bt,
+            status: finalStatus,
+            optimistic: (local?.optimistic || false),
+            balanceApplied: local?.balanceApplied,
+            sessionOwner: local?.sessionOwner || bt.sessionOwner,
+            isSessionTrade: local?.isSessionTrade || bt.isSessionTrade,
+            entryPrice: local?.entryPrice || bt.entryPrice,
+            settlementPrice: local?.settlementPrice || bt.settlementPrice,
+          });
+        }
+      });
+
+      prev.forEach(local => {
+        const localId = String(local.id || local.tx || local.nonce);
+        if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
+          const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
+
+          if (now <= (normExp + GHOST_GRACE)) {
+            updatedActive.push({ ...local, expiryMs: normExp });
+          }
+        }
+      });
+
+      const seen = new Set();
+      return updatedActive.filter(t => {
+        const mid = String(t.id || t.tx || t.nonce);
+        if (seen.has(mid)) return false;
+        seen.add(mid);
+        return true;
+      });
+    });
+  }, [triggerGlobalRefresh]);
+
+  const fetchMyProfile = useCallback(async () => {
+    if (!address) return;
+    try {
+      const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
+      if (res.ok) {
+        const data = await res.json();
+
+        if (!data || data.error) {
+          setUserProfile({ address, isInitial: true });
+          setShowOnboarding(true);
+        } else {
+          setUserProfile(data);
+          setShowOnboarding(false);
+        }
+      } else {
+        setUserProfile({ address, isInitial: true });
+        setShowOnboarding(true);
+      }
+    } catch (e) {
+      console.warn("Profile fetch failed:", e.message);
+      setUserProfile({ address, isInitial: true });
+      setShowOnboarding(true);
+    } finally {
+      setProfileChecked(true);
+    }
+  }, [address]);
+
+  const aggressiveRefresh = useCallback((force = false) => {
+    triggerGlobalRefresh(force);
+    [500, 2000, 5000].forEach(delay => setTimeout(() => triggerGlobalRefresh(force), delay));
+    [1500, 4000].forEach(delay => setTimeout(fetchMyProfile, delay));
+  }, [triggerGlobalRefresh, fetchMyProfile]);
+
+  const displayEvmBalance = useMemo(() => {
+    let bal = parseFloat(evmBalance || "0");
+    if (isNaN(bal)) bal = 0;
+    Object.values(pendingStakes || {}).forEach(amt => { bal -= (amt || 0); });
+    return Math.max(0, bal);
+  }, [evmBalance, pendingStakes]);
+
+  const balance = useMemo(() => parseFloat(displayEvmBalance || "0"), [displayEvmBalance]);
+
+  useEffect(() => {
+    if (address) triggerGlobalRefresh(true);
+  }, [address, triggerGlobalRefresh]);
+
+  useEffect(() => {
+    if (address) {
+      const interval = setInterval(() => {
+        triggerGlobalRefresh(false);
+        fetchMyProfile();
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [address, triggerGlobalRefresh, fetchMyProfile]);
+
+  const notify = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+  }, []);
+
+  const closeToast = useCallback(() => {
+    setToast(null);
+  }, []);
+
+  const setBalance = useCallback((val) => {
+    if (typeof val === 'function') {
+      setEvmBalance(prev => {
+        const num = parseFloat(prev || "0");
+        return val(num).toString();
+      });
+    } else {
+      setEvmBalance(val.toString());
+    }
+  }, []);
+
+  const [chainId, setChainId] = useState(null);
+  useEffect(() => {
+    const checkChain = async () => {
+      try {
+        const id = await publicClient.getChainId();
+        setChainId(id);
+      } catch (e) { }
+    };
+    checkChain();
+  }, []);
+
+  const [authenticated, setAuthenticated] = useState(false);
+  useEffect(() => {
+    if (isConnected) {
+      setAuthenticated(true);
+    } else {
+      const timer = setTimeout(() => setAuthenticated(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected]);
+
+  const wallet = useMemo(() => {
+    if (!isConnected || !address) return { connected: false };
+
+    return {
+      connected: true,
+      address: address,
+      publicKey: null
+    };
+  }, [isConnected, address]);
+
+  const login = () => {
+    console.log("Connect via wallet button");
+  };
+
+  const user = useMemo(() => {
+    if (isConnected && address) return { wallet: { address } };
+    return null;
+  }, [isConnected, address]);
+
+  const GREEN = "#3CB371";
+  const CORAL = "#FF4444";
+
+  useEffect(() => {
+    localStorage.setItem("15market_network", "arc");
+  }, []);
+
+  const themeClass = "theme-arc";
+
+  const initializeSessionWallet = useCallback(async () => {
+    if (!address || !walletClient) {
+      notify("Connect your main wallet first", "error");
+      return;
+    }
+
+    try {
+      setIsExecuting(true);
+      notify("Authorizing Auto-Signer...", "pending");
+
+      const message = `Authorize 15market Auto-Signer for ${address.toLowerCase()}`;
+      const sig = await walletClient.signMessage({ message });
+
+      if (!sig) throw new Error("Signature failed or rejected by user");
+
+      console.log(`📡 [Session] Initializing at: ${KEEPER_URL_ARC}/session/init`);
+      const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, signature: sig })
+      }).catch(err => {
+        console.error("❌ [Session] Fetch Failed:", err);
+        throw new Error(`Connection to Backend Failed (${KEEPER_URL_ARC})`);
+      });
+
+      if (!res.ok) {
+        let errData = { error: "Unknown Error" };
+        try { errData = await res.json(); } catch (e) { console.error("Non-JSON Error from Backend:", e); }
+        throw new Error(errData.error || `Backend init failed (${res.status})`);
+      }
+
+      const data = await res.json();
+
+      const sessionObj = { address: data.sessionAddress, isRemote: true };
+      setEvmSessionWallet(sessionObj);
+      setSessionBalance(parseFloat(data.balance));
+      setIsSessionSynced(true);
+      setSessionMode(true);
+
+      localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+
+      if (userProfile) {
+        const updatedProfile = { ...userProfile, sessionWalletAddress: data.sessionAddress };
+        setUserProfile(updatedProfile);
+        fetch(`${KEEPER_URL_ARC}/sync-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, profile: updatedProfile })
+        }).catch(e => console.warn("Failed to sync session wallet to backend:", e));
+      }
+
+      setIsSignerInitializing(false);
+      notify("Auto-Signer Activated (Server-Managed)", "success");
+
+    } catch (err) {
+      console.error("Session init error:", err);
+      notify("Setup failed: " + (err.message), "error");
+      setSessionMode(false);
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [address, walletClient, notify, userProfile]);
+
+  const toggleSessionMode = () => {
+    if (sessionMode) {
+      setSessionMode(false);
+      notify("Switched to Main Wallet", "success");
+    } else {
+      const storedAddr = localStorage.getItem(`15market_session_addr_${address?.toLowerCase()}`);
+      if (evmSessionWallet?.address || storedAddr) {
+        if (!evmSessionWallet) {
+          setEvmSessionWallet({ address: storedAddr, isRemote: true });
+        }
+        setSessionMode(true);
+        notify("Auto-Signer Activated", "success");
+      } else {
+        initializeSessionWallet();
+      }
+    }
+  };
+
+  const [autoSignerFees, setAutoSignerFees] = useState(() => {
+    const saved = localStorage.getItem("15market_autosigner_fees");
+    return saved ? JSON.parse(saved) : { arc: 0 };
+  });
+
+  useEffect(() => {
+    const fetchTreasury = async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider(ARC_RPC);
+        const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
+        setTreasuryBalance(parseFloat(ethers.formatEther(bal)));
+      } catch (e) { }
+    };
+    fetchTreasury();
+  }, []);
+
+  const executeTrade = async (params = null) => {
+    if (isExecuting) return;
+
+    if (platformSettings.tradingHalted) {
+      return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
+    }
+
+    const activeType = params?.type || 'classic';
+    const activeDirection = params?.direction || direction;
+    const activeAmount = params?.amount || amount;
+    const activeDuration = params?.duration || duration;
+
+    let activePrice = parseFloat(price);
+    if (!activePrice || activePrice <= 0) return;
+    if (!activeDirection) return notify("Select UP or DOWN first", "error");
+    if (!activeAmount || parseFloat(activeAmount) <= 0) return notify("Enter a valid amount", "error");
+
+    const currentBal = sessionMode ? sessionBalance : balance;
+    const stakeAmt = parseFloat(activeAmount);
+
+    const gasMargin = sessionMode ? 0.1 : 0;
+
+    if (stakeAmt + gasMargin > currentBal) {
+      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. ${sessionMode ? `Session wallet needs at least ${stakeAmt + gasMargin} USDC (Stake + Gas room)` : `Balance: ${currentBal.toFixed(3)}`}`, "error");
+    }
+
+    if (Number(activeAmount) < parseFloat(platformSettings.minBet) && activeType !== 'rounds') {
+      return notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
+    }
+
+    setShowManagement(false);
+
+    const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
+    const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
+    const dirVal = (activeDirection === "buy" || activeDirection === "UP") ? 1 : 0;
+    const entryPriceParams = Math.floor(activePrice * 100000000);
+    const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 };
+    const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
+    const activeUserAddr = (sessionMode && evmSessionWallet) ? evmSessionWallet.address : address;
+    const now = Date.now();
+    const amtNum = parseFloat(activeAmount);
+
+    setIsExecuting(true);
+    notify("Processing Trade...", "pending");
+
+    try {
+      if (!isConnected) {
+        throw new Error("Please connect wallet first");
+      }
+      const amountWei = parseUnits(parseFloat(activeAmount).toFixed(18), 18);
+      let txHash;
+
+      if (activeType === 'rounds') {
+        const roundId = params.poolId;
+        const dirVal = (activeDirection === "UP" ? 1 : 0);
+        const amountWei = parseEther(parseFloat(activeAmount).toFixed(6));
+
+        console.log(`🏟️ [ROUNDS] Entering P2P Pool with ${activeAmount} USDC. ID: ${roundId}`);
+
+        if (sessionMode) {
+          setSessionBalance(prev => Math.max(0, prev - amtNum));
+        } else {
+          setEvmBalance(prev => Math.max(0, parseFloat(prev || '0') - amtNum).toString());
+        }
+        lastOptimisticActionTime.current = Date.now();
+
+        if (sessionMode && evmSessionWallet) {
+          const res = await fetch(`${KEEPER_URL_ROUNDS}/rounds/session-enter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address,
+              roundId: roundId.toString(),
+              direction: dirVal,
+              amount: activeAmount
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Auto-signer failed to enter round");
+          txHash = data.txHash;
+          console.log(`✅ [ROUNDS] Auto-signer broadcasted tx: ${txHash}`);
+        } else {
+          if (!walletClient) throw new Error("Wallet not connected");
+
+          const ROUND_CONTRACT = ARC_ROUNDS_CONTRACT_ADDRESS;
+          txHash = await walletClient.sendTransaction({
+            to: ROUND_CONTRACT,
+            value: amountWei,
+            account: address,
+            data: encodeFunctionData({
+              abi: [{ name: "enterRound", type: "function", inputs: [{ name: "_roundId", type: "uint256" }, { name: "_direction", type: "uint8" }] }],
+              functionName: 'enterRound',
+              args: [BigInt(roundId), dirVal]
+            })
+          });
+        }
+
+        notify("Broadcasting Entry...", "pending");
+
+        const roundTrade = {
+          id: `round-${roundId}-${Date.now()}`,
+          type: 'rounds',
+          amount: activeAmount,
+          entryPrice: activePrice,
+          direction: activeDirection,
+          timestamp: new Date().toLocaleTimeString(),
+          symbol: activeMarket?.symbol || 'ETH',
+          status: 'LOCKED',
+          poolId: roundId,
+          tx: txHash,
+          confirmed: false
+        };
+        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+        setTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
+        setRoundsTradeHistory(prev => dedupeAndAdd(prev, roundTrade));
+        setIsExecuting(false);
+
+        publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 }).then((receipt) => {
+          if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+            if (sessionMode) {
+              setSessionBalance(prev => prev + amtNum);
+            } else {
+              setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
+            }
+            notify("Round entry failed on-chain.", "error");
+            setRoundsTradeHistory(prev => prev.filter(t => t.tx !== txHash));
+          } else {
+            console.log(`⛓️ [ROUNDS] Confirmed: ${txHash}`);
+            setRoundsTradeHistory(prev => prev.map(t => t.tx === txHash ? { ...t, confirmed: true } : t));
+          }
+        }).catch(err => {
+          console.error("Rounds confirmation error:", err);
+          if (sessionMode) setSessionBalance(prev => prev + amtNum);
+          else setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
+        });
+
+        notify("Joined the Round Successfully!", "success");
+        triggerGlobalRefresh();
+        return;
+      }
+
+      if (sessionMode) {
+        console.log(`📡 [SESSION] Initiating Optimistic Trade ${tradeId}...`);
+        
+        const confirmedNow = Date.now();
+        const optimisticTrade = {
+          id: tradeId,
+          direction: (dirVal === 1 ? "UP" : "DOWN"),
+          amount: Number(amount).toFixed(3),
+          entryPrice: activePrice.toFixed(8),
+          timestamp: confirmedNow,
+          status: "PENDING",
+          tx: null,
+          nonce: tradeId,
+          userPublicKey: activeUserAddr,
+          owner: address,
+          sessionOwner: activeUserAddr,
+          duration: activeDuration,
+          network: "arc",
+          startTime: confirmedNow,
+          expiryMs: confirmedNow + (activeDuration * 1000),
+          symbol: activeMarket?.symbol || 'ETH',
+          isSessionTrade: true,
+          confirmed: false, 
+          isOptimistic: true
+        };
+
+        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
+        
+        setSessionBalance(prev => Math.max(0, prev - amtNum));
+        setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
+        setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
+        setIsExecuting(false);
+        triggerGlobalRefresh(true);
+        notify("Broadcasting Trade...", "pending");
+
+        (async () => {
+          try {
+            const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                address,
+                tradeParams: {
+                  id: tradeId.toString(),
+                  direction: dirVal,
+                  duration: Number(activeDuration),
+                  entryPrice: entryPriceParams.toString(),
+                  marketId: assetId,
+                  amount: activeAmount
+                }
+              })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Session trade failed");
+            
+            txHash = data.txHash;
+            console.log(`✅ [SESSION] Backend broadcasted tx: ${txHash}`);
+
+            setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
+            setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
+
+            publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
+              if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+                setSessionBalance(prev => prev + amtNum);
+                setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+                notify("Transaction reverted on-chain.", "error");
+              } else {
+                console.log(`⛓️ [SESSION] Confirmed: ${txHash}`);
+                setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+              }
+            }).catch(() => {
+              setSessionBalance(prev => prev + amtNum);
+              setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+            });
+
+          } catch (err) {
+            console.error("❌ Session background trade failed:", err);
+            setSessionBalance(prev => prev + amtNum);
+            setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+            setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+            notify(`Execution Error: ${err.message}`, "error");
+          }
+        })();
+
+        return;
+      } else {
+        if (!walletClient) throw new Error("Wallet not connected");
+        console.log(`✍️ [MAIN] Requesting signature...`);
+        txHash = await walletClient.writeContract({
+          address: ARC_CONTRACT_ADDRESS,
+          abi: ArcABI.abi,
+          functionName: 'placeBet',
+          args: [BigInt(tradeId), Number(dirVal), BigInt(activeDuration), BigInt(entryPriceParams), Number(assetId), address],
+          value: amountWei,
+          account: address,
+          gas: 800000n
+        });
+
+        notify("Trade Signed! Confirming on-chain...", "pending");
+
+        setEvmBalance(prev => Math.max(0, parseFloat(prev || '0') - amtNum).toString());
+        lastOptimisticActionTime.current = Date.now();
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 });
+        if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+          setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
+          throw new Error("Transaction Reverted on-chain");
+        }
+
+        const confirmedNow = Date.now();
+        console.log(`⛓️ [MAIN] Confirmed: ${txHash}`);
+
+        const strictTrade = {
+          id: tradeId,
+          direction: (dirVal === 1 ? "UP" : "DOWN"),
+          amount: Number(amount).toFixed(3),
+          entryPrice: activePrice.toFixed(8),
+          timestamp: confirmedNow,
+          status: "PENDING",
+          tx: txHash,
+          nonce: tradeId,
+          userPublicKey: address,
+          owner: address,
+          duration: activeDuration,
+          network: "arc",
+          startTime: confirmedNow,
+          expiryMs: confirmedNow + (activeDuration * 1000),
+          symbol: activeMarket?.symbol || 'ETH',
+          isSessionTrade: false,
+          confirmed: true,
+        };
+
+        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
+        setActiveTrades(prev => dedupeAndAdd(prev, strictTrade));
+        setTradeHistory(prev => dedupeAndAdd(prev, strictTrade));
+
+        triggerGlobalRefresh(true);
+
+        fetch(`${KEEPER_URL_ARC}/trade-ping`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: tradeId.toString(),
+            address, amount: activeAmount, direction: dirVal, duration: Number(activeDuration),
+            entryPrice: entryPriceParams.toString(),
+            symbol: activeMarket?.symbol || 'ETH'
+          })
+        }).catch(() => { });
+
+        notify("Trade Confirmed & Started!", "success");
+      }
+
+      setIsExecuting(false);
+
+    } catch (err) {
+      console.error("❌ Execution Failed:", err);
+      notify(err.message, "error");
+      setIsExecuting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!address || !isConnected) {
+      return;
+    }
+
+    const fetchTradeHistory = async () => {
+      try {
+        const addr = address.toLowerCase();
+        const res = await fetch(`${KEEPER_URL_ARC}/history/${addr}`);
+        if (res.ok) {
+          const backendAllRaw = await res.json();
+          reconcileTrades(backendAllRaw);
+        }
+      } catch (e) {
+        console.error("Failed to fetch trade history:", e);
+      }
+    };
+
+    fetchTradeHistory();
+    const interval = setInterval(fetchTradeHistory, 3000);
+    return () => clearInterval(interval);
+  }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
+
+  useEffect(() => {
+    localStorage.setItem("15market_autosigner_fees", JSON.stringify(autoSignerFees));
+  }, [autoSignerFees]);
+
+  const recordFee = async (network, amount) => {
+    setAutoSignerFees(prev => ({
+      ...prev,
+      arc: prev.arc + amount
+    }));
+
+    const targetUrl = KEEPER_URL_ARC;
+    try {
+      await fetch(`${targetUrl}/record-fee`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': ADMIN_TOKEN
+        },
+        body: JSON.stringify({ network: 'arc', amount })
+      });
+    } catch (e) {
+      console.error("Failed to sync fee with keeper:", e);
+    }
+  };
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+  }, []);
+
+  useEffect(() => {
+    if (isConnected) {
+    }
+  }, [isConnected, address]);
+
+  const [activeMarket, setActiveMarket] = useState(() => {
+    const defaultTokens = [
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT', kraken: 'ETHUSD' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT', kraken: 'XBTUSD' },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
+      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x0000000000000000000000000000000000000000000000000000000000000000', binance: 'MONUSDT' },
+    ];
+
+    const saved = localStorage.getItem('15market_listed_tokens');
+    const listed = saved ? JSON.parse(saved) : defaultTokens;
+
+    const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
+    return listed.find(t => t.id === activeId) || listed[0];
+  });
+
+  const cleanupTimers = useRef({});
+
+  const fetchCurrentPrice = useCallback(async () => {
+    try {
+      const sources = [];
+
+      if (activeMarket.pythId) {
+        const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
+
+        sources.push({
+          name: "pyth",
+          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
+          parse: d => {
+            const p = d.parsed?.[0]?.price;
+            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+          }
+        });
+      }
+
+      if (activeMarket.binance) {
+        sources.push({ name: "mexc", url: `/api-mexc/api/v3/ticker/price?symbol=${activeMarket.binance}`, parse: d => parseFloat(d.price) });
+      }
+
+      if (activeMarket.kraken) {
+        sources.push({
+          name: "kraken",
+          url: `https://api.kraken.com/0/public/Ticker?pair=${activeMarket.kraken}`,
+          parse: d => {
+            const k = Object.keys(d.result || {})[0];
+            return k ? parseFloat(d.result[k].c[0]) : null;
+          }
+        });
+      }
+
+      if (sources.length === 0 && activeMarket.mint) {
+        sources.push({
+          name: "jup",
+          url: `https://price.jup.ag/v4/price?ids=${activeMarket.mint}`,
+          parse: d => d.data[activeMarket.mint]?.price
+        });
+      }
+
+      if (sources.length === 0) return null;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+      const pricePromises = sources.map(async (src) => {
+        try {
+          const res = await fetch(src.url, {
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+          const data = await res.json();
+          const val = src.parse(data);
+          if (!val || isNaN(val)) throw new Error("Invalid");
+          return val;
+        } catch (e) { throw e; }
+      });
+
+      const fastestPrice = await Promise.any(pricePromises);
+      clearTimeout(timeoutId);
+
+      if (fastestPrice > 0) {
+        const truncated = Math.floor(fastestPrice * 100) / 100;
+        const pStr = truncated.toFixed(2);
+        setPrice(pStr);
+        priceRef.current = pStr;
+        setIsLoading(false);
+
+        const now = Date.now();
+        priceHistoryRef.current.push({ p: truncated, t: now });
+        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+
+        return fastestPrice;
+      }
+    } catch (err) {
+      staticPriceFails.current = (staticPriceFails.current || 0) + 1;
+      if (staticPriceFails.current > 3) setIsLoading(false);
+    }
+    return null;
+  }, [activeMarket]);
+
+  useEffect(() => {
+    let active = true;
+    const loop = async () => {
+      if (!active) return;
+      await fetchCurrentPrice();
+      if (active) setTimeout(loop, 300);
+    };
+    loop();
+    return () => { active = false; };
+  }, [fetchCurrentPrice]);
+
+  useEffect(() => {
+    const syncMarket = async () => {
+      try {
+        const targetUrl = KEEPER_URL_ARC;
+        const res = await fetch(`${targetUrl}/listings`);
+        const remoteListings = await res.json();
+
+        if (Array.isArray(remoteListings) && remoteListings.length > 0) {
+          const currentListedStr = localStorage.getItem('15market_listed_tokens');
+          const remoteStr = JSON.stringify(remoteListings);
+
+          if (currentListedStr !== remoteStr) {
+            console.log(`🔄 Market listings updated from Arc Keeper.`);
+            localStorage.setItem('15market_listed_tokens', remoteStr);
+          }
+        }
+
+        const activeRes = await fetch(`${targetUrl}/active-market`);
+        const activeData = await activeRes.json();
+        if (activeData && activeData.activeId) {
+          const currentLocalActiveId = localStorage.getItem('15market_active_token_id');
+          if (currentLocalActiveId !== activeData.activeId) {
+            console.log(`🎯 Syncing with LIVE active market: ${activeData.activeId}`);
+            localStorage.setItem('15market_active_token_id', activeData.activeId);
+          }
+        }
+
+        const settingsRes = await fetch(`${targetUrl}/settings`);
+        const settingsData = await settingsRes.json();
+        if (settingsData) {
+          const settingsStr = JSON.stringify(settingsData);
+          if (localStorage.getItem('15market_citadel_settings') !== settingsStr) {
+            console.log(`🛡️ Syncing platform settings from Arc Keeper.`);
+            setPlatformSettings(settingsData);
+          }
+        }
+      } catch (e) { }
+
+      const listed = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
+      const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
+      const market = listed.find(t => t.id === activeId);
+
+      if (market) {
+        if (!market.binance) {
+          market.binance = `${market.symbol}USDT`;
+        }
+
+        if (market.id !== activeMarket.id) {
+          console.log(`🎯 Switching UI to market: ${market.symbol}`);
+          setActiveMarket(market);
+          setTimeout(() => fetchCurrentPrice(), 50);
+        }
+      }
+    };
+
+    syncMarket();
+
+    window.addEventListener('storage', syncMarket);
+
+    const poller = setInterval(syncMarket, 5000);
+
+    return () => {
+      window.removeEventListener('storage', syncMarket);
+      clearInterval(poller);
+    };
+  }, [activeMarket.id, network]);
+
+  const handleMarketChange = useCallback(async (newMarket) => {
+    if (!newMarket || newMarket.id === activeMarket.id) return;
+
+    console.log(`🎯 User switched market to: ${newMarket.symbol}`);
+    localStorage.setItem('15market_active_token_id', newMarket.id);
+    setActiveMarket(newMarket);
+    priceHistoryRef.current = [];
+
+    try {
+      await fetch(`${KEEPER_URL_ARC}/active-market`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeId: newMarket.id })
+      });
+    } catch (e) {
+      console.warn('Failed to sync market change with keeper:', e.message);
+    }
+
+    setTimeout(() => fetchCurrentPrice(), 100);
+  }, [activeMarket.id, fetchCurrentPrice]);
+
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      const targetUrl = KEEPER_URL_ARC;
+      const res = await fetch(`${targetUrl}/campaigns`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setCampaigns(data);
+      
+      const wbRes = await fetch(`${targetUrl}/winner-banner`);
+      if (wbRes.ok) {
+        const wbData = await wbRes.json();
+        setWinnerBanner(wbData);
+      }
+
+      if (address && data.length > 0) {
+        const active = data.filter(c => Date.now() < c.endTime);
+        const newEnrollments = { ...enrollments };
+        let changed = false;
+
+        for (const c of active) {
+          if (newEnrollments[c.id] === undefined) {
+            const eRes = await fetch(`${KEEPER_URL_ARC}/enroll?campaignId=${c.id}&address=${address}`);
+            if (eRes.ok) {
+              const eData = await eRes.json();
+              newEnrollments[c.id] = eData.enrolled;
+              changed = true;
+            }
+          }
+        }
+        if (changed) setEnrollments(newEnrollments);
+      }
+    } catch (e) { }
+  }, [address, enrollments]);
+
+  useEffect(() => {
+    const detectLocation = async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        setUserLocation({
+          country: data.country_name,
+          countryCode: data.country_code,
+          lat: data.latitude,
+          lng: data.longitude
+        });
+      } catch (e) {
+        console.warn("Location detection failed", e);
+      }
+    };
+    detectLocation();
+  }, []);
+
+  useEffect(() => {
+    fetchCampaigns();
+    const interval = setInterval(fetchCampaigns, 10000);
+    return () => clearInterval(interval);
+  }, [fetchCampaigns]);
+
+  const handleEnroll = async (campaignId) => {
+    if (!address) {
+      notify("Please connect wallet to enroll", "error");
+      return;
+    }
+    try {
+      const res = await fetch(`${KEEPER_URL_ARC}/enroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId, address })
+      });
+      if (res.ok) {
+        setEnrollments(prev => ({ ...prev, [campaignId]: true }));
+        notify("Successfully enrolled in campaign!", "success");
+      }
+    } catch (e) { notify("Enrollment failed", "error"); }
+  };
+
+  const minStake = useMemo(() => {
+    return "0.1";
+  }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+    setTradeHistory(prev => {
+      let changed = false;
+      const updated = prev.map(t => {
+        if (["PENDING", "RESOLVING"].includes(t.status)) {
+          const start = t.startTime || (t.nonce > 1000000000000 ? t.nonce : Math.floor(t.nonce / 100) * 1000);
+          const expiry = start + ((t.duration || 15) * 1000);
+          if (now > expiry + 60000) {
+            changed = true;
+            return { ...t, status: "TIMEOUT" };
+          }
+        }
+        return t;
+      });
+      return changed ? updated : prev;
+    });
+    setActiveTrades(prev => prev.filter(t => {
+      const expiry = (t.nonce || 0) + ((t.duration || 15) * 1000);
+      return now < expiry + 60000;
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!address) return;
+
+    setSessionMode(false);
+
+    const storedAddr = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
+    if (storedAddr) {
+      setEvmSessionWallet({ address: storedAddr, isRemote: true });
+      updateEvmSessionBal(true);
+    } else {
+      setEvmSessionWallet(null);
+    }
+  }, [address]);
+
+  const activeBal = useMemo(() => {
+    const bal = sessionMode ? sessionBalance : balance;
+    return bal;
+  }, [sessionMode, sessionBalance, balance]);
+
+  const handleSliderChange = useCallback((e) => {
+    const val = e.target.value;
+    setSliderValue(val);
+    if (activeBal > 0) {
+      const calculated = (activeBal * val) / 100;
+      const truncated = Math.floor(calculated * 100) / 100;
+      setAmount(truncated.toFixed(2));
+    }
+  }, [activeBal]);
+
+  const handleAmountChange = useCallback((e) => {
+    let val = e.target.value;
+
+    if (val.includes('.')) {
+      const [int, dec] = val.split('.');
+      if (dec.length > 2) {
+        val = `${int}.${dec.slice(0, 2)}`;
+      }
+    }
+
+    setAmount(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && activeBal > 0) setSliderValue(Math.min((num / activeBal) * 100, 100));
+    else setSliderValue(0);
+  }, [activeBal]);
+
+  useEffect(() => {
+    if (!timerActive || timeLeft <= 0) return;
+    const interval = setInterval(() => {
+      setTimeLeft(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerActive, timeLeft]);
+
+  useEffect(() => {
+    const activeIds = new Set(activeTrades.map(t => t.id));
+    for (const id of resolvingInProgress.current) {
+      if (!activeIds.has(id)) {
+        resolvingInProgress.current.delete(id);
+      }
+    }
+  }, [activeTrades]);
+
+  const [serverTimeOffset, setServerTimeOffset] = useState(0);
+  useEffect(() => {
+    fetch(`${KEEPER_URL_ARC}/time`).then(r => r.json()).then(d => {
+      setServerTimeOffset(d.time - Date.now());
+    }).catch(() => { });
+  }, []);
+
+  useEffect(() => {
+    const checkAndResolve = () => {
+      const now = Date.now() + serverTimeOffset;
+      const pendingTrades = activeTrades.filter(t => t.status === "PENDING");
+
+      for (const trade of pendingTrades) {
+        const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
+        const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
+
+        if (now >= expiryMs && (trade.confirmed || trade.tx)) {
+          if (!resolvingInProgress.current.has(trade.id)) {
+            resolvingInProgress.current.add(trade.id);
+
+            let capturedPrice = parseFloat(priceRef.current);
+            if (priceHistoryRef.current.length > 0) {
+              const closest = priceHistoryRef.current.reduce((prev, curr) =>
+                Math.abs(curr.t - expiryMs) < Math.abs(prev.t - expiryMs) ? curr : prev
+              );
+              if (Math.abs(closest.t - expiryMs) < 1000) {
+                capturedPrice = closest.p;
+              }
+            }
+
+            const ePrice = parseFloat(trade.entryPrice);
+            const isUp = String(trade.direction) === "1" || String(trade.direction).toUpperCase() === "UP";
+            const diff = capturedPrice - ePrice;
+            const isWon = isUp ? diff > 0 : diff < 0;
+            const finalStatus = isWon ? "WON" : "LOST";
+            const settlementPriceStr = capturedPrice.toFixed(2);
+
+            console.log(`🎯 [RESOLVER] LOCKED result for trade ${trade.id}: ${finalStatus} at $${capturedPrice}`);
+
+            const tradeIdStr = String(trade.id);
+            lockedResults.current.set(tradeIdStr, { status: finalStatus, settlementPrice: settlementPriceStr });
+
+            setTradeHistory(prev => {
+              const existing = prev.find(t => String(t.id || t.tx || t.nonce) === tradeIdStr);
+              if (existing) {
+                return prev.map(t =>
+                  String(t.id || t.tx || t.nonce) === tradeIdStr
+                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr }
+                    : t
+                );
+              }
+              return [{ ...trade, status: finalStatus, settlementPrice: settlementPriceStr }, ...prev];
+            });
+
+            setActiveTrades(prev => prev.map(t =>
+              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr } : t
+            ));
+
+            fetch(`${KEEPER_URL_ARC}/settle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: trade.id,
+                exitPrice: capturedPrice
+              })
+            }).catch(() => { });
+          }
+        }
+      }
+    };
+    const interval = setInterval(checkAndResolve, 500);
+    return () => clearInterval(interval);
+  }, [activeTrades, serverTimeOffset]);
+
+  useEffect(() => {
+    const finalStatuses = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"];
+    const finished = activeTrades.filter(t => finalStatuses.includes(t.status));
+
+    finished.forEach(trade => {
+      const tid = trade.id || trade.tx || trade.nonce;
+      if (tid && !cleanupTimers.current[tid]) {
+        cleanupTimers.current[tid] = setTimeout(() => {
+          removedTradeIds.current.add(String(tid));
+          setActiveTrades(prev => prev.filter(t => (t.id || t.tx || t.nonce) !== tid));
+          delete cleanupTimers.current[tid];
+          setTimeout(() => removedTradeIds.current.delete(String(tid)), 10 * 60 * 1000);
+        }, 3500);
+      }
+    });
+
+    return () => {
+      if (activeTrades.length === 0) {
+        Object.values(cleanupTimers.current).forEach(clearTimeout);
+        cleanupTimers.current = {};
+      }
+    };
+  }, [activeTrades]);
+
+  const processedSettlements = useRef(new Set());
+  const creditedPayouts = useRef(new Set());
+
+  useEffect(() => {
+    const unwatch = publicClient.watchContractEvent({
+      address: ARC_CONTRACT_ADDRESS,
+      abi: ArcABI.abi,
+      eventName: 'BetSettled',
+      onLogs(logs) {
+        logs.forEach(log => {
+          const { id, user: betUser, settlementPrice, won, payout } = log.args;
+          const normalizedUser = betUser?.toLowerCase();
+          const mainAddr = address?.toLowerCase();
+          const sessionAddr = evmSessionWallet?.address?.toLowerCase();
+
+          if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
+            const betId = id.toString();
+
+            const eventKey = `${betId}_${log.transactionHash}`;
+            if (processedSettlements.current.has(eventKey)) {
+              console.log(`⏭️ [DEDUP] Already processed settlement for bet ${betId}, skipping.`);
+              return;
+            }
+            processedSettlements.current.add(eventKey);
+
+            setTimeout(() => processedSettlements.current.delete(eventKey), 5 * 60 * 1000);
+
+            const eventInitialStatus = won ? "WON" : "LOST";
+            const priceUSD = parseFloat(formatUnits(settlementPrice || log.args.exitPrice, 8)).toFixed(2);
+            const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(2);
+
+            const updateTrade = (t) => {
+              const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+                (t.nonce && t.nonce.toString() === betId) ||
+                (t.id && t.id.toString() === betId);
+              if (isMatch) {
+                return {
+                  ...t,
+                  status: eventInitialStatus,
+                  settlementPrice: priceUSD,
+                  payout: formattedPayout,
+                  chainConfirmed: true,
+                  balanceApplied: t.balanceApplied || false
+                };
+              }
+              return t;
+            };
+
+            setTradeHistory(prev => prev.map(updateTrade));
+            setActiveTrades(prev => prev.map(updateTrade));
+
+            if (won) {
+              const payoutNum = parseFloat(formattedPayout);
+
+              const existingTrade = activeTradesRef.current.find(t =>
+                (t.id && t.id.toString() === betId) || (t.nonce && t.nonce.toString() === betId)
+              );
+              const alreadyOptimisticallyCredited = existingTrade?.balanceApplied === true ||
+                creditedPayouts.current.has(betId);
+
+              if (!alreadyOptimisticallyCredited) {
+                creditedPayouts.current.add(betId);
+                setTimeout(() => creditedPayouts.current.delete(betId), 10 * 60 * 1000);
+
+                const sessionAddrLower = evmSessionWallet?.address?.toLowerCase();
+                const mainAddrLower = address?.toLowerCase();
+
+                if (sessionAddrLower && normalizedUser === sessionAddrLower) {
+                  setSessionBalance(prev => prev + payoutNum);
+                  console.log(`🔗 [ON-CHAIN WIN] +${payoutNum} credited to SESSION wallet (optimistic had not run)`);
+                } else if (mainAddrLower && normalizedUser === mainAddrLower) {
+                  setEvmBalance(prev => {
+                    const current = parseFloat(prev || '0');
+                    return (current + payoutNum).toFixed(6);
+                  });
+                  console.log(`🔗 [ON-CHAIN WIN] +${payoutNum} credited to MAIN wallet (optimistic had not run)`);
+                }
+              } else {
+                console.log(`🔗 [ON-CHAIN WIN] Bet ${betId} already credited optimistically, skipping duplicate credit.`);
+              }
+
+              lastOptimisticActionTime.current = Date.now();
+
+              const finalizeWin = () => {
+                const matchFn = (t) => {
+                  const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+                    (t.id && t.id.toString() === betId);
+                  return isMatch ? { ...t, status: "WON", payout: formattedPayout, chainConfirmed: true, balanceApplied: true } : t;
+                };
+                setTradeHistory(prev => prev.map(matchFn));
+                setActiveTrades(prev => prev.map(matchFn));
+                notify(`Trade WON! +${formattedPayout} USDC`, "success");
+              };
+
+              setTimeout(() => {
+                lastOptimisticActionTime.current = 0;
+                refetchEvmBalance(true);
+                updateEvmSessionBal(true);
+                finalizeWin();
+              }, 5000);
+
+            } else {
+              notify(`Trade LOST.`, "error");
+              lastOptimisticActionTime.current = 0;
+              setTimeout(() => {
+                updateEvmSessionBal(true);
+                refetchEvmBalance(true);
+              }, 2000);
+            }
+          }
+        });
+      },
+    });
+    return () => unwatch();
+  }, [address, evmSessionWallet, notify, aggressiveRefresh, updateEvmSessionBal, refetchEvmBalance]);
+
+  useEffect(() => {
+    const winningTrades = activeTrades.filter(t => t.status === "WON" && !t.balanceApplied);
+
+    winningTrades.forEach(trade => {
+      const betId = (trade.id || trade.nonce || trade.tx).toString();
+      if (creditedPayouts.current.has(betId)) return;
+
+      const amt = parseFloat(trade.amount);
+      const duration = trade.duration || 15;
+      const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+      const payout = amt * multiplier;
+
+      creditedPayouts.current.add(betId);
+      setTimeout(() => creditedPayouts.current.delete(betId), 600000);
+
+      const isSession = trade.isSessionTrade || trade.sessionOwner;
+
+      if (isSession) {
+        setSessionBalance(prev => prev + payout);
+        console.log(`🚀 [INSTANT WIN] +${payout.toFixed(3)} credited to AUTO-SIGNER for trade ${betId}`);
+      } else {
+        setEvmBalance(prev => {
+          const current = parseFloat(prev || '0');
+          return (current + payout).toFixed(6);
+        });
+        console.log(`🚀 [INSTANT WIN] +${payout.toFixed(3)} credited to MAIN WALLET for trade ${betId}`);
+      }
+
+      setActiveTrades(prev => prev.map(t =>
+        (t.id?.toString() === betId || t.nonce?.toString() === betId) ? { ...t, balanceApplied: true, payout: payout.toString() } : t
+      ));
+
+      notify(`INSTANT WIN! +${payout.toFixed(2)} USDC`, "success");
+    });
+  }, [activeTrades, evmSessionWallet, notify]);
+
+  const handleRefill = useCallback(async (amt) => {
+    if (isExecuting) return;
+
+    try {
+      const amtNum = parseFloat(amt);
+      if (isNaN(amtNum) || amtNum <= 0) {
+        notify("Invalid deposit amount", "error");
+        return;
+      }
+
+      if (!address || !evmSessionWallet) {
+        notify("Connect Arc wallet for refill", "error");
+        return;
+      }
+
+      if (!walletClient) {
+        notify("Wallet client not ready — please reconnect your wallet", "error");
+        return;
+      }
+
+      const currentBal = parseFloat(evmBalance);
+      if (currentBal < amtNum) {
+        notify(`Insufficient balance. You have ${currentBal.toFixed(4)} USDC`, "error");
+        return;
+      }
+
+      setIsExecuting(true);
+      notify(`Confirm deposit of ${amtNum.toFixed(4)} USDC in your wallet...`, "pending");
+
+      try {
+        const hash = await walletClient.sendTransaction({
+          to: evmSessionWallet.address,
+          value: parseEther(amtNum.toFixed(6)),
+          account: address
+        });
+
+        notify("Deposit Transaction Broadcasted!", "success");
+
+        publicClient.waitForTransactionReceipt({ hash }).then(() => {
+          notify("Deposit Confirmed!", "success");
+          setTimeout(() => {
+            updateEvmSessionBal(true);
+            refetchEvmBalance(true);
+          }, 2000);
+        });
+
+        const newTx = {
+          id: `dep_${Date.now()}`,
+          type: 'DEPOSIT',
+          amount: amtNum.toFixed(4),
+          timestamp: Date.now(),
+          tx: hash,
+          network: 'arc'
+        };
+        setTransactionHistory(prev => [newTx, ...prev]);
+
+        fetch(`${KEEPER_URL_ARC}/push-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, transaction: newTx })
+        }).catch(e => console.warn("Failed to sync deposit to cloud:", e));
+
+      } catch (evmErr) {
+        notify(`Deposit failed: ${evmErr.shortMessage || evmErr.message}`, "error");
+      }
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [evmSessionWallet, address, notify, evmBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
+
+  const handleWithdraw = useCallback(async (amt) => {
+    if (isExecuting) return;
+
+    try {
+      const amtNum = parseFloat(amt);
+      if (isNaN(amtNum) || amtNum <= 0) {
+        notify("Invalid withdrawal amount", "error");
+        return;
+      }
+
+      if (!evmSessionWallet) {
+        notify("Session wallet not ready", "error");
+        return;
+      }
+
+      if (!address) {
+        notify("Connect your wallet", "error");
+        return;
+      }
+
+      if (sessionBalance < amtNum) {
+        notify(`Insufficient balance. You have ${sessionBalance.toFixed(4)} USDC`, "error");
+        return;
+      }
+
+      const gasBuffer = 0.01;
+      const netAmt = amtNum - gasBuffer;
+
+      if (netAmt <= 0) {
+        notify("Amount too low for gas", "error");
+        return;
+      }
+
+      setIsExecuting(true);
+      notify("Sign to authorize withdrawal...", "pending");
+
+      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
+      try {
+        if (walletClient) {
+          await walletClient.signMessage({ message: authMsg, account: address });
+        } else if (window.ethereum) {
+          const msgHex = '0x' + Array.from(new TextEncoder().encode(authMsg)).map(b => b.toString(16).padStart(2, '0')).join('');
+          await window.ethereum.request({ method: 'personal_sign', params: [msgHex, address] });
+        } else {
+          throw new Error("No wallet available to sign");
+        }
+        console.log("✅ [WITHDRAW] User authorized");
+      } catch (sigErr) {
+        if (sigErr.code === 4001 || sigErr.message?.includes('rejected') || sigErr.message?.includes('denied')) {
+          notify("Withdrawal cancelled by user", "error");
+        } else {
+          notify("Signature failed: " + (sigErr.shortMessage || sigErr.message), "error");
+        }
+        setIsExecuting(false);
+        return;
+      }
+
+      notify("Processing sweep...", "pending");
+
+      const cleanNetAmt = parseFloat(netAmt.toFixed(6));
+
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 25000);
+
+      let res;
+      try {
+        res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            address,
+            amount: cleanNetAmt,
+            signature: "authorized"
+          })
+        });
+      } catch (fetchErr) {
+        if (fetchErr.name === 'AbortError') {
+          throw new Error("Network timeout — Arc RPC may be congested. Try again in a moment.");
+        }
+        throw fetchErr;
+      } finally {
+        clearTimeout(fetchTimeout);
+      }
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Sweep failed");
+      }
+
+      const data = await res.json();
+      const sweepHash = data.txHash;
+
+      notify("Arc Withdrawal Successful!", "success");
+
+      const newTx = {
+        id: `withdraw-${Date.now()}`,
+        type: "WITHDRAW",
+        amount: amtNum.toFixed(4),
+        timestamp: Date.now(),
+        tx: sweepHash,
+        network: 'arc'
+      };
+
+      setTransactionHistory(prev => [newTx, ...prev]);
+
+      fetch(`${KEEPER_URL_ARC}/push-tx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, transaction: newTx })
+      }).catch(e => console.warn("Failed to sync withdrawal to cloud:", e));
+
+      setTimeout(() => {
+        updateEvmSessionBal(true);
+        refetchEvmBalance(true);
+      }, 2000);
+    } catch (e) {
+      notify("Withdrawal failed: " + (e.shortMessage || e.message), "error");
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
+
+  if (isLoading) return (
+    <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center bg-black/40">
+      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative mb-20 flex flex-col items-center justify-center">
+        <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
+        <img src="/logo.png" alt="logo" className="h-32 lg:h-48 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
+      </motion.div>
+
+      <div className="flex flex-col items-center justify-center w-full">
+        <MascotLoader
+          status="running"
+          progress={loadingProgress}
+          label="Pre-Flight Systems Check"
+          theme={theme}
+        />
+      </div>
+    </div>
+  );
+
+  if (platformSettings.maintenanceMode) {
+    return (
+      <div className={`fixed inset-0 z-[1000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
+        <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
+          <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
+        </div>
+        <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+          Under Maintenance
+        </h1>
+        <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+          We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
+        </p>
+        <div className="mt-12 py-2 px-6 rounded-full border border-[#3CB371]/10 text-[10px] font-black uppercase tracking-widest text-[#3CB371]">
+          Precision V2 Upgrade in Progress
+        </div>
+      </div>
+    );
+  }
+
+  if (!authenticated) return (
+    <div className={themeClass}>
+      <LandingPage theme={theme} onToggle={toggleTheme} />
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} theme={theme} />}
+      </AnimatePresence>
+    </div>
+  );
+
+  if (isSignerInitializing) {
+    return (
+      <div className={`${themeClass} fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center`}>
+        <div className="max-w-md w-full bg-[#0D0D0D] border border-[#3CB371]/20 rounded-3xl p-8 relative overflow-hidden shadow-[0_0_100px_rgba(60,179,113,0.1)]">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 pointer-events-none" />
+
+          <div className="w-16 h-16 rounded-full bg-[#3CB371]/10 flex items-center justify-center mx-auto mb-6 border border-[#3CB371]/20">
+            <Shield className="w-8 h-8 text-[#3CB371] animate-pulse" />
+          </div>
+
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">
+            {userProfile?.sessionWalletAddress ? "Restore Auto-Signer" : "Secure Auto-Signer Setup"}
+          </h2>
+          <p className="text-white/40 text-xs font-medium leading-relaxed mb-8">
+            {userProfile?.sessionWalletAddress
+              ? `We've detected an existing Auto-Signer linked to your wallet (${userProfile.sessionWalletAddress.slice(0, 6)}...). Please sign to restore access on this device.`
+              : "To ensure maximum security and cross-device synchronization, you must sign a one-time authorization to link your Main Wallet to your Auto-Signer."
+            }
+          </p>
+
+          <button
+            onClick={initializeSessionWallet}
+            disabled={isExecuting}
+            className="w-full py-4 rounded-xl bg-[#3CB371] hover:brightness-110 active:scale-[0.98] transition-all text-white font-black uppercase tracking-widest text-sm shadow-[0_10px_40px_-10px_#3CB371]"
+          >
+            {isExecuting ? "Signing..." : "Initialize & Link Wallet"}
+          </button>
+          <AnimatePresence>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      className={`min-h-screen ${uiVersion === 'v2' && !isSmallScreen ? 'h-screen overflow-hidden' : 'overflow-x-hidden'} font-sans flex flex-col items-center ${themeClass}`}
+      style={{
+        color: theme === 'light' ? '#1f2937' : '#ffffff',
+        transition: "color 0.3s ease"
+      }}>
+
+      <DissolveTransition isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
+
+      {view === "dashboard" ? (
+        <DashboardPage
+          onBack={() => setView("trading")}
+          wallet={wallet}
+          sessionBalance={sessionBalance}
+          onRefill={handleRefill}
+          onWithdraw={handleWithdraw}
+          treasuryBalance={treasuryBalance}
+          autoSignerFees={autoSignerFees}
+          userProfile={userProfile}
+          theme={theme}
+          evmSessionWallet={evmSessionWallet}
+          transactionHistory={transactionHistory}
+          uiVersion={uiVersion}
+          onViewReceipt={(tx) => {
+            setSelectedTransaction(tx);
+            setIsTransactionReceiptOpen(true);
+          }}
+        />
+      ) : (
+        <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden">
+
+          <header className="w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 py-1 lg:py-0">
+            <div className="flex items-center transition-all duration-500"
+              style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
+              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[52px]' : 'h-[42px] lg:h-[58px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+            </div>
+
+            <div className="hidden lg:flex items-center gap-3 px-2 py-1">
+              <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
+                <motion.div
+                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
+                  initial={false}
+                  animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+                {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
+                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                    className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
+                    <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                    <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
+              <button onClick={() => setView("dashboard")} className="p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
+                style={{
+                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                }}>
+                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+              </button>
+              <UnifiedWalletButton theme={theme} />
+            </div>
+
+            <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
+              <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
+                <motion.div
+                  className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
+                  initial={false}
+                  animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+                {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
+                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                    className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
+                    <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                  </button>
+                ))}
+              </div>
+              <div className="scale-[0.8] origin-center -mx-1.5">
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              </div>
+              <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95"
+                style={{
+                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                }}>
+                <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+              </button>
+              <div className="scale-[0.9] origin-right ml-[-2px]">
+                <UnifiedWalletButton theme={theme} />
+              </div>
+            </div>
+          </header>
+
+          <div className="w-full flex flex-col -mt-1 md:mt-0 mb-[2px] md:mb-[4px] relative z-[60]">
+            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
+            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)] mt-[2px]" />
+          </div>
+
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
+            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} verified={hasRoundsAccess} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1 mb-0 md:mb-6 relative z-0 ${isSmallScreen ? 'min-h-[280px] pb-0' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
+                  <motion.div
+                    layout
+                    className={`w-full md:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto flex-none' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
+                    style={{ paddingLeft: !isSmallScreen && showSideHistory ? (isSmallScreen ? '0px' : '220px') : (!isSmallScreen ? '36px' : '0px') }}>
+
+                    {!isSmallScreen && (
+                      <SideHistoryPane
+                        isOpen={showSideHistory}
+                        onToggle={() => setShowSideHistory(!showSideHistory)}
+                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                        theme={theme}
+                        setSelectedPnLTrade={setSelectedPnLTrade}
+                        setIsPnLOpen={setIsPnLOpen}
+                      />
+                    )}
+
+                    <div className={`w-[calc(100%+16px)] md:w-full -mx-2 md:mx-0 relative z-[45] overflow-hidden mb-0 md:mb-1 md:rounded-full`}>
+                      <GlobalTradeScroller theme={theme} />
+                    </div>
+
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[245px] min-h-[245px] mt-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
+                      style={{
+                        background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#8faf9a' : 'rgba(10, 10, 10, 0.7)'),
+                        boxShadow: isSmallScreen ? 'none' : (theme === 'light'
+                          ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                          : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
+                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
+                      }}>
+                      <div className="flex-1 w-full h-full flex relative">
+                        <div className="flex-1 w-full h-full relative min-w-0">
+                          {gameMode === 'rounds' ? (
+                            <RoundsChart
+                              theme={theme}
+                              currentPrice={price}
+                              entryPrice={roundsChartState?.entryPrice || price}
+                              timeLeft={roundsChartState?.timeLeft || 0}
+                              totalDuration={roundsChartState?.phase === 'entry' ? 10 : 15}
+                              pools={roundsChartState?.pools || { long: 0, short: 0 }}
+                              userDirection={roundsChartState?.userDirection}
+                              odds={roundsChartState?.odds}
+                              onResult={roundsChartState?.onResult}
+                              isSettled={roundsChartState?.isSettled}
+                              phase={roundsChartState?.phase || 'entry'}
+                              result={roundsChartState?.result}
+                              priceHistory={priceHistoryRef.current}
+                            />
+                          ) : (
+                            <CustomChart
+                              symbol={activeMarket.binance}
+                              theme={theme}
+                              network={network}
+                              activeMarket={activeMarket}
+                              uiVersion={uiVersion}
+                              setActiveMarket={handleMarketChange}
+                              activeTrades={activeTrades}
+                              currentPrice={price}
+                              priceHistory={priceHistoryRef.current}
+                            />
+                          )}
+                        </div>
+
+                        <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                          <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                            Order Book
+                          </div>
+                          <div className="flex-1 overflow-hidden p-2">
+                            <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    layout
+                    className={`w-full md:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-[184px]' : 'h-full flex-1'} min-h-0`}
+                  >
+                    <div className={`w-full flex flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'flex-1' : 'w-full flex-1'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                        style={{
+                          background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                          borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                        }}>
+                        {gameMode === 'rounds' ? (
+                          <RoundsTerminal
+                            price={price}
+                            balance={balance}
+                            executeTrade={executeTrade}
+                            isExecuting={isExecuting}
+                            theme={theme}
+                            sessionMode={sessionMode}
+                            sessionBalance={sessionBalance}
+                            amount={amount}
+                            handleAmountChange={handleAmountChange}
+                            sliderValue={sliderValue}
+                            handleSliderChange={handleSliderChange}
+                            activeMarket={activeMarket}
+                            onRoundPhaseChange={handleRoundPhaseChange}
+                            maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                          />
+                        ) : (
+                          <TradeTerminal
+                            transparent={true}
+                            activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                            sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                            setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                            sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                            theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                            refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                            CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                            evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                            activeMarket={activeMarket}
+                            maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                            tradingHalted={platformSettings.tradingHalted}
+                            uiVersion={uiVersion}
+                          />
+                        )}
+                      </div>
+
+                      {(gameMode !== 'rounds' || (uiVersion === 'v2' && isSmallScreen)) && (
+                        <div className={`min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'flex-1 min-h-[160px]' : 'flex-1 min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                          style={{
+                            background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                          }}>
+                          <div className="flex flex-col h-full min-h-0">
+                            <LiveExecution
+                              activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                              theme={theme} currentNetwork={network}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {!isSmallScreen && (
+                      <>
+                        <AnimatePresence>
+                          {platformSettings.systemBanner && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
+                                  platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
+                                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
+                                      'bg-blue-500/10 border-blue-500/20'
+                                }`}
+                            >
+                              <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
+                                      platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
+                                          'bg-blue-500'
+                                    }`} />
+                                  <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
+                                      platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
+                                          'text-blue-500'
+                                    }`}>
+                                    {platformSettings.systemBanner}
+                                  </span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel shadow-lg'}`}
+                          style={{
+                            background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
+                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)')
+                          }}>
+                          <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
+                            {gameMode === 'rounds' ? (
+                              <RoundsTerminal
+                                price={price}
+                                balance={balance}
+                                executeTrade={executeTrade}
+                                isExecuting={isExecuting}
+                                theme={theme}
+                                sessionMode={sessionMode}
+                                sessionBalance={sessionBalance}
+                                amount={amount}
+                                handleAmountChange={handleAmountChange}
+                                sliderValue={sliderValue}
+                                handleSliderChange={handleSliderChange}
+                                activeMarket={activeMarket}
+                                onRoundPhaseChange={handleRoundPhaseChange}
+                                maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                              />
+                            ) : (
+                              <TradeTerminal
+                                transparent={true}
+                                activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                                sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                                sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                                theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                                refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                                CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                                evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                                activeMarket={activeMarket}
+                                maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                                tradingHalted={platformSettings.tradingHalted}
+                                uiVersion={uiVersion}
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        {gameMode !== 'rounds' && (
+                          <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-1/2 lg:w-full'} shadow-lg`}
+                            style={{
+                              background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                            }}>
+                            <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
+                              <LiveExecution
+                                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                                theme={theme} currentNetwork={network}
+                                isTruncated={uiVersion === 'v2' && !showActiveExpanded}
+                                isExpanded={showActiveExpanded}
+                                setIsExpanded={setShowActiveExpanded}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </motion.div>
+                </div>
+
+              {showPortraitLock && <PortraitPrompt theme={theme} />}
+
+              {isSmallScreen && (
+                <MobileBottomHistoryPane
+                  isOpen={showMobileHistory}
+                  onToggle={() => setShowMobileHistory(!showMobileHistory)}
+                  tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                  theme={theme}
+                  setSelectedPnLTrade={setSelectedPnLTrade}
+                  setIsPnLOpen={setIsPnLOpen}
+                  userProfile={userProfile}
+                />
+              )}
+            </RoundsAccessGate>
+          </div>
+        </div>
+      )}
+
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        wallet={wallet}
+        userProfile={userProfile}
+        transactionHistory={transactionHistory}
+        onViewReceipt={(tx) => {
+          setSelectedTransaction(tx);
+          setIsTransactionReceiptOpen(true);
+        }}
+        notify={notify}
+        theme={theme}
+      />
+      <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
+
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+      </AnimatePresence>
+
+      <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
+        style={{ fontFamily: 'Arial, sans-serif' }}>
+        <div className="flex items-center gap-4 pointer-events-auto">
+          <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
+          <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+            © 2026 15market
+          </span>
+        </div>
+        <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+          Built by 15labs
+        </span>
+      </footer>
+      <TransactionReceiptModal
+        isOpen={isTransactionReceiptOpen}
+        onClose={() => setIsTransactionReceiptOpen(false)}
+        transaction={selectedTransaction}
+      />
+
+      <AnimatePresence>
+        {isGlobalLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+          >
+            <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
+              <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
+              <MascotLoader 
+                progress={globalLoadingProgress} 
+                status="running" 
+                label="INITIALIZING..." 
+                theme="dark" 
+              />
+            </div>
+            
+            <div className="absolute inset-0 pointer-events-none overflow-hidden origin-center">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#3CB371]/5 rounded-full blur-[120px] animate-pulse" />
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#3CB371]/30 to-transparent animate-scanLine" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {showOnboarding && address && !isGlobalLoading && (
+        <OnboardingFlow
+          address={address}
+          theme={theme}
+          onComplete={(profile) => {
+            setShowOnboarding(false);
+            performStealthChecks(address);
+          }}
+        />
+      )}
+    </motion.div>
+  );
+}
