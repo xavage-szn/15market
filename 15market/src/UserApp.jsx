@@ -106,7 +106,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     <motion.div
       initial={false}
       animate={{
-        y: isOpen ? 0 : 'calc(100% - 48px)',
+        y: isOpen ? 0 : 'calc(100% - 182px)',
       }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       className="fixed bottom-0 left-0 right-0 z-[110] flex flex-col pointer-events-none"
@@ -124,17 +124,22 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         <div
           onClick={onToggle}
           className={`
-            w-full h-12 flex items-center justify-center cursor-pointer 
-            hover:bg-black/5 transition-colors relative shrink-0 border-b
-            ${isDark ? 'border-white/5 hover:bg-white/5' : 'border-[#3CB371]/10'}
+            w-full h-14 flex items-center justify-center cursor-pointer 
+            transition-all duration-300 relative shrink-0 border-t
+            ${isDark 
+              ? 'bg-[#0a0a0a]/95 border-[#3CB371]/40 shadow-[0_-15px_40px_rgba(60,179,113,0.2)]' 
+              : 'bg-[#f0f9f4]/95 border-[#3CB371]/30 shadow-[0_-10px_30px_rgba(60,179,113,0.1)]'}
           `}
         >
-          <div className="flex items-center justify-center gap-3 w-full">
-            <History size={16} className={isOpen ? 'text-[#3CB371]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')} />
-            <span className={`text-[10px] font-black uppercase tracking-[0.2em] relative top-[0.5px] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
-              Trade History ({userProfile?.stats?.totalTrades || tradeHistory.length})
+          {/* Branded "Glow Line" at the top edge */}
+          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#3CB371] to-transparent opacity-60" />
+          
+          <div className="flex items-center justify-center gap-3 w-full -translate-y-3">
+            <History size={16} className="text-[#3CB371]" style={{ filter: 'drop-shadow(0 0 10px rgba(60,179,113,0.6))' }} />
+            <span className={`text-[12px] font-black uppercase tracking-[0.25em] bg-gradient-to-r from-[#48c97f] to-[#1e5a38] bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(60,179,113,0.4)]`}>
+              TRADE HISTORY ({userProfile?.stats?.totalTrades || tradeHistory.length})
             </span>
-            {isOpen ? <ChevronDown size={14} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronUp size={14} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
+            {isOpen ? <ChevronDown size={14} className="text-[#3CB371]/60" /> : <ChevronUp size={14} className="text-[#3CB371]/60" />}
           </div>
         </div>
 
@@ -385,6 +390,21 @@ export default function UserApp() {
   const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
+  
+  // LOCK SCROLL for Mobile History Drawer
+  useEffect(() => {
+    if (showMobileHistory) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.height = '100vh';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+    };
+  }, [showMobileHistory]);
 
   const [campaigns, setCampaigns] = useState([]);
   const [winnerBanner, setWinnerBanner] = useState(null);
@@ -2615,7 +2635,7 @@ export default function UserApp() {
 
 
                     {/* Chart Container */}
-                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[222px] min-h-[222px] mt-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[245px] min-h-[245px] mt-0' : 'min-h-[280px]'} md:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] md:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
                         background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#8faf9a' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
@@ -2672,12 +2692,12 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full md:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-14' : 'h-full flex-1'} min-h-0`}
+                    className={`w-full md:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none pb-[184px]' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    <div className={`w-full flex flex-col lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full flex flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'w-full flex-none' : 'w-full flex-1'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                      <div className={`${uiVersion === 'v2' && isSmallScreen ? 'flex-1' : 'w-full flex-1'} min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'min-h-[200px]' : 'min-h-[280px]'} md:min-h-[320px] rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                         style={{
                           background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                           borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2720,7 +2740,7 @@ export default function UserApp() {
 
                       {/* ACTIVE EXECUTION - Visible on Mobile V2 or when not in Rounds */}
                       {(gameMode !== 'rounds' || (uiVersion === 'v2' && isSmallScreen)) && (
-                        <div className={`min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'w-full flex-none min-h-[160px]' : 'flex-1 min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
+                        <div className={`min-h-0 ${uiVersion === 'v2' && isSmallScreen ? 'flex-1 min-h-[160px]' : 'flex-1 min-h-[240px]'} h-auto rounded-[22px] md:rounded-[24px] overflow-hidden border glass-panel p-1 shadow-lg flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
@@ -2851,7 +2871,7 @@ export default function UserApp() {
                 <MobileBottomHistoryPane
                   isOpen={showMobileHistory}
                   onToggle={() => setShowMobileHistory(!showMobileHistory)}
-                  tradeHistory={tradeHistory}
+                  tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                   theme={theme}
                   setSelectedPnLTrade={setSelectedPnLTrade}
                   setIsPnLOpen={setIsPnLOpen}
