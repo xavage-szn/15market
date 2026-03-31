@@ -2629,7 +2629,7 @@ export default function UserApp() {
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
-                    className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'h-auto flex-none' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
+                    className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-0' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
                     style={{ paddingLeft: !isSmallScreen && showSideHistory ? (isSmallScreen ? '0px' : '220px') : (!isSmallScreen ? '36px' : '0px') }}>
 
                     {!isSmallScreen && (
