@@ -110,7 +110,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
       className="fixed bottom-0 left-0 right-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '40vh' }}
+      style={{ height: '260px' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
@@ -2602,6 +2602,11 @@ export default function UserApp() {
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
           <div className="w-full flex flex-col -mt-1 md:mt-0 mb-[2px] md:mb-[4px] relative z-[60]">
+            {isSmallScreen && (
+              <div className="w-full mb-1">
+                <GlobalTradeScroller theme={theme} />
+              </div>
+            )}
             <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
             <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)] mt-[2px]" />
           </div>
@@ -2609,9 +2614,9 @@ export default function UserApp() {
 
 
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 ${isSmallScreen ? 'pb-8' : ''}`}>
             <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} verified={hasRoundsAccess} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1 mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden' : 'h-auto lg:h-[calc(100vh-80px)] landscape:h-[calc(100vh-80px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col gap-1 mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden' : 'h-auto lg:h-[calc(100vh-120px)] landscape:h-[calc(100vh-120px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -2629,13 +2634,15 @@ export default function UserApp() {
                       />
                     )}
 
-                    <div className={`w-[calc(100%+16px)] md:w-full -mx-2 md:mx-0 relative z-[45] overflow-hidden mb-0 md:mb-1 md:rounded-full`}>
-                      <GlobalTradeScroller theme={theme} />
-                    </div>
+                    {!isSmallScreen && (
+                      <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
+                        <GlobalTradeScroller theme={theme} />
+                      </div>
+                    )}
 
 
-                    {/* Chart Container */}
-                    <div className={`flex-[2] ${isSmallScreen ? 'flex-none h-[220px] min-h-[220px] mt-0' : 'min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
+                    {/* Chart Container - Set to flex-1 on mobile so it stretches to fill the screen */}
+                    <div className={`flex-[2] ${isSmallScreen ? 'flex-1 min-h-[200px] mt-0' : 'min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full`}
                       style={{
                         background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#8faf9a' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
@@ -2692,7 +2699,7 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'flex-1 pb-[36px]' : 'h-full flex-1'} min-h-0`}
+                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[230px] flex-none' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                     <div className={`w-full flex flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex flex-1 min-h-0' : 'hidden md:hidden lg:hidden'}`}>
@@ -2794,7 +2801,7 @@ export default function UserApp() {
                         </AnimatePresence>
 
                         {/* Navigation Bar - TOP BAR */}
-                        {/* Trading Terminal Box */}
+                        {/* Trading Terminal Box - Restored to h-auto for proper desktop proportions */}
                         <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel shadow-lg'}`}
                           style={{
                             background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),

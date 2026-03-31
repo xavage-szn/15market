@@ -81,19 +81,19 @@ function TradeTerminalComponent({
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("UP"); }}
                 disabled={maintenanceMode}
-                className={`flex-1 relative z-10 py-1.5 lg:py-2 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "UP" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
+                className={`flex-1 relative z-10 py-1.5 lg:py-3 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "UP" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
             >
-                <TrendingUp size={12} className={direction === "UP" ? "text-white" : "text-[#3CB371]/60"} />
-                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">LONG</span>
+                <TrendingUp size={16} className={direction === "UP" ? "text-white" : "text-[#3CB371]/60"} />
+                <span className="text-[9px] lg:text-[11px] font-black uppercase tracking-widest">LONG</span>
             </button>
             
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("DOWN"); }}
                 disabled={maintenanceMode}
-                className={`flex-1 relative z-10 py-1.5 lg:py-2 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "DOWN" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
+                className={`flex-1 relative z-10 py-1.5 lg:py-3 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "DOWN" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
             >
-                <TrendingDown size={12} className={direction === "DOWN" ? "text-white" : "text-[#FF7F50]/60"} />
-                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">SHORT</span>
+                <TrendingDown size={16} className={direction === "DOWN" ? "text-white" : "text-[#FF7F50]/60"} />
+                <span className="text-[9px] lg:text-[11px] font-black uppercase tracking-widest">SHORT</span>
             </button>
         </div>
     );
@@ -170,11 +170,9 @@ function TradeTerminalComponent({
     const renderConfirm = () => (
         <motion.button
             id="trade-confirm-button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
             onClick={(e) => { e.stopPropagation(); executeTrade(); }}
             disabled={isExecuting || maintenanceMode}
-            className={`w-full py-2.5 lg:py-3.5 rounded-full font-black text-[9px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group hover:brightness-110
+            className={`w-full py-2.5 lg:py-3.5 rounded-full font-black text-[9px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group hover:brightness-125 active:brightness-95
             ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
             style={{
                 background: maintenanceMode ? "#333" : (direction === "DOWN" ? 'linear-gradient(to right, #FF7F50, #D2691E)' : 'linear-gradient(to right, #3CB371, #2E8B57)'),

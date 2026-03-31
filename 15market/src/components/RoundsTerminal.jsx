@@ -307,20 +307,20 @@ function RoundsTerminalComponent({
                     <button onClick={() => setSelectedDirection('UP')}
                         disabled={hasEnteredThisRound}
                         className={`flex-1 relative z-10 py-1.5 flex flex-col items-center gap-0.5 transition-all duration-300 ${selectedDirection === 'UP' ? 'text-white scale-110' : (isLight ? 'text-[#0a261a]/60 hover:text-[#0a261a]/80' : 'text-white/50 hover:text-white/70')}`}>
-                        <TrendingUp size={14} className={selectedDirection === 'UP' ? 'text-white' : 'text-[#3CB371]/60'} />
+                        <TrendingUp size={16} className={selectedDirection === 'UP' ? 'text-white' : 'text-[#3CB371]/60'} />
                         <div className="flex flex-col items-center leading-none">
-                            <span className="text-[6px] font-black uppercase opacity-60">LONG</span>
-                            <span className="text-[10px] font-black">{odds.long}x</span>
+                            <span className="text-[7px] font-black uppercase opacity-60">LONG</span>
+                            <span className="text-[11px] font-black">{odds.long}x</span>
                         </div>
                     </button>
 
                     <button onClick={() => setSelectedDirection('DOWN')}
                         disabled={hasEnteredThisRound}
                         className={`flex-1 relative z-10 py-1.5 flex flex-col items-center gap-1 transition-all duration-300 ${selectedDirection === 'DOWN' ? 'text-white scale-110' : (isLight ? 'text-[#0a261a]/60 hover:text-[#0a261a]/80' : 'text-white/50 hover:text-white/70')}`}>
-                        <TrendingDown size={14} className={selectedDirection === 'DOWN' ? 'text-white' : 'text-[#FF7F50]/60'} />
+                        <TrendingDown size={16} className={selectedDirection === 'DOWN' ? 'text-white' : 'text-[#FF7F50]/60'} />
                         <div className="flex flex-col items-center leading-none">
-                            <span className="text-[6px] font-black uppercase opacity-60">SHORT</span>
-                            <span className="text-[10px] font-black">{odds.short}x</span>
+                            <span className="text-[7px] font-black uppercase opacity-60">SHORT</span>
+                            <span className="text-[11px] font-black">{odds.short}x</span>
                         </div>
                     </button>
                 </div>
@@ -355,11 +355,9 @@ function RoundsTerminalComponent({
                         </motion.div>
                     ) : (
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
                             onClick={handleConfirm}
                             disabled={!selectedDirection || isExecuting || !localAmount || parseFloat(localAmount) <= 0}
-                            className={`w-full py-2.5 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all relative overflow-hidden group hover:brightness-110 border-2 ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
+                            className={`w-full py-2.5 rounded-full font-black text-[11px] uppercase tracking-[0.2em] transition-all relative overflow-hidden group hover:brightness-125 active:brightness-95 border-2 ${(!selectedDirection || !localAmount || parseFloat(localAmount) <= 0 || maintenanceMode || tradingHalted)
                                 ? 'bg-white/5 text-white/10 cursor-not-allowed border-white/5'
                                 : (isLight ? 'bg-[#3CB371]/10 !text-[#3CB371] !border-[#3CB371]' : 'bg-[#3CB371]/10 text-white !border-[#3CB371]')
                                 }`}
