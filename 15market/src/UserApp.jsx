@@ -2522,6 +2522,7 @@ export default function UserApp() {
           autoSignerFees={autoSignerFees}
           userProfile={userProfile}
           theme={theme}
+          isSmallScreen={isSmallScreen}
           evmSessionWallet={evmSessionWallet}
           transactionHistory={transactionHistory}
           uiVersion={uiVersion}

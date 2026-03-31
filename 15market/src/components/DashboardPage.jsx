@@ -14,6 +14,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
     autoSignerFees,
     userProfile,
     theme,
+    isSmallScreen,
     evmSessionWallet,
     transactionHistory,
     onViewReceipt,
@@ -317,7 +318,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
                                 </div>
                             </div>
 
-                            {/* Activity Pulse Chart - Hidden on Mobile */}
+                            {/* Activity Pulse Chart - Desktop Only */}
+                            {!isSmallScreen && (
                             <div className={`hidden lg:flex flex-1 min-h-[120px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
@@ -339,9 +341,11 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
                                     </ResponsiveContainer>
                                 </div>
                             </div>
+                            )}
                         </div>
 
-                        {/* COL 2: Transaction Matrix - Narrow (lg:col-span-3) - Hidden on Mobile */}
+                        {/* COL 2: Transaction Matrix - Desktop Only */}
+                        {!isSmallScreen && (
                         <div className="hidden lg:flex lg:col-span-3 flex-col gap-5 min-h-0">
                             <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
                                 <div className="flex items-center justify-between mb-4">
@@ -390,6 +394,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
                                 </div>
                             </div>
                         </div>
+                        )}
 
                         {/* COL 3: Analytics Stats + Community Chat (lg:col-span-5) */}
                         <div className="lg:col-span-5 flex flex-col gap-5 min-h-0">
