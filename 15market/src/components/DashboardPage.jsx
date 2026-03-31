@@ -10,7 +10,7 @@ import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
 import { parseEther } from "viem";
 
-export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, treasuryBalance,
+export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWithdraw, treasuryBalance,
     autoSignerFees,
     userProfile,
     theme,
@@ -248,11 +248,18 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </h1>
                             </div>
                         </div>
-                        <div className="flex items-center gap-6">
-                           <div className="flex flex-col items-end">
-                               <p className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/20'}`}>Authorized Wallet</p>
-                               <p className={`text-[10px] font-bold font-mono ${isLight ? 'text-[#3CB371]' : 'text-[#3CB371]'}`}>{truncate(address)}</p>
-                           </div>
+                        <div className="flex items-center gap-4 text-right">
+                            <button
+                                onClick={onAdmin}
+                                className={`p-2.5 rounded-2xl border transition-all flex items-center gap-2 group ${isLight ? 'bg-white border-[#3CB371]/20 hover:bg-[#3CB371]/10 text-black' : 'bg-white/5 border-white/5 hover:bg-white/10 text-white'}`}
+                            >
+                                <Shield size={14} className="text-[#3CB371]" />
+                                <span className="text-[10px] font-black uppercase tracking-widest hidden md:block">Citadel</span>
+                            </button>
+                            <div className="flex flex-col items-end">
+                                <p className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-[#3D5A4C]/40' : 'text-white/20'}`}>Authorized Wallet</p>
+                                <p className={`text-[10px] font-bold font-mono ${isLight ? 'text-[#3CB371]' : 'text-[#3CB371]'}`}>{truncate(address)}</p>
+                            </div>
                         </div>
                     </div>
                 </div>

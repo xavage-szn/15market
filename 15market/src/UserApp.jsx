@@ -23,6 +23,7 @@ import { publicClient } from "./client";
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
+import { AdminDashboard } from "./components/AdminDashboard";
 
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
@@ -2512,6 +2513,7 @@ export default function UserApp() {
       {view === "dashboard" ? (
         <DashboardPage
           onBack={() => setView("trading")}
+          onAdmin={() => setView("admin")}
           wallet={wallet}
           sessionBalance={sessionBalance}
           onRefill={handleRefill}
@@ -2527,6 +2529,13 @@ export default function UserApp() {
             setSelectedTransaction(tx);
             setIsTransactionReceiptOpen(true);
           }}
+        />
+      ) : view === "admin" ? (
+        <AdminDashboard
+          onBack={() => setView("dashboard")}
+          theme={theme}
+          notify={notify}
+          platformSettings={platformSettings}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
