@@ -2709,7 +2709,7 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[245px] flex-none' : 'h-full flex-1'} min-h-0`}
+                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[255px] flex-none' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
                     <div className={`w-full flex flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex flex-1 min-h-0' : 'hidden md:hidden lg:hidden'}`}>
