@@ -11,6 +11,8 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
     });
     const [profiles, setProfiles] = useState({});
     const [activeBroadcast, setActiveBroadcast] = useState(null);
+    const [campaignBroadcast, setCampaignBroadcast] = useState(null);
+    const [isCampaignWindow, setIsCampaignWindow] = useState(false);
     const lastFetchRef = useRef(0);
 
     const isLight = theme === 'light';
@@ -104,9 +106,47 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
         fetchBroadcast();
         const bInterval = setInterval(fetchBroadcast, 15000);
 
+        // 3. Campaign Scroller Logic (1min every 10min)
+        const fetchCampaigns = async () => {
+            try {
+                const res = await fetch(`${KEEPER_URL_ARC}/campaigns`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const active = data.find(c => Date.now() >= c.startTime && Date.now() < c.endTime);
+                    if (active) {
+                        setCampaignBroadcast({
+                            text: `🏆 ACTIVE CAMPAIGN: ${active.title} — JOIN NOW TO WIN ${active.prize || ''}!`,
+                            id: active.id
+                        });
+                    } else {
+                        setCampaignBroadcast(null);
+                    }
+                }
+            } catch (e) { }
+        };
+
+        const checkTimeWindow = () => {
+            const now = new Date();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+            
+            // Show for minute 0 of every 10-minute cycle (e.g. 0:00, 10:00, 20:00...)
+            const minuteInCycle = minutes % 10;
+            const inWindow = minuteInCycle === 0;
+            setIsCampaignWindow(inWindow);
+        };
+
+        fetchCampaigns();
+        const cInterval = setInterval(fetchCampaigns, 30000);
+        
+        checkTimeWindow();
+        const tInterval = setInterval(checkTimeWindow, 1000);
+
         return () => {
             clearInterval(interval);
             clearInterval(bInterval);
+            clearInterval(cInterval);
+            clearInterval(tInterval);
         };
     }, []);
 
@@ -154,7 +194,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
 
     return (
         <div className={`w-full ${isV1 ? 'h-7 md:h-8 lg:h-12 ' + v1Bg : 'h-7 md:h-8 lg:h-12 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden`}>
-            {activeBroadcast ? (
+            {(activeBroadcast || (isCampaignWindow && campaignBroadcast)) ? (
                 <div className="absolute inset-0 flex items-center" style={{ animation: 'fadeIn 0.3s ease' }}>
                     <div
                         className={`flex items-center gap-10 whitespace-nowrap px-10 ${isV1 ? 'bg-amber-500/10' : ''}`}
@@ -164,7 +204,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                             <div key={i} className="flex items-center gap-2">
                                 <Radio size={isV1 ? 14 : 12} className={`${isV1 ? 'text-amber-500' : 'text-white'}`} />
                                 <span className={`${isV1 ? 'text-[11px] font-black' : 'text-[10px]'} uppercase tracking-[0.2em] ${isV1 ? 'text-amber-500' : 'text-white'}`}>
-                                    {activeBroadcast.text}
+                                    {isCampaignWindow && campaignBroadcast ? campaignBroadcast.text : activeBroadcast.text}
                                 </span>
                             </div>
                         ))}

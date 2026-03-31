@@ -1,28 +1,11 @@
 import React, { useEffect, useState, useMemo } from "react";
 import * as ethers from "ethers";
-import { motion } from "framer-motion";
-import {
-    Activity,
-    DollarSign,
-    Award,
-    Target,
-    BarChart2,
-    User,
-    Settings,
-    ArrowLeft,
-    ArrowRight,
-    TrendingUp,
-    TrendingDown,
-    Zap,
-    Shield,
-    Globe,
-    MessageSquare,
-    AlertCircle
-} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAccount } from "wagmi";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
-import { useAccount } from "wagmi";
 import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
 import { parseEther } from "viem";
@@ -58,6 +41,12 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     const [promptConfig, setPromptConfig] = useState(null); // { title: string, placeholder: string, onConfirm: function }
 
     const [isSyncing, setIsSyncing] = useState(false);
+    const [campaigns, setCampaigns] = useState([]);
+    const [activeCampaignLeaderboard, setActiveCampaignLeaderboard] = useState([]);
+    const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+    const [toast, setToast] = useState(null);
+    const [enrolling, setEnrolling] = useState(false);
+    const [enrollments, setEnrollments] = useState({});
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -164,6 +153,68 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
         }
     };
 
+    const fetchCampaigns = async () => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/campaigns`);
+            if (!res.ok) return;
+            const data = await res.json();
+            setCampaigns(data);
+
+            if (address && data.length > 0) {
+                const newEnrollments = {};
+                for (const c of data) {
+                   const eRes = await fetch(`${KEEPER_URL_ARC}/enroll?campaignId=${c.id}&address=${address}`);
+                   if (eRes.ok) {
+                       const eData = await eRes.json();
+                       newEnrollments[c.id] = eData.enrolled;
+                   }
+                }
+                setEnrollments(newEnrollments);
+            }
+        } catch (e) {}
+    };
+
+    const fetchActiveLeaderboard = async () => {
+        if (!selectedCampaignId) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/leaderboard?campaignId=${selectedCampaignId}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            setActiveCampaignLeaderboard(data);
+        } catch (e) {}
+    };
+
+    useEffect(() => {
+        fetchCampaigns();
+        const interval = setInterval(fetchCampaigns, 15000);
+        return () => clearInterval(interval);
+    }, [address]);
+
+    useEffect(() => {
+        if (selectedCampaignId) {
+            fetchActiveLeaderboard();
+            const interval = setInterval(fetchActiveLeaderboard, 5000);
+            return () => clearInterval(interval);
+        }
+    }, [selectedCampaignId]);
+
+    const handleEnroll = async (cid) => {
+        if (!address) return;
+        setEnrolling(true);
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/enroll`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ campaignId: cid, address })
+            });
+
+            if (res.ok) {
+                setEnrollments(prev => ({ ...prev, [cid]: true }));
+                if (!selectedCampaignId) setSelectedCampaignId(cid);
+            }
+        } catch (e) {} finally { setEnrolling(false); }
+    };
+
     const chartData = useMemo(() => {
         return stats.recentTrades
             .slice(0, 20)
@@ -259,8 +310,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
                             </div>
 
-                            {/* Activity Pulse Chart */}
-                            <div className={`flex-1 min-h-[120px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex flex-col`}>
+                            {/* Activity Pulse Chart - Hidden on Mobile */}
+                            <div className={`hidden lg:flex flex-1 min-h-[120px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
                                     <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
@@ -283,8 +334,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             </div>
                         </div>
 
-                        {/* COL 2: Transaction Matrix - Narrow (lg:col-span-3) */}
-                        <div className="lg:col-span-3 flex flex-col gap-5 min-h-0">
+                        {/* COL 2: Transaction Matrix - Narrow (lg:col-span-3) - Hidden on Mobile */}
+                        <div className="hidden lg:flex lg:col-span-3 flex-col gap-5 min-h-0">
                             <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Transactions</h3>
@@ -359,25 +410,103 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                                 </div>
                             </div>
 
-                            {/* Community Chat */}
+                            {/* Dynamic Campaigns Section - Replaces Generic Chat on Mobile/Dashboard context */}
                             <div className={`flex-1 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
                                 <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <MessageSquare size={14} className="text-[#3CB371]" />
-                                        <h3 className={`text-[9px] font-black uppercase tracking-widest opacity-40`}>Market Community</h3>
+                                        <Trophy size={14} className="text-[#3CB371]" />
+                                        <h3 className={`text-[9px] font-black uppercase tracking-widest opacity-40`}>Campaigns & Leaderboards</h3>
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                         <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
-                                        <span className="text-[8px] text-[#3CB371] font-bold uppercase tracking-widest">Live</span>
+                                        <span className="text-[8px] text-[#3CB371] font-bold uppercase tracking-widest">LIVE EVENT</span>
                                     </div>
                                 </div>
-                                <div className="flex-1 overflow-hidden relative">
-                                    <MessagingSystem
-                                        isOpen={true}
-                                        embedded={true}
-                                        onClose={() => { }}
-                                        userProfile={userProfile}
-                                    />
+                                
+                                <div className="flex-1 overflow-y-auto no-scrollbar p-3 flex flex-col gap-3">
+                                    {/* Campaign Selector / List */}
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                        {campaigns.length === 0 ? (
+                                            <div className="text-[8px] font-black opacity-20 uppercase py-2">No active campaigns</div>
+                                        ) : campaigns.map(c => {
+                                            const isUpcoming = Date.now() < c.startTime;
+                                            const canJoin = isUpcoming;
+                                            const isJoined = enrollments[c.id];
+                                            const isSelected = selectedCampaignId === c.id;
+
+                                            return (
+                                                <button 
+                                                    key={c.id}
+                                                    onClick={() => setSelectedCampaignId(c.id)}
+                                                    className={`shrink-0 px-4 py-2 rounded-xl border transition-all flex flex-col gap-1 min-w-[120px]
+                                                        ${isSelected ? 'bg-[#3CB371]/20 border-[#3CB371]/40 shadow-sm' : 'bg-white/5 border-white/5 opacity-60 hover:opacity-100'}
+                                                    `}
+                                                >
+                                                    <span className="text-[9px] font-black uppercase truncate w-full text-left">{c.title}</span>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className={`text-[7px] font-black uppercase ${isUpcoming ? 'text-amber-500' : 'text-[#3CB371]'}`}>
+                                                            {isUpcoming ? 'Upcoming' : 'Active'}
+                                                        </span>
+                                                        {isJoined && <Check size={10} className="text-[#3CB371]" />}
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+
+                                    {/* Campaign Details / Leaderboard Area */}
+                                    {selectedCampaignId ? (
+                                        <div className={`flex-1 flex flex-col min-h-0 rounded-2xl p-4 gap-4 ${isLight ? 'bg-[#d4e6dc]' : 'bg-black/20'}`}>
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <div className="text-[8px] font-black opacity-40 uppercase tracking-widest">Prize Pool</div>
+                                                    <div className="text-sm font-black text-[#3CB371]">{campaigns.find(c => c.id === selectedCampaignId)?.prize || 'USDC Entry'}</div>
+                                                </div>
+                                                {!enrollments[selectedCampaignId] ? (
+                                                    <button 
+                                                        disabled={enrolling || Date.now() >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0)}
+                                                        onClick={() => handleEnroll(selectedCampaignId)}
+                                                        className="px-5 py-2 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:brightness-110 active:scale-95 disabled:opacity-30"
+                                                    >
+                                                        {Date.now() >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0) ? 'Entry Ended' : (enrolling ? 'Joining...' : 'Enroll Now')}
+                                                    </button>
+                                                ) : (
+                                                    <div className="px-4 py-1.5 bg-[#3CB371]/20 text-[#3CB371] text-[8px] font-black uppercase tracking-widest rounded-xl border border-[#3CB371]/20">Joined</div>
+                                                )}
+                                            </div>
+
+                                            {/* Live Mini-Leaderboard */}
+                                            <div className="flex-1 flex flex-col gap-2 min-h-0 overflow-y-auto no-scrollbar">
+                                                <div className="text-[8px] font-black opacity-40 uppercase tracking-widest border-b border-white/5 pb-1">Leaderboard Sync</div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    {activeCampaignLeaderboard.slice(0, 8).map((entry, idx) => {
+                                                        const isMe = address && entry.address.toLowerCase() === address.toLowerCase();
+                                                        return (
+                                                            <motion.div 
+                                                                layout
+                                                                key={entry.address}
+                                                                initial={{ opacity: 0, x: -10 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                                className={`flex items-center justify-between p-2 rounded-xl transition-all ${isMe ? 'bg-[#3CB371]/30 border border-[#3CB371]/40' : 'bg-white/5 hover:bg-white/10'}`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`text-[10px] font-black ${idx < 3 ? 'text-[#3CB371]' : 'opacity-40'}`}>#{idx + 1}</span>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] font-bold font-mono">{truncate(entry.address)}</span>
+                                                                        {isMe && <span className="text-[6px] font-black text-[#3CB371] uppercase">My Position</span>}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-[10px] font-black text-[#3CB371]">{entry.wins} W</div>
+                                                            </motion.div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 flex items-center justify-center opacity-20 text-[9px] font-black uppercase">Select a campaign to view standing</div>
+                                    )}
                                 </div>
                             </div>
                         </div>
