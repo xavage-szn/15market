@@ -179,8 +179,8 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`h-screen w-full flex flex-col overflow-hidden ${isLight ? 'bg-[#c8ddd2] text-[#0a261a]' : 'bg-transparent text-white'}`}>
-            <div className={`flex-none ${isLight ? 'bg-[#c8ddd2]/90 border-[#3CB371]/20' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
+        <div className={`h-screen w-full flex flex-col overflow-hidden ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+            <div className={`flex-none ${isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
                 <div className="max-w-[1600px] mx-auto p-3 md:px-8 md:py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -215,7 +215,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         {/* COL 1: Profile + Auto-Signer + Activity (lg:col-span-4) */}
                         <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
                             {/* Profile & Auto-Signer Compact Card */}
-                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
+                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px]">
                                         <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#c8ddd2]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
@@ -260,7 +260,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             </div>
 
                             {/* Activity Pulse Chart */}
-                            <div className={`flex-1 min-h-[120px] ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex flex-col`}>
+                            <div className={`flex-1 min-h-[120px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex flex-col`}>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
                                     <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
@@ -285,7 +285,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
 
                         {/* COL 2: Transaction Matrix - Narrow (lg:col-span-3) */}
                         <div className="lg:col-span-3 flex flex-col gap-5 min-h-0">
-                            <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
+                            <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Transactions</h3>
                                     <div className="flex items-center gap-1.5">
@@ -337,7 +337,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                         <div className="lg:col-span-5 flex flex-col gap-5 min-h-0">
                             {/* Analytics Quick Stats */}
                             <div className="grid grid-cols-2 gap-3 flex-none">
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'}`}>
                                     <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">24h Volume</div>
                                     <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketTotalVol}</div>
                                     <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
@@ -360,7 +360,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                             </div>
 
                             {/* Community Chat */}
-                            <div className={`flex-1 ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
+                            <div className={`flex-1 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
                                 <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <MessageSquare size={14} className="text-[#3CB371]" />
@@ -390,7 +390,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/20 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
+                        className={`w-full max-w-md ${isLight ? 'bg-[#b4d9c7] border-[#3CB371]/40 shadow-2xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
                     >
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10 flex flex-col items-center text-center">
@@ -436,7 +436,7 @@ export function DashboardPage({ onBack, sessionBalance, onRefill, onWithdraw, tr
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-[#f0f9f4] border-[#3CB371]/20 shadow-xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
+                        className={`w-full max-w-md ${isLight ? 'bg-[#b4d9c7] border-[#3CB371]/40 shadow-2xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
                     >
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
                         <div className="relative z-10">

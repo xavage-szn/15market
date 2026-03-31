@@ -223,8 +223,8 @@ export default function RoundsChart({
             const entryY = !isNaN(ePrice) ? toY(ePrice) : H / 2;
             const nowPx = Date.now();
             const windowMs = 15000; 
-            const liveX = W * 0.95; 
-            const oldest = nowPx - windowMs;
+            const labelH = 20; // Corrected fixed spacing for better alignment
+            const liveX = W - 100; // Leave more room for the label "in front"
             const liveY = toY(latestPriceVal);
 
             // Shaded Zones (Only if we have entry price and are locked)
@@ -276,23 +276,25 @@ export default function RoundsChart({
                 grad.addColorStop(0, `${statusColor}25`);
                 grad.addColorStop(1, 'transparent');
 
-                // Fill Path
+                // Fill Path - Ensuring it starts from outside left
                 ctx.beginPath();
-                let firstX = -1;
+                let firstX = -100; // Force it to start off-screen
+                ctx.moveTo(firstX, H); 
+                
                 history.forEach(pt => {
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x < -100 || x > W + 100) return;
-                    if (firstX === -1) { ctx.moveTo(x, y); firstX = x; }
+                    if (x < -200 || x > W + 100) return;
+                    if (firstX === -100) { ctx.lineTo(x, y); firstX = x; }
                     else ctx.lineTo(x, y);
                 });
+                
                 ctx.lineTo(liveX, liveY);
-                if (firstX !== -1) {
-                    ctx.save();
-                    ctx.lineTo(liveX, H); ctx.lineTo(firstX, H); ctx.closePath();
-                    ctx.fillStyle = grad; ctx.fill();
-                    ctx.restore();
-                }
+                ctx.lineTo(liveX, H);
+                ctx.closePath();
+                ctx.save();
+                ctx.fillStyle = grad; ctx.fill();
+                ctx.restore();
 
                 // Stroke Path
                 ctx.beginPath();
@@ -300,7 +302,7 @@ export default function RoundsChart({
                 history.forEach(pt => {
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x < -100 || x > W + 100) return;
+                    if (x < -200 || x > W + 100) return;
                     if (!started) { ctx.moveTo(x, y); started = true; }
                     else ctx.lineTo(x, y);
                 });
@@ -316,18 +318,65 @@ export default function RoundsChart({
                 ctx.shadowBlur = 15; ctx.shadowColor = statusColor;
                 ctx.beginPath(); ctx.arc(liveX, liveY, 6, 0, Math.PI * 2); ctx.fill();
                 ctx.shadowBlur = 0;
+
+                // Live Price Label
+                const labelText = latestPriceVal.toFixed(2);
+                ctx.font = 'bold 12px IBM Plex Mono, monospace';
+                const labelW = ctx.measureText(labelText).width + 16;
+                const priceLabelH = 20;
+
+                // Horizontal Line
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = `${statusColor}40`;
+                ctx.beginPath(); ctx.moveTo(0, liveY); ctx.lineTo(W, liveY); ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Label Box
+                ctx.fillStyle = statusColor;
+                ctx.beginPath();
+                ctx.roundRect(W - labelW - 10, liveY - priceLabelH/2, labelW, priceLabelH, 6);
+                ctx.fill();
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, W - labelW - 10 + 8, liveY);
             }
 
-            // Particles (Always on)
-            particlesRef.current.forEach(p => {
-                p.y -= p.s * p.direction;
-                if (p.y < -5) p.y = 105;
-                if (p.y > 105) p.y = -5;
-                const px = (p.x / 100) * W;
-                const py = (p.y / 100) * H;
-                ctx.fillStyle = isLight ? `rgba(60,179,113,${p.o})` : `rgba(255,255,255,${p.o})`;
-                ctx.beginPath(); ctx.arc(px, py, p.size, 0, Math.PI * 2); ctx.fill();
-            });
+            // 4. DYNAMIC GLOWING GRID (Premium Effect)
+            const gridStep = 50;
+            const gridOffset = (nowPx / 60) % gridStep;
+            
+            ctx.save();
+            ctx.strokeStyle = isLight ? 'rgba(60,179,113,0.06)' : 'rgba(255,255,255,0.04)';
+            ctx.lineWidth = 1;
+            
+            // Draw Grid Lines
+            for (let x = -gridOffset; x < W + gridStep; x += gridStep) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+            }
+            for (let y = 0; y < H; y += gridStep) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            }
+
+            // Draw Glowing Intersections
+            ctx.fillStyle = isLight ? 'rgba(60,179,113,0.12)' : 'rgba(255,255,255,0.08)';
+            for (let x = -gridOffset; x < W + gridStep; x += gridStep) {
+                for (let y = 0; y < H; y += gridStep) {
+                    if ((Math.floor(x + gridOffset) / gridStep + Math.floor(y / gridStep)) % 3 === 0) {
+                        ctx.beginPath();
+                        ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // Subtle Spotlight tracking live price
+            const spotlight = ctx.createRadialGradient(liveX, liveY, 0, liveX, liveY, 150);
+            spotlight.addColorStop(0, isLight ? 'rgba(60,179,113,0.05)' : 'rgba(60,179,113,0.08)');
+            spotlight.addColorStop(1, 'transparent');
+            ctx.fillStyle = spotlight;
+            ctx.fillRect(0, 0, W, H);
+            ctx.restore();
 
             rafRef.current = requestAnimationFrame(draw);
         };
@@ -355,7 +404,7 @@ export default function RoundsChart({
     const shortPct = totalPool > 0 ? ((pools.short / totalPool) * 100).toFixed(0) : 50;
 
     return (
-        <div className={`relative w-full h-full flex flex-col overflow-hidden bg-[#0d0d0d] select-none ${!isDark ? 'bg-[#8faf9a]' : ''}`}>
+        <div className={`relative w-full h-full flex flex-col overflow-hidden bg-[#0d0d0d] select-none ${!isDark ? 'bg-[#e2efea]' : ''}`}>
             {/* Branded Background Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                 <img src="/logo.png" alt="15market" style={{
@@ -367,55 +416,54 @@ export default function RoundsChart({
             </div>
             <canvas ref={canvasRef} className="flex-1 w-full h-full relative z-10" />
 
-            {/* LIVE PRICE OVERLAY (Entry & Locked Phases) */}
-            {!showLockedCountdown && !showWinnerAnimation && (
-                <div className="absolute top-4 left-4 flex flex-col gap-1 z-20">
-                    <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${phase === 'entry' ? 'bg-[#3CB371]' : (isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')}`} />
-                        <span className="text-[10px] font-black text-white/40 tracking-[0.2em] uppercase">
-                            {phase === 'entry' ? 'Pre-Round Preview' : 'Active Market'}
-                        </span>
-                        {phase === 'locked' && (
-                            <div className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest transition-all duration-500 scale-90 ${isAbove ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#3CB371]' : 'bg-[#FF7F50]/10 border-[#FF7F50]/30 text-[#FF7F50]'}`}>
-                                {isAbove ? 'BULLISH' : 'BEARISH'}
-                            </div>
-                        )}
-                    </div>
-                    <span className={`text-xl font-black font-mono tabular-nums leading-none ${phase === 'entry' ? 'text-[#3CB371]' : (isAbove ? 'text-[#3CB371]' : 'text-[#FF7F50]')}`}>
-                        ${parseFloat(currentPrice).toFixed(2)}
-                    </span>
-                    {phase === 'locked' && !isNaN(ePriceNum) && (
-                        <span className="text-[9px] font-bold text-white/30 tracking-widest uppercase">Target: ${parseFloat(entryPrice).toFixed(2)}</span>
-                    )}
-                </div>
-            )}
 
-            {/* POOLS OVERLAY (TOP) */}
-            <div className={`absolute top-4 left-0 right-0 flex justify-center gap-4 px-4 transition-all duration-500 z-30 ${showEntrySplit ? 'opacity-0 translate-y-[-20px]' : 'opacity-100'}`}>
-                <div className={`flex items-center justify-center gap-3 px-5 py-3 rounded-full bg-black/40 backdrop-blur-xl border min-w-[120px] max-w-[160px] flex-1 transition-all duration-300 ${isAbove ? 'border-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.2)]' : 'border-white/5 opacity-40'}`}>
-                    <TrendingUp size={12} className={isAbove ? 'text-[#3CB371]' : 'text-white/20'} />
-                    <div className="flex flex-col leading-none">
-                        <span className="text-[11px] font-black text-white">{longPct}%</span>
-                        <span className="text-[7px] font-bold text-white/30 mt-0.5">${(pools?.long || 0).toFixed(0)}</span>
-                    </div>
-                </div>
+
+            {/* STATUS BAR (Price, Pools, Timer) */}
+            <div className={`absolute top-2 left-2 right-2 flex items-center justify-between gap-2 z-30 transition-all duration-500 ${showEntrySplit ? 'opacity-0 translate-y-[-20px]' : 'opacity-100'}`}>
                 
-                <div className="relative w-12 h-12 shrink-0">
-                    <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
-                        <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
-                        <circle cx="28" cy="28" r="22" fill="none" stroke={timeLeft > 5 ? '#3CB371' : '#FF7F50'} strokeWidth="4" strokeDasharray={138} strokeDashoffset={138 * (1 - (timeLeft / totalDuration))} strokeLinecap="round" />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-[12px] font-black font-mono text-white">{timeLeft}s</span>
+                {/* LEFT: Price & Pools */}
+                <div className="flex items-center gap-1.5 md:gap-3 flex-1">
+                    {/* Live Price Pill - Now Horizontal for better visibility */}
+                    <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl bg-black/40 backdrop-blur-xl border ${phase === 'locked' ? (isAbove ? 'border-[#3CB371]/40' : 'border-[#FF7F50]/40') : 'border-white/5'}`}>
+                        <div className="flex items-center gap-1.5">
+                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${phase === 'entry' ? 'bg-[#3CB371]' : (isAbove ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')}`} />
+                            <span className="text-[8px] font-black text-white/40 tracking-widest uppercase truncate">
+                                {phase === 'entry' ? 'Live' : (isAbove ? 'Bullish' : 'Bearish')}
+                            </span>
+                        </div>
+                        <div className="w-[1px] h-3 bg-white/10" />
+                        <span className={`text-sm md:text-lg font-black font-mono tabular-nums leading-none ${phase === 'entry' ? 'text-[#3CB371]' : (isAbove ? 'text-[#3CB371]' : 'text-[#FF7F50]')}`}>
+                            ${parseFloat(currentPrice).toFixed(2)}
+                        </span>
+                    </div>
+
+                    {/* Pools Pill (Shifted to the left of timer) */}
+                    <div className="flex items-center p-1 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/5 shadow-2xl overflow-hidden min-w-[120px] md:min-w-[180px]">
+                        {/* Long Half */}
+                        <div className={`flex items-center gap-2 px-3 py-1.5 flex-1 transition-all ${isAbove ? 'bg-[#3CB371]/10' : ''}`}>
+                             <TrendingUp size={10} className={isAbove ? 'text-[#3CB371]' : 'text-white/20'} />
+                             <span className={`text-[11px] font-black ${isAbove ? 'text-[#3CB371]' : 'text-white'}`}>{longPct}%</span>
+                        </div>
+                        {/* Divider */}
+                        <div className="w-[1px] h-4 bg-white/10" />
+                        {/* Short Half */}
+                        <div className={`flex items-center gap-2 px-3 py-1.5 flex-1 transition-all ${!isAbove ? 'bg-[#FF7F50]/10' : ''}`}>
+                             <span className={`text-[11px] font-black ${!isAbove ? 'text-[#FF7F50]' : 'text-white'}`}>{shortPct}%</span>
+                             <TrendingDown size={10} className={!isAbove ? 'text-[#FF7F50]' : 'text-white/20'} />
+                        </div>
                     </div>
                 </div>
 
-                <div className={`flex items-center justify-center gap-3 px-5 py-3 rounded-full bg-black/40 backdrop-blur-xl border min-w-[120px] max-w-[160px] flex-1 transition-all duration-300 ${!isAbove ? 'border-[#FF7F50] shadow-[0_0_20px_rgba(255,127,80,0.2)]' : 'border-white/5 opacity-40'}`}>
-                    <div className="text-right flex flex-col leading-none">
-                        <span className="text-[11px] font-black text-white">{shortPct}%</span>
-                        <span className="text-[7px] font-bold text-white/30 mt-0.5">${(pools?.short || 0).toFixed(0)}</span>
+                {/* RIGHT: Timer */}
+                <div className="relative w-12 h-12 md:w-14 md:h-14 shrink-0">
+                    <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
+                        <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="3" />
+                        <circle cx="28" cy="28" r="24" fill="none" stroke={timeLeft > 5 ? '#3CB371' : '#FF7F50'} strokeWidth="3" strokeDasharray={150} strokeDashoffset={150 * (1 - (timeLeft / totalDuration))} strokeLinecap="round" className="transition-all duration-1000" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+                        <span className="text-[12px] md:text-[14px] font-black font-mono text-white">{timeLeft}s</span>
+                        <span className={`text-[6px] font-black uppercase tracking-tighter mt-0.5 ${timeLeft > 5 ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>Left</span>
                     </div>
-                    <TrendingDown size={12} className={!isAbove ? 'text-[#FF7F50]' : 'text-white/20'} />
                 </div>
             </div>
 

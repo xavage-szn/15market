@@ -193,10 +193,10 @@ input[type=number] {
 /* ===== PREMIUM LIGHT MODE — Light Coral Green Branding ===== */
 html.light,
 body.light {
-  background-color: #c8ddd2 !important;
+  background-color: #b4d9c7 !important; /* More intense coral green */
   background-image:
-    radial-gradient(circle at 2px 2px, rgba(60, 179, 113, 0.08) 1px, transparent 0),
-    linear-gradient(180deg, #c8ddd2 0%, #bcd4c9 100%) !important;
+    radial-gradient(circle at 2px 2px, rgba(42, 157, 92, 0.08) 1px, transparent 0),
+    linear-gradient(180deg, #b4d9c7 0%, #a2ccb6 100%) !important;
   background-size: 32px 32px, 100% 100% !important;
   background-attachment: fixed !important;
 }
@@ -206,9 +206,9 @@ body.light {
   --primary-glow: rgba(60, 179, 113, 0.3);
   --primary-glow-strong: rgba(60, 179, 113, 0.5);
   --primary-glow-subtle: rgba(60, 179, 113, 0.15);
-  --glass-bg: rgba(240, 250, 245, 0.95);
-  --glass-border: rgba(60, 179, 113, 0.15);
-  --glass-highlight: rgba(255, 255, 255, 0.8);
+  --glass-bg: rgba(226, 239, 234, 0.95);
+  --glass-border: rgba(60, 179, 113, 0.25); /* Stronger outline */
+  --glass-highlight: rgba(255, 255, 255, 0.5);
   --text-primary: #0a261a;
   --text-secondary: #1a3d2e;
   --text-tertiary: #2d5a45;
@@ -216,13 +216,13 @@ body.light {
 
 /* Light Mode Glass Panels */
 .light .glass-panel {
-  background: rgba(240, 250, 245, 0.92) !important;
+  background: rgba(180, 217, 199, 0.94) !important; /* Intensified */
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(60, 179, 113, 0.18) !important;
+  border: 1.5px solid rgba(60, 179, 113, 0.3) !important;
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.04),
-    0 1px 0 rgba(255, 255, 255, 0.5) inset !important;
+    0 10px 40px rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset !important;
 }
 
 .light .glass-panel::before {
@@ -234,19 +234,19 @@ body.light {
 
 /* Light Mode Static Panels */
 .light .static-panel-light {
-  background: #f8fdfb !important;
-  border: 1px solid rgba(60, 179, 113, 0.15) !important;
+  background: #cce3d7 !important; /* Intense version of diluted white */
+  border: 1.5px solid rgba(60, 179, 113, 0.35) !important;
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.04),
-    0 1px 0 rgba(255, 255, 255, 0.8) inset !important;
+    0 10px 40px rgba(0, 0, 0, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset !important;
 }
 
 /* Light Mode Nav */
 .light .glass-nav {
-  background: rgba(255, 255, 255, 0.90) !important;
+  background: rgba(226, 239, 234, 0.90) !important;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  border-bottom: 1px solid rgba(60, 179, 113, 0.1) !important;
 }
 
 .light ::-webkit-scrollbar {
@@ -264,14 +264,15 @@ body.light {
 .light .bg-\[#3CB371\] {
   box-shadow:
     0 4px 14px rgba(42, 157, 92, 0.30),
-    0 0 0 1px rgba(42, 157, 92, 0.12) inset !important;
+    0 0 0 1px rgba(0, 0, 0, 0.15) inset !important; /* Added outline */
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
 }
 
 .light button[style*="#3CB371"]:hover,
 .light .bg-\[#3CB371\]:hover {
   box-shadow:
     0 6px 20px rgba(42, 157, 92, 0.40),
-    0 0 0 1px rgba(42, 157, 92, 0.20) inset !important;
+    0 0 0 1px rgba(0, 0, 0, 0.25) inset !important;
   transform: translateY(-1px);
 }
 
@@ -330,7 +331,8 @@ body.light {
 }
 
 .light .bg-white {
-  background-color: #ffffff !important;
+  background-color: #cce3d7 !important; /* Intense */
+  border: 1px solid rgba(60, 179, 113, 0.3) !important;
 }
 
 .light .bg-white\/60 {
@@ -350,9 +352,14 @@ body.light {
 .light input,
 .light select,
 .light textarea {
-  background-color: rgba(175, 205, 185, 0.5) !important;
-  border-color: rgba(30, 90, 56, 0.15) !important;
-  color: #0f2618 !important;
+  background-color: rgba(255, 255, 255, 0.4) !important;
+  border-color: rgba(30, 90, 56, 0.2) !important;
+  color: #05140b !important;
+}
+
+/* Explicit override to defeat global input styles for transparent fields */
+.light input.force-transparent-bg {
+  background-color: transparent !important;
 }
 
 .light input::placeholder,
@@ -386,19 +393,19 @@ body.light {
   color: rgba(5, 20, 11, 0.55) !important;
 }
 
-/* Diluted Gradient for Light Mode Containers - Light Coral Green */
+/* Diluted Gradient for Light Mode Containers - Faded Coral Green */
 .coral-green-gradient-light {
   background: linear-gradient(145deg,
-      #f8fdfb 0%,
-      #ebf7f1 100%) !important;
+      #e2efea 0%,
+      #d9e9e2 100%) !important;
 }
 
 .light .text-black\/20 {
-  color: rgba(5, 20, 11, 0.35) !important;
+  color: rgba(5, 20, 11, 0.45) !important;
 }
 
 .light .text-black\/10 {
-  color: rgba(5, 20, 11, 0.2) !important;
+  color: rgba(5, 20, 11, 0.25) !important;
 }
 
 .light .text-black {
@@ -407,6 +414,11 @@ body.light {
 
 .light .text-black\/90 {
   color: rgba(5, 20, 11, 0.92) !important;
+}
+
+/* Force branded green text for Rounds button in Light Mode */
+.light .rounds-confirm-text {
+  color: #3CB371 !important;
 }
 
 .light .text-black\/80 {

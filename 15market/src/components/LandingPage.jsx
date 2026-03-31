@@ -72,7 +72,7 @@ export function LandingPage({ theme, onToggle }) {
     const dAppUrl = "15market.online";
 
     return (
-        <div className={`h-screen w-screen ${isLight ? 'bg-[#8faf9a] text-[#0a261a]' : 'bg-[#050505] text-white'} overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30 transition-colors duration-500`}>
+        <div className={`h-screen w-screen ${isLight ? 'bg-[#e2efea] text-[#0a261a]' : 'bg-[#050505] text-white'} overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30 transition-colors duration-500`}>
             <AnimatedIllustrationBackground theme={theme} />
 
             {/* Top Navigation - Minimal */}

@@ -33,7 +33,7 @@ function TradeTerminalComponent({
 
     const containerClass = transparent
         ? "flex flex-col h-full justify-between gap-1 lg:gap-2 overflow-y-auto no-scrollbar"
-        : `w-full min-h-0 h-auto lg:h-full p-1.5 md:p-2 lg:p-3 rounded-2xl glass-panel relative transition-all duration-300 flex flex-col gap-1 lg:gap-1.5 lg:gap-2.5 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
+        : `w-full min-h-0 h-auto lg:h-full p-2 lg:p-3 rounded-[32px] glass-panel relative transition-all duration-300 flex flex-col gap-1.5 lg:gap-3 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
 
     const renderHeader = () => (
         <div className="flex items-center justify-between pointer-events-auto mb-0.5">
@@ -56,8 +56,8 @@ function TradeTerminalComponent({
                 </div>
             </div>
 
-            <div className="flex flex-col items-end">
-                <span className="text-[5px] lg:text-[6px] font-black opacity-30 uppercase tracking-widest">Market</span>
+            <div className="flex flex-col items-end opacity-60">
+                <span className="text-[6px] lg:text-[7px] font-black uppercase tracking-widest">Market</span>
                 <span className="text-[7px] lg:text-[10px] font-mono font-black text-[#3CB371]">
                     ${(Math.floor(Number(price) * 100) / 100).toFixed(2)}
                 </span>
@@ -66,16 +66,16 @@ function TradeTerminalComponent({
     );
 
     const renderCallPut = () => (
-        <div className={`relative flex items-center p-1 rounded-full border border-[#3CB371]/10 bg-white/5 backdrop-blur-3xl overflow-hidden pointer-events-auto`}>
-            {/* Sliding Pill Background */}
+        <div className={`relative flex items-center p-0.5 rounded-full border border-[#3CB371]/10 bg-white/5 backdrop-blur-3xl overflow-hidden pointer-events-auto`}>
+            {/* Sliding Pill Background - Synchronized with Time Scroller geometry */}
             <motion.div
-                className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all`}
+                className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-full shadow-[0_0_20px_rgba(60,179,113,0.25)] transition-all`}
                 initial={false}
                 animate={{ 
-                    x: direction === "UP" ? 4 : 'calc(100% + 4px)',
-                    background: direction === "UP" ? 'linear-gradient(to bottom right, #48c97f, #1e5a38)' : 'linear-gradient(to bottom right, #FF7F50, #D2691E)'
+                    x: direction === "UP" ? 1 : 'calc(100% + 1px)',
+                    background: direction === "UP" ? 'linear-gradient(to right, #48c97f, #1e5a38)' : 'linear-gradient(to right, #FF7F50, #D2691E)'
                 }}
-                transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                transition={{ type: "spring", stiffness: 450, damping: 40 }}
             />
             
             <button
@@ -84,7 +84,7 @@ function TradeTerminalComponent({
                 className={`flex-1 relative z-10 py-1.5 lg:py-2 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "UP" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
             >
                 <TrendingUp size={12} className={direction === "UP" ? "text-white" : "text-[#3CB371]/60"} />
-                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">Call</span>
+                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">LONG</span>
             </button>
             
             <button
@@ -93,7 +93,7 @@ function TradeTerminalComponent({
                 className={`flex-1 relative z-10 py-1.5 lg:py-2 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "DOWN" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
             >
                 <TrendingDown size={12} className={direction === "DOWN" ? "text-white" : "text-[#FF7F50]/60"} />
-                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">Put</span>
+                <span className="text-[7px] lg:text-[9px] font-black uppercase tracking-widest">SHORT</span>
             </button>
         </div>
     );
@@ -101,7 +101,7 @@ function TradeTerminalComponent({
     const renderTime = () => (
         <div className="flex flex-col gap-1 pointer-events-auto">
             <div className="flex items-center justify-between px-1">
-                <span className={`text-[6px] md:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Time</span>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white opacity-30'}`}>Time</span>
                 <span className="text-[6px] md:text-[7px] font-mono font-bold" style={{ color: '#3CB371' }}>
                     {duration === 5 ? '6.98x' : duration === 10 ? '4.98x' : '1.98x'}
                 </span>
@@ -133,13 +133,13 @@ function TradeTerminalComponent({
 
     const renderStake = () => (
         <div className="flex flex-col gap-0.5 lg:gap-0.5 pointer-events-auto">
-            <div className="flex items-center justify-between px-1">
-                <span className={`text-[6px] lg:text-[7px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
+            <div className="flex items-center justify-between px-1.5">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`}>Stake</span>
                 <span className={`text-[6px] lg:text-[7px] font-bold ${sessionMode ? (isLight ? 'text-[#3CB371]' : 'text-yellow-400') : 'text-[#3CB371]'}`}>
                     ${(sessionMode ? sessionBalance : balance).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex flex-col gap-2 p-3 rounded-[32px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-[#d4e6dc] border-[#3CB371]/30 shadow-lg' : 'bg-white/10 border-[#3CB371]/30 shadow-[0_0_20px_rgba(60,179,113,0.1)]') : (isLight ? 'bg-[#cce0d5] border-[#3CB371]/15' : 'bg-white/5 border-white/5')}`}>
+            <div className={`flex flex-col gap-2 py-1.5 px-3 rounded-[32px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-[#b4d9c7] border-[#3CB371]/40 shadow-lg' : 'bg-white/10 border-[#3CB371]/30 shadow-[0_0_20px_rgba(60,179,113,0.1)]') : (isLight ? 'bg-[#cce3d7] border-[#3CB371]/30' : 'bg-white/5 border-white/5')}`}>
                 <div className="flex items-center gap-1 md:gap-1.5 transition-all">
                     <span className={`text-[10px] md:text-sm font-black transition-opacity duration-300 ${isFocused ? 'opacity-40 text-[#3CB371]' : 'opacity-20'}`}>$</span>
                     <input
@@ -149,11 +149,11 @@ function TradeTerminalComponent({
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setTimeout(() => setIsFocused(false), 200)}
                         placeholder="0.00"
-                        className={`w-full bg-transparent text-sm md:text-base font-black outline-none transition-all ${isLight ? 'text-black placeholder:text-black/10' : 'text-white placeholder:text-white/10'} ${isFocused ? 'tracking-tight translate-x-1' : ''}`}
+                        className={`w-full bg-transparent text-sm md:text-base font-black outline-none border-none transition-all ${isLight ? 'text-black placeholder:text-black/30' : 'text-white placeholder:text-white/10'} ${isFocused ? 'tracking-tight translate-x-1' : ''}`}
                     />
                 </div>
             </div>
-            <div className="relative pt-3 pb-1 px-1">
+            <div className="relative pt-3 pb-1 px-2">
                 <div className="relative h-1.5">
                     <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
                     <div className="absolute inset-y-0 left-0 rounded-full bg-[#3CB371] transition-all duration-150" style={{ width: `${sliderValue || 0}%`, boxShadow: '0 0 10px rgba(60, 179, 113, 0.4)' }} />
@@ -197,7 +197,9 @@ function TradeTerminalComponent({
             {renderCallPut()}
             {renderTime()}
             {renderStake()}
-            {renderConfirm()}
+            <div className="w-full mt-auto -translate-y-0.5">
+                {renderConfirm()}
+            </div>
         </div>
     );
 };

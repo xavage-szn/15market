@@ -210,7 +210,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
                 // Horizontal Price Line (Crosshair)
                 ctx.setLineDash([5, 5]);
-                ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+                ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)';
                 ctx.beginPath();
                 ctx.moveTo(0, liveY);
                 ctx.lineTo(W, liveY);
@@ -218,26 +218,27 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 ctx.setLineDash([]);
 
                 // Live Badge
-                const labelH = isMobile ? 24 : 20;
+                const labelH = 20;
 
                 ctx.fillStyle = isLight ? '#1e5a38' : GREEN;
                 ctx.beginPath();
-                ctx.roundRect(W - labelW - 10, liveY - labelH/2, labelW, labelH, 6);
+                // Closer to the dot
+                ctx.roundRect(liveX + 10, liveY - labelH/2, labelW, labelH, 6);
                 ctx.fill();
                 ctx.fillStyle = '#ffffff';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(labelText, W - labelW - 10 + 8, liveY);
+                ctx.fillText(labelText, liveX + 10 + 8, liveY);
 
                 // Pulse Dot
                 const pulse = Math.sin(nowPx / 200) * 3;
-                const dotSize = isMobile ? 5 : 4;
+                const dotSize = 5;
                 ctx.beginPath();
                 ctx.arc(liveX, liveY, dotSize, 0, Math.PI * 2);
                 ctx.fillStyle = isLight ? '#48c97f' : '#ffffff';
                 ctx.fill();
                 ctx.beginPath();
                 ctx.arc(liveX, liveY, (dotSize + 2) + pulse, 0, Math.PI * 2);
-                ctx.strokeStyle = isLight ? 'rgba(72,201,127,0.6)' : `${GREEN}60`;
+                ctx.strokeStyle = isLight ? 'rgba(72,201,127,0.6)' : `${GREEN}80`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
             }

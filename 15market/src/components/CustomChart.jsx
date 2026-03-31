@@ -490,7 +490,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         <div
             className={`relative w-full h-full flex flex-col flex-1 ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`}
             style={{
-                backgroundColor: isDark ? '#0d0d0d' : '#8faf9a',
+                backgroundColor: isDark ? '#0d0d0d' : '#e2efea',
                 borderRadius: isFullscreen ? '0' : 'inherit',
                 minHeight: isFullscreen ? '100vh' : (uiVersion === 'v2' ? '120px' : '220px')
             }}
@@ -573,12 +573,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
                     {/* LEFT: Live badge + symbol selector */}
                     <div className="flex items-center gap-2">
-                        <div className={`flex items-center ${controlBg} backdrop-blur-2xl border ${controlBorder} rounded-xl overflow-hidden p-0.5 shadow-2xl px-3 py-1.5`}>
-                            <div className="flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-pulse" />
-                                <span className="text-[10px] font-black tracking-widest text-[#3CB371]">1S LIVE</span>
-                            </div>
-                        </div>
+
 
                         <div
                             className={`flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:${controlBorder} pointer-events-auto group`}
@@ -592,76 +587,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     </div>
                     {/* END LEFT */}
 
-                    {/* RIGHT: Settings + Fullscreen */}
-                    <div className="flex items-center gap-2 relative">
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowSettings(!showSettings)}
-                                className={`p-2 ${controlBg} border ${controlBorder} rounded-xl transition-all shadow-2xl pointer-events-auto ${
-                                    showSettings
-                                        ? 'text-[#3CB371] border-[#3CB371]/50'
-                                        : `${controlTextDim} hover:${controlText}`
-                                }`}
-                            >
-                                <Settings size={16} />
-                            </button>
-
-                            <AnimatePresence>
-                                {showSettings && (
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                        className={`absolute top-12 right-0 w-48 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-2xl z-[110] flex flex-col gap-1 pointer-events-auto`}
-                                    >
-                                        <div className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest ${controlTextDim} border-b ${controlBorder} mb-1`}>
-                                            Chart Settings
-                                        </div>
-                                        <div className={`px-3 py-1.5 flex flex-col gap-2 border-b ${controlBorder} pb-3 mb-1`}>
-                                            <span className={`text-[9px] font-bold uppercase tracking-widest ${controlTextDim}`}>Grid Display</span>
-                                            <div className="flex gap-1">
-                                                {[
-                                                    { id: 'none', label: 'Off' },
-                                                    { id: 'horz', label: 'Horz' },
-                                                    { id: 'all', label: 'All' }
-                                                ].map(opt => (
-                                                    <button
-                                                        key={opt.id}
-                                                        onClick={() => { setGridMode(opt.id); setShowSettings(false); }}
-                                                        className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-lg border ${
-                                                            gridMode === opt.id
-                                                                ? 'bg-[#3CB371] text-white border-[#3CB371]'
-                                                                : `${isDark ? 'bg-white/5' : 'bg-[#3CB371]/5'} ${controlTextDim} border-transparent`
-                                                        }`}
-                                                    >
-                                                        {opt.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        {uiVersion === 'v2' && (
-                                            <button
-                                                onClick={() => { setChartType(chartType === 'candles' ? 'line' : 'candles'); setShowSettings(false); }}
-                                                className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/5'} transition-all ${controlTextDim} hover:${controlText}`}
-                                            >
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Candles</span>
-                                                <div className={`w-8 h-4 rounded-full relative transition-all ${chartType === 'candles' ? 'bg-[#3CB371]' : (isDark ? 'bg-white/10' : 'bg-[#3CB371]/10')}`}>
-                                                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-all ${chartType === 'candles' ? 'translate-x-4' : 'translate-x-0'}`} />
-                                                </div>
-                                            </button>
-                                        )}
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-
-                        <button
-                            onClick={toggleFullscreen}
-                            className={`p-2 ${controlBg} border ${controlBorder} rounded-xl ${controlTextDim} hover:${controlText} transition-all shadow-2xl pointer-events-auto`}
-                        >
-                            <Maximize2 size={16} />
-                        </button>
-                    </div>
+                    {/* RIGHT: Settings + Fullscreen (Removed) */}
                 </div>
             </div>
 

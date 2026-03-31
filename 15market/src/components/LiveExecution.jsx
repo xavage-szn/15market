@@ -272,7 +272,7 @@ function LiveExecutionComponent({
                                             return (
                                                 <div
                                                     className={`rounded-[16px] p-2 md:p-3 flex flex-col relative transition-all duration-500 border-2 ${!isExpanded && activeTrades.length === 1 ? 'h-full flex-1' : 'h-auto'} ${isLight
-                                                        ? 'bg-[#f0f9f4]/90 backdrop-blur-xl border-[#3CB371]/20 shadow-sm hover:shadow-md'
+                                                        ? 'bg-[#cce3d7] backdrop-blur-xl border-[#3CB371]/35 shadow-sm hover:shadow-md'
                                                         : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
                                                     style={displayFinal ? {
                                                         borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(60, 179, 113, 0.5)' : 'rgba(255, 127, 80, 0.5)',
