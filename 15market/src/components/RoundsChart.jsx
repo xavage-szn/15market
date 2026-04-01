@@ -176,9 +176,7 @@ export default function RoundsChart({
             const history = priceHistoryRef.current;
             const latestPriceVal = interpolatedPriceRef.current || ePrice;
 
-            // 1. Clear & Background
-            ctx.fillStyle = isLight ? '#ffffff' : '#050505';
-            ctx.fillRect(0, 0, W, H);
+            ctx.clearRect(0, 0, W, H);
             // Determine lo/hi for the window
             let lo, hi, hRange;
             if (!isNaN(ePrice) && phase === 'locked') {
@@ -404,7 +402,7 @@ export default function RoundsChart({
     const shortPct = totalPool > 0 ? ((pools.short / totalPool) * 100).toFixed(0) : 50;
 
     return (
-        <div className={`relative w-full h-full flex flex-col overflow-hidden bg-[#0d0d0d] select-none ${!isDark ? 'bg-[#e2efea]' : ''}`}>
+        <div className={`relative w-full h-full flex flex-col overflow-hidden bg-transparent select-none`}>
             {/* Branded Background Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                 <img src="/logo.png" alt="15market" style={{

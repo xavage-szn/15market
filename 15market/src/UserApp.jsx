@@ -2666,13 +2666,17 @@ export default function UserApp() {
 
 
                     {/* Chart Container - flex-1 fills all remaining vertical space on mobile */}
-                    <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
+                    <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'backdrop-blur-2xl shadow-[0_0_40px_rgba(0,0,0,0.2)]' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
                       style={{
-                        background: isSmallScreen ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.10)' : 'rgba(10, 10, 10, 0.7)'),
+                        background: isSmallScreen 
+                          ? (theme === 'light' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.12)') 
+                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.10)' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
                           ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                           : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
-                        borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`
+                        borderColor: isSmallScreen
+                          ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(60, 179, 113, 0.25)')
+                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
                       }}>
                       <div className="flex-1 w-full h-full flex relative">
                         {/* Chart Area */}
