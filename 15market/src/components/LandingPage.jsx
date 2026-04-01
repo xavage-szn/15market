@@ -1,6 +1,6 @@
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { UnifiedWalletButton } from "./UnifiedWalletButton";
-
 import { ThemeToggle } from "./ThemeToggle";
 
 const AnimatedIllustrationBackground = ({ theme }) => {
@@ -69,7 +69,41 @@ const AnimatedIllustrationBackground = ({ theme }) => {
 
 export function LandingPage({ theme, onToggle }) {
     const isLight = theme === 'light';
-    const dAppUrl = "15market.online";
+    const [currentTextIndex, setCurrentTextIndex] = useState(0);
+    const [displayText, setDisplayText] = useState("");
+    const [isDeleting, setIsDeleting] = useState(false);
+    
+    const phrases = [
+        "access the momentum market",
+        "predict the direction of an asset and earn",
+        "explore 15market"
+    ];
+
+    useEffect(() => {
+        let timer;
+        const currentPhrase = phrases[currentTextIndex];
+        
+        if (!isDeleting) {
+            if (displayText.length < currentPhrase.length) {
+                timer = setTimeout(() => {
+                    setDisplayText(currentPhrase.substring(0, displayText.length + 1));
+                }, 80);
+            } else {
+                timer = setTimeout(() => setIsDeleting(true), 2500);
+            }
+        } else {
+            if (displayText.length > 0) {
+                timer = setTimeout(() => {
+                    setDisplayText(currentPhrase.substring(0, displayText.length - 1));
+                }, 40);
+            } else {
+                setIsDeleting(false);
+                setCurrentTextIndex((prev) => (prev + 1) % phrases.length);
+            }
+        }
+        
+        return () => clearTimeout(timer);
+    }, [displayText, isDeleting, currentTextIndex]);
 
     return (
         <div className={`h-screen w-screen ${isLight ? 'bg-[#e2efea] text-[#0a261a]' : 'bg-[#050505] text-white'} overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30 transition-colors duration-500`}>
@@ -85,7 +119,7 @@ export function LandingPage({ theme, onToggle }) {
                     <img
                         src="/logo.png"
                         alt="15market"
-                        className={`h-16 md:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)] ${isLight ? 'invert hue-rotate-180' : ''}`}
+                        className={`h-16 md:h-28 lg:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)] ${isLight ? 'invert hue-rotate-180' : ''}`}
                     />
                 </motion.div>
 
@@ -105,33 +139,64 @@ export function LandingPage({ theme, onToggle }) {
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-                    className="flex flex-col items-center gap-12"
+                    className="flex flex-col items-center gap-6 md:gap-12"
                 >
-                    <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-tight uppercase max-w-5xl">
-                        ACCESS THE <br />
-                        <motion.span
-                            animate={{
-                                scale: [1, 1.02, 1],
-                                opacity: [0.8, 1, 0.8],
-                                filter: ["drop-shadow(0 0 20px rgba(60,179,113,0.3))", "drop-shadow(0 0 50px rgba(60,179,113,0.5))", "drop-shadow(0 0 20px rgba(60,179,113,0.3))"]
-                            }}
-                            transition={{
-                                duration: 4,
-                                repeat: Infinity,
-                                ease: "easeInOut"
-                            }}
-                            className="inline-block text-transparent bg-clip-text bg-gradient-to-b from-[#3CB371] to-[#2d8a57]"
-                        >
-                            MOMENTUM MARKET.
-                        </motion.span>
-                    </h1>
+                    <div className="h-[120px] sm:h-[180px] md:h-[240px] flex items-center justify-center">
+                        <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-8xl font-black tracking-tighter leading-tight uppercase max-w-5xl">
+                            <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#3CB371] to-[#2d8a57] inline-block filter drop-shadow-[0_0_20px_rgba(60,179,113,0.3)]">
+                                {displayText}
+                                <motion.span
+                                    animate={{ opacity: [1, 0] }}
+                                    transition={{ duration: 0.6, repeat: Infinity, ease: "linear" }}
+                                    className="inline-block w-[2px] h-[0.8em] bg-[#3CB371] ml-2 -mb-1"
+                                />
+                            </span>
+                        </h1>
+                    </div>
 
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.5, duration: 1 }}
-                        className="flex flex-col items-center gap-12"
+                        className="flex flex-col items-center gap-12 relative"
                     >
+                        {/* Animated Illustration pointing to Connect Wallet - ONLY when "explore 15market" */}
+                        <AnimatePresence>
+                            {currentTextIndex === 2 && !isDeleting && (
+                                <motion.div 
+                                    initial={{ opacity: 0, scale: 0.5, y: -20 }}
+                                    animate={{ opacity: 1, scale: 1.25, y: [0, -10, 0] }}
+                                    exit={{ opacity: 0, scale: 0.5, y: -20 }}
+                                    transition={{
+                                        duration: 3,
+                                        repeat: Infinity,
+                                        ease: "easeInOut"
+                                    }}
+                                    className="absolute -top-24 scale-125 pointer-events-none hidden md:block"
+                                >
+                                    <svg width="80" height="80" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <motion.path 
+                                            d="M50 10V50M50 50L35 35M50 50L65 35" 
+                                            stroke="#3CB371" 
+                                            strokeWidth="6" 
+                                            strokeLinecap="round" 
+                                            strokeLinejoin="round" 
+                                            animate={{ 
+                                                strokeDasharray: ["0 100", "100 100"],
+                                                opacity: [0.4, 1, 0.4]
+                                            }}
+                                            transition={{
+                                                duration: 2,
+                                                repeat: Infinity,
+                                                ease: "easeInOut"
+                                            }}
+                                        />
+                                        <circle cx="50" cy="70" r="8" fill="#3CB371" className="animate-pulse" />
+                                    </svg>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         <div className="flex flex-col items-center gap-4">
                             <div className="scale-110 relative z-10 hover:scale-[1.15] transition-transform duration-700">
                                 <UnifiedWalletButton theme={theme} />

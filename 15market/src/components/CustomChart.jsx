@@ -490,7 +490,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         <div
             className={`relative w-full h-full flex flex-col flex-1 ${isFullscreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]' : ''}`}
             style={{
-                backgroundColor: isDark ? '#0d0d0d' : '#e2efea',
+                backgroundColor: 'transparent',
                 borderRadius: isFullscreen ? '0' : 'inherit',
                 minHeight: isFullscreen ? '100vh' : (uiVersion === 'v2' ? '120px' : '220px')
             }}

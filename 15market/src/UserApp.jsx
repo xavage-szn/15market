@@ -460,10 +460,16 @@ export default function UserApp() {
 
     try {
       // PROMISE 1: Check if user exists (Onboarding check)
-      const profilePromise = fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`);
+      const profilePromise = Promise.race([
+        fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Profile Timeout")), 10000))
+      ]);
       
       // PROMISE 2: Check if user has Rounds access
-      const roundsPromise = fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`);
+      const roundsPromise = Promise.race([
+        fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Access Timeout")), 10000))
+      ]);
 
       const [pRes, rRes] = await Promise.all([profilePromise, roundsPromise]);
       
@@ -640,11 +646,14 @@ export default function UserApp() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
-      setIsPortrait(window.innerHeight > window.innerWidth);
-      setIsSmallScreen(window.innerWidth < 1025);
+      const portrait = window.innerHeight > window.innerWidth;
+      setIsPortrait(portrait);
+      // Use orientation-based detection: Portrait = Mobile UI, Landscape = Desktop UI
+      setIsSmallScreen(portrait); 
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
+    handleResize(); // Initial check
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
@@ -652,7 +661,7 @@ export default function UserApp() {
   }, []);
 
   const [isSmallScreen, setIsSmallScreen] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < 1025 : false
+    typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
   );
   const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
 
@@ -1116,20 +1125,25 @@ export default function UserApp() {
 
   // Execute trade
   const executeTrade = async (params = null) => {
+    console.log("🚀 [Trade] Execution triggered", { params, isExecuting, maintenance: platformSettings.maintenanceMode, halted: platformSettings.tradingHalted });
     if (isExecuting) return;
+
+    // Determine if we are placing a Rounds trade vs Classic trade
+    const activeType = params?.type || (gameMode === 'rounds' ? 'rounds' : 'classic');
+    const isRounds = activeType === 'round' || activeType === 'rounds';
 
     if (platformSettings.tradingHalted) {
       return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
     }
 
-    // Extract values from params (for Rounds) or state (for Classic)
-    const activeType = params?.type || 'classic';
     const activeDirection = params?.direction || direction;
     const activeAmount = params?.amount || amount;
     const activeDuration = params?.duration || duration;
 
     let activePrice = parseFloat(price);
-    if (!activePrice || activePrice <= 0) return;
+    if (!activePrice || activePrice <= 0) {
+      return notify("Waiting for price feed sync...", "error");
+    }
     if (!activeDirection) return notify("Select UP or DOWN first", "error");
     if (!activeAmount || parseFloat(activeAmount) <= 0) return notify("Enter a valid amount", "error");
 
@@ -1147,8 +1161,8 @@ export default function UserApp() {
       return notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
     }
 
-    // Force collapse management when starting a trade
-    setShowManagement(false);
+    // Ensure active expansion pane is controlled if necessary
+    if (typeof setShowActiveExpanded === 'function') setShowActiveExpanded(false);
 
     // setIsExecuting(true); // REMOVED global block for burst mode
 
@@ -2626,7 +2640,7 @@ export default function UserApp() {
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
             <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} verified={hasRoundsAccess} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden pb-[36px]' : 'h-auto lg:h-[calc(100vh-120px)] landscape:h-[calc(100vh-120px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden pb-[36px]' : 'h-auto lg:h-[calc(100vh-105px)] landscape:h-[calc(100vh-105px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -2654,7 +2668,7 @@ export default function UserApp() {
                     {/* Chart Container - flex-1 fills all remaining vertical space on mobile */}
                     <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? '' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
                       style={{
-                        background: isSmallScreen ? 'transparent' : (theme === 'light' ? '#8faf9a' : 'rgba(10, 10, 10, 0.7)'),
+                        background: isSmallScreen ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.10)' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen ? 'none' : (theme === 'light'
                           ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                           : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
@@ -2811,8 +2825,8 @@ export default function UserApp() {
                         </AnimatePresence>
 
                         {/* Navigation Bar - TOP BAR */}
-                        {/* Trading Terminal Box - Restored to h-auto for proper desktop proportions */}
-                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-auto w-1/2 lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel shadow-lg'}`}
+                        {/* Trading Terminal Box - Dynamic height to maximize active trades space */}
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel shadow-lg'}`}
                           style={{
                             background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
                             borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)')
@@ -2857,7 +2871,7 @@ export default function UserApp() {
 
                         {/* Active Trade / Controls Box — hidden in Rounds */}
                         {gameMode !== 'rounds' && (
-                          <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-1/2 lg:w-full'} shadow-lg`}
+                          <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'} shadow-lg`}
                             style={{
                               background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                               borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'

@@ -40,7 +40,7 @@ async function createProvider(blockchainService) {
         try {
             console.log(`[Blockchain] Trying RPC: ${rpc}...`);
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 60000;
+            fetchReq.timeout = 10000; // Faster timeout for rotation
             
             const network = ethers.Network.from(5042002);
             const provider = new ethers.JsonRpcProvider(fetchReq, network, {
@@ -48,10 +48,10 @@ async function createProvider(blockchainService) {
                 batchMaxCount: 1
             });
 
-            // Race getBlockNumber against a 6s timeout for faster rotation
+            // Race getBlockNumber against a 3s timeout for faster rotation
             const block = await Promise.race([
                 provider.getBlockNumber(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 6000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
             ]);
 
             console.log(`[Blockchain] ✅ Connected to RPC: ${rpc} (Block: ${block})`);

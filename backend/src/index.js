@@ -42,19 +42,19 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // ===== ANTI-DDOS RATE LIMITING PROTOCOL =====
-// Global Limiter: Max 300 requests per minute per IP (allows normal polling but blocks floods)
+// Global Limiter: Max 2000 requests per minute per IP (allows normal polling but blocks floods)
 const globalLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
-    max: 300, 
+    max: 2000, 
     message: { error: 'Rate limit exceeded. Please wait a moment.' },
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-// Stricter Action Limiter: Max 30 requests per minute for sensitive operations (trades, settlements)
+// Stricter Action Limiter: Max 100 requests per minute for sensitive operations (trades, settlements)
 const actionLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
-    max: 30,
+    max: 100,
     message: { error: 'Transaction rate limit exceeded. Please slow down.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -132,6 +132,8 @@ const SETTINGS_RESPONSE = {
     maxBet: 1000000.0,
     maintenanceMode: false,
     tradingHalted: false,
+    systemBanner: "",
+    bannerLevel: "info",
     payoutMultipliers: { "5": 6.98, "10": 4.98, "15": 1.98 }
 };
 
@@ -568,10 +570,17 @@ app.post('/session/init', actionLimiter, async (req, res) => {
 });
 
 app.post('/session/trade', actionLimiter, async (req, res) => {
+    console.log(`📥 [API] Trade Request: ${req.body.user} - ${req.body.direction} @ ${req.body.amount}`);
     try {
         const settings = await redis.getSettings();
-        if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
-        if (settings?.tradingHalted) return res.status(503).json({ error: 'Trading Halted by Admin' });
+        if (settings?.maintenanceMode) {
+            console.log("🛑 [API] Refused: Maintenance Mode Active");
+            return res.status(503).json({ error: 'Maintenance Mode Active' });
+        }
+        if (settings?.tradingHalted) {
+            console.log("🛑 [API] Refused: Trading Halted");
+            return res.status(503).json({ error: 'Trading Halted by Admin' });
+        }
 
         const { address, tradeParams } = req.body;
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
@@ -872,7 +881,8 @@ app.get('/admin/settings', async (req, res) => {
         minBet: 0.1,
         maxBet: 100,
         systemBanner: "",
-        bannerLevel: "info"
+        bannerLevel: "info",
+        payoutMultipliers: { "5": 6.98, "10": 4.98, "15": 1.98 }
     });
 });
 

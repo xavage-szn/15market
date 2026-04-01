@@ -834,7 +834,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         maintenanceMode: false,
         tradingHalted: false,
         minBet: 0.1,
-        maxBet: 100,
+        maxBet: 1000000,
+        payoutMultipliers: { "5": 6.98, "10": 4.98, "15": 1.98 },
         treasuryThreshold: 0.5,
         maxConcurrentTrades: 50,
         defaultBroadcastDuration: 60,
@@ -867,8 +868,16 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     const handleSaveSettings = async (dataToSave) => {
         // If called from onClick, dataToSave might be an event object - skip it
-        const body = (dataToSave && !dataToSave.nativeEvent) ? dataToSave : platformSettings;
         try {
+            // Fetch current settings first to merge and prevent data loss
+            const currentRes = await fetch(`${KEEPER_URL_ARC}/admin/settings`, {
+                headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+            });
+            let currentData = {};
+            if (currentRes.ok) currentData = await currentRes.json();
+
+            const body = { ...currentData, ...((dataToSave && !dataToSave.nativeEvent) ? dataToSave : platformSettings) };
+            
             const res = await fetch(`${KEEPER_URL_ARC}/admin/settings`, {
                 method: 'POST',
                 headers: { 

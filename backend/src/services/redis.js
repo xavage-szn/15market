@@ -9,25 +9,45 @@ class RedisStore {
         if (REDIS_URL) {
             console.log('[Redis] Connecting to Redis Cloud...');
             this.redis = new Redis(REDIS_URL, {
-                retryStrategy: (times) => Math.min(times * 50, 2000),
-                reconnectOnError: (err) => true
+                retryStrategy: (times) => times < 5 ? Math.min(times * 50, 2000) : null, // Give up after 5 retries to trigger fallback
+                reconnectOnError: (err) => true,
+                connectTimeout: 5000
             });
             this.redis.on('error', (err) => {
                 console.error('[Redis] ❌ Error Event:', err.message);
+                if (!this.fallbackTriggered) {
+                    console.warn('[Redis] ⚠️ Connection failing. Falling back to memory for stability.');
+                    this.isCloud = false;
+                    this.fallbackTriggered = true;
+                    this._initMemory();
+                }
             });
             this.isCloud = true;
-            this._lastBlock = 31400000; // Reset to recent block to avoid saturating RPC during sync
-
-            this.redis.ping().then(() => console.log('[Redis] ✅ Cloud Connection Verified')).catch(e => console.error('[Redis] ❌ Connection Failed:', e.message));
-        } else {
-            console.warn('[Redis] No REDIS_URL found, falling back to local memory.');
-            this.redis = null;
-            this.isCloud = false;
-            this.activeTrades = new Map();
-            this.sessionWallets = new Map();
-            this.historicalTrades = new Map();
+            this.fallbackTriggered = false;
             this._lastBlock = 31400000;
+
+            this.redis.ping()
+                .then(() => console.log('[Redis] ✅ Cloud Connection Verified'))
+                .catch(e => {
+                    console.error('[Redis] ❌ Initial Connection Failed. Using Memory.');
+                    this.isCloud = false;
+                    this._initMemory();
+                });
+        } else {
+            this._initMemory();
         }
+    }
+
+    _initMemory() {
+        if (this.activeTrades) return; // Already init
+        this.activeTrades = new Map();
+        this.sessionWallets = new Map();
+        this.historicalTrades = new Map();
+        this.campaigns = [];
+        this.settings = null;
+        this._lastBlock = 31400000;
+        console.warn('[Memory] Data will not persist across restarts.');
+    }
     }
 
     async setTrade(id, data) {
