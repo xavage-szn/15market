@@ -68,32 +68,22 @@ function TradeTerminalComponent({
     const renderCallPut = () => (
         <div className={`relative flex items-center p-0.5 rounded-full border border-[#3CB371]/10 bg-white/5 backdrop-blur-3xl overflow-hidden pointer-events-auto`}>
             {/* Sliding Pill Background - Synchronized with Time Scroller geometry */}
-            <motion.div
-                className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-full shadow-[0_0_20px_rgba(60,179,113,0.25)] transition-all`}
-                initial={false}
-                animate={{ 
-                    x: direction === "UP" ? 1 : 'calc(100% + 1px)',
-                    background: direction === "UP" ? 'linear-gradient(to right, #48c97f, #1e5a38)' : 'linear-gradient(to right, #FF7F50, #D2691E)'
-                }}
-                transition={{ type: "spring", stiffness: 450, damping: 40 }}
-            />
-            
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("UP"); }}
                 disabled={maintenanceMode}
-                className={`flex-1 relative z-10 py-3.5 lg:py-4 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "UP" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
+                className={`flex-1 relative z-10 py-3.5 lg:py-4 flex items-center justify-center gap-2 transition-all duration-300 rounded-full ${direction === "UP" ? "bg-[#3CB371] text-white" : "text-white/20 hover:text-white/40"}`}
             >
                 <TrendingUp size={16} className={direction === "UP" ? "text-white" : "text-[#3CB371]/60"} />
-                <span className="text-[9px] lg:text-[11px] font-black uppercase tracking-widest">LONG</span>
+                <span className="text-[9px] lg:text-[11px] font-black uppercase tracking-widest">CALL</span>
             </button>
             
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("DOWN"); }}
                 disabled={maintenanceMode}
-                className={`flex-1 relative z-10 py-3.5 lg:py-4 flex items-center justify-center gap-2 transition-all duration-300 ${direction === "DOWN" ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
+                className={`flex-1 relative z-10 py-3.5 lg:py-4 flex items-center justify-center gap-2 transition-all duration-300 rounded-full ${direction === "DOWN" ? "bg-[#FF4D4D] text-white" : "text-white/20 hover:text-white/40"}`}
             >
-                <TrendingDown size={16} className={direction === "DOWN" ? "text-white" : "text-[#FF7F50]/60"} />
-                <span className="text-[9px] lg:text-[11px] font-black uppercase tracking-widest">SHORT</span>
+                <TrendingDown size={16} className={direction === "DOWN" ? "text-white" : "text-[#FF4D4D]/60"} />
+                <span className="text-[9px] lg:text-[11px] font-black uppercase tracking-widest">PUT</span>
             </button>
         </div>
     );
@@ -171,17 +161,17 @@ function TradeTerminalComponent({
         <motion.button
             id="trade-confirm-button"
             onClick={(e) => { e.stopPropagation(); executeTrade(); }}
-            disabled={isExecuting || maintenanceMode}
+            disabled={isExecuting || maintenanceMode || tradingHalted}
             className={`w-full py-3.5 lg:py-4 rounded-full font-black text-[10px] lg:text-[11px] uppercase tracking-[0.3em] transition-all pointer-events-auto relative overflow-hidden group hover:brightness-125 active:brightness-95
-            ${(isExecuting || maintenanceMode) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+            ${(isExecuting || maintenanceMode || tradingHalted) ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
             style={{
-                background: maintenanceMode ? "#333" : (direction === "DOWN" ? 'linear-gradient(to right, #FF7F50, #D2691E)' : 'linear-gradient(to right, #3CB371, #2E8B57)'),
+                background: "#3CB371",
                 color: "white",
             }}
         >
             <span className="relative z-10 flex items-center justify-center gap-2">
                 {isExecuting && <div className="w-2 h-2 rounded-full border-2 border-white border-t-transparent animate-spin" />}
-                {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "SIGNING..." : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? `CONFIRM ${direction || ''}` : "CONNECT WALLET")}
+                {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "SIGNING..." : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? "CONFIRM" : "CONNECT WALLET")}
             </span>
         </motion.button>
     );

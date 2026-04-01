@@ -865,7 +865,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }
     }, [isLoggedIn, fetchSettings]);
 
-    const handleSaveSettings = async () => {
+    const handleSaveSettings = async (dataToSave) => {
+        // If called from onClick, dataToSave might be an event object - skip it
+        const body = (dataToSave && !dataToSave.nativeEvent) ? dataToSave : platformSettings;
         try {
             const res = await fetch(`${KEEPER_URL_ARC}/admin/settings`, {
                 method: 'POST',
@@ -873,9 +875,10 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${ADMIN_TOKEN}`
                 },
-                body: JSON.stringify(platformSettings)
+                body: JSON.stringify(body)
             });
             if (res.ok) {
+                if (dataToSave) setPlatformSettings(dataToSave);
                 notify('success', 'SETTINGS SAVED', 'Platform configuration has been synchronized to the cloud.');
             } else {
                 notify('error', 'SAVE FAILED', 'Could not persist settings to backend.');
@@ -885,8 +888,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }
     };
 
-    const handleToggleSetting = (key) => {
-        setPlatformSettings(prev => ({ ...prev, [key]: !prev[key] }));
+    const handleToggleSetting = async (key) => {
+        const newValue = !platformSettings[key];
+        const updated = { ...platformSettings, [key]: newValue };
+        setPlatformSettings(updated);
+        await handleSaveSettings(updated);
     };
 
     const updateSetting = (key, val) => {
@@ -1893,8 +1899,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     <img src="/logo.png" alt="logo" className="h-24 w-auto drop-shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
                 </div>
 
-                <div className="flex-1 space-y-2">
-                    <NavItem icon={BarChart3} label="Terminal" id="dashboard" active={activeTab === 'dashboard'} onClick={setActiveTab} />
+                <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
+                    <NavItem icon={BarChart3} label="Dashboard" id="dashboard" active={activeTab === 'dashboard'} onClick={setActiveTab} />
+                    <NavItem icon={Settings} label="Settings" id="settings" active={activeTab === 'settings'} onClick={setActiveTab} />
                     <NavItem icon={Gavel} label="Disputes" id="disputes" active={activeTab === 'disputes'} onClick={setActiveTab} />
                     {currentUser?.role === 'ROOT' && (
                         <NavItem icon={Users} label="Staff Mgmt" id="staff" active={activeTab === 'staff'} onClick={setActiveTab} />
@@ -1903,10 +1910,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     <NavItem icon={Globe} label="Geo-Map" id="globe" active={activeTab === 'globe'} onClick={setActiveTab} />
                     <NavItem icon={Users} label="Profiles" id="directory" active={activeTab === 'directory'} onClick={setActiveTab} />
                     <NavItem icon={Megaphone} label="Campaigns" id="campaigns" active={activeTab === 'campaigns'} onClick={setActiveTab} />
+                    <NavItem icon={Radio} label="Broadcasts" id="broadcasts" active={activeTab === 'broadcasts'} onClick={setActiveTab} />
                     <NavItem icon={Key} label="Beta Entry" id="beta" active={activeTab === 'beta'} onClick={setActiveTab} />
-                    <NavItem icon={Database} label="Markets" id="markets" active={activeTab === 'markets'} onClick={setActiveTab} />
+                    <NavItem icon={Database} label="Markets" id="listing" active={activeTab === 'listing'} onClick={setActiveTab} />
                     <NavItem icon={ShieldCheck} label="Security" id="security" active={activeTab === 'security'} onClick={setActiveTab} />
-                    <NavItem icon={TerminalIcon} label="Logs" id="logs" active={activeTab === 'logs'} onClick={setActiveTab} />
+                    <NavItem icon={TerminalIcon} label="System Logs" id="terminal" active={activeTab === 'terminal'} onClick={setActiveTab} />
                     <div className="h-[1px] w-full bg-white/5 my-4" />
                     <button
                         onClick={() => setIsMessagingOpen(true)}
@@ -2093,7 +2101,10 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                             message: newState 
                                                                 ? 'This will suspend all trading and notify all active users. Markets will be locked for maintenance.' 
                                                                 : 'This will restore live trading and remove maintenance banners from all terminals.',
-                                                            onConfirm: () => handleSaveSettings({ ...platformSettings, maintenanceMode: newState })
+                                                            onConfirm: () => {
+                                                                const updated = { ...platformSettings, maintenanceMode: newState };
+                                                                handleSaveSettings(updated);
+                                                            }
                                                         });
                                                     }}
                                                     className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${platformSettings.maintenanceMode ? 'bg-[#3CB371] text-white shadow-[0_10px_30px_rgba(60,179,113,0.3)]' : 'bg-[#FF7F50] text-white shadow-[0_10px_30px_rgba(255,127,80,0.3)]'}`}
@@ -3550,7 +3561,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                         </div>
                                                     </div>
                                                     <button
-                                                        onClick={handleSaveSettings}
+                                                        onClick={() => handleSaveSettings()}
                                                         className="w-fit flex items-center gap-2 px-6 py-3 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-[0_10px_20px_rgba(60,179,113,0.3)]"
                                                     >
                                                         <Save size={14} />
