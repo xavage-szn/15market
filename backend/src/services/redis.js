@@ -14,9 +14,9 @@ class RedisStore {
                 connectTimeout: 5000
             });
             this.redis.on('error', (err) => {
-                console.error('[Redis] ❌ Error Event:', err.message);
+                console.error('[Redis] Error:', err.message);
                 if (!this.fallbackTriggered) {
-                    console.warn('[Redis] ⚠️ Connection failing. Falling back to memory for stability.');
+                    console.warn('[Redis] Connection failing, using memory fallback.');
                     this.isCloud = false;
                     this.fallbackTriggered = true;
                     this._initMemory();
@@ -27,9 +27,9 @@ class RedisStore {
             this._lastBlock = 31400000;
 
             this.redis.ping()
-                .then(() => console.log('[Redis] ✅ Cloud Connection Verified'))
+                .then(() => console.log('[Redis] Cloud connected'))
                 .catch(e => {
-                    console.error('[Redis] ❌ Initial Connection Failed. Using Memory.');
+                    console.error('[Redis] Connection failed, using memory.');
                     this.isCloud = false;
                     this._initMemory();
                 });
@@ -48,7 +48,7 @@ class RedisStore {
         this._lastBlock = 31400000;
         console.warn('[Memory] Data will not persist across restarts.');
     }
-    }
+
 
     async setTrade(id, data) {
         if (this.isCloud) {
@@ -146,7 +146,7 @@ class RedisStore {
                 const all = await this.redis.hvals('15market_historical_trades');
                 const trades = all.map(t => JSON.parse(t));
                 if (trades.length === 0) {
-                    console.log("[Redis] ⚠️ History is empty in Cloud. Backfiller might still be running.");
+                    console.log("[Redis] History empty, backfiller may still be running.");
                 }
                 return trades;
             } catch (e) {

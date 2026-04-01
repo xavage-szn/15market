@@ -41,7 +41,7 @@ router.post('/session-enter', async (req, res) => {
         }
 
         const assetUpper = asset.toUpperCase();
-        console.log(`[RoundsApi] 🎮 ${address} entering ${side} on ${assetUpper} for ${amount} USDC`);
+        console.log(`[RoundsApi] ${address} entering ${side} on ${assetUpper} for ${amount} USDC`);
 
         // Check current state
         const state = await redis.getRound(`${assetUpper}_state`);
@@ -60,14 +60,14 @@ router.post('/session-enter', async (req, res) => {
         await blockchainService.ensureReady();
         const connectedWallet = sessionWallet.connect(blockchainService.blockchain.provider);
         
-        console.log(`[RoundsApi] 🚀 Dispatched relayer for ${address} -> Session: ${sessionAddr} | Round: ${roundId}`);
+        console.log(`[RoundsApi] Relayer: ${address} -> Session: ${sessionAddr} | Round: ${roundId}`);
 
         // We use a high gas limit since sessions might be complex
         const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet);
         
-        console.log(`[RoundsApi] ✅ On-chain Success: ${tx.hash}`);
+        console.log(`[RoundsApi] On-chain success: ${tx.hash}`);
 
-        // 3. 📝 Update Redis state (Actual count)
+        // 3. Update Redis state (Actual count)
         const sideKey = side.toLowerCase() === 'up' ? 'long' : 'short';
         
         // Refetch state to prevent race conditions
@@ -77,7 +77,7 @@ router.post('/session-enter', async (req, res) => {
             latestState.next.pools[sideKey] = (latestState.next.pools[sideKey] || 1.0) + parseFloat(amount);
             latestState.next.pools.participants = (latestState.next.pools.participants || 0) + 1;
             await redis.setRound(`${assetUpper}_state`, latestState);
-            console.log(`[RoundsApi] 📊 State Updated: ${assetUpper} Participants: ${latestState.next.pools.participants}`);
+            console.log(`[RoundsApi] State updated: ${assetUpper} Participants: ${latestState.next.pools.participants}`);
         }
 
         res.json({ 
@@ -204,7 +204,7 @@ router.post('/settle', async (req, res) => {
         if (!asset || !roundId || !settlePrice) return res.status(400).json({ error: 'Missing parameters' });
 
         const assetUpper = asset.toUpperCase();
-        console.log(`[RoundsApi] 🏁 Settlement report from frontend for ${assetUpper} Round ${roundId}: ${result} at $${settlePrice}`);
+        console.log(`[RoundsApi] Settlement: ${assetUpper} Round ${roundId}: ${result} at $${settlePrice}`);
 
         const state = await redis.getRound(`${assetUpper}_state`);
         if (state && state.live && Number(state.live.id) === Number(roundId)) {
@@ -219,7 +219,7 @@ router.post('/settle', async (req, res) => {
             const priceFixed = ethers.parseUnits(parseFloat(settlePrice).toFixed(8), 8);
             await blockchainService.ensureReady();
             blockchainService.settleRound(roundId, priceFixed).then(tx => {
-                console.log(`[RoundsApi] ✅ On-chain Settle Success: ${tx.hash}`);
+                console.log(`[RoundsApi] On-chain settle: ${tx.hash}`);
             }).catch(e => {
                 console.warn(`[RoundsApi] On-chain Settle Warning: ${e.message}`);
             });

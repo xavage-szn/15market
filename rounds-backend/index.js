@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3011;
 const requiredEnv = ['REDIS_URL', 'ADMIN_TOKEN', 'EMAIL_USER', 'EMAIL_PASS', 'PRIVATE_KEY', 'ROUNDS_CONTRACT_ADDRESS'];
 requiredEnv.forEach(env => {
     if (!process.env[env]) {
-        console.warn(`[Startup] ⚠️ MISSING ENV VAR: ${env}. This will cause service failures.`);
+        console.warn(`[Startup] Missing env: ${env}`);
     }
 });
 
@@ -37,7 +37,7 @@ const isAdmin = (req) => req.headers['authorization'] === `Bearer ${process.env.
 // --- SESSION WALLET DERIVATION ---
 const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
 if (!SESSION_MASTER_SECRET) {
-    console.warn("⚠️ [Startup] MISSING SESSION_MASTER_SECRET. Session trades will fail.");
+    console.warn("[Startup] Missing session secret");
 }
 
 async function deriveUserWallet(userAddress) {
@@ -112,7 +112,7 @@ app.post('/access/admin/approve', async (req, res) => {
         to: email,
         subject: 'Your 15Market Rounds Access Code',
         text: `Your application has been approved!\n\nAccess Code: ${code}\n\nIMPORTANT: This code is bound to your wallet address (${address}) and can only be redeemed once.\n\nRedeem it at https://15market.online to unlock the Rounds terminal.`,
-        html: `<div style="font-family:sans-serif;max-width:480px"><h2>You're In! 🎉</h2><p>Your application to Rounds Beta has been approved.</p><h3 style="background:#f5f5f5;padding:16px;border-radius:8px;letter-spacing:4px;text-align:center">${code}</h3><p style="font-size:12px;color:#888">⚠️ This code is bound to wallet <strong>${address}</strong> and is single-use. It will expire in 30 days.</p><p>Redeem at <a href="https://15market.online">15market.online</a></p></div>`
+        html: `<div style="font-family:sans-serif;max-width:480px"><h2>Approval</h2><p>Your application to Rounds Beta has been approved.</p><h3 style="background:#f5f5f5;padding:16px;border-radius:8px;letter-spacing:4px;text-align:center">${code}</h3><p style="font-size:12px;color:#888">This code is bound to wallet <strong>${address}</strong> and is single-use.</p><p>Redeem at <a href="https://15market.online">15market.online</a></p></div>`
     };
 
     try {
@@ -193,10 +193,10 @@ app.post('/rounds/session-enter', async (req, res) => {
                 state.next.pools[side] = (state.next.pools[side] || 0) + parseFloat(amount);
                 state.next.pools.participants = (state.next.pools.participants || 0) + 1;
                 await redis.setRound(`${symbol}_state`, state);
-                console.log(`[Rounds] 👤 Updated state via session-enter: ${symbol} ${side} +${amount}`);
+                console.log(`[Rounds] Updated state: ${symbol} ${side} +${amount}`);
             }
         } catch (redisErr) {
-            console.warn(`[Rounds] ⚠️ Optimistic update failed:`, redisErr.message);
+            console.warn(`[Rounds] Optimistic update failed:`, redisErr.message);
         }
 
         res.json({ success: true, txHash: tx.hash });
@@ -243,7 +243,7 @@ app.get('/history', async (req, res) => {
 });
 
 app.listen(PORT, async () => {
-    console.log(`[Rounds-Backend] 🚀 Running on port ${PORT}`);
+    console.log(`[Rounds-Backend] Running on port ${PORT}`);
     await botService.init();
     processor.start();
 });

@@ -12,7 +12,7 @@ class RoundsProcessor {
     }
 
     async start() {
-        console.log('[Rounds] 🟢 Starting Rounds Processor...');
+        console.log('[Rounds] Starting Rounds Processor...');
         // Wait for services to be ready
         await blockchain.ensureReady();
         
@@ -34,7 +34,7 @@ class RoundsProcessor {
 
     async handleLock() {
         const roundId = Math.floor(Date.now() / 30000);
-        console.log(`[Rounds] 🔒 Locking Round ${roundId} at T=0`);
+        console.log(`[Rounds] Lock Round ${roundId}`);
 
         for (const asset of this.assets) {
             try {
@@ -42,7 +42,7 @@ class RoundsProcessor {
                 const price = await pricing.getPrice(baseAsset);
                 
                 if (!price || isNaN(price)) {
-                    console.error(`[Rounds] ⚠️ Could not fetch price for ${asset}`);
+                    console.error(`[Rounds] Price missing for ${asset}`);
                     continue;
                 }
 
@@ -66,20 +66,20 @@ class RoundsProcessor {
                 // On-chain Lock
                 const priceFixed = ethers.parseUnits(price.toFixed(8), 8);
                 blockchain.lockRound(roundId, priceFixed).then(tx => {
-                    console.log(`[Rounds] ✅ Round ${roundId} Locked for ${asset}: ${tx.hash}`);
+                    console.log(`[Rounds] Round ${roundId} Locked for ${asset}: ${tx.hash}`);
                 }).catch(e => {
-                    console.error(`[Rounds] ❌ On-chain Lock Failed for ${asset}:`, e.message);
+                    console.error(`[Rounds] Lock failed for ${asset}:`, e.message);
                 });
                 
             } catch (e) {
-                console.error(`[Rounds] ❌ Lock Round Process Failed for ${asset}:`, e.message);
+                console.error(`[Rounds] Lock process failed for ${asset}:`, e.message);
             }
         }
     }
 
     async handleSettle() {
         const roundId = Math.floor(Date.now() / 30000);
-        console.log(`[Rounds] 🏁 Settling Round ${roundId} at T=15`);
+        console.log(`[Rounds] Settle Round ${roundId}`);
 
         for (const asset of this.assets) {
             try {
@@ -87,7 +87,7 @@ class RoundsProcessor {
                 const price = await pricing.getPrice(baseAsset);
                 
                 if (!price || isNaN(price)) {
-                    console.error(`[Rounds] ⚠️ Could not fetch price for ${asset}`);
+                    console.error(`[Rounds] Price missing for ${asset}`);
                     continue;
                 }
 
@@ -108,13 +108,13 @@ class RoundsProcessor {
                 // On-chain Settle
                 const priceFixed = ethers.parseUnits(price.toFixed(8), 8);
                 blockchain.settleRound(roundId, priceFixed).then(tx => {
-                    console.log(`[Rounds] ✅ Round ${roundId} Settled for ${asset}: ${tx.hash}`);
+                    console.log(`[Rounds] Round ${roundId} Settled for ${asset}: ${tx.hash}`);
                 }).catch(e => {
-                    console.error(`[Rounds] ❌ On-chain Settle Failed for ${asset}:`, e.message);
+                    console.error(`[Rounds] Settle failed for ${asset}:`, e.message);
                 });
 
             } catch (e) {
-                console.error(`[Rounds] ❌ Settle Round Process Failed for ${asset}:`, e.message);
+                console.error(`[Rounds] Settle process failed for ${asset}:`, e.message);
             }
         }
     }

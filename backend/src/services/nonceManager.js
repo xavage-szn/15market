@@ -91,7 +91,7 @@ class NonceManager {
             // High Water Mark protection: Never set nonce backwards unless explicitly forced
             // Stale RPCs often return a lower 'pending' count than reality.
             if (!force && chainNonce < currentLocal) {
-                console.warn(`[Nonce] ⚠️ Chain returned LOWER nonce (${chainNonce}) than cached (${currentLocal}) for ${addr}. Skipping sync to prevent collisions.`);
+                console.warn(`[Nonce] Chain nonce (${chainNonce}) lower than cached (${currentLocal}) for ${addr}. Skipping.`);
                 return currentLocal;
             }
 
@@ -100,7 +100,7 @@ class NonceManager {
             } else {
                 this.nonces.set(addr, chainNonce);
             }
-            console.log(`[Nonce] ✅ Sync Complete: Updated ${addr} to ${chainNonce} (Previous: ${currentLocal})`);
+            console.log(`[Nonce] Synced ${addr} to ${chainNonce} (was: ${currentLocal})`);
             return chainNonce;
 
         } catch (e) {

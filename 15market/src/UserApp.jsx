@@ -343,7 +343,6 @@ export default function UserApp() {
   useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
       if (isLoading) {
-        console.warn("⚠️ Price feed sync taking too long, entering fallback load state...");
         setIsLoading(false);
       }
     }, 5000); // 5 seconds max loading
@@ -443,7 +442,6 @@ export default function UserApp() {
   const performStealthChecks = useCallback(async (addr) => {
     if (!addr) return;
     
-    console.log(`🕵️ [STEALTH] Starting identity verification for ${addr}...`);
     setIsGlobalLoading(true);
     setGlobalLoadingProgress(0);
 
@@ -491,12 +489,10 @@ export default function UserApp() {
       }
 
       // Update Rounds Access State
-      setHasRoundsAccess(rData.authorized === true);
-      console.log(`🕵️ [STEALTH] Verification complete. Rounds Access: ${rData.authorized}`);
+      setHasRoundsAccess(rRes.ok ? rData.authorized === true : false);
 
     } catch (e) {
-      console.warn("🕵️ [STEALTH] Verification encounterd an error:", e.message);
-      // Fallback: Default to restricted but let them manually retry if needed
+      // Quiet fail for stealth
       setHasRoundsAccess(false);
     } finally {
       clearInterval(progressInterval);
@@ -538,7 +534,6 @@ export default function UserApp() {
         });
       }
     } catch (e) {
-      console.error("Failed to fetch global settings:", e);
     }
   }, []);
 
@@ -608,7 +603,6 @@ export default function UserApp() {
   // Auto-switch to Arc Testnet if wallet is on the wrong network
   useEffect(() => {
     if (isConnected && connectedChainId && connectedChainId !== ARC_CHAIN_ID) {
-      console.log(`🔄 [NETWORK] Auto-switching from chain ${connectedChainId} to Arc Testnet (${ARC_CHAIN_ID})`);
       switchChain?.({ chainId: ARC_CHAIN_ID });
     }
   }, [isConnected, connectedChainId, switchChain]);
@@ -707,7 +701,6 @@ export default function UserApp() {
 
       if (Math.abs(bal - sessionBalance) > 0.0001) {
         setSessionBalance(bal);
-        console.log(`💰 [SESSION_BAL] Synced from on-chain: ${bal.toFixed(4)} USDC`);
       }
     } catch (err) { }
   }, [evmSessionWallet, sessionBalance]);
@@ -820,8 +813,6 @@ export default function UserApp() {
         // the backend revert it to PENDING/RESOLVING. The local lock is ground truth.
         const locked = lockedResults.current.get(btId);
         if (locked) {
-          // Trade is already resolved — skip re-adding it as PENDING from backend
-          console.log(`🔒 [LOCK] Skipping backend overwrite for locked trade ${btId} (${locked.status})`);
           return;
         }
 
@@ -894,8 +885,6 @@ export default function UserApp() {
         setShowOnboarding(true);
       }
     } catch (e) {
-      console.warn("Profile fetch failed:", e.message);
-      // Network error — show onboarding so they can register
       setUserProfile({ address, isInitial: true });
       setShowOnboarding(true);
     } finally {
@@ -991,7 +980,6 @@ export default function UserApp() {
   }, [isConnected, address]);
 
   const login = () => {
-    console.log("Connect via wallet button");
   };
 
   const user = useMemo(() => {
@@ -1030,19 +1018,17 @@ export default function UserApp() {
       if (!sig) throw new Error("Signature failed or rejected by user");
 
       // 2. Request Session Wallet from Backend
-      console.log(`📡 [Session] Initializing at: ${KEEPER_URL_ARC}/session/init`);
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address, signature: sig })
       }).catch(err => {
-        console.error("❌ [Session] Fetch Failed:", err);
-        throw new Error(`Connection to Backend Failed (${KEEPER_URL_ARC})`);
+        throw new Error(`Connection to Backend Failed`);
       });
 
       if (!res.ok) {
         let errData = { error: "Unknown Error" };
-        try { errData = await res.json(); } catch (e) { console.error("Non-JSON Error from Backend:", e); }
+        try { errData = await res.json(); } catch (e) { }
         throw new Error(errData.error || `Backend init failed (${res.status})`);
       }
 
@@ -1066,15 +1052,14 @@ export default function UserApp() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address, profile: updatedProfile })
-        }).catch(e => console.warn("Failed to sync session wallet to backend:", e));
+        }).catch(e => { });
       }
 
       setIsSignerInitializing(false);
       notify("Auto-Signer Activated (Server-Managed)", "success");
 
     } catch (err) {
-      console.error("Session init error:", err);
-      notify("Setup failed: " + (err.message), "error");
+      notify("Setup failed", "error");
       setSessionMode(false);
     } finally {
       setIsExecuting(false);
@@ -1115,7 +1100,6 @@ export default function UserApp() {
     const fetchTreasury = async () => {
       try {
         const provider = new ethers.JsonRpcProvider(ARC_RPC);
-        const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
         setTreasuryBalance(parseFloat(ethers.formatEther(bal)));
       } catch (e) { }
     };
@@ -1125,7 +1109,6 @@ export default function UserApp() {
 
   // Execute trade
   const executeTrade = async (params = null) => {
-    console.log("🚀 [Trade] Execution triggered", { params, isExecuting, maintenance: platformSettings.maintenanceMode, halted: platformSettings.tradingHalted });
     if (isExecuting) return;
 
     // Determine if we are placing a Rounds trade vs Classic trade
@@ -1193,8 +1176,6 @@ export default function UserApp() {
         const dirVal = (activeDirection === "UP" ? 1 : 0);
         const amountWei = parseEther(parseFloat(activeAmount).toFixed(6));
 
-        console.log(`🏟️ [ROUNDS] Entering P2P Pool with ${activeAmount} USDC. ID: ${roundId}`);
-
         // --- OPTIMISTIC BALANCE DEDUCTION (instant UI feedback) ---
         if (sessionMode) {
           setSessionBalance(prev => Math.max(0, prev - amtNum));
@@ -1218,7 +1199,6 @@ export default function UserApp() {
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Auto-signer failed to enter round");
           txHash = data.txHash;
-          console.log(`✅ [ROUNDS] Auto-signer broadcasted tx: ${txHash}`);
         } else {
           // STANDARD WALLET MODE
           if (!walletClient) throw new Error("Wallet not connected");
@@ -1270,7 +1250,6 @@ export default function UserApp() {
             // Optionally remove from state if failed
             setRoundsTradeHistory(prev => prev.filter(t => t.tx !== txHash));
           } else {
-            console.log(`⛓️ [ROUNDS] Confirmed: ${txHash}`);
             setRoundsTradeHistory(prev => prev.map(t => t.tx === txHash ? { ...t, confirmed: true } : t));
           }
         }).catch(err => {
@@ -1285,8 +1264,6 @@ export default function UserApp() {
       }
 
       if (sessionMode) {
-        console.log(`📡 [SESSION] Initiating Optimistic Trade ${tradeId}...`);
-        
         // --- STEP 1: INSTANT UI FEEDBACK (OPTIMISTIC) ---
         const confirmedNow = Date.now();
         const optimisticTrade = {
@@ -1343,7 +1320,6 @@ export default function UserApp() {
             if (!res.ok) throw new Error(data.error || "Session trade failed");
             
             txHash = data.txHash;
-            console.log(`✅ [SESSION] Backend broadcasted tx: ${txHash}`);
 
             // Update optimistic trade with real TX hash
             setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
@@ -1356,7 +1332,6 @@ export default function UserApp() {
                 setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
                 notify("Transaction reverted on-chain.", "error");
               } else {
-                console.log(`⛓️ [SESSION] Confirmed: ${txHash}`);
                 setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
               }
             }).catch(() => {
@@ -1365,7 +1340,6 @@ export default function UserApp() {
             });
 
           } catch (err) {
-            console.error("❌ Session background trade failed:", err);
             // ROLLBACK OPTIMISTIC STATE
             setSessionBalance(prev => prev + amtNum);
             setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
@@ -1377,7 +1351,6 @@ export default function UserApp() {
         return; // Exit main flow as background process is running
       } else {
         if (!walletClient) throw new Error("Wallet not connected");
-        console.log(`✍️ [MAIN] Requesting signature...`);
         txHash = await walletClient.writeContract({
           address: ARC_CONTRACT_ADDRESS,
           abi: ArcABI.abi,
@@ -1403,8 +1376,7 @@ export default function UserApp() {
         }
 
         const confirmedNow = Date.now();
-        console.log(`⛓️ [MAIN] Confirmed: ${txHash}`);
-
+        
         const strictTrade = {
           id: tradeId,
           direction: (dirVal === 1 ? "UP" : "DOWN"),
@@ -1450,7 +1422,6 @@ export default function UserApp() {
       setIsExecuting(false);
 
     } catch (err) {
-      console.error("❌ Execution Failed:", err);
       notify(err.message, "error");
       setIsExecuting(false);
     }
@@ -1473,7 +1444,6 @@ export default function UserApp() {
           reconcileTrades(backendAllRaw);
         }
       } catch (e) {
-        console.error("Failed to fetch trade history:", e);
       }
     };
 
@@ -1505,7 +1475,6 @@ export default function UserApp() {
         body: JSON.stringify({ network: 'arc', amount })
       });
     } catch (e) {
-      console.error("Failed to sync fee with keeper:", e);
     }
   };
 
@@ -1528,7 +1497,6 @@ export default function UserApp() {
   // Debug logging for connection issues
   useEffect(() => {
     if (isConnected) {
-      // console.log(`Connected`);
     }
   }, [isConnected, address]);
 
@@ -1669,7 +1637,6 @@ export default function UserApp() {
           const remoteStr = JSON.stringify(remoteListings);
 
           if (currentListedStr !== remoteStr) {
-            console.log(`🔄 Market listings updated from Arc Keeper.`);
             localStorage.setItem('15market_listed_tokens', remoteStr);
           }
         }
@@ -1680,7 +1647,6 @@ export default function UserApp() {
         if (activeData && activeData.activeId) {
           const currentLocalActiveId = localStorage.getItem('15market_active_token_id');
           if (currentLocalActiveId !== activeData.activeId) {
-            console.log(`🎯 Syncing with LIVE active market: ${activeData.activeId}`);
             localStorage.setItem('15market_active_token_id', activeData.activeId);
           }
         }
@@ -1691,7 +1657,6 @@ export default function UserApp() {
         if (settingsData) {
           const settingsStr = JSON.stringify(settingsData);
           if (localStorage.getItem('15market_citadel_settings') !== settingsStr) {
-            console.log(`🛡️ Syncing platform settings from Arc Keeper.`);
             setPlatformSettings(settingsData);
           }
         }
@@ -1710,7 +1675,6 @@ export default function UserApp() {
         }
 
         if (market.id !== activeMarket.id) {
-          console.log(`🎯 Switching UI to market: ${market.symbol}`);
           setActiveMarket(market);
           setTimeout(() => fetchCurrentPrice(), 50);
         }
@@ -1736,7 +1700,6 @@ export default function UserApp() {
   const handleMarketChange = useCallback(async (newMarket) => {
     if (!newMarket || newMarket.id === activeMarket.id) return;
 
-    console.log(`🎯 User switched market to: ${newMarket.symbol}`);
     localStorage.setItem('15market_active_token_id', newMarket.id);
     setActiveMarket(newMarket);
     priceHistoryRef.current = []; // Clear history to avoid phantom lines when switching tokens
@@ -1749,7 +1712,6 @@ export default function UserApp() {
         body: JSON.stringify({ activeId: newMarket.id })
       });
     } catch (e) {
-      console.warn('Failed to sync market change with keeper:', e.message);
     }
 
     // Trigger price fetch for new market
@@ -1803,8 +1765,6 @@ export default function UserApp() {
           lng: data.longitude
         });
       } catch (e) {
-        // Fallback or ignore
-        console.warn("Location detection failed", e);
       }
     };
     detectLocation();
@@ -1899,7 +1859,6 @@ export default function UserApp() {
   // Slider / amount handlers - active balance aware
   const activeBal = useMemo(() => {
     const bal = sessionMode ? sessionBalance : balance;
-    // console.log("💰 [ACTIVE BALANCE]", { sessionMode, activeBal: bal });
     return bal;
   }, [sessionMode, sessionBalance, balance]);
 
@@ -1989,8 +1948,6 @@ export default function UserApp() {
             const isWon = isUp ? diff > 0 : diff < 0;
             const finalStatus = isWon ? "WON" : "LOST";
             const settlementPriceStr = capturedPrice.toFixed(2);
-
-            console.log(`🎯 [RESOLVER] LOCKED result for trade ${trade.id}: ${finalStatus} at $${capturedPrice}`);
 
             // 🔒 LOCK THE RESULT: Store in ref so reconciler never overwrites this
             const tradeIdStr = String(trade.id);
@@ -2088,7 +2045,6 @@ export default function UserApp() {
             // 🛑 DEDUP: Skip if we already processed this exact settlement event
             const eventKey = `${betId}_${log.transactionHash}`;
             if (processedSettlements.current.has(eventKey)) {
-              console.log(`⏭️ [DEDUP] Already processed settlement for bet ${betId}, skipping.`);
               return;
             }
             processedSettlements.current.add(eventKey);
@@ -2133,23 +2089,19 @@ export default function UserApp() {
 
               if (!alreadyOptimisticallyCredited) {
                 creditedPayouts.current.add(betId);
-                setTimeout(() => creditedPayouts.current.delete(betId), 10 * 60 * 1000);
+                setTimeout(() => creditedPayouts.current.delete(betId), 5 * 60 * 1000);
 
                 const sessionAddrLower = evmSessionWallet?.address?.toLowerCase();
                 const mainAddrLower = address?.toLowerCase();
 
                 if (sessionAddrLower && normalizedUser === sessionAddrLower) {
                   setSessionBalance(prev => prev + payoutNum);
-                  console.log(`🔗 [ON-CHAIN WIN] +${payoutNum} credited to SESSION wallet (optimistic had not run)`);
                 } else if (mainAddrLower && normalizedUser === mainAddrLower) {
                   setEvmBalance(prev => {
                     const current = parseFloat(prev || '0');
                     return (current + payoutNum).toFixed(6);
                   });
-                  console.log(`🔗 [ON-CHAIN WIN] +${payoutNum} credited to MAIN wallet (optimistic had not run)`);
                 }
-              } else {
-                console.log(`🔗 [ON-CHAIN WIN] Bet ${betId} already credited optimistically, skipping duplicate credit.`);
               }
 
               // Also set the lastOptimisticActionTime to prevent the polling cooldown
@@ -2215,13 +2167,11 @@ export default function UserApp() {
 
       if (isSession) {
         setSessionBalance(prev => prev + payout);
-        console.log(`🚀 [INSTANT WIN] +${payout.toFixed(3)} credited to AUTO-SIGNER for trade ${betId}`);
       } else {
         setEvmBalance(prev => {
           const current = parseFloat(prev || '0');
           return (current + payout).toFixed(6);
         });
-        console.log(`🚀 [INSTANT WIN] +${payout.toFixed(3)} credited to MAIN WALLET for trade ${betId}`);
       }
 
       // Mark as applied so the chain listener doesn't double-credit
@@ -2293,7 +2243,7 @@ export default function UserApp() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address, transaction: newTx })
-        }).catch(e => console.warn("Failed to sync deposit to cloud:", e));
+        }).catch(e => {});
 
       } catch (evmErr) {
         notify(`Deposit failed: ${evmErr.shortMessage || evmErr.message}`, "error");

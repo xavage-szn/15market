@@ -182,7 +182,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     // Enforce Arc Network
     useEffect(() => {
         if (isWalletConnected && chainId !== 5042002) {
-            console.log("🌐 [ADMIN] Network mismatch. Switching to Arc Testnet...");
+            // Network mismatch handled silently
             // Use switchChain, but catch errors just in case
             try {
                 switchChain({ chainId: 5042002 });
@@ -278,7 +278,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         const fetchStats = async () => {
             try {
                 const targetUrl = KEEPER_URL_ARC;
-                console.log(`📡 [ADMIN_SYNC] Polling ${targetUrl}/protocol-stats...`);
+                // Polling stats...
                 const res = await fetch(`${targetUrl}/protocol-stats`);
                 if (res.ok) {
                     const data = await res.json();
@@ -721,7 +721,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         return saved || 'eth';
     });
 
-    // 🔄 STANDALONE MARKET SYNC (KEEPER BRIDGE)
+    // STANDALONE MARKET SYNC (KEEPER BRIDGE)
     const syncWithKeeper = async (tokens) => {
         try {
             const targetUrl = KEEPER_URL_ARC;
@@ -733,9 +733,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 },
                 body: JSON.stringify(tokens)
             });
-            if (res.ok) console.log(`✅ Market listings synced with Arc Keeper.`);
+            if (res.ok) { /* synced */ }
         } catch (e) {
-            console.error("❌ Market sync failed:", e.message);
+            console.error("Market sync failed");
         }
     };
 
@@ -980,7 +980,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 onConfirm: async () => {
                     try {
                         if (dispute.originalTrade) {
-                            console.log(`🔗 Attempting manual settlement for REFUND:`, dispute.id);
+                            // Attempting manual settlement for refund
                             await handleOnChainSettle(dispute.originalTrade, true);
                         }
                         notify('success', 'REFUND SUCCESSFUL', `Stake returned/settled as WIN.`);
@@ -1483,31 +1483,29 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     const handleLogin = async (e) => {
         if (e) e.preventDefault();
-        console.log("🔐 [AdminAuth] Login attempt for user:", loginForm.username);
+        // Login attempt
         setAuthError(null);
 
         if (!isWalletConnected) {
-            console.warn("🔐 [AdminAuth] No wallet connected.");
+            console.warn("[AdminAuth] No wallet connected.");
             notify('error', 'WALLET REQUIRED', 'Connect authorized wallet to proceed.');
             return;
         }
 
         if (!isAuthorizedWallet) {
-            console.warn("🔐 [AdminAuth] Wallet not authorized:", walletAddress);
+            console.warn("[AdminAuth] Wallet not authorized.");
             notify('error', 'NOT ALLOWED', 'This wallet address is not registered in the administrative directory.');
             return;
         }
 
         if (!currentStaffMember.onboardingComplete) {
-            console.log("🔐 [AdminAuth] Onboarding required for:", walletAddress);
+            // Onboarding required
             setIsOnboarding(true);
             return;
         }
 
         try {
-            console.log("🔐 [AdminAuth] Comparing credentials...");
-            console.log("Target User:", currentStaffMember.username);
-            console.log("Input User:", loginForm.username);
+            // Credential validation
 
             // Check credentials against our staff database - Added trim() for resilience
             if (loginForm.username && currentStaffMember.username && 
@@ -1515,17 +1513,17 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 loginForm.password && currentStaffMember.password &&
                 loginForm.password.trim() === currentStaffMember.password.trim()) {
 
-                console.log("🔐 [AdminAuth] Credentials matched. Initializing session...");
+                // Auth success
                 setIsLoggedIn(true);
                 setCurrentUser({ username: currentStaffMember.username, role: currentStaffMember.role });
                 notify('success', 'ACCESS GRANTED', 'Citadel Session Initialized.');
             } else {
-                console.warn("🔐 [AdminAuth] Credentials mismatch.");
+                console.warn("[AdminAuth] Credentials mismatch.");
                 notify('error', 'AUTH FAILED', 'INVALID LOGIN COORDINATES');
                 setAuthError("INVALID AUTHENTICATION COORDINATES");
             }
         } catch (err) {
-            console.error("🔐 [AdminAuth] Login Error:", err);
+            console.error("[AdminAuth] Login error");
             notify('error', 'SYSTEM ERROR', err.message);
         }
     };

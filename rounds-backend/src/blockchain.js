@@ -22,7 +22,7 @@ async function createProvider() {
             await provider.getBlockNumber();
             return provider;
         } catch (e) {
-            console.warn(`[Blockchain] ⚠️ RPC failed: ${rpc} - ${e.message}`);
+            console.warn(`[Blockchain] RPC failed: ${rpc} - ${e.message}`);
         }
     }
     return new ethers.JsonRpcProvider(endpoints[0]);
@@ -53,7 +53,7 @@ class BlockchainService {
             this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
             this.settleWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.settleProvider);
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);
-            console.log(`[Blockchain] ⚡ High-priority Settlement optimized to use official RPC: ${bestRpc}`);
+            console.log(`[Blockchain] Settlement provider: ${bestRpc}`);
         } catch (e) {
             console.warn(`[Blockchain] Could not isolate settlement provider: ${e.message}`);
         }

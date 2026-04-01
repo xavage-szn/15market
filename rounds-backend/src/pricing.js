@@ -7,7 +7,7 @@ async function getPrice(symbol) {
         if (!response.data || !response.data.price) return null;
         return parseFloat(response.data.price);
     } catch (e) {
-        console.error(`[Pricing] ❌ Error fetching price for ${symbol}:`, e.message);
+        console.error(`[Pricing] Error fetching ${symbol}:`, e.message);
         return null;
     }
 }

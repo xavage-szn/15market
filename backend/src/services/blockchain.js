@@ -54,13 +54,13 @@ async function createProvider(blockchainService) {
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
             ]);
 
-            console.log(`[Blockchain] ✅ Connected to RPC: ${rpc} (Block: ${block})`);
+            console.log(`[Blockchain] Connected: ${rpc} (Block: ${block})`);
             if (blockchainService) blockchainService.lastGoodRpc = rpc;
             return provider;
         } catch (e) {
-            console.warn(`[Blockchain] ⚠️ RPC failed: ${rpc} — ${e.message}`);
+            console.warn(`[Blockchain] RPC failed: ${rpc} - ${e.message}`);
             if (currentRpcs.length === 1) {
-                console.log("[Blockchain] ⏳ Only one RPC available. Waiting 2s before retry...");
+                console.log("[Blockchain] Only one RPC available, waiting 2s...");
                 await new Promise(r => setTimeout(r, 2000));
             }
         }
@@ -102,7 +102,7 @@ class BlockchainService {
         ];
 
         this._init().catch(e => {
-            console.error('[Blockchain] ❌ Critical Initialization Error:', e.message);
+            console.error('[Blockchain] Init error:', e.message);
         });
     }
 
@@ -120,9 +120,9 @@ class BlockchainService {
             this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
             this.settleWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.settleProvider);
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);
-            console.log(`[Blockchain] ⚡ Settlement optimized to use high-speed RPC: ${bestRpc}`);
+            console.log(`[Blockchain] Settlement RPC: ${bestRpc}`);
         } catch (e) {
-            console.warn(`[Blockchain] ⚠️ Could not optimize settlement provider: ${e.message}`);
+            console.warn(`[Blockchain] Settlement provider init failed: ${e.message}`);
         }
 
         this.providerReady = true;
@@ -137,7 +137,7 @@ class BlockchainService {
     async _startEventPolling() {
         if (!this.contract) return;
         let lastLoggedBlock = await this.provider.getBlockNumber();
-        console.log(`[Blockchain] 🛰️ Starting robust event polling from block ${lastLoggedBlock}...`);
+        console.log(`[Blockchain] Starting event polling from block ${lastLoggedBlock}`);
 
         setInterval(async () => {
             try {
@@ -196,7 +196,7 @@ class BlockchainService {
     }
 
     async _resetNonce() {
-        console.warn('[Blockchain] ⚠️ Resetting nonce from chain...');
+        console.warn('[Blockchain] Resetting nonce...');
         try {
             await nonceManager.syncWithChain(this.wallet.address, this.provider);
         } catch (e) {
@@ -240,7 +240,7 @@ class BlockchainService {
         if (options.retryCount > 0) {
             const bumpFactor = 100n + BigInt(options.retryCount * 20);
             maxFee = (maxFee * bumpFactor) / 100n;
-            console.log(`[Blockchain] 🔥 Scaling gas for retry ${options.retryCount} (Bump: ${bumpFactor}%): ${ethers.formatUnits(maxFee, 'gwei')} gwei`);
+            console.log(`[Blockchain] Gas bump retry ${options.retryCount}: ${ethers.formatUnits(maxFee, 'gwei')} gwei`);
         }
 
         const finalGasPrice = maxFee > minGasFee ? maxFee : minGasFee;
@@ -261,7 +261,7 @@ class BlockchainService {
         }
 
         try {
-            console.warn(`[Blockchain] 🔄 Congestion detected on ${failedRpc || 'current RPC'}. Rotating endpoints...`);
+            console.warn(`[Blockchain] Rotating RPC from ${failedRpc || 'current'}...`);
             // If we have a failed RPC, we should ensure the next provider attempt doesn't prioritize it
             const newProvider = await createProvider(this);
             const newWallet = new ethers.Wallet(process.env.PRIVATE_KEY, newProvider);
@@ -272,11 +272,11 @@ class BlockchainService {
             this.contract = newContract;
             this.providerReady = true;
 
-            console.log(`[Blockchain] ✅ RPC rotated and service updated. New RPC: ${this.lastGoodRpc}`);
-            logToFile(`[Blockchain] 🔄 Switched to RPC: ${this.lastGoodRpc} due to congestion/timeouts`);
+            console.log(`[Blockchain] RPC rotated to: ${this.lastGoodRpc}`);
+            logToFile(`RPC switched to: ${this.lastGoodRpc}`);
             await this._resetNonce();
         } catch (e) {
-            console.error(`[Blockchain] ❌ RPC rotation failed: ${e.message}`);
+            console.error(`[Blockchain] RPC rotation failed: ${e.message}`);
         } finally {
             this.isRotating = false;
         }
@@ -289,7 +289,7 @@ class BlockchainService {
             const staleThreshold = Date.now() - 60000;
             for (const [txHash, info] of this.pendingTxs) {
                 if (info.sentAt < staleThreshold) {
-                    console.warn(`[Blockchain] ⏰ TX ${txHash} (bet ${info.betId}) timed out after 60s`);
+                    console.warn(`[Blockchain] TX ${txHash} (bet ${info.betId}) timed out`);
                     this.pendingTxs.delete(txHash);
                     if (this.onTxFailedCallback) this.onTxFailedCallback(info.betId.toString());
                     continue;
@@ -299,13 +299,13 @@ class BlockchainService {
                     const receipt = await this.provider.getTransactionReceipt(txHash);
                     if (receipt) {
                         if (receipt.status === 1) {
-                            console.log(`[Blockchain] ✅ Background confirmed: ${txHash} for bet ${info.betId}`);
-                            logToFile(`[Blockchain] ✅ Background confirmed: ${txHash} for bet ${info.betId}. Block ${receipt.blockNumber}, GasUsed: ${receipt.gasUsed?.toString()}`);
+                            console.log(`[Blockchain] Confirmed: ${txHash} bet ${info.betId}`);
+                            logToFile(`Confirmed: ${txHash} bet ${info.betId} Block ${receipt.blockNumber}`);
                             this.confirmedTxs.add(info.betId.toString());
                             if (this.onTxConfirmedCallback) this.onTxConfirmedCallback(info.betId.toString());
                         } else {
-                            console.warn(`[Blockchain] ❌ TX reverted on-chain: ${txHash} for bet ${info.betId}`);
-                            logToFile(`[Blockchain] ❌ TX reverted on-chain: ${txHash} for bet ${info.betId}. Possible gas issues or logic fail.`);
+                            console.warn(`[Blockchain] TX reverted: ${txHash} bet ${info.betId}`);
+                            logToFile(`TX reverted: ${txHash} bet ${info.betId}`);
                             if (this.onTxFailedCallback) this.onTxFailedCallback(info.betId.toString());
                         }
                         this.pendingTxs.delete(txHash);
@@ -322,7 +322,7 @@ class BlockchainService {
         const fees = await this._getGasPrice({ retryCount });
 
         try {
-            console.log(`[Blockchain] ⚡ Sending (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei) - Bet ${betId}`);
+            console.log(`[Blockchain] Sending (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei) Bet ${betId}`);
 
             const useContract = this.settleContract || this.contract;
             const settlementPriceBigInt = ethers.parseUnits(parseFloat(exitPrice).toFixed(8), 8);
@@ -339,12 +339,12 @@ class BlockchainService {
                 new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Broadcast TIMEOUT (45s)")), 45000))
             ]);
 
-            console.log(`[Blockchain] 🚀 TX Sent: ${tx.hash} for bet ${betId}`);
+            console.log(`[Blockchain] TX sent: ${tx.hash} bet ${betId}`);
             this.pendingTxs.set(tx.hash, { betId: betId.toString(), sentAt: Date.now() });
             return { hash: tx.hash, status: 1 };
 
         } catch (e) {
-            console.error(`[Blockchain] ❌ SettleBet Error for ${betId}:`, e.message);
+            console.error(`[Blockchain] SettleBet error for ${betId}:`, e.message);
             const msg = (e.message || "").toLowerCase();
             const fullError = JSON.stringify(e).toLowerCase();
 
@@ -359,13 +359,13 @@ class BlockchainService {
                 msg.includes('too many requests') || msg.includes('429') ||
                 fullError.includes('txpool is full') || fullError.includes('timeout') || fullError.includes('rate limit')) {
                 const rotationMsg = (getRpcEndpoints().length > 1) ? ". Rotating nodes..." : ". Waiting for congestion to clear...";
-                console.warn(`[Blockchain] ⏳ RPC Overloaded or Rate Limited for bet ${betId}${rotationMsg}`);
+                console.warn(`[Blockchain] RPC overloaded for bet ${betId}${rotationMsg}`);
                 // Force rotation to a fresh node, explicitly deprioritizing the one that just failed
                 await this.rotateRpc(this.lastGoodRpc);
             }
 
             if (msg.includes('already settled')) {
-                console.log(`[Blockchain] ℹ️ Bet ${betId} was already settled. Treating as success.`);
+                console.log(`[Blockchain] Bet ${betId} already settled.`);
                 return { status: 1, alreadySettled: true };
             }
 
@@ -394,7 +394,7 @@ class BlockchainService {
         await this._ensureReady();
         try {
             const currentBlock = toBlock || await this.provider.getBlockNumber();
-            console.log(`[Blockchain] 🔍 Scanning past events: ${eventName} from block ${fromBlock} to ${currentBlock}`);
+            console.log(`[Blockchain] Scanning: ${eventName} ${fromBlock}-${currentBlock}`);
             let allEvents = [];
             let startBlock = fromBlock;
             const chunk = 1000; // Even smaller chunk for unstable Arc nodes
@@ -411,7 +411,7 @@ class BlockchainService {
                         success = true;
                     } catch (e) {
                         retries--;
-                        console.warn(`[Blockchain] ⚠️ Chunk fetch failed for ${eventName} [${startBlock}-${endBlock}]. Retries left: ${retries}. Error: ${e.message}`);
+                        console.warn(`[Blockchain] Chunk fetch failed ${eventName} [${startBlock}-${endBlock}]. Retries: ${retries}`);
                         if (retries === 0) throw e;
                         await new Promise(r => setTimeout(r, 1000));
                     }
@@ -420,7 +420,7 @@ class BlockchainService {
             }
             return allEvents;
         } catch (e) {
-            console.error(`[Blockchain] ❌ Error querying past events ${eventName}:`, e.message);
+            console.error(`[Blockchain] Event query error ${eventName}:`, e.message);
             return [];
         }
     }

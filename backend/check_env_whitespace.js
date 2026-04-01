@@ -10,8 +10,8 @@ console.log('CLIENT_ID:', cid ? `'${cid}'` : 'MISSING', 'Length:', cid ? cid.len
 console.log('SECRET_KEY:', sec ? `'${sec}'` : 'MISSING', 'Length:', sec ? sec.length : 0);
 
 if (cid && cid.trim() !== cid) {
-    console.log('⚠️ CLIENT_ID HAS WHITESPACE!');
+    console.log('CLIENT_ID HAS WHITESPACE!');
 }
 if (sec && sec.trim() !== sec) {
-    console.log('⚠️ SECRET_KEY HAS WHITESPACE!');
+    console.log('SECRET_KEY HAS WHITESPACE!');
 }

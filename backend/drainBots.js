@@ -8,9 +8,9 @@ const RPC = "https://rpc.testnet.arc.network";
 const TREASURY_ADDRESS = "0x094604E6bA1E98756b0de29a9E2285Ead0c443Fd"; // Derived from the PRIVATE_KEY in .env
 
 async function drain() {
-    console.log('--- 🤖 15Market Bot Draining Procedure ---');
+    console.log('--- 15Market Bot Draining Procedure ---');
     if (!fs.existsSync(BOT_DATA_FILE)) {
-        console.error('❌ bot_wallets.json not found.');
+        console.error('bot_wallets.json not found.');
         return;
     }
 
@@ -44,10 +44,10 @@ async function drain() {
                 gasPrice: gasPrice
             });
 
-            console.log(`[Drain] ✅ Success: ${tx.hash}`);
+            console.log(`[Drain] Success: ${tx.hash}`);
             await new Promise(r => setTimeout(r, 2000));
         } catch (e) {
-            console.error(`[Drain] ❌ Failed ${bot.address.slice(0, 6)}: ${e.message}`);
+            console.error(`[Drain] Failed ${bot.address.slice(0, 6)}: ${e.message}`);
         }
     }
 }

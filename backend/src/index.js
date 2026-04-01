@@ -145,8 +145,7 @@ const LISTINGS_RESPONSE = [
 // --- SESSION LOGIC (Deterministic Session Wallets) ---
 const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
 if (!SESSION_MASTER_SECRET) {
-    console.error("❌ CRITICAL: SESSION_MASTER_SECRET is missing in .env");
-    // In production, we should probably exit, but for now we'll just log loudly
+    console.error("SESSION_MASTER_SECRET missing");
 }
 const getSessionRpcs = () => {
     // Official Arc + dRPC only (Thirdweb/Quicknode removed — hit rate limits)
@@ -199,7 +198,7 @@ const getHistoryFor = async (address, limit = 100) => {
         const sorted = trades.sort((a, b) => (b.timestamp || b.startTime || 0) - (a.timestamp || a.startTime || 0));
         return limit > 0 ? sorted.slice(0, limit) : sorted;
     } catch (e) {
-        console.error('[History API] Error:', e);
+        console.error('History error:', e.message);
         return [];
     }
 };
@@ -338,7 +337,7 @@ app.post('/active-market', (req, res) => {
     const { activeId } = req.body;
     if (activeId) {
         activeMarketId = activeId;
-        console.log(`🎯 Active market synced to: ${activeId}`);
+        console.log(`Active market: ${activeId}`);
     }
     res.json({ success: true, activeId });
 });
@@ -415,11 +414,11 @@ app.post('/settle', actionLimiter, async (req, res) => {
         const { id, exitPrice } = req.body;
         if (!id) return res.status(400).json({ error: 'Missing bet ID' });
 
-        logToFile(`[SETTLE] 🔔 Manual settlement signal for ${id} (Price: ${exitPrice || 'auto'})`);
+        logToFile(`Settle ${id} (Price: ${exitPrice || 'auto'})`);
 
         const trade = await redis.getTrade(id);
         if (trade) {
-            // 🔥 FRONTEND SOURCE OF TRUTH: 
+            // FRONTEND SOURCE OF TRUTH: 
             // We use the exitPrice provided by the frontend if it exists. 
             // This ensures the outcome shown to the user is exactly what is settled on-chain.
 
@@ -457,7 +456,7 @@ app.post('/settle', actionLimiter, async (req, res) => {
 
             // Trigger on-chain settlement in the BACKGROUND
             processor._settleSingleTrade(trade, exitPriceNum.toFixed(8)).catch(e => {
-                logToFile(`[SETTLE] ❌ Background settlement failed for ${id}: ${e.message}`);
+                logToFile(`Settle failed for ${id}: ${e.message}`);
             });
 
             return res.json({ success: true, status: isWin ? "WON" : "LOST", payout });
@@ -494,7 +493,7 @@ app.post('/trade-ping', actionLimiter, async (req, res) => {
             startTime: Date.now()
         };
         await redis.setTrade(id, tradeData);
-        logToFile(`[PING] Registered trade ${id} for ${address} (Price: ${tradeData.entryPrice})`);
+        logToFile(`Trade registered: ${id} for ${address} (${tradeData.entryPrice})`);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -570,22 +569,22 @@ app.post('/session/init', actionLimiter, async (req, res) => {
 });
 
 app.post('/session/trade', actionLimiter, async (req, res) => {
-    console.log(`📥 [API] Trade Request: ${req.body.user} - ${req.body.direction} @ ${req.body.amount}`);
+    console.log(`Trade request: ${req.body.user} - ${req.body.direction} @ ${req.body.amount}`);
     try {
         const settings = await redis.getSettings();
         if (settings?.maintenanceMode) {
-            console.log("🛑 [API] Refused: Maintenance Mode Active");
+            console.log("Refused: Maintenance Mode");
             return res.status(503).json({ error: 'Maintenance Mode Active' });
         }
         if (settings?.tradingHalted) {
-            console.log("🛑 [API] Refused: Trading Halted");
+            console.log("Refused: Trading Halted");
             return res.status(503).json({ error: 'Trading Halted by Admin' });
         }
 
         const { address, tradeParams } = req.body;
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
-        logToFile(`[SESSION_TRADE] 🚀 INCOMING: Bet ${id} for ${address} (${amount} USDC)`);
+        logToFile(`Trade ${id}: ${address} (${amount} USDC)`);
 
         if (!id || !address || !amount) {
             return res.status(400).json({ error: 'Missing parameters' });
@@ -593,14 +592,14 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
 
         const lockTrade = await redis.lockTrade(id);
         if (!lockTrade) {
-            logToFile(`[SESSION_TRADE] 🛑 Bet ${id} already being processed (locked)`);
+            logToFile(`Trade ${id} locked (duplicate)`);
             return res.status(409).json({ error: 'Trade already in progress' });
         }
 
         // Fetch Wallet & Provider
         const derivationStart = Date.now();
         let { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        logToFile(`[SESSION_TRADE] 👛 Sync took ${Date.now() - derivationStart}ms (${sessionAddr})`);
+        logToFile(`Wallet sync ${Date.now() - derivationStart}ms (${sessionAddr})`);
 
         redis.saveSessionMapping(sessionAddr, address).catch(() => { });
 
@@ -629,11 +628,11 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             // Update balance cache
             await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 30);
         } catch (e) {
-            logToFile(`[SESSION_TRADE] ⚠️ Pre-flight error: ${e.message}`);
+            logToFile(`Pre-flight error: ${e.message}`);
             throw e;
         }
 
-        logToFile(`[SESSION_TRADE] 📡 Pre-flight ready in ${Date.now() - preflightStart}ms (Nonce: ${nonce})`);
+        logToFile(`Pre-flight ready ${Date.now() - preflightStart}ms (Nonce: ${nonce})`);
 
         const amtNum = parseFloat(amount);
         const amtWei = ethers.parseUnits(amtNum.toFixed(18), 18);
@@ -642,15 +641,15 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         const maxGasCost = BigInt(800000) * fees.maxFeePerGas;
         const totalNeeded = amtWei + maxGasCost;
 
-        logToFile(`[SESSION_TRADE] 💰 Balance Check: Current=${ethers.formatEther(balance)}, Required=${ethers.formatEther(totalNeeded)} (Stake: ${amount} + MaxGas: ${ethers.formatEther(maxGasCost)})`);
+        logToFile(`Balance: ${ethers.formatEther(balance)}, Need: ${ethers.formatEther(totalNeeded)}`);
 
         if (balance < totalNeeded) {
             const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC. Need ${ethers.formatEther(totalNeeded)} USDC (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(maxGasCost)})`;
-            logToFile(`[SESSION_TRADE] ❌ ${err}`);
+            logToFile(`Insufficient balance: ${err}`);
             return res.status(400).json({ error: err });
         }
 
-        logToFile(`[SESSION_TRADE] 📝 Preparing TX (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei, Value: ${amtNum} USDC)`);
+        logToFile(`Preparing TX (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei)`);
 
         const txArgs = {
             to: process.env.ARC_CONTRACT_ADDRESS,
@@ -671,7 +670,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             chainId: 5042002
         };
 
-        logToFile(`[SESSION_TRADE] ✍️ Broadcasting TX for bet ${id} (Nonce: ${nonce})...`);
+        logToFile(`Broadcasting TX for ${id} (Nonce: ${nonce})`);
         const broadcastStart = Date.now();
         let tx;
         let lastError;
@@ -681,14 +680,14 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         while (attempts < maxAttempts) {
             attempts++;
             try {
-                logToFile(`[SESSION_TRADE] ✍️ Broadcast attempt ${attempts} for bet ${id} (Nonce: ${txArgs.nonce})...`);
+                logToFile(`Broadcast attempt ${attempts} for ${id} (Nonce: ${txArgs.nonce})`);
                 await blockchain._ensureReady();
                 tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
                 break; // Success!
             } catch (err) {
                 lastError = err;
                 const errLower = err.message?.toLowerCase() || "";
-                logToFile(`[SESSION_TRADE] ⚠️ Attempt ${attempts} Failed: ${err.message}`);
+                logToFile(`Attempt ${attempts} failed: ${err.message}`);
 
                 const isTransient = errLower.includes("txpool is full") ||
                     errLower.includes("timeout") ||
@@ -698,7 +697,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
                     errLower.includes("already");
 
                 if (isTransient && attempts < maxAttempts) {
-                    logToFile(`[SESSION_TRADE] 🔄 Retrying transient error...`);
+                    logToFile(`Retrying transient error...`);
                     // Rotate RPC and Resync
                     await blockchain.rotateRpc();
                     const freshNonce = await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
@@ -720,7 +719,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
                 }
             }
         }
-        logToFile(`[SESSION_TRADE] ✅ Broadcasted ${id} in ${Date.now() - broadcastStart}ms: ${tx.hash}`);
+        logToFile(`Trade ${id} broadcasted: ${tx.hash}`);
 
         // Immediate Redis Register
         const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
@@ -749,7 +748,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         // Return txHash immediately after successful broadcast
         // The EVM guarantees funds are locked once tx is in mempool
         res.json({ success: true, txHash: tx.hash, confirmed: false });
-        logToFile(`[SESSION_TRADE] ✅ Responded to frontend with txHash: ${tx.hash}`);
+        logToFile(`Responded with txHash: ${tx.hash}`);
 
         // Background confirmation tracking (non-blocking)
         (async () => {
@@ -766,20 +765,20 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
                         expiry: confirmedNow + (Number(duration) * 1000)
                     };
                     await redis.setTrade(id, updatedData);
-                    logToFile(`[SESSION_TRADE] ⛓️ Confirmed ${id}: ${tx.hash}`);
+                    logToFile(`Confirmed ${id}: ${tx.hash}`);
                 } else {
-                    logToFile(`[SESSION_TRADE] ❌ Reverted on-chain ${id}: ${tx.hash}`);
+                    logToFile(`Reverted ${id}: ${tx.hash}`);
                     await redis.delTrade(id);
                 }
             } catch (err) {
-                logToFile(`[SESSION_TRADE] ⚠️ Background confirmation polling failed for ${tx.hash}: ${err.message}`);
+                logToFile(`Confirmation poll failed for ${tx.hash}: ${err.message}`);
                 // Don't delete trade — it may still be pending in mempool
             }
         })();
 
     } catch (e) {
         const errorMsg = e.reason || e.message || "Unknown error";
-        logToFile(`[SESSION_TRADE] ❌ FATAL Error: ${errorMsg}`);
+        logToFile(`Trade error: ${errorMsg}`);
         console.error(`[SESSION_TRADE] Trace:`, e);
 
         if (errorMsg.toLowerCase().includes('nonce') || errorMsg.toLowerCase().includes('already been used') || errorMsg.toLowerCase().includes('too low')) {
@@ -803,7 +802,7 @@ app.post('/session/withdraw', actionLimiter, async (req, res) => {
         const { address, amount } = req.body;
         if (!address) return res.status(400).json({ error: 'Missing main address' });
 
-        logToFile(`[WITHDRAW] 💸 Request from ${address} for ${amount} USDC`);
+        logToFile(`Withdraw request: ${address} for ${amount} USDC`);
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
         // 1. Gas & Nonce (Parallel Ready)
         const [fees, nonce, balance] = await Promise.all([
@@ -827,7 +826,7 @@ app.post('/session/withdraw', actionLimiter, async (req, res) => {
             return res.status(400).json({ error: "Balance too low for gas" });
         }
 
-        logToFile(`[WITHDRAW] 🚀 Sweeping ${ethers.formatEther(sweepAmt)} USDC from ${sessionAddr} to ${address}`);
+        logToFile(`Sweeping ${ethers.formatEther(sweepAmt)} from ${sessionAddr} to ${address}`);
 
         const tx = await wallet.sendTransaction({
             to: address,
@@ -842,7 +841,7 @@ app.post('/session/withdraw', actionLimiter, async (req, res) => {
 
         res.json({ success: true, txHash: tx.hash });
     } catch (e) {
-        logToFile(`[WITHDRAW] ❌ Error: ${e.message}`);
+        logToFile(`Withdraw error: ${e.message}`);
         if (e.message.includes('nonce') || e.message.includes('already been used') || e.message.includes('too low')) {
             try {
                 const { address: sessionAddr } = await deriveUserWallet(req.body.address);
@@ -983,14 +982,13 @@ app.get('/admin/profiles', async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', async () => {
-    console.log(`[Server] Fast & Decentralized running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
     
     // Start Binary Options (Classic) Processor
     processor.init();
     
-    // Start Rounds Processor (Unified in main backend)
     roundsProcessor.start().catch(e => {
-        console.error('[Rounds] ❌ Processor failed to start:', e.message);
+        console.error('Rounds processor fail:', e.message);
     });
 
     keepAlive.startKeepAlive();

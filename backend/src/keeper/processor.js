@@ -57,7 +57,7 @@ class TradeProcessor {
             };
 
             await redis.setTrade(tradeId, updatedTrade);
-            console.log(`[Processor] ${existing ? '🔄 Updated' : '🛰️ Detected'} trade ${tradeId}. User: ${finalUser}, Expiry: ${new Date(onChainExpiry).toISOString()}`);
+            console.log(`[Processor] Trade ${tradeId} detected. User: ${finalUser}`);
 
             // Add to history too
             await redis.addHistoricalTrade({
@@ -69,12 +69,11 @@ class TradeProcessor {
 
         // robust lifecycle tracking for reverted/dropped TXs
         blockchain.onTxConfirmed(async (tradeId) => {
-            logToFile(`✅ Confirmed TX for trade ${tradeId}. Removing from active pipeline.`);
-            await redis.delTrade(tradeId);
+            logToFile(`Confirmed trade ${tradeId}`);
         });
 
         blockchain.onTxFailed(async (tradeId) => {
-            logToFile(`❌ TX Reverted/Failed for trade ${tradeId}. Re-activating for settlement retry.`);
+            logToFile(`TX failed for trade ${tradeId}`);
             this.settledCache.delete(tradeId.toString());
             this.settlingIds.delete(tradeId.toString());
         });
@@ -87,12 +86,12 @@ class TradeProcessor {
     }
 
     async runHistoryBackfiller() {
-        console.log('[Processor] 📚 Starting history backfiller...');
+        console.log('[Processor] Starting history backfiller...');
 
         const sync = async () => {
             try {
                 if (!blockchain.providerReady || !blockchain.provider) {
-                    console.log('[Processor] ⏳ Waiting for blockchain provider before backfilling...');
+                    console.log('[Processor] Waiting for provider...');
                     setTimeout(sync, 2000);
                     return;
                 }
@@ -102,7 +101,7 @@ class TradeProcessor {
                 // SAFETY JUMP: If we are way too far behind (e.g. 50k blocks), 
                 // jump forward to avoid saturating the RPC with millions of old requests.
                 if (currentBlock - startBlock > 50000) {
-                    console.log(`[Processor] ⚠️ Indexer is way behind (${currentBlock - startBlock} blocks). Jumping forward to prioritize recent trades...`);
+                    console.log(`[Processor] Indexer behind (${currentBlock - startBlock} blocks), jumping forward`);
                     startBlock = currentBlock - 5000;
                     redis.lastScannedBlock = startBlock;
                 }
@@ -116,7 +115,7 @@ class TradeProcessor {
                 const lookback = 1000; // Even smaller for fragile RPCs
                 const endBlock = Math.min(startBlock + lookback, currentBlock);
 
-                console.log(`[Processor] 📚 Syncing history: ${startBlock} -> ${endBlock} (Target: ${currentBlock})`);
+                console.log(`[Processor] Syncing: ${startBlock} -> ${endBlock} (Target: ${currentBlock})`);
 
                 const [placed, settled] = await Promise.all([
                     blockchain.getPastEvents("BetPlaced", startBlock, endBlock),
@@ -161,7 +160,7 @@ class TradeProcessor {
                                 recovered: true
                             };
                             await redis.setTrade(id, tradeData);
-                            console.log(`[Processor] 🩹 RECOVERY: Re-activated pending trade ${id} found on-chain.`);
+                            console.log(`[Processor] Recovery: Re-activated trade ${id}`);
                         }
                     }
 
@@ -264,7 +263,7 @@ class TradeProcessor {
 
         if (toSettle.length === 0) return;
 
-        console.log(`[Processor] ⚡ Mass settling ${toSettle.length} trades (Concurrency: ${Math.min(toSettle.length, 25)})...`);
+        console.log(`[Processor] Mass settling ${toSettle.length} trades`);
 
         // Use smaller concurrency to prevent txpool exhaustion on the private node
         const BATCH_SIZE = 5; 
@@ -274,7 +273,7 @@ class TradeProcessor {
             // Fire batch members in parallel
             await Promise.all(batch.map(trade => 
                 this._settleSingleTrade(trade).catch(err => {
-                    logToFile(`[Processor] ❌ Error in settlement task for ${trade.id}: ${err.message}`);
+                    logToFile(`error in settlement for ${trade.id}: ${err.message}`);
                 })
             ));
 
@@ -297,11 +296,11 @@ class TradeProcessor {
         const currentTrade = await redis.getTrade(tradeId);
         if (currentTrade) {
             const updates = { status: 'RESOLVING' };
-            if (manualPrice) updates.lockedExitPrice = manualPrice; // Permanently lock front-end source of truth
+            if (manualPrice) updates.lockedExitPrice = manualPrice;
             await redis.setTrade(tradeId, { ...currentTrade, ...updates });
         }
         try {
-            logToFile(`[Processor] ⚡ Settling trade ${tradeId}...`);
+            logToFile(`Settling trade ${tradeId}...`);
             const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
             const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
 
@@ -316,12 +315,12 @@ class TradeProcessor {
                     logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
                 } else {
                     // ATTEMPT 2: Fallback to a very safe buffer or WAIT
-                    // 🔥 CRITICAL FIX: Removed 'pricing.getPrice(symbol)' fallback.
+                    // CRITICAL FIX: Removed 'pricing.getPrice(symbol)' fallback.
                     // Using the current price for an old trade is what caused the $2k exploit.
                     // We now throw an error to trigger a retry in the next loop, 
                     // allowing history to catch up or frontend to send a manual price.
                     const age = Date.now() - trade.expiry;
-                    throw new Error(`⚠️ NO PRICE DATA for ${symbol} at ${trade.expiry} yet (Age: ${Math.floor(age / 1000)}s). REFUSING to use fresh price for old trade.`);
+                    throw new Error(`No price data for ${symbol} at ${trade.expiry} (Age: ${Math.floor(age / 1000)}s). Refusing stale-price settlement.`);
                 }
             }
 
@@ -346,7 +345,7 @@ class TradeProcessor {
                 const payoutWei = ethers.parseUnits(expectedPayout.toFixed(18), 18);
 
                 if (isWin && contractBal < payoutWei) {
-                    const msg = `🚩 INSUFFICIENT TREASURY: Contract balance (${ethers.formatEther(contractBal)} USDC) cannot cover ${expectedPayout} payout for ${tradeId}. Skipping this trade for now so others can settle.`;
+                    const msg = `Insufficient treasury: ${ethers.formatEther(contractBal)} USDC, need ${expectedPayout} for ${tradeId}. Skipping.`;
                     console.warn(`[Processor] ${msg}`);
                     logToFile(msg);
                     
@@ -363,7 +362,7 @@ class TradeProcessor {
                     return; 
                 } else if (!isWin) {
                     // Proceeding with LOSER settlement as it cost 0 treasury balance (good for platform health)
-                    logToFile(`[Processor] 📉 Trade ${tradeId} is a LOSER. Proceeding with settlement (0 Treasury Cost).`);
+                    logToFile(`Trade ${tradeId} lost. Settling (0 cost).`);
                 }
             } catch (balError) {
                 console.warn(`[Processor] Could not check contract balance: ${balError.message}`);
@@ -372,7 +371,7 @@ class TradeProcessor {
             // DOUBLE-CREDIT PREVENTION: Verify on-chain status before broadcasting
             const isSettled = await blockchain.isBetSettled(trade.id);
             if (isSettled) {
-                logToFile(`[Processor] ℹ️ Bet ${tradeId} was already settled on-chain. Removing from active pipeline.`);
+                logToFile(`Bet ${tradeId} already settled on-chain, removing.`);
                 await redis.delTrade(trade.id);
                 this.failedSettlements.delete(tradeId);
                 return;
@@ -382,7 +381,7 @@ class TradeProcessor {
             const retryCount = this.failedSettlements.get(tradeId)?.count || 0;
             const result = await blockchain.settleBet(trade.id, exitVal, retryCount); // Blockchain service already parses to BigInt(8)
             if (result) {
-                logToFile(`✅ Settlement TX for ${tradeId} broadcasted: ${result.hash}`);
+                logToFile(`Settlement broadcasted for ${tradeId}: ${result.hash}`);
 
                 // Pause retries temporarily to wait for receipt
                 this.markSettled(tradeId);
@@ -396,7 +395,7 @@ class TradeProcessor {
                     // Success!
                     this.failedSettlements.delete(tradeId);
 
-                    // 🔥 RECORD HISTORY
+                    // RECORD HISTORY
                     const instantVal = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
 
                     await redis.addHistoricalTrade({
@@ -411,7 +410,7 @@ class TradeProcessor {
         } catch (e) {
             const count = (this.failedSettlements.get(tradeId)?.count || 0) + 1;
             this.failedSettlements.set(tradeId, { count, lastAttempt: Date.now() });
-            logToFile(`❌ Settlement failed for ${tradeId} (Attempt ${count}): ${e.message}`);
+            logToFile(`Settlement failed for ${tradeId} (Attempt ${count}): ${e.message}`);
         } finally {
             this.settlingIds.delete(tradeId);
         }

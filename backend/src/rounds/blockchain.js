@@ -33,7 +33,7 @@ class RoundsBlockchain {
         // Reuse the settlement isolated provider if available
         if (blockchain.settleWallet) {
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, blockchain.settleWallet);
-            console.log("[RoundsBlockchain] ⚡ High-priority settlement provider initialized.");
+            console.log("[RoundsBlockchain] Settlement provider ready.");
         }
         
         console.log(`[RoundsBlockchain] Initialized for contract: ${this.contractAddress}`);

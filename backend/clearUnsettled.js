@@ -3,7 +3,7 @@ const path = require('path');
 require('dotenv').config();
 
 async function clearUnsettled() {
-    console.log('--- 🧹 15Market Fresh Start Procedure ---');
+    console.log('--- 15Market Fresh Start Procedure ---');
     console.log('[Clear] Marking active classic trades as LOST...');
 
     const activeTrades = await redis.getAllActiveTrades();
@@ -42,11 +42,11 @@ async function clearUnsettled() {
                 state.live.pools = { long: 1.0, short: 1.0, participants: 0 };
             }
             await redis.setRound(`${asset}_state`, state);
-            console.log(`[Clear] ✅ Reset ${asset} pools.`);
+            console.log(`[Clear] Reset ${asset} pools.`);
         }
     }
 
-    console.log('[Clear] ✅ Fresh start complete.');
+    console.log('[Clear] Fresh start complete.');
     process.exit(0);
 }
 

@@ -20,7 +20,7 @@ class BotService {
     }
 
     async init() {
-        console.log('[BotService] 🤖 Initializing Bot Protocol for Rounds...');
+        console.log('[BotService] Initializing...');
         this.contractAddress = process.env.ROUNDS_CONTRACT_ADDRESS;
         await this.loadOrGenerateBots();
         this.checkAndFundBots(); // Background execution
@@ -44,7 +44,7 @@ class BotService {
                 console.log('[BotService] Wallets generated and saved to bot_wallets.json');
             }
         } catch (e) {
-            console.error('[BotService] ❌ Failed to load/generate bots:', e.message);
+            console.error('[BotService] Failed to load bots:', e.message);
         }
     }
 
@@ -67,13 +67,13 @@ class BotService {
                     await new Promise(r => setTimeout(r, 2000));
                 }
             } catch (e) {
-                console.error(`[BotService] ❌ Funding failed for ${bot.address.slice(0, 6)}:`, e.message);
+                console.error(`[BotService] Funding failed for ${bot.address.slice(0, 6)}:`, e.message);
             }
         }
     }
 
     async act(assetId, roundId, currentParticipants) {
-        console.log(`[BotService] 🤖 Round Pulse: ${assetId} | ID: ${roundId} | Players: ${currentParticipants}`);
+        console.log(`[BotService] Round: ${assetId} | ID: ${roundId} | Players: ${currentParticipants}`);
 
         let botsToEnter = 0;
         const roll = Math.random();
@@ -86,7 +86,7 @@ class BotService {
 
         if (botsToEnter === 0) return;
 
-        console.log(`[BotService] 🚀 Triggering ${botsToEnter} bot(s) for ${assetId}...`);
+        console.log(`[BotService] Entering ${botsToEnter} bot(s) for ${assetId}`);
         const shuffledBots = [...this.bots].sort(() => 0.5 - Math.random());
         const selected = shuffledBots.slice(0, botsToEnter);
 
@@ -108,7 +108,7 @@ class BotService {
                     gasLimit: 500000
                 });
 
-                console.log(`[BotService] ✅ Bot TX: ${tx.hash}`);
+                console.log(`[BotService] Bot TX: ${tx.hash}`);
 
                 // Optimistic state update in Redis
                 const state = await redis.getRound(`${assetId}_state`);
@@ -122,7 +122,7 @@ class BotService {
 
                 await new Promise(r => setTimeout(r, 1000));
             } catch (e) {
-                console.error(`[BotService] ❌ Bot failed:`, e.message);
+                console.error(`[BotService] Bot failed:`, e.message);
             }
         }
     }
