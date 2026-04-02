@@ -1,7 +1,6 @@
 const { ethers, FetchRequest } = require('ethers');
 const dns = require('dns');
 const path = require('path');
-const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const vault = require('./vault');
 const nonceManager = require('./nonceManager');
