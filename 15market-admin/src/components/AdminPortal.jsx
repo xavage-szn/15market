@@ -3520,9 +3520,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 )
                             }
 
-                                )
-                            }
-
                         </AnimatePresence >
                     </div >
                 </div >
