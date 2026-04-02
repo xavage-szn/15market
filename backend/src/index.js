@@ -411,24 +411,27 @@ app.post('/settle', actionLimiter, async (req, res) => {
         const settings = await redis.getSettings();
         if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
 
-        const { id, exitPrice } = req.body;
+        const { id } = req.body;
         if (!id) return res.status(400).json({ error: 'Missing bet ID' });
 
-        logToFile(`Settle ${id} (Price: ${exitPrice || 'auto'})`);
+        logToFile(`Settle ${id} (Fetching fresh price...)`);
 
         const trade = await redis.getTrade(id);
         if (trade) {
-            // FRONTEND SOURCE OF TRUTH: 
-            // We use the exitPrice provided by the frontend if it exists. 
-            // This ensures the outcome shown to the user is exactly what is settled on-chain.
+            // SECURITY PATCH: Do NOT trust the frontend for exitPrice.
+            // We fetch the fresh price from our internal pricing service.
+            const freshPrice = pricing.getCurrentPrice(trade.symbol || 'BTC');
+            if (!freshPrice) {
+                logToFile(`Settle ${id} failed: No pricing data available.`);
+                return res.status(500).json({ error: 'Pricing service unavailable' });
+            }
 
-            const cleanPrice = (p) => parseFloat(p);
-            const entryPrice = cleanPrice(trade.entryPrice);
-            const exitPriceNum = cleanPrice(exitPrice || entryPrice);
+            const entryPrice = parseFloat(trade.entryPrice);
+            const exitPriceNum = parseFloat(freshPrice);
 
             const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
 
-            // CRITICAL: Use high precision for win/loss determination to match on-chain contract logic
+            // Determined by backend price oracle
             const isWin = isUp ? (exitPriceNum > entryPrice) : (exitPriceNum < entryPrice);
 
             const duration = Number(trade.duration) || 15;
