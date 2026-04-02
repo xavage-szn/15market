@@ -1146,7 +1146,8 @@ export default function UserApp() {
     if (!activeAmount || parseFloat(activeAmount) <= 0) return notify("Enter a valid amount", "error");
 
     const currentBal = sessionMode ? sessionBalance : balance;
-    const stakeAmt = parseFloat(activeAmount);
+    const sanitizedAmount = (activeAmount || "0").toString().replace(',', '.');
+    const stakeAmt = parseFloat(sanitizedAmount);
 
     // For session trades, require a small margin (0.1 USDC) for gas to avoid "Insufficient funds for gas" errors
     const gasMargin = sessionMode ? 0.1 : 0;
@@ -1182,14 +1183,14 @@ export default function UserApp() {
       if (!isConnected) {
         throw new Error("Please connect wallet first");
       }
-      const amountWei = parseUnits(parseFloat(activeAmount).toFixed(18), 18);
+      const amountWei = parseUnits(parseFloat(sanitizedAmount).toFixed(18), 18);
       let txHash;
 
       // ─── ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ───
       if (activeType === 'rounds') {
-        const roundId = params.poolId;
+        const roundId = params.roundId || params.poolId;
         const dirVal = (activeDirection === "UP" ? 1 : 0);
-        const amountWei = parseEther(parseFloat(activeAmount).toFixed(6));
+        const amountWei = parseEther(parseFloat(sanitizedAmount).toFixed(6));
 
         // --- OPTIMISTIC BALANCE DEDUCTION (instant UI feedback) ---
         if (sessionMode) {
@@ -1207,8 +1208,8 @@ export default function UserApp() {
             body: JSON.stringify({
               address, // main address
               roundId: roundId.toString(),
-              direction: dirVal,
-              amount: activeAmount
+              direction: dirVal === 1 ? "UP" : "DOWN",
+              amount: sanitizedAmount
             })
           });
           const data = await res.json();
@@ -1326,7 +1327,7 @@ export default function UserApp() {
                   duration: Number(activeDuration),
                   entryPrice: entryPriceParams.toString(),
                   marketId: assetId,
-                  amount: activeAmount
+                  amount: sanitizedAmount
                 }
               })
             });

@@ -782,13 +782,15 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
         const symbol = ID_ASSET_MAP[Number(marketId)] || 'BTC';
 
+        const normalizedDirection = (direction === 1 || direction === '1' || direction === 'UP' || direction === 'buy') ? 'UP' : 'DOWN';
+
         const tradeData = {
             id: id.toString(),
             user: address, // Main wallet for identification
             owner: address,
             sessionOwner: sessionAddr,
             amount: amount,
-            direction: direction,
+            direction: normalizedDirection,
             duration: duration,
             entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
             symbol: symbol,

@@ -165,12 +165,14 @@ app.get('/rounds/status', async (req, res) => {
 
 app.post('/rounds/session-enter', async (req, res) => {
     try {
-        const { address, direction, amount, poolId, asset } = req.body;
-        if (!address || !direction || !amount) return res.status(400).json({ error: 'Missing parameters' });
+        const { address, direction, amount, roundId, asset } = req.body;
+        if (!address || direction === undefined || !amount || !roundId) {
+            return res.status(400).json({ error: 'Missing parameters' });
+        }
 
         const { wallet } = await deriveUserWallet(address);
-        const blockchain = require('./src/blockchain');
         const { ethers } = require('ethers');
+        const blockchain = require('./src/blockchain');
 
         const contract = new ethers.Contract(
             process.env.ROUNDS_CONTRACT_ADDRESS,
@@ -178,29 +180,42 @@ app.post('/rounds/session-enter', async (req, res) => {
             wallet
         );
 
-        const dirMap = { 'UP': 0, 'DOWN': 1 };
-        const val = ethers.parseUnits(parseFloat(amount).toFixed(18), 18);
-        
-        const tx = await contract.enterRound(poolId, dirMap[direction], { value: val });
+        // Normalize direction: Contract expects 0=DOWN, 1=UP
+        // Frontend sends dirVal: 1=UP, 0=DOWN. If it's already a number, use it.
+        let dirVal;
+        if (typeof direction === 'number') {
+            dirVal = direction;
+        } else {
+            dirVal = (direction === 'UP' || direction === 'buy') ? 1 : 0;
+        }
 
-        // --- OPTIMISTIC REDIS UPDATE FOR PARTICIPANT COUNT ---
+        const cleanAmount = amount.toString().replace(',', '.'); // Handle European decimals
+        const val = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
+        
+        console.log(`[Rounds] Session Entry: User ${address} entering round ${roundId} ${dirVal === 1 ? 'UP' : 'DOWN'} with ${amount} USDC`);
+        const tx = await contract.enterRound(roundId, dirVal, { value: val });
+
+        // --- OPTIMISTIC REDIS UPDATE ---
         try {
-            const symbol = asset.length < 5 ? `${asset.toUpperCase()}USDT` : asset.toUpperCase();
+            const sym = asset || 'ETH';
+            const symbol = sym.length < 5 ? `${sym.toUpperCase()}USDT` : sym.toUpperCase();
             const state = await redis.getRound(`${symbol}_state`);
-            if (state && state.next && state.next.id === poolId) {
-                const side = direction === 'UP' ? 'long' : 'short';
-                if (!state.next.pools) state.next.pools = { long: 0, short: 0, participants: 0 };
-                state.next.pools[side] = (state.next.pools[side] || 0) + parseFloat(amount);
-                state.next.pools.participants = (state.next.pools.participants || 0) + 1;
+            if (state && state.next && state.next.id.toString() === roundId.toString()) {
+                const side = dirVal === 1 ? 'long' : 'short';
+                if (!state.next.pools) state.next.pools = { long: 1, short: 1, participants: 0 };
+                state.next.pools[side] += parseFloat(cleanAmount);
+                state.next.pools.participants += 1;
                 await redis.setRound(`${symbol}_state`, state);
-                console.log(`[Rounds] Updated state: ${symbol} ${side} +${amount}`);
             }
         } catch (redisErr) {
             console.warn(`[Rounds] Optimistic update failed:`, redisErr.message);
         }
 
         res.json({ success: true, txHash: tx.hash });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) {
+        console.error(`[Rounds] Session Enter Error:`, e.message);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get('/active', async (req, res) => {
