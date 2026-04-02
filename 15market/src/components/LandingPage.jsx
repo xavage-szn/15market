@@ -172,7 +172,7 @@ export function LandingPage({ theme, onToggle }) {
                                         repeat: Infinity,
                                         ease: "easeInOut"
                                     }}
-                                    className="absolute -top-24 scale-125 pointer-events-none hidden md:block"
+                                    className="absolute -top-12 sm:-top-16 md:-top-24 scale-[0.8] sm:scale-100 md:scale-125 pointer-events-none"
                                 >
                                     <svg width="80" height="80" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                                         <motion.path 

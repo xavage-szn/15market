@@ -335,7 +335,7 @@ class TradeProcessor {
             const isWin = isUp ? (exitVal > entryVal) : (exitVal < entryVal);
 
             const duration = Number(trade.duration) || 15;
-            const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+            const multiplier = duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
             const expectedPayout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 1e8) / 1e8) : 0;
 
             // --- FINAL SAFETY GUARD: CONTRACT BALANCE ---

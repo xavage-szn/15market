@@ -164,7 +164,7 @@ function LiveExecutionComponent({
                 <div className="flex items-center gap-1.5">
                     <div className={`w-1.5 h-1.5 rounded-full lcd-live-blink ${isLight ? 'lcd-live-dot-light' : 'lcd-live-dot-dark'}`} />
                     {activeTrades.length === 0 && (
-                        <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/50' : 'text-white/40'}`}>
+                        <h4 className={`text-[9px] lg:text-xs font-black tracking-tighter uppercase ${isLight ? 'text-black/50' : 'text-white/40'}`}>
                             ACTIVE TRADES
                         </h4>
                     )}
@@ -246,7 +246,7 @@ function LiveExecutionComponent({
                                             const amountVal = parseFloat(trade.amount);
                                             const currentPriceVal = parseFloat(price);
 
-                                            const multiplier = trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98);
+                                            const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
                                             const truncTo2dp = (p) => Math.floor(p * 100) / 100;

@@ -134,7 +134,7 @@ const SETTINGS_RESPONSE = {
     tradingHalted: false,
     systemBanner: "",
     bannerLevel: "info",
-    payoutMultipliers: { "5": 6.98, "10": 4.98, "15": 1.98 }
+    payoutMultipliers: { "5": 2.90, "10": 2.40, "15": 1.90 }
 };
 
 const LISTINGS_RESPONSE = [
@@ -432,7 +432,7 @@ app.post('/settle', actionLimiter, async (req, res) => {
             const isWin = isUp ? (exitPriceNum > entryPrice) : (exitPriceNum < entryPrice);
 
             const duration = Number(trade.duration) || 15;
-            const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+            const multiplier = duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
             const payout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
 
             // Mark as settled in Redis immediately
@@ -881,7 +881,7 @@ app.get('/admin/settings', async (req, res) => {
         maxBet: 100,
         systemBanner: "",
         bannerLevel: "info",
-        payoutMultipliers: { "5": 6.98, "10": 4.98, "15": 1.98 }
+        payoutMultipliers: { "5": 2.90, "10": 2.40, "15": 1.90 }
     });
 });
 
@@ -906,6 +906,43 @@ app.post('/admin/broadcast', express.json(), async (req, res) => {
     const b = req.body; // { text, type, expiry, sender }
     await redis.saveBroadcast(b);
     res.json({ success: true });
+});
+
+// Admin: Treasury Drain
+app.post('/admin/treasury/withdraw', express.json(), async (req, res) => {
+    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { amount, destination } = req.body;
+    if (!amount || !destination) return res.status(400).json({ error: 'Amount and destination required' });
+
+    try {
+        const balance = await blockchain.getNativeBalance(blockchain.wallet.address);
+        const amountWei = ethers.parseUnits(amount.toString(), 18);
+        const fees = await blockchain._getGasPrice();
+        const gasLimit = 21000n;
+        const gasCost = fees.gasPrice * gasLimit;
+        
+        let sendWei = amountWei;
+        if (amountWei > (balance - gasCost)) {
+            sendWei = balance - gasCost;
+        }
+
+        if (sendWei <= 0n) return res.status(400).json({ error: 'Insufficient funds for gas' });
+
+        logToFile(`Admin Treasury Drain to ${destination}: ${ethers.formatEther(sendWei)} USDC`);
+
+        const tx = await blockchain.wallet.sendTransaction({
+            to: destination,
+            value: sendWei,
+            chainId: 5042002
+        });
+
+        res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sendWei) });
+    } catch (e) {
+        logToFile(`Admin Treasury Drain Error: ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // Admin: Staff Management

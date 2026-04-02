@@ -110,8 +110,8 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         y: isOpen ? 0 : 'calc(100% - 32px)',
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-      className="fixed bottom-0 left-0 right-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '260px' }}
+      className="absolute inset-0 z-[110] flex flex-col pointer-events-none"
+      style={{ height: '100%' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
@@ -2156,7 +2156,7 @@ export default function UserApp() {
       // Calculate payout: Stake * Multiplier
       const amt = parseFloat(trade.amount);
       const duration = trade.duration || 15;
-      const multiplier = duration <= 5 ? 6.98 : (duration <= 10 ? 4.98 : 1.98);
+      const multiplier = duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
       const payout = amt * multiplier;
 
       creditedPayouts.current.add(betId);
@@ -2575,7 +2575,7 @@ export default function UserApp() {
           </header>
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
-          <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? 'mt-0 mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
+          <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[2px] mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
             <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
             <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />
             {isSmallScreen && (
@@ -2590,7 +2590,7 @@ export default function UserApp() {
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
             <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} verified={hasRoundsAccess} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden pb-[36px]' : 'h-auto lg:h-[calc(100vh-105px)] landscape:h-[calc(100vh-105px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden' : 'h-auto lg:h-[calc(100vh-105px)] landscape:h-[calc(100vh-105px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -2616,16 +2616,20 @@ export default function UserApp() {
 
 
                     {/* Chart Container - flex-1 fills all remaining vertical space on mobile */}
-                    <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[24px] lg:rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'backdrop-blur-2xl shadow-[0_0_40px_rgba(0,0,0,0.2)]' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
+                    <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'backdrop-blur-2xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
                       style={{
                         background: isSmallScreen 
-                          ? (theme === 'light' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.12)') 
-                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.10)' : 'rgba(10, 10, 10, 0.7)'),
-                        boxShadow: isSmallScreen ? 'none' : (theme === 'light'
-                          ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
-                          : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
+                          ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(255, 255, 255, 0.12)') 
+                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
+                        boxShadow: isSmallScreen 
+                          ? (theme === 'light' 
+                            ? '0 25px 80px -10px rgba(60,179,113,0.15), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.15)' 
+                            : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.2), inset 0 2px 4px rgba(255,255,255,0.1)')
+                          : (theme === 'light'
+                            ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                            : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
                         borderColor: isSmallScreen
-                          ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(60, 179, 113, 0.25)')
+                          ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.08)')
                           : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
                       }}>
                       <div className="flex-1 w-full h-full flex relative">
@@ -2677,15 +2681,15 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[255px] flex-none' : 'h-full flex-1'} min-h-0`}
+                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none relative' : 'h-full flex-1'} min-h-0`}
                   >
-                    {/* Trade Terminal / Active Section Side-by-Side on Mobile */}
-                    <div className={`w-full flex flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex flex-1 min-h-0' : 'hidden md:hidden lg:hidden'}`}>
+                    {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
+                    <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex flex-1 min-h-0 pb-[34px] px-1' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
                       <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : 'rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 shadow-lg'}`}
                         style={{
-                          background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
-                          borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)')
+                          background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
+                          borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)')
                         }}>
                         {gameMode === 'rounds' ? (
                           <RoundsTerminal
@@ -2727,8 +2731,8 @@ export default function UserApp() {
                       {(gameMode !== 'rounds') && (
                         <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 shadow-lg flex flex-col`}
                           style={{
-                            background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                            background: theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)',
+                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)'
                           }}>
                           <div className="flex flex-col h-full min-h-0">
                             <LiveExecution
@@ -2740,6 +2744,18 @@ export default function UserApp() {
                         </div>
                       )}
                     </div>
+                    {/* V2 Mobile History Drawer - Integrated into the terminal section */}
+                    {isSmallScreen && (
+                      <MobileBottomHistoryPane
+                        isOpen={showMobileHistory}
+                        onToggle={() => setShowMobileHistory(!showMobileHistory)}
+                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                        theme={theme}
+                        setSelectedPnLTrade={setSelectedPnLTrade}
+                        setIsPnLOpen={setIsPnLOpen}
+                        userProfile={userProfile}
+                      />
+                    )}
                     {/* Compact spacer */}
 
                     {!isSmallScreen && (
@@ -2851,18 +2867,7 @@ export default function UserApp() {
               {/* Forced Orientation Overlay for V2 Mobile */}
               {showPortraitLock && <PortraitPrompt theme={theme} />}
 
-              {/* V2 Mobile History Bottom Drawer */}
-              {isSmallScreen && (
-                <MobileBottomHistoryPane
-                  isOpen={showMobileHistory}
-                  onToggle={() => setShowMobileHistory(!showMobileHistory)}
-                  tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-                  theme={theme}
-                  setSelectedPnLTrade={setSelectedPnLTrade}
-                  setIsPnLOpen={setIsPnLOpen}
-                  userProfile={userProfile}
-                />
-              )}
+
             </RoundsAccessGate>
 
 

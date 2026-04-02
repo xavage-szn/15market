@@ -552,11 +552,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${
-                                result.won
+                            className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${result.won
                                     ? 'bg-[#3CB371]/20 border-[#3CB371]/30'
                                     : 'bg-[#FF4444]/20 border-[#FF4444]/30'
-                            }`}
+                                }`}
                         >
                             <div className={`w-2 h-2 rounded-full animate-pulse ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
                             <span className={`text-[10px] font-black uppercase ${isDark ? 'text-white' : 'text-[#0a261a]'} tracking-widest`}>
@@ -605,5 +604,5 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 )}
             </AnimatePresence>
         </div>
-);
+    );
 }

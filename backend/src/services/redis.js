@@ -203,6 +203,22 @@ class RedisStore {
         return this.rounds.get(id.toString());
     }
 
+    async getBroadcast() {
+        if (this.isCloud) {
+            const data = await this.redis.get('15market_broadcast');
+            return data ? JSON.parse(data) : null;
+        }
+        return this._broadcast || null;
+    }
+
+    async saveBroadcast(b) {
+        if (this.isCloud) {
+            await this.redis.set('15market_broadcast', JSON.stringify(b));
+        } else {
+            this._broadcast = b;
+        }
+    }
+
     async setRound(id, data) {
         if (this.isCloud) {
             await this.redis.hset('15market_rounds', id.toString(), JSON.stringify(data));

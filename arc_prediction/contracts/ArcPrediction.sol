@@ -100,9 +100,9 @@ contract ArcPrediction is Ownable, ReentrancyGuard {
         if (won) {
             bet.won = true;
             profile.totalWins += 1;
-            uint256 multiplier = 198; 
-            if (bet.duration <= 5) multiplier = 698;
-            else if (bet.duration <= 10) multiplier = 498;
+            uint256 multiplier = 190; 
+            if (bet.duration <= 5) multiplier = 290;
+            else if (bet.duration <= 10) multiplier = 240;
 
             payout = (bet.amount * multiplier) / 100;
             

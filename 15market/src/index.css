@@ -367,7 +367,7 @@ body.light {
   color: rgba(15, 38, 24, 0.3) !important;
 }
 
-.light input:focus,
+.light input:focus:not(.force-transparent-bg),
 .light select:focus,
 .light textarea:focus {
   border-color: rgba(42, 157, 92, 0.5) !important;

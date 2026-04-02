@@ -137,7 +137,7 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                             <div className="text-[9px] font-black flex items-center gap-1" style={{ color: statusColor }}>
                                                 {isWinning ? '▲' : '▼'}
                                                 {isWinning
-                                                    ? `+${(Math.floor(parseFloat(trade.amount) * (trade.duration <= 5 ? 6.98 : (trade.duration <= 10 ? 4.98 : 1.98)) * 100) / 100).toFixed(2)}`
+                                                    ? `+${(Math.floor(parseFloat(trade.amount) * (trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90)) * 100) / 100).toFixed(2)}`
                                                     : `-${Number(trade.amount).toFixed(2)}`
                                                 }
                                             </div>

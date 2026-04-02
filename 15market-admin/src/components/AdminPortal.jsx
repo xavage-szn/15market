@@ -124,6 +124,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [currentUser, setCurrentUser] = useState(null);
 
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [settingsSubTab, setSettingsSubTab] = useState('platform');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const [metrics, setMetrics] = useState({
@@ -703,6 +704,34 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }
     };
 
+    const handleWithdraw = async (amount) => {
+        if (!amount || isNaN(amount) || Number(amount) <= 0) {
+            notify('error', 'INVALID AMOUNT', 'Please specify a valid withdrawal amount.');
+            return;
+        }
+
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/treasury/withdraw`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                },
+                body: JSON.stringify({ amount: Number(amount), destination: ROOT_WALLET })
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                notify('success', 'WITHDRAWAL SUCCESS', `Successfully swept ${data.amount} USDC to Root. TX: ${data.txHash}`);
+                setIsTreasuryModalOpen(false);
+            } else {
+                notify('error', 'WITHDRAWAL FAILED', data.error || 'Failed to drain treasury.');
+            }
+        } catch (e) {
+            notify('error', 'NETWORK ERROR', e.message);
+        }
+    };
+
     // --- TOKEN LISTING ENGINE ---
 
     const VERIFIED_SUGGESTIONS = [
@@ -835,7 +864,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         tradingHalted: false,
         minBet: 0.1,
         maxBet: 1000000,
-        payoutMultipliers: { "5": 6.98, "10": 4.98, "15": 1.98 },
+        payoutMultipliers: { "5": 2.90, "10": 2.40, "15": 1.90 },
         treasuryThreshold: 0.5,
         maxConcurrentTrades: 50,
         defaultBroadcastDuration: 60,
@@ -1909,19 +1938,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
                     <NavItem icon={BarChart3} label="Dashboard" id="dashboard" active={activeTab === 'dashboard'} onClick={setActiveTab} />
                     <NavItem icon={Settings} label="Settings" id="settings" active={activeTab === 'settings'} onClick={setActiveTab} />
+                    <NavItem icon={Megaphone} label="Broadcasts" id="broadcasts" active={activeTab === 'broadcasts'} onClick={setActiveTab} />
+                    <NavItem icon={Trophy} label="Campaigns" id="campaigns" active={activeTab === 'campaigns'} onClick={setActiveTab} />
                     <NavItem icon={Gavel} label="Disputes" id="disputes" active={activeTab === 'disputes'} onClick={setActiveTab} />
-                    {currentUser?.role === 'ROOT' && (
-                        <NavItem icon={Users} label="Staff Mgmt" id="staff" active={activeTab === 'staff'} onClick={setActiveTab} />
-                    )}
-                    <NavItem icon={Coins} label="Treasury" id="treasury" active={activeTab === 'treasury'} onClick={setActiveTab} />
-                    <NavItem icon={Globe} label="Geo-Map" id="globe" active={activeTab === 'globe'} onClick={setActiveTab} />
-                    <NavItem icon={Users} label="Profiles" id="directory" active={activeTab === 'directory'} onClick={setActiveTab} />
-                    <NavItem icon={Megaphone} label="Campaigns" id="campaigns" active={activeTab === 'campaigns'} onClick={setActiveTab} />
-                    <NavItem icon={Radio} label="Broadcasts" id="broadcasts" active={activeTab === 'broadcasts'} onClick={setActiveTab} />
-                    <NavItem icon={Key} label="Beta Entry" id="beta" active={activeTab === 'beta'} onClick={setActiveTab} />
-                    <NavItem icon={Database} label="Markets" id="listing" active={activeTab === 'listing'} onClick={setActiveTab} />
-                    <NavItem icon={ShieldCheck} label="Security" id="security" active={activeTab === 'security'} onClick={setActiveTab} />
-                    <NavItem icon={TerminalIcon} label="System Logs" id="terminal" active={activeTab === 'terminal'} onClick={setActiveTab} />
                     <div className="h-[1px] w-full bg-white/5 my-4" />
                     <button
                         onClick={() => setIsMessagingOpen(true)}
@@ -2389,609 +2408,13 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 </motion.div>
                             )
                             }
-                            {
-                                activeTab === 'treasury' && (
-                                    <motion.div
-                                        key="treasury"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className="space-y-8"
-                                    >
-                                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                                            <div className="flex flex-col">
-                                                <h3 className="text-xl lg:text-2xl font-black text-white uppercase tracking-tighter">
-                                                    Arc Treasury (USDC)
-                                                </h3>
-                                                <p className="text-[9px] lg:text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
-                                                    Automated platform reserve tracking for Arc Network.
-                                                </p>
-                                            </div>
-                                            <div className="flex gap-4">
-                                                <div className="bg-[#3CB371]/10 border border-[#3CB371]/20 px-6 py-3 rounded-2xl flex flex-col items-center flex-1 lg:flex-none">
-                                                    <p className="text-[8px] font-black text-[#3CB371] uppercase tracking-widest mb-1">Global Health</p>
-                                                    <p className="text-xl font-black text-white uppercase">Optimal</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-8">
-                                            {/* Unified Treasury Card */}
-                                            <div className="bg-[#0D0D0D] border border-white/10 p-10 rounded-[48px] relative overflow-hidden group">
-                                                <div className="flex items-center gap-4 mb-10">
-                                                    <div className="w-14 h-14 bg-[#3CB371]/10 rounded-2xl flex items-center justify-center border border-[#3CB371]/20">
-                                                        <Database size={28} className="text-[#3CB371]" />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-lg font-black text-white uppercase italic">Arc Treasury</h4>
-                                                        <p className="text-[9px] font-black text-[#3CB371] uppercase tracking-widest">Global Liquidity Vault</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-8">
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-2">Available Balance</p>
-                                                        <p className="text-3xl lg:text-5xl font-black text-white tracking-tighter tabular-nums leading-none">
-                                                            {unifiedMetrics.displayReserve} <span className="text-sm lg:text-xl font-bold text-white/40">{unifiedMetrics.currencyUnit}</span>
-                                                        </p>
-                                                    </div>
-
-                                                    <div className="p-6 bg-white/5 border border-white/10 rounded-3xl relative overflow-hidden">
-                                                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                                                            <Lock size={24} />
-                                                        </div>
-                                                        <p className="text-[9px] font-black text-[#3CB371] uppercase tracking-[0.2em] mb-2">Treasury Authority Address</p>
-
-                                                        <div className="flex flex-col md:flex-row items-center gap-6">
-                                                            {/* QR Code Container */}
-                                                            {unifiedMetrics.reserveAddress && (
-                                                                <div className="p-3 bg-white rounded-xl shadow-lg shrink-0">
-                                                                    <QRCodeCanvas
-                                                                        value={unifiedMetrics.reserveAddress}
-                                                                        size={100}
-                                                                        level="H"
-                                                                        bgColor="#FFFFFF"
-                                                                        fgColor="#000000"
-                                                                    />
-                                                                </div>
-                                                            )}
-
-                                                            <div className="flex-1 w-full space-y-4">
-                                                                <div className="flex items-center gap-3">
-                                                                    <p className="text-[11px] font-mono font-bold text-white break-all bg-black/40 p-3 rounded-xl border border-white/5 flex-1">
-                                                                        {unifiedMetrics.reserveAddress || 'Scanning...'}
-                                                                    </p>
-                                                                    {unifiedMetrics.reserveAddress && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                navigator.clipboard.writeText(unifiedMetrics.reserveAddress);
-                                                                                notify('success', 'COPIED', 'Treasury address copied to clipboard.');
-                                                                            }}
-                                                                            className="p-3 bg-[#3CB371]/20 hover:bg-[#3CB371]/30 rounded-xl border border-[#3CB371]/30 text-[#3CB371] transition-all"
-                                                                        >
-                                                                            <Copy size={16} />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest leading-relaxed">
-                                                                    Scan to fund the Arc Treasury.
-                                                                    Direct transfers are automatically detected and credited to the vault balance.
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <button
-                                                        onClick={() => setIsTreasuryModalOpen(true)}
-                                                        className="w-full py-5 bg-[#3CB371]/10 hover:bg-[#3CB371]/20 border border-[#3CB371]/10 text-[#3CB371] text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl transition-all"
-                                                    >
-                                                        Manage Liquidity
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Action Alert */}
-                                        <div className="bg-[#1A1010] border border-red-500/20 p-6 lg:p-8 rounded-[40px] flex flex-col md:flex-row items-center justify-between gap-6">
-                                            <div className="flex items-center gap-6">
-                                                <div className="p-4 bg-red-500/20 rounded-2xl border border-red-500/30 w-fit">
-                                                    <ShieldAlert className="text-red-500" size={32} />
-                                                </div>
-                                                <div>
-                                                    <h5 className="text-sm font-black text-white uppercase tracking-tight">Emergency Protocol Notice</h5>
-                                                    <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">
-                                                        Treasury withdrawal triggers a platform-wide verification.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-4 w-full md:w-auto">
-                                                <button
-                                                    onClick={() => {
-                                                        setTreasuryAction('WITHDRAW');
-                                                        setIsTreasuryModalOpen(true);
-                                                    }}
-                                                    className="w-full md:px-8 py-4 bg-red-600 hover:bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg"
-                                                >
-                                                    Emergency Drain
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
 
 
 
-                            {
-                                activeTab === 'listing' && (
-                                    <motion.div
-                                        key="listing"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className="space-y-8"
-                                    >
-                                        {/* Section Header */}
-                                        <div className="flex flex-col mb-4 lg:mb-8">
-                                            <h3 className="text-lg lg:text-xl font-black text-white uppercase tracking-tighter">Market Provisioning</h3>
-                                            <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Configure & deploy tradable pairs with live liquidity feeds.</p>
-                                        </div>
 
-                                        {/* Suggestions Row */}
-                                        <div className="bg-[#0D0D0D] border border-white/5 p-6 rounded-[32px] overflow-hidden">
-                                            <h4 className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-4">Verified Bluechips</h4>
-                                            <div className="flex flex-wrap gap-2 lg:gap-3">
-                                                {VERIFIED_SUGGESTIONS.map(token => {
-                                                    const isListed = listedTokens.some(t => t.id === token.id);
-                                                    return (
-                                                        <button
-                                                            key={token.id}
-                                                            onClick={() => !isListed && handleListToken(token)}
-                                                            className={`px-3 lg:px-5 py-2 lg:py-3 rounded-xl lg:rounded-2xl flex items-center gap-2 lg:gap-3 border transition-all ${isListed
-                                                                ? 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'
-                                                                : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:border-white/10'}`}
-                                                        >
-                                                            <span className="text-[10px] lg:text-xs font-black uppercase">{token.symbol}</span>
-                                                            <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
-                                                            <span className="text-[9px] lg:text-[10px] font-bold opacity-60 hidden sm:block">{token.name}</span>
-                                                            {!isListed && <PlusCircle size={12} className="ml-1 opacity-40 shrink-0" />}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
 
-                                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                                            {/* Manual Entry Form */}
-                                            <div className="lg:col-span-4 bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] relative overflow-hidden group">
-                                                <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
-                                                    <Zap size={140} />
-                                                </div>
 
-                                                <h3 className="text-sm font-black text-white uppercase mb-6 flex items-center gap-2">
-                                                    <PlusCircle size={16} className="text-[#3CB371]" />
-                                                    Custom Token List
-                                                </h3>
 
-                                                <div className="space-y-5 relative z-10">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest ml-1 mb-1.5 block">Mint Address</label>
-                                                        <input
-                                                            type="text"
-                                                            value={newTokenForm.mint}
-                                                            onChange={e => setNewTokenForm({ ...newTokenForm, mint: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono font-bold text-white outline-none focus:border-[#3CB371]/40"
-                                                            placeholder="Solana Mint Pubkey..."
-                                                        />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <label className="text-[9px] font-black text-white/20 uppercase tracking-widest ml-1 mb-1.5 block">Pair Symbol</label>
-                                                            <input
-                                                                type="text"
-                                                                value={newTokenForm.symbol}
-                                                                onChange={e => setNewTokenForm({ ...newTokenForm, symbol: e.target.value.toUpperCase() })}
-                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-black text-white outline-none focus:border-[#3CB371]/40"
-                                                                placeholder="e.g. MON"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[9px] font-black text-white/20 uppercase tracking-widest ml-1 mb-1.5 block">Pair Name</label>
-                                                            <input
-                                                                type="text"
-                                                                value={newTokenForm.name}
-                                                                onChange={e => setNewTokenForm({ ...newTokenForm, name: e.target.value })}
-                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-bold text-white outline-none focus:border-[#3CB371]/40"
-                                                                placeholder="Project Name"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest ml-1 mb-1.5 block">Moralis Pair Address (Widget)</label>
-                                                        <input
-                                                            type="text"
-                                                            value={newTokenForm.pair}
-                                                            onChange={e => setNewTokenForm({ ...newTokenForm, pair: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono font-bold text-white outline-none focus:border-[#3CB371]/40"
-                                                            placeholder="AMM Pair Address..."
-                                                        />
-                                                    </div>
-                                                    <button
-                                                        onClick={() => {
-                                                            if (!newTokenForm.symbol || !newTokenForm.mint || !newTokenForm.pair) {
-                                                                notify('error', 'INCOMPLETE DATA', 'Fill all critical fields (Symbol, Contract, Pair) to initialize market.');
-                                                                return;
-                                                            }
-                                                            handleListToken(newTokenForm);
-                                                            setNewTokenForm({ symbol: '', name: '', mint: '', pair: '', pythId: '', binance: '' });
-                                                        }}
-                                                        className="w-full bg-[#3CB371] text-white py-4.5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:scale-[1.02] transition-all shadow-[0_10px_30px_rgba(60,179,113,0.3)]"
-                                                    >
-                                                        Initialize Market Pair
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Active Tokens Table */}
-                                            <div className="lg:col-span-8 bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden">
-                                                <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Active Deployments</h3>
-                                                    <div className="w-fit px-4 py-1.5 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-lg text-[9px] font-black text-[#3CB371] uppercase tracking-widest">
-                                                        {listedTokens.length} Markets Ready
-                                                    </div>
-                                                </div>
-                                                <div className="max-h-[600px] overflow-x-auto custom-scrollbar">
-                                                    <table className="w-full">
-                                                        <thead className="bg-[#050505]">
-                                                            <tr>
-                                                                <th className="text-left px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Market Asset</th>
-                                                                <th className="text-left px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Oracle Links</th>
-                                                                <th className="text-center px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Configuration</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-white/[0.02]">
-                                                            {listedTokens.map((token) => (
-                                                                <tr key={token.id} className={`group hover:bg-white/[0.01] transition-all ${token.id === activeTokenId ? 'bg-[#3CB371]/[0.02]' : ''}`}>
-                                                                    <td className="px-8 py-6">
-                                                                        <div className="flex items-center gap-4">
-                                                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm relative ${token.id === activeTokenId ? 'bg-[#3CB371] text-black shadow-[0_0_20px_rgba(60,179,113,0.4)]' : 'bg-white/5 text-white/40'}`}>
-                                                                                {token.symbol.slice(0, 2)}
-                                                                                {token.id === activeTokenId && (
-                                                                                    <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white rounded-full flex items-center justify-center border-2 border-[#3CB371]">
-                                                                                        <div className="w-1.5 h-1.5 bg-[#3CB371] rounded-full animate-pulse" />
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                            <div>
-                                                                                <p className="text-xs font-black text-white uppercase">{token.name}</p>
-                                                                                <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest mt-0.5">{token.symbol}/USDC</p>
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-8 py-6">
-                                                                        <div className="space-y-1.5">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500/40" />
-                                                                                <p className="text-[9px] font-mono text-white/30 truncate w-32">{token.mint}</p>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className="w-1.5 h-1.5 rounded-full bg-yellow-500/40" />
-                                                                                <p className="text-[9px] font-mono text-[#3CB371] truncate w-32">{token.pair}</p>
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-8 py-6">
-                                                                        <div className="flex items-center justify-center gap-3">
-                                                                            {token.id === activeTokenId ? (
-                                                                                <div className="px-4 py-2 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-xl text-[9px] font-black text-[#3CB371] uppercase tracking-widest flex items-center gap-2">
-                                                                                    <Activity size={10} className="animate-pulse" />
-                                                                                    Active
-                                                                                </div>
-                                                                            ) : (
-                                                                                <button
-                                                                                    onClick={() => handleSetActiveMarket(token.id)}
-                                                                                    className="px-4 py-2 bg-white/5 hover:bg-[#3CB371] text-white/40 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border border-white/5"
-                                                                                >
-                                                                                    Switch To
-                                                                                </button>
-                                                                            )}
-                                                                            <button
-                                                                                onClick={() => handleDelistToken(token.id)}
-                                                                                className="p-2 hover:bg-red-500/10 text-white/10 hover:text-red-500 rounded-xl transition-colors"
-                                                                            >
-                                                                                <AlertCircle size={16} />
-                                                                            </button>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                activeTab === 'globe' && (
-                                    <motion.div
-                                        key="globe"
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        className="h-[calc(100vh-140px)] w-full relative"
-                                    >
-                                        <GlobalExpansionMap
-                                            theme="dark"
-                                            currentNetwork="ARC"
-                                            activeBets={unifiedMetrics.activeList}
-                                            isFullscreen={true}
-                                        />
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                activeTab === 'directory' && (
-                                    <motion.div
-                                        key="directory"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        className="space-y-6"
-                                    >
-                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
-                                            <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                <div className="flex flex-col">
-                                                    <h3 className="text-sm font-black uppercase tracking-widest text-white">Network User Directory</h3>
-                                                    <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Verified identities & social links</p>
-                                                </div>
-                                                <div className="flex items-center gap-4 text-[9px] lg:text-[10px] font-black text-[#3CB371] uppercase w-fit">
-                                                    <div className="h-2 w-2 rounded-full bg-[#3CB371] animate-pulse" />
-                                                    {protocolData.profiles?.length || 0} Total Profiles
-                                                </div>
-                                            </div>
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-left">
-                                                    <thead>
-                                                        <tr className="bg-white/[0.02] border-b border-white/5">
-                                                            <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest">Operator Address</th>
-                                                            <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest">X (Twitter)</th>
-                                                            <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest text-center">Wins/Total</th>
-                                                            <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-widest text-right">Volume</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {protocolData.profiles?.length > 0 ? [...protocolData.profiles].sort((a, b) => (b.trades || 0) - (a.trades || 0)).map((profile) => (
-                                                            <tr key={profile.address} className="border-b border-white/5 hover:bg-white/[0.01] transition-colors group">
-                                                                <td className="px-8 py-6">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center overflow-hidden border border-white/5">
-                                                                            {profile.xProfileImage ? (
-                                                                                <img src={profile.xProfileImage} alt="" className="w-full h-full object-cover" />
-                                                                            ) : (
-                                                                                <User size={16} className="text-white/20 group-hover:text-[#3CB371] transition-colors" />
-                                                                            )}
-                                                                        </div>
-                                                                        <div>
-                                                                            <p className="text-xs font-black text-white">{String(profile.username || "Anonymous Operator")}</p>
-                                                                            <p className="text-[10px] font-mono text-white/20">{profile.address?.slice(0, 12)}...</p>
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-8 py-6">
-                                                                    {profile.xHandle ? (
-                                                                        <div className="flex items-center gap-2 text-[#1DA1F2] bg-[#1DA1F2]/10 border border-[#1DA1F2]/20 px-3 py-1.5 rounded-lg w-fit">
-                                                                            <Globe size={12} />
-                                                                            <span className="text-[10px] font-black uppercase tracking-widest">@{profile.xHandle}</span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-[10px] font-black text-white/10 uppercase tracking-widest">Not Linked</span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-8 py-6 text-center">
-                                                                    <div className="text-xs font-black text-white">{profile.wins} <span className="text-white/20">/</span> {profile.trades}</div>
-                                                                    <div className="text-[9px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{profile.trades > 0 ? Number((profile.wins / profile.trades) * 100 || 0).toFixed(0) : 0}% WR</div>
-                                                                </td>
-                                                                <td className="px-8 py-6 text-right">
-                                                                    <p className="text-xs font-black text-white">{profile.volume} USDC</p>
-                                                                    <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Life Vol</p>
-                                                                </td>
-                                                            </tr>
-                                                        )) : (
-                                                            <tr>
-                                                                <td colSpan="4" className="py-20 text-center">
-                                                                    <div className="flex flex-col items-center gap-4 opacity-20">
-                                                                        <Shield size={48} />
-                                                                        <p className="text-[10px] font-black uppercase tracking-widest">Database Clear: No Active Profiles</p>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                activeTab === 'beta' && (
-                                    <motion.div
-                                        key="beta"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        className="space-y-6"
-                                    >
-                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
-                                            <div className="p-8 border-b border-white/5">
-                                                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Beta Access Applications</h3>
-                                                <p className="text-[10px] font-bold text-white/20 mt-1">Review and approve requests for access to the Rounds terminal.</p>
-                                            </div>
-
-                                            <div className="p-8 space-y-8">
-                                                {/* PENDING APPLICATIONS */}
-                                                <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
-                                                    <div className="p-6 border-b border-white/5">
-                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Pending Applications</h4>
-                                                    </div>
-                                                    <table className="w-full">
-                                                        <thead>
-                                                            <tr className="border-b border-white/5 bg-white/[0.02]">
-                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">Wallet</th>
-                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">X Handle</th>
-                                                                <th className="px-8 py-4 text-left text-[9px] font-black text-white/20 uppercase tracking-widest">Status</th>
-                                                                <th className="px-8 py-4 text-right text-[9px] font-black text-white/20 uppercase tracking-widest">Actions</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-white/[0.02]">
-                                                            {betaApplications.length > 0 ? betaApplications.map((app, idx) => {
-                                                                const isApproved = app.status === 'approved' || authorizedWallets.includes(app.address.toLowerCase());
-                                                                
-                                                                return (
-                                                                    <tr key={idx} className="hover:bg-white/[0.01] transition-all group">
-                                                                        <td className="px-8 py-5">
-                                                                            <span className="text-[10px] font-mono text-white">{app.address.toLowerCase().slice(0, 8)}...{app.address.toLowerCase().slice(-6)}</span>
-                                                                        </td>
-                                                                        <td className="px-8 py-5">
-                                                                            <span className="text-[10px] font-black text-[#3CB371]">@{app.xHandle || 'N/A'}</span>
-                                                                        </td>
-                                                                        <td className="px-8 py-5">
-                                                                            <span className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-tight ${isApproved ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-yellow-500/10 text-yellow-500'}`}>
-                                                                                {isApproved ? 'Approved' : 'Pending'}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-8 py-5 text-right">
-                                                                            {isApproved ? (
-                                                                                <button
-                                                                                    onClick={() => handleRevokeBeta(app.address)}
-                                                                                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
-                                                                                >
-                                                                                    Revoke
-                                                                                </button>
-                                                                            ) : (
-                                                                                <button 
-                                                                                    onClick={() => handleApproveBeta(app.address, app.email)}
-                                                                                    className="px-4 py-2 bg-[#3CB371] hover:bg-[#2E8B57] text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
-                                                                                >
-                                                                                    Approve
-                                                                                </button>
-                                                                            )}
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            }) : (
-                                                                <tr>
-                                                                    <td colSpan="4" className="py-20 text-center opacity-20">
-                                                                        <Users size={48} className="mx-auto mb-4" />
-                                                                        <p className="text-[10px] font-black uppercase tracking-widest">No pending applications.</p>
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-
-                                                {/* AUTHORIZED USERS */}
-                                                <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
-                                                    <div className="p-6 border-b border-white/5">
-                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Authorized Wallets</h4>
-                                                    </div>
-                                                    <div className="p-6">
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            {authorizedWallets.length > 0 ? authorizedWallets.map((wallet, idx) => (
-                                                                <div key={idx} className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl group hover:border-[#3CB371]/30 transition-all">
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-[10px] font-mono text-white">{wallet.slice(0, 6)}...{wallet.slice(-4)}</span>
-                                                                        <span className="text-[8px] font-black text-white/20 uppercase mt-0.5">Verified Access</span>
-                                                                    </div>
-                                                                    <button 
-                                                                        onClick={() => handleRevokeBeta(wallet)}
-                                                                        className="p-2 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                                                                        title="Revoke Access"
-                                                                    >
-                                                                        <Lock size={14} />
-                                                                    </button>
-                                                                </div>
-                                                            )) : (
-                                                                <div className="col-span-full py-10 text-center opacity-20">
-                                                                    <p className="text-[9px] font-black uppercase tracking-widest">No authorized wallets found.</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                activeTab === 'staff' && currentUser?.role === 'ROOT' && (
-                                    <motion.div
-                                        key="staff"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden"
-                                    >
-                                        <div className="p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="flex flex-col">
-                                                <h3 className="text-sm font-black uppercase tracking-widest text-white">Citadel Operators</h3>
-                                                <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Manage infrastructure access & wallet-based roles</p>
-                                            </div>
-                                            <button
-                                                onClick={() => setIsStaffModalOpen(true)}
-                                                className="w-fit flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
-                                            >
-                                                <PlusCircle size={14} />
-                                                Authorize New Wallet
-                                            </button>
-                                        </div>
-                                        <div className="p-8">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {staffMembers.map((staff) => (
-                                                    <div key={staff.id} className="p-6 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center relative">
-                                                                <User size={20} className="text-white/40 group-hover:text-[#3CB371] transition-colors" />
-                                                                {staff.onboardingComplete ? (
-                                                                    <div className="absolute -top-1 -right-1 bg-[#3CB371] rounded-full p-0.5 border border-[#0D0D0D]">
-                                                                        <CheckCircle2 size={10} className="text-white" />
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-0.5 border border-[#0D0D0D]">
-                                                                        <Clock size={10} className="text-white" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="text-xs font-black text-white truncate w-32">{staff.address}</p>
-                                                                <p className="text-[9px] font-bold text-[#3CB371] uppercase tracking-widest">{staff.role}</p>
-                                                                <p className="text-[10px] text-white/40 font-bold uppercase mt-0.5">{staff.username || 'Uninitialized'}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col items-end gap-3">
-                                                            <div className={`w-2 h-2 rounded-full ${staff.status === 'ACTIVE' ? 'bg-[#3CB371] animate-pulse' : 'bg-white/10'}`} />
-                                                            {staff.role !== 'ROOT' && (
-                                                                <button
-                                                                    onClick={() => handleRevokeRole(staff.id)}
-                                                                    className="p-2 hover:bg-red-500/10 text-white/20 hover:text-red-500 rounded-lg transition-colors group/btn"
-                                                                    title="Revoke Access"
-                                                                >
-                                                                    <LogOut size={14} className="group-hover/btn:scale-110 transition-transform" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
 
 
                             {
@@ -3378,66 +2801,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                     </motion.div>
                                 )
                             }
-                            {
-                                activeTab === 'terminal' && (
-                                    <motion.div
-                                        key="terminal"
-                                        initial={{ opacity: 0, scale: 0.98 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        className="h-[70vh] flex flex-col bg-black/80 border border-white/5 rounded-[32px] overflow-hidden backdrop-blur-3xl shadow-2xl"
-                                    >
-                                        <div className="p-6 lg:p-8 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-black rounded-xl border border-[#3CB371]/30 flex items-center justify-center shrink-0">
-                                                    <TerminalIcon className="text-[#3CB371]" size={20} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">PROTOCOL_TERMINAL</h3>
-                                                    <p className="text-[10px] text-[#3CB371] font-bold uppercase tracking-[0.2em]">Live Stream Active</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4 w-fit">
-                                                <div className="h-2 w-2 rounded-full bg-[#3CB371] animate-ping" />
-                                                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Node Connected</span>
-                                            </div>
-                                        </div>
-
-
-                                        <div className="flex-1 overflow-y-auto p-8 font-mono space-y-2 text-xs custom-scrollbar bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-90">
-                                            {keeperLogs.length > 0 ? keeperLogs.map(log => (
-                                                <div key={log.id} className="flex gap-4 group">
-                                                    <span className="text-white/20 select-none w-20 shrink-0">[{log.timestamp}]</span>
-                                                    <span className={`w-14 shrink-0 font-black tracking-tighter ${log.type === 'ERROR' ? 'text-red-500' :
-                                                        log.type === 'WARN' ? 'text-yellow-500' :
-                                                            'text-[#3CB371]'
-                                                        }`}>
-                                                        {log.type}
-                                                    </span>
-                                                    <span className="text-white/80 whitespace-pre-wrap leading-relaxed group-hover:text-white transition-colors">{log.message}</span>
-                                                </div>
-                                            )) : (
-                                                <div className="h-full flex flex-col items-center justify-center text-white/20 gap-4">
-                                                    <div className="w-12 h-12 border-2 border-white/5 border-t-[#3CB371] rounded-full animate-spin" />
-                                                    <p className="font-black uppercase tracking-widest text-[10px]">Awaiting First Data Packet...</p>
-                                                </div>
-                                            )}
-                                            <div className="h-4" />
-                                        </div>
-
-                                        <div className="p-4 bg-black/40 border-t border-white/5 flex items-center justify-between px-8">
-                                            <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">
-                                                Root Execution Domain: 15market.internal.node
-                                            </p>
-                                            <button
-                                                onClick={() => setKeeperLogs([])}
-                                                className="text-[9px] font-black text-[#FF4444] hover:text-[#FF4444]/80 uppercase tracking-widest px-4 py-2 border border-[#FF4444]/20 rounded-lg transition-all"
-                                            >
-                                                Flush Local Buffer
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
 
                             {
                                 activeTab === 'settings' && (
@@ -3452,44 +2815,56 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                             <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Fine-tune protocol parameters and platform governance.</p>
                                         </div>
 
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                            {/* Governance & Limits */}
-                                            <div className="bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] space-y-8">
+                                        {/* Settings Sub-Nav */}
+                                        <div className="flex flex-wrap gap-2 lg:gap-4 p-2 bg-white/5 border border-white/5 rounded-2xl mb-8">
+                                            {[
+                                                { id: 'platform', label: 'Platform', icon: Cpu },
+                                                { id: 'treasury', label: 'Treasury', icon: Coins },
+                                                { id: 'listing', label: 'Markets', icon: Database },
+                                                { id: 'beta', label: 'Beta Entry', icon: Key },
+                                                { id: 'globe', label: 'Geo-Map', icon: Globe },
+                                                { id: 'directory', label: 'Profiles', icon: Users },
+                                                { id: 'security', label: 'Security', icon: ShieldCheck },
+                                                { id: 'terminal', label: 'System Logs', icon: TerminalIcon },
+                                            ].map((tab) => (
+                                                <button
+                                                    key={tab.id}
+                                                    onClick={() => setSettingsSubTab(tab.id)}
+                                                    className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all ${settingsSubTab === tab.id
+                                                        ? 'bg-[#3CB371] text-white shadow-[0_0_20px_rgba(60,179,113,0.3)]'
+                                                        : 'text-white/40 hover:bg-white/5 hover:text-white'
+                                                        }`}
+                                                >
+                                                    <tab.icon size={16} />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+                                                </button>
+                                            ))}
+                                             {
+                                settingsSubTab === 'platform' && (
+                                    <motion.div
+                                        key="platform-config"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -20 }}
+                                        className="space-y-12"
+                                    >
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                            {/* Core Toggles */}
+                                            <div className="bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] space-y-8 shadow-2xl">
                                                 <div className="flex items-center gap-4">
                                                     <div className="p-3 bg-[#3CB371]/10 rounded-2xl">
-                                                        <Gavel size={24} className="text-[#3CB371]" />
+                                                        <Zap size={24} className="text-[#3CB371]" />
                                                     </div>
                                                     <div>
-                                                        <h4 className="text-sm font-black text-white uppercase">Trading Governance</h4>
-                                                        <p className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Enforce risk limits and market status</p>
+                                                        <h4 className="text-sm font-black text-white uppercase">Killswitches</h4>
+                                                        <p className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Global platform status controls</p>
                                                     </div>
                                                 </div>
 
                                                 <div className="space-y-6">
-                                                    <div className="grid grid-cols-2 gap-6">
-                                                        <div>
-                                                            <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">Min Bet Size (SOL)</label>
-                                                            <input
-                                                                type="number"
-                                                                value={platformSettings.minBet}
-                                                                onChange={(e) => updateSetting('minBet', parseFloat(e.target.value))}
-                                                                className="w-full bg-black border border-white/5 rounded-2xl px-5 py-4 text-xs font-black text-white outline-none focus:border-[#3CB371]/40"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">Max Bet Size (SOL)</label>
-                                                            <input
-                                                                type="number"
-                                                                value={platformSettings.maxBet}
-                                                                onChange={(e) => updateSetting('maxBet', parseFloat(e.target.value))}
-                                                                className="w-full bg-black border border-white/5 rounded-2xl px-5 py-4 text-xs font-black text-white outline-none focus:border-[#3CB371]/40"
-                                                            />
-                                                        </div>
-                                                    </div>
-
                                                     <div className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5">
                                                         <div>
-                                                            <p className="text-xs font-black text-white uppercase">Global Kill Switch</p>
+                                                            <p className="text-xs font-black text-white uppercase">Trading Halt</p>
                                                             <p className="text-[9px] text-white/20 uppercase font-bold mt-1">Instantly halt all trade placements</p>
                                                         </div>
                                                         <button
@@ -3521,72 +2896,53 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                 </div>
                                             </div>
 
-                                            {/* Protocol Parameters (Immutable from contract) */}
-                                            <div className="bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] space-y-8">
+                                            {/* Updated Multipliers (Pulling from platformSettings) */}
+                                            <div className="bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] space-y-8 shadow-2xl">
                                                 <div className="flex items-center gap-4">
                                                     <div className="p-3 bg-blue-500/10 rounded-2xl">
-                                                        <Lock size={24} className="text-blue-500" />
+                                                        <Coins size={24} className="text-blue-500" />
                                                     </div>
                                                     <div>
-                                                        <h4 className="text-sm font-black text-white uppercase">Protocol Constants</h4>
-                                                        <p className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Hardcoded smart contract logic</p>
+                                                        <h4 className="text-sm font-black text-white uppercase">Profit Pegging</h4>
+                                                        <p className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Active payout multipliers</p>
                                                     </div>
                                                 </div>
 
                                                 <div className="space-y-4">
                                                     <div className="p-5 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
                                                         <span className="text-[10px] font-black text-white/40 uppercase">5s Multiplier</span>
-                                                        <span className="text-xs font-black text-[#3CB371]">6.90x (590% Prof)</span>
+                                                        <span className="text-xs font-black text-[#3CB371]">{platformSettings.payoutMultipliers?.["5"] || "2.90"}x</span>
                                                     </div>
                                                     <div className="p-5 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
                                                         <span className="text-[10px] font-black text-white/40 uppercase">10s Multiplier</span>
-                                                        <span className="text-xs font-black text-[#3CB371]">4.90x (390% Prof)</span>
+                                                        <span className="text-xs font-black text-[#3CB371]">{platformSettings.payoutMultipliers?.["10"] || "2.40"}x</span>
                                                     </div>
                                                     <div className="p-5 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between">
                                                         <span className="text-[10px] font-black text-white/40 uppercase">15s Multiplier</span>
-                                                        <span className="text-xs font-black text-[#3CB371]">1.98x (98% Prof)</span>
+                                                        <span className="text-xs font-black text-[#3CB371]">{platformSettings.payoutMultipliers?.["15"] || "1.90"}x</span>
                                                     </div>
-                                                    <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-center gap-4">
-                                                        <AlertCircle size={14} className="text-yellow-500 shrink-0" />
-                                                        <p className="text-[8px] font-bold text-yellow-500 uppercase leading-relaxed">
-                                                            Multiplier logic is currently immutable and governed by the Protocol smart contract. Redeployment required to modify.
+                                                    <div className="p-4 bg-[#3CB371]/10 border border-[#3CB371]/20 rounded-2xl flex items-center gap-4">
+                                                        <CheckCircle2 size={14} className="text-[#3CB371] shrink-0" />
+                                                        <p className="text-[8px] font-bold text-[#3CB371] uppercase leading-relaxed">
+                                                            Multipliers are synced with the Arc Protocol ruleset (15s: 1.90x, 10s: 2.40x, 5s: 2.90x).
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Technical Stack */}
-                                            <div className="lg:col-span-2 bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] space-y-8">
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="p-3 bg-purple-500/10 rounded-2xl">
-                                                            <Cpu size={24} className="text-purple-500" />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-sm font-black text-white uppercase">Operational Stack</h4>
-                                                            <p className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Infrastructure and Connectivity</p>
-                                                        </div>
+                                            {/* Dynamic Operational Config */}
+                                            <div className="bg-[#0D0D0D] border border-white/10 p-8 rounded-[40px] space-y-8 shadow-2xl">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-3 bg-purple-500/10 rounded-2xl">
+                                                        <Sliders size={24} className="text-purple-500" />
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleSaveSettings()}
-                                                        className="w-fit flex items-center gap-2 px-6 py-3 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:scale-105 transition-all shadow-[0_10px_20px_rgba(60,179,113,0.3)]"
-                                                    >
-                                                        <Save size={14} />
-                                                        Apply Config
-                                                    </button>
+                                                    <div>
+                                                        <h4 className="text-sm font-black text-white uppercase">Operational Limits</h4>
+                                                        <p className="text-[9px] text-white/20 uppercase font-bold tracking-widest">Global risk parameters</p>
+                                                    </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">Treasury Warning (SOL)</label>
-                                                        <input
-                                                            type="number"
-                                                            step="0.1"
-                                                            value={platformSettings.treasuryThreshold}
-                                                            onChange={(e) => updateSetting('treasuryThreshold', parseFloat(e.target.value))}
-                                                            className="w-full bg-black border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono text-white outline-none focus:border-purple-500/40"
-                                                        />
-                                                    </div>
+                                                <div className="space-y-6">
                                                     <div>
                                                         <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">Max Concurrent Trades</label>
                                                         <input
@@ -3597,49 +2953,68 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">Default Broadcast TTL (s)</label>
+                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">Min Stake (USDC)</label>
                                                         <input
                                                             type="number"
-                                                            value={platformSettings.defaultBroadcastDuration}
-                                                            onChange={(e) => updateSetting('defaultBroadcastDuration', parseInt(e.target.value))}
+                                                            value={platformSettings.minBet}
+                                                            onChange={(e) => updateSetting('minBet', parseFloat(e.target.value))}
                                                             className="w-full bg-black border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono text-white outline-none focus:border-purple-500/40"
                                                         />
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">RPC Endpoint Node</label>
+                                        <div className="bg-[#0D0D0D] border border-white/10 p-10 rounded-[48px] space-y-10 relative overflow-hidden shadow-2xl">
+                                            <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                                                <Server size={180} />
+                                            </div>
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                                                <div>
+                                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">System Infrastructure</h3>
+                                                    <p className="text-xs text-white/40 font-bold uppercase tracking-widest mt-1">Authorized Endpoints and Node Sensitivity</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleSaveSettings()}
+                                                    className="w-full md:w-auto flex items-center justify-center gap-3 px-10 py-4 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-[0_20px_40px_rgba(60,179,113,0.3)] hover:scale-105 transition-all"
+                                                >
+                                                    <Save size={16} />
+                                                    Commit Changes
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
+                                                <div>
+                                                    <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-3">Primary RPC Node</label>
+                                                    <input
+                                                        type="text"
+                                                        value={platformSettings.rpcEndpoint}
+                                                        onChange={(e) => updateSetting('rpcEndpoint', e.target.value)}
+                                                        className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono text-white outline-none focus:border-[#3CB371]/40"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-3">Arbiter Response Delta (ms)</label>
+                                                    <input
+                                                        type="number"
+                                                        value={platformSettings.priceFeedInterval}
+                                                        onChange={(e) => updateSetting('priceFeedInterval', parseInt(e.target.value))}
+                                                        className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono text-white outline-none focus:border-[#3CB371]/40"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-3">AI Consensus Sensitivity</label>
+                                                    <div className="flex items-center gap-4 bg-black/40 border border-white/5 rounded-2xl px-5 py-4">
                                                         <input
-                                                            type="text"
-                                                            value={platformSettings.rpcEndpoint}
-                                                            onChange={(e) => updateSetting('rpcEndpoint', e.target.value)}
-                                                            className="w-full bg-black border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono text-white outline-none focus:border-purple-500/40"
+                                                            type="range"
+                                                            min="0"
+                                                            max="1"
+                                                            step="0.01"
+                                                            value={platformSettings.aiArbiterSensitivity}
+                                                            onChange={(e) => updateSetting('aiArbiterSensitivity', parseFloat(e.target.value))}
+                                                            className="flex-1 accent-[#3CB371]"
                                                         />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">Price Sync Delta (ms)</label>
-                                                        <input
-                                                            type="number"
-                                                            value={platformSettings.priceFeedInterval}
-                                                            onChange={(e) => updateSetting('priceFeedInterval', parseInt(e.target.value))}
-                                                            className="w-full bg-black border border-white/5 rounded-2xl px-5 py-4 text-[10px] font-mono text-white outline-none focus:border-purple-500/40"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[9px] font-black text-white/20 uppercase tracking-widest block mb-2">AI Arbiter Consensus</label>
-                                                        <div className="flex items-center gap-4 bg-black border border-white/5 rounded-2xl px-5 py-4">
-                                                            <input
-                                                                type="range"
-                                                                min="0"
-                                                                max="1"
-                                                                step="0.01"
-                                                                value={platformSettings.aiArbiterSensitivity}
-                                                                onChange={(e) => updateSetting('aiArbiterSensitivity', parseFloat(e.target.value))}
-                                                                className="flex-1 accent-purple-500"
-                                                            />
-                                                            <span className="text-[10px] font-black text-white/40 w-8">{Math.round(platformSettings.aiArbiterSensitivity * 100)}%</span>
-                                                        </div>
+                                                        <span className="text-[10px] font-mono text-white/40">{Math.round(platformSettings.aiArbiterSensitivity * 100)}%</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -3647,116 +3022,504 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                     </motion.div>
                                 )
                             }
+
                             {
-                                activeTab === 'security' && (
+                                settingsSubTab === 'directory' && (
+                                    <motion.div
+                                        key="directory"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden"
+                                    >
+                                        <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                                            <div>
+                                                <h3 className="text-lg font-black text-white uppercase tracking-tight">User Directory</h3>
+                                                <p className="text-[10px] text-white/20 font-bold uppercase mt-1">Manage global user profiles & status</p>
+                                            </div>
+                                            <div className="flex gap-4">
+                                                <div className="relative">
+                                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={14} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="SEARCH PROFILES..."
+                                                        className="bg-black/40 border border-white/5 rounded-xl pl-10 pr-6 py-2.5 text-[9px] font-black text-white outline-none focus:border-[#3CB371]/40 w-64"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-8">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {protocolData.profiles.map((profile, idx) => (
+                                                    <div key={idx} className="p-6 bg-white/5 border border-white/5 rounded-3xl hover:bg-white/[0.08] transition-all group">
+                                                        <div className="flex items-center gap-4 mb-6">
+                                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#3CB371]/20 to-blue-500/20 flex items-center justify-center text-[#3CB371]">
+                                                                <User size={28} />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-black text-white truncate">{profile.username || 'Anonymous'}</p>
+                                                                <p className="text-[9px] font-mono text-white/20 truncate">{profile.publicKey?.slice(0, 8)}...{profile.publicKey?.slice(-8)}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="p-3 bg-black/40 rounded-xl border border-white/5">
+                                                                <p className="text-[8px] font-black text-white/20 uppercase mb-1">Trades</p>
+                                                                <p className="text-xs font-bold text-white">{profile.stats?.totalTrades || 0}</p>
+                                                            </div>
+                                                            <div className="p-3 bg-black/40 rounded-xl border border-white/5">
+                                                                <p className="text-[8px] font-black text-white/20 uppercase mb-1">Wins</p>
+                                                                <p className="text-xs font-bold text-[#3CB371]">{profile.stats?.totalWins || 0}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {protocolData.profiles.length === 0 && (
+                                                    <div className="col-span-full py-20 text-center opacity-10">
+                                                        <Users size={64} className="mx-auto mb-4" />
+                                                        <p className="text-xs font-black uppercase tracking-[0.3em]">No synced profiles found in Arc Keeper</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
+                            {
+                                settingsSubTab === 'beta' && (
+                                    <motion.div
+                                        key="beta"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        className="space-y-8"
+                                    >
+                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden">
+                                            <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                                <div>
+                                                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Beta Entry Control</h3>
+                                                    <p className="text-[10px] text-white/20 font-bold uppercase mt-1">Approve rounds access requests</p>
+                                                </div>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full">
+                                                    <thead>
+                                                        <tr className="bg-white/5">
+                                                            <th className="text-left px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest">Applicant</th>
+                                                            <th className="text-left px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest">Email</th>
+                                                            <th className="text-left px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest text-center">Status</th>
+                                                            <th className="text-right px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest">Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-white/[0.02]">
+                                                        {betaApplications.map((app, i) => (
+                                                            <tr key={i} className="hover:bg-white/[0.01]">
+                                                                <td className="px-8 py-6">
+                                                                    <p className="font-mono text-xs text-white">{app.address}</p>
+                                                                </td>
+                                                                <td className="px-8 py-6">
+                                                                    <p className="text-xs text-white/40">{app.email}</p>
+                                                                </td>
+                                                                <td className="px-8 py-6 text-center">
+                                                                    <span className="px-3 py-1 bg-yellow-500/10 text-yellow-500 text-[9px] font-black uppercase rounded-lg border border-yellow-500/20">Pending</span>
+                                                                </td>
+                                                                <td className="px-8 py-6 text-right">
+                                                                    <button
+                                                                        onClick={() => handleApproveBeta(app.address, app.email)}
+                                                                        className="px-6 py-2 bg-[#3CB371]/20 text-[#3CB371] text-[9px] font-black uppercase rounded-lg border border-[#3CB371]/30 hover:bg-[#3CB371] hover:text-white transition-all"
+                                                                    >
+                                                                        Grant Access
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {betaApplications.length === 0 && (
+                                                            <tr><td colSpan="4" className="py-20 text-center opacity-20 text-[10px] font-black uppercase tracking-widest italic">No pending applications</td></tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden">
+                                            <div className="p-8 border-b border-white/5">
+                                                <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Authorized Beta List</h3>
+                                            </div>
+                                            <div className="p-8">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {authorizedWallets.map((w, i) => (
+                                                        <div key={i} className="flex items-center justify-between p-5 bg-white/5 border border-white/5 rounded-2xl group">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-2 h-2 rounded-full bg-[#3CB371]" />
+                                                                <p className="font-mono text-xs text-white/60 group-hover:text-white transition-colors">{w}</p>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => handleRevokeBeta(w)}
+                                                                className="opacity-0 group-hover:opacity-100 p-2 hover:bg-red-500/20 text-red-500 rounded-lg transition-all"
+                                                            >
+                                                                <LogOut size={16} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
+                            {
+                                settingsSubTab === 'terminal' && (
+                                    <motion.div
+                                        key="terminal"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -20 }}
+                                        className="bg-black border border-white/10 rounded-[32px] overflow-hidden flex flex-col h-[600px] shadow-2xl"
+                                    >
+                                        <div className="p-6 bg-[#0A0A0A] border-b border-white/10 flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 bg-[#3CB371]/10 rounded-xl flex items-center justify-center text-[#3CB371]">
+                                                    <TerminalIcon size={20} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">System Logs</h3>
+                                                    <p className="text-[9px] text-[#3CB371] font-bold uppercase">Streaming live from Arc Keeper Node</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+                                                    <div className="w-1.5 h-1.5 bg-[#3CB371] rounded-full animate-pulse" />
+                                                    <span className="text-[8px] font-black text-white/60 uppercase">Connected</span>
+                                                </div>
+                                                <button onClick={() => setKeeperLogs([])} className="p-2 hover:bg-white/5 text-white/20 hover:text-white transition-colors"><RefreshCw size={14} /></button>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 p-6 font-mono text-[10px] sm:text-xs overflow-y-auto custom-scrollbar-terminal bg-black/40">
+                                            {keeperLogs.map((log, i) => (
+                                                <div key={i} className="mb-2.5 flex gap-4 opacity-80 hover:opacity-100 transition-opacity">
+                                                    <span className="text-white/20 shrink-0">[{new Date().toLocaleTimeString()}]</span>
+                                                    <span className={`${log.includes('ERROR') || log.includes('FAILED') ? 'text-red-500' : log.includes('SUCCESS') || log.includes('PLACED') ? 'text-[#3CB371]' : 'text-blue-400'}`}>
+                                                        {log}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {keeperLogs.length === 0 && (
+                                                <div className="h-full flex items-center justify-center text-white/5 italic">Awaiting node transmission...</div>
+                                            )}
+                                        </div>
+                                        <div className="p-4 bg-[#0A0A0A] border-t border-white/5 flex items-center gap-4">
+                                            <div className="w-2 h-2 rounded-full bg-[#3CB371] shadow-[0_0_10px_rgba(60,179,113,0.5)]" />
+                                            <span className="text-[8px] font-black text-white/20 uppercase tracking-[0.3em]">Citadel Secure Relay v2.0.4 - System Active</span>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
+                            {
+                                settingsSubTab === 'treasury' && (
+                                    <motion.div
+                                        key="treasury"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        className="bg-[#0D0D0D] border border-white/10 p-10 rounded-[48px] space-y-10 relative overflow-hidden"
+                                    >
+                                        <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                                            <Database size={180} />
+                                        </div>
+                                        <div className="relative z-10 flex flex-col items-center max-w-md mx-auto text-center">
+                                            <div className="w-20 h-20 bg-[#3CB371]/10 rounded-3xl flex items-center justify-center mb-6 text-[#3CB371] border border-[#3CB371]/20">
+                                                <Database size={40} />
+                                            </div>
+                                            <h3 className="text-2xl font-black text-white uppercase tracking-widest">Sweep to Root</h3>
+                                            <p className="text-xs text-white/40 font-bold mt-2 uppercase px-12 leading-relaxed">Extract accumulated liquidities to the secure root wallet: {ROOT_WALLET.slice(0, 10)}...</p>
+                                            
+                                            <div className="w-full mt-12 mb-10 p-6 bg-white/5 rounded-3xl border border-white/10 flex flex-col items-center">
+                                                <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Available Reserve</p>
+                                                <p className="text-3xl font-black text-[#3CB371] tracking-tighter">{Number(arcTreasuryBalance || 0).toFixed(4)} USDC</p>
+                                            </div>
+
+                                            <div className="w-full space-y-6">
+                                                <div className="text-left w-full">
+                                                    <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 block ml-1">Extraction Payload (USDC)</label>
+                                                    <input
+                                                        id="treasury-sweep-amt"
+                                                        type="number"
+                                                        placeholder="0.00"
+                                                        className="w-full bg-black/60 border border-white/5 rounded-2xl px-6 py-5 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40"
+                                                    />
+                                                </div>
+
+                                                <button
+                                                    onClick={() => handleWithdraw(document.getElementById('treasury-sweep-amt')?.value)}
+                                                    className="w-full bg-[#3CB371] text-white py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:scale-105 transition-all shadow-[0_20px_40px_rgba(60,179,113,0.3)]"
+                                                >
+                                                    Authorize Extraction
+                                                </button>
+                                                
+                                                <p className="text-[9px] text-white/20 uppercase font-black tracking-widest leading-relaxed px-6">
+                                                    Sweeping is an irreversible administrative action. Transfers bypass standard cooldowns.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
+                            {
+                                settingsSubTab === 'listing' && (
+                                    <motion.div
+                                        key="listing"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden"
+                                    >
+                                        <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500">
+                                                    <PlusCircle size={20} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Market Listing Control</h3>
+                                                    <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Manage active trading pairs & oracle feeds</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-8">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {listedTokens.map((token) => (
+                                                    <div key={token.id} className={`p-6 border rounded-[32px] transition-all relative overflow-hidden group ${activeTokenId === token.id ? 'bg-[#3CB371]/5 border-[#3CB371]/20' : 'bg-white/5 border-white/5 hover:bg-white/[0.08]'}`}>
+                                                        <div className="flex items-center justify-between mb-8 relative z-10">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black ${activeTokenId === token.id ? 'bg-[#3CB371] text-white' : 'bg-white/10 text-white/40'}`}>
+                                                                    {token.symbol?.slice(0, 1)}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-black text-white uppercase">{token.symbol}</p>
+                                                                    <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest">{token.name}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className={`px-2.5 py-1 rounded-md text-[8px] font-black uppercase ${activeTokenId === token.id ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-white/10 text-white/40'}`}>
+                                                                {activeTokenId === token.id ? 'PRIMARY' : 'SECONDARY'}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="space-y-3 relative z-10">
+                                                            <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest text-white/20">
+                                                                <span>Oracle</span>
+                                                                <span className="text-white/40">PYTH: {token.pythId?.slice(0, 10)}...</span>
+                                                            </div>
+                                                            <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest text-white/20">
+                                                                <span>Sync Feed</span>
+                                                                <span className="text-white/40">BINANCE: {token.binance}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-8 flex gap-3 relative z-10">
+                                                            <button 
+                                                                onClick={() => handleSetActiveMarket(token.id)}
+                                                                disabled={activeTokenId === token.id}
+                                                                className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeTokenId === token.id ? 'bg-[#3CB371] text-white shadow-lg' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
+                                                            >
+                                                                Set Primary
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleDelistToken(token.id)}
+                                                                className="px-4 py-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all"
+                                                            >
+                                                                <LogOut size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
+                            {
+                                settingsSubTab === 'security' && (
                                     <motion.div
                                         key="security"
                                         initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
-                                        className="max-w-4xl mx-auto space-y-8 pb-20"
+                                        className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden"
                                     >
-                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[48px] p-10 overflow-hidden relative shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
-                                            <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
-                                                <ShieldCheck size={200} />
+                                        <div className="p-8 border-b border-white/5 flex items-center justify-between">
+                                            <div className="flex flex-col">
+                                                <h3 className="text-sm font-black uppercase tracking-widest text-white">Infrastructure Operators</h3>
+                                                <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Manage platform access & wallet-based permissions</p>
                                             </div>
-
-                                            <div className="relative z-10 flex flex-col gap-10">
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-                                                    <div className="p-5 bg-[#3CB371]/10 rounded-[28px] border border-[#3CB371]/20 shadow-[0_0_30px_rgba(60,179,113,0.1)] w-fit">
-                                                        <Key className="text-[#3CB371]" size={32} />
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="text-2xl font-black text-white uppercase tracking-tight">Security Credentials</h3>
-                                                        <p className="text-[10px] text-white/40 font-bold uppercase tracking-[0.2em] mt-1">Re-initialize your administrative access keys</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                                    <div className="space-y-3">
-                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">New Operator ID</label>
-                                                        <div className="relative group">
-                                                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                                                                <User size={16} className="text-white/20 group-focus-within:text-[#3CB371] transition-colors" />
-                                                            </div>
-                                                            <input
-                                                                type="text"
-                                                                value={securityForm.username}
-                                                                onChange={(e) => setSecurityForm({ ...securityForm, username: e.target.value })}
-                                                                placeholder="CHOOSE NEW IDENTITY"
-                                                                className="w-full bg-black/60 border border-white/5 rounded-2xl pl-14 pr-5 py-5 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40 transition-all placeholder:text-white/5"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-3">
-                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Current Authorized Wallet</label>
-                                                        <div className="p-5 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-4">
-                                                            <div className="w-10 h-10 rounded-full bg-[#3CB371]/10 flex items-center justify-center border border-[#3CB371]/20 text-[#3CB371] shrink-0">
-                                                                <Shield size={18} />
+                                            {currentUser?.role === 'ROOT' && (
+                                                <button
+                                                    onClick={() => setIsStaffModalOpen(true)}
+                                                    className="w-fit flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
+                                                >
+                                                    <PlusCircle size={14} />
+                                                    Authorize Level-1 Wallet
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="p-8">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {staffMembers.map((staff) => (
+                                                    <div key={staff.id} className="p-6 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center relative">
+                                                                <User size={20} className="text-white/40 group-hover:text-[#3CB371] transition-colors" />
+                                                                {staff.onboardingComplete ? (
+                                                                    <div className="absolute -top-1 -right-1 bg-[#3CB371] rounded-full p-0.5 border border-[#0D0D0D]">
+                                                                        <CheckCircle2 size={10} className="text-white" />
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-0.5 border border-[#0D0D0D]">
+                                                                        <Clock size={10} className="text-white" />
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="text-[10px] text-white font-mono truncate">{walletAddress}</p>
-                                                                <p className="text-[8px] text-[#3CB371] font-black uppercase tracking-widest mt-0.5">Role: {currentUser?.role}</p>
+                                                                <p className="text-xs font-black text-white truncate w-32">{staff.address}</p>
+                                                                <p className="text-[9px] font-bold text-[#3CB371] uppercase tracking-widest">{staff.role}</p>
+                                                                <p className="text-[10px] text-white/40 font-bold uppercase mt-0.5">{staff.username || 'Uninitialized'}</p>
                                                             </div>
                                                         </div>
+                                                        <div className="flex flex-col items-end gap-3">
+                                                            <div className={`w-2 h-2 rounded-full ${staff.status === 'ACTIVE' ? 'bg-[#3CB371] animate-pulse' : 'bg-white/10'}`} />
+                                                            {staff.role !== 'ROOT' && currentUser?.role === 'ROOT' && (
+                                                                <button
+                                                                    onClick={() => handleRevokeRole(staff.id)}
+                                                                    className="p-2 hover:bg-red-500/10 text-white/20 hover:text-red-500 rounded-lg transition-colors group/btn"
+                                                                    title="Revoke Access"
+                                                                >
+                                                                    <LogOut size={14} className="group-hover/btn:scale-110 transition-transform" />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
 
-                                                    <div className="space-y-3">
-                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">New Pass-Key</label>
-                                                        <div className="relative group">
-                                                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                                                                <Lock size={16} className="text-white/20 group-focus-within:text-[#3CB371] transition-colors" />
-                                                            </div>
-                                                            <input
-                                                                type="password"
-                                                                value={securityForm.password}
-                                                                onChange={(e) => setSecurityForm({ ...securityForm, password: e.target.value })}
-                                                                placeholder="SET NEW PASS-KEY"
-                                                                className="w-full bg-black/60 border border-white/5 rounded-2xl pl-14 pr-5 py-5 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40 transition-all placeholder:text-white/5"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-3">
-                                                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Confirm Identity Key</label>
-                                                        <div className="relative group">
-                                                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                                                                <Lock size={16} className="text-white/20 group-focus-within:text-[#3CB371] transition-colors" />
-                                                            </div>
-                                                            <input
-                                                                type="password"
-                                                                value={securityForm.confirmPassword}
-                                                                onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })}
-                                                                placeholder="REPEAT NEW PASS-KEY"
-                                                                className="w-full bg-black/60 border border-white/5 rounded-2xl pl-14 pr-5 py-5 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40 transition-all placeholder:text-white/5"
-                                                            />
-                                                        </div>
-                                                    </div>
+                            {
+                                settingsSubTab === 'globe' && (
+                                    <motion.div
+                                        key="globe"
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                        className="bg-[#0D0D0D] border border-white/5 rounded-[48px] overflow-hidden flex flex-col h-[700px] shadow-2xl"
+                                    >
+                                        <div className="p-8 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-[#3CB371]/10 rounded-2xl flex items-center justify-center text-[#3CB371]">
+                                                    <Globe size={28} />
                                                 </div>
-
-                                                <div className="pt-6">
-                                                    <button
-                                                        onClick={handleUpdateSecurity}
-                                                        className="group relative w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-[0.3em] text-xs overflow-hidden transition-all hover:scale-[1.01] active:scale-[0.99] shadow-[0_20px_50px_rgba(255,255,255,0.05)]"
-                                                    >
-                                                        <div className="absolute inset-0 bg-gradient-to-r from-[#3CB371] to-[#4ADE80] opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                        <span className="relative z-10 group-hover:text-white transition-colors">Apply Security Updates</span>
-                                                    </button>
+                                                <div>
+                                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Geo-Spatial Analysis</h3>
+                                                    <p className="text-[10px] text-white/20 font-bold uppercase tracking-[0.2em] mt-1">Live global trade density & infrastructure health</p>
                                                 </div>
-
-                                                <div className="p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-3xl flex items-start gap-4">
-                                                    <AlertCircle size={20} className="text-yellow-500 shrink-0 mt-0.5" />
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-1">Authorization Warning</p>
-                                                        <p className="text-[9px] text-yellow-500/60 font-medium uppercase leading-relaxed tracking-widest">
-                                                            Updating your credentials will take effect immediately for the current session and all future logins from this wallet. Ensure you store your new coordinates securely.
-                                                        </p>
+                                            </div>
+                                            <div className="flex gap-3">
+                                                <div className="px-4 py-2 bg-[#3CB371]/20 rounded-xl border border-[#3CB371]/30 text-[9px] font-black text-[#3CB371] uppercase tracking-widest">
+                                                    REAL-TIME SYNC
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 relative bg-black/40">
+                                            <GlobalExpansionMap onLocationUpdate={(loc) => {}} simplified={false} />
+                                            {/* Map Overlay Stats */}
+                                            <div className="absolute bottom-8 left-8 p-6 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl space-y-4 max-w-xs shadow-2xl">
+                                                <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Infrastructure Status</h4>
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] text-white/40 uppercase font-black">NA-East Node</span>
+                                                        <span className="text-[9px] text-[#3CB371] font-black">OPTIMAL (12ms)</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] text-white/40 uppercase font-black">EU-Central Node</span>
+                                                        <span className="text-[9px] text-yellow-500 font-black">ACTIVE (48ms)</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] text-white/40 uppercase font-black">AS-Tokyo Node</span>
+                                                        <span className="text-[9px] text-blue-500 font-black">STABLE (92ms)</span>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </motion.div>
+                                )
+                            }
+
+                            {
+                                settingsSubTab === 'security' && (
+                                    <motion.div
+                                        key="security"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -20 }}
+                                        className="bg-[#0D0D0D] border border-white/10 p-10 rounded-[48px] space-y-10 relative overflow-hidden"
+                                    >
+                                        <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                                            <Shield size={180} />
+                                        </div>
+                                        <div className="relative z-10">
+                                            <div className="flex items-center gap-6 mb-12">
+                                                <div className="w-16 h-16 bg-red-500/10 rounded-3xl flex items-center justify-center text-red-500 border border-red-500/20">
+                                                    <Lock size={32} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-2xl font-black text-white uppercase tracking-tight">Root Authentication</h3>
+                                                    <p className="text-xs text-white/40 font-bold uppercase tracking-widest mt-1">Manage administrative credentials and access tokens</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                                <div className="space-y-6">
+                                                    <h4 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em] ml-1">Secure Credential Rotation</h4>
+                                                    <div className="space-y-4">
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder="Current Username"
+                                                            className="w-full bg-black/60 border border-white/5 rounded-2xl px-6 py-5 text-xs text-white outline-none focus:border-red-500/40"
+                                                        />
+                                                        <input 
+                                                            type="password" 
+                                                            placeholder="New Secure Password"
+                                                            className="w-full bg-black/60 border border-white/5 rounded-2xl px-6 py-5 text-xs text-white outline-none focus:border-red-500/40"
+                                                        />
+                                                        <button 
+                                                            onClick={() => notify('info', 'UNAUTHORIZED', 'Root credential rotation requires CLI access.')}
+                                                            className="w-full py-5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-red-500/40 transition-all"
+                                                        >
+                                                            Rotate Credentials
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="p-8 bg-red-500/5 border border-red-500/10 rounded-[32px] space-y-6 shadow-2xl">
+                                                    <div className="flex items-center gap-4">
+                                                        <ShieldAlert className="text-red-500" size={24} />
+                                                        <h5 className="text-[11px] font-black text-white uppercase tracking-widest">Security Advisory</h5>
+                                                    </div>
+                                                    <p className="text-[10px] text-white/40 font-bold uppercase leading-relaxed">
+                                                        Administrative actions are logged and audited across the Arc Network. Ensure your session token ($ADMIN_TOKEN) is rotated regularily in the Citadel core configuration files.
+                                                    </p>
+                                                    <div className="pt-4 border-t border-white/10">
+                                                        <p className="text-[8px] font-mono text-white/20 uppercase tracking-[0.2em]">Session Hash: {btoa(ADMIN_TOKEN || "").slice(0, 32)}...</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
+
                                 )
                             }
 
@@ -3878,49 +3641,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 )}
             </AnimatePresence>
 
-            {/* Treasury Management Modal */}
-            <AnimatePresence>
-                {isTreasuryModalOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[600] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                            className="w-full max-w-md bg-[#0D0D0D] border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 relative"
-                        >
-                            <button onClick={() => setIsTreasuryModalOpen(false)} className="absolute top-8 right-8 text-white/20 hover:text-white"><X size={24} /></button>
-                            <div className="flex flex-col items-center mb-10">
-                                <div className="w-16 h-16 rounded-3xl bg-[#3CB371]/10 flex items-center justify-center mb-4 text-[#3CB371]">
-                                    <Database size={32} />
-                                </div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-widest">Treasury Control</h3>
-                                <p className="text-xs text-white/20 font-bold mt-1 uppercase">Balance: {Number(arcTreasuryBalance || 0).toFixed(4)} USDC</p>
-                            </div>
-
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 block">Withdrawal Amount (USDC)</label>
-                                    <input
-                                        id="treasury-amt"
-                                        type="number"
-                                        placeholder="100.0"
-                                        className="w-full bg-black/60 border border-white/5 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#3CB371]/40"
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={() => handleWithdraw(document.getElementById('treasury-amt').value)}
-                                    className="w-full bg-[#3CB371] text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-[0_10px_30px_rgba(60,179,113,0.3)]"
-                                >
-                                    Authorize Withdrawal
-                                </button>
-                                <p className="text-[9px] text-white/20 text-center uppercase font-bold px-4">Withdrawals are processed via the Arc Keeper and require valid admin credentials.</p>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             {/* Broadcast Modal */}
             <AnimatePresence>

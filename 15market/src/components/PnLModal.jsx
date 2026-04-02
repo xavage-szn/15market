@@ -42,9 +42,9 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
 
     // Calculate profit based on duration multiplier
     const getMultiplier = (duration) => {
-        if (duration === 5) return 6.98;
-        if (duration === 10) return 4.98;
-        return 1.98;
+        if (duration === 5) return 2.90;
+        if (duration === 10) return 2.40;
+        return 1.90;
     };
 
     const currency = trade.currency || (trade.network === 'sol' || trade.network === 'SOL' ? 'SOL' : 'USDC');
