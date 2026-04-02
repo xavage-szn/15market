@@ -9,18 +9,16 @@ class RedisStore {
         if (REDIS_URL) {
             console.log('[Redis] Connecting to Redis Cloud...');
             this.redis = new Redis(REDIS_URL, {
-                retryStrategy: (times) => times < 5 ? Math.min(times * 50, 2000) : null, // Give up after 5 retries to trigger fallback
+                retryStrategy: (times) => Math.min(times * 200, 5000), // Never give up on production
                 reconnectOnError: (err) => true,
-                connectTimeout: 5000
+                connectTimeout: 10000,
+                maxRetriesPerRequest: null, // Critical: Disable command dropping so requests wait for reconnect
+                enableReadyCheck: true
             });
+            
             this.redis.on('error', (err) => {
-                console.error('[Redis] Error:', err.message);
-                if (!this.fallbackTriggered) {
-                    console.warn('[Redis] Connection failing, using memory fallback.');
-                    this.isCloud = false;
-                    this.fallbackTriggered = true;
-                    this._initMemory();
-                }
+                console.error('[Redis] Transient Error:', err.message);
+                // Do NOT permanently fallback to memory in production over a transient glitch!
             });
             this.isCloud = true;
             this.fallbackTriggered = false;
