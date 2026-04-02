@@ -1371,7 +1371,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     // Unified Treasury Balance is now handled by the updateBalances() loop in the monitoring effect above
 
-    const handleWithdraw = async (amt) => {
+    const legacyHandleWithdraw = async (amt) => {
         const amtNum = parseFloat(amt);
         if (isNaN(amtNum) || amtNum <= 0) {
             notify('error', 'INVALID AMOUNT', 'Specify a valid amount for withdrawal.');
@@ -1414,7 +1414,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     };
 
     const handleTreasuryAction = (amt) => {
-        handleWithdraw(amt);
+        legacyHandleWithdraw(amt);
     };
 
 
