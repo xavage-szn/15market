@@ -2,7 +2,7 @@ const Redis = require('ioredis');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
-const REDIS_URL = process.env.REDIS_URL;
+const REDIS_URL = process.env.REDIS_URL ? process.env.REDIS_URL.trim().replace(/^"|"$/g, '') : undefined;
 
 class RedisStore {
     constructor() {
