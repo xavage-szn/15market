@@ -240,7 +240,9 @@ const getHistoryFor = async (address, limit = 100) => {
                 t.user?.toLowerCase() === addr ||
                 t.user?.toLowerCase() === sessionLower ||
                 t.owner?.toLowerCase() === addr ||
-                t.owner?.toLowerCase() === sessionLower
+                t.owner?.toLowerCase() === sessionLower ||
+                t.sessionOwner?.toLowerCase() === addr ||
+                t.sessionOwner?.toLowerCase() === sessionLower
             );
         }
 
@@ -492,11 +494,15 @@ app.post('/settle', actionLimiter, secureTransit, async (req, res) => {
             // Mark as settled in Redis immediately
             const settlementData = {
                 id: id,
+                user: trade.user || trade.owner,
+                owner: trade.owner || trade.user,
+                sessionOwner: trade.sessionOwner,
                 status: isWin ? "WON" : "LOST",
                 settlementPrice: exitPriceNum.toFixed(8),
                 payout: payout,
                 settled: true,
-                lockedExitPrice: exitPriceNum.toFixed(8) // Save this so background processor uses it too
+                lockedExitPrice: exitPriceNum.toFixed(8),
+                isSessionTrade: trade.isSessionTrade || !!trade.sessionOwner
             };
 
             // Update history
@@ -536,6 +542,7 @@ app.post('/trade-ping', actionLimiter, async (req, res) => {
         const tradeData = {
             id: id.toString(),
             user: address,
+            owner: address,
             amount: amount,
             direction: direction,
             duration: duration,

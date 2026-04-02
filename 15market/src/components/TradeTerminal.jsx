@@ -33,7 +33,7 @@ function TradeTerminalComponent({
 
     const containerClass = transparent
         ? "flex flex-col h-full gap-1 lg:gap-1.5 overflow-y-auto no-scrollbar"
-        : `w-full min-h-0 h-auto lg:h-full p-2 lg:p-2.5 rounded-[32px] glass-panel relative transition-all duration-300 flex flex-col gap-1.5 lg:gap-2 ${isLight ? 'static-panel-light !shadow-xl' : ''}`;
+        : `w-full min-h-0 h-auto lg:h-full p-2 lg:p-2.5 rounded-[32px] glass-panel relative transition-all duration-300 flex flex-col gap-1.5 lg:gap-2 ${isLight ? 'static-panel-light' : ''}`;
 
     const renderHeader = () => (
         <div className="flex items-center justify-between pointer-events-auto mb-0.5">
@@ -109,7 +109,8 @@ function TradeTerminalComponent({
             <div className="relative flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden">
                 {/* 3-way Sliding Pill Background */}
                 <motion.div
-                    className="absolute top-0.5 bottom-0.5 w-[calc(33.33%-2px)] rounded-full bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)] transition-all"
+                    className="absolute top-0.5 bottom-0.5 w-[calc(33.33%-2px)] rounded-full bg-[#3CB371]"
+                    style={{ boxShadow: isLight ? 'none' : '0 0 15px rgba(60,179,113,0.3)' }}
                     initial={false}
                     animate={{
                         x: duration === 15 ? 1 : duration === 10 ? 'calc(100% + 1px)' : 'calc(200% + 1px)',
@@ -121,7 +122,7 @@ function TradeTerminalComponent({
                     <button
                         key={d}
                         onClick={(e) => { e.stopPropagation(); setDuration(d); }}
-                        className={`flex-1 relative z-10 py-2 lg:py-2.5 flex flex-col items-center justify-center transition-all duration-300 ${duration === d ? "text-white scale-110" : "text-white/20 hover:text-white/40"}`}
+                        className={`flex-1 relative z-10 py-2 lg:py-2.5 flex flex-col items-center justify-center transition-all duration-300 ${duration === d ? "text-white scale-110" : (isLight ? "text-black/40 hover:text-black/60" : "text-white/20 hover:text-white/40")}`}
                     >
                         <span className="text-[9px] lg:text-[10px] font-black tracking-tighter leading-none">{d}s</span>
                     </button>

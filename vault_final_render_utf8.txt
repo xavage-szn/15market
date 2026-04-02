@@ -1,0 +1,12 @@
+﻿
+--- ≡ƒ¢í∩╕Å 15MARKET ENCRYPTION MIGRATOR ---
+Use these encrypted values in your .env file:
+
+PRIVATE_KEY="ENC:v1:/oFD2PlmgGBN/IYo:iy5FPJvReYL80/Hb+X7aQw==:v+YxCLVSAvEA13ApLYjI1qL48Q4qK7LXfcPDr1aGyaFNTdMJ2zrWewP3qzjnXG2fjEW6P7vx8EBWIGEbpnd6jthu"
+SESSION_MASTER_SECRET="ENC:v1:i9n4A2FxGkhAfczC:vw8UjPo7G8rJaNBAMdxNcA==:LPkskbPvAUWfCJFQ0vGvZi+Zuhe6gvJooNw/ci2sQ/raEBonZU/RXNN8"
+ADMIN_TOKEN="ENC:v1:UsE8BOJ8zSr+b4fL:Cmz+cOSVw0GOeg77ofP5OQ==:BlMx8VJHsOPz1CkMxlXMVuP0Z0kf4y1t4SnlT69E"
+REDIS_URL="ENC:v1:fJFPNfFLhkaItoHv:K1MAEaE66Q6HhuStMls1cQ==:HG1YrtvcF2PjCK+DUBGKnG47GWTO9mso5J67RQY8iIoTlzatwQ7VULIznZ7PDineiGCuQwQe5aeIPDG5myr/CQo9vKx7awABGBwyafkGMqMp1UCfwsDNb+cgOlNQdQ75d5c5Mw=="
+MNEMONIC="ENC:v1:PNBZZrHQ4ALO4jbF:wsDuwtimiTK+4asyV18ABA==:7DcGEwhJlqZBhHgra74lX/toztOK3teC04ipdUJsYdk/OLuybuyA+rm8WTJUD1THOnW264Np19592PIZr9Y8oJ0DRMkQBpOe"
+
+--- ≡ƒ¢í∩╕Å SECURITY WARNING ---
+Once you update your .env with these values, the backend will NEED the correct SYSTEM_PASSPHRASE environment variable set to unlock them.

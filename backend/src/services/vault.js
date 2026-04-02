@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const os = require('os');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
@@ -12,14 +13,51 @@ class VaultService {
         // not the .env file, for maximum security.
         this.masterKey = process.env.SYSTEM_PASSPHRASE || '15market_default_system_salt_2026';
         this.algorithm = 'aes-256-gcm';
-        this.key = this._deriveKey(this.masterKey);
+        
+        // --- 🔒 MACHINE LOCK: Derive part of the salt from unique system hardware ---
+        this.machineSeed = this._getMachineSeed();
+        this.key = this._deriveKey(this.masterKey, this.machineSeed);
     }
 
     /**
-     * Derives a 32-byte key from the passphrase using SHA-256
+     * Generates a unique, deterministic hardware seed for this specific machine.
+     * Supports Render.com Service IDs and manual overrides for easy migration.
      */
-    _deriveKey(passphrase) {
-        return crypto.createHash('sha256').update(String(passphrase)).digest();
+    _getMachineSeed() {
+        try {
+            // 1. Priority: Manual override (Useful for generating production keys locally)
+            if (process.env.FORCE_MACHINE_SEED) return process.env.FORCE_MACHINE_SEED;
+
+            // 2. Render.com: Use the Stable Service ID
+            if (process.env.RENDER_SERVICE_ID) return `RENDER:${process.env.RENDER_SERVICE_ID}`;
+
+            // 3. Local Hardware Fallback (MACs + Hostname)
+            const hostname = os.hostname();
+            const platform = os.platform();
+            const interfaces = os.networkInterfaces();
+            
+            const macs = Object.values(interfaces)
+                .flat()
+                .filter(i => i.mac && i.mac !== '00:00:00:00:00:00')
+                .map(i => i.mac)
+                .sort()
+                .join('|');
+
+            return crypto.createHash('sha256')
+                .update(`${hostname}:${platform}:${macs}`)
+                .digest('hex');
+        } catch (e) {
+            return 'default_fallback_seed_v1';
+        }
+    }
+
+    /**
+     * Derives a 32-byte key from the passphrase and machine seed using SHA-256
+     */
+    _deriveKey(passphrase, seed) {
+        return crypto.createHash('sha256')
+            .update(`${String(passphrase)}:LOCK:${seed}`)
+            .digest();
     }
 
     /**

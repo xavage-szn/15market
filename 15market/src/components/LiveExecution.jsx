@@ -2,6 +2,7 @@ import React, { memo, useState, useEffect, useMemo, useRef } from 'react';
 import { Share2, X, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Stamp } from './Stamp';
+import { KEEPER_URL_ARC } from '../constants';
 
 const LCD_COUNTER_STYLE = `
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
@@ -116,7 +117,7 @@ function LiveExecutionComponent({
                 // Freeze at the current price exactly when the timer hits zero
                 const lockedPrice = priceVal.toFixed(8);
 
-                console.log(`🎯 [Finality] Trade ${trade.id} expired. Locking exit price: ${lockedPrice}`);
+                console.log(`[Finality] Trade ${trade.id} expired. Locking exit price: ${lockedPrice}`);
 
                 // 1. Freeze locally for immediate UI response
                 frozenPnL.current[trade.id] = {
@@ -125,7 +126,7 @@ function LiveExecutionComponent({
                 };
 
                 // 2. Nudge Backend
-                fetch(`/api-arc/settle`, {
+                fetch(`${KEEPER_URL_ARC}/settle`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -277,8 +278,8 @@ function LiveExecutionComponent({
                                                     style={displayFinal ? {
                                                         borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(60, 179, 113, 0.5)' : 'rgba(255, 127, 80, 0.5)',
                                                         boxShadow: (instantStatus === "WON" || trade.status === "WON")
-                                                            ? 'inset 0 0 30px rgba(60, 179, 113, 0.05), 0 5px 30px rgba(60, 179, 113, 0.1)'
-                                                            : 'inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px rgba(255, 127, 80, 0.1)'
+                                                            ? `inset 0 0 30px rgba(60, 179, 113, 0.05), 0 5px 30px ${isLight ? 'rgba(60, 179, 113, 0.04)' : 'rgba(60, 179, 113, 0.1)'}`
+                                                            : `inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px ${isLight ? 'rgba(255, 127, 80, 0.04)' : 'rgba(255, 127, 80, 0.1)'}`
                                                     } : {}}
                                                 >
                                                     {/* Card Header - Ultra Compact */}

@@ -116,11 +116,11 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     >
       <div className={`
         w-full h-full pointer-events-auto
-        backdrop-blur-xl border-t border-x rounded-t-[32px] shadow-[0_-20px_50px_rgba(0,0,0,0.3)]
+        backdrop-blur-xl border-t border-x rounded-t-[32px]
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-10px_40px_rgba(27,94,60,0.4)] border-white/10'
-          : 'bg-gradient-to-br from-[#3CB371]/90 to-[#1e5a38]/90 shadow-[0_-10px_40px_rgba(60,179,113,0.3)] border-[#3CB371]/20'}
+          : 'bg-gradient-to-br from-[#3CB371]/90 to-[#1e5a38]/90 shadow-[0_-5px_25px_rgba(60,179,113,0.12)] border-[#3CB371]/20'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -2646,9 +2646,9 @@ export default function UserApp() {
                         background: isSmallScreen 
                           ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(255, 255, 255, 0.12)') 
                           : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
-                        boxShadow: isSmallScreen 
+                        boxShadow: isSmallScreen
                           ? (theme === 'light' 
-                            ? '0 25px 80px -10px rgba(60,179,113,0.15), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.15)' 
+                            ? '0 15px 45px -10px rgba(60,179,113,0.08), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.1)' 
                             : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.2), inset 0 2px 4px rgba(255,255,255,0.1)')
                           : (theme === 'light'
                             ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
@@ -2711,7 +2711,7 @@ export default function UserApp() {
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
                     <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex flex-1 min-h-0 pb-[34px] px-1' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : 'rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 shadow-lg'}`}
+                      <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'}`}`}
                         style={{
                           background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
                           borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)')
@@ -2754,7 +2754,7 @@ export default function UserApp() {
 
                       {/* ACTIVE EXECUTION - Hidden entirely in Rounds mode */}
                       {(gameMode !== 'rounds') && (
-                        <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 shadow-lg flex flex-col`}
+                        <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'} flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)',
                             borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)'
@@ -2821,7 +2821,7 @@ export default function UserApp() {
 
                         {/* Navigation Bar - TOP BAR */}
                         {/* Trading Terminal Box - Dynamic height to maximize active trades space */}
-                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel shadow-lg'}`}
+                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
                           style={{
                             background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
                             borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)')
@@ -2866,7 +2866,7 @@ export default function UserApp() {
 
                         {/* Active Trade / Controls Box — hidden in Rounds */}
                         {gameMode !== 'rounds' && (
-                          <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'} shadow-lg`}
+                          <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                             style={{
                               background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                               borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'

@@ -139,6 +139,11 @@ class TradeProcessor {
                     const id = e.args.id.toString();
                     const s = settledMap.get(id);
 
+                    // Resolve session wallet -> main wallet for proper indexing
+                    const onChainUser = e.args.user;
+                    const mainAddr = await redis.getMainAddressForSession(onChainUser.toLowerCase());
+                    const resolvedUser = mainAddr || onChainUser;
+
                     // --- PRODUCTION RECOVERY LOGIC ---
                     // If a trade is PLACED on-chain but NOT found in our active memory queue,
                     // and it's NOT yet settled, we MUST re-activate it for settlement.
@@ -148,19 +153,22 @@ class TradeProcessor {
                         if (!existing) {
                             const tradeData = {
                                 id: id,
-                                user: e.args.user,
+                                user: resolvedUser,
+                                owner: resolvedUser,
+                                sessionOwner: mainAddr ? onChainUser.toLowerCase() : undefined,
                                 amount: ethers.formatEther(e.args.amount),
                                 direction: Number(e.args.direction),
                                 duration: Number(e.args.duration),
                                 marketId: Number(e.args.marketId),
-                                entryPrice: (Number(e.args.entryPrice) / 1e8).toString(), // Keep raw for better comparison
+                                entryPrice: (Number(e.args.entryPrice) / 1e8).toString(),
                                 timestamp: Number(e.args.timestamp) * 1000,
                                 expiry: (Number(e.args.timestamp) * 1000) + (Number(e.args.duration) * 1000),
                                 confirmed: true,
-                                recovered: true
+                                recovered: true,
+                                isSessionTrade: !!mainAddr
                             };
                             await redis.setTrade(id, tradeData);
-                            console.log(`[Processor] Recovery: Re-activated trade ${id}`);
+                            console.log(`[Processor] Recovery: Re-activated trade ${id} (User: ${resolvedUser})`);
                         }
                     }
 
@@ -170,7 +178,9 @@ class TradeProcessor {
 
                     await redis.addHistoricalTrade({
                         id,
-                        user: e.args.user,
+                        user: resolvedUser,
+                        owner: resolvedUser,
+                        sessionOwner: mainAddr ? onChainUser.toLowerCase() : undefined,
                         amount: ethers.formatEther(e.args.amount),
                         direction: Number(e.args.direction) === 1 ? 'UP' : 'DOWN',
                         duration: Number(e.args.duration),
@@ -180,7 +190,8 @@ class TradeProcessor {
                         settlementPrice: s ? s.settlementPrice : null,
                         payout: s ? s.payout : null,
                         tx: e.transactionHash,
-                        symbol: parsedSymbol
+                        symbol: parsedSymbol,
+                        isSessionTrade: !!mainAddr
                     });
                 }
 
@@ -400,10 +411,14 @@ class TradeProcessor {
 
                     await redis.addHistoricalTrade({
                         id: tradeId,
+                        user: trade.user || trade.owner,
+                        owner: trade.owner || trade.user,
+                        sessionOwner: trade.sessionOwner,
                         status: isWin ? "WON" : "LOST",
                         settlementPrice: exitVal.toFixed(2),
                         payout: instantVal,
-                        symbol: symbol
+                        symbol: symbol,
+                        isSessionTrade: trade.isSessionTrade || !!trade.sessionOwner
                     });
                 }
             }
