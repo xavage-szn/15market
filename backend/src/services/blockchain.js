@@ -1,7 +1,9 @@
 const { ethers, FetchRequest } = require('ethers');
 const dns = require('dns');
 const path = require('path');
+const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+const vault = require('./vault');
 const nonceManager = require('./nonceManager');
 
 // DNS: Using system DNS resolution (no hardcoded IP overrides)
@@ -108,7 +110,10 @@ class BlockchainService {
 
     async _init() {
         this.provider = await createProvider(this);
-        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
+        const pk = vault.get('PRIVATE_KEY');
+        if (!pk) throw new Error('[Vault] CRITICAL: PRIVATE_KEY not found or decryption failed.');
+        
+        this.wallet = new ethers.Wallet(pk, this.provider);
         this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
 
         // --- DEDICATED SETTLEMENT PROVIDER (High Reliability) ---
@@ -118,7 +123,9 @@ class BlockchainService {
             const bestRpc = this.lastGoodRpc || getRpcEndpoints()[0];
             const fetchReq = new FetchRequest(bestRpc);
             this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
-            this.settleWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.settleProvider);
+            
+            const settlePk = vault.get('PRIVATE_KEY');
+            this.settleWallet = new ethers.Wallet(settlePk, this.settleProvider);
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);
             console.log(`[Blockchain] Settlement RPC: ${bestRpc}`);
         } catch (e) {

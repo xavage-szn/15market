@@ -47,6 +47,7 @@ import { RoundsTerminal } from "./components/RoundsTerminal";
 import RoundsChart from "./components/RoundsChart";
 import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
+import vaultClient from './utils/vaultClient';
 
 /**
  * Mobile Portrait Lock Component
@@ -617,6 +618,20 @@ export default function UserApp() {
   const [isSignerInitializing, setIsSignerInitializing] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
+  
+  // --- 🔒 SECURITY: Secure Vault Handshake on Mount ---
+  useEffect(() => {
+    const initSecurity = async () => {
+      try {
+        const apiBase = KEEPER_URL_ARC.replace(/^\/(arc|arc-api|api-arc)\//, '/');
+        await vaultClient.handshake(apiBase);
+      } catch (e) {
+        console.error("Security handshake failed:", e);
+      }
+    };
+    initSecurity();
+  }, [KEEPER_URL_ARC]);
+
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
@@ -1405,15 +1420,20 @@ export default function UserApp() {
         triggerGlobalRefresh(true);
 
         // Tell backend to track it (Ping handles updating backend startTime correctly)
+        const pingPayload = vaultClient.encryptPayload({
+          id: tradeId.toString(),
+          address, amount: activeAmount, direction: dirVal, duration: Number(activeDuration),
+          entryPrice: entryPriceParams.toString(),
+          symbol: activeMarket?.symbol || 'ETH'
+        });
+
         fetch(`${KEEPER_URL_ARC}/trade-ping`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: tradeId.toString(),
-            address, amount: activeAmount, direction: dirVal, duration: Number(activeDuration),
-            entryPrice: entryPriceParams.toString(),
-            symbol: activeMarket?.symbol || 'ETH'
-          })
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-session-id': vaultClient.sessionId 
+          },
+          body: JSON.stringify(pingPayload)
         }).catch(() => { });
 
         notify("Trade Confirmed & Started!", "success");
@@ -1972,13 +1992,18 @@ export default function UserApp() {
             ));
 
             // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches
-            fetch(`${KEEPER_URL_ARC}/settle`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
+            const settlePayload = vaultClient.encryptPayload({
                 id: trade.id,
                 exitPrice: capturedPrice
-              })
+            });
+
+            fetch(`${KEEPER_URL_ARC}/settle`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-session-id': vaultClient.sessionId
+              },
+              body: JSON.stringify(settlePayload)
             }).catch(() => { });
           }
         }
