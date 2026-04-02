@@ -2839,8 +2839,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                     <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
                                                 </button>
                                             ))}
-                                             {
-                                settingsSubTab === 'platform' && (
+                                        </div>
+
+                                        <AnimatePresence mode="wait">
+                                            {
+                                                settingsSubTab === 'platform' && (
                                     <motion.div
                                         key="platform-config"
                                         initial={{ opacity: 0, y: 20 }}
@@ -3519,6 +3522,10 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                     </motion.div>
                                 )
                             }
+
+                        </AnimatePresence >
+                                </motion.div>
+                            )}
 
                         </AnimatePresence >
                     </div >

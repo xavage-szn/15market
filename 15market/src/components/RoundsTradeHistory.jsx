@@ -53,7 +53,9 @@ function RoundsTradeHistoryComponent({
                                             <span className="text-[8px] font-black uppercase" style={{ color }}>{isUp ? 'LONG' : 'SHORT'}</span>
                                         </div>
                                         <div className="flex flex-col">
-                                            <div className={`text-xs lg:text-sm font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{Number(t.amount).toFixed(2)} USDC</div>
+                                            <div className={`text-xs lg:text-sm font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                                                {isWon ? `+${Number(t.payout || (t.amount * 1.90)).toFixed(2)}` : `${Number(t.amount).toFixed(2)}`} USDC
+                                            </div>
                                             <div className="text-[8px] uppercase font-black opacity-30 tracking-widest">{t.symbol.replace('USDT', '')} // Round #{t.id.toString().slice(-6)}</div>
                                         </div>
                                     </div>

@@ -120,7 +120,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-10px_40px_rgba(27,94,60,0.4)] border-white/10'
-          : 'bg-gradient-to-br from-[#3CB371]/90 to-[#1e5a38]/90 shadow-[0_-5px_25px_rgba(60,179,113,0.12)] border-[#3CB371]/20'}
+          : 'bg-gradient-to-br from-[#E2EFEA]/98 to-[#D9E9E2]/98 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-[#3CB371]/30'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -137,11 +137,11 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
           <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />
           
           <div className="flex items-center justify-center gap-3 w-full">
-            <History size={14} className="text-white" style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' }} />
-            <span className={`text-[11px] font-black uppercase tracking-[0.25em] text-white`}>
+            <History size={14} className={isDark ? "text-white" : "text-[#0a261a]"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
+            <span className={`text-[11px] font-black uppercase tracking-[0.25em] ${isDark ? "text-white" : "text-[#0a261a]"}`}>
               TRADE HISTORY ({userProfile?.stats?.totalTrades || tradeHistory.length})
             </span>
-            {isOpen ? <ChevronDown size={12} className="text-white/80" /> : <ChevronUp size={12} className="text-white/80" />}
+            {isOpen ? <ChevronDown size={12} className={isDark ? "text-white/80" : "text-black/60"} /> : <ChevronUp size={12} className={isDark ? "text-white/80" : "text-black/60"} />}
           </div>
         </div>
 

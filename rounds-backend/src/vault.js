@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const os = require('os');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 /**
  * 15MARKET SECURITY VAULT
@@ -79,14 +79,12 @@ class VaultService {
      * Decrypts a vault-formatted string. Returns original if not encrypted.
      */
     decrypt(vaultString) {
-        if (!vaultString || typeof vaultString !== 'string') return vaultString;
-        const trimmed = vaultString.trim();
-        if (!trimmed.toUpperCase().startsWith('ENC:V1:')) {
+        if (!vaultString || !vaultString.trim().toUpperCase().startsWith('ENC:V1:')) {
             return vaultString; // Return as-is if not a vault string
         }
 
         try {
-            const parts = trimmed.split(':');
+            const parts = vaultString.trim().split(':');
             if (parts.length !== 5) throw new Error('Invalid vault format');
 
             const iv = Buffer.from(parts[2], 'base64');

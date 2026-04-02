@@ -1,8 +1,11 @@
 const Redis = require('ioredis');
 const path = require('path');
+const vault = require('./vault');
 require('dotenv').config();
 
-const redis = new Redis(process.env.REDIS_URL);
+const RAW_REDIS_URL = process.env.REDIS_URL ? process.env.REDIS_URL.trim().replace(/^["'\s]+|["'\s]+$/g, '') : undefined;
+const redisUrl = vault.decrypt(RAW_REDIS_URL);
+const redis = new Redis(redisUrl);
 
 redis.on('connect', () => {
     console.log('[Redis] Connected to Redis Cloud');

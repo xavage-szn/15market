@@ -1,8 +1,10 @@
 const Redis = require('ioredis');
 const path = require('path');
+const vault = require('./vault');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
-const REDIS_URL = process.env.REDIS_URL ? process.env.REDIS_URL.trim().replace(/^"|"$/g, '') : undefined;
+const RAW_REDIS_URL = process.env.REDIS_URL ? process.env.REDIS_URL.trim().replace(/^["'\s]+|["'\s]+$/g, '') : undefined;
+const REDIS_URL = vault.decrypt(RAW_REDIS_URL);
 
 class RedisStore {
     constructor() {

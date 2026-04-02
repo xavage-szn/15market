@@ -44,7 +44,7 @@ function TradeHistoryComponent({
             <div className={`
                 ${isCompact ? 'h-full flex flex-col p-3' : 'p-4 lg:p-6'} 
                 rounded-2xl border transition-all duration-300 glass-panel
-                ${isLight ? 'coral-green-gradient-light !shadow-xl' : 'shadow-2xl'}`}
+                ${isLight ? 'coral-green-gradient-light shadow-lg shadow-[#0a261a]/5' : 'shadow-2xl'}`}
                 style={isLight ? {} : { background: 'rgba(10, 10, 10, 0.7)' }}
             >
                 <div className="flex items-center justify-between mb-3 lg:mb-4 px-1">
@@ -77,7 +77,9 @@ function TradeHistoryComponent({
                                             )}
                                         </div>
                                         <div className="flex flex-col">
-                                            <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>{Number(t.amount).toFixed(2)} USDC</div>
+                                            <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>
+                                                {t.status === 'WON' ? `+${Number(t.payout || (t.amount * (t.duration <= 5 ? 2.90 : t.duration <= 10 ? 2.40 : 1.90))).toFixed(2)}` : `${Number(t.amount).toFixed(2)}`} USDC
+                                            </div>
                                             <div className="text-[7px] lg:text-[9px] uppercase font-black opacity-30">{t.symbol || 'ETH'} // {isRounds ? 'P2P Pool' : 'Binary'}</div>
                                         </div>
                                     </div>
