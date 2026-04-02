@@ -329,7 +329,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 fetchStats();
                 fetchStaff();
                 fetchProfiles();
-            }, 3000);
+            }, 5000); // 5s Stats Refresh
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchStaff, fetchProfiles]);
@@ -340,17 +340,28 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         let interval;
         const fetchArcBalance = async () => {
-            try {
-                const provider = new ethers.JsonRpcProvider(ARC_RPC, undefined, { staticNetwork: true });
-                const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
-                const formattedBal = parseFloat(ethers.formatEther(bal)) || 0;
-                setArcTreasuryBalance(formattedBal);
-            } catch (e) { }
+            const rpcList = [
+                'https://rpc.testnet.arc.network',
+                'https://arc-testnet.alt.technology',
+                'https://arc-testnet.drpc.org'
+            ];
+            
+            for (const rpc of rpcList) {
+                try {
+                    const provider = new ethers.JsonRpcProvider(rpc, undefined, { staticNetwork: true });
+                    const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
+                    const formattedBal = parseFloat(ethers.formatEther(bal)) || 0;
+                    setArcTreasuryBalance(formattedBal);
+                    return; // Success, exit-loop
+                } catch (e) {
+                    console.warn(`Admin Balance Sync: RPC ${rpc} failed`);
+                }
+            }
         };
 
         if (isLoggedIn) {
             fetchArcBalance();
-            interval = setInterval(fetchArcBalance, 2000);
+            interval = setInterval(fetchArcBalance, 3000); // 3s Balance Sync
         }
         return () => clearInterval(interval);
     }, [isLoggedIn]);
@@ -1189,7 +1200,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             triggerAnalysis();
-            const interval = setInterval(triggerAnalysis, 2000);
+            const interval = setInterval(triggerAnalysis, 1000); // 1s Sync
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, triggerAnalysis]);
@@ -1217,7 +1228,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             fetchTradeHistory();
-            const interval = setInterval(fetchTradeHistory, 3000);
+            const interval = setInterval(fetchTradeHistory, 3000); // 3s History Refresh
             return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchTradeHistory]);
@@ -1345,7 +1356,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         };
 
         fetchLogs();
-        const interval = setInterval(fetchLogs, 20000);
+        const interval = setInterval(fetchLogs, 5000); // 5s Log Sync
         return () => clearInterval(interval);
     }, [isLoggedIn, activeTab]);
 

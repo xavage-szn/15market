@@ -563,6 +563,10 @@ app.post('/trade-ping', actionLimiter, async (req, res) => {
 
 app.get('/protocol-stats', async (req, res) => {
     try {
+        const cacheKey = 'stats:protocol_summary';
+        const cached = await redis.redis.get(cacheKey); // Access underlying ioredis
+        if (cached) return res.json(JSON.parse(cached));
+
         // 1. Classic Binary Options Stats
         const history = await redis.getFullHistory();
         const activeTrades = await redis.getAllActiveTrades(true);
@@ -573,39 +577,30 @@ app.get('/protocol-stats', async (req, res) => {
         const assets = ['ETHUSDT', 'BTCUSDT', 'SOLUSDT'];
         let roundsVolume = 0;
         let roundsParticipants = 0;
-        let activeRoundsCount = 0;
 
         for (const asset of assets) {
             const state = await redis.getRound(`${asset}_state`);
             if (state) {
-                activeRoundsCount++;
-                // Add next round participants (currently betting)
                 roundsParticipants += state.next?.pools?.participants || 0;
-                // Add live round participants
                 roundsParticipants += state.live?.pools?.participants || 0;
-                
-                // Estimate volume from pools
-                if (state.next?.pools) {
-                    roundsVolume += (state.next.pools.long || 0) + (state.next.pools.short || 0) - 2.0; // Subtract initial 1.0/1.0
-                }
-                if (state.live?.pools) {
-                    roundsVolume += (state.live.pools.long || 0) + (state.live.pools.short || 0) - 2.0;
-                }
+                if (state.next?.pools) roundsVolume += (state.next.pools.long || 0) + (state.next.pools.short || 0) - 2.0;
+                if (state.live?.pools) roundsVolume += (state.live.pools.long || 0) + (state.live.pools.short || 0) - 2.0;
             }
         }
 
-        res.json({
+        const stats = {
             totalVolume: (totalVolume + roundsVolume).toFixed(2),
             classicVolume: totalVolume.toFixed(2),
             roundsVolume: roundsVolume.toFixed(2),
             wallets: uniqueWallets,
             activeCount: activeTrades.length + roundsParticipants,
-            classicActive: activeTrades.length,
-            roundsActive: roundsParticipants,
             totalTrades: history.length,
             activeStakes: activeTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) + roundsVolume,
             autoSignerFees: { arc: ((totalVolume + roundsVolume) * 0.01).toFixed(2) }
-        });
+        };
+
+        await redis.redis.set(cacheKey, JSON.stringify(stats), 'EX', 5);
+        res.json(stats);
     } catch (e) {
         console.error('[Stats] Error:', e.message);
         res.status(500).json({ error: e.message });

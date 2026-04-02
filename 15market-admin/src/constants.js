@@ -15,11 +15,12 @@ const isLocal = typeof window !== 'undefined' &&
      window.location.hostname === '127.0.0.1' || 
      window.location.hostname.startsWith('192.168.'));
 
-// Priority Detection: If on localhost, attempt to use the local node port 3010 
-// even if VITE_KEEPER_URL is set in .env (which usually contains production staging URL)
+// Priority Detection: Automatic fall-back for production environments
 const rawKeeperUrl = isLocal 
-    ? "http://localhost:3010" 
-    : (import.meta.env.VITE_KEEPER_URL || "https://api.15market.online");
+    ? (import.meta.env.VITE_KEEPER_URL || "http://localhost:3010")
+    : (import.meta.env.VITE_KEEPER_URL && !import.meta.env.VITE_KEEPER_URL.includes('localhost') 
+        ? import.meta.env.VITE_KEEPER_URL 
+        : "https://api.15market.online");
 
 export const KEEPER_URL = rawKeeperUrl.endsWith('/') ? rawKeeperUrl.slice(0, -1) : rawKeeperUrl;
 export const KEEPER_URL_ARC = KEEPER_URL; // Unified backend
