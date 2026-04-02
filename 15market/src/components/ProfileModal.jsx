@@ -2,12 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { KEEPER_URL_ARC } from '../constants';
 
-import { Zap, Shield, TrendingUp, TrendingDown } from 'lucide-react';
+import { Zap, Shield, TrendingUp, TrendingDown, Camera, Edit3, Image as ImageIcon, Link as LinkIcon, Check } from 'lucide-react';
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme }) {
+const PRESET_AVATARS = [
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Midnight",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Oliver",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Luna",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Shadow",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Milo",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Peanut"
+];
+
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme, onUpdate }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
+    const [avatar, setAvatar] = useState("");
+    const [showAvatarSelector, setShowAvatarSelector] = useState(false);
+    const [customAvatarUrl, setCustomAvatarUrl] = useState("");
     const [metrics, setMetrics] = useState(null);
     const [tradeHistory, setTradeHistory] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -25,6 +39,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                 setUsername(userProfile.username || "");
                 setXHandle(userProfile.xHandle || "");
                 setDiscordHandle(userProfile.discordHandle || "");
+                setAvatar(userProfile.avatar || userProfile.xProfileImage || PRESET_AVATARS[0]);
             }
             // Fetch metrics from backend if address is available
             if (address) {
@@ -71,7 +86,8 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                     profile: {
                         username: username,
                         xHandle: xHandle,
-                        discordHandle: discordHandle
+                        discordHandle: discordHandle,
+                        avatar: avatar
                     }
                 })
             });
@@ -79,6 +95,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
             if (!res.ok) throw new Error("Failed to save profile on backend.");
 
             notify("Profile synced successfully!", "success");
+            if (onUpdate) onUpdate();
             onClose();
             // UserApp polling will catch this within 2s, but we can trigger a manual fetch if we had a prop for it
         } catch (err) {
@@ -140,19 +157,30 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px] overflow-hidden">
-                                <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#e6f4ed]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
-                                    {userProfile?.xProfileImage ? (
-                                        <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-[#3CB371] font-black text-xl">
-                                            {(username || "A").charAt(0).toUpperCase()}
-                                        </span>
-                                    )}
+                            <div className="relative group cursor-pointer" onClick={() => setShowAvatarSelector(!showAvatarSelector)}>
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1.5px] overflow-hidden transition-transform group-hover:scale-105">
+                                    <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#e6f4ed]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden relative`}>
+                                        {userProfile?.xProfileImage || avatar ? (
+                                            <img src={userProfile?.xProfileImage || avatar} alt="Profile" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <span className="text-[#3CB371] font-black text-xl">
+                                                {(username || "A").charAt(0).toUpperCase()}
+                                            </span>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                            <Camera size={16} className="text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#3CB371] border-2 border-[#0D0D0D] flex items-center justify-center shadow-lg">
+                                    <Edit3 size={10} className="text-black font-bold" />
                                 </div>
                             </div>
                             <div className="flex flex-col">
-                                <h3 className={`text-xl font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-white'}`}>DeGen Account</h3>
+                                <h3 className={`text-xl font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-white'} flex items-center gap-2`}>
+                                    DeGen Account
+                                    <Edit3 size={12} className="text-[#3CB371] opacity-40" />
+                                </h3>
                                 <p className={`text-[9px] ${isLight ? 'text-black/40' : 'text-white/20'} uppercase font-bold tracking-widest mt-1`}>Identity & Metrics</p>
                             </div>
                         </div>
@@ -160,6 +188,50 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                             <button onClick={onClose} className={`p-2 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40' : 'bg-white/5 hover:bg-white/10 text-white/40'} transition-colors`}>✕</button>
                         </div>
                     </div>
+
+                    <AnimatePresence>
+                        {showAvatarSelector && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className={`mb-6 p-4 rounded-[24px] ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-[#3CB371]/20 overflow-hidden`}
+                            >
+                                <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${isLight ? 'text-black/40' : 'text-white/40'}`}>Select Avatar Or Provide URL</p>
+                                <div className="grid grid-cols-4 gap-3 mb-4">
+                                    {PRESET_AVATARS.map((url, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => { setAvatar(url); setCustomAvatarUrl(""); }}
+                                            className={`relative w-12 h-12 rounded-full border-2 transition-all overflow-hidden ${avatar === url ? 'border-[#3CB371] scale-110 shadow-lg z-10' : 'border-transparent opacity-40 hover:opacity-100'}`}
+                                        >
+                                            <img src={url} alt="Avatar" className="w-full h-full" />
+                                            {avatar === url && (
+                                                <div className="absolute inset-0 bg-[#3CB371]/20 flex items-center justify-center">
+                                                    <Check size={16} className="text-white" />
+                                                </div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3CB371]">
+                                        <LinkIcon size={14} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Paste Custom Image URL"
+                                        value={customAvatarUrl}
+                                        onChange={(e) => {
+                                            setCustomAvatarUrl(e.target.value);
+                                            if (e.target.value.trim().startsWith('http')) setAvatar(e.target.value.trim());
+                                        }}
+                                        className={`w-full py-3 pl-10 pr-4 rounded-xl ${isLight ? 'bg-white border-black/10' : 'bg-black border-white/10'} border text-[10px] font-bold focus:border-[#3CB371] outline-none transition-all placeholder:text-white/10`}
+                                    />
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {metrics && (
                         <div className="grid grid-cols-2 gap-4 mb-6">
@@ -253,14 +325,19 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                     </div>
 
                     <div className="space-y-4">
-                        <div>
+                        <div className="relative">
                             <label className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-2 block`}>Username (Public)</label>
-                            <input
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                placeholder="Anonymous DeGen"
-                                className={`w-full ${isLight ? 'bg-white text-black border-black/10' : 'bg-black text-white border-white/10'} border rounded-2xl px-5 py-3.5 text-xs font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-black/20`}
-                            />
+                            <div className="relative">
+                                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-[#3CB371]">
+                                    <Edit3 size={14} />
+                                </div>
+                                <input
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    placeholder="Anonymous DeGen"
+                                    className={`w-full ${isLight ? 'bg-white text-black border-black/10' : 'bg-black text-white border-white/10'} border rounded-2xl pl-12 pr-5 py-3.5 text-xs font-bold focus:border-[#3CB371]/50 outline-none transition-all placeholder:text-black/20`}
+                                />
+                            </div>
                         </div>
 
                         <div>

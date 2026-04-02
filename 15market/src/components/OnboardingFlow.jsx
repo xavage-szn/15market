@@ -40,6 +40,7 @@ export const OnboardingFlow = ({ address, onComplete, theme }) => {
             });
             const data = await res.json();
             if (res.ok && data.success) {
+                localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, 'true');
                 onComplete(data.profile || { 
                     username: username.trim(), 
                     xHandle: xHandle.trim(), 

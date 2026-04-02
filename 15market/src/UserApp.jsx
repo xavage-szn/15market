@@ -478,15 +478,18 @@ export default function UserApp() {
       let rData = { authorized: false };
       if (rRes.ok) rData = await rRes.json();
 
+      const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
+
       // Update Profile & Onboarding State Stealthily
-      if (!pData || pData.error) {
+      if ((!pData || pData.error) && !localOnboarded) {
         // New user detected
         setUserProfile({ address: addr, isInitial: true });
         setShowOnboarding(true);
       } else {
         // Returning user
-        setUserProfile(pData);
+        setUserProfile(pData || { address: addr, username: `Trader_${addr.slice(2, 6)}` });
         setShowOnboarding(false);
+        localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
       }
 
       // Update Rounds Access State
@@ -2649,20 +2652,20 @@ export default function UserApp() {
 
 
                     {/* Chart Container - flex-1 fills all remaining vertical space on mobile */}
-                    <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'backdrop-blur-2xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
+                    <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
                       style={{
                         background: isSmallScreen 
-                          ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(255, 255, 255, 0.12)') 
+                          ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
                           : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen
                           ? (theme === 'light' 
                             ? '0 15px 45px -10px rgba(60,179,113,0.08), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.1)' 
-                            : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.2), inset 0 2px 4px rgba(255,255,255,0.1)')
+                            : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)')
                           : (theme === 'light'
                             ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
                             : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
                         borderColor: isSmallScreen
-                          ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.08)')
+                          ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
                           : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
                       }}>
                       <div className="flex-1 w-full h-full flex relative">
@@ -2924,6 +2927,7 @@ export default function UserApp() {
         }}
         notify={notify}
         theme={theme}
+        onUpdate={() => performStealthChecks(address)}
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
 
