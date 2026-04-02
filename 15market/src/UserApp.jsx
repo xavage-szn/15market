@@ -1969,26 +1969,33 @@ export default function UserApp() {
             const finalStatus = isWon ? "WON" : "LOST";
             const settlementPriceStr = capturedPrice.toFixed(2);
 
+            // Calculate expected payout so it's not erased by frontend reconciler
+            const durationNum = trade.duration || 15;
+            const multiplierAmt = durationNum <= 5 ? 2.90 : (durationNum <= 10 ? 2.40 : 1.90);
+            const amtParsed = parseFloat(trade.amount);
+            const calcPayout = isWon ? (amtParsed * multiplierAmt).toFixed(2) : "0.00";
+
             // 🔒 LOCK THE RESULT: Store in ref so reconciler never overwrites this
             const tradeIdStr = String(trade.id);
-            lockedResults.current.set(tradeIdStr, { status: finalStatus, settlementPrice: settlementPriceStr });
+            lockedResults.current.set(tradeIdStr, { status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout });
 
             // Also record in tradeHistory immediately with locked result
+
             setTradeHistory(prev => {
               const existing = prev.find(t => String(t.id || t.tx || t.nonce) === tradeIdStr);
               if (existing) {
                 return prev.map(t =>
                   String(t.id || t.tx || t.nonce) === tradeIdStr
-                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr }
+                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }
                     : t
                 );
               }
-              return [{ ...trade, status: finalStatus, settlementPrice: settlementPriceStr }, ...prev];
+              return [{ ...trade, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }, ...prev];
             });
 
             // Update activeTrades with locked final status
             setActiveTrades(prev => prev.map(t =>
-              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr } : t
+              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout } : t
             ));
 
             // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches

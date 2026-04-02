@@ -135,9 +135,15 @@ function LiveExecutionComponent({
                     })
                 }).catch(() => { });
 
+                // Calculate expected payout
+                const durationNum = trade.duration || 15;
+                const multiplierAmt = durationNum <= 5 ? 2.90 : (durationNum <= 10 ? 2.40 : 1.90);
+                const amtParsed = parseFloat(trade.amount);
+                const calcPayout = isWin ? (amtParsed * multiplierAmt).toFixed(2) : "0.00";
+
                 // 3. Update Parent State (Syncs Chart & Other UI)
                 setActiveTrades(prev => prev.map(t =>
-                    t.id === trade.id ? { ...t, lockedExitPrice: lockedPrice, status: isWin ? "WON" : "LOST" } : t
+                    t.id === trade.id ? { ...t, lockedExitPrice: lockedPrice, status: isWin ? "WON" : "LOST", payout: calcPayout } : t
                 ));
             }
         });
