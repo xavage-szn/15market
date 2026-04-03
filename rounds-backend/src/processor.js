@@ -76,7 +76,7 @@ class RoundsProcessor {
                 // On-chain Lock
                 if (blockchain.contract) {
                     const priceFixed = ethers.parseUnits(price.toFixed(8), 8);
-                    const tx = await blockchain.contract.lockRound(roundId, priceFixed);
+                    const tx = await blockchain.contract.lockRound(roundId, priceFixed, { gasLimit: 500000 });
                     console.log(`[Rounds] Round ${roundId} Locked for ${asset}: ${tx.hash}`);
                 }
             } catch (e) {
@@ -91,39 +91,55 @@ class RoundsProcessor {
 
         for (const asset of this.assets) {
             try {
-                const baseAsset = asset.replace('USDT', '');
-                const price = await pricing.getPrice(baseAsset);
-                
-                if (!price || isNaN(price)) {
-                    console.error(`[Rounds] Price missing for ${asset}`);
-                    continue;
-                }
-
                 const state = await redis.getRound(`${asset}_state`);
+                
                 if (state && state.live && state.live.id === roundId) {
                     const lPrice = state.live.lockPrice;
-                    const sPrice = parseFloat(price);
-                    state.live.settlePrice = sPrice;
-                    
-                    // Logic: If price didn't move, House (Treasury) wins.
-                    // We check if it truly stayed static or if it's within 0.0001% tolerance
-                    const diff = Math.abs(sPrice - lPrice);
-                    if (diff < 0.00000001) {
-                        state.live.result = 'HOUSE';
-                        console.log(`[Rounds] House wins for ${asset}: Settle=${sPrice}, Lock=${lPrice}`);
-                    } else {
-                        state.live.result = sPrice > lPrice ? 'WON' : 'LOST';
-                        console.log(`[Rounds] Round ${roundId} Result for ${asset}: ${state.live.result}`);
-                    }
-                    
-                    await redis.setRound(`${asset}_state`, state);
-                    this.lastSettledId[asset] = roundId;
-                }
+                    let sPrice;
 
-                if (blockchain.contract) {
-                    const priceFixed = ethers.parseUnits(price.toFixed(8), 8);
-                    const tx = await blockchain.contract.settleRound(roundId, priceFixed);
-                    console.log(`[Rounds] Round ${roundId} Settled for ${asset}: ${tx.hash}`);
+                    // === RESULT LOCKING: If result already exists, NEVER re-determine it ===
+                    if (state.live.resultLocked) {
+                        console.log(`[Rounds] Round ${roundId} for ${asset}: Result already locked as ${state.live.result}`);
+                        sPrice = state.live.settlePrice;
+                    } else {
+                        // First time settling - fetch price and LOCK IT PERMANENTLY
+                        const baseAsset = asset.replace('USDT', '');
+                        const price = await pricing.getPrice(baseAsset);
+                        
+                        if (!price || isNaN(price)) {
+                            console.error(`[Rounds] Price missing for ${asset}`);
+                            continue;
+                        }
+
+                        sPrice = parseFloat(price);
+                        state.live.settlePrice = sPrice;
+                        
+                        // Determine result ONCE
+                        const diff = Math.abs(sPrice - lPrice);
+                        if (diff < 0.00000001) {
+                            state.live.result = 'HOUSE';
+                            console.log(`[Rounds] House wins for ${asset}: Settle=${sPrice}, Lock=${lPrice}`);
+                        } else {
+                            state.live.result = sPrice > lPrice ? 'WON' : 'LOST';
+                            console.log(`[Rounds] Round ${roundId} Result for ${asset}: ${state.live.result}`);
+                        }
+                        
+                        // LOCK IT - this flag prevents any future re-determination
+                        state.live.resultLocked = true;
+                        await redis.setRound(`${asset}_state`, state);
+                        this.lastSettledId[asset] = roundId;
+                    }
+
+                    // On-chain settlement (uses the locked price)
+                    if (blockchain.contract) {
+                        const priceFixed = ethers.parseUnits(sPrice.toFixed(8), 8);
+                        const tx = await blockchain.contract.settleRound(roundId, priceFixed, { gasLimit: 1500000 });
+                        console.log(`[Rounds] Round ${roundId} Settled on-chain for ${asset}: ${tx.hash}`);
+                        
+                        // --- AUTOMATED AID: Trigger immediate payout retry for this round ---
+                        const payoutKeeper = require('./payoutKeeper');
+                        payoutKeeper.processAsset(asset).catch(e => console.warn(`[Rounds] Instant payout check failed:`, e.message));
+                    }
                 }
             } catch (e) {
                 console.error(`[Rounds] Settle Round Failed for ${asset}:`, e.message);

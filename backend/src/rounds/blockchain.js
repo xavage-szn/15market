@@ -39,16 +39,16 @@ class RoundsBlockchain {
         console.log(`[RoundsBlockchain] Initialized for contract: ${this.contractAddress}`);
     }
 
-    async lockRound(roundId, price) {
+    async lockRound(roundId, price, options = {}) {
         await this.ensureReady();
         const c = this.settleContract || this.contract;
-        return await c.lockRound(roundId, price);
+        return await c.lockRound(roundId, price, options);
     }
 
-    async settleRound(roundId, price) {
+    async settleRound(roundId, price, options = {}) {
         await this.ensureReady();
         const c = this.settleContract || this.contract;
-        return await c.settleRound(roundId, price);
+        return await c.settleRound(roundId, price, options);
     }
 
     async enterRound(roundId, direction, value, wallet) {

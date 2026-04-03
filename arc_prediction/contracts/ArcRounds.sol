@@ -135,13 +135,77 @@ contract ArcRounds is Ownable, ReentrancyGuard {
             address user = participants[_roundId][i];
             Entry storage entry = entries[_roundId][user];
             if (entry.direction == _result && entry.amount > 0 && !entry.claimed) {
-                entry.claimed = true;
                 // Payout = (UserStake / TotalWinningPool) * DistributablePool
                 uint256 payout = (entry.amount * distributable) / winningPool;
-                payable(user).transfer(payout);
-                emit PayoutClaimed(_roundId, user, payout);
+                
+                // CRITICAL FIX: Mark as claimed BEFORE the call to prevent reentrancy (though not possible with nonReentrant on parent)
+                // Also use .call instead of .transfer to prevent one failed transfer from blocking the whole round.
+                entry.claimed = true;
+                (bool success, ) = payable(user).call{value: payout}("");
+                if (success) {
+                    emit PayoutClaimed(_roundId, user, payout);
+                } else {
+                    // If transfer fails (e.g., recipient is a contract that reverts), 
+                    // we UNMARK it as claimed so they can still try to manual-claim via claimPayout later.
+                    entry.claimed = false;
+                }
             }
         }
+    }
+
+    /**
+     * @dev Allows owner to retry payouts for specific users if the initial bulk payout failed.
+     */
+    function distributePayoutsBatch(uint256 _roundId, address[] calldata _users) external onlyOwner nonReentrant {
+        Round storage round = rounds[_roundId];
+        require(round.settled, "Round not settled");
+
+        uint8 result = (round.settlePrice > round.lockPrice) ? 1 : 0;
+        uint256 totalPool = round.totalLong + round.totalShort;
+        uint256 fee = (totalPool * feeBps) / 10000;
+        uint256 distributable = totalPool - fee;
+        uint256 winningPool = (result == 1) ? round.totalLong : round.totalShort;
+
+        for (uint256 i = 0; i < _users.length; i++) {
+            address user = _users[i];
+            Entry storage entry = entries[_roundId][user];
+            if (entry.direction == result && entry.amount > 0 && !entry.claimed) {
+                entry.claimed = true;
+                uint256 payout = (entry.amount * distributable) / winningPool;
+                (bool success, ) = payable(user).call{value: payout}("");
+                if (success) {
+                    emit PayoutClaimed(_roundId, user, payout);
+                } else {
+                    entry.claimed = false; // Reset for next retry
+                }
+            }
+        }
+    }
+
+    /**
+     * @dev Allows a user to manually claim their payout if automatic distribution fails.
+     */
+    function claimPayout(uint256 _roundId) external nonReentrant {
+        Round storage round = rounds[_roundId];
+        require(round.settled, "Round not settled");
+        
+        Entry storage entry = entries[_roundId][msg.sender];
+        require(entry.amount > 0, "No stake in this round");
+        require(!entry.claimed, "Already claimed");
+
+        uint8 result = (round.settlePrice > round.lockPrice) ? 1 : 0;
+        require(entry.direction == result, "Not a winner");
+
+        uint256 totalPool = round.totalLong + round.totalShort;
+        uint256 fee = (totalPool * feeBps) / 10000;
+        uint256 distributable = totalPool - fee;
+        uint256 winningPool = (result == 1) ? round.totalLong : round.totalShort;
+
+        entry.claimed = true;
+        uint256 payout = (entry.amount * distributable) / winningPool;
+        
+        payable(msg.sender).transfer(payout);
+        emit PayoutClaimed(_roundId, msg.sender, payout);
     }
 
     function setFee(uint256 _bps) external onlyOwner {

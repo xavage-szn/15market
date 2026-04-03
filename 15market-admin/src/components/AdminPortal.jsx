@@ -769,7 +769,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': ADMIN_TOKEN
+                    'Authorization': `Bearer ${ADMIN_TOKEN}`
                 },
                 body: JSON.stringify(tokens)
             });

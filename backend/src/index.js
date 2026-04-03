@@ -471,33 +471,40 @@ app.post('/settle', actionLimiter, secureTransit, async (req, res) => {
 
         const trade = await redis.getTrade(id);
         if (trade) {
-            // SECURITY PATCH: Do NOT trust the frontend for exitPrice.
-            // We fetch the fresh price from our internal pricing service.
-            const freshPrice = pricing.getCurrentPrice(trade.symbol || 'BTC');
-            if (!freshPrice) {
-                logToFile(`Settle ${id} failed: No pricing data available.`);
-                return res.status(500).json({ error: 'Pricing service unavailable' });
+            // === RESULT LOCKING: Use existing locked result if available ===
+            let exitPriceNum;
+            let status = trade.status;
+            let payout = trade.payout;
+
+            if (trade.lockedExitPrice) {
+                logToFile(`Settle ${id}: Using already locked price ${trade.lockedExitPrice}`);
+                exitPriceNum = parseFloat(trade.lockedExitPrice);
+            } else {
+                // Determine fresh price and LOCK IT IN.
+                const freshPrice = pricing.getCurrentPrice(trade.symbol || 'BTC');
+                if (!freshPrice) {
+                    logToFile(`Settle ${id} failed: No pricing data available.`);
+                    return res.status(500).json({ error: 'Pricing service unavailable' });
+                }
+                exitPriceNum = parseFloat(freshPrice);
+                logToFile(`Settle ${id}: Price locked at ${exitPriceNum}`);
             }
 
             const entryPrice = parseFloat(trade.entryPrice);
-            const exitPriceNum = parseFloat(freshPrice);
-
             const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
-
-            // Determined by backend price oracle
             const isWin = isUp ? (exitPriceNum > entryPrice) : (exitPriceNum < entryPrice);
 
             const duration = Number(trade.duration) || 15;
             const multiplier = duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
-            const payout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
+            payout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
+            status = isWin ? "WON" : "LOST";
 
-            // Mark as settled in Redis immediately
             const settlementData = {
                 id: id,
                 user: trade.user || trade.owner,
                 owner: trade.owner || trade.user,
                 sessionOwner: trade.sessionOwner,
-                status: isWin ? "WON" : "LOST",
+                status: status,
                 settlementPrice: exitPriceNum.toFixed(8),
                 payout: payout,
                 settled: true,
@@ -505,21 +512,25 @@ app.post('/settle', actionLimiter, secureTransit, async (req, res) => {
                 isSessionTrade: trade.isSessionTrade || !!trade.sessionOwner
             };
 
+
             // Update history
             await redis.addHistoricalTrade(settlementData);
 
             // Update active trade so current session/polls see the finalized result
-            await redis.setTrade(id, {
+            const updatedTrade = {
                 ...trade,
                 ...settlementData
-            });
+            };
+            await redis.setTrade(id, updatedTrade);
 
             // Trigger on-chain settlement in the BACKGROUND
-            processor._settleSingleTrade(trade, exitPriceNum.toFixed(8)).catch(e => {
+            // CRITICAL: Pass the UPDATED trade (with lockedExitPrice) so the processor
+            // uses the SAME price. This prevents result flipping.
+            processor._settleSingleTrade(updatedTrade, exitPriceNum.toFixed(8)).catch(e => {
                 logToFile(`Settle failed for ${id}: ${e.message}`);
             });
 
-            return res.json({ success: true, status: isWin ? "WON" : "LOST", payout });
+            return res.json({ success: true, status: status, payout });
         } else {
             // Check if already settled on-chain
             const isSettled = await blockchain.isBetSettled(id);
@@ -617,12 +628,34 @@ app.post('/session/init', actionLimiter, async (req, res) => {
         const { address } = req.body;
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
         logToFile(`[SESSION_INIT] 🛠️ Initializing for ${address} -> Session: ${sessionAddr}`);
+
+        // ===== 🏥 AID/FUNDING SYSTEM: Ensure session wallet has gas (ARC) =====
         const balance = await blockchain.getNativeBalance(sessionAddr);
-        res.json({ sessionAddress: sessionAddr, balance: ethers.formatEther(balance) });
+        const balanceEth = parseFloat(ethers.formatEther(balance));
+
+        if (balanceEth < 0.5) { // Minimum gas threshold
+            const treasuryBal = await blockchain.getNativeBalance(blockchain.wallet.address);
+            if (parseFloat(ethers.formatEther(treasuryBal)) > 10.0) {
+                console.log(`[SessionInit] Funding ${sessionAddr} with 2.0 ARC (aid)...`);
+                logToFile(`[SessionInit] Funding ${sessionAddr} with 2.0 ARC (aid)...`);
+                const tx = await blockchain.wallet.sendTransaction({
+                    to: sessionAddr,
+                    value: ethers.parseEther("2.0")
+                });
+                // Non-blocking wait for initial funding to ensure UX is smooth
+                res.json({ sessionAddress: sessionAddr, balance: "2.0", funded: true, txHash: tx.hash });
+                return;
+            } else {
+                console.warn(`[SessionInit] Treasury too low to fund ${sessionAddr}`);
+            }
+        }
+
+        res.json({ sessionAddress: sessionAddr, balance: balanceEth.toString() });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
+
 
 app.post('/session/trade', actionLimiter, async (req, res) => {
     console.log(`Trade request: ${req.body.user} - ${req.body.direction} @ ${req.body.amount}`);
@@ -938,7 +971,8 @@ app.use('/rounds', roundsRouter);
 
 // Admin: Global Settings
 app.get('/admin/settings', async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     const settings = await redis.getSettings();
@@ -954,7 +988,8 @@ app.get('/admin/settings', async (req, res) => {
 });
 
 app.post('/admin/settings', express.json(), async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     await redis.saveSettings(req.body);
@@ -968,7 +1003,8 @@ app.get('/broadcast', async (req, res) => {
 });
 
 app.post('/admin/broadcast', express.json(), async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     const b = req.body; // { text, type, expiry, sender }
@@ -978,7 +1014,8 @@ app.post('/admin/broadcast', express.json(), async (req, res) => {
 
 // Admin: Treasury Drain
 app.post('/admin/treasury/withdraw', express.json(), async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     const { amount, destination } = req.body;
@@ -1015,7 +1052,8 @@ app.post('/admin/treasury/withdraw', express.json(), async (req, res) => {
 
 // Admin: Staff Management
 app.get('/admin/staff', async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     const staff = await redis.getAllStaff();
@@ -1023,7 +1061,8 @@ app.get('/admin/staff', async (req, res) => {
 });
 
 app.post('/admin/staff', express.json(), async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     const staff = req.body;
@@ -1033,7 +1072,8 @@ app.post('/admin/staff', express.json(), async (req, res) => {
 });
 
 app.delete('/admin/staff/:address', async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     await redis.deleteStaff(req.params.address);
@@ -1079,7 +1119,8 @@ app.post('/profiles', express.json(), async (req, res) => {
 
 // Admin: All Profiles (Directory)
 app.get('/admin/profiles', async (req, res) => {
-    if (req.headers['authorization'] !== `Bearer ${process.env.ADMIN_TOKEN}`) {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     const profiles = await redis.getAllProfiles();

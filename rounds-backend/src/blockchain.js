@@ -67,14 +67,14 @@ class BlockchainService {
     }
 
     // Methods for Rounds Processor to call
-    async lockRound(roundId, price) {
+    async lockRound(roundId, price, options = {}) {
         const c = this.settleContract || this.contract;
-        return await c.lockRound(roundId, price);
+        return await c.lockRound(roundId, price, options);
     }
 
-    async settleRound(roundId, price) {
+    async settleRound(roundId, price, options = {}) {
         const c = this.settleContract || this.contract;
-        return await c.settleRound(roundId, price);
+        return await c.settleRound(roundId, price, options);
     }
 }
 

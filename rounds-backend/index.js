@@ -6,8 +6,10 @@ require('dotenv').config();
 const processor = require('./src/processor');
 const botService = require('./src/botService');
 const redis = require('./src/redis');
+const payoutKeeper = require('./src/payoutKeeper');
 
 const nodemailer = require('nodemailer');
+
 
 const app = express();
 const PORT = process.env.PORT || 3011;
@@ -193,16 +195,23 @@ app.post('/rounds/session-enter', async (req, res) => {
         const val = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
         
         console.log(`[Rounds] Session Entry: User ${address} entering round ${roundId} ${dirVal === 1 ? 'UP' : 'DOWN'} with ${amount} USDC`);
-        const tx = await contract.enterRound(roundId, dirVal, { value: val });
+        
+        // --- 🛡️ ROBUST TRANSACTION: Add high gas limit for session complex wallets ---
+        const tx = await contract.enterRound(roundId, dirVal, { 
+            value: val,
+            gasLimit: 600000 
+        });
 
-        // --- OPTIMISTIC REDIS UPDATE ---
+        console.log(`[Rounds] Entry broadcasted: ${tx.hash}`);
+
+        // --- OPTIMISTIC REDIS UPDATE (Now safer) ---
         try {
             const sym = asset || 'ETH';
             const symbol = sym.length < 5 ? `${sym.toUpperCase()}USDT` : sym.toUpperCase();
             const state = await redis.getRound(`${symbol}_state`);
             if (state && state.next && state.next.id.toString() === roundId.toString()) {
                 const side = dirVal === 1 ? 'long' : 'short';
-                if (!state.next.pools) state.next.pools = { long: 1, short: 1, participants: 0 };
+                if (!state.next.pools) state.next.pools = { long: 0, short: 0, participants: 0 };
                 state.next.pools[side] += parseFloat(cleanAmount);
                 state.next.pools.participants += 1;
                 await redis.setRound(`${symbol}_state`, state);
@@ -213,8 +222,13 @@ app.post('/rounds/session-enter', async (req, res) => {
 
         res.json({ success: true, txHash: tx.hash });
     } catch (e) {
-        console.error(`[Rounds] Session Enter Error:`, e.message);
-        res.status(500).json({ error: e.message });
+        console.error(`[Rounds] Session Enter Error [User: ${req.body.address}]:`, e.message);
+        // Special helpful message for gas/funding issues (Most common)
+        let errorMsg = e.message;
+        if (errorMsg.includes('insufficient funds')) {
+            errorMsg = "Insufficient funds in session wallet for stake + gas (ARC). Please refresh profile.";
+        }
+        res.status(500).json({ error: errorMsg });
     }
 });
 
@@ -261,4 +275,5 @@ app.listen(PORT, async () => {
     console.log(`[Rounds-Backend] Running on port ${PORT}`);
     await botService.init();
     processor.start();
+    payoutKeeper.start();
 });

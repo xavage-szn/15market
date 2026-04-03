@@ -306,9 +306,17 @@ class TradeProcessor {
         // Explicitly update the trade status to RESOLVING in Redis for frontend visibility
         const currentTrade = await redis.getTrade(tradeId);
         if (currentTrade) {
-            const updates = { status: 'RESOLVING' };
+            const updates = {};
             if (manualPrice) updates.lockedExitPrice = manualPrice;
-            await redis.setTrade(tradeId, { ...currentTrade, ...updates });
+            // CRITICAL: Do NOT override a locked WON/LOST status with RESOLVING.
+            // The /settle endpoint already set the final result. We only set RESOLVING
+            // if this trade hasn't been settled by the frontend yet.
+            if (!currentTrade.lockedExitPrice && !trade.lockedExitPrice) {
+                updates.status = 'RESOLVING';
+            }
+            if (Object.keys(updates).length > 0) {
+                await redis.setTrade(tradeId, { ...currentTrade, ...updates });
+            }
         }
         try {
             logToFile(`Settling trade ${tradeId}...`);
@@ -316,9 +324,11 @@ class TradeProcessor {
             const symbol = trade.symbol?.toUpperCase() || ID_ASSET_MAP[Number(trade.marketId)] || 'BTC';
 
             // Check for explicit frontend price OR previously locked price for this trade
-            let settlementPrice = manualPrice || currentTrade?.lockedExitPrice || trade.lockedExitPrice;
-            let logMsg = settlementPrice ? `[Processor] Using LOCKED FRONTEND price for ${tradeId}` : "";
-
+            // RESULT LOCKING: trade.lockedExitPrice is THE source of truth from /settle endpoint.
+            // Once set, it NEVER changes. This prevents result flipping.
+            let settlementPrice = trade.lockedExitPrice || manualPrice || currentTrade?.lockedExitPrice;
+            let logMsg = settlementPrice ? `[Processor] Using LOCKED price for ${tradeId}: ${settlementPrice}` : "";
+            
             if (!settlementPrice) {
                 // ATTEMPT 1: Get HISTORICAL price at the exact moment of expiry
                 settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
@@ -393,6 +403,13 @@ class TradeProcessor {
             const result = await blockchain.settleBet(trade.id, exitVal, retryCount); // Blockchain service already parses to BigInt(8)
             if (result) {
                 logToFile(`Settlement broadcasted for ${tradeId}: ${result.hash}`);
+                
+                // --- PROOF OF PAID: Store the TX hash for the UI to confirm payout ---
+                await redis.setTrade(tradeId, { 
+                    ...trade, 
+                    settlementTx: result.hash, 
+                    paidStatus: 'pending_confirmation' 
+                });
 
                 // Pause retries temporarily to wait for receipt
                 this.markSettled(tradeId);
@@ -406,18 +423,22 @@ class TradeProcessor {
                     // Success!
                     this.failedSettlements.delete(tradeId);
 
-                    // RECORD HISTORY
-                    const instantVal = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
+                    // RECORD HISTORY (Including TX Proof)
+                    // Use the LOCKED status/payout from /settle endpoint if available
+                    // This ensures history NEVER shows a different result than what the user saw
+                    const lockedStatus = trade.status || (isWin ? "WON" : "LOST");
+                    const instantVal = trade.payout || (isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00");
 
                     await redis.addHistoricalTrade({
                         id: tradeId,
                         user: trade.user || trade.owner,
                         owner: trade.owner || trade.user,
                         sessionOwner: trade.sessionOwner,
-                        status: isWin ? "WON" : "LOST",
+                        status: lockedStatus,
                         settlementPrice: exitVal.toFixed(2),
                         payout: instantVal,
                         symbol: symbol,
+                        settlementTx: result.hash,
                         isSessionTrade: trade.isSessionTrade || !!trade.sessionOwner
                     });
                 }

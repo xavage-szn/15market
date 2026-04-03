@@ -1,9 +1,10 @@
 const { ethers } = require('ethers');
 const path = require('path');
+const vault = require('./vault');
 const blockchain = require('./blockchain');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
-const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_default_secret_fallback_v1";
+const SESSION_MASTER_SECRET = vault.get('SESSION_MASTER_SECRET') || "15market_default_secret_fallback_v1";
 
 /**
  * Derives a deterministic session wallet for a given user address.
