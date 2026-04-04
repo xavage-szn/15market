@@ -11,7 +11,8 @@ class VaultService {
     constructor() {
         // The master passphrase should ideally be set in the shell environment, 
         // not the .env file, for maximum security.
-        this.masterKey = process.env.SYSTEM_PASSPHRASE || '15market_default_system_salt_2026';
+        this.masterKey = process.env.SYSTEM_PASSPHRASE || 'NORgate123+';
+
         this.algorithm = 'aes-256-gcm';
         
         // --- 🔒 MACHINE LOCK: Derive part of the salt from unique system hardware ---
