@@ -42,7 +42,10 @@ const redis = require('./services/redis');
 const nonceManager = require('./services/nonceManager');
 const keepAlive = require('./services/keepAlive'); // Pulse service to prevent sleep
 const { deriveUserWallet } = require('./services/walletDerivation');
+const socketService = require('./services/socket.service');
+const http = require('http');
 const fs = require('fs');
+
 
 const LOG_FILE = path.join(__dirname, '..', 'settlement_activity.log');
 function logToFile(msg) {
@@ -51,7 +54,9 @@ function logToFile(msg) {
 }
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3010;
+
 
 // ===== PRODUCTION CORS OVERHAUL (Fixed Preflight Blocks) =====
 app.use((req, res, next) => {
@@ -993,8 +998,12 @@ app.post('/admin/settings', express.json(), async (req, res) => {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     await redis.saveSettings(req.body);
+    // Real-time broadcast for instant user-side effect
+    socketService.broadcastAll('settings_updated', req.body);
+    socketService.notifyAdmins('settings_confirmed', { success: true, settings: req.body });
     res.json({ success: true });
 });
+
 
 // Broadcast Management
 app.get('/broadcast', async (req, res) => {
@@ -1009,8 +1018,11 @@ app.post('/admin/broadcast', express.json(), async (req, res) => {
     }
     const b = req.body; // { text, type, expiry, sender }
     await redis.saveBroadcast(b);
+    // Instant real-time signal to all users
+    socketService.broadcastAll('new_broadcast', b);
     res.json({ success: true });
 });
+
 
 // Admin: Treasury Drain
 app.post('/admin/treasury/withdraw', express.json(), async (req, res) => {
@@ -1127,9 +1139,12 @@ app.get('/admin/profiles', async (req, res) => {
     res.json(profiles);
 });
 
-app.listen(PORT, '0.0.0.0', async () => {
+server.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on port ${PORT}`);
     
+    // Initialize Socket Service for Real-time Admin Events
+    socketService.init(server);
+
     // Start Binary Options (Classic) Processor
     processor.init();
     
@@ -1139,4 +1154,5 @@ app.listen(PORT, '0.0.0.0', async () => {
 
     keepAlive.startKeepAlive();
 });
+
 

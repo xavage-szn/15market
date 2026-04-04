@@ -70,6 +70,8 @@ import {
 import { AdminAuthDB } from '../utils/adminAuthDb';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useAppKit } from '@reown/appkit/react';
+import { socketService } from '../utils/socket';
+
 
 const ROOT_WALLET = "0x4c8C0fb7333E3ab1594e69c0F5F751150502C28C";
 
@@ -131,11 +133,13 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         totalWallets: '...',
         totalVolume: '...',
         activeUsers: '...',
+        activeStakesTotal: '...',
         pendingDisputes: 0,
         avgExecutionTime: '42ms',
         networkHealth: '100%',
         treasuryBalance: '...'
     });
+
     const [keeperLogs, setKeeperLogs] = useState([]);
     const [escrowBalance, setEscrowBalance] = useState(0);
     const [escrowStats, setEscrowStats] = useState({
@@ -321,56 +325,60 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             }
         };
 
+    // Real-time Event Subscription (SOCKET.IO)
+    useEffect(() => {
         if (isLoggedIn) {
-            fetchStats();
+            socketService.connect();
             fetchStaff();
             fetchProfiles();
-            const interval = setInterval(() => {
-                fetchStats();
-                fetchStaff();
-                fetchProfiles();
-            }, 5000); // 5s Stats Refresh
-            return () => clearInterval(interval);
+
+
+            // Listen for dashboard aggregated stats
+            const unbindStats = socketService.on('dashboard_stats', (data) => {
+                setMetrics(prev => ({
+                    ...prev,
+                    totalWallets: data.totalWallets,
+                    totalVolume: `${data.totalVolume} USDC`,
+                    activeUsers: data.activeCount,
+                    activeStakesTotal: `${data.activeStakesTotal} ARC`,
+                    treasuryBalance: `${data.treasuryBalance} ARC`,
+                    pendingDisputes: data.pendingDisputes || 0,
+                    networkHealth: 'Operational (Live)'
+                }));
+
+
+                setLastSync(new Date().toLocaleTimeString());
+                setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
+            });
+
+            // Listen for specific trade events
+            const unbindTrade = socketService.on('trade_detected', (trade) => {
+                 setTradeHistory(prev => [trade, ...prev].slice(0, 50));
+            });
+
+            const unbindSettled = socketService.on('trade_settled', (res) => {
+                 // Trigger refresh of history if needed, or update individual trade
+            });
+
+            // Listen for settings confirmed (Instant UI feedback)
+            const unbindSettings = socketService.on('settings_confirmed', (res) => {
+                 if (res.success) {
+                     notify('success', 'SYNCED', 'Platform configuration updated instantly.');
+                     // Optionally sync local settings state
+                 }
+            });
+
+            return () => {
+                unbindStats();
+                unbindTrade();
+                unbindSettled();
+                unbindSettings();
+                socketService.disconnect();
+            };
         }
-    }, [isLoggedIn, fetchStaff, fetchProfiles]);
-
-    // Real-time Arc Treasury Balance
-    const [arcTreasuryBalance, setArcTreasuryBalance] = useState(0);
-
-    useEffect(() => {
-        let interval;
-        const fetchArcBalance = async () => {
-            const rpcList = [
-                'https://rpc.testnet.arc.network',
-                'https://arc-testnet.alt.technology',
-                'https://arc-testnet.drpc.org'
-            ];
-            
-            for (const rpc of rpcList) {
-                try {
-                    const provider = new ethers.JsonRpcProvider(rpc, undefined, { staticNetwork: true });
-                    const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
-                    const formattedBal = parseFloat(ethers.formatEther(bal)) || 0;
-                    setArcTreasuryBalance(formattedBal);
-                    return; // Success, exit-loop
-                } catch (e) {
-                    console.warn(`Admin Balance Sync: RPC ${rpc} failed`);
-                }
-            }
-        };
-
-        if (isLoggedIn) {
-            fetchArcBalance();
-            interval = setInterval(fetchArcBalance, 3000); // 3s Balance Sync
-        }
-        return () => clearInterval(interval);
     }, [isLoggedIn]);
 
-    // Force re-render every second to update expiry status in real-time
-    const [tick, setTick] = useState(0);
-    const nowRef = useRef(Date.now() / 1000);
-
-    // High-frequency UI tick (10s) to drive "Frontend-Only" timers - Optimized to reduce re-renders
+    // High-frequency UI tick (1s) to drive "Frontend-Only" timers - Optimized to reduce re-renders
     useEffect(() => {
         const interval = setInterval(() => {
             const now = Date.now() / 1000;
@@ -379,6 +387,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }, 1000); // 1s tick for real-time expiry checking
         return () => clearInterval(interval);
     }, []);
+
 
 
 
@@ -1242,16 +1251,18 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
         // HYBRID VOLUME: Keeper Total + fresh unexpired pings for instant jump
         const freshArcPings = liveValues.filter(b => b.network === 'arc');
+
         const unconfirmedArcVol = freshArcPings.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
 
-        const totalVolume = (parseFloat(arcStats.totalVolume) || 0) + unconfirmedArcVol;
-        const totalWallets = parseInt(arcStats.wallets) || 0;
+        // Prefer real-time socket metrics if available
+        const totalVolume = metrics.totalVolume !== '...' ? parseFloat(metrics.totalVolume) : ((parseFloat(arcStats.totalVolume) || 0) + unconfirmedArcVol);
+        const totalWallets = metrics.totalWallets !== '...' ? metrics.totalWallets : (parseInt(arcStats.wallets) || 0);
 
         const pingsStake = freshArcPings.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
-        const finalActiveStake = Math.max(parseFloat(arcStats.stake) || 0, pingsStake);
-        const finalActiveCount = Math.max(parseInt(arcStats.count) || 0, freshArcPings.length);
+        const finalActiveStake = metrics.activeStakesTotal !== '...' ? parseFloat(metrics.activeStakesTotal) : Math.max(parseFloat(arcStats.stake) || 0, pingsStake);
+        const finalActiveCount = metrics.activeUsers !== '...' ? metrics.activeUsers : Math.max(parseInt(arcStats.count) || 0, freshArcPings.length);
 
-        const PHYSICAL_TREASURY_BAL = arcTreasuryBalance;
+        const PHYSICAL_TREASURY_BAL = metrics.treasuryBalance !== '...' ? parseFloat(metrics.treasuryBalance) : arcTreasuryBalance;
         const RESERVE_ADDRESS = arcStats.address || 'Scanning...';
 
         const currentStats = {
@@ -1271,10 +1282,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             currentStats,
             displayReserve: Number(PHYSICAL_TREASURY_BAL || 0).toFixed(2),
             reserveAddress: RESERVE_ADDRESS,
-            pendingDisputes: activeList.length,
+            pendingDisputes: metrics.pendingDisputes || activeList.length,
             currencyUnit: 'USDC'
         };
-    }, [escrowStats, liveEscrowBuffer, arcTreasuryBalance, clockOffset]);
+    }, [escrowStats, liveEscrowBuffer, arcTreasuryBalance, clockOffset, metrics]);
+
 
 
 

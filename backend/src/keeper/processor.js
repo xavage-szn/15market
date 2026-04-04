@@ -2,7 +2,9 @@ const { ethers } = require('ethers');
 const blockchain = require('../services/blockchain');
 const pricing = require('../services/pricing');
 const redis = require('../services/redis'); // This is now MemoryStore
+const socketService = require('../services/socket.service');
 const fs = require('fs');
+
 const path = require('path');
 
 const LOG_FILE = path.join(__dirname, '..', '..', 'settlement_activity.log');
@@ -58,6 +60,10 @@ class TradeProcessor {
 
             await redis.setTrade(tradeId, updatedTrade);
             console.log(`[Processor] Trade ${tradeId} detected. User: ${finalUser}`);
+            
+            // Real-time Signal to Admin
+            socketService.notifyAdmins('trade_detected', updatedTrade);
+
 
             // Add to history too
             await redis.addHistoricalTrade({
@@ -466,7 +472,12 @@ class TradeProcessor {
                         settlementTx: result.hash,
                         isSessionTrade: trade.isSessionTrade || !!trade.sessionOwner
                     });
+
+                    // Real-time Signal to Admin
+                    socketService.notifyAdmins('trade_settled', { id: tradeId, status: lockedStatus, payout: instantVal });
+
                 }
+
             }
         } catch (e) {
             const count = (this.failedSettlements.get(tradeId)?.count || 0) + 1;
