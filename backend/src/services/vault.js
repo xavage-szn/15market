@@ -80,9 +80,15 @@ class VaultService {
      */
     decrypt(vaultString) {
         if (!vaultString || typeof vaultString !== 'string') return vaultString;
-        const trimmed = vaultString.trim();
+        
+        // --- 🧹 SANITIZATION: Strip quotes and whitespace ---
+        let trimmed = vaultString.trim();
+        if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+            trimmed = trimmed.slice(1, -1).trim();
+        }
+
         if (!trimmed.toUpperCase().startsWith('ENC:V1:')) {
-            return vaultString; // Return as-is if not a vault string
+            return trimmed; // Return as-is if not a vault string
         }
 
         try {
@@ -100,10 +106,11 @@ class VaultService {
             decrypted += decipher.final('utf8');
             return decrypted;
         } catch (e) {
-            console.error('[Vault] Decryption failed. Incorrect SYSTEM_PASSPHRASE?');
+            console.error('[Vault] Decryption failed. Incorrect SYSTEM_PASSPHRASE or Machine Seed?');
             return null;
         }
     }
+
 
     /**
      * Redacts sensitive strings for safe logging (e.g. 0x123...abc)

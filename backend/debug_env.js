@@ -1,6 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 console.log('--- ENV CHECK ---');
-console.log('MNEMONIC exists?', !!process.env.MNEMONIC);
-console.log('MNEMONIC length:', process.env.MNEMONIC ? process.env.MNEMONIC.length : 0);
-console.log('MNEMONIC start:', process.env.MNEMONIC ? process.env.MNEMONIC.slice(0, 10) : 'N/A');
+console.log('SESSION_MASTER_SECRET exists?', !!process.env.SESSION_MASTER_SECRET);
+console.log('SESSION_MASTER_SECRET mask:', process.env.SESSION_MASTER_SECRET ? process.env.SESSION_MASTER_SECRET.slice(0, 5) : 'N/A');
+

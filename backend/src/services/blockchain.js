@@ -270,8 +270,10 @@ class BlockchainService {
             console.warn(`[Blockchain] Rotating RPC from ${failedRpc || 'current'}...`);
             // If we have a failed RPC, we should ensure the next provider attempt doesn't prioritize it
             const newProvider = await createProvider(this);
-            const newWallet = new ethers.Wallet(process.env.PRIVATE_KEY, newProvider);
+            const pk = vault.get('PRIVATE_KEY');
+            const newWallet = new ethers.Wallet(pk, newProvider);
             const newContract = new ethers.Contract(this.contractAddress, this.abi, newWallet);
+
 
             this.provider = newProvider;
             this.wallet = newWallet;

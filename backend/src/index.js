@@ -733,8 +733,8 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         logToFile(`Balance: ${ethers.formatEther(balance)}, Need: ${ethers.formatEther(totalNeeded)}`);
 
         if (balance < totalNeeded) {
-            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} USDC. Need ${ethers.formatEther(totalNeeded)} USDC (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(maxGasCost)})`;
-            logToFile(`Insufficient balance: ${err}`);
+            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(totalNeeded)} ARC (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(maxGasCost)})`;
+            logToFile(`[SESSION_TRADE] ❌ Insufficient balance: ${err}`);
             return res.status(400).json({ error: err });
         }
 

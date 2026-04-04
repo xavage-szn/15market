@@ -1,6 +1,7 @@
 const { ethers } = require('ethers');
 const redis = require('../services/redis');
 const pricing = require('../services/pricing');
+const vault = require('../services/vault');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
@@ -16,7 +17,9 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 class RoundsProcessor {
     constructor() {
         this.provider = new ethers.JsonRpcProvider(process.env.ARC_RPC || 'https://rpc.testnet.arc.network');
-        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
+        const pk = vault.get('PRIVATE_KEY');
+        this.wallet = new ethers.Wallet(pk, this.provider);
+
 
         // Contract setup (Address to be filled after deployment)
         this.contractAddress = process.env.ROUNDS_CONTRACT_ADDRESS || "";

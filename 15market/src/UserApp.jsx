@@ -1101,8 +1101,8 @@ export default function UserApp() {
         setSessionMode(true);
         notify("Auto-Signer Activated", "success");
       } else {
-        // Need to initialize
-        initializeSessionWallet();
+        // Need to initialize - Show the secure setup screen
+        setIsSignerInitializing(true);
       }
     }
   };

@@ -4,7 +4,12 @@ const vault = require('./vault');
 const blockchain = require('./blockchain');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
-const SESSION_MASTER_SECRET = vault.get('SESSION_MASTER_SECRET') || "15market_default_secret_fallback_v1";
+const SESSION_MASTER_SECRET = vault.get('SESSION_MASTER_SECRET');
+if (!SESSION_MASTER_SECRET) {
+    console.warn("[Derivation] CRITICAL: SESSION_MASTER_SECRET missing or vault decryption failed. Fallback in use!");
+}
+const FINAL_SECRET = SESSION_MASTER_SECRET || "15market_session_fallback_security_lock_v2";
+
 
 /**
  * Derives a deterministic session wallet for a given user address.
@@ -18,8 +23,9 @@ async function deriveUserWallet(userAddress) {
     const addr = userAddress.toLowerCase();
     
     // Create deterministic entropy from secret + user address
-    const entropy = ethers.toUtf8Bytes(SESSION_MASTER_SECRET + addr);
+    const entropy = ethers.toUtf8Bytes(FINAL_SECRET + addr);
     const privateKey = ethers.keccak256(entropy);
+
     
     let wallet = new ethers.Wallet(privateKey);
     

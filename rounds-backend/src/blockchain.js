@@ -1,6 +1,8 @@
 const { ethers, FetchRequest } = require('ethers');
+const vault = require('./vault');
 const path = require('path');
 require('dotenv').config();
+
 
 const getRpcEndpoints = () => {
     // Official ARC RPCs
@@ -43,16 +45,20 @@ class BlockchainService {
 
     async _init() {
         this.provider = await createProvider();
-        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
+        const pk = vault.get('PRIVATE_KEY');
+        this.wallet = new ethers.Wallet(pk, this.provider);
         this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
+
 
         // --- DEDICATED SETTLEMENT PROVIDER (High Performance) ---
         try {
             const bestRpc = getRpcEndpoints()[0]; // Use top official RPC
             const fetchReq = new FetchRequest(bestRpc);
             this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
-            this.settleWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.settleProvider);
+            const sPk = vault.get('PRIVATE_KEY');
+            this.settleWallet = new ethers.Wallet(sPk, this.settleProvider);
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);
+
             console.log(`[Blockchain] Settlement provider: ${bestRpc}`);
         } catch (e) {
             console.warn(`[Blockchain] Could not isolate settlement provider: ${e.message}`);

@@ -6,11 +6,11 @@ const SENSITIVE_KEYS = [
     'PRIVATE_KEY',
     'SESSION_MASTER_SECRET',
     'ADMIN_TOKEN',
-    'REDIS_URL',
-    'MNEMONIC'
+    'REDIS_URL'
 ];
 
 console.log("\n--- 🛡️ 15MARKET ENCRYPTION MIGRATOR ---");
+
 console.log("Use these encrypted values in your .env file:\n");
 
 SENSITIVE_KEYS.forEach(key => {

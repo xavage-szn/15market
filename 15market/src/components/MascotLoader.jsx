@@ -88,7 +88,7 @@ export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loadin
                 {/* Moving Plane Wrapper */}
                 <motion.div
                     className="absolute -top-10 z-20"
-                    animate={{ left: `${progress}% ` }}
+                    animate={{ left: `${progress}%` }}
                     transition={{
                         type: "tween",
                         ease: "linear",
@@ -103,7 +103,7 @@ export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loadin
                 <motion.div
                     className="absolute -bottom-6 w-16 h-4 blur-xl bg-[#3CB371]/20 rounded-full"
                     animate={{
-                        left: `${progress}% `,
+                        left: `${progress}%`,
                         opacity: isTakingOff ? [0.3, 0.6, 0.3] : 0,
                         scale: isTakingOff ? [1, 1.2, 1] : 0.5
                     }}
@@ -113,7 +113,7 @@ export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loadin
                 {/* Progress Fill (Fuel/Thrust Path) */}
                 <motion.div
                     className="absolute inset-y-0 left-0 bg-gradient-to-r from-transparent via-[#3CB371]/40 to-[#3CB371] rounded-full shadow-[0_0_20px_rgba(60,179,113,0.4)]"
-                    animate={{ width: `${progress}% ` }}
+                    animate={{ width: `${progress}%` }}
                     transition={{
                         type: "tween",
                         ease: "linear",
