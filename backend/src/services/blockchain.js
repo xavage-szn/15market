@@ -427,6 +427,10 @@ class BlockchainService {
             return allEvents;
         } catch (e) {
             console.error(`[Blockchain] Event query error ${eventName}:`, e.message);
+            // AUTO RECOVERY: If a scan fails, rotate RPC to ensure next scan has a fresh node
+            if (e.message.includes('timeout') || e.message.includes('retry') || e.message.includes('limit')) {
+                this.rotateRpc(this.lastGoodRpc);
+            }
             return [];
         }
     }
@@ -443,9 +447,16 @@ class BlockchainService {
     async getNativeBalance(address) {
         try {
             await this._ensureReady();
-            const balance = await this.provider.getBalance(address);
+            const balance = await Promise.race([
+                this.provider.getBalance(address),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Balance Fetch Timeout")), 5000))
+            ]);
             return balance;
         } catch (e) {
+            console.warn(`[Blockchain] Balance check failed for ${address}: ${e.message}`);
+            if (e.message.includes('Timeout')) {
+                this.rotateRpc();
+            }
             return 0n;
         }
     }

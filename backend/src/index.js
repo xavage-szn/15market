@@ -635,7 +635,7 @@ app.post('/session/init', actionLimiter, async (req, res) => {
 
         if (balanceEth < 0.5) { // Minimum gas threshold
             const treasuryBal = await blockchain.getNativeBalance(blockchain.wallet.address);
-            if (parseFloat(ethers.formatEther(treasuryBal)) > 10.0) {
+            if (parseFloat(ethers.formatEther(treasuryBal)) > 1.0) {
                 console.log(`[SessionInit] Funding ${sessionAddr} with 2.0 ARC (aid)...`);
                 logToFile(`[SessionInit] Funding ${sessionAddr} with 2.0 ARC (aid)...`);
                 const tx = await blockchain.wallet.sendTransaction({

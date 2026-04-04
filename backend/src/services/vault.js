@@ -126,9 +126,14 @@ class VaultService {
 
     /**
      * Application Layer Transport Encryption (For frontend-backend handshake)
+     * MATCHES: VaultClient._deriveKey on frontend
      */
+    _deriveTransportKey(secret) {
+        return crypto.createHash('sha256').update(String(secret)).digest();
+    }
+
     encryptForTransport(data, sessionKey) {
-        const transitKey = this._deriveKey(sessionKey);
+        const transitKey = this._deriveTransportKey(sessionKey);
         const iv = crypto.randomBytes(12);
         const cipher = crypto.createCipheriv(this.algorithm, transitKey, iv);
         let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'base64');
@@ -139,9 +144,10 @@ class VaultService {
 
     /**
      * Application Layer Transport Decryption
+     * MATCHES: VaultClient.encryptPayload on frontend
      */
     decryptForTransport(transitPayload, sessionKey) {
-        const transitKey = this._deriveKey(sessionKey);
+        const transitKey = this._deriveTransportKey(sessionKey);
         const parts = transitPayload.split(':');
         if (parts.length !== 3) throw new Error('Invalid transit format');
 

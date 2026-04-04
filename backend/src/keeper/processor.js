@@ -20,9 +20,9 @@ class TradeProcessor {
         this.priceCache = {};
     }
 
-    markSettled(tradeId) {
+    markSettled(tradeId, ttl = null) {
         this.settledCache.add(tradeId.toString());
-        setTimeout(() => this.settledCache.delete(tradeId.toString()), this.SETTLED_CACHE_TTL);
+        setTimeout(() => this.settledCache.delete(tradeId.toString()), ttl || this.SETTLED_CACHE_TTL);
     }
 
     async init() {
@@ -229,10 +229,21 @@ class TradeProcessor {
             }
         };
 
-        // Initial burst
-        await sync();
+        // Initial burst with isolation
+        try {
+            await sync();
+        } catch (e) {
+            console.error('[Processor] Initial sync failed:', e.message);
+        }
+
         // Periodic sync (Slower to save RPC units)
-        setInterval(sync, 45000);
+        setInterval(async () => {
+            try {
+                await sync();
+            } catch (e) {
+                console.error('[Processor] Periodic sync interval error:', e.message);
+            }
+        }, 45000);
     }
 
     _startSettlementLoop() {
@@ -241,11 +252,17 @@ class TradeProcessor {
             if (isProcessing || !blockchain.providerReady) return;
             isProcessing = true;
             try {
-                await this.processSettlements();
+                // Add a timeout to the whole settlement tick to prevent "hanging" loop
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Settlement Tick Timeout")), 15000));
+                await Promise.race([this.processSettlements(), timeoutPromise]);
+            } catch (err) {
+                console.error(`[Processor] CRITICAL Loop Failure: ${err.message}`);
+                logToFile(`CRITICAL Loop Failure: ${err.message}`);
+                // Isolation: Don't let a crash in processSettlements stop the interval from running again
             } finally {
                 isProcessing = false;
             }
-        }, 200); // Faster tick
+        }, 300); // Reliable tick
     }
 
     async processSettlements() {
@@ -281,16 +298,22 @@ class TradeProcessor {
         for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
             const batch = toSettle.slice(i, i + BATCH_SIZE);
 
-            // Fire batch members in parallel
-            await Promise.all(batch.map(trade => 
-                this._settleSingleTrade(trade).catch(err => {
-                    logToFile(`error in settlement for ${trade.id}: ${err.message}`);
-                })
-            ));
+            // ISOLATION: Use allSettled to ensure that even if one trade's 
+            // _settleSingleTrade REJECTS or CRASHES, the others continue.
+            const results = await Promise.allSettled(batch.map(trade => this._settleSingleTrade(trade)));
+            
+            results.forEach((res, idx) => {
+                if (res.status === 'rejected') {
+                    const tradeId = batch[idx]?.id;
+                    const errMsg = res.reason?.message || "Unknown error";
+                    console.error(`[Processor] Isolated failure for trade ${tradeId}: ${errMsg}`);
+                    logToFile(`Trade ${tradeId} isolated error: ${errMsg}`);
+                }
+            });
 
             // Small delay between batches to let the mempool breathe
             if (toSettle.length > BATCH_SIZE) {
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 800));
             }
         }
     }
@@ -341,7 +364,9 @@ class TradeProcessor {
                     // We now throw an error to trigger a retry in the next loop, 
                     // allowing history to catch up or frontend to send a manual price.
                     const age = Date.now() - trade.expiry;
-                    throw new Error(`No price data for ${symbol} at ${trade.expiry} (Age: ${Math.floor(age / 1000)}s). Refusing stale-price settlement.`);
+                    const alert = `[TRANSIT_ERROR] Missing price data for ${symbol} @ ${trade.expiry} (Age: ${Math.floor(age / 1000)}s). Retrying sync...`;
+                    console.warn(alert);
+                    throw new Error(alert);
                 }
             }
 
@@ -366,20 +391,20 @@ class TradeProcessor {
                 const payoutWei = ethers.parseUnits(expectedPayout.toFixed(18), 18);
 
                 if (isWin && contractBal < payoutWei) {
-                    const msg = `Insufficient treasury: ${ethers.formatEther(contractBal)} USDC, need ${expectedPayout} for ${tradeId}. Skipping.`;
-                    console.warn(`[Processor] ${msg}`);
-                    logToFile(msg);
-                    
+                    if (parseFloat(ethers.formatEther(contractBal)) < 5.0) {
+                        const alert = `[TREASURY_CRITICAL] Treasury dangerously low (${ethers.formatEther(contractBal)} ARC). Refusing settlement for ${tradeId} until funded.`;
+                        console.error(alert);
+                        logToFile(alert);
+                    }
+
                     // Cleanup settling status so it can be picked up later if balance increases
                     this.settlingIds.delete(tradeId);
-                    this.markSettled(tradeId); // Temporarily cache as settled to skip in this cycle
+                    this.markSettled(tradeId, 15000); // Retry in 15s — continue other trades immediately
                     
                     // Reset Redis status so frontend doesn't show "RESOLVING" forever
                     if (currentTrade) {
                         await redis.setTrade(tradeId, { ...currentTrade, isSettling: false, status: 'PENDING' });
                     }
-
-                    setTimeout(() => this.settledCache.delete(tradeId.toString()), 10000); // Retry in 10s — continue other trades immediately
                     return; 
                 } else if (!isWin) {
                     // Proceeding with LOSER settlement as it cost 0 treasury balance (good for platform health)

@@ -20,7 +20,13 @@ class RedisStore {
             
             this.redis.on('error', (err) => {
                 console.error('[Redis] Transient Error:', err.message);
-                // Do NOT permanently fallback to memory in production over a transient glitch!
+                if (err.message.includes('ECONNREFUSED') || err.message.includes('ETIMEDOUT')) {
+                    this.isCloud = false; // Graceful fallback
+                    setTimeout(() => {
+                         console.log('[Redis] Attempting to reconnect to Cloud...');
+                         this.redis.ping().then(() => this.isCloud = true).catch(() => {});
+                    }, 30000); // Check again in 30s
+                }
             });
             this.isCloud = true;
             this.fallbackTriggered = false;
@@ -51,37 +57,60 @@ class RedisStore {
 
 
     async setTrade(id, data) {
-        if (this.isCloud) {
-            await this.redis.hset('15market_active_trades', id.toString(), JSON.stringify(data));
-        } else {
-            this.activeTrades.set(id.toString(), { ...data, timestamp: Date.now() });
+        try {
+            if (this.isCloud) {
+                await this.redis.hset('15market_active_trades', id.toString(), JSON.stringify(data));
+            } else {
+                this._initMemory();
+                this.activeTrades.set(id.toString(), { ...data, timestamp: Date.now() });
+            }
+        } catch (e) {
+            console.error(`[Redis] setTrade failed for ${id}:`, e.message);
+            // Emergency memory fallback
+            this._initMemory();
+            this.activeTrades.set(id.toString(), data);
         }
     }
 
     async getTrade(id) {
-        if (this.isCloud) {
-            const data = await this.redis.hget('15market_active_trades', id.toString());
-            return data ? JSON.parse(data) : null;
+        try {
+            if (this.isCloud) {
+                const data = await this.redis.hget('15market_active_trades', id.toString());
+                return data ? JSON.parse(data) : null;
+            }
+        } catch (e) {
+            console.error(`[Redis] getTrade failed for ${id}:`, e.message);
         }
-        return this.activeTrades.get(id.toString());
+        return this.activeTrades?.get(id.toString());
     }
 
     async delTrade(id) {
-        if (this.isCloud) {
-            await this.redis.hdel('15market_active_trades', id.toString());
-        } else {
-            this.activeTrades.delete(id.toString());
+        try {
+            if (this.isCloud) {
+                await this.redis.hdel('15market_active_trades', id.toString());
+            }
+        } catch (e) {
+            console.error(`[Redis] delTrade failed for ${id}:`, e.message);
         }
+        this.activeTrades?.delete(id.toString());
     }
 
     async getAllActiveTrades(filterSettling = false) {
         let trades = [];
-        if (this.isCloud) {
-            const all = await this.redis.hvals('15market_active_trades');
-            trades = all.map(t => JSON.parse(t));
-        } else {
-            trades = Array.from(this.activeTrades.values());
+        try {
+            if (this.isCloud) {
+                const all = await this.redis.hvals('15market_active_trades');
+                trades = all.map(t => JSON.parse(t));
+            }
+        } catch (e) {
+            console.error('[Redis] getAllActiveTrades failed:', e.message);
         }
+
+        // Merge with memory trades if any (In case of hybrid state)
+        if (this.activeTrades) {
+            trades = [...trades, ...Array.from(this.activeTrades.values())];
+        }
+
         return filterSettling ? trades.filter(t => !t.isSettling) : trades;
     }
 
