@@ -279,51 +279,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     }, []);
 
     // Fetch Stats and Metrics regularly
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const targetUrl = KEEPER_URL_ARC;
-                // Polling stats...
-                const res = await fetch(`${targetUrl}/protocol-stats`);
-                if (res.ok) {
-                    const data = await res.json();
-                    
-                    if (data.autoSignerFees !== undefined) {
-                        setAutoSignerFees({ arc: data.autoSignerFees.arc || 0 });
-                    }
+    // DASHBOARD DATA MANAGEMENT (Now reactive via Socket.io)
 
-                    setMetrics(prev => ({
-                        ...prev,
-                        totalWallets: data.wallets || 0,
-                        totalVolume: data.totalVolume ? `${Number(data.totalVolume || 0).toFixed(2)} USDC` : '0.00',
-                        activeUsers: data.activeCount || 0,
-                        pendingDisputes: data.pendingDisputes || prev.pendingDisputes || 0,
-                        networkHealth: 'Operational'
-                    }));
-
-                    setEscrowStats(prev => ({
-                        ...prev,
-                        arc: {
-                            totalVolume: data.totalVolume || 0,
-                            wallets: data.wallets || 0,
-                            stake: data.activeStakes || 0,
-                            count: data.totalTrades || 0
-                        }
-                    }));
-
-                    setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
-                } else {
-                    throw new Error("Stats request failed");
-                }
-            } catch (e) {
-                console.warn("Admin Stats Sync Failed:", e.message);
-                setKeeperHealth(prev => ({
-                    connected: false,
-                    failCount: prev.failCount + 1,
-                    lastCheck: Date.now()
-                }));
-            }
-        };
 
     // Real-time Event Subscription (SOCKET.IO)
     useEffect(() => {
