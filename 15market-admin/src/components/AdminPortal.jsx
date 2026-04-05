@@ -154,6 +154,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [isLoading, setIsLoading] = useState(false); // Track loading state
     const [messages, setMessages] = useState({}); // { disputeId: [msgs] }
     const [newMessage, setNewMessage] = useState('');
+    const [tick, setTick] = useState(0);
+    const nowRef = useRef(Date.now() / 1000);
     const [keeperHealth, setKeeperHealth] = useState({ connected: true, failCount: 0, lastCheck: Date.now() });
     const keeperHealthRef = useRef(keeperHealth);
     // Wait, original code was: const keeperHealthRef = useRef(keeperHealth); useEffect(() => { keeperHealthRef.current = keeperHealth; }, [keeperHealth]);

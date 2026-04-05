@@ -107,6 +107,7 @@ class BlockchainService {
         });
     }
 
+    async _init() {
         try {
             this.provider = await createProvider(this);
             const pk = vault.get('PRIVATE_KEY');
@@ -142,6 +143,7 @@ class BlockchainService {
         this._refreshGasPrice();
         this._setupListeners();
         this._startConfirmationTracker();
+    }
 
     async _startEventPolling() {
         if (!this.contract) return;
