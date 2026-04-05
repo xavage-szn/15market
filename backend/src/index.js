@@ -54,6 +54,7 @@ function logToFile(msg) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // 🛡️ TRUST PROXY: Required for Render.com/Cloudflare rate limiting
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3010;
 
@@ -690,12 +691,18 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         }
 
         const { address, tradeParams } = req.body;
+        if (!address || !tradeParams) {
+             console.error("Refused: Missing trade data in body");
+             return res.status(400).json({ error: 'Incomplete trade data' });
+        }
+
         const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
         logToFile(`Trade ${id}: ${address} (${amount} USDC)`);
 
-        if (!id || !address || !amount) {
-            return res.status(400).json({ error: 'Missing parameters' });
+        if (!id || !amount) {
+            console.error("Refused: Missing ID or Amount", tradeParams);
+            return res.status(400).json({ error: 'Missing bet parameters' });
         }
 
         const lockTrade = await redis.lockTrade(id);

@@ -107,18 +107,22 @@ class BlockchainService {
         });
     }
 
-    async _init() {
-        this.provider = await createProvider(this);
-        const pk = vault.get('PRIVATE_KEY');
-        if (!pk) throw new Error('[Vault] CRITICAL: PRIVATE_KEY not found or decryption failed.');
-        
-        this.wallet = new ethers.Wallet(pk, this.provider);
-        this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
-
-        // --- DEDICATED SETTLEMENT PROVIDER (High Reliability) ---
         try {
-            // Use the last good RPC or the top-priority 'Arc Official'
-            // to ensure instant settlement.
+            this.provider = await createProvider(this);
+            const pk = vault.get('PRIVATE_KEY');
+            if (!pk) {
+                console.error('================================================================');
+                console.error('[Vault] CRITICAL: PRIVATE_KEY decryption FAILED.');
+                console.error('[Vault] This usually means your SYSTEM_PASSPHRASE or Machine Seed');
+                console.error('[Vault] (from Render.com or Local MAC) does not match the one used');
+                console.error('[Vault] to encrypt the key in your .env file.');
+                console.error('================================================================');
+                throw new Error('Vault Decryption Failure');
+            }
+            
+            this.wallet = new ethers.Wallet(pk, this.provider);
+            this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
+
             const bestRpc = this.lastGoodRpc || getRpcEndpoints()[0];
             const fetchReq = new FetchRequest(bestRpc);
             this.settleProvider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
@@ -126,19 +130,18 @@ class BlockchainService {
             const settlePk = vault.get('PRIVATE_KEY');
             this.settleWallet = new ethers.Wallet(settlePk, this.settleProvider);
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, this.settleWallet);
-            console.log(`[Blockchain] Settlement RPC: ${bestRpc}`);
-        } catch (e) {
-            console.warn(`[Blockchain] Settlement provider init failed: ${e.message}`);
-        }
 
-        this.providerReady = true;
+            this.providerReady = true;
+            console.log(`[Blockchain] Ready. Wallet: ${this.wallet.address}`);
+        } catch (e) {
+            console.error('[Blockchain] Initialization FAILED:', e.message);
+            // We set providerReady to false explicitly to ensure the app stays in safe mode
+            this.providerReady = false; 
+        }
 
         this._refreshGasPrice();
         this._setupListeners();
         this._startConfirmationTracker();
-
-        console.log(`[Blockchain] Ready. Wallet: ${this.wallet.address}`);
-    }
 
     async _startEventPolling() {
         if (!this.contract) return;
@@ -213,8 +216,12 @@ class BlockchainService {
     }
 
     async _refreshGasPrice() {
+        if (!this.provider) return;
         try {
-            const feeData = await this.provider.getFeeData();
+            const feeData = await Promise.race([
+                this.provider.getFeeData(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Gas Fetch Timeout")), 5000))
+            ]);
             this.cachedGasPrice = feeData.gasPrice;
             this.cachedPriorityFee = feeData.maxPriorityFeePerGas;
             this.lastGasUpdate = Date.now();

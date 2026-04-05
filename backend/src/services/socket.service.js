@@ -71,9 +71,13 @@ class SocketService {
             
             let treasuryBalance = 0;
             try {
-                const bal = await blockchain.getNativeBalance(blockchain.wallet.address);
-                const { ethers } = require('ethers');
-                treasuryBalance = parseFloat(ethers.formatEther(bal)) || 0;
+                if (blockchain.wallet) {
+                    const bal = await blockchain.getNativeBalance(blockchain.wallet.address);
+                    const { ethers } = require('ethers');
+                    treasuryBalance = parseFloat(ethers.formatEther(bal)) || 0;
+                } else {
+                    console.warn("[Socket] Blockchain wallet not ready for treasury sync.");
+                }
             } catch (e) {
                 console.warn("[Socket] Treasury sync failed:", e.message);
             }
