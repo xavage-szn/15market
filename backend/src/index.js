@@ -595,7 +595,10 @@ app.post('/trade-ping', actionLimiter, async (req, res) => {
 app.get('/protocol-stats', async (req, res) => {
     try {
         const cacheKey = 'stats:protocol_summary';
-        const cached = await redis.redis.get(cacheKey); // Access underlying ioredis
+        let cached;
+        if (redis.isCloud && redis.redis) {
+            cached = await redis.redis.get(cacheKey);
+        }
         if (cached) return res.json(JSON.parse(cached));
 
         // 1. Classic Binary Options Stats
@@ -630,7 +633,9 @@ app.get('/protocol-stats', async (req, res) => {
             autoSignerFees: { arc: ((totalVolume + roundsVolume) * 0.01).toFixed(2) }
         };
 
-        await redis.redis.set(cacheKey, JSON.stringify(stats), 'EX', 5);
+        if (redis.isCloud && redis.redis) {
+            await redis.redis.set(cacheKey, JSON.stringify(stats), 'EX', 5);
+        }
         res.json(stats);
     } catch (e) {
         console.error('[Stats] Error:', e.message);
@@ -731,8 +736,11 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
                     blockchain.getNativeBalance(sessionAddr),
                     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
                 ]).catch(async () => {
-                   const cached = await redis.redis.get(`bal:${sessionAddr}`);
-                   return cached ? BigInt(cached) : ethers.parseUnits("1000", 18);
+                   if (redis.isCloud && redis.redis) {
+                       const cached = await redis.redis.get(`bal:${sessionAddr}`);
+                       return cached ? BigInt(cached) : ethers.parseUnits("1000", 18);
+                   }
+                   return ethers.parseUnits("1000", 18);
                 })
             ]);
 
@@ -741,7 +749,9 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             balance = fetchedBalance;
 
             // Update balance cache
-            await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 30);
+            if (redis.isCloud && redis.redis) {
+                await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 30);
+            }
         } catch (e) {
             logToFile(`Pre-flight error: ${e.message}`);
             throw e;

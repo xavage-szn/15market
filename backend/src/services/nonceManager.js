@@ -115,7 +115,7 @@ class NonceManager {
 
     resetNonce(address, nonce) {
         const addr = address.toLowerCase();
-        if (redisStore.isCloud) {
+        if (redisStore.isCloud && redisStore.redis) {
             redisStore.redis.set(`nnc:${addr}`, nonce).catch(e => console.error(`[Nonce] Reset failed:`, e.name));
         } else {
             this.nonces.set(addr, nonce);
