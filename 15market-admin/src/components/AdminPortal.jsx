@@ -141,7 +141,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     });
 
     const [keeperLogs, setKeeperLogs] = useState([]);
-    const [escrowBalance, setEscrowBalance] = useState(0);
+    const [arcTreasuryBalance, setArcTreasuryBalance] = useState(0);
     const [escrowStats, setEscrowStats] = useState({
         arc: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 }
     }); // Unified stats from keeper
@@ -298,10 +298,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     totalVolume: `${data.totalVolume} USDC`,
                     activeUsers: data.activeCount,
                     activeStakesTotal: `${data.activeStakesTotal} ARC`,
-                    treasuryBalance: `${data.treasuryBalance} ARC`,
-                    pendingDisputes: data.pendingDisputes || 0,
-                    networkHealth: 'Operational (Live)'
-                }));
+                        treasuryBalance: `${data.treasuryBalance} ARC`,
+                        pendingDisputes: data.pendingDisputes || 0,
+                        networkHealth: 'Operational (Live)'
+                    }));
+                    setArcTreasuryBalance(parseFloat(data.treasuryBalance) || 0);
 
 
                 setLastSync(new Date().toLocaleTimeString());

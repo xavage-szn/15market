@@ -172,6 +172,8 @@ class BlockchainService {
                                 timestamp: Number(timestamp),
                                 marketId: Number(marketId),
                                 transactionHash: event.transactionHash
+                            }).catch(err => {
+                                console.error(`[Blockchain] Callback error for bet ${id}:`, err.message);
                             });
                         }
                     } catch (innerError) {

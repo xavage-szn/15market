@@ -555,6 +555,20 @@ app.post('/trade-ping', actionLimiter, async (req, res) => {
             return res.status(503).json({ error: 'Trading is currently paused' });
         }
         const { id, address, amount, direction, duration, entryPrice, symbol } = req.body;
+        if (!id || !address) return res.status(400).json({ error: 'Missing parameters' });
+
+        // --- 🛡️ LEAK PROTECTION: Check if this is a session wallet trade ---
+        const mainAddr = await redis.getMainAddressForSession(address);
+        if (mainAddr) {
+            return res.status(403).json({ error: 'Session trades must use /session/trade for backend signing and debiting.' });
+        }
+
+        // --- 🛡️ DOUBLE-PING PROTECTION: Don't overwrite if already processed ---
+        const existing = await redis.getTrade(id);
+        if (existing && existing.confirmed) {
+            return res.json({ success: true, note: 'Already registered and confirmed' });
+        }
+
         const tradeData = {
             id: id.toString(),
             user: address,
@@ -566,12 +580,12 @@ app.post('/trade-ping', actionLimiter, async (req, res) => {
             entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
             symbol: symbol || 'BTC',
             expiry: Date.now() + (duration * 1000),
-            confirmed: true,
+            confirmed: false, // CRITICAL: Must be confirmed by on-chain listener in processor.js
             startTime: Date.now()
         };
         await redis.setTrade(id, tradeData);
-        logToFile(`Trade registered: ${id} for ${address} (${tradeData.entryPrice})`);
-        res.json({ success: true });
+        logToFile(`Trade ping registered: ${id} for ${address} (Pending confirm...)`);
+        res.json({ success: true, confirmed: false });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -815,16 +829,13 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         }
         logToFile(`Trade ${id} broadcasted: ${tx.hash}`);
 
-        // Immediate Redis Register
-        const trunc2 = (v) => Math.floor(parseFloat(v) * 100) / 100;
         const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
         const symbol = ID_ASSET_MAP[Number(marketId)] || 'BTC';
-
         const normalizedDirection = (direction === 1 || direction === '1' || direction === 'UP' || direction === 'buy') ? 'UP' : 'DOWN';
 
         const tradeData = {
             id: id.toString(),
-            user: address, // Main wallet for identification
+            user: address,
             owner: address,
             sessionOwner: sessionAddr,
             amount: amount,
@@ -832,7 +843,6 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             duration: duration,
             entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
             symbol: symbol,
-            // Expiry/StartTime set pessimistically, will be updated strictly on confirmation
             expiry: Date.now() + (duration * 1000),
             txHash: tx.hash,
             startTime: Date.now(),
@@ -841,36 +851,40 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         };
         await redis.setTrade(id, tradeData);
 
-        // Return txHash immediately after successful broadcast
-        // The EVM guarantees funds are locked once tx is in mempool
-        res.json({ success: true, txHash: tx.hash, confirmed: false });
-        logToFile(`Responded with txHash: ${tx.hash}`);
+        // --- 🛡️ STAKE DEBIT VERIFICATION: Wait for mining before acknowledging ---
+        // This ensures the stake is actually debited before the trade 'starts' for the user.
+        try {
+            logToFile(`Waiting for confirmation of ${tx.hash}...`);
+            const receipt = await tx.wait(1).catch(async (e) => {
+                 // Retry once on generic timeout
+                 logToFile(`Mining wait error: ${e.message}. Retrying...`);
+                 return await blockchain.provider.getTransactionReceipt(tx.hash);
+            });
 
-        // Background confirmation tracking (non-blocking)
-        (async () => {
-            try {
-                // Use a fresh provider for confirmation polling to avoid timeout issues
-                const confirmProvider = blockchain.provider;
-                const receipt = await confirmProvider.waitForTransaction(tx.hash, 1, 120000); // 120s timeout
-                if (receipt && receipt.status === 1) {
-                    const confirmedNow = Date.now();
-                    const updatedData = {
-                        ...tradeData,
-                        confirmed: true,
-                        startTime: confirmedNow,
-                        expiry: confirmedNow + (Number(duration) * 1000)
-                    };
-                    await redis.setTrade(id, updatedData);
-                    logToFile(`Confirmed ${id}: ${tx.hash}`);
-                } else {
-                    logToFile(`Reverted ${id}: ${tx.hash}`);
-                    await redis.delTrade(id);
-                }
-            } catch (err) {
-                logToFile(`Confirmation poll failed for ${tx.hash}: ${err.message}`);
-                // Don't delete trade — it may still be pending in mempool
+            if (receipt && receipt.status === 1) {
+                const confirmedNow = Date.now();
+                logToFile(`Trade ${id} confirmed on-chain: ${tx.hash}`);
+                const confirmedData = {
+                    ...tradeData,
+                    confirmed: true,
+                    startTime: confirmedNow,
+                    expiry: confirmedNow + (Number(duration) * 1000)
+                };
+                await redis.setTrade(id, confirmedData);
+                
+                // Return success ONLY after confirmation
+                res.json({ success: true, txHash: tx.hash, confirmed: true });
+            } else {
+                logToFile(`Trade ${id} REVERTED: ${tx.hash}`);
+                await redis.delTrade(id);
+                if (!res.headersSent) res.status(400).json({ error: 'Trade transaction reverted. Stake was not debited.' });
             }
-        })();
+        } catch (confirmErr) {
+            logToFile(`Trade ${id} mining confirmation failure: ${confirmErr.message}`);
+            // If we can't confirm mining, let the high-reliability worker pick it up later or fail it
+            // but for UX, we return 500 now because the money might be in limbo
+            if (!res.headersSent) res.status(500).json({ error: 'Stake debit check timed out. Please check your history.' });
+        }
 
     } catch (e) {
         const errorMsg = e.reason || e.message || "Unknown error";

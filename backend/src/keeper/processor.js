@@ -254,21 +254,31 @@ class TradeProcessor {
 
     _startSettlementLoop() {
         let isProcessing = false;
+        let lastTickStart = 0;
         setInterval(async () => {
+            // Watchdog: If a tick has been running for > 2 mins, something is deadlocked/hung.
+            // We force reset isProcessing to allow it to recover.
+            if (isProcessing && (Date.now() - lastTickStart > 120000)) {
+                logToFile("CRITICAL: Settlement loop watchdog triggered. Forcing recovery...");
+                isProcessing = false;
+            }
+
             if (isProcessing || !blockchain.providerReady) return;
             isProcessing = true;
+            lastTickStart = Date.now();
             try {
                 // Add a timeout to the whole settlement tick to prevent "hanging" loop
-                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Settlement Tick Timeout")), 15000));
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Settlement Tick Timeout")), 25000));
                 await Promise.race([this.processSettlements(), timeoutPromise]);
             } catch (err) {
-                console.error(`[Processor] CRITICAL Loop Failure: ${err.message}`);
-                logToFile(`CRITICAL Loop Failure: ${err.message}`);
-                // Isolation: Don't let a crash in processSettlements stop the interval from running again
+                if (!err.message.includes("Timeout")) {
+                    console.error(`[Processor] Loop Failure: ${err.message}`);
+                    logToFile(`Loop Failure: ${err.message}`);
+                }
             } finally {
                 isProcessing = false;
             }
-        }, 300); // Reliable tick
+        }, 500); 
     }
 
     async processSettlements() {
@@ -277,35 +287,38 @@ class TradeProcessor {
         const activeTrades = await redis.getAllActiveTrades();
 
         const toSettle = activeTrades.filter(t => {
-            const failed = this.failedSettlements.get(t.id);
+            const tid = t.id.toString();
+
+            // --- 🛡️ LEAK PROTECTION: Skip trades that were never confirmed on-chain ---
+            if (!t.confirmed) {
+                // Orphan cleanup: If a trade is unconfirmed for > 2 mins, it's likely a leaked/failed ping
+                const age = now - (t.startTime || t.timestamp || 0);
+                if (age > 120000) {
+                    logToFile(`Cleaning orphaned trade ${tid} (No on-chain confirm after 2m)`);
+                    redis.delTrade(tid).catch(() => {});
+                }
+                return false;
+            }
+
+            const failed = this.failedSettlements.get(tid);
             if (failed) {
-                // Aggressive Retry Strategy:
-                // Attempts 1-2: 2s delay
-                // Attempts 3-4: 5s delay
-                // Attempt 5+: 15s delay
-                // Capped at 30s to ensure we never stop trying for "stuck" trades
                 const backoff = failed.count <= 2 ? 2000 :
                     failed.count <= 4 ? 5000 :
                         failed.count <= 10 ? 15000 : 30000;
-
                 if (now - failed.lastAttempt < backoff) return false;
             }
-            // CRITICAL: Removed grace period for INSTANT settlement.
-            // Settle as soon as expiry is reached.
-            return now >= t.expiry && !this.settlingIds.has(t.id) && !this.settledCache.has(t.id);
+
+            return now >= t.expiry && !this.settlingIds.has(tid) && !this.settledCache.has(tid);
         });
 
         if (toSettle.length === 0) return;
 
         console.log(`[Processor] Mass settling ${toSettle.length} trades`);
+        logToFile(`Mass settling ${toSettle.length} trades (Queue: ${activeTrades.length} total)`);
 
-        // Use smaller concurrency to prevent txpool exhaustion on the private node
         const BATCH_SIZE = 5; 
         for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
             const batch = toSettle.slice(i, i + BATCH_SIZE);
-
-            // ISOLATION: Use allSettled to ensure that even if one trade's 
-            // _settleSingleTrade REJECTS or CRASHES, the others continue.
             const results = await Promise.allSettled(batch.map(trade => this._settleSingleTrade(trade)));
             
             results.forEach((res, idx) => {
@@ -317,7 +330,6 @@ class TradeProcessor {
                 }
             });
 
-            // Small delay between batches to let the mempool breathe
             if (toSettle.length > BATCH_SIZE) {
                 await new Promise(r => setTimeout(r, 800));
             }
