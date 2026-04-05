@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const processor = require('./processor');
 const redis = require('../services/redis'); 
-const vault = require('../services/vault');
+// Vault decommissioned.
 const { deriveUserWallet } = require('../services/walletDerivation');
 const blockchainService = require('./blockchain');
 const { ethers } = require('ethers');
@@ -155,7 +155,7 @@ router.post('/access/redeem', async (req, res) => {
 
 // ADMIN ONLY (Requires ADMIN_TOKEN)
 const isAdmin = (req) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     return req.headers['authorization'] === `Bearer ${adminToken}`;
 };
 

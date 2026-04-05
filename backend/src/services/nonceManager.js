@@ -74,10 +74,30 @@ class NonceManager {
         const addr = address.toLowerCase();
         try {
             console.log(`[Nonce] Force syncing ${addr} from chain (Mode: pending)...`);
-            const chainNonce = await Promise.race([
-                provider.getTransactionCount(address, 'pending'),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
-            ]);
+            const queries = [
+                "https://rpc.testnet.arc.network",
+                "https://arc-testnet.alt.technology",
+                "https://arc-testnet.drpc.org",
+                "https://arc-testnet.alt.technology/rpc"
+            ].map(async (url) => {
+                try {
+                    const p = new ethers.JsonRpcProvider(url, 5042002, { staticNetwork: true });
+                    const n = await Promise.race([
+                        p.getTransactionCount(address, 'pending'),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+                    ]);
+                    return Number(n);
+                } catch (e) {
+                    return -1;
+                }
+            });
+
+            const results = await Promise.all(queries);
+            const chainNonce = results.reduce((max, curr) => (curr > max ? curr : max), -1);
+
+            if (chainNonce === -1) {
+                return await provider.getTransactionCount(address, 'pending'); // Final fallback 
+            }
 
             const currentKey = `nnc:${addr}`;
             let currentLocal;

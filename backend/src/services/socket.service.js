@@ -1,6 +1,7 @@
 const { Server } = require("socket.io");
 const redis = require('./redis');
-const vault = require('./vault');
+// Vault decommissioned.
+const crypto = require('crypto');
 
 class SocketService {
     constructor() {
@@ -20,7 +21,7 @@ class SocketService {
             console.log(`[Socket] New connection: ${socket.id}`);
 
             socket.on("auth_admin", (token) => {
-                const adminToken = vault.get('ADMIN_TOKEN');
+                const adminToken = process.env.ADMIN_TOKEN;
                 if (token === adminToken) {
                     socket.join("admins");
                     this.connectedAdmins.add(socket.id);

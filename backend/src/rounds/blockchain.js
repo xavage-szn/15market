@@ -41,14 +41,28 @@ class RoundsBlockchain {
 
     async lockRound(roundId, price, options = {}) {
         await this.ensureReady();
+        const fees = await blockchain._getGasPrice();
         const c = this.settleContract || this.contract;
-        return await c.lockRound(roundId, price, options);
+        return await c.lockRound(roundId, price, {
+            ...options,
+            maxFeePerGas: fees.maxFeePerGas,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+            type: 2,
+            chainId: 5042002
+        });
     }
 
     async settleRound(roundId, price, options = {}) {
         await this.ensureReady();
+        const fees = await blockchain._getGasPrice();
         const c = this.settleContract || this.contract;
-        return await c.settleRound(roundId, price, options);
+        return await c.settleRound(roundId, price, {
+            ...options,
+             maxFeePerGas: fees.maxFeePerGas,
+             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+             type: 2,
+             chainId: 5042002
+        });
     }
 
     async enterRound(roundId, direction, value, wallet) {

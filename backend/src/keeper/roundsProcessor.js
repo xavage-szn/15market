@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 const redis = require('../services/redis');
 const pricing = require('../services/pricing');
-const vault = require('../services/vault');
+// Vault decommissioned.
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
@@ -17,7 +17,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 class RoundsProcessor {
     constructor() {
         this.provider = new ethers.JsonRpcProvider(process.env.ARC_RPC || 'https://rpc.testnet.arc.network');
-        const pk = vault.get('PRIVATE_KEY');
+        const pk = process.env.PRIVATE_KEY;
         this.wallet = new ethers.Wallet(pk, this.provider);
 
 

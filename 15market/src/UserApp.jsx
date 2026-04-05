@@ -47,7 +47,7 @@ import { RoundsTerminal } from "./components/RoundsTerminal";
 import RoundsChart from "./components/RoundsChart";
 import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
-import vaultClient from './utils/vaultClient';
+// Vault decommissioned.
 import { socketService } from './utils/socket';
 
 /**
@@ -623,18 +623,7 @@ export default function UserApp() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   
-  // --- 🔒 SECURITY: Secure Vault Handshake on Mount ---
-  useEffect(() => {
-    const initSecurity = async () => {
-      try {
-        const apiBase = KEEPER_URL_ARC.replace(/^\/(arc|arc-api|api-arc)\//, '/');
-        await vaultClient.handshake(apiBase);
-      } catch (e) {
-        console.error("Security handshake failed:", e);
-      }
-    };
-    initSecurity();
-  }, [KEEPER_URL_ARC]);
+  // Security Handshake Purged
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
@@ -1425,23 +1414,21 @@ export default function UserApp() {
         triggerGlobalRefresh(true);
 
         // Tell backend to track it (Ping handles updating backend startTime correctly)
-        const pingPayload = vaultClient.encryptPayload({
+        const pingPayload = {
           id: tradeId.toString(),
           address, amount: activeAmount, direction: dirVal, duration: Number(activeDuration),
           entryPrice: entryPriceParams.toString(),
           symbol: activeMarket?.symbol || 'ETH'
-        });
+        };
 
         fetch(`${KEEPER_URL_ARC}/trade-ping`, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-session-id': vaultClient.sessionId 
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(pingPayload)
         }).catch(() => { });
 
         notify("Trade Confirmed & Started!", "success");
+        triggerGlobalRefresh(true);
       }
 
       setIsExecuting(false);
@@ -2019,18 +2006,13 @@ export default function UserApp() {
             ));
 
             // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches
-            const settlePayload = vaultClient.encryptPayload({
-                id: trade.id,
-                exitPrice: capturedPrice
-            });
-
             fetch(`${KEEPER_URL_ARC}/settle`, {
               method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'x-session-id': vaultClient.sessionId
-              },
-              body: JSON.stringify(settlePayload)
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  id: trade.id,
+                  exitPrice: capturedPrice
+              })
             }).catch(() => { });
           }
         }

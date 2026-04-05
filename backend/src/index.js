@@ -5,33 +5,9 @@ const { ethers } = require('ethers');
 const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-const vault = require('./services/vault');
+// Vault decommissioned as per user request
 
-// --- 🔒 SECURE TRANSIT SESSIONS ---
-const secureSessions = new Map(); // sessionId -> { sessionSecret, expires }
-
-// Middleware to decrypt secure transit payloads
-const secureTransit = (req, res, next) => {
-    const sessionId = req.headers['x-session-id'];
-    if (sessionId && secureSessions.has(sessionId)) {
-        const session = secureSessions.get(sessionId);
-        if (Date.now() > session.expires) {
-            secureSessions.delete(sessionId);
-            return res.status(401).json({ error: 'Security session expired' });
-        }
-
-        // If payload is encrypted, decrypt it
-        if (req.body && req.body._encrypted) {
-            try {
-                const decrypted = vault.decryptForTransport(req.body.payload, session.sessionSecret);
-                req.body = JSON.parse(decrypted);
-            } catch (e) {
-                return res.status(400).json({ error: 'Security decryption failed' });
-            }
-        }
-    }
-    next();
-};
+// Transit Security decommissioned. Plain JSON communication enabled.
 
 const processor = require('./keeper/processor');
 // const roundsProcessor = require('./keeper/roundsProcessor'); // Removed for separation
@@ -171,36 +147,15 @@ const SETTINGS_RESPONSE = {
     payoutMultipliers: { "5": 2.90, "10": 2.40, "15": 1.90 }
 };
 
-// ===== SECURE VAULT HANDSHAKE (Transit Security) =====
-app.post('/vault/handshake', actionLimiter, (req, res) => {
-    try {
-        const sessionId = crypto.randomBytes(16).toString('hex');
-        const sessionSecret = crypto.randomBytes(32).toString('hex');
-        
-        secureSessions.set(sessionId, {
-            sessionSecret,
-            expires: Date.now() + 3600000 // 1 hour
-        });
-        
-        res.json({ 
-            success: true, 
-            sessionId,
-            sessionSecret
-        });
-    } catch (e) {
-        res.status(500).json({ error: 'Handshake failed' });
-    }
-});
-
 const LISTINGS_RESPONSE = [
     { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
     { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' }
 ];
 
-// --- SESSION LOGIC (Deterministic Session Wallets) ---
-const SESSION_MASTER_SECRET = vault.get('SESSION_MASTER_SECRET');
+// === SESSION LOGIC (Deterministic Session Wallets) ===
+const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
 if (!SESSION_MASTER_SECRET) {
-    console.error("[Vault] SESSION_MASTER_SECRET missing or decryption failed");
+    console.error("[Config] SESSION_MASTER_SECRET missing in .env");
 }
 const getSessionRpcs = () => {
     // Official Arc + dRPC only (Thirdweb/Quicknode removed — hit rate limits)
@@ -275,7 +230,7 @@ app.get('/campaigns', async (req, res) => {
 });
 
 app.post('/campaigns', express.json(), async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -293,7 +248,7 @@ app.get('/winner-banner', async (req, res) => {
 });
 
 app.post('/winner-banner', express.json(), async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -465,7 +420,7 @@ app.post('/profile', async (req, res) => {
 });
 
 // ===== SETTLEMENT TRIGGER (Frontend calls this when timer hits 0) =====
-app.post('/settle', actionLimiter, secureTransit, async (req, res) => {
+app.post('/settle', actionLimiter, async (req, res) => {
     try {
         const settings = await redis.getSettings();
         if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
@@ -680,17 +635,29 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             const { wallet, address: sessionAddr } = deriveUserWallet(address);
 
             // 3. FLIGHT CHECKS
-            const [fees, balance, nonce] = await Promise.all([
-                blockchain._getGasPrice().catch(() => ({ maxFeePerGas: 400000000000n, maxPriorityFeePerGas: 200000000000n })),
-                blockchain.getNativeBalance(sessionAddr),
-                nonceManager.getNonce(sessionAddr, blockchain.provider).catch(async () => {
-                     return await blockchain.provider.getTransactionCount(sessionAddr, 'pending');
-                })
-            ]);
-
+            // 3. FLIGHT CHECKS (Authoritative balance with persistent retry)
+            let fees = await blockchain._getGasPrice().catch(() => ({ maxFeePerGas: 400000000000n, maxPriorityFeePerGas: 200000000000n }));
+            let balance = 0n;
             const amtWei = ethers.parseUnits(parseFloat(amount).toFixed(18), 18);
             const maxGas = BigInt(800000) * fees.maxFeePerGas;
-            
+
+            // Authoritative Retry: Wait up to 15s for the balance to appear (L2 lag protection)
+            for (let i = 0; i < 5; i++) {
+                balance = await blockchain.getNativeBalance(sessionAddr);
+                if (balance >= (amtWei + maxGas)) break;
+                
+                console.log(`[AutoSigner] Balance low for ${sessionAddr.slice(0,8)} (${ethers.formatEther(balance)} ARC), retry ${i+1}/5 in 3s...`);
+                await new Promise(r => setTimeout(r, 3000));
+            }
+
+            if (balance < (amtWei + maxGas)) {
+                throw new Error(`Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(amtWei + maxGas)} (including gas) for ${sessionAddr.slice(0,8)}... Please ensure you have funded your session wallet.`);
+            }
+
+            const nonce = await nonceManager.getNonce(sessionAddr, blockchain.provider).catch(async () => {
+                 return await blockchain.provider.getTransactionCount(sessionAddr, 'pending');
+            });
+
             if (balance < (amtWei + maxGas)) {
                 throw new Error(`Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(amtWei + maxGas)} (including gas) for ${sessionAddr.slice(0,8)}...`);
             }
@@ -747,7 +714,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
 });
 
 // Ping Trade (Updates start time in backend for expiration logic)
-app.post('/trade-ping', actionLimiter, secureTransit, async (req, res) => {
+app.post('/trade-ping', actionLimiter, async (req, res) => {
     try {
         const { id, address, amount, direction, duration, entryPrice, symbol } = req.body;
         if (!id) return res.status(400).json({ error: 'Missing ID' });
@@ -758,7 +725,7 @@ app.post('/trade-ping', actionLimiter, secureTransit, async (req, res) => {
     }
 });
 
-app.post('/session/withdraw', actionLimiter, secureTransit, async (req, res) => {
+app.post('/session/withdraw', actionLimiter, async (req, res) => {
     try {
         const { address, amount } = req.body;
         if (!address) return res.status(400).json({ error: 'Missing main address' });
@@ -815,7 +782,7 @@ app.post('/session/withdraw', actionLimiter, secureTransit, async (req, res) => 
 });
 
 app.get('/admin/logs', async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -835,7 +802,7 @@ app.use('/rounds', roundsRouter);
 
 // Admin: Global Settings
 app.get('/admin/settings', async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -852,7 +819,7 @@ app.get('/admin/settings', async (req, res) => {
 });
 
 app.post('/admin/settings', express.json(), async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -872,7 +839,7 @@ app.get('/broadcast', async (req, res) => {
 });
 
 app.post('/admin/broadcast', express.json(), async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -886,7 +853,7 @@ app.post('/admin/broadcast', express.json(), async (req, res) => {
 
 // Admin: Treasury Drain
 app.post('/admin/treasury/withdraw', express.json(), async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -924,7 +891,7 @@ app.post('/admin/treasury/withdraw', express.json(), async (req, res) => {
 
 // Admin: Staff Management
 app.get('/admin/staff', async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -933,7 +900,7 @@ app.get('/admin/staff', async (req, res) => {
 });
 
 app.post('/admin/staff', express.json(), async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -944,7 +911,7 @@ app.post('/admin/staff', express.json(), async (req, res) => {
 });
 
 app.delete('/admin/staff/:address', async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -991,7 +958,7 @@ app.post('/profiles', express.json(), async (req, res) => {
 
 // Admin: All Profiles (Directory)
 app.get('/admin/profiles', async (req, res) => {
-    const adminToken = vault.get('ADMIN_TOKEN');
+    const adminToken = process.env.ADMIN_TOKEN;
     if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
         return res.status(401).json({ error: 'Unauthorized' });
     }

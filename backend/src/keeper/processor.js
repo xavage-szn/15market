@@ -284,57 +284,33 @@ class TradeProcessor {
 
     async processSettlements() {
         if (!blockchain.providerReady) return;
-        const now = Date.now();
-        const activeTrades = await redis.getAllActiveTrades();
+        try {
+            const now = Date.now();
+            const activeTrades = await redis.getAllActiveTrades(true);
+            const toSettle = activeTrades.filter(t => {
+                const tid = t.id.toString();
+                // ONLY process if confirmed on-chain (Or has a TX hash)
+                if (!t.confirmed && !t.txHash && !t.tx) return false;
+                if (now < (t.expiry || 0)) return false;
+                if (this.settlingIds.has(tid) || this.settledCache.has(tid)) return false;
 
-        const toSettle = activeTrades.filter(t => {
-            const tid = t.id.toString();
-
-            // --- 🛡️ LEAK PROTECTION: Skip trades that were never confirmed on-chain ---
-            if (!t.confirmed) {
-                // Orphan cleanup: If a trade is unconfirmed for > 2 mins, it's likely a leaked/failed ping
-                const age = now - (t.startTime || t.timestamp || 0);
-                if (age > 120000) {
-                    logToFile(`Cleaning orphaned trade ${tid} (No on-chain confirm after 2m)`);
-                    redis.delTrade(tid).catch(() => {});
+                const failed = this.failedSettlements.get(tid);
+                if (failed) {
+                   const backoff = failed.count <= 2 ? 2000 : 5000;
+                   if (now - failed.lastAttempt < backoff) return false;
                 }
-                return false;
-            }
-
-            const failed = this.failedSettlements.get(tid);
-            if (failed) {
-                const backoff = failed.count <= 2 ? 2000 :
-                    failed.count <= 4 ? 5000 :
-                        failed.count <= 10 ? 15000 : 30000;
-                if (now - failed.lastAttempt < backoff) return false;
-            }
-
-            return now >= t.expiry && !this.settlingIds.has(tid) && !this.settledCache.has(tid);
-        });
-
-        if (toSettle.length === 0) return;
-
-        console.log(`[Processor] Mass settling ${toSettle.length} trades`);
-        logToFile(`Mass settling ${toSettle.length} trades (Queue: ${activeTrades.length} total)`);
-
-        const BATCH_SIZE = 5; 
-        for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
-            const batch = toSettle.slice(i, i + BATCH_SIZE);
-            const results = await Promise.allSettled(batch.map(trade => this._settleSingleTrade(trade)));
-            
-            results.forEach((res, idx) => {
-                if (res.status === 'rejected') {
-                    const tradeId = batch[idx]?.id;
-                    const errMsg = res.reason?.message || "Unknown error";
-                    console.error(`[Processor] Isolated failure for trade ${tradeId}: ${errMsg}`);
-                    logToFile(`Trade ${tradeId} isolated error: ${errMsg}`);
-                }
+                return true;
             });
 
-            if (toSettle.length > BATCH_SIZE) {
-                await new Promise(r => setTimeout(r, 800));
+            if (toSettle.length === 0) return;
+
+            console.log(`[Processor] Handling ${toSettle.length} trades ready for settlement...`);
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
+                const batch = toSettle.slice(i, i + BATCH_SIZE);
+                await Promise.allSettled(batch.map(trade => this._settleSingleTrade(trade)));
             }
-        }
+        } catch (e) { }
     }
 
     async _settleSingleTrade(trade, manualPrice = null) {
@@ -380,9 +356,17 @@ class TradeProcessor {
                     // ATTEMPT 2: Fallback to a very safe buffer or WAIT
                     // CRITICAL FIX: Removed 'pricing.getPrice(symbol)' fallback.
                     // Using the current price for an old trade is what caused the $2k exploit.
-                    // We now throw an error to trigger a retry in the next loop, 
-                    // allowing history to catch up or frontend to send a manual price.
                     const age = Date.now() - trade.expiry;
+                    
+                    // AUTO-TIMEOUT: If a trade is older than 1 hour and we STILL have no historical price,
+                    // mark it as TIMEOUT to stop the settlement loop from retrying it forever.
+                    if (age > 3600000) {
+                        console.log(`[Processor] Auto-timing out stale trade ${tradeId} (Age: ${Math.floor(age / 3600000)}h)`);
+                        await redis.addHistoricalTrade({ ...trade, status: 'TIMEOUT', settled: true });
+                        await redis.deleteTrade(tradeId);
+                        return;
+                    }
+
                     const alert = `[TRANSIT_ERROR] Missing price data for ${symbol} @ ${trade.expiry} (Age: ${Math.floor(age / 1000)}s). Retrying sync...`;
                     console.warn(alert);
                     throw new Error(alert);
