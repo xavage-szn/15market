@@ -460,17 +460,16 @@ class BlockchainService {
     async getNativeBalance(address) {
         try {
             await this._ensureReady();
-            const balance = await Promise.race([
+            // Add a timeout to prevent hanging on a slow RPC
+            return await Promise.race([
                 this.provider.getBalance(address),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Balance Fetch Timeout")), 5000))
             ]);
-            return balance;
         } catch (e) {
-            console.warn(`[Blockchain] Balance check failed for ${address}: ${e.message}`);
-            if (e.message.includes('Timeout')) {
-                this.rotateRpc();
-            }
-            return 0n;
+            console.warn(`[Blockchain] getNativeBalance failed for ${address}:`, e.message);
+            // On failure, rotate RPC and try one more time before giving up
+            await this.rotateRpc();
+            return await this.provider.getBalance(address).catch(() => 0n);
         }
     }
 }

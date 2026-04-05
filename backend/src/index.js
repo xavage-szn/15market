@@ -654,26 +654,7 @@ app.post('/session/init', actionLimiter, async (req, res) => {
         const { wallet, address: sessionAddr } = await deriveUserWallet(address);
         logToFile(`[SESSION_INIT] 🛠️ Initializing for ${address} -> Session: ${sessionAddr}`);
 
-        // ===== 🏥 AID/FUNDING SYSTEM: Ensure session wallet has gas (ARC) =====
-        const balance = await blockchain.getNativeBalance(sessionAddr);
-        const balanceEth = parseFloat(ethers.formatEther(balance));
-
-        if (balanceEth < 0.5) { // Minimum gas threshold
-            const treasuryBal = await blockchain.getNativeBalance(blockchain.wallet.address);
-            if (parseFloat(ethers.formatEther(treasuryBal)) > 1.0) {
-                console.log(`[SessionInit] Funding ${sessionAddr} with 2.0 ARC (aid)...`);
-                logToFile(`[SessionInit] Funding ${sessionAddr} with 2.0 ARC (aid)...`);
-                const tx = await blockchain.wallet.sendTransaction({
-                    to: sessionAddr,
-                    value: ethers.parseEther("2.0")
-                });
-                // Non-blocking wait for initial funding to ensure UX is smooth
-                res.json({ sessionAddress: sessionAddr, balance: "2.0", funded: true, txHash: tx.hash });
-                return;
-            } else {
-                console.warn(`[SessionInit] Treasury too low to fund ${sessionAddr}`);
-            }
-        }
+        // AID/FUNDING logic moved to /session/trade for authoritative real-time coverage
 
         res.json({ sessionAddress: sessionAddr, balance: balanceEth.toString() });
     } catch (e) {
@@ -748,12 +729,32 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             nonce = fetchedNonce;
             balance = fetchedBalance;
 
+            // ===== 🏥 AUTOMATIC GAS TOP-UP: Authoritative Real-time Funding =====
+            const balanceEth = parseFloat(ethers.formatEther(balance));
+            if (balanceEth < 0.2 && attempts === 0) {
+                try {
+                    const treasuryBal = await blockchain.getNativeBalance(blockchain.wallet.address);
+                    if (parseFloat(ethers.formatEther(treasuryBal)) > 5.0) {
+                        console.log(`[TradeAutoFund] Top-up for ${sessionAddr}: 2.0 ARC airdropped.`);
+                        logToFile(`[TradeAutoFund] Top-up for ${sessionAddr}: 2.0 ARC airdropped.`);
+                        await blockchain.wallet.sendTransaction({
+                             to: sessionAddr,
+                             value: ethers.parseEther("2.0")
+                        });
+                        // Update balance locally for this immediate trade to prevent "Insufficient" error
+                        balance = balance + ethers.parseUnits("2.0", 18);
+                    }
+                } catch (fundErr) {
+                    console.warn(`[TradeAutoFund] Airdrop failed: ${fundErr.message}`);
+                }
+            }
+
             // Update balance cache
             if (redis.isCloud && redis.redis) {
                 await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 30);
             }
         } catch (e) {
-            logToFile(`Pre-flight error: ${e.message}`);
+            logToFile(`Pre-flight error: ${e.message} for ${sessionAddr}`);
             throw e;
         }
 
@@ -769,7 +770,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         logToFile(`Balance: ${ethers.formatEther(balance)}, Need: ${ethers.formatEther(totalNeeded)}`);
 
         if (balance < totalNeeded) {
-            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(totalNeeded)} ARC (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(maxGasCost)})`;
+            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(totalNeeded)} ARC for ${sessionAddr.slice(0, 8)}... (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(maxGasCost)})`;
             logToFile(`[SESSION_TRADE] ❌ Insufficient balance: ${err}`);
             return res.status(400).json({ error: err });
         }
