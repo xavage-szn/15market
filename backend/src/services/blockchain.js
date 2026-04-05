@@ -461,10 +461,18 @@ class BlockchainService {
         try {
             await this._ensureReady();
             // Add a timeout to prevent hanging on a slow RPC
-            return await Promise.race([
+            const balance = await Promise.race([
                 this.provider.getBalance(address),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Balance Fetch Timeout")), 5000))
             ]);
+            
+            // If balance is 0, we perform a "Double Check" on a rotated RPC to ensure it's not a lagging node
+            if (balance === 0n) {
+                console.log(`[Blockchain] Verified 0 balance for ${address}. Double checking on rotated RPC...`);
+                await this.rotateRpc();
+                return await this.provider.getBalance(address).catch(() => 0n);
+            }
+            return balance;
         } catch (e) {
             console.warn(`[Blockchain] getNativeBalance failed for ${address}:`, e.message);
             // On failure, rotate RPC and try one more time before giving up

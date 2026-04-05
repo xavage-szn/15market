@@ -729,27 +729,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             nonce = fetchedNonce;
             balance = fetchedBalance;
 
-            // ===== 🏥 AUTOMATIC GAS TOP-UP: Authoritative Real-time Funding =====
-            const balanceEth = parseFloat(ethers.formatEther(balance));
-            if (balanceEth < 0.2 && attempts === 0) {
-                try {
-                    const treasuryBal = await blockchain.getNativeBalance(blockchain.wallet.address);
-                    if (parseFloat(ethers.formatEther(treasuryBal)) > 5.0) {
-                        console.log(`[TradeAutoFund] Top-up for ${sessionAddr}: 2.0 ARC airdropped.`);
-                        logToFile(`[TradeAutoFund] Top-up for ${sessionAddr}: 2.0 ARC airdropped.`);
-                        await blockchain.wallet.sendTransaction({
-                             to: sessionAddr,
-                             value: ethers.parseEther("2.0")
-                        });
-                        // Update balance locally for this immediate trade to prevent "Insufficient" error
-                        balance = balance + ethers.parseUnits("2.0", 18);
-                    }
-                } catch (fundErr) {
-                    console.warn(`[TradeAutoFund] Airdrop failed: ${fundErr.message}`);
-                }
-            }
-
-            // Update balance cache
+            // Balance cache (Optional, aids in speed for consecutive trades)
             if (redis.isCloud && redis.redis) {
                 await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 30);
             }
