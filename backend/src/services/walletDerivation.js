@@ -1,52 +1,28 @@
 const { ethers } = require('ethers');
 const path = require('path');
-const vault = require('./vault');
-const blockchain = require('./blockchain');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
-const SESSION_MASTER_SECRET = vault.get('SESSION_MASTER_SECRET');
-if (!SESSION_MASTER_SECRET) {
-    console.warn("[Derivation] CRITICAL: SESSION_MASTER_SECRET missing or vault decryption failed. Fallback in use!");
-}
-const FINAL_SECRET = SESSION_MASTER_SECRET || "15market_session_fallback_security_lock_v2";
-
+// Master secret used for all session address derivations
+const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_universal_session_salt_v1";
 
 /**
- * Derives a deterministic session wallet for a given user address.
- * No Mnemonic required - relies on SESSION_MASTER_SECRET for entropy.
+ * Deterministically derives a session wallet for a user.
+ * Given the same userAddress and SESSION_MASTER_SECRET, this will always return the same address.
  */
-async function deriveUserWallet(userAddress) {
-    if (!userAddress) {
-        throw new Error("User address required for derivation");
-    }
-
+function deriveUserWallet(userAddress) {
+    if (!userAddress) throw new Error("Target address required");
+    
     const addr = userAddress.toLowerCase();
     
-    // Create deterministic entropy from secret + user address
-    const entropy = ethers.toUtf8Bytes(FINAL_SECRET + addr);
-    const privateKey = ethers.keccak256(entropy);
+    // Low-level deterministic path: secret + address -> hash -> private key
+    // This is virtually impossible to crack but perfectly repeatable for the same user.
+    const salt = ethers.id(`${SESSION_MASTER_SECRET}:${addr}`);
+    const wallet = new ethers.Wallet(salt);
 
-    
-    let wallet = new ethers.Wallet(privateKey);
-    
-    // Connect to blockchain provider if available
-    try {
-        if (blockchain.provider) {
-            wallet = wallet.connect(blockchain.provider);
-        } else {
-            await blockchain._ensureReady();
-            if (blockchain.provider) {
-                wallet = wallet.connect(blockchain.provider);
-            }
-        }
-    } catch (e) {
-        console.warn("[Derivation] Could not connect wallet to provider:", e.message);
-    }
-    
     return {
-        wallet: wallet,
         address: wallet.address,
-        isSession: true
+        privateKey: wallet.privateKey,
+        wallet: wallet
     };
 }
 

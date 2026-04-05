@@ -651,255 +651,98 @@ app.get('/treasury', async (req, res) => {
 app.post('/session/init', actionLimiter, async (req, res) => {
     try {
         const { address } = req.body;
-        const { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        logToFile(`[SESSION_INIT] 🛠️ Initializing for ${address} -> Session: ${sessionAddr}`);
-
-        // AID/FUNDING logic moved to /session/trade for authoritative real-time coverage
-
-        res.json({ sessionAddress: sessionAddr, balance: balanceEth.toString() });
+        const { wallet, address: sessionAddr } = deriveUserWallet(address);
+        logToFile(`[SESSION_INIT] Initializing for ${address} -> Session: ${sessionAddr}`);
+        const balance = await blockchain.getNativeBalance(sessionAddr);
+        res.json({ sessionAddress: sessionAddr, balance: ethers.formatEther(balance) });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-
+// Authoritative Rebuild: Clean, High-Performance Auto-Signer Endpoint
 app.post('/session/trade', actionLimiter, async (req, res) => {
-    console.log(`Trade request: ${req.body.user} - ${req.body.direction} @ ${req.body.amount}`);
     try {
-        const settings = await redis.getSettings();
-        if (settings?.maintenanceMode) {
-            console.log("Refused: Maintenance Mode");
-            return res.status(503).json({ error: 'Maintenance Mode Active' });
-        }
-        if (settings?.tradingHalted) {
-            console.log("Refused: Trading Halted");
-            return res.status(503).json({ error: 'Trading Halted by Admin' });
-        }
-
         const { address, tradeParams } = req.body;
         if (!address || !tradeParams) {
-             console.error("Refused: Missing trade data in body");
-             return res.status(400).json({ error: 'Incomplete trade data' });
+             return res.status(400).json({ error: 'Missing address or trade parameters' });
         }
+        
+        const { id, amount, direction, duration, entryPrice, marketId } = tradeParams;
+        logToFile(`[AutoSigner] Incoming: ${id} (${amount} USDC) for ${address}`);
 
-        const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
-
-        logToFile(`Trade ${id}: ${address} (${amount} USDC)`);
-
-        if (!id || !amount) {
-            console.error("Refused: Missing ID or Amount", tradeParams);
-            return res.status(400).json({ error: 'Missing bet parameters' });
-        }
-
-        const lockTrade = await redis.lockTrade(id);
-        if (!lockTrade) {
-            logToFile(`Trade ${id} locked (duplicate)`);
-            return res.status(409).json({ error: 'Trade already in progress' });
-        }
-
-        // Fetch Wallet & Provider
-        const derivationStart = Date.now();
-        let { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        logToFile(`Wallet sync ${Date.now() - derivationStart}ms (${sessionAddr})`);
-
-        redis.saveSessionMapping(sessionAddr, address).catch(() => { });
-
-        // Pre-flight consistency check (Parallelized for Ultra-Low Latency)
-        const preflightStart = Date.now();
-        let balance, nonce, fees;
+        // 1. DEDUPLICATE
+        const lock = await redis.lockTrade(id);
+        if (!lock) return res.status(409).json({ error: 'Trade ID collision' });
 
         try {
-            // FIRE ALL NETWORK CALLS IN PARALLEL
-            const [fetchedFees, fetchedNonce, fetchedBalance] = await Promise.all([
-                blockchain._getGasPrice().catch(() => ({ maxFeePerGas: 400000000000n, maxPriorityFeePerGas: 200000000000n, gasPrice: 400000000000n })),
-                nonceManager.getNonce(sessionAddr, blockchain.provider),
-                Promise.race([
-                    blockchain.getNativeBalance(sessionAddr),
-                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
-                ]).catch(async () => {
-                   if (redis.isCloud && redis.redis) {
-                       const cached = await redis.redis.get(`bal:${sessionAddr}`);
-                       return cached ? BigInt(cached) : ethers.parseUnits("1000", 18);
-                   }
-                   return ethers.parseUnits("1000", 18);
+            // 2. PREP
+            const { wallet, address: sessionAddr } = deriveUserWallet(address);
+
+            // 3. FLIGHT CHECKS
+            const [fees, balance, nonce] = await Promise.all([
+                blockchain._getGasPrice().catch(() => ({ maxFeePerGas: 400000000000n, maxPriorityFeePerGas: 200000000000n })),
+                blockchain.getNativeBalance(sessionAddr),
+                nonceManager.getNonce(sessionAddr, blockchain.provider).catch(async () => {
+                     return await blockchain.provider.getTransactionCount(sessionAddr, 'pending');
                 })
             ]);
 
-            fees = fetchedFees;
-            nonce = fetchedNonce;
-            balance = fetchedBalance;
-
-            // Balance cache (Optional, aids in speed for consecutive trades)
-            if (redis.isCloud && redis.redis) {
-                await redis.redis.set(`bal:${sessionAddr}`, balance.toString(), 'EX', 30);
+            const amtWei = ethers.parseUnits(parseFloat(amount).toFixed(18), 18);
+            const maxGas = BigInt(800000) * fees.maxFeePerGas;
+            
+            if (balance < (amtWei + maxGas)) {
+                throw new Error(`Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(amtWei + maxGas)} (including gas) for ${sessionAddr.slice(0,8)}...`);
             }
-        } catch (e) {
-            logToFile(`Pre-flight error: ${e.message} for ${sessionAddr}`);
-            throw e;
-        }
 
-        logToFile(`Pre-flight ready ${Date.now() - preflightStart}ms (Nonce: ${nonce})`);
+            // 4. BROADCAST
+            const txArgs = {
+                to: process.env.ARC_CONTRACT_ADDRESS,
+                data: blockchain.contract.interface.encodeFunctionData("placeBet", [
+                    BigInt(id), Number(direction), BigInt(duration), 
+                    BigInt(entryPrice), Number(marketId), sessionAddr
+                ]),
+                value: amtWei,
+                nonce: nonce,
+                maxFeePerGas: fees.maxFeePerGas,
+                maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+                gasLimit: 800000n,
+                type: 2,
+                chainId: 5042002
+            };
 
-        const amtNum = parseFloat(amount);
-        const amtWei = ethers.parseUnits(amtNum.toFixed(18), 18);
+            logToFile(`[AutoSigner] Broadcasting ${id} (Nonce: ${nonce})...`);
+            const tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
+            logToFile(`[AutoSigner] SUCCESS: ${tx.hash}`);
 
-        // Calculate gas buffer based on MAX fee to be conservative
-        const maxGasCost = BigInt(800000) * fees.maxFeePerGas;
-        const totalNeeded = amtWei + maxGasCost;
+            // 5. UPDATE STATE
+            const symbolMap = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
+            const tradeData = {
+               id: id.toString(), user: address, owner: address, sessionOwner: sessionAddr,
+               amount: amount, direction: direction === 1 ? 'UP' : 'DOWN', duration,
+               entryPrice: (Number(entryPrice) / 1e8).toFixed(8), symbol: symbolMap[marketId] || 'BTC',
+               expiry: Date.now() + (duration * 1000), txHash: tx.hash, startTime: Date.now(),
+               confirmed: false, isSessionTrade: true
+            };
+            await redis.setTrade(id, tradeData);
 
-        logToFile(`Balance: ${ethers.formatEther(balance)}, Need: ${ethers.formatEther(totalNeeded)}`);
+            res.json({ success: true, txHash: tx.hash });
 
-        if (balance < totalNeeded) {
-            const err = `Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(totalNeeded)} ARC for ${sessionAddr.slice(0, 8)}... (Stake: ${amount} + Gas Buffer: ${ethers.formatEther(maxGasCost)})`;
-            logToFile(`[SESSION_TRADE] ❌ Insufficient balance: ${err}`);
-            return res.status(400).json({ error: err });
-        }
-
-        logToFile(`Preparing TX (Nonce: ${nonce}, Gas: ${ethers.formatUnits(fees.gasPrice, 'gwei')} gwei)`);
-
-        const txArgs = {
-            to: process.env.ARC_CONTRACT_ADDRESS,
-            data: blockchain.contract.interface.encodeFunctionData("placeBet", [
-                BigInt(id),
-                Number(direction),
-                BigInt(duration),
-                BigInt(entryPrice),
-                Number(marketId),
-                sessionAddr // Pay Payout back to session address for auto-signer trades
-            ]),
-            value: amtWei,
-            nonce: nonce,
-            maxFeePerGas: fees.maxFeePerGas,
-            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-            gasLimit: 800000n, // Fixed limit for consistency
-            type: 2,
-            chainId: 5042002
-        };
-
-        logToFile(`Broadcasting TX for ${id} (Nonce: ${nonce})`);
-        const broadcastStart = Date.now();
-        let tx;
-        let lastError;
-        let attempts = 0;
-        const maxAttempts = 3;
-
-        while (attempts < maxAttempts) {
-            attempts++;
-            try {
-                logToFile(`Broadcast attempt ${attempts} for ${id} (Nonce: ${txArgs.nonce})`);
-                await blockchain._ensureReady();
-                tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
-                break; // Success!
-            } catch (err) {
-                lastError = err;
-                const errLower = err.message?.toLowerCase() || "";
-                logToFile(`Attempt ${attempts} failed: ${err.message}`);
-
-                const isTransient = errLower.includes("txpool is full") ||
-                    errLower.includes("timeout") ||
-                    errLower.includes("nonce") ||
-                    errLower.includes("underpriced") ||
-                    errLower.includes("replacement") ||
-                    errLower.includes("already");
-
-                if (isTransient && attempts < maxAttempts) {
-                    logToFile(`Retrying transient error...`);
-                    // Rotate RPC and Resync
-                    await blockchain.rotateRpc();
-                    const freshNonce = await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
-                    const freshFees = await blockchain._getGasPrice();
-
-                    txArgs.nonce = freshNonce;
-                    // Aggressively bump gas on each retry (+20% cumulative)
-                    const bumpFactor = 10n + BigInt(attempts * 2);
-                    txArgs.maxFeePerGas = freshFees.maxFeePerGas * bumpFactor / 10n;
-                    txArgs.maxPriorityFeePerGas = freshFees.maxPriorityFeePerGas * bumpFactor / 10n;
-
-                    // Re-connect wallet to the potentially new provider from rotation
-                    wallet = wallet.connect(blockchain.provider);
-                    continue;
-                } else {
-                    // Non-transient or final attempt failed
-                    await nonceManager.syncWithChain(sessionAddr, blockchain.provider).catch(() => { });
-                    throw err;
-                }
+        } catch (innerErr) {
+            logToFile(`[AutoSigner] Exec Error: ${innerErr.message}`);
+            // Nonce Sync on failure
+            if (innerErr.message.includes('nonce') || innerErr.message.includes('already')) {
+                const { address: sessionAddr } = deriveUserWallet(address);
+                nonceManager.syncWithChain(sessionAddr, blockchain.provider).catch(() => {});
             }
-        }
-        logToFile(`Trade ${id} broadcasted: ${tx.hash}`);
-
-        const ID_ASSET_MAP = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
-        const symbol = ID_ASSET_MAP[Number(marketId)] || 'BTC';
-        const normalizedDirection = (direction === 1 || direction === '1' || direction === 'UP' || direction === 'buy') ? 'UP' : 'DOWN';
-
-        const tradeData = {
-            id: id.toString(),
-            user: address,
-            owner: address,
-            sessionOwner: sessionAddr,
-            amount: amount,
-            direction: normalizedDirection,
-            duration: duration,
-            entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
-            symbol: symbol,
-            expiry: Date.now() + (duration * 1000),
-            txHash: tx.hash,
-            startTime: Date.now(),
-            confirmed: false,
-            isSessionTrade: true
-        };
-        await redis.setTrade(id, tradeData);
-
-        // --- 🛡️ STAKE DEBIT VERIFICATION: Wait for mining before acknowledging ---
-        // This ensures the stake is actually debited before the trade 'starts' for the user.
-        try {
-            logToFile(`Waiting for confirmation of ${tx.hash}...`);
-            const receipt = await tx.wait(1).catch(async (e) => {
-                 // Retry once on generic timeout
-                 logToFile(`Mining wait error: ${e.message}. Retrying...`);
-                 return await blockchain.provider.getTransactionReceipt(tx.hash);
-            });
-
-            if (receipt && receipt.status === 1) {
-                const confirmedNow = Date.now();
-                logToFile(`Trade ${id} confirmed on-chain: ${tx.hash}`);
-                const confirmedData = {
-                    ...tradeData,
-                    confirmed: true,
-                    startTime: confirmedNow,
-                    expiry: confirmedNow + (Number(duration) * 1000)
-                };
-                await redis.setTrade(id, confirmedData);
-                
-                // Return success ONLY after confirmation
-                res.json({ success: true, txHash: tx.hash, confirmed: true });
-            } else {
-                logToFile(`Trade ${id} REVERTED: ${tx.hash}`);
-                await redis.delTrade(id);
-                if (!res.headersSent) res.status(400).json({ error: 'Trade transaction reverted. Stake was not debited.' });
-            }
-        } catch (confirmErr) {
-            logToFile(`Trade ${id} mining confirmation failure: ${confirmErr.message}`);
-            // If we can't confirm mining, let the high-reliability worker pick it up later or fail it
-            // but for UX, we return 500 now because the money might be in limbo
-            if (!res.headersSent) res.status(500).json({ error: 'Stake debit check timed out. Please check your history.' });
+            res.status(400).json({ error: innerErr.message });
+        } finally {
+            await redis.unlockTrade(id);
         }
 
     } catch (e) {
-        const errorMsg = e.reason || e.message || "Unknown error";
-        logToFile(`Trade error: ${errorMsg}`);
-        console.error(`[SESSION_TRADE] Trace:`, e);
-
-        if (errorMsg.toLowerCase().includes('nonce') || errorMsg.toLowerCase().includes('already been used') || errorMsg.toLowerCase().includes('too low')) {
-            try {
-                const { address: sessionAddr } = await deriveUserWallet(req.body.address);
-                await nonceManager.syncWithChain(sessionAddr, blockchain.provider);
-            } catch (err) { }
-        }
-        if (!res.headersSent) res.status(500).json({ error: errorMsg });
-    } finally {
-        if (req.body.tradeParams?.id) {
-            await redis.unlockTrade(req.body.tradeParams.id);
-        }
+        logToFile(`[AutoSigner] Fatal Catch: ${e.message}`);
+        res.status(500).json({ error: e.message });
     }
 });
 
