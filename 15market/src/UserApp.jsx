@@ -48,6 +48,7 @@ import RoundsChart from "./components/RoundsChart";
 import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
 import vaultClient from './utils/vaultClient';
+import { socketService } from './utils/socket';
 
 /**
  * Mobile Portrait Lock Component
@@ -1635,6 +1636,21 @@ export default function UserApp() {
     }
     return null;
   }, [activeMarket]);
+
+  useEffect(() => {
+    socketService.connect();
+    
+    // Listen for real-time setting updates from Admin
+    const unbind = socketService.on('settings_updated', (newSettings) => {
+      console.log("[Socket] Applying platform settings update...");
+      setPlatformSettings(prev => ({ ...prev, ...newSettings }));
+      
+      // Update local storage for persistence across refreshes
+      localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
+    });
+
+    return () => unbind();
+  }, []);
 
   useEffect(() => {
     let active = true;

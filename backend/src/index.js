@@ -980,13 +980,17 @@ app.post('/session/withdraw', actionLimiter, secureTransit, async (req, res) => 
     }
 });
 
-app.get('/debug-logs', (req, res) => {
+app.get('/admin/logs', async (req, res) => {
+    const adminToken = vault.get('ADMIN_TOKEN');
+    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
     try {
         const fs = require('fs');
-        const logs = fs.readFileSync(LOG_FILE, 'utf8').split('\n').reverse().slice(0, 200).join('\n');
-        res.type('text/plain').send(logs);
+        const logs = fs.readFileSync(LOG_FILE, 'utf8').split('\n').reverse().slice(0, 200);
+        res.json(logs);
     } catch (e) {
-        res.status(500).send(e.message);
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -1022,6 +1026,7 @@ app.post('/admin/settings', express.json(), async (req, res) => {
     // Real-time broadcast for instant user-side effect
     socketService.broadcastAll('settings_updated', req.body);
     socketService.notifyAdmins('settings_confirmed', { success: true, settings: req.body });
+    socketService.triggerStatsBroadcast();
     res.json({ success: true });
 });
 

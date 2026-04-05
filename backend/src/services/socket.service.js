@@ -44,6 +44,13 @@ class SocketService {
     }
 
     /**
+     * Manual trigger for instant stats refresh
+     */
+    triggerStatsBroadcast() {
+        this._broadcastDashboardStats();
+    }
+
+    /**
      * Broadcasts real-time events to all connected admins.
      */
     notifyAdmins(event, data) {

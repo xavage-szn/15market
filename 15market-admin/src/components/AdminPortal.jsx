@@ -317,14 +317,14 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             });
 
             const unbindSettled = socketService.on('trade_settled', (res) => {
-                 // Trigger refresh of history if needed, or update individual trade
+                 setTradeHistory(prev => prev.map(t => t.id === res.id ? { ...t, status: res.status, payout: res.payout } : t));
             });
 
             // Listen for settings confirmed (Instant UI feedback)
             const unbindSettings = socketService.on('settings_confirmed', (res) => {
                  if (res.success) {
                      notify('success', 'SYNCED', 'Platform configuration updated instantly.');
-                     // Optionally sync local settings state
+                     if (res.settings) setPlatformSettings(res.settings);
                  }
             });
 
@@ -1315,7 +1315,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
             try {
                 const targetUrl = KEEPER_URL_ARC;
-                const res = await fetch(`${targetUrl}/logs`);
+                const res = await fetch(`${targetUrl}/admin/logs`, {
+                    headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+                });
                 if (res.ok) {
                     const data = await res.json();
                     if (activeTab === 'terminal') setKeeperLogs(data);

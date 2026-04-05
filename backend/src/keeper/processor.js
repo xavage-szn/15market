@@ -63,6 +63,7 @@ class TradeProcessor {
             
             // Real-time Signal to Admin
             socketService.notifyAdmins('trade_detected', updatedTrade);
+            socketService.triggerStatsBroadcast();
 
 
             // Add to history too
@@ -487,6 +488,7 @@ class TradeProcessor {
 
                     // Real-time Signal to Admin
                     socketService.notifyAdmins('trade_settled', { id: tradeId, status: lockedStatus, payout: instantVal });
+                    socketService.triggerStatsBroadcast();
 
                 }
 
