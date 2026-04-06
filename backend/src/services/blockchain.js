@@ -70,20 +70,20 @@ class BlockchainService {
     async _getGasPrice() {
         try {
             const feed = await this.provider.getFeeData();
-            // Aggressive Arc Testnet Overrides
-            const floor = ethers.parseUnits("100", "gwei");
+            // Reasonable Arc Testnet gas pricing
+            const floor = ethers.parseUnits("5", "gwei");
             let maxFee = feed.maxFeePerGas || floor;
             if (maxFee < floor) maxFee = floor;
             
-            // 4x safety multiplier
-            maxFee = (maxFee * 40n) / 10n;
-            const priority = ethers.parseUnits("100", "gwei");
+            // 1.5x safety multiplier (was 4x — that was draining session wallets)
+            maxFee = (maxFee * 15n) / 10n;
+            const priority = ethers.parseUnits("2", "gwei");
 
             return { maxFeePerGas: maxFee, maxPriorityFeePerGas: priority };
         } catch (e) {
             return { 
-                maxFeePerGas: ethers.parseUnits("500", "gwei"), 
-                maxPriorityFeePerGas: ethers.parseUnits("100", "gwei") 
+                maxFeePerGas: ethers.parseUnits("10", "gwei"), 
+                maxPriorityFeePerGas: ethers.parseUnits("2", "gwei") 
             };
         }
     }

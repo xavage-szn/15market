@@ -656,12 +656,17 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             const cleanAmount = (amount || "0").toString().replace(',', '.');
             const amtWei = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
             
-            const fees = await blockchain._getGasPrice();
-            const maxGas = BigInt(1000000) * fees.maxFeePerGas; // Increased safety window
+            // Gas buffer: Use a REALISTIC estimate, not the inflated maxFeePerGas
+            // Actual placeBet uses ~200-300k gas. Gas price on Arc testnet is ~1-5 gwei.
+            // Old calculation was: 1M * 400 gwei = 0.4 ARC (way too aggressive!)
+            // New calculation: 300k gas * 50 gwei = 0.015 ARC (realistic safety margin)
+            const realisticGasBuffer = ethers.parseUnits("0.02", "ether"); // 0.02 ARC flat buffer for gas
 
-            if (balance < (amtWei + maxGas)) {
+            console.log(`[AutoSigner] Balance: ${ethers.formatEther(balance)} ARC | Stake: ${cleanAmount} | Gas Buffer: 0.02 ARC`);
+
+            if (balance < (amtWei + realisticGasBuffer)) {
                 return res.status(400).json({ 
-                    error: `Insufficient Balance on Chain. Backend sees ${ethers.formatEther(balance)} ARC for address ${sessionAddr}. Stake: ${amount} USDC + Gas.` 
+                    error: `Insufficient Balance. Session wallet ${sessionAddr} has ${ethers.formatEther(balance)} ARC. Need ${cleanAmount} USDC + ~0.02 gas.` 
                 });
             }
 
