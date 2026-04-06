@@ -673,6 +673,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             // 4. NONCE & SIGNING
             const nonce = await nonceManager.getNonce(sessionAddr, blockchain.provider);
             const entryVal = BigInt(Math.floor(Number(entryPrice) * 1e8));
+            const fees = await blockchain._getGasPrice();
 
             const txArgs = [
                 BigInt(id),
@@ -683,6 +684,8 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
                 address // Main wallet for payout
             ];
 
+            console.log(`[AutoSigner] Sending TX: Nonce=${nonce} | MaxFee=${fees.maxFeePerGas} | To=${contractAddr}`);
+
             const tx = await wallet.connect(blockchain.provider).sendTransaction({
                 to: contractAddr,
                 data: blockchain.contract.interface.encodeFunctionData("placeBet", txArgs),
@@ -690,7 +693,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
                 nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 1000000,
+                gasLimit: 500000,
                 chainId: 5042002
             });
 
