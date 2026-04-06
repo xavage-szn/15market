@@ -296,7 +296,7 @@ class TradeProcessor {
 
                 const failed = this.failedSettlements.get(tid);
                 if (failed) {
-                   const backoff = failed.count <= 2 ? 2000 : 5000;
+                   const backoff = failed.count <= 2 ? 5000 : (failed.count <= 5 ? 30000 : 300000); // Exponential backoff
                    if (now - failed.lastAttempt < backoff) return false;
                 }
                 return true;
@@ -304,13 +304,20 @@ class TradeProcessor {
 
             if (toSettle.length === 0) return;
 
-            console.log(`[Processor] Handling ${toSettle.length} trades ready for settlement...`);
+            console.log(`[Processor] Batch Settlement: ${toSettle.length} trades ready.`);
             const BATCH_SIZE = 5;
             for (let i = 0; i < toSettle.length; i += BATCH_SIZE) {
                 const batch = toSettle.slice(i, i + BATCH_SIZE);
-                await Promise.allSettled(batch.map(trade => this._settleSingleTrade(trade)));
+                // Error boundary per batch
+                try {
+                    await Promise.allSettled(batch.map(trade => this._settleSingleTrade(trade)));
+                } catch (batchErr) {
+                    console.error(`[Processor] Batch Error: ${batchErr.message}`);
+                }
             }
-        } catch (e) { }
+        } catch (e) {
+            console.error(`[Processor] ProcessSettlements Error: ${e.message}`);
+        }
     }
 
     async _settleSingleTrade(trade, manualPrice = null) {

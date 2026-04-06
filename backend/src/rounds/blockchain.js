@@ -65,10 +65,11 @@ class RoundsBlockchain {
         });
     }
 
-    async enterRound(roundId, direction, value, wallet) {
+    async enterRound(roundId, direction, value, wallet, addressOverride = null) {
         await this.ensureReady();
-        const contract = new ethers.Contract(this.contractAddress, this.abi, wallet);
-        return await contract.enterRound(roundId, direction, { value });
+        const target = addressOverride || this.contractAddress;
+        const contract = new ethers.Contract(target, this.abi, wallet);
+        return await contract.enterRound(roundId, direction, { value, gasLimit: 1000000 });
     }
 }
 

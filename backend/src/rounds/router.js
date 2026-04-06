@@ -57,16 +57,21 @@ router.post('/session-enter', async (req, res) => {
         const { wallet: sessionWallet, address: sessionAddr } = await deriveUserWallet(address);
         
         // 2. Transact on Blockchain
-        const val = ethers.parseEther(amount.toString());
+        const cleanAmount = (amount || "0").toString().replace(',', '.');
+        const val = ethers.parseEther(cleanAmount);
+        
+        const contractAddr = process.env.SESSION_MARKET_ROUNDS || process.env.SESSION_MARKET || process.env.ROUNDS_CONTRACT_ADDRESS;
+        
         await blockchainService.ensureReady();
         const connectedWallet = sessionWallet.connect(blockchainService.blockchain.provider);
         
-        console.log(`[RoundsApi] Relayer: ${address} -> Session: ${sessionAddr} | Round: ${roundId}`);
+        console.log(`[RoundsApi] Session Round Entry: ${address} -> Session: ${sessionAddr} | Round: ${roundId} | Contract: ${contractAddr}`);
 
         // We use a high gas limit since sessions might be complex
-        const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet);
+        // We override the contract address if SESSION_MARKET is set
+        const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet, contractAddr);
         
-        console.log(`[RoundsApi] On-chain success: ${tx.hash}`);
+        console.log(`[RoundsApi] Broadcated: ${tx.hash}`);
 
         // 3. Update Redis state (Actual count)
         const sideKey = side.toLowerCase() === 'up' ? 'long' : 'short';
@@ -75,10 +80,9 @@ router.post('/session-enter', async (req, res) => {
         const latestState = await redis.getRound(`${assetUpper}_state`);
         if (latestState && latestState.next && Number(latestState.next.id) === Number(roundId)) {
             if (!latestState.next.pools) latestState.next.pools = { long: 1.0, short: 1.0, participants: 0 };
-            latestState.next.pools[sideKey] = (latestState.next.pools[sideKey] || 1.0) + parseFloat(amount);
+            latestState.next.pools[sideKey] = (latestState.next.pools[sideKey] || 1.0) + parseFloat(cleanAmount);
             latestState.next.pools.participants = (latestState.next.pools.participants || 0) + 1;
             await redis.setRound(`${assetUpper}_state`, latestState);
-            console.log(`[RoundsApi] State updated: ${assetUpper} Participants: ${latestState.next.pools.participants}`);
         }
 
         res.json({ 

@@ -154,9 +154,18 @@ const LISTINGS_RESPONSE = [
 
 // === SESSION LOGIC (Deterministic Session Wallets) ===
 const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
+const SESSION_MARKET = process.env.SESSION_MARKET; 
+
 if (!SESSION_MASTER_SECRET) {
     console.error("[Config] SESSION_MASTER_SECRET missing in .env");
 }
+
+if (SESSION_MARKET) {
+    console.log(`[Config] SESSION_MARKET detected: ${SESSION_MARKET}. This will override the contract for all auto-signer trades.`);
+} else {
+    console.log(`[Config] No SESSION_MARKET override. Using ARC_CONTRACT_ADDRESS for stakings.`);
+}
+
 const getSessionRpcs = () => {
     // Official Arc + dRPC only (Thirdweb/Quicknode removed — hit rate limits)
     return [
@@ -168,7 +177,14 @@ const getSessionRpcs = () => {
 
 let sessionProvider = null;
 async function getSessionProvider() {
-    await blockchain._ensureReady();
+    if (!blockchain.providerReady) {
+        // Wait briefly for init if it was just triggered
+        let wait = 0;
+        while (!blockchain.providerReady && wait < 10) {
+            await new Promise(r => setTimeout(r, 500));
+            wait++;
+        }
+    }
     return blockchain.provider;
 }
 
@@ -482,15 +498,12 @@ app.post('/settle', actionLimiter, async (req, res) => {
                 ...trade,
                 ...settlementData
             };
+            // Update Redis state
             await redis.setTrade(id, updatedTrade);
 
-            // Trigger on-chain settlement in the BACKGROUND
-            // CRITICAL: Pass the UPDATED trade (with lockedExitPrice) so the processor
-            // uses the SAME price. This prevents result flipping.
-            processor._settleSingleTrade(updatedTrade, exitPriceNum.toFixed(8)).catch(e => {
-                logToFile(`Settle failed for ${id}: ${e.message}`);
-            });
-
+            // Background Payout (Handled by Processor Loop)
+            // No direct call needed here, loop will pick up finalized status
+            
             return res.json({ success: true, status: status, payout });
         } else {
             // Check if already settled on-chain
@@ -626,78 +639,74 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
         const { id, amount, direction, duration, entryPrice, marketId } = tradeParams;
         logToFile(`[AutoSigner] Incoming: ${id} (${amount} USDC) for ${address}`);
 
-        // 1. DEDUPLICATE
+        // 1. DEDUPLICATE & LOCK
         const lock = await redis.lockTrade(id);
         if (!lock) return res.status(409).json({ error: 'Trade ID collision' });
 
         try {
-            // 2. PREP
+            // 2. DERIVATION & CONTRACT SELECTION
             const { wallet, address: sessionAddr } = deriveUserWallet(address);
+            
+            // SESSION_MARKET check if provided as an override
+            const contractAddr = process.env.SESSION_MARKET || process.env.ARC_CONTRACT_ADDRESS;
+            console.log(`[AutoSigner] Dispatching ID ${id} to Contract: ${contractAddr}`);
 
-            // 3. FLIGHT CHECKS
-            // 3. FLIGHT CHECKS (Authoritative balance with persistent retry)
-            let fees = await blockchain._getGasPrice().catch(() => ({ maxFeePerGas: 400000000000n, maxPriorityFeePerGas: 200000000000n }));
-            let balance = 0n;
-            const amtWei = ethers.parseUnits(parseFloat(amount).toFixed(18), 18);
-            const maxGas = BigInt(800000) * fees.maxFeePerGas;
-
-            // Authoritative Retry: Wait up to 15s for the balance to appear (L2 lag protection)
-            for (let i = 0; i < 5; i++) {
-                balance = await blockchain.getNativeBalance(sessionAddr);
-                if (balance >= (amtWei + maxGas)) break;
-                
-                console.log(`[AutoSigner] Balance low for ${sessionAddr.slice(0,8)} (${ethers.formatEther(balance)} ARC), retry ${i+1}/5 in 3s...`);
-                await new Promise(r => setTimeout(r, 3000));
-            }
+            // 3. FLIGHT CHECKS (Robust Parsing)
+            const balance = await blockchain.getNativeBalance(sessionAddr);
+            const cleanAmount = (amount || "0").toString().replace(',', '.');
+            const amtWei = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
+            
+            const fees = await blockchain._getGasPrice();
+            const maxGas = BigInt(1000000) * fees.maxFeePerGas; // Increased safety window
 
             if (balance < (amtWei + maxGas)) {
-                throw new Error(`Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(amtWei + maxGas)} (including gas) for ${sessionAddr.slice(0,8)}... Please ensure you have funded your session wallet.`);
+                return res.status(400).json({ 
+                    error: `Insufficient Balance on Chain. Backend sees ${ethers.formatEther(balance)} ARC for address ${sessionAddr}. Stake: ${amount} USDC + Gas.` 
+                });
             }
 
-            const nonce = await nonceManager.getNonce(sessionAddr, blockchain.provider).catch(async () => {
-                 return await blockchain.provider.getTransactionCount(sessionAddr, 'pending');
-            });
+            // 4. NONCE & SIGNING
+            const nonce = await nonceManager.getNonce(sessionAddr, blockchain.provider);
+            const entryVal = BigInt(Math.floor(Number(entryPrice) * 1e8));
 
-            if (balance < (amtWei + maxGas)) {
-                throw new Error(`Insufficient Session Balance: ${ethers.formatEther(balance)} ARC. Need ${ethers.formatEther(amtWei + maxGas)} (including gas) for ${sessionAddr.slice(0,8)}...`);
-            }
+            const txArgs = [
+                BigInt(id),
+                Number(direction),
+                BigInt(duration),
+                entryVal,
+                Number(marketId),
+                address // Main wallet for payout
+            ];
 
-            // 4. BROADCAST
-            const txArgs = {
-                to: process.env.ARC_CONTRACT_ADDRESS,
-                data: blockchain.contract.interface.encodeFunctionData("placeBet", [
-                    BigInt(id), Number(direction), BigInt(duration), 
-                    BigInt(entryPrice), Number(marketId), sessionAddr
-                ]),
+            const tx = await wallet.connect(blockchain.provider).sendTransaction({
+                to: contractAddr,
+                data: blockchain.contract.interface.encodeFunctionData("placeBet", txArgs),
                 value: amtWei,
-                nonce: nonce,
+                nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 800000n,
-                type: 2,
+                gasLimit: 1000000,
                 chainId: 5042002
-            };
+            });
 
-            logToFile(`[AutoSigner] Broadcasting ${id} (Nonce: ${nonce})...`);
-            const tx = await wallet.connect(blockchain.provider).sendTransaction(txArgs);
-            logToFile(`[AutoSigner] SUCCESS: ${tx.hash}`);
-
-            // 5. UPDATE STATE
-            const symbolMap = { 0: 'ETH', 1: 'BTC', 2: 'SOL', 3: 'MON', 4: 'JUP', 5: 'XRP' };
+            // 5. PERSISTENCE
             const tradeData = {
-               id: id.toString(), user: address, owner: address, sessionOwner: sessionAddr,
-               amount: amount, direction: direction === 1 ? 'UP' : 'DOWN', duration,
-               entryPrice: (Number(entryPrice) / 1e8).toFixed(8), symbol: symbolMap[marketId] || 'BTC',
-               expiry: Date.now() + (duration * 1000), txHash: tx.hash, startTime: Date.now(),
-               confirmed: false, isSessionTrade: true
+                id, amount: cleanAmount, direction, duration, entryPrice, marketId,
+                user: address, owner: address, sessionOwner: sessionAddr,
+                txHash: tx.hash, startTime: Date.now(),
+                expiry: Date.now() + (duration * 1000),
+                confirmed: false, isSessionTrade: true,
+                contractAddress: contractAddr
             };
+
             await redis.setTrade(id, tradeData);
+            console.log(`[AutoSigner] Trade Broadcasted: ${tx.hash}`);
 
             res.json({ success: true, txHash: tx.hash });
 
         } catch (innerErr) {
             logToFile(`[AutoSigner] Exec Error: ${innerErr.message}`);
-            // Nonce Sync on failure
+            // Nonce Sync On Hazard
             if (innerErr.message.includes('nonce') || innerErr.message.includes('already')) {
                 const { address: sessionAddr } = deriveUserWallet(address);
                 nonceManager.syncWithChain(sessionAddr, blockchain.provider).catch(() => {});
