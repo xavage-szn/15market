@@ -6,7 +6,7 @@ const nonceManager = require('./nonceManager');
 class BlockchainService {
     constructor() {
         this.providerReady = false;
-        this.rpc = "https://rpc.testnet.arc.network";
+        this.rpc = "https://5042002.rpc.thirdweb.com";
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
         this.provider = null;
         this.wallet = null;

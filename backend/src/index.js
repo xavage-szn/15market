@@ -693,7 +693,7 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
                 nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 500000,
+                gasLimit: 300000,
                 chainId: 5042002
             });
 

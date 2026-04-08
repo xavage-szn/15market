@@ -14,7 +14,7 @@ export function LatencyMeter({ currentNetwork = 'arc' }) {
             // Measure RPC Latency
             const rpcStart = performance.now();
             // Fetch for EVM / Arc
-            await fetch(currentNetwork === 'arc' ? "https://rpc.testnet.arc.network" : "https://mainnet.base.org", {
+            await fetch(currentNetwork === 'arc' ? "https://5042002.rpc.thirdweb.com" : "https://mainnet.base.org", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jsonrpc: "2.0", method: "eth_blockNumber", params: [], id: 1 })
