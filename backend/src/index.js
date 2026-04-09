@@ -630,11 +630,15 @@ app.post('/session/init', actionLimiter, async (req, res) => {
 
 app.get('/session/balance/:address', async (req, res) => {
     try {
+        await blockchain.ensureReady(); // Ensure blockchain service is ready
         const { address } = req.params;
         const { address: sessionAddr } = deriveUserWallet(address);
         const balance = await blockchain.getNativeBalance(sessionAddr);
         console.log(`[BalanceProxy] Session balance for ${address} (${sessionAddr}): ${ethers.formatEther(balance)}`);
-        res.json({ balance: ethers.formatEther(balance) });
+        res.json({ 
+            balance: ethers.formatEther(balance),
+            sessionAddress: sessionAddr
+        });
     } catch (e) {
         console.error(`[BalanceProxy] Session error:`, e.message);
         res.status(500).json({ error: e.message });
@@ -642,13 +646,14 @@ app.get('/session/balance/:address', async (req, res) => {
 });
 
 app.get('/balance/:address', async (req, res) => {
+    const { address } = req.params;
     try {
-        const { address } = req.params;
+        await blockchain.ensureReady(); // Ensure blockchain service is ready
         const balance = await blockchain.getNativeBalance(address);
         console.log(`[BalanceProxy] Main balance for ${address}: ${ethers.formatEther(balance)}`);
         res.json({ balance: ethers.formatEther(balance) });
     } catch (e) {
-        console.error(`[BalanceProxy] Main error for ${address}:`, e.message);
+        console.error(`[BalanceProxy] Main error for ${address || 'unknown'}:`, e.message);
         res.status(500).json({ error: e.message });
     }
 });

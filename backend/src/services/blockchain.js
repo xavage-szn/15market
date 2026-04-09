@@ -7,6 +7,9 @@ class BlockchainService {
     constructor() {
         this.providerReady = false;
         this.rpc = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
+        this.backupRpc = process.env.ARC_RPC_BACKUP || "https://arc-testnet.drpc.org";
+        this.rpcs = [this.rpc, this.backupRpc, "https://5042002.rpc.thirdweb.com"].filter(Boolean);
+        this.currentRpcIndex = 0;
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
         this.provider = null;
         this.wallet = null;
@@ -24,11 +27,12 @@ class BlockchainService {
         this._init();
     }
 
-    async _init() {
+    async _init(rpcUrl = null) {
+        const targetRpc = rpcUrl || this.rpcs[this.currentRpcIndex];
         try {
-            console.log(`[Blockchain] Connecting to: ${this.rpc}`);
+            console.log(`[Blockchain] Connecting to: ${targetRpc}`);
             const network = ethers.Network.from(5042002);
-            this.provider = new ethers.JsonRpcProvider(this.rpc, network, {
+            this.provider = new ethers.JsonRpcProvider(targetRpc, network, {
                 staticNetwork: true,
                 batchMaxCount: 1
             });
@@ -44,19 +48,57 @@ class BlockchainService {
             this.providerReady = true;
             console.log(`[Blockchain] Core Ready. Wallet: ${this.wallet.address}`);
         } catch (e) {
-            console.error('[Blockchain] Initialization Critical Failure:', e.message);
-            // Retry in 5s
+            console.error(`[Blockchain] Initialization Failure using ${targetRpc}:`, e.message);
+            // Cycle to next RPC
+            this.currentRpcIndex = (this.currentRpcIndex + 1) % this.rpcs.length;
             setTimeout(() => this._init(), 5000);
         }
     }
 
-    async getNativeBalance(address) {
-        if (!this.providerReady || !this.provider) throw new Error("Blockchain service not ready");
-        try {
-            return await this.provider.getBalance(address);
-        } catch (e) {
-            console.error(`[Blockchain] Balance check failed for ${address}:`, e.message);
-            throw new Error(`Blockchain connection timed out while checking balance for ${address}`);
+    async ensureReady() {
+        if (this.providerReady) return;
+        let attempts = 0;
+        while (!this.providerReady && attempts < 20) {
+            await new Promise(r => setTimeout(r, 500));
+            attempts++;
+        }
+        if (!this.providerReady) throw new Error("Blockchain service not ready after 10s");
+    }
+
+    async getNativeBalance(address, retries = 3) {
+        if (!this.providerReady || !this.provider) {
+            try {
+                await this.ensureReady();
+            } catch (e) {
+                throw new Error("Blockchain service not ready");
+            }
+        }
+        
+        for (let i = 0; i < retries; i++) {
+            try {
+                // Set a manual timeout for the balance check
+                const balancePromise = this.provider.getBalance(address);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error("Timeout")), 8000)
+                );
+                
+                return await Promise.race([balancePromise, timeoutPromise]);
+            } catch (e) {
+                console.error(`[Blockchain] Balance check attempt ${i+1} failed for ${address}:`, e.message);
+                
+                // If it failed and we have alternative RPCs, try to switch
+                if ((e.message.includes("Timeout") || e.message.includes("503") || e.message.includes("429")) && this.rpcs.length > 1) {
+                    console.log(`[Blockchain] Switching RPC due to failure...`);
+                    this.currentRpcIndex = (this.currentRpcIndex + 1) % this.rpcs.length;
+                    await this._init(); // Re-initialize with next RPC
+                }
+
+                if (i === retries - 1) {
+                    throw new Error(`Blockchain connection timed out after ${retries} attempts while checking balance for ${address}`);
+                }
+                // Exponential backoff
+                await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+            }
         }
     }
 

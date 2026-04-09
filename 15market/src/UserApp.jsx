@@ -689,15 +689,14 @@ export default function UserApp() {
         return;
       }
 
-      // Use numeric comparison to avoid floating-point string format mismatches
-      if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001) {
+      if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001 || (newBalNum > 0 && evmBalance === "0")) {
         setEvmBalance(formatted);
       }
     } catch (e) { }
   }, [address, evmBalance]);
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
-    if (!evmSessionWallet) return;
+    if (!address) return;
 
     try {
       // Use backend proxy to avoid RPC CORS issues
@@ -715,8 +714,15 @@ export default function UserApp() {
       if (Math.abs(bal - sessionBalance) > 0.0001) {
         setSessionBalance(bal);
       }
+
+      // Auto-correct stale session addresses in localStorage/state
+      if (data.sessionAddress && (!evmSessionWallet || data.sessionAddress.toLowerCase() !== evmSessionWallet.address?.toLowerCase())) {
+        console.log("Syncing session address from backend:", data.sessionAddress);
+        setEvmSessionWallet({ address: data.sessionAddress, isRemote: true });
+        localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+      }
     } catch (err) { }
-  }, [evmSessionWallet, sessionBalance]);
+  }, [address, sessionBalance]);
 
   const triggerGlobalRefresh = useCallback((force = false) => {
     refetchEvmBalance(force);
