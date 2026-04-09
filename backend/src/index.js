@@ -441,14 +441,13 @@ app.post('/settle', actionLimiter, async (req, res) => {
         const settings = await redis.getSettings();
         if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
 
-        const { id } = req.body;
+        const { id, exitPrice } = req.body;
         if (!id) return res.status(400).json({ error: 'Missing bet ID' });
 
-        logToFile(`Settle ${id} (Fetching fresh price...)`);
+        logToFile(`Settle ${id} (Fetching price...)`);
 
         const trade = await redis.getTrade(id);
         if (trade) {
-            // === RESULT LOCKING: Use existing locked result if available ===
             let exitPriceNum;
             let status = trade.status;
             let payout = trade.payout;
@@ -456,8 +455,10 @@ app.post('/settle', actionLimiter, async (req, res) => {
             if (trade.lockedExitPrice) {
                 logToFile(`Settle ${id}: Using already locked price ${trade.lockedExitPrice}`);
                 exitPriceNum = parseFloat(trade.lockedExitPrice);
+            } else if (exitPrice) {
+                logToFile(`Settle ${id}: Using frontend locked price ${exitPrice}`);
+                exitPriceNum = parseFloat(exitPrice);
             } else {
-                // Determine fresh price and LOCK IT IN.
                 const freshPrice = pricing.getCurrentPrice(trade.symbol || 'BTC');
                 if (!freshPrice) {
                     logToFile(`Settle ${id} failed: No pricing data available.`);

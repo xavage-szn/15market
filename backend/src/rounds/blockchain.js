@@ -1,3 +1,4 @@
+const { ethers } = require('ethers');
 const blockchain = require('../services/blockchain'); // Reuse the main blockchain service for provider/wallet
 const nonceManager = require('../services/nonceManager');
 

@@ -151,17 +151,40 @@ class RedisStore {
     // Historical Indexing
     async addHistoricalTrade(trade) {
         const id = trade.id.toString();
+        const statusOrder = { 'WON': 3, 'LOST': 3, 'RESOLVING': 2, 'PENDING': 1, 'TIMEOUT': 0 };
+
         if (this.isCloud) {
             try {
-                const existing = await this.redis.hget('15market_historical_trades', id);
-                const updated = existing ? { ...JSON.parse(existing), ...trade } : trade;
-                await this.redis.hset('15market_historical_trades', id, JSON.stringify(updated));
+                const existingRaw = await this.redis.hget('15market_historical_trades', id);
+                if (existingRaw) {
+                    const existing = JSON.parse(existingRaw);
+                    // Prevent downgrading status (e.g., WON -> PENDING)
+                    const oldStatus = existing.status || 'PENDING';
+                    const newStatus = trade.status || 'PENDING';
+                    
+                    if (statusOrder[oldStatus] > statusOrder[newStatus]) {
+                        // Inherit old final status
+                        trade.status = oldStatus;
+                        if (existing.settlementPrice && !trade.settlementPrice) trade.settlementPrice = existing.settlementPrice;
+                        if (existing.payout && !trade.payout) trade.payout = existing.payout;
+                    }
+                    await this.redis.hset('15market_historical_trades', id, JSON.stringify({ ...existing, ...trade }));
+                } else {
+                    await this.redis.hset('15market_historical_trades', id, JSON.stringify(trade));
+                }
             } catch (e) {
                 console.error(`[Redis] Failed to add historical trade ${id}:`, e.message);
             }
         } else {
             const existing = this.historicalTrades.get(id);
             if (existing) {
+                const oldStatus = existing.status || 'PENDING';
+                const newStatus = trade.status || 'PENDING';
+                if (statusOrder[oldStatus] > statusOrder[newStatus]) {
+                    trade.status = oldStatus;
+                    if (existing.settlementPrice && !trade.settlementPrice) trade.settlementPrice = existing.settlementPrice;
+                    if (existing.payout && !trade.payout) trade.payout = existing.payout;
+                }
                 this.historicalTrades.set(id, { ...existing, ...trade });
             } else {
                 this.historicalTrades.set(id, trade);
