@@ -118,7 +118,7 @@ class RoundsProcessor {
 
                     // On-chain Settle (uses LOCKED price)
                     const priceFixed = ethers.parseUnits(sPrice.toFixed(8), 8);
-                    blockchain.settleRound(roundId, priceFixed, { gasLimit: 1500000 }).then(tx => {
+                    blockchain.settleRound(roundId, priceFixed, { gasLimit: 800000 }).then(tx => {
                         console.log(`[Rounds] Round ${roundId} Settled for ${asset}: ${tx.hash}`);
                     }).catch(e => {
                         console.error(`[Rounds] Settle failed for ${asset}:`, e.message);

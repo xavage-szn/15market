@@ -628,6 +628,31 @@ app.post('/session/init', actionLimiter, async (req, res) => {
     }
 });
 
+app.get('/session/balance/:address', async (req, res) => {
+    try {
+        const { address } = req.params;
+        const { address: sessionAddr } = deriveUserWallet(address);
+        const balance = await blockchain.getNativeBalance(sessionAddr);
+        console.log(`[BalanceProxy] Session balance for ${address} (${sessionAddr}): ${ethers.formatEther(balance)}`);
+        res.json({ balance: ethers.formatEther(balance) });
+    } catch (e) {
+        console.error(`[BalanceProxy] Session error:`, e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/balance/:address', async (req, res) => {
+    try {
+        const { address } = req.params;
+        const balance = await blockchain.getNativeBalance(address);
+        console.log(`[BalanceProxy] Main balance for ${address}: ${ethers.formatEther(balance)}`);
+        res.json({ balance: ethers.formatEther(balance) });
+    } catch (e) {
+        console.error(`[BalanceProxy] Main error for ${address}:`, e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Authoritative Rebuild: Clean, High-Performance Auto-Signer Endpoint
 app.post('/session/trade', actionLimiter, async (req, res) => {
     try {
@@ -656,17 +681,17 @@ app.post('/session/trade', actionLimiter, async (req, res) => {
             const cleanAmount = (amount || "0").toString().replace(',', '.');
             const amtWei = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
             
-            // Gas buffer: Use a REALISTIC estimate, not the inflated maxFeePerGas
-            // Actual placeBet uses ~200-300k gas. Gas price on Arc testnet is ~1-5 gwei.
-            // Old calculation was: 1M * 400 gwei = 0.4 ARC (way too aggressive!)
-            // New calculation: 300k gas * 50 gwei = 0.015 ARC (realistic safety margin)
-            const realisticGasBuffer = ethers.parseUnits("0.02", "ether"); // 0.02 ARC flat buffer for gas
+            // Gas buffer: Use a REALISTIC estimate.
+            // Typical placeBet takes ~150-250k gas. With Round entry it might be higher.
+            // 0.05 ARC (or USDC) is a safe buffer for gas at current net prices.
+            const realisticGasBuffer = ethers.parseUnits("0.05", "ether"); 
 
-            console.log(`[AutoSigner] Balance: ${ethers.formatEther(balance)} ARC | Stake: ${cleanAmount} | Gas Buffer: 0.02 ARC`);
+            const totalNeeded = amtWei + realisticGasBuffer;
+            console.log(`[AutoSigner] Balance: ${ethers.formatEther(balance)} | Needed: ${ethers.formatEther(totalNeeded)} (Stake: ${cleanAmount} + Buffer: 0.05)`);
 
-            if (balance < (amtWei + realisticGasBuffer)) {
+            if (balance < totalNeeded) {
                 return res.status(400).json({ 
-                    error: `Insufficient Balance. Session wallet ${sessionAddr} has ${ethers.formatEther(balance)} ARC. Need ${cleanAmount} USDC + ~0.02 gas.` 
+                    error: `Insufficient Balance. Session wallet ${sessionAddr} has ${parseFloat(ethers.formatEther(balance)).toFixed(4)} USDC. Need ${cleanAmount} USDC stake + 0.05 for gas.` 
                 });
             }
 

@@ -1,24 +1,26 @@
 import { useAccount } from "wagmi";
-import { publicClient } from "../client";
-import { formatUnits } from "viem";
 import { useState, useEffect, useCallback } from "react";
+import { KEEPER_URL_ARC } from "../constants";
 
 export function WalletBalance({ theme, balanceOverride, sessionMode }) {
     const { isConnected, address } = useAccount();
     const [internalBalance, setInternalBalance] = useState(0);
 
     // Sync balance with the override passed from UserApp (robust fetch)
-    const balance = (typeof balanceOverride === 'number') ? balanceOverride : internalBalance;
+    const balance = (typeof balanceOverride === 'number' && balanceOverride > 0) ? balanceOverride : internalBalance;
 
     const refetchEvm = useCallback(async () => {
-        if (!address || balanceOverride !== undefined) return;
+        if (!address) return;
         try {
-            const b = await publicClient.getBalance({ address });
-            setInternalBalance(parseFloat(formatUnits(b, 18)));
+            // Use backend proxy for balance check to avoid direct RPC CORS errors
+            const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            setInternalBalance(parseFloat(data.balance));
         } catch (e) {
             console.error("WalletBalance fetch error:", e);
         }
-    }, [address, balanceOverride]);
+    }, [address]);
 
     useEffect(() => {
         refetchEvm();

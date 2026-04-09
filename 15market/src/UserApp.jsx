@@ -676,14 +676,16 @@ export default function UserApp() {
     if (!address) return;
 
     try {
-      const b = await publicClient.getBalance({ address });
-      const formatted = formatUnits(b, 18);
+      // Use backend proxy for balance to avoid CORS issues with direct RPC from browser
+      const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const formatted = data.balance;
       const newBalNum = parseFloat(formatted);
 
-      // During cooldown, block ALL non-forced polls
-      // Extended to 30s to prevent balance flicker while awaiting on-chain payout settlement
+      // Extended to 5s to prevent balance flicker while awaiting on-chain payout settlement
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 30000) {
+      if (!force && msSinceLastAction < 5000) {
         return;
       }
 
@@ -698,12 +700,15 @@ export default function UserApp() {
     if (!evmSessionWallet) return;
 
     try {
-      const balanceWei = await publicClient.getBalance({ address: evmSessionWallet.address });
-      const bal = parseFloat(formatUnits(balanceWei, 18));
+      // Use backend proxy to avoid RPC CORS issues
+      const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const bal = parseFloat(data.balance);
 
-      // Extended to 30s for better protection against slow RPC indexing
+      // Extended to 5s for better protection against slow RPC indexing
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 30000) {
+      if (!force && msSinceLastAction < 5000) {
         return;
       }
 
@@ -1142,8 +1147,8 @@ export default function UserApp() {
     const sanitizedAmount = (activeAmount || "0").toString().replace(',', '.');
     const stakeAmt = parseFloat(sanitizedAmount);
 
-    // For session trades, require a small margin (0.1 USDC) for gas to avoid "Insufficient funds for gas" errors
-    const gasMargin = sessionMode ? 0.1 : 0;
+    // For session trades, require a small margin (0.02 USDC) for gas to avoid "Insufficient funds for gas" errors
+    const gasMargin = sessionMode ? 0.02 : 0;
 
     if (stakeAmt + gasMargin > currentBal) {
       return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. ${sessionMode ? `Session wallet needs at least ${stakeAmt + gasMargin} USDC (Stake + Gas room)` : `Balance: ${currentBal.toFixed(3)}`}`, "error");
@@ -1195,7 +1200,7 @@ export default function UserApp() {
 
         if (sessionMode && evmSessionWallet) {
           // AUTO-SIGNER MODE
-          const res = await fetch(`${KEEPER_URL_ROUNDS}/rounds/session-enter`, {
+          const res = await fetch(`${KEEPER_URL_ROUNDS}/session-enter`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1299,11 +1304,12 @@ export default function UserApp() {
 
         const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
         
+        lastOptimisticActionTime.current = Date.now();
         setSessionBalance(prev => Math.max(0, prev - amtNum));
         setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
         setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
         setIsExecuting(false); // RELEASE BUTTON IMMEDIATELY FOR INSTANT FEEL
-        triggerGlobalRefresh(true);
+        triggerGlobalRefresh(false); // Do NOT force, let the throttle protect our optimistic state
         notify("Broadcasting Trade...", "pending");
 
         // --- STEP 2: BACKGROUND EXECUTION ---

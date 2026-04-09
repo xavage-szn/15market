@@ -6,7 +6,7 @@ const nonceManager = require('./nonceManager');
 class BlockchainService {
     constructor() {
         this.providerReady = false;
-        this.rpc = "https://5042002.rpc.thirdweb.com";
+        this.rpc = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
         this.provider = null;
         this.wallet = null;
@@ -117,6 +117,17 @@ class BlockchainService {
         // Logic to scan for failed TXs if needed
     }
 
+    async getPastEvents(eventName, fromBlock, toBlock) {
+        if (!this.contract) return [];
+        try {
+            const filter = this.contract.filters[eventName]();
+            return await this.contract.queryFilter(filter, fromBlock, toBlock);
+        } catch (e) {
+            console.error(`[Blockchain] Error fetching past events (${eventName}):`, e.message);
+            return [];
+        }
+    }
+
     async settleBet(betId, exitPrice, retryCount = 0) {
         try {
             const fees = await this._getGasPrice();
@@ -127,7 +138,7 @@ class BlockchainService {
                 nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 1500000
+                gasLimit: 500000
             });
         } catch (e) {
             console.error(`[Blockchain] Settlement failed for ${betId}:`, e.message);

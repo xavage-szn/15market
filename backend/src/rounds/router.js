@@ -60,6 +60,15 @@ router.post('/session-enter', async (req, res) => {
         const cleanAmount = (amount || "0").toString().replace(',', '.');
         const val = ethers.parseEther(cleanAmount);
         
+        // --- ADDED BALANCE CHECK ---
+        const balance = await blockchainService.blockchain.getNativeBalance(sessionAddr);
+        const gasBuffer = ethers.parseUnits("0.05", "ether");
+        if (balance < (val + gasBuffer)) {
+            return res.status(400).json({ 
+                error: `Insufficient Balance. Session wallet ${sessionAddr} has ${parseFloat(ethers.formatEther(balance)).toFixed(4)} USDC. Need ${cleanAmount} USDC stake + 0.05 for gas.` 
+            });
+        }
+        
         const contractAddr = process.env.SESSION_MARKET_ROUNDS || process.env.SESSION_MARKET || process.env.ROUNDS_CONTRACT_ADDRESS;
         
         await blockchainService.ensureReady();

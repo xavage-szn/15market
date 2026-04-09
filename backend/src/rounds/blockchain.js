@@ -1,5 +1,5 @@
-const { ethers, FetchRequest } = require('ethers');
 const blockchain = require('../services/blockchain'); // Reuse the main blockchain service for provider/wallet
+const nonceManager = require('../services/nonceManager');
 
 class RoundsBlockchain {
     constructor() {
@@ -43,8 +43,11 @@ class RoundsBlockchain {
         await this.ensureReady();
         const fees = await blockchain._getGasPrice();
         const c = this.settleContract || this.contract;
+        const nonce = await nonceManager.getNonce(blockchain.wallet.address, blockchain.provider);
+        
         return await c.lockRound(roundId, price, {
             ...options,
+            nonce,
             maxFeePerGas: fees.maxFeePerGas,
             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
             type: 2,
@@ -56,8 +59,11 @@ class RoundsBlockchain {
         await this.ensureReady();
         const fees = await blockchain._getGasPrice();
         const c = this.settleContract || this.contract;
+        const nonce = await nonceManager.getNonce(blockchain.wallet.address, blockchain.provider);
+
         return await c.settleRound(roundId, price, {
             ...options,
+            nonce,
              maxFeePerGas: fees.maxFeePerGas,
              maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
              type: 2,
