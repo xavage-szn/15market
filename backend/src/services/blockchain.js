@@ -8,7 +8,7 @@ class BlockchainService {
         this.providerReady = false;
         this.rpc = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
         this.backupRpc = process.env.ARC_RPC_BACKUP || "https://arc-testnet.drpc.org";
-        this.rpcs = [this.rpc, this.backupRpc, "https://5042002.rpc.thirdweb.com"].filter(Boolean);
+        this.rpcs = [this.rpc, this.backupRpc].filter(Boolean);
         this.currentRpcIndex = 0;
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
         this.provider = null;
@@ -32,10 +32,18 @@ class BlockchainService {
         try {
             console.log(`[Blockchain] Connecting to: ${targetRpc}`);
             const network = ethers.Network.from(5042002);
+            
+            // For initialization, we want a tighter timeout to find a working RPC quickly
             this.provider = new ethers.JsonRpcProvider(targetRpc, network, {
                 staticNetwork: true,
                 batchMaxCount: 1
             });
+
+            // Fast check: get block number with 5s timeout
+            await Promise.race([
+                this.provider.getBlockNumber(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Init Timeout")), 5000))
+            ]);
 
             const pk = process.env.PRIVATE_KEY;
             if (!pk) throw new Error('PRIVATE_KEY is missing in .env');

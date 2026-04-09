@@ -76,9 +76,7 @@ class NonceManager {
             console.log(`[Nonce] Force syncing ${addr} from chain (Mode: pending)...`);
             const queries = [
                 "https://rpc.testnet.arc.network",
-                "https://arc-testnet.alt.technology",
-                "https://arc-testnet.drpc.org",
-                "https://arc-testnet.alt.technology/rpc"
+                "https://arc-testnet.drpc.org"
             ].map(async (url) => {
                 try {
                     const p = new ethers.JsonRpcProvider(url, 5042002, { staticNetwork: true });

@@ -8,6 +8,7 @@ const REDIS_URL = RAW_REDIS_URL;
 
 class RedisStore {
     constructor() {
+        this._initMemory(); // Always initialize memory structures first as a baseline
         if (REDIS_URL) {
             console.log('[Redis] Connecting to Redis Cloud...');
             this.redis = new Redis(REDIS_URL, {
@@ -30,17 +31,13 @@ class RedisStore {
             });
             this.isCloud = true;
             this.fallbackTriggered = false;
-            this._lastBlock = 31400000;
 
             this.redis.ping()
                 .then(() => console.log('[Redis] Cloud connected'))
                 .catch(e => {
                     console.error('[Redis] Connection failed, using memory.');
                     this.isCloud = false;
-                    this._initMemory();
                 });
-        } else {
-            this._initMemory();
         }
     }
 
@@ -58,7 +55,7 @@ class RedisStore {
 
     async setTrade(id, data) {
         try {
-            if (this.isCloud) {
+            if (this.isCloud && this.redis) {
                 await this.redis.hset('15market_active_trades', id.toString(), JSON.stringify(data));
             } else {
                 this._initMemory();
@@ -74,7 +71,7 @@ class RedisStore {
 
     async getTrade(id) {
         try {
-            if (this.isCloud) {
+            if (this.isCloud && this.redis) {
                 const data = await this.redis.hget('15market_active_trades', id.toString());
                 return data ? JSON.parse(data) : null;
             }
@@ -86,7 +83,7 @@ class RedisStore {
 
     async delTrade(id) {
         try {
-            if (this.isCloud) {
+            if (this.isCloud && this.redis) {
                 await this.redis.hdel('15market_active_trades', id.toString());
             }
         } catch (e) {
@@ -98,7 +95,7 @@ class RedisStore {
     async getAllActiveTrades(filterSettling = false) {
         let trades = [];
         try {
-            if (this.isCloud) {
+            if (this.isCloud && this.redis) {
                 const all = await this.redis.hvals('15market_active_trades');
                 trades = all.map(t => JSON.parse(t));
             }
@@ -127,7 +124,7 @@ class RedisStore {
     // Atomic Lock to prevent double-processing a request
     async lockTrade(id, ttl = 30) {
         const key = `lock:trd:${id}`;
-        if (this.isCloud) {
+        if (this.isCloud && this.redis) {
             const res = await this.redis.set(key, "1", "EX", ttl, "NX");
             return res === "OK";
         }
@@ -141,7 +138,7 @@ class RedisStore {
 
     async unlockTrade(id) {
         const key = `lock:trd:${id}`;
-        if (this.isCloud) {
+        if (this.isCloud && this.redis) {
             await this.redis.del(key);
         } else if (this._memLocks) {
             this._memLocks.delete(id);
@@ -153,7 +150,7 @@ class RedisStore {
         const id = trade.id.toString();
         const statusOrder = { 'WON': 3, 'LOST': 3, 'RESOLVING': 2, 'PENDING': 1, 'TIMEOUT': 0 };
 
-        if (this.isCloud) {
+        if (this.isCloud && this.redis) {
             try {
                 const existingRaw = await this.redis.hget('15market_historical_trades', id);
                 if (existingRaw) {
@@ -193,7 +190,7 @@ class RedisStore {
     }
 
     async getFullHistory() {
-        if (this.isCloud) {
+        if (this.isCloud && this.redis) {
             try {
                 const all = await this.redis.hvals('15market_historical_trades');
                 const trades = all.map(t => JSON.parse(t));
