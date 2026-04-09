@@ -39,10 +39,10 @@ class BlockchainService {
                 batchMaxCount: 1
             });
 
-            // Fast check: get block number with 5s timeout
+            // Fast check: get block number with 15s timeout
             await Promise.race([
                 this.provider.getBlockNumber(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Init Timeout")), 5000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Init Timeout")), 15000))
             ]);
 
             const pk = process.env.PRIVATE_KEY;

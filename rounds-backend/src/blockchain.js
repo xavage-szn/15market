@@ -5,12 +5,10 @@ require('dotenv').config();
 
 
 const getRpcEndpoints = () => {
-    // Official ARC RPCs
+    // Official ARC RPCs only (Standard + dRPC)
     return [
         "https://rpc.testnet.arc.network",
-        "https://arc-testnet.alt.technology",
-        "https://arc-testnet.drpc.org",
-        "https://rpc.drpc.testnet.arc.network"
+        "https://arc-testnet.drpc.org"
     ];
 };
 
@@ -19,9 +17,14 @@ async function createProvider() {
     for (const rpc of endpoints) {
         try {
             const fetchReq = new FetchRequest(rpc);
-            fetchReq.timeout = 30000;
+            fetchReq.timeout = 15000; // Shorter timeout for discovery
             const provider = new ethers.JsonRpcProvider(fetchReq, ethers.Network.from(5042002), { staticNetwork: true });
-            await provider.getBlockNumber();
+            
+            // Fast check
+            await Promise.race([
+                provider.getBlockNumber(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 10000))
+            ]);
             return provider;
         } catch (e) {
             console.warn(`[Blockchain] RPC failed: ${rpc} - ${e.message}`);

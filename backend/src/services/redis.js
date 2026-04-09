@@ -105,7 +105,7 @@ class RedisStore {
 
         // Merge with memory trades if any (In case of hybrid state)
         if (this.activeTrades) {
-            trades = [...trades, ...Array.from(this.activeTrades.values())];
+            trades = [...trades, ...Array.from(this.activeTrades?.values() || [])];
         }
 
         return filterSettling ? trades.filter(t => !t.isSettling) : trades;
@@ -203,7 +203,7 @@ class RedisStore {
                 return [];
             }
         }
-        return Array.from(this.historicalTrades.values());
+        return Array.from(this.historicalTrades?.values() || []);
     }
 
     // Sessions
