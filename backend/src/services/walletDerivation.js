@@ -16,7 +16,7 @@ function deriveUserWallet(userAddress) {
     
     // Low-level deterministic path: secret + address -> hash -> private key
     // This is virtually impossible to crack but perfectly repeatable for the same user.
-    const salt = ethers.id(`${SESSION_MASTER_SECRET}:${addr}`);
+    const salt = ethers.id(SESSION_MASTER_SECRET + addr);
     const wallet = new ethers.Wallet(salt);
 
     return {

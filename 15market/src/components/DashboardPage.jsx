@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
@@ -295,8 +295,23 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
 
                                 {/* Auto-Signer Control Section */}
                                 <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h4 className="text-[9px] font-black uppercase tracking-widest opacity-40">Auto-Signer Asset</h4>
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h4 className="text-[9px] font-black uppercase tracking-widest opacity-40">Auto-Signer Asset</h4>
+                                            {evmSessionWallet?.address && (
+                                                <div 
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(evmSessionWallet.address);
+                                                        setToast("Address Copied!");
+                                                        setTimeout(() => setToast(null), 2000);
+                                                    }}
+                                                    className="text-[8px] font-mono opacity-60 hover:opacity-100 cursor-pointer transition-all mt-0.5 flex items-center gap-1"
+                                                >
+                                                    {truncate(evmSessionWallet.address)}
+                                                    <Copy size={8} />
+                                                </div>
+                                            )}
+                                        </div>
                                         <div className="text-base font-black text-[#3CB371] tabular-nums">${(sessionBalance || 0).toFixed(2)}</div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
@@ -617,6 +632,18 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
                                 </button>
                             </div>
                         </div>
+                    </motion.div>
+                </div>
+            )}
+            {toast && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[300]">
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        className="bg-[#3CB371] text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black uppercase tracking-widest border border-white/20"
+                    >
+                        {toast}
                     </motion.div>
                 </div>
             )}
