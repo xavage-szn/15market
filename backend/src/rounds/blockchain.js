@@ -11,6 +11,7 @@ class RoundsBlockchain {
             "function enterRound(uint256 _roundId, uint8 _direction) external payable"
         ];
         this.contract = null;
+        this.highSpeedContract = null;
         this.settleContract = null;
         this.blockchain = blockchain; // Expose the main blockchain service
     }
@@ -31,6 +32,11 @@ class RoundsBlockchain {
 
         this.contract = new ethers.Contract(this.contractAddress, this.abi, blockchain.wallet);
         
+        if (blockchain.highSpeedProvider) {
+            this.highSpeedContract = new ethers.Contract(this.contractAddress, this.abi, blockchain.wallet.connect(blockchain.highSpeedProvider));
+            console.log("[RoundsBlockchain] High-speed provider ready for settlements.");
+        }
+
         // Reuse the settlement isolated provider if available
         if (blockchain.settleWallet) {
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, blockchain.settleWallet);
@@ -43,8 +49,8 @@ class RoundsBlockchain {
     async lockRound(roundId, price, options = {}) {
         await this.ensureReady();
         const fees = await blockchain._getGasPrice();
-        const c = this.settleContract || this.contract;
-        const nonce = await nonceManager.getNonce(blockchain.wallet.address, blockchain.provider);
+        const c = this.highSpeedContract || this.settleContract || this.contract;
+        const nonce = await nonceManager.getNonce(blockchain.wallet.address, blockchain.highSpeedProvider || blockchain.provider);
         
         return await c.lockRound(roundId, price, {
             ...options,
@@ -59,8 +65,8 @@ class RoundsBlockchain {
     async settleRound(roundId, price, options = {}) {
         await this.ensureReady();
         const fees = await blockchain._getGasPrice();
-        const c = this.settleContract || this.contract;
-        const nonce = await nonceManager.getNonce(blockchain.wallet.address, blockchain.provider);
+        const c = this.highSpeedContract || this.settleContract || this.contract;
+        const nonce = await nonceManager.getNonce(blockchain.wallet.address, blockchain.highSpeedProvider || blockchain.provider);
 
         return await c.settleRound(roundId, price, {
             ...options,

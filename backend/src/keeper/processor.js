@@ -119,7 +119,7 @@ class TradeProcessor {
                 }
 
                 // Scan in small chunks to avoid RPC timeouts
-                const lookback = 1000; // Even smaller for fragile RPCs
+                const lookback = 500; // Reduced from 1000 to prevent Thirdweb/Arc timeouts
                 const endBlock = Math.min(startBlock + lookback, currentBlock);
 
                 console.log(`[Processor] Syncing: ${startBlock} -> ${endBlock} (Target: ${currentBlock})`);
@@ -289,9 +289,10 @@ class TradeProcessor {
             const activeTrades = await redis.getAllActiveTrades(true);
             const toSettle = activeTrades.filter(t => {
                 const tid = t.id.toString();
-                // ONLY process if confirmed on-chain (Or has a TX hash)
+                // Process if confirmed on-chain, OR has a TX hash, OR was submitted by trade-ping (confirmed: true)
                 if (!t.confirmed && !t.txHash && !t.tx) return false;
                 if (now < (t.expiry || 0)) return false;
+                if (t.status === 'WON' || t.status === 'LOST' || t.status === 'TIMEOUT') return false; // Already finalized
                 if (this.settlingIds.has(tid) || this.settledCache.has(tid)) return false;
 
                 const failed = this.failedSettlements.get(tid);
@@ -370,7 +371,7 @@ class TradeProcessor {
                     if (age > 3600000) {
                         console.log(`[Processor] Auto-timing out stale trade ${tradeId} (Age: ${Math.floor(age / 3600000)}h)`);
                         await redis.addHistoricalTrade({ ...trade, status: 'TIMEOUT', settled: true });
-                        await redis.deleteTrade(tradeId);
+                        await redis.delTrade(tradeId);
                         return;
                     }
 

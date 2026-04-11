@@ -40,8 +40,8 @@ class SocketService {
             });
         });
 
-        // Background loop for real-time dashboard metrics (e.g. Volume, Wallets, Active trades)
-        setInterval(() => this._broadcastDashboardStats(), 5000);
+        // Background loop for real-time dashboard metrics — reduced to 30s to avoid RPC pressure
+        setInterval(() => this._broadcastDashboardStats(), 30000);
     }
 
     /**
@@ -77,17 +77,16 @@ class SocketService {
             const totalVolume = history.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
             const totalWallets = new Set(history.map(t => t.user?.toLowerCase())).size;
             
-            let treasuryBalance = 0;
+            let treasuryBalance = this._lastTreasuryBalance || 0;
             try {
-                if (blockchain.wallet) {
+                if (blockchain.wallet && blockchain.providerReady) {
                     const bal = await blockchain.getNativeBalance(blockchain.wallet.address);
                     const { ethers } = require('ethers');
                     treasuryBalance = parseFloat(ethers.formatEther(bal)) || 0;
-                } else {
-                    console.warn("[Socket] Blockchain wallet not ready for treasury sync.");
+                    this._lastTreasuryBalance = treasuryBalance; // Cache for next time
                 }
             } catch (e) {
-                console.warn("[Socket] Treasury sync failed:", e.message);
+                // Use cached value silently — don't spam logs
             }
 
             const stats = {

@@ -33,7 +33,7 @@ class NonceManager {
                     console.log(`[Nonce] Initializing ${addr} in Redis from Chain (Pending Mode)...`);
                     const count = await Promise.race([
                         provider.getTransactionCount(address, 'pending'),
-                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
                     ]);
                     await redisStore.redis.setnx(redisKey, count);
                 }
@@ -47,7 +47,7 @@ class NonceManager {
                     console.log(`[Nonce] Initializing ${addr} in Memory from Chain (Pending Mode)...`);
                     const count = await Promise.race([
                         provider.getTransactionCount(address, 'pending'),
-                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
                     ]);
                     this.nonces.set(addr, count);
                 }
@@ -55,7 +55,7 @@ class NonceManager {
                 this.nonces.set(addr, finalNonce + 1);
             }
 
-            console.log(`[Nonce] Dispensed for ${addr}: ${finalNonce} (Method: ${redisStore.isCloud ? 'Redis' : 'Memory'})`);
+            console.log(`[Nonce] Dispensed for ${addr.slice(0,10)}...: ${finalNonce} (Method: ${redisStore.isCloud ? 'Redis' : 'Memory'})`);
             return finalNonce;
 
         } catch (e) {
@@ -63,7 +63,7 @@ class NonceManager {
             // On failure, fall back to chain as a last resort
             return await Promise.race([
                 provider.getTransactionCount(address, 'pending'),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
             ]).catch(() => 0);
         } finally {
             release();
@@ -82,7 +82,7 @@ class NonceManager {
                     const p = new ethers.JsonRpcProvider(url, 5042002, { staticNetwork: true });
                     const n = await Promise.race([
                         p.getTransactionCount(address, 'pending'),
-                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
                     ]);
                     return Number(n);
                 } catch (e) {

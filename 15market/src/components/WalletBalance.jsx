@@ -2,12 +2,12 @@ import { useAccount } from "wagmi";
 import { useState, useEffect, useCallback } from "react";
 import { KEEPER_URL_ARC } from "../constants";
 
-export function WalletBalance({ theme, balanceOverride, sessionMode }) {
+export function WalletBalance({ theme, balanceOverride }) {
     const { isConnected, address } = useAccount();
     const [internalBalance, setInternalBalance] = useState(0);
 
     // Sync balance with the override passed from UserApp (robust fetch)
-    const balance = (typeof balanceOverride === 'number' && balanceOverride > 0) ? balanceOverride : internalBalance;
+    const balance = (balanceOverride !== undefined) ? balanceOverride : internalBalance;
 
     const refetchEvm = useCallback(async () => {
         if (!address) return;
@@ -41,16 +41,9 @@ export function WalletBalance({ theme, balanceOverride, sessionMode }) {
                 borderColor: theme === 'light' ? `${networkColor}20` : `${networkColor}30`
             }}>
 
-            {sessionMode && (
-                <div className={`flex items-center gap-1.5 pr-2 border-r ${theme === 'light' ? 'border-black/5' : 'border-white/10'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full animate-pulse`} style={{ backgroundColor: theme === 'light' ? '#3CB371' : '#facc15' }} />
-                    <span className={`text-[8px] font-black uppercase tracking-tighter ${theme === 'light' ? 'text-[#3CB371]' : 'text-yellow-400/90'}`}>Auto</span>
-                </div>
-            )}
-
-            {!sessionMode && (
-                <div className={`w-1.5 h-1.5 rounded-full animate-pulse`} style={{ backgroundColor: networkColor }} />
-            )}
+            <div className={`w-1.5 h-1.5 rounded-full animate-pulse`} 
+                style={{ backgroundColor: theme === 'light' ? '#3CB371' : '#facc15', boxShadow: `0 0 8px ${theme === 'light' ? '#3CB371' : '#facc15'}60` }} 
+            />
 
             <span className={`text-[10px] font-bold font-mono tracking-wide ${theme === 'light' ? 'text-black' : 'text-white'}`}>
                 {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC

@@ -72,7 +72,7 @@ router.post('/session-enter', async (req, res) => {
         const contractAddr = process.env.SESSION_MARKET_ROUNDS || process.env.SESSION_MARKET || process.env.ROUNDS_CONTRACT_ADDRESS;
         
         await blockchainService.ensureReady();
-        const connectedWallet = sessionWallet.connect(blockchainService.blockchain.provider);
+        const connectedWallet = sessionWallet.connect(blockchainService.blockchain.highSpeedProvider || blockchainService.blockchain.provider);
         
         console.log(`[RoundsApi] Session Round Entry: ${address} -> Session: ${sessionAddr} | Round: ${roundId} | Contract: ${contractAddr}`);
 

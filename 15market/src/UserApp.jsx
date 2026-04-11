@@ -614,7 +614,7 @@ export default function UserApp() {
 
   const [evmBalance, setEvmBalance] = useState("0");
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
-  const [sessionMode, setSessionMode] = useState(false);
+  const [sessionMode, setSessionMode] = useState(true);
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
   const [sessionBalance, setSessionBalance] = useState(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
@@ -676,53 +676,65 @@ export default function UserApp() {
     if (!address) return;
 
     try {
-      // Use backend proxy for balance to avoid CORS issues with direct RPC from browser
+      // Priority 1: Backend Proxy (Faster, handles indexing)
       const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const formatted = data.balance;
+      let formatted;
+      
+      if (res.ok) {
+        const data = await res.json();
+        formatted = data.balance;
+      } else {
+        // Priority 2: Direct Blockchain Core Fallback (If backend is down/slow)
+        const balWei = await publicClient.getBalance({ address });
+        formatted = formatUnits(balWei, 18);
+      }
+
       const newBalNum = parseFloat(formatted);
 
-      // Extended to 5s to prevent balance flicker while awaiting on-chain payout settlement
+      // Guard period for optimistic updates
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 5000) {
-        return;
-      }
+      if (!force && msSinceLastAction < 5000) return;
 
       if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001 || (newBalNum > 0 && evmBalance === "0")) {
         setEvmBalance(formatted);
       }
-    } catch (e) { }
+    } catch (e) { 
+      // Last resort: standard blockchain fetch
+      try {
+        const balWei = await publicClient.getBalance({ address });
+        setEvmBalance(formatUnits(balWei, 18));
+      } catch (err) {}
+    }
   }, [address, evmBalance]);
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
 
     try {
-      // Use backend proxy to avoid RPC CORS issues
+      // Priority 1: Backend Proxy
       const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const bal = parseFloat(data.balance);
+      if (res.ok) {
+        const data = await res.json();
+        const bal = parseFloat(data.balance);
 
-      // Extended to 5s for better protection against slow RPC indexing
-      const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 5000) {
-        return;
-      }
+        const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+        if (!force && msSinceLastAction < 5000) return;
 
-      if (Math.abs(bal - sessionBalance) > 0.0001) {
-        setSessionBalance(bal);
-      }
+        if (Math.abs(bal - sessionBalance) > 0.0001) {
+          setSessionBalance(bal);
+        }
 
-      // Auto-correct stale session addresses in localStorage/state
-      if (data.sessionAddress && (!evmSessionWallet || data.sessionAddress.toLowerCase() !== evmSessionWallet.address?.toLowerCase())) {
-        console.log("Syncing session address from backend:", data.sessionAddress);
-        setEvmSessionWallet({ address: data.sessionAddress, isRemote: true });
-        localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+        if (data.sessionAddress && (!evmSessionWallet || data.sessionAddress.toLowerCase() !== evmSessionWallet.address?.toLowerCase())) {
+          setEvmSessionWallet({ address: data.sessionAddress, isRemote: true });
+          localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+        }
+      } else if (evmSessionWallet?.address) {
+        // Priority 2: Direct Blockchain Fallback for Session Balance
+        const balWei = await publicClient.getBalance({ address: evmSessionWallet.address });
+        setSessionBalance(parseFloat(formatUnits(balWei, 18)));
       }
     } catch (err) { }
-  }, [address, sessionBalance]);
+  }, [address, sessionBalance, evmSessionWallet]);
 
   const triggerGlobalRefresh = useCallback((force = false) => {
     refetchEvmBalance(force);
@@ -937,10 +949,17 @@ export default function UserApp() {
   // Periodic Universal Sync (Optimized for Instant Pulse Mode)
   useEffect(() => {
     if (address) {
+      // 1. Instant Retention: Load session wallet from storage as soon as main wallet connects
+      const stored = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
+      if (stored && (!evmSessionWallet || evmSessionWallet.address !== stored)) {
+        setEvmSessionWallet({ address: stored, isRemote: true });
+      }
+
+      // 2. Continuous Sync
       const interval = setInterval(() => {
         triggerGlobalRefresh(false);
         fetchMyProfile();
-      }, 2000); // 2s — matches backend pulse speed
+      }, 2000);
       return () => clearInterval(interval);
     }
   }, [address, triggerGlobalRefresh, fetchMyProfile]);
@@ -1026,12 +1045,12 @@ export default function UserApp() {
 
     try {
       setIsExecuting(true);
-      notify("Authorizing Auto-Signer...", "pending");
+      notify("Authorizing Trading Wallet...", "pending");
 
       // 1. Sign Auth Message (Identity Proof)
       // This signature can be verified by backend if needed, but the backend derives wallet 
       // primarily from the user address to ensure cross-device consistency.
-      const message = `Authorize 15market Auto-Signer for ${address.toLowerCase()}`;
+      const message = `Authorize 15market Trading Wallet for ${address.toLowerCase()}`;
       const sig = await walletClient.signMessage({ message }); // Auto-detect account for mobile compatibility
 
       if (!sig) throw new Error("Signature failed or rejected by user");
@@ -1075,36 +1094,27 @@ export default function UserApp() {
       }
 
       setIsSignerInitializing(false);
-      notify("Auto-Signer Activated (Server-Managed)", "success");
+      notify("Trading Wallet Activated", "success");
 
     } catch (err) {
       notify("Setup failed", "error");
-      setSessionMode(false);
     } finally {
       setIsExecuting(false);
     }
   }, [address, walletClient, notify, userProfile]);
 
   const toggleSessionMode = () => {
-    if (sessionMode) {
-      setSessionMode(false);
-      notify("Switched to Main Wallet", "success");
-    } else {
-      // Trying to ENABLE
-      // If we have an address in state or local storage, use it. Otherwise init.
-      const storedAddr = localStorage.getItem(`15market_session_addr_${address?.toLowerCase()}`);
-      if (evmSessionWallet?.address || storedAddr) {
-        if (!evmSessionWallet) {
-          // Restore object from storage
-          setEvmSessionWallet({ address: storedAddr, isRemote: true });
-          // Balance will update via poll
-        }
-        setSessionMode(true);
-        notify("Auto-Signer Activated", "success");
-      } else {
-        // Need to initialize - Show the secure setup screen
-        setIsSignerInitializing(true);
+    // Toggling BACK to main wallet mode is disabled.
+    // This now only triggers initialization if the trading wallet is missing.
+    const storedAddr = localStorage.getItem(`15market_session_addr_${address?.toLowerCase()}`);
+    if (evmSessionWallet?.address || storedAddr) {
+      if (!evmSessionWallet) {
+        setEvmSessionWallet({ address: storedAddr, isRemote: true });
       }
+      setSessionMode(true);
+      notify("Trading Wallet Active", "success");
+    } else {
+      setIsSignerInitializing(true);
     }
   };
 
@@ -1187,7 +1197,7 @@ export default function UserApp() {
       if (!isConnected) {
         throw new Error("Please connect wallet first");
       }
-      const amountWei = parseUnits(parseFloat(sanitizedAmount).toFixed(18), 18);
+      
       let txHash;
 
       // ─── ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ───
@@ -1197,15 +1207,11 @@ export default function UserApp() {
         const amountWei = parseEther(parseFloat(sanitizedAmount).toFixed(6));
 
         // --- OPTIMISTIC BALANCE DEDUCTION (instant UI feedback) ---
-        if (sessionMode) {
-          setSessionBalance(prev => Math.max(0, prev - amtNum));
-        } else {
-          setEvmBalance(prev => Math.max(0, parseFloat(prev || '0') - amtNum).toString());
-        }
+        setSessionBalance(prev => Math.max(0, prev - amtNum));
         lastOptimisticActionTime.current = Date.now();
 
-        if (sessionMode && evmSessionWallet) {
-          // AUTO-SIGNER MODE
+        if (evmSessionWallet) {
+          // AUTO-SIGNER MODE (SESSION WALLET)
           const res = await fetch(`${KEEPER_URL_ROUNDS}/session-enter`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1217,23 +1223,12 @@ export default function UserApp() {
             })
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Auto-signer failed to enter round");
+          if (!res.ok) throw new Error(data.error || "Trading wallet failed to enter round");
           txHash = data.txHash;
         } else {
-          // STANDARD WALLET MODE
-          if (!walletClient) throw new Error("Wallet not connected");
-
-          const ROUND_CONTRACT = ARC_ROUNDS_CONTRACT_ADDRESS;
-          txHash = await walletClient.sendTransaction({
-            to: ROUND_CONTRACT,
-            value: amountWei,
-            account: address,
-            data: encodeFunctionData({
-              abi: [{ name: "enterRound", type: "function", inputs: [{ name: "_roundId", type: "uint256" }, { name: "_direction", type: "uint8" }] }],
-              functionName: 'enterRound',
-              args: [BigInt(roundId), dirVal]
-            })
-          });
+          // If no session wallet, force initialization
+          setIsSignerInitializing(true);
+          throw new Error("Trading wallet not initialized");
         }
 
         notify("Broadcasting Entry...", "pending");
@@ -1261,11 +1256,7 @@ export default function UserApp() {
         publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 }).then((receipt) => {
           if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
             // Restore balance if tx failed
-            if (sessionMode) {
-              setSessionBalance(prev => prev + amtNum);
-            } else {
-              setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
-            }
+            setSessionBalance(prev => prev + amtNum);
             notify("Round entry failed on-chain.", "error");
             // Optionally remove from state if failed
             setRoundsTradeHistory(prev => prev.filter(t => t.tx !== txHash));
@@ -1274,8 +1265,7 @@ export default function UserApp() {
           }
         }).catch(err => {
           console.error("Rounds confirmation error:", err);
-          if (sessionMode) setSessionBalance(prev => prev + amtNum);
-          else setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
+          setSessionBalance(prev => prev + amtNum);
         });
 
         notify("Joined the Round Successfully!", "success");
@@ -1283,165 +1273,96 @@ export default function UserApp() {
         return;
       }
 
-      if (sessionMode) {
-        // --- STEP 1: INSTANT UI FEEDBACK (OPTIMISTIC) ---
-        const confirmedNow = Date.now();
-        const optimisticTrade = {
-          id: tradeId,
-          direction: (dirVal === 1 ? "UP" : "DOWN"),
-          amount: Number(amount).toFixed(3),
-          entryPrice: activePrice.toFixed(8),
-          timestamp: confirmedNow,
-          status: "PENDING",
-          tx: null, // Filled later
-          nonce: tradeId,
-          userPublicKey: activeUserAddr,
-          owner: address,
-          sessionOwner: activeUserAddr,
-          duration: activeDuration,
-          network: "arc",
-          startTime: confirmedNow,
-          expiryMs: confirmedNow + (activeDuration * 1000),
-          symbol: activeMarket?.symbol || 'ETH',
-          isSessionTrade: true,
-          confirmed: false, 
-          isOptimistic: true // Marker for local cleanup if failed
-        };
+      // ─── CLASSIC TRADING (SESSION-ONLY) ───
+      if (!evmSessionWallet) {
+        setIsSignerInitializing(true);
+        throw new Error("Trading wallet not initialized");
+      }
 
-        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
-        
-        lastOptimisticActionTime.current = Date.now();
-        setSessionBalance(prev => Math.max(0, prev - amtNum));
-        setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
-        setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
-        setIsExecuting(false); // RELEASE BUTTON IMMEDIATELY FOR INSTANT FEEL
-        triggerGlobalRefresh(false); // Do NOT force, let the throttle protect our optimistic state
-        notify("Broadcasting Trade...", "pending");
+      // --- STEP 1: INSTANT UI FEEDBACK (OPTIMISTIC) ---
+      const confirmedNow = Date.now();
+      const optimisticTrade = {
+        id: tradeId,
+        direction: (dirVal === 1 ? "UP" : "DOWN"),
+        amount: Number(amount).toFixed(3),
+        entryPrice: activePrice.toFixed(8),
+        timestamp: confirmedNow,
+        status: "PENDING",
+        tx: null, // Filled later
+        nonce: tradeId,
+        userPublicKey: activeUserAddr,
+        owner: address,
+        sessionOwner: activeUserAddr,
+        duration: activeDuration,
+        network: "arc",
+        startTime: confirmedNow,
+        expiryMs: confirmedNow + (activeDuration * 1000),
+        symbol: activeMarket?.symbol || 'ETH',
+        isSessionTrade: true,
+        confirmed: false, 
+        isOptimistic: true // Marker for local cleanup if failed
+      };
 
-        // --- STEP 2: BACKGROUND EXECUTION ---
-        (async () => {
-          try {
-            const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                address,
-                tradeParams: {
-                  id: tradeId.toString(),
-                  direction: dirVal,
-                  duration: Number(activeDuration),
-                  entryPrice: entryPriceParams.toString(),
-                  marketId: assetId,
-                  amount: sanitizedAmount
-                }
-              })
-            });
+      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
+      
+      lastOptimisticActionTime.current = Date.now();
+      setSessionBalance(prev => Math.max(0, prev - amtNum));
+      setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
+      setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
+      setIsExecuting(false); // RELEASE BUTTON IMMEDIATELY FOR INSTANT FEEL
+      triggerGlobalRefresh(false); // Do NOT force, let the throttle protect our optimistic state
+      notify("Broadcasting Trade...", "pending");
 
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Session trade failed");
-            
-            txHash = data.txHash;
-
-            // Update optimistic trade with real TX hash
-            setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
-            setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
-
-            // Background Confirmation
-            publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
-              if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
-                setSessionBalance(prev => prev + amtNum);
-                setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-                notify("Transaction reverted on-chain.", "error");
-              } else {
-                setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+      // --- STEP 2: BACKGROUND EXECUTION ---
+      (async () => {
+        try {
+          const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address,
+              tradeParams: {
+                id: tradeId.toString(),
+                direction: dirVal,
+                duration: Number(activeDuration),
+                entryPrice: entryPriceParams.toString(),
+                marketId: assetId,
+                amount: sanitizedAmount
               }
-            }).catch(() => {
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Session trade failed");
+          
+          txHash = data.txHash;
+
+          // Update optimistic trade with real TX hash
+          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
+          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
+
+          // Background Confirmation
+          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
+            if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
               setSessionBalance(prev => prev + amtNum);
               setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-            });
-
-          } catch (err) {
-            // ROLLBACK OPTIMISTIC STATE
+              notify("Transaction reverted on-chain.", "error");
+            } else {
+              setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+            }
+          }).catch(() => {
             setSessionBalance(prev => prev + amtNum);
             setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-            setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-            notify(`Execution Error: ${err.message}`, "error");
-          }
-        })();
+          });
 
-        return; // Exit main flow as background process is running
-      } else {
-        if (!walletClient) throw new Error("Wallet not connected");
-        txHash = await walletClient.writeContract({
-          address: ARC_CONTRACT_ADDRESS,
-          abi: ArcABI.abi,
-          functionName: 'placeBet',
-          args: [BigInt(tradeId), Number(dirVal), BigInt(activeDuration), BigInt(entryPriceParams), Number(assetId), address],
-          value: amountWei,
-          account: address,
-          gas: 800000n
-        });
-
-        notify("Trade Signed! Confirming on-chain...", "pending");
-
-        // --- OPTIMISTIC DEDUCTION: Deduct right after signing (not after confirmation) ---
-        setEvmBalance(prev => Math.max(0, parseFloat(prev || '0') - amtNum).toString());
-        lastOptimisticActionTime.current = Date.now();
-
-        // Wait for on-chain confirmation
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60000 });
-        if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
-          // Restore balance on revert
-          setEvmBalance(prev => (parseFloat(prev || '0') + amtNum).toString());
-          throw new Error("Transaction Reverted on-chain");
+        } catch (err) {
+          // ROLLBACK OPTIMISTIC STATE
+          setSessionBalance(prev => prev + amtNum);
+          setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+          setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+          notify(`Execution Error: ${err.message}`, "error");
         }
-
-        const confirmedNow = Date.now();
-        
-        const strictTrade = {
-          id: tradeId,
-          direction: (dirVal === 1 ? "UP" : "DOWN"),
-          amount: Number(amount).toFixed(3),
-          entryPrice: activePrice.toFixed(8),
-          timestamp: confirmedNow,
-          status: "PENDING",
-          tx: txHash,
-          nonce: tradeId,
-          userPublicKey: address,
-          owner: address,
-          duration: activeDuration,
-          network: "arc",
-          startTime: confirmedNow,
-          expiryMs: confirmedNow + (activeDuration * 1000),
-          symbol: activeMarket?.symbol || 'ETH',
-          isSessionTrade: false,
-          confirmed: true,
-        };
-
-        const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id || t.tx) !== String(item.id || item.tx)))];
-        setActiveTrades(prev => dedupeAndAdd(prev, strictTrade));
-        setTradeHistory(prev => dedupeAndAdd(prev, strictTrade));
-
-        // Balance already deducted optimistically above — DON'T deduct again
-        triggerGlobalRefresh(true);
-
-        // Tell backend to track it (Ping handles updating backend startTime correctly)
-        const pingPayload = {
-          id: tradeId.toString(),
-          address, amount: activeAmount, direction: dirVal, duration: Number(activeDuration),
-          entryPrice: entryPriceParams.toString(),
-          symbol: activeMarket?.symbol || 'ETH'
-        };
-
-        fetch(`${KEEPER_URL_ARC}/trade-ping`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pingPayload)
-        }).catch(() => { });
-
-        notify("Trade Confirmed & Started!", "success");
-        triggerGlobalRefresh(true);
-      }
+      })();
 
       setIsExecuting(false);
 
@@ -1866,21 +1787,21 @@ export default function UserApp() {
     }));
   }, []);
 
-  // Session Wallet - RESTORE STATE ONLY (No Auto-Enable)
-  // We only load the address so it's ready if they toggle it on.
+  // Session Wallet - RESTORE STATE ONLY
   useEffect(() => {
     if (!address) return;
 
-    // Reset mode to false on wallet change/connect to ensure opt-in
-    setSessionMode(false);
+    // Default to true as the primary trading account
+    setSessionMode(true);
 
     const storedAddr = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
     if (storedAddr) {
       setEvmSessionWallet({ address: storedAddr, isRemote: true });
-      // Optionally fetch balance here (using the separate updater)
       updateEvmSessionBal(true);
     } else {
       setEvmSessionWallet(null);
+      // Trigger initialization flow
+      setIsSignerInitializing(true);
     }
   }, [address]);
 
@@ -2484,12 +2405,12 @@ export default function UserApp() {
           </div>
 
           <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">
-            {userProfile?.sessionWalletAddress ? "Restore Auto-Signer" : "Secure Auto-Signer Setup"}
+            {userProfile?.sessionWalletAddress ? "Restore Trading Account" : "Secure Trading Account Setup"}
           </h2>
           <p className="text-white/40 text-xs font-medium leading-relaxed mb-8">
             {userProfile?.sessionWalletAddress
-              ? `We've detected an existing Auto-Signer linked to your wallet (${userProfile.sessionWalletAddress.slice(0, 6)}...). Please sign to restore access on this device.`
-              : "To ensure maximum security and cross-device synchronization, you must sign a one-time authorization to link your Main Wallet to your Auto-Signer."
+              ? `We've detected an existing Trading Wallet linked to your account (${userProfile.sessionWalletAddress.slice(0, 6)}...). Please sign to restore access on this device.`
+              : "To ensure maximum efficiency and high-speed execution, you must authorize a secure Trading Wallet linked to your Main Account."
             }
           </p>
 
@@ -2526,6 +2447,7 @@ export default function UserApp() {
           onAdmin={() => setView("admin")}
           wallet={wallet}
           sessionBalance={sessionBalance}
+          evmBalance={parseFloat(evmBalance || "0")}
           onRefill={handleRefill}
           onWithdraw={handleWithdraw}
           treasuryBalance={treasuryBalance}
@@ -2577,7 +2499,7 @@ export default function UserApp() {
                 ))}
               </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <WalletBalance network={network} theme={theme} balanceOverride={sessionMode ? sessionBalance : parseFloat(evmBalance)} sessionMode={sessionMode} />
+              <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
               <button onClick={() => setView("dashboard")} className="p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',

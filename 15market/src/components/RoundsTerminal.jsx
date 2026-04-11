@@ -30,7 +30,7 @@ function RoundsTerminalComponent({
     const [localAmount, setLocalAmount] = useState('');
     const [localSlider, setLocalSlider] = useState(0);
 
-    const activeBal = sessionMode ? sessionBalance : balance;
+    const activeBal = sessionBalance;
 
     const handleLocalAmountChange = (val) => {
         // Clamp to 2 decimal places
@@ -266,7 +266,7 @@ function RoundsTerminalComponent({
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center justify-between px-1">
                             <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white opacity-30'}`}>Stake</span>
-                            <span className={`text-[8px] font-bold ${sessionMode ? (isLight ? 'text-[#3CB371]' : 'text-emerald-400') : 'text-[#3CB371]'}`}>
+                            <span className={`text-[8px] font-bold ${isLight ? 'text-[#3CB371]' : 'text-emerald-400'}`}>
                                 ${(activeBal || 0).toFixed(2)}
                             </span>
                         </div>

@@ -44,16 +44,6 @@ function TradeTerminalComponent({
                     </h2>
                     <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#3CB371', boxShadow: `0 0 10px #3CB371` }} />
                 </div>
-
-                <div className="flex items-center gap-1.5">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setSessionMode(); }}
-                        className={`w-5 lg:w-7 h-2.5 lg:h-3.5 rounded-full relative transition-all duration-300 cursor-pointer ${sessionMode ? 'bg-[#3CB371]' : (isLight ? 'bg-[#3CB371]/10' : 'bg-white/10')}`}
-                    >
-                        <div className={`absolute top-0.5 left-0.5 w-1.5 lg:w-2.5 h-1.5 lg:h-2.5 rounded-full bg-white transition-all duration-300 ${sessionMode ? 'translate-x-2.5 lg:translate-x-3.5' : 'translate-x-0'}`} />
-                    </button>
-                    <span className={`text-[5px] lg:text-[7px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>Auto</span>
-                </div>
             </div>
 
             <div className="flex flex-col items-end opacity-60">
@@ -135,8 +125,8 @@ function TradeTerminalComponent({
         <div className="flex flex-col gap-0.5 pointer-events-auto">
             <div className="flex items-center justify-between px-1.5 mb-0.5">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`}>Amount</span>
-                <span className={`text-[6px] lg:text-[7px] font-bold ${sessionMode ? (isLight ? 'text-[#3CB371]' : 'text-yellow-400') : 'text-[#3CB371]'}`}>
-                    ${(sessionMode ? sessionBalance : balance).toFixed(2)}
+                <span className={`text-[6px] lg:text-[7px] font-bold ${isLight ? 'text-[#3CB371]' : 'text-yellow-400'}`}>
+                    ${(sessionBalance || 0).toFixed(2)}
                 </span>
             </div>
             <div className={`flex flex-col gap-2 py-1 lg:py-1.5 px-3 rounded-[12px] lg:rounded-[16px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-transparent border-[#3CB371]/20 shadow-none' : 'bg-white/10 border-[#3CB371]/30 shadow-[0_0_20px_rgba(60,179,113,0.1)]') : (isLight ? 'bg-transparent border-[#3CB371]/20' : 'bg-white/5 border-white/5')}`}>
@@ -184,7 +174,7 @@ function TradeTerminalComponent({
         >
             <span className="relative z-10 flex items-center justify-center gap-2">
                 {isExecuting && <div className="w-2 h-2 rounded-full border-2 border-white border-t-transparent animate-spin" />}
-                {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "SIGNING..." : (wallet?.connected || (sessionMode && sessionBalance > 0)) ? "CONFIRM" : "CONNECT WALLET")}
+                {maintenanceMode ? (tradingHalted ? "HALTED" : "PAUSED") : (isExecuting ? "SIGNING..." : (wallet?.connected && sessionBalance > 0) ? "CONFIRM" : (wallet?.connected ? "FUND WALLET" : "CONNECT WALLET"))}
             </span>
         </motion.button>
     );

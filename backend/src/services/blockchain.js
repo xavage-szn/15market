@@ -6,14 +6,30 @@ const nonceManager = require('./nonceManager');
 class BlockchainService {
     constructor() {
         this.providerReady = false;
+        
+        // --- 1. Define RPCs ---
         this.rpc = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
         this.backupRpc = process.env.ARC_RPC_BACKUP || "https://arc-testnet.drpc.org";
-        this.rpcs = [this.rpc, this.backupRpc].filter(Boolean);
+        this.rpcs = [
+            this.rpc, 
+            this.backupRpc,
+            "https://rpc.drpc.testnet.arc.network"
+        ].filter(Boolean);
         this.currentRpcIndex = 0;
+        
+        const twClientId = process.env.THIRDWEB_CLIENT_ID;
+        const twSecret = process.env.THIRDWEB_SECRET_KEY;
+        this.twRpc = twClientId 
+            ? `https://5042002.rpc.thirdweb.com/${twClientId}` 
+            : "https://5042002.rpc.thirdweb.com";
+        this.twSecret = twSecret;
+
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
-        this.provider = null;
+        this.provider = null;         // Standard Provider (Main Balances)
+        this.highSpeedProvider = null; // High-Speed Provider (Trades/Settlements/Events)
         this.wallet = null;
         this.contract = null;
+        this.highSpeedContract = null;
         
         this.abi = [
             "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
@@ -27,37 +43,52 @@ class BlockchainService {
         this._init();
     }
 
-    async _init(rpcUrl = null) {
-        const targetRpc = rpcUrl || this.rpcs[this.currentRpcIndex];
+    async _init() {
+        const targetRpc = this.rpcs[this.currentRpcIndex];
+        const network = ethers.Network.from(5042002);
+
         try {
-            console.log(`[Blockchain] Connecting to: ${targetRpc}`);
-            const network = ethers.Network.from(5042002);
+            console.log(`[Blockchain] Init: Main=${targetRpc} | HighSpeed=${this.twRpc}`);
             
-            // For initialization, we want a tighter timeout to find a working RPC quickly
+            const pk = process.env.PRIVATE_KEY;
+            if (!pk) throw new Error('PRIVATE_KEY is missing');
+
+            // --- 1. Setup High-Speed Provider (Thirdweb) ---
+            // We use this for CRITICAL connectivity and trade detection because Arc public RPCs are unstable
+            const twFetch = new ethers.FetchRequest(this.twRpc);
+            if (this.twSecret) twFetch.setHeader("x-secret-key", this.twSecret);
+            
+            this.highSpeedProvider = new ethers.JsonRpcProvider(twFetch, network, {
+                staticNetwork: true,
+                batchMaxCount: 1
+            });
+
+            // Verify Thirdweb connectivity first (Since it's our stable baseline)
+            await this.highSpeedProvider.getBlockNumber();
+            console.log(`[Blockchain] High-Speed Path Verified.`);
+
+            // --- 2. Setup Standard Provider (Standard Arc) ---
             this.provider = new ethers.JsonRpcProvider(targetRpc, network, {
                 staticNetwork: true,
                 batchMaxCount: 1
             });
 
-            // Fast check: get block number with 15s timeout
-            await Promise.race([
-                this.provider.getBlockNumber(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Init Timeout")), 15000))
-            ]);
-
-            const pk = process.env.PRIVATE_KEY;
-            if (!pk) throw new Error('PRIVATE_KEY is missing in .env');
-
+            // --- 3. Initialize Wallets & Contracts ---
             this.wallet = new ethers.Wallet(pk, this.provider);
             this.contract = new ethers.Contract(this.contractAddress, this.abi, this.wallet);
             
-            // Basic connection check
-            await this.provider.getBlockNumber();
+            // High Speed instance (Attached to Thirdweb)
+            this.highSpeedContract = new ethers.Contract(this.contractAddress, this.abi, this.wallet.connect(this.highSpeedProvider));
+
             this.providerReady = true;
             console.log(`[Blockchain] Core Ready. Wallet: ${this.wallet.address}`);
+
+            // Nonce sync using the STABLE provider (HighSpeed) to avoid init hangs
+            await nonceManager.syncWithChain(this.wallet.address, this.highSpeedProvider, true);
+
         } catch (e) {
-            console.error(`[Blockchain] Initialization Failure using ${targetRpc}:`, e.message);
-            // Cycle to next RPC
+            console.error(`[Blockchain] Init Error:`, e.message);
+            // Cycle to next standard RPC for the fallback provider
             this.currentRpcIndex = (this.currentRpcIndex + 1) % this.rpcs.length;
             setTimeout(() => this._init(), 5000);
         }
@@ -66,82 +97,56 @@ class BlockchainService {
     async ensureReady() {
         if (this.providerReady) return;
         let attempts = 0;
-        while (!this.providerReady && attempts < 20) {
-            await new Promise(r => setTimeout(r, 500));
+        while (!this.providerReady && attempts < 10) {
+            await new Promise(r => setTimeout(r, 1000));
             attempts++;
         }
-        if (!this.providerReady) throw new Error("Blockchain service not ready after 10s");
     }
 
-    async getNativeBalance(address, retries = 3) {
-        if (!this.providerReady || !this.provider) {
-            try {
-                await this.ensureReady();
-            } catch (e) {
-                throw new Error("Blockchain service not ready");
-            }
-        }
+    // STRICT: Uses ONLY the standard provider for Main Balances as per instructions
+    async getNativeBalance(address, retries = 2) {
+        if (!this.provider) return 0n;
         
         for (let i = 0; i < retries; i++) {
             try {
-                // Set a manual timeout for the balance check
                 const balancePromise = this.provider.getBalance(address);
                 const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error("Timeout")), 8000)
+                    setTimeout(() => reject(new Error("Timeout")), 15000)
                 );
-                
                 return await Promise.race([balancePromise, timeoutPromise]);
             } catch (e) {
-                console.error(`[Blockchain] Balance check attempt ${i+1} failed for ${address}:`, e.message);
-                
-                // If it failed and we have alternative RPCs, try to switch
-                if ((e.message.includes("Timeout") || e.message.includes("503") || e.message.includes("429")) && this.rpcs.length > 1) {
-                    console.log(`[Blockchain] Switching RPC due to failure...`);
-                    this.currentRpcIndex = (this.currentRpcIndex + 1) % this.rpcs.length;
-                    await this._init(); // Re-initialize with next RPC
-                }
-
-                if (i === retries - 1) {
-                    throw new Error(`Blockchain connection timed out after ${retries} attempts while checking balance for ${address}`);
-                }
-                // Exponential backoff
-                await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+                // If standard RPC fails, we return 0 rather than exposing Thirdweb to balance traffic
+                if (i === retries - 1) return 0n;
+                await new Promise(r => setTimeout(r, 1000));
             }
         }
     }
 
     async isBetSettled(betId) {
+        // Use high speed for checks too
         try {
-            const bet = await this.contract.bets(betId);
-            return bet.settled;
+            return await this.highSpeedContract.isBetSettled(betId);
         } catch (e) { return false; }
     }
 
     async _getGasPrice() {
         try {
-            const feed = await this.provider.getFeeData();
-            // Reasonable Arc Testnet gas pricing
+            // Use high speed for fee data (More accurate/responsive)
+            const feed = await this.highSpeedProvider.getFeeData();
             const floor = ethers.parseUnits("5", "gwei");
             let maxFee = feed.maxFeePerGas || floor;
             if (maxFee < floor) maxFee = floor;
-            
-            // 1.5x safety multiplier (was 4x — that was draining session wallets)
             maxFee = (maxFee * 15n) / 10n;
-            const priority = ethers.parseUnits("2", "gwei");
-
-            return { maxFeePerGas: maxFee, maxPriorityFeePerGas: priority };
+            return { maxFeePerGas: maxFee, maxPriorityFeePerGas: ethers.parseUnits("2", "gwei") };
         } catch (e) {
-            return { 
-                maxFeePerGas: ethers.parseUnits("10", "gwei"), 
-                maxPriorityFeePerGas: ethers.parseUnits("2", "gwei") 
-            };
+            return { maxFeePerGas: ethers.parseUnits("10", "gwei"), maxPriorityFeePerGas: ethers.parseUnits("2", "gwei") };
         }
     }
 
-    // Direct event listeners for high reliability
     onBetPlaced(callback) {
-        if (!this.contract) return;
-        this.contract.on("BetPlaced", (...args) => {
+        // Connect event listener to HIGH SPEED provider for reliable detection
+        if (!this.highSpeedContract) return;
+        this.highSpeedContract.on("BetPlaced", (...args) => {
             const event = args[args.length - 1];
             callback({
                 id: event.args.id.toString(),
@@ -156,42 +161,34 @@ class BlockchainService {
         });
     }
 
-    onTxConfirmed(callback) {
-        // Platform level confirmation tracking (optional but required by processor)
-        this.provider?.on('block', async () => {
-            // Logic to scan for confirmed TXs if needed
-        });
-    }
-
-    onTxFailed(callback) {
-        // Logic to scan for failed TXs if needed
-    }
+    onTxConfirmed(callback) {}
+    onTxFailed(callback) {}
 
     async getPastEvents(eventName, fromBlock, toBlock) {
-        if (!this.contract) return [];
+        if (!this.highSpeedContract) return [];
         try {
-            const filter = this.contract.filters[eventName]();
-            return await this.contract.queryFilter(filter, fromBlock, toBlock);
+            const filter = this.highSpeedContract.filters[eventName]();
+            // Use high speed for history fetching as well
+            return await this.highSpeedContract.queryFilter(filter, fromBlock, toBlock);
         } catch (e) {
-            console.error(`[Blockchain] Error fetching past events (${eventName}):`, e.message);
             return [];
         }
     }
 
-    async settleBet(betId, exitPrice, retryCount = 0) {
+    async settleBet(betId, exitPrice) {
         try {
             const fees = await this._getGasPrice();
-            const nonce = await nonceManager.getNonce(this.wallet.address, this.provider);
+            const nonce = await nonceManager.getNonce(this.wallet.address, this.highSpeedProvider);
             const priceFixed = BigInt(Math.floor(exitPrice * 1e8));
 
-            return await this.contract.settleBet(betId, priceFixed, {
+            return await this.highSpeedContract.settleBet(betId, priceFixed, {
                 nonce,
                 maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
                 gasLimit: 500000
             });
         } catch (e) {
-            console.error(`[Blockchain] Settlement failed for ${betId}:`, e.message);
+            console.error(`[Blockchain] Settle Error ${betId}:`, e.message);
             return null;
         }
     }

@@ -10,7 +10,7 @@ import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
 import { parseEther } from "viem";
 
-export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWithdraw, treasuryBalance,
+export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onRefill, onWithdraw, treasuryBalance,
     autoSignerFees,
     userProfile,
     theme,
@@ -293,11 +293,11 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
 
                                 <div className="h-px bg-white/5 w-full" />
 
-                                {/* Auto-Signer Control Section */}
+                                {/* Trading Wallet Control Section */}
                                 <div>
-                                    <div className="flex justify-between items-start mb-3">
+                                    <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <h4 className="text-[9px] font-black uppercase tracking-widest opacity-40">Auto-Signer Asset</h4>
+                                            <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>Trading Wallet</h4>
                                             {evmSessionWallet?.address && (
                                                 <div 
                                                     onClick={() => {
@@ -305,28 +305,42 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, onRefill, onWit
                                                         setToast("Address Copied!");
                                                         setTimeout(() => setToast(null), 2000);
                                                     }}
-                                                    className="text-[8px] font-mono opacity-60 hover:opacity-100 cursor-pointer transition-all mt-0.5 flex items-center gap-1"
+                                                    className={`text-[8px] font-mono opacity-40 hover:opacity-100 cursor-pointer transition-all mt-1 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
                                                 >
                                                     {truncate(evmSessionWallet.address)}
                                                     <Copy size={8} />
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-base font-black text-[#3CB371] tabular-nums">${(sessionBalance || 0).toFixed(2)}</div>
+                                        <div className="text-xl font-black text-[#3CB371] tabular-nums">${(sessionBalance || 0).toFixed(2)}</div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
+
+                                    {/* Main Wallet Source */}
+                                    <div className={`mb-4 p-3 rounded-2xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex flex-col">
+                                                <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>Main Wallet Balance</span>
+                                                <span className={`text-[9px] font-mono font-bold ${isLight ? 'text-[#0a261a]/60' : 'text-white/60'}`}>{truncate(address)}</span>
+                                            </div>
+                                            <div className={`text-sm font-black ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>
+                                                ${(evmBalance || 0).toFixed(2)}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2.5">
                                         <button onClick={() => setPromptConfig({
-                                            title: "Refill Asset",
-                                            placeholder: "USDC Amount",
+                                            title: "Refill Trading Wallet",
+                                            placeholder: "USDC Amount from Main",
                                             onConfirm: (val) => onRefill(parseFloat(val))
-                                        })} className="py-2.5 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
+                                        })} className="py-3 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
                                             Refill
                                         </button>
                                         <button onClick={() => setPromptConfig({
-                                            title: "Sweep Asset",
+                                            title: "Sweep to Main Wallet",
                                             placeholder: "Withdraw Amount",
                                             onConfirm: (val) => onWithdraw(val)
-                                        })} className="py-2.5 bg-white/5 border border-white/10 text-white text-[9px] font-black uppercase tracking-widest rounded-2xl hover:bg-white/10 active:scale-95 transition-all">
+                                        })} className={`py-3 ${isLight ? 'bg-white/40 border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 active:scale-95 transition-all`}>
                                             Sweep
                                         </button>
                                     </div>
