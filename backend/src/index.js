@@ -143,13 +143,16 @@ app.post('/session/trade', async (req, res) => {
             chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
         });
 
-        console.log(`[AutoSigner] TX Broadcasted: ${tx.hash}`);
+        console.log(`[AutoSigner] Trade broadcasted: ${tx.hash}`);
+        const receipt = await tx.wait();
+        if (receipt.status !== 1) throw new Error("On-chain transaction failed");
+        console.log(`[AutoSigner] Trade MINED: ${tx.hash}`);
 
         res.json({ 
             success: true, 
             txHash: tx.hash,
             sessionAddress: sessionAddr,
-            status: 'broadcasted'
+            status: 'mined'
         });
 
     } catch (e) {
