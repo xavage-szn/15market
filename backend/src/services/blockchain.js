@@ -204,6 +204,25 @@ class BlockchainService {
             });
         });
     }
+
+    onTxConfirmed(callback) {
+        // No-op for now as we use onBetSettled listener or receipt wait
+    }
+
+    onTxFailed(callback) {
+        // No-op for now
+    }
+
+    async getPastEvents(eventName, fromBlock, toBlock) {
+        const contract = this.highSpeedContract || this.contract;
+        if (!contract) return [];
+        try {
+            return await contract.queryFilter(eventName, fromBlock, toBlock);
+        } catch (e) {
+            console.warn(`[Blockchain] getPastEvents [${eventName}] failed:`, e.message);
+            return [];
+        }
+    }
 }
 
 module.exports = new BlockchainService();
