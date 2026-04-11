@@ -107,24 +107,44 @@ class PricingService {
         return this.fetching[symbol];
     }
 
-    getHistoricalPrice(symbol, targetTime) {
-        if (!this.history[symbol] || this.history[symbol].length === 0) return null;
+    async getHistoricalPrice(symbol, targetTime) {
+        if (!this.history[symbol]) this.history[symbol] = [];
+        
+        // 1. Try Memory First
+        if (this.history[symbol].length > 0) {
+            let closest = this.history[symbol][0];
+            let minDiff = Math.abs(targetTime - closest.time);
 
-        // Find the price entry closest to targetTime
-        let closest = this.history[symbol][0];
-        let minDiff = Math.abs(targetTime - closest.time);
-
-        for (const entry of this.history[symbol]) {
-            const diff = Math.abs(targetTime - entry.time);
-            if (diff < minDiff) {
-                minDiff = diff;
-                closest = entry;
+            for (const entry of this.history[symbol]) {
+                const diff = Math.abs(targetTime - entry.time);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = entry;
+                }
             }
+
+            // If the closest entry is more than 10s away, it's not reliable for memory-only
+            if (minDiff <= 10000) return closest.price;
         }
 
-        // If the closest entry is more than 10s away, it's not reliable
-        if (minDiff > 10000) return null;
-        return closest.price;
+        // 2. Fallback to Binance Historical API (1s resolution)
+        try {
+            const configs = { 'BTC': 'BTCUSDT', 'ETH': 'ETHUSDT', 'SOL': 'SOLUSDT', 'JUP': 'JUPUSDT', 'XRP': 'XRPUSDT', 'MON': 'BTCUSDT' };
+            const binanceSym = configs[symbol] || 'BTCUSDT';
+            const startTime = Math.floor(targetTime / 1000) * 1000;
+            const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSym}&interval=1s&startTime=${startTime}&limit=1`;
+            
+            const res = await this.axiosInstance.get(url);
+            if (res.data && res.data[0]) {
+                const closePrice = parseFloat(res.data[0][4]); // Index 4 is Close
+                console.log(`[Pricing] Historical Fallback for ${symbol} @ ${targetTime}: ${closePrice}`);
+                return closePrice;
+            }
+        } catch (e) {
+            console.error(`[Pricing] Historical Fallback failed for ${symbol}:`, e.message);
+        }
+
+        return null;
     }
 }
 

@@ -356,8 +356,8 @@ class TradeProcessor {
             let logMsg = settlementPrice ? `[Processor] Using LOCKED price for ${tradeId}: ${settlementPrice}` : "";
             
             if (!settlementPrice) {
-                // ATTEMPT 1: Get HISTORICAL price at the exact moment of expiry
-                settlementPrice = pricing.getHistoricalPrice(symbol, trade.expiry);
+                // ATTEMPT 1: Get HISTORICAL price (Sync memory or Async API)
+                settlementPrice = await pricing.getHistoricalPrice(symbol, trade.expiry);
                 if (settlementPrice) {
                     logMsg = `[Processor] Using HISTORICAL price at expiry for ${tradeId}`;
                 } else {
