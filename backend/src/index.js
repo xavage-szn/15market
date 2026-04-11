@@ -79,6 +79,7 @@ app.get('/session/balance/:address', async (req, res) => {
 
 // --- 2. Auto-Signer Trade Execution ---
 app.post('/session/trade', async (req, res) => {
+    console.log(`[AutoSigner] Incoming Trade Request for: ${req.body.address || 'Unknown'}`);
     // Support both flat params and tradeParams wrapper used by V2 UI
     const body = req.body.tradeParams ? { ...req.body.tradeParams, address: req.body.address } : req.body;
     const { address, amount, direction, duration, id, marketId, entryPrice } = body;
