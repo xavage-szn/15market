@@ -11,9 +11,10 @@ class BlockchainService {
         this.rpc = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
         this.backupRpc = process.env.ARC_RPC_BACKUP || "https://arc-testnet.drpc.org";
         this.rpcs = [
-            this.rpc, 
+            this.twRpc, // High-speed Thirdweb first
+            this.rpc,   // Public Arc
             this.backupRpc,
-            "https://rpc.drpc.testnet.arc.network"
+            "https://rpc-drpc.testnet.arc.network"
         ].filter(Boolean);
         this.currentRpcIndex = 0;
         
@@ -69,8 +70,15 @@ class BlockchainService {
             await this.highSpeedProvider.getBlockNumber();
             console.log(`[Blockchain] High-Speed Path Verified.`);
 
-            // --- 2. Setup Standard Provider (Standard Arc) ---
-            this.provider = new ethers.JsonRpcProvider(targetRpc, network, {
+            // --- 2. Setup Standard Provider (Now prioritizing High-Speed) ---
+            let standardFetch = targetRpc;
+            if (targetRpc === this.twRpc) {
+                const req = new ethers.FetchRequest(this.twRpc);
+                if (this.twSecret) req.setHeader("x-secret-key", this.twSecret);
+                standardFetch = req;
+            }
+
+            this.provider = new ethers.JsonRpcProvider(standardFetch, network, {
                 staticNetwork: true,
                 batchMaxCount: 1
             });
