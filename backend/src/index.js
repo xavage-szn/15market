@@ -16,7 +16,7 @@ const roundsRouter = require('./rounds/router');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: { origin: ["http://localhost:3000", "https://15market.online", "https://www.15market.online"], methods: ["GET", "POST"] }
 });
 
 app.use(cors());
@@ -196,7 +196,52 @@ app.post('/session/sweep', async (req, res) => {
     }
 });
 
-// --- 4. Admin API ---
+// --- 4. Platform Data API ---
+app.get('/settings', async (req, res) => {
+    const settings = await redis.getSettings();
+    res.json(settings || { maintenanceMode: false, tradingHalted: false });
+});
+
+app.get('/broadcast', async (req, res) => {
+    const b = await redis.getBroadcast();
+    res.json(b || { active: false, message: "" });
+});
+
+app.get('/campaigns', async (req, res) => {
+    const campaigns = await redis.getCampaigns();
+    res.json(campaigns || []);
+});
+
+app.get('/protocol-stats', async (req, res) => {
+    const history = await redis.getFullHistory();
+    const volume = history.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+    res.json({
+        totalVolume: volume,
+        totalTrades: history.length,
+        activeTrades: (await redis.getAllActiveTrades()).length
+    });
+});
+
+app.get('/history', async (req, res) => {
+    const history = await redis.getFullHistory();
+    // Sort by timestamp desc
+    res.json(history.sort((a,b) => b.timestamp - a.timestamp).slice(0, 100));
+});
+
+app.get('/history/:address', async (req, res) => {
+    const target = req.params.address.toLowerCase();
+    const history = await redis.getFullHistory();
+    const filtered = history.filter(t => 
+        t.user?.toLowerCase() === target || 
+        t.mainAddress?.toLowerCase() === target
+    );
+    res.json(filtered.sort((a,b) => b.timestamp - a.timestamp));
+});
+
+// Health check
+app.get('/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
+
+// --- 5. Admin API ---
 app.get('/admin/stats', async (req, res) => {
     const stats = await redis.getStats();
     res.json(stats);
