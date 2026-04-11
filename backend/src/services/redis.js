@@ -12,21 +12,28 @@ class RedisStore {
         if (REDIS_URL) {
             console.log('[Redis] Connecting to Redis Cloud...');
             this.redis = new Redis(REDIS_URL, {
-                retryStrategy: (times) => times > 10 ? null : Math.min(times * 200, 3000), 
+                retryStrategy: (times) => times > 5 ? null : 2000, 
                 reconnectOnError: (err) => true,
-                connectTimeout: 5000, // Fail fast (5s) to trigger memory fallback
-                maxRetriesPerRequest: 3, // Don't hang forever
-                enableReadyCheck: true
+                connectTimeout: 5000,
+                maxRetriesPerRequest: 5,
+                enableReadyCheck: false,
+                enableOfflineQueue: false // CRITICAL: Don't queue commands if Redis is down
             });
             
             this.redis.on('error', (err) => {
+                if (err.name === 'MaxRetriesPerRequestError') {
+                    console.error('[Redis] Max retries reached. Switching to local memory.');
+                    this.isCloud = false;
+                    return;
+                }
                 console.error('[Redis] Transient Error:', err.message);
                 if (err.message.includes('ECONNREFUSED') || err.message.includes('ETIMEDOUT')) {
                     this.isCloud = false; // Graceful fallback
                     setTimeout(() => {
+                         if (this.redis.status === 'ready') return;
                          console.log('[Redis] Attempting to reconnect to Cloud...');
                          this.redis.ping().then(() => this.isCloud = true).catch(() => {});
-                    }, 30000); // Check again in 30s
+                    }, 60000); // Check again in 60s
                 }
             });
             this.isCloud = true;
@@ -35,9 +42,18 @@ class RedisStore {
             this.redis.ping()
                 .then(() => console.log('[Redis] Cloud connected'))
                 .catch(e => {
-                    console.error('[Redis] Connection failed, using memory.');
+                    console.error('[Redis] Connection failed, switching to local memory.');
                     this.isCloud = false;
+                    this.redis.disconnect();
                 });
+            
+            // Safety timeout: If ping takes more than 3s, force memory
+            setTimeout(() => {
+                if (this.isCloud && !this.redis.status === 'ready') {
+                    console.warn('[Redis] Connection slow, forcing local memory.');
+                    this.isCloud = false;
+                }
+            }, 3000);
         }
     }
 
@@ -234,9 +250,13 @@ class RedisStore {
     }
 
     async syncLastBlock() {
-        if (this.isCloud) {
-            const val = await this.redis.get('15market_last_scanned_block');
-            if (val) this._lastBlock = parseInt(val);
+        if (this.isCloud && this.redis && this.redis.status === 'ready') {
+            try {
+                const val = await this.redis.get('15market_last_scanned_block');
+                if (val) this._lastBlock = parseInt(val);
+            } catch (e) {
+                console.warn('[Redis] syncLastBlock failed:', e.message);
+            }
         }
     }
 
@@ -401,18 +421,26 @@ class RedisStore {
     // ─── PROFILE & STAFF MANAGEMENT ──────────────────────────────────────────────
 
     async saveProfile(address, profile) {
-        if (this.isCloud) {
-            await this.redis.hset('15market_profiles', address.toLowerCase(), JSON.stringify(profile));
-        } else {
-            if (!this._profiles) this._profiles = new Map();
-            this._profiles.set(address.toLowerCase(), profile);
+        try {
+            if (this.isCloud && this.redis && this.redis.status === 'ready') {
+                await this.redis.hset('15market_profiles', address.toLowerCase(), JSON.stringify(profile));
+            }
+        } catch (e) {
+            console.error(`[Redis] saveProfile failed for ${address}:`, e.message);
         }
+        
+        if (!this._profiles) this._profiles = new Map();
+        this._profiles.set(address.toLowerCase(), profile);
     }
 
     async getProfile(address) {
-        if (this.isCloud) {
-            const data = await this.redis.hget('15market_profiles', address.toLowerCase());
-            return data ? JSON.parse(data) : null;
+        try {
+            if (this.isCloud && this.redis && this.redis.status === 'ready') {
+                const data = await this.redis.hget('15market_profiles', address.toLowerCase());
+                return data ? JSON.parse(data) : null;
+            }
+        } catch (e) {
+            console.error(`[Redis] getProfile failed for ${address}:`, e.message);
         }
         return this._profiles?.get(address.toLowerCase()) || null;
     }
@@ -566,7 +594,11 @@ class RedisStore {
 }
 
 const store = new RedisStore();
-if (store.isCloud) store.syncLastBlock();
+if (store.isCloud) {
+    store.syncLastBlock().catch(e => {
+        console.warn('[Redis] Initial sync deferred until connection is ready.');
+    });
+}
 
 module.exports = store;
 

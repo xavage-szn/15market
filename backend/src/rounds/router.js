@@ -31,6 +31,7 @@ router.get('/status', async (req, res) => {
 
 // Register session wallet entry (User betting in a round)
 router.post('/session-enter', async (req, res) => {
+    console.log(`[RoundsApi] Incoming Enter Request for: ${req.body.address || 'Unknown'}`);
     try {
         const settings = await redis.getSettings();
         if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });

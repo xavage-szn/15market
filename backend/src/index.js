@@ -39,9 +39,9 @@ app.get('/balance/:address', async (req, res) => {
 app.get('/profiles/:address', async (req, res) => {
     try {
         const address = req.params.address.toLowerCase();
-        const profile = await redis.redis.get(`prof:${address}`);
+        const profile = await redis.getProfile(address);
         if (!profile) return res.status(404).json({ error: 'Profile not found' });
-        res.json(JSON.parse(profile));
+        res.json(profile);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -60,7 +60,7 @@ app.post('/profiles', async (req, res) => {
             onboardedAt: Date.now()
         };
 
-        await redis.redis.set(`prof:${address.toLowerCase()}`, JSON.stringify(profile));
+        await redis.saveProfile(address, profile);
         res.json({ success: true, profile });
     } catch (e) {
         res.status(500).json({ error: e.message });
