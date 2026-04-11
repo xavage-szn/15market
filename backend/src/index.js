@@ -165,9 +165,9 @@ app.post('/session/sweep', async (req, res) => {
         const { wallet, address: sessionAddr } = deriveUserWallet(address);
         const balance = await blockchain.getSessionBalance(sessionAddr);
         
-        const gasBuffer = ethers.parseEther("0.05");
+        const gasBuffer = ethers.parseEther("0.005");
         if (balance <= gasBuffer) {
-            return res.status(400).json({ error: 'Balance too low to sweep (need > 0.05 for gas)' });
+            return res.status(400).json({ error: 'Balance too low to sweep (need > 0.005 for gas)' });
         }
 
         const sweepAmt = balance - gasBuffer;
@@ -222,5 +222,6 @@ blockchain.onBetPlaced((data) => {
 const PORT = process.env.PORT || 3010;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    require('./keeper/processor'); // Start background indexer
+    const processor = require('./keeper/processor'); 
+    processor.init(); // CRITICAL: Start the settlement & payout engine
 });
