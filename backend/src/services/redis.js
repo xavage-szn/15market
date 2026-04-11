@@ -12,10 +12,10 @@ class RedisStore {
         if (REDIS_URL) {
             console.log('[Redis] Connecting to Redis Cloud...');
             this.redis = new Redis(REDIS_URL, {
-                retryStrategy: (times) => Math.min(times * 200, 5000), // Never give up on production
+                retryStrategy: (times) => times > 10 ? null : Math.min(times * 200, 3000), 
                 reconnectOnError: (err) => true,
-                connectTimeout: 10000,
-                maxRetriesPerRequest: null, // Critical: Disable command dropping so requests wait for reconnect
+                connectTimeout: 5000, // Fail fast (5s) to trigger memory fallback
+                maxRetriesPerRequest: 3, // Don't hang forever
                 enableReadyCheck: true
             });
             
