@@ -79,9 +79,11 @@ app.get('/session/balance/:address', async (req, res) => {
 
 // --- 2. Auto-Signer Trade Execution ---
 app.post('/session/trade', async (req, res) => {
-    const { address, amount, direction, duration, id, marketId } = req.body;
+    // Support both flat params and tradeParams wrapper used by V2 UI
+    const body = req.body.tradeParams ? { ...req.body.tradeParams, address: req.body.address } : req.body;
+    const { address, amount, direction, duration, id, marketId, entryPrice } = body;
     
-    if (!address || !amount || !direction || !duration || !id) {
+    if (!address || !amount || direction === undefined || !duration || !id) {
         return res.status(400).json({ error: 'Missing trade parameters' });
     }
 
@@ -115,7 +117,7 @@ app.post('/session/trade', async (req, res) => {
 
         // 4. NONCE & SIGNING
         const nonce = await nonceManager.getNonce(sessionAddr, blockchain.highSpeedProvider || blockchain.provider);
-        const entryVal = BigInt(Math.floor(Number(req.body.entryPrice || 0) * 1e8));
+        const entryVal = BigInt(Math.floor(Number(entryPrice || 0) * 1e8));
         const fees = await blockchain._getGasPrice();
 
         const txArgs = [
