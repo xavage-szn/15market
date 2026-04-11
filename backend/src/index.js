@@ -139,7 +139,7 @@ app.post('/session/trade', async (req, res) => {
             maxFeePerGas: fees.maxFeePerGas,
             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
             gasLimit: 300000,
-            chainId: 5042002
+            chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
         });
 
         console.log(`[AutoSigner] TX Broadcasted: ${tx.hash}`);
@@ -180,7 +180,7 @@ app.post('/session/sweep', async (req, res) => {
             maxFeePerGas: fees.maxFeePerGas,
             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
             gasLimit: 100000,
-            chainId: 5042002
+            chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
         });
 
         res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sweepAmt) });
@@ -204,7 +204,7 @@ app.post('/admin/withdraw', async (req, res) => {
         const tx = await blockchain.wallet.sendTransaction({
             to: destination,
             value: sendWei,
-            chainId: 5042002
+            chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
         });
         res.json({ success: true, txHash: tx.hash, amount: amount });
     } catch (e) {

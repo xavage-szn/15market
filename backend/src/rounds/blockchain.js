@@ -55,7 +55,7 @@ class RoundsBlockchain {
             maxFeePerGas: fees.maxFeePerGas,
             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
             type: 2,
-            chainId: 5042002
+            chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
         });
     }
 
@@ -71,7 +71,7 @@ class RoundsBlockchain {
              maxFeePerGas: fees.maxFeePerGas,
              maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
              type: 2,
-             chainId: 5042002
+             chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
         });
     }
 

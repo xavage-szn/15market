@@ -19,9 +19,11 @@ class BlockchainService {
         
         const twClientId = process.env.THIRDWEB_CLIENT_ID;
         const twSecret = process.env.THIRDWEB_SECRET_KEY;
-        this.twRpc = twClientId 
-            ? `https://5042002.rpc.thirdweb.com/${twClientId}` 
-            : "https://5042002.rpc.thirdweb.com";
+        const chainId = process.env.ARC_CHAIN_ID || "5042002";
+
+        this.twRpc = process.env.THIRDWEB_RPC_URL || (twClientId 
+            ? `https://${chainId}.rpc.thirdweb.com/${twClientId}` 
+            : `https://${chainId}.rpc.thirdweb.com`);
         this.twSecret = twSecret;
 
         this.contractAddress = process.env.ARC_CONTRACT_ADDRESS;
@@ -45,7 +47,7 @@ class BlockchainService {
 
     async _init() {
         const targetRpc = this.rpcs[this.currentRpcIndex];
-        const network = ethers.Network.from(5042002);
+        const network = ethers.Network.from(Number(process.env.ARC_CHAIN_ID || 5042002));
 
         try {
             console.log(`[Blockchain] Init: Main=${targetRpc} | HighSpeed=${this.twRpc}`);
