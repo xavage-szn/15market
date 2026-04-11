@@ -1,636 +1,67 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const { ethers } = require('ethers');
 const path = require('path');
-const crypto = require('crypto');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-// Vault decommissioned as per user request
-
-// Transit Security decommissioned. Plain JSON communication enabled.
-
-const processor = require('./keeper/processor');
-// const roundsProcessor = require('./keeper/roundsProcessor'); // Removed for separation
-// const botService = require('./services/botService'); // Removed for separation
-const blockchain = require('./services/blockchain');
-const pricing = require('./services/pricing');
-const redis = require('./services/redis');
-const nonceManager = require('./services/nonceManager');
-const keepAlive = require('./services/keepAlive'); // Pulse service to prevent sleep
-const { deriveUserWallet } = require('./services/walletDerivation');
-const socketService = require('./services/socket.service');
-const http = require('http');
 const fs = require('fs');
+require('dotenv').config();
 
-
-const LOG_FILE = path.join(__dirname, '..', 'settlement_activity.log');
-function logToFile(msg) {
-    const entry = `[${new Date().toISOString()}] ${msg}\n`;
-    fs.appendFile(LOG_FILE, entry, () => { });
-}
+const blockchain = require('./services/blockchain');
+const redis = require('./services/redis');
+const { deriveUserWallet } = require('./services/walletDerivation');
+const nonceManager = require('./services/nonceManager');
+const roundsRouter = require('./rounds/router');
 
 const app = express();
-app.set('trust proxy', 1); // 🛡️ TRUST PROXY: Required for Render.com/Cloudflare rate limiting
 const server = http.createServer(app);
-const PORT = process.env.PORT || 3010;
-
-
-// ===== PRODUCTION CORS OVERHAUL (Fixed Preflight Blocks) =====
-app.use((req, res, next) => {
-    // Explicitly allow all origins, methods, and headers for cross-origin compatibility
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-
-    // Immediate success for preflight OPTIONS requests (Critical for 502/CORS fixes)
-    if (req.method === "OPTIONS") {
-        return res.status(200).end();
-    }
-    next();
+const io = new Server(server, {
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+app.use(cors());
 app.use(express.json());
 
-// ===== ANTI-DDOS RATE LIMITING PROTOCOL =====
-// Global Limiter: Max 2000 requests per minute per IP (allows normal polling but blocks floods)
-const globalLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 2000, 
-    message: { error: 'Rate limit exceeded. Please wait a moment.' },
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-});
+// Routes
+app.use('/rounds', roundsRouter);
 
-// Stricter Action Limiter: Max 100 requests per minute for sensitive operations (trades, settlements)
-const actionLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 100,
-    message: { error: 'Transaction rate limit exceeded. Please slow down.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-// Apply the global limiter to all incoming requests
-app.use(globalLimiter);
-
-app.get('/time', (req, res) => {
-    res.json({ time: Date.now() });
-});
-
-// Support various API prefixes used by the frontend (arc, arc-api, api-arc)
-app.use((req, res, next) => {
-    // Regex to strip any of the common prefixes: /arc/, /arc-api/, /api-arc/
-    req.url = req.url.replace(/^\/(arc|arc-api|api-arc)\//, '/');
-    next();
-});
-
-// ===== GLOBAL CRASH PROTECTOR =====
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
-    logToFile(`CRITICAL Unhandled Rejection: ${reason?.message || reason}`);
-});
-
-process.on('uncaughtException', (err) => {
-    console.error('CRITICAL: Uncaught Exception:', err);
-    logToFile(`CRITICAL Uncaught Exception: ${err.message}`);
-    // Optional: exit if the error is non-recoverable
-    // if (err.message.includes('EBADF')) process.exit(1);
-});
-
-// Helper to normalize legacy exaggerated numbers
-const normalizeTrade = (t) => {
-    if (!t) return t;
-    if (t.amount && Number(t.amount) > 1000000) {
-        try {
-            t.amount = ethers.formatEther(t.amount.toString());
-        } catch (e) { }
-    }
-    if (t.entryPrice && Number(t.entryPrice) > 100000000) {
-        t.entryPrice = (Number(t.entryPrice) / 1e8).toFixed(8);
-    }
-    if (t.settlementPrice && Number(t.settlementPrice) > 100000000) {
-        t.settlementPrice = (Number(t.settlementPrice) / 1e8).toFixed(8);
-    }
-    return t;
-};
-
-// Monitoring Endpoints
-app.get('/health', (req, res) => {
-    res.json({ status: 'healthy', timestamp: Date.now() });
-});
-
-app.get('/status', async (req, res) => {
+// --- 1. Wallet & Balance API ---
+app.get('/balance/:address', async (req, res) => {
     try {
-        const block = await blockchain.provider.getBlockNumber().catch(e => "Disconnected");
-        const redisStatus = redis.isCloud ? "Cloud Connected" : "Local Memory";
-        res.json({
-            status: 'online',
-            network: 'arc-testnet-5042002',
-            currentBlock: block,
-            redis: redisStatus,
-            uptime: process.uptime(),
-            keeperAddress: blockchain.wallet?.address || "Unknown"
-        });
+        const bal = await blockchain.getNativeBalance(req.params.address);
+        res.json({ balance: ethers.formatEther(bal) });
     } catch (e) {
-        res.status(500).json({ status: 'error', message: e.message });
+        res.status(500).json({ error: e.message });
     }
 });
 
-// Settings & Listings (Static/Config)
-const SETTINGS_RESPONSE = {
-    minBet: 0.1,
-    maxBet: 1000000.0,
-    maintenanceMode: false,
-    tradingHalted: false,
-    systemBanner: "",
-    bannerLevel: "info",
-    payoutMultipliers: { "5": 2.90, "10": 2.40, "15": 1.90 }
-};
-
-const LISTINGS_RESPONSE = [
-    { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
-    { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' }
-];
-
-// === SESSION LOGIC (Deterministic Session Wallets) ===
-const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
-const SESSION_MARKET = process.env.SESSION_MARKET; 
-
-if (!SESSION_MASTER_SECRET) {
-    console.error("[Config] SESSION_MASTER_SECRET missing in .env");
-}
-
-if (SESSION_MARKET) {
-    console.log(`[Config] SESSION_MARKET detected: ${SESSION_MARKET}. This will override the contract for all auto-signer trades.`);
-} else {
-    console.log(`[Config] No SESSION_MARKET override. Using ARC_CONTRACT_ADDRESS for stakings.`);
-}
-
-const getSessionRpcs = () => {
-    // Official Arc + dRPC only (Thirdweb/Quicknode removed — hit rate limits)
-    return [
-        "https://rpc.testnet.arc.network",
-        "https://arc-testnet.drpc.org",
-        "https://rpc.drpc.testnet.arc.network"
-    ];
-};
-
-let sessionProvider = null;
-async function getSessionProvider() {
-    if (!blockchain.providerReady) {
-        // Wait briefly for init if it was just triggered
-        let wait = 0;
-        while (!blockchain.providerReady && wait < 10) {
-            await new Promise(r => setTimeout(r, 500));
-            wait++;
-        }
-    }
-    return blockchain.provider;
-}
-
-app.get('/settings', async (req, res) => {
-    const settings = await redis.getSettings();
-    res.json(settings || SETTINGS_RESPONSE);
-});
-app.get('/listings', (req, res) => res.json(LISTINGS_RESPONSE));
-
-// Rounds logic has been moved to a separate microservice (rounds-backend)
-
-// Helper for history (Shared between /history and /profile)
-const getHistoryFor = async (address, limit = 100) => {
+// --- User Profile Endpoints ---
+app.get('/profiles/:address', async (req, res) => {
     try {
-        const [historical, active] = await Promise.all([
-            redis.getFullHistory(),
-            redis.getAllActiveTrades()
-        ]);
-
-        // Merge both sets for a complete view
-        const allTrades = [...historical, ...active];
-        let trades = allTrades;
-
-        if (address) {
-            const addr = address.toLowerCase();
-            const { address: sessionAddr } = await deriveUserWallet(addr);
-            const sessionLower = sessionAddr.toLowerCase();
-
-            trades = allTrades.filter(t =>
-                t.user?.toLowerCase() === addr ||
-                t.user?.toLowerCase() === sessionLower ||
-                t.owner?.toLowerCase() === addr ||
-                t.owner?.toLowerCase() === sessionLower ||
-                t.sessionOwner?.toLowerCase() === addr ||
-                t.sessionOwner?.toLowerCase() === sessionLower
-            );
-        }
-
-        const sorted = trades.sort((a, b) => (b.timestamp || b.startTime || 0) - (a.timestamp || a.startTime || 0));
-        return limit > 0 ? sorted.slice(0, limit) : sorted;
+        const address = req.params.address.toLowerCase();
+        const profile = await redis.redis.get(`prof:${address}`);
+        if (!profile) return res.status(404).json({ error: 'Profile not found' });
+        res.json(JSON.parse(profile));
     } catch (e) {
-        console.error('History error:', e.message);
-        return [];
+        res.status(500).json({ error: e.message });
     }
-};
-
-// Support for historical/missing frontend routes
-// --- CAMPAIGN & WINNER BANNER ENDPOINTS ---
-app.get('/campaigns', async (req, res) => {
-    try {
-        const campaigns = await redis.getCampaigns();
-        // Enrich with enrollment counts
-        const enriched = await Promise.all(campaigns.map(async (c) => {
-            const count = await redis.getEnrollmentCount(c.id);
-            return { ...c, enrollmentCount: count };
-        }));
-        res.json(enriched);
-    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/campaigns', express.json(), async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
+app.post('/profiles', async (req, res) => {
     try {
-        await redis.saveCampaigns(req.body);
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/winner-banner', async (req, res) => {
-    try {
-        const banner = await redis.getWinnerBanner();
-        res.json(banner || {});
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/winner-banner', express.json(), async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    try {
-        await redis.saveWinnerBanner(req.body);
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/enroll', actionLimiter, express.json(), async (req, res) => {
-    try {
-        const { campaignId, address } = req.body;
-        if (!campaignId || !address) return res.status(400).json({ error: 'Missing parameters' });
-        await redis.enrollUser(campaignId, address);
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/enroll', async (req, res) => {
-    try {
-        const { campaignId, address } = req.query;
-        if (!campaignId || !address) return res.status(400).json({ error: 'Missing parameters' });
-        const enrolled = await redis.isUserEnrolled(campaignId, address);
-        res.json({ enrolled });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/leaderboard', async (req, res) => {
-    try {
-        const { campaignId } = req.query;
-        if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
-
-        const campaigns = await redis.getCampaigns();
-        const campaign = campaigns.find(c => c.id === campaignId);
-        if (!campaign) return res.json([]);
-
-        // Filter history by campaign timeframe
-        const history = await redis.getFullHistory();
-        const campaignTrades = history.filter(t => 
-            t.timestamp >= campaign.startTime && 
-            t.timestamp <= campaign.endTime
-        );
-
-        // Calculate rankings
-        const rankings = {};
-        campaignTrades.forEach(t => {
-            const user = t.user?.toLowerCase();
-            if (!user) return;
-            if (!rankings[user]) rankings[user] = { address: user, volume: 0, wins: 0, trades: 0, pnl: 0 };
-            
-            const amount = parseFloat(t.amount || 0);
-            rankings[user].volume += amount;
-            rankings[user].trades += 1;
-            
-            if (t.status === 'WON') {
-                rankings[user].wins += 1;
-                rankings[user].pnl += parseFloat(t.payout || 0) - amount;
-            } else if (t.status === 'LOST') {
-                rankings[user].pnl -= amount;
-            }
-        });
-
-        const sorted = Object.values(rankings).map(r => ({
-            ...r,
-            winRate: r.trades > 0 ? (r.wins / r.trades) * 100 : 0
-        })).sort((a, b) => b.pnl - a.pnl); // Sort by PnL or volume as per your campaign rules
+        const { address, username, xHandle, avatar } = req.body;
+        if (!address || !username) return res.status(400).json({ error: 'Address and Username required' });
         
-        res.json(sorted.slice(0, 50));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/campaign-trades', async (req, res) => {
-    try {
-        const { campaignId } = req.query;
-        if (!campaignId) return res.status(400).json({ error: 'campaignId required' });
-        
-        const campaigns = await redis.getCampaigns();
-        const campaign = campaigns.find(c => c.id === campaignId);
-        if (!campaign) return res.json([]);
-
-        const history = await redis.getFullHistory();
-        const campaignTrades = history.filter(t => 
-            t.timestamp >= campaign.startTime && 
-            t.timestamp <= campaign.endTime
-        ).sort((a, b) => b.timestamp - a.timestamp);
-
-        res.json(campaignTrades.slice(0, 100));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/stats', (req, res) => res.json({ status: 'active', network: 'arc-testnet' }));
-
-// --- MARKET SYNC (Missing in early versions) ---
-let activeMarketId = 'eth';
-app.get('/active-market', (req, res) => {
-    res.json({ activeId: activeMarketId });
-});
-
-app.post('/active-market', (req, res) => {
-    const { activeId } = req.body;
-    if (activeId) {
-        activeMarketId = activeId;
-        console.log(`Active market: ${activeId}`);
-    }
-    res.json({ success: true, activeId });
-});
-
-// (Duplicate route declarations removed — /settings and /listings already registered above)
-
-// ===== HISTORY ENDPOINT =====
-app.get('/history/:address?', async (req, res) => {
-    const { address } = req.params;
-    const trades = await getHistoryFor(address);
-    res.json(trades);
-});
-
-// Redirect /history for global feed
-app.get('/history', async (req, res) => {
-    const trades = await getHistoryFor();
-    res.json(trades);
-});
-
-// ===== PROFILE ENDPOINT (Unified Sync) =====
-app.get('/profile', async (req, res) => {
-    try {
-        const { address } = req.query;
-        if (!address) return res.status(400).json({ error: 'Address required' });
-
-        // Fetch stored profile from Redis
-        const storedProfile = await redis.getProfile(address);
-
-        // Fetch FULL history for accurate stats
-        const allHistory = await getHistoryFor(address, 0);
-
-        // Stats calculation on ALL trades
-        const stats = {
-            totalTrades: allHistory.length,
-            totalWins: allHistory.filter(t => t.status === 'WON').length,
-            totalVolume: allHistory.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0).toFixed(2)
+        const profile = {
+            address: address.toLowerCase(),
+            username: username.trim(),
+            xHandle: (xHandle || '').trim(),
+            avatar: avatar || '',
+            onboardedAt: Date.now()
         };
 
-        res.json({
-            profile: storedProfile || {
-                username: `Trader_${address.slice(2, 6)}`,
-                avatar: ``,
-                address: address,
-                isInitial: true // Flag for frontend to trigger onboarding
-            },
-            stats,
-            history: allHistory.slice(0, 100),
-            transactions: []
-        });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// Update profile
-app.post('/profile', async (req, res) => {
-    try {
-        const { address, profile } = req.body;
-        if (!address || !profile) return res.status(400).json({ error: 'Address and profile data required' });
-        
-        await redis.saveProfile(address, profile);
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// ===== SETTLEMENT TRIGGER (Frontend calls this when timer hits 0) =====
-app.post('/settle', actionLimiter, async (req, res) => {
-    try {
-        const settings = await redis.getSettings();
-        if (settings?.maintenanceMode) return res.status(503).json({ error: 'Maintenance Mode Active' });
-
-        const { id, exitPrice } = req.body;
-        if (!id) return res.status(400).json({ error: 'Missing bet ID' });
-
-        logToFile(`Settle ${id} (Fetching price...)`);
-
-        const trade = await redis.getTrade(id);
-        if (trade) {
-            let exitPriceNum;
-            let status = trade.status;
-            let payout = trade.payout;
-
-            if (trade.lockedExitPrice) {
-                logToFile(`Settle ${id}: Using already locked price ${trade.lockedExitPrice}`);
-                exitPriceNum = parseFloat(trade.lockedExitPrice);
-            } else if (exitPrice) {
-                logToFile(`Settle ${id}: Using frontend locked price ${exitPrice}`);
-                exitPriceNum = parseFloat(exitPrice);
-            } else {
-                const freshPrice = pricing.getCurrentPrice(trade.symbol || 'BTC');
-                if (!freshPrice) {
-                    logToFile(`Settle ${id} failed: No pricing data available.`);
-                    return res.status(500).json({ error: 'Pricing service unavailable' });
-                }
-                exitPriceNum = parseFloat(freshPrice);
-                logToFile(`Settle ${id}: Price locked at ${exitPriceNum}`);
-            }
-
-            const entryPrice = parseFloat(trade.entryPrice);
-            const isUp = (trade.direction === 1 || trade.direction === "UP" || trade.direction === "buy");
-            const isWin = isUp ? (exitPriceNum > entryPrice) : (exitPriceNum < entryPrice);
-
-            const duration = Number(trade.duration) || 15;
-            const multiplier = duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
-            payout = isWin ? (Math.floor(Number(trade.amount) * multiplier * 100) / 100).toFixed(2) : "0.00";
-            status = isWin ? "WON" : "LOST";
-
-            const settlementData = {
-                id: id,
-                user: trade.user || trade.owner,
-                owner: trade.owner || trade.user,
-                sessionOwner: trade.sessionOwner,
-                status: status,
-                settlementPrice: exitPriceNum.toFixed(8),
-                payout: payout,
-                settled: true,
-                lockedExitPrice: exitPriceNum.toFixed(8),
-                isSessionTrade: trade.isSessionTrade || !!trade.sessionOwner
-            };
-
-
-            // Update history
-            await redis.addHistoricalTrade(settlementData);
-
-            // Update active trade so current session/polls see the finalized result
-            const updatedTrade = {
-                ...trade,
-                ...settlementData
-            };
-            // Update Redis state
-            await redis.setTrade(id, updatedTrade);
-
-            // Background Payout (Handled by Processor Loop)
-            // No direct call needed here, loop will pick up finalized status
-            
-            return res.json({ success: true, status: status, payout });
-        } else {
-            // Check if already settled on-chain
-            const isSettled = await blockchain.isBetSettled(id);
-            if (isSettled) return res.json({ success: true, note: 'Already settled' });
-            res.status(404).json({ error: 'Trade not found in active session' });
-        }
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// ===== HIGH-SPEED TRADE REGISTRATION =====
-// Called by frontend AFTER the user's main wallet has already submitted the TX onchain.
-// The frontend waits for the receipt, then pings this endpoint with the txHash.
-app.post('/trade-ping', actionLimiter, async (req, res) => {
-    try {
-        const settings = await redis.getSettings();
-        if (settings?.maintenanceMode || settings?.tradingHalted) {
-            return res.status(503).json({ error: 'Trading is currently paused' });
-        }
-        const { id, address, amount, direction, duration, entryPrice, symbol, txHash } = req.body;
-        if (!id || !address) return res.status(400).json({ error: 'Missing parameters' });
-
-        // --- 🛡️ LEAK PROTECTION: Check if this is a session wallet trade ---
-        const mainAddr = await redis.getMainAddressForSession(address);
-        if (mainAddr) {
-            return res.status(403).json({ error: 'Session trades must use /session/trade for backend signing and debiting.' });
-        }
-
-        // --- 🛡️ DOUBLE-PING PROTECTION: Don't overwrite if already processed ---
-        const existing = await redis.getTrade(id);
-        if (existing && existing.confirmed) {
-            return res.json({ success: true, note: 'Already registered and confirmed' });
-        }
-
-        const tradeData = {
-            id: id.toString(),
-            user: address,
-            owner: address,
-            amount: amount,
-            direction: direction,
-            duration: duration,
-            // Maintain 8 decimals for consistency with contract precision
-            entryPrice: (Number(entryPrice) / 1e8).toFixed(8),
-            symbol: symbol || 'BTC',
-            expiry: Date.now() + (duration * 1000),
-            // CRITICAL FIX: The frontend already confirmed the TX onchain before calling trade-ping.
-            // Mark as confirmed immediately so processor can settle when timer expires.
-            confirmed: true,
-            txHash: txHash || null,
-            startTime: Date.now()
-        };
-        await redis.setTrade(id, tradeData);
-        logToFile(`Trade ping registered & confirmed: ${id} for ${address} | TX: ${txHash || 'N/A'}`);
-        res.json({ success: true, confirmed: true });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.get('/protocol-stats', async (req, res) => {
-    try {
-        const cacheKey = 'stats:protocol_summary';
-        let cached;
-        if (redis.isCloud && redis.redis) {
-            cached = await redis.redis.get(cacheKey);
-        }
-        if (cached) return res.json(JSON.parse(cached));
-
-        // 1. Classic Binary Options Stats
-        const history = await redis.getFullHistory();
-        const activeTrades = await redis.getAllActiveTrades(true);
-        const totalVolume = history.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-        const uniqueWallets = new Set(history.map(t => t.user?.toLowerCase())).size;
-
-        // 2. Rounds Stats (Unified)
-        const assets = ['ETHUSDT', 'BTCUSDT', 'SOLUSDT'];
-        let roundsVolume = 0;
-        let roundsParticipants = 0;
-
-        for (const asset of assets) {
-            const state = await redis.getRound(`${asset}_state`);
-            if (state) {
-                roundsParticipants += state.next?.pools?.participants || 0;
-                roundsParticipants += state.live?.pools?.participants || 0;
-                if (state.next?.pools) roundsVolume += (state.next.pools.long || 0) + (state.next.pools.short || 0) - 2.0;
-                if (state.live?.pools) roundsVolume += (state.live.pools.long || 0) + (state.live.pools.short || 0) - 2.0;
-            }
-        }
-
-        const stats = {
-            totalVolume: (totalVolume + roundsVolume).toFixed(2),
-            classicVolume: totalVolume.toFixed(2),
-            roundsVolume: roundsVolume.toFixed(2),
-            wallets: uniqueWallets,
-            activeCount: activeTrades.length + roundsParticipants,
-            totalTrades: history.length,
-            activeStakes: activeTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) + roundsVolume,
-            autoSignerFees: { arc: ((totalVolume + roundsVolume) * 0.01).toFixed(2) }
-        };
-
-        if (redis.isCloud && redis.redis) {
-            await redis.redis.set(cacheKey, JSON.stringify(stats), 'EX', 5);
-        }
-        res.json(stats);
-    } catch (e) {
-        console.error('[Stats] Error:', e.message);
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.get('/treasury', async (req, res) => {
-    const balance = await blockchain.getNativeBalance(process.env.ARC_CONTRACT_ADDRESS);
-    res.json({ balance: balance.toString(), formatted: ethers.formatEther(balance) + ' USDC' });
-});
-
-app.post('/session/init', actionLimiter, async (req, res) => {
-    try {
-        const { address } = req.body;
-        const { wallet, address: sessionAddr } = deriveUserWallet(address);
-        logToFile(`[SESSION_INIT] Initializing for ${address} -> Session: ${sessionAddr}`);
-        // Save mapping early so processor can attribute onchain events to main wallet
-        await redis.saveSessionMapping(sessionAddr.toLowerCase(), address.toLowerCase());
-        const balance = await blockchain.getNativeBalance(sessionAddr);
-        res.json({ sessionAddress: sessionAddr, balance: ethers.formatEther(balance) });
+        await redis.redis.set(`prof:${address.toLowerCase()}`, JSON.stringify(profile));
+        res.json({ success: true, profile });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -638,396 +69,155 @@ app.post('/session/init', actionLimiter, async (req, res) => {
 
 app.get('/session/balance/:address', async (req, res) => {
     try {
-        await blockchain.ensureReady(); // Ensure blockchain service is ready
-        const { address } = req.params;
-        const { address: sessionAddr } = deriveUserWallet(address);
-        const balance = await blockchain.getNativeBalance(sessionAddr);
-        console.log(`[BalanceProxy] Session balance for ${address} (${sessionAddr}): ${ethers.formatEther(balance)}`);
-        res.json({ 
-            balance: ethers.formatEther(balance),
-            sessionAddress: sessionAddr
-        });
+        const { address: sessionAddr } = deriveUserWallet(req.params.address);
+        const bal = await blockchain.getSessionBalance(sessionAddr);
+        res.json({ balance: ethers.formatEther(bal), sessionAddress: sessionAddr });
     } catch (e) {
-        console.error(`[BalanceProxy] Session error:`, e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-app.get('/balance/:address', async (req, res) => {
-    const { address } = req.params;
-    try {
-        await blockchain.ensureReady(); // Ensure blockchain service is ready
-        const balance = await blockchain.getNativeBalance(address);
-        console.log(`[BalanceProxy] Main balance for ${address}: ${ethers.formatEther(balance)}`);
-        res.json({ balance: ethers.formatEther(balance) });
-    } catch (e) {
-        console.error(`[BalanceProxy] Main error for ${address || 'unknown'}:`, e.message);
-        res.status(500).json({ error: e.message });
+// --- 2. Auto-Signer Trade Execution ---
+app.post('/session/trade', async (req, res) => {
+    const { address, amount, direction, duration, id, marketId } = req.body;
+    
+    if (!address || !amount || !direction || !duration || !id) {
+        return res.status(400).json({ error: 'Missing trade parameters' });
     }
-});
 
-// Authoritative Rebuild: Clean, High-Performance Auto-Signer Endpoint
-app.post('/session/trade', actionLimiter, async (req, res) => {
+    // 1. DEDUPLICATE & LOCK
+    const lock = await redis.lockTrade(id);
+    if (!lock) return res.status(409).json({ error: 'Trade ID collision' });
+
     try {
-        const { address, tradeParams } = req.body;
-        if (!address || !tradeParams) {
-             return res.status(400).json({ error: 'Missing address or trade parameters' });
-        }
+        // 2. DERIVATION & CONTRACT SELECTION
+        const { wallet, address: sessionAddr } = deriveUserWallet(address);
         
-        const { id, amount, direction, duration, entryPrice, marketId } = tradeParams;
-        logToFile(`[AutoSigner] Incoming: ${id} (${amount} USDC) for ${address}`);
+        // CRITICAL FIX: Save session→main wallet mapping
+        await redis.saveSessionMapping(sessionAddr.toLowerCase(), address.toLowerCase());
+        
+        const contractAddr = process.env.SESSION_MARKET || process.env.ARC_CONTRACT_ADDRESS;
+        console.log(`[AutoSigner] Dispatching ID ${id} to Contract: ${contractAddr} | Session: ${sessionAddr}`);
 
-        // 1. DEDUPLICATE & LOCK
-        const lock = await redis.lockTrade(id);
-        if (!lock) return res.status(409).json({ error: 'Trade ID collision' });
+        // 3. FLIGHT CHECKS
+        const balance = await blockchain.getSessionBalance(sessionAddr);
+        const cleanAmount = (amount || "0").toString().replace(',', '.');
+        const amtWei = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
+        
+        const realisticGasBuffer = ethers.parseUnits("0.05", "ether"); 
+        const totalNeeded = amtWei + realisticGasBuffer;
 
-        try {
-            // 2. DERIVATION & CONTRACT SELECTION
-            const { wallet, address: sessionAddr } = deriveUserWallet(address);
-            
-            // CRITICAL FIX: Save session→main wallet mapping so processor can attribute trades correctly
-            await redis.saveSessionMapping(sessionAddr.toLowerCase(), address.toLowerCase());
-            
-            // SESSION_MARKET check if provided as an override
-            const contractAddr = process.env.SESSION_MARKET || process.env.ARC_CONTRACT_ADDRESS;
-            console.log(`[AutoSigner] Dispatching ID ${id} to Contract: ${contractAddr} | Session: ${sessionAddr}`);
-
-            // 3. FLIGHT CHECKS (Robust Parsing)
-            const balance = await blockchain.getNativeBalance(sessionAddr);
-            const cleanAmount = (amount || "0").toString().replace(',', '.');
-            const amtWei = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
-            
-            // Gas buffer: Use a REALISTIC estimate.
-            // Typical placeBet takes ~150-250k gas. With Round entry it might be higher.
-            // 0.05 ARC (or USDC) is a safe buffer for gas at current net prices.
-            const realisticGasBuffer = ethers.parseUnits("0.05", "ether"); 
-
-            const totalNeeded = amtWei + realisticGasBuffer;
-            console.log(`[AutoSigner] Balance: ${ethers.formatEther(balance)} | Needed: ${ethers.formatEther(totalNeeded)} (Stake: ${cleanAmount} + Buffer: 0.05)`);
-
-            if (balance < totalNeeded) {
-                return res.status(400).json({ 
-                    error: `Insufficient Balance. Session wallet ${sessionAddr} has ${parseFloat(ethers.formatEther(balance)).toFixed(4)} USDC. Need ${cleanAmount} USDC stake + 0.05 for gas.` 
-                });
-            }
-
-            // 4. NONCE & SIGNING
-            const nonce = await nonceManager.getNonce(sessionAddr, blockchain.highSpeedProvider || blockchain.provider);
-            const entryVal = BigInt(Math.floor(Number(entryPrice) * 1e8));
-            const fees = await blockchain._getGasPrice();
-
-            const txArgs = [
-                BigInt(id),
-                Number(direction),
-                BigInt(duration),
-                entryVal,
-                Number(marketId),
-                address // Main wallet for payout
-            ];
-
-            console.log(`[AutoSigner] Sending TX: Nonce=${nonce} | MaxFee=${fees.maxFeePerGas} | To=${contractAddr}`);
-
-            const tx = await wallet.connect(blockchain.highSpeedProvider || blockchain.provider).sendTransaction({
-                to: contractAddr,
-                data: blockchain.contract.interface.encodeFunctionData("placeBet", txArgs),
-                value: amtWei,
-                nonce,
-                maxFeePerGas: fees.maxFeePerGas,
-                maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-                gasLimit: 300000,
-                chainId: 5042002
+        if (balance < totalNeeded) {
+            return res.status(400).json({ 
+                error: `Insufficient Balance. Session wallet ${sessionAddr} has ${parseFloat(ethers.formatEther(balance)).toFixed(4)} USDC. Need ${cleanAmount} USDC stake + 0.05 for gas.` 
             });
-
-            // 5. PERSISTENCE
-            const tradeData = {
-                id, amount: cleanAmount, direction, duration, entryPrice, marketId,
-                user: address, owner: address, sessionOwner: sessionAddr,
-                txHash: tx.hash, startTime: Date.now(),
-                expiry: Date.now() + (duration * 1000),
-                confirmed: false, isSessionTrade: true,
-                contractAddress: contractAddr
-            };
-
-            await redis.setTrade(id, tradeData);
-            console.log(`[AutoSigner] Trade Broadcasted: ${tx.hash}`);
-
-            res.json({ success: true, txHash: tx.hash });
-
-        } catch (innerErr) {
-            logToFile(`[AutoSigner] Exec Error: ${innerErr.message}`);
-            // Nonce Sync On Hazard
-            if (innerErr.message.includes('nonce') || innerErr.message.includes('already')) {
-                const { address: sessionAddr } = deriveUserWallet(address);
-                nonceManager.syncWithChain(sessionAddr, blockchain.provider).catch(() => {});
-            }
-            res.status(400).json({ error: innerErr.message });
-        } finally {
-            await redis.unlockTrade(id);
         }
 
-    } catch (e) {
-        logToFile(`[AutoSigner] Fatal Catch: ${e.message}`);
-        res.status(500).json({ error: e.message });
-    }
-});
+        // 4. NONCE & SIGNING
+        const nonce = await nonceManager.getNonce(sessionAddr, blockchain.highSpeedProvider || blockchain.provider);
+        const entryVal = BigInt(Math.floor(Number(req.body.entryPrice || 0) * 1e8));
+        const fees = await blockchain._getGasPrice();
 
-// Duplicate /trade-ping route removed — consolidated above (line ~521)
+        const txArgs = [
+            BigInt(id),
+            Number(direction),
+            BigInt(duration),
+            entryVal,
+            Number(marketId || 0),
+            sessionAddr // Winnings stay in Trading Account
+        ];
 
-app.post('/session/withdraw', actionLimiter, async (req, res) => {
-    try {
-        const { address, amount } = req.body;
-        if (!address) return res.status(400).json({ error: 'Missing main address' });
+        console.log(`[AutoSigner] Sending TX: Nonce=${nonce} | MaxFee=${fees.maxFeePerGas} | To=${contractAddr}`);
 
-        logToFile(`Withdraw request: ${address} for ${amount} USDC`);
-        const { wallet, address: sessionAddr } = await deriveUserWallet(address);
-        // 1. Gas & Nonce (Parallel Ready)
-        const [fees, nonce, balance] = await Promise.all([
-            blockchain._getGasPrice(),
-            nonceManager.getNonce(sessionAddr, blockchain.provider),
-            blockchain.getNativeBalance(sessionAddr)
-        ]);
-        const amountWei = amount ? ethers.parseUnits(amount.toString(), 18) : balance;
-
-        let gasPrice = fees.gasPrice;
-        const minGasPrice = ethers.parseUnits("50", "gwei");
-        if (gasPrice < minGasPrice) gasPrice = minGasPrice;
-
-        const gasLimit = 21000n;
-        const gasCost = gasLimit * gasPrice;
-
-        // Ensure we don't drain gas money
-        const sweepAmt = amountWei > (balance - gasCost) ? (balance - gasCost) : amountWei;
-
-        if (sweepAmt <= 0n) {
-            return res.status(400).json({ error: "Balance too low for gas" });
-        }
-
-        logToFile(`Sweeping ${ethers.formatEther(sweepAmt)} from ${sessionAddr} to ${address}`);
-
-        const tx = await wallet.sendTransaction({
-            to: address,
-            value: sweepAmt,
+        const tx = await wallet.connect(blockchain.highSpeedProvider || blockchain.provider).sendTransaction({
+            to: contractAddr,
+            data: blockchain.contract.interface.encodeFunctionData("placeBet", txArgs),
+            value: amtWei,
+            nonce,
             maxFeePerGas: fees.maxFeePerGas,
             maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-            gasLimit,
-            nonce,
-            type: 2,
+            gasLimit: 300000,
             chainId: 5042002
         });
 
-        res.json({ success: true, txHash: tx.hash });
+        console.log(`[AutoSigner] TX Broadcasted: ${tx.hash}`);
+
+        res.json({ 
+            success: true, 
+            txHash: tx.hash,
+            sessionAddress: sessionAddr,
+            status: 'broadcasted'
+        });
+
     } catch (e) {
-        logToFile(`Withdraw error: ${e.message}`);
-        if (e.message.includes('nonce') || e.message.includes('already been used') || e.message.includes('too low')) {
-            try {
-                const { address: sessionAddr } = await deriveUserWallet(req.body.address);
-                const provider = await getSessionProvider();
-                await nonceManager.syncWithChain(sessionAddr, provider);
-            } catch (syncErr) { }
-        }
+        console.error(`[AutoSigner] Trade Failure:`, e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-app.get('/admin/logs', async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
+// --- 3. Withdraw/Sweep Session Funds ---
+app.post('/session/sweep', async (req, res) => {
+    const { address } = req.body;
     try {
-        const fs = require('fs');
-        const logs = fs.readFileSync(LOG_FILE, 'utf8').split('\n').reverse().slice(0, 200);
-        res.json(logs);
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-const roundsRouter = require('./rounds/router');
-const roundsProcessor = require('./rounds/processor'); 
-
-app.use('/rounds', roundsRouter);
-
-// Admin: Global Settings
-app.get('/admin/settings', async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const settings = await redis.getSettings();
-    res.json(settings || {
-        maintenanceMode: false,
-        tradingHalted: false,
-        minBet: 0.1,
-        maxBet: 100,
-        systemBanner: "",
-        bannerLevel: "info",
-        payoutMultipliers: { "5": 2.90, "10": 2.40, "15": 1.90 }
-    });
-});
-
-app.post('/admin/settings', express.json(), async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    await redis.saveSettings(req.body);
-    // Real-time broadcast for instant user-side effect
-    socketService.broadcastAll('settings_updated', req.body);
-    socketService.notifyAdmins('settings_confirmed', { success: true, settings: req.body });
-    socketService.triggerStatsBroadcast();
-    res.json({ success: true });
-});
-
-
-// Broadcast Management
-app.get('/broadcast', async (req, res) => {
-    const b = await redis.getBroadcast();
-    res.json(b || {});
-});
-
-app.post('/admin/broadcast', express.json(), async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const b = req.body; // { text, type, expiry, sender }
-    await redis.saveBroadcast(b);
-    // Instant real-time signal to all users
-    socketService.broadcastAll('new_broadcast', b);
-    res.json({ success: true });
-});
-
-
-// Admin: Treasury Drain
-app.post('/admin/treasury/withdraw', express.json(), async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const { amount, destination } = req.body;
-    if (!amount || !destination) return res.status(400).json({ error: 'Amount and destination required' });
-
-    try {
-        const balance = await blockchain.getNativeBalance(blockchain.wallet.address);
-        const amountWei = ethers.parseUnits(amount.toString(), 18);
-        const fees = await blockchain._getGasPrice();
-        const gasLimit = 21000n;
-        const gasCost = fees.gasPrice * gasLimit;
+        const { wallet, address: sessionAddr } = deriveUserWallet(address);
+        const balance = await blockchain.getSessionBalance(sessionAddr);
         
-        let sendWei = amountWei;
-        if (amountWei > (balance - gasCost)) {
-            sendWei = balance - gasCost;
+        const gasBuffer = ethers.parseEther("0.05");
+        if (balance <= gasBuffer) {
+            return res.status(400).json({ error: 'Balance too low to sweep (need > 0.05 for gas)' });
         }
 
-        if (sendWei <= 0n) return res.status(400).json({ error: 'Insufficient funds for gas' });
+        const sweepAmt = balance - gasBuffer;
+        const fees = await blockchain._getGasPrice();
+        const nonce = await nonceManager.getNonce(sessionAddr, blockchain.highSpeedProvider || blockchain.provider);
 
-        logToFile(`Admin Treasury Drain to ${destination}: ${ethers.formatEther(sendWei)} USDC`);
+        const tx = await wallet.connect(blockchain.highSpeedProvider || blockchain.provider).sendTransaction({
+            to: address,
+            value: sweepAmt,
+            nonce,
+            maxFeePerGas: fees.maxFeePerGas,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+            gasLimit: 100000,
+            chainId: 5042002
+        });
 
+        res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sweepAmt) });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- 4. Admin API ---
+app.get('/admin/stats', async (req, res) => {
+    const stats = await redis.getStats();
+    res.json(stats);
+});
+
+app.post('/admin/withdraw', async (req, res) => {
+    const { amount, destination, token } = req.body;
+    if (token !== process.env.ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+        const sendWei = ethers.parseEther(amount.toString());
         const tx = await blockchain.wallet.sendTransaction({
             to: destination,
             value: sendWei,
             chainId: 5042002
         });
-
-        res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sendWei) });
+        res.json({ success: true, txHash: tx.hash, amount: amount });
     } catch (e) {
-        logToFile(`Admin Treasury Drain Error: ${e.message}`);
         res.status(500).json({ error: e.message });
     }
 });
 
-// Admin: Staff Management
-app.get('/admin/staff', async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const staff = await redis.getAllStaff();
-    res.json(staff);
+// --- 5. Real-Time Events ---
+blockchain.onBetPlaced((data) => {
+    io.emit('bet_placed', data);
 });
 
-app.post('/admin/staff', express.json(), async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const staff = req.body;
-    if (!staff.address) return res.status(400).json({ error: 'Address required' });
-    await redis.saveStaff(staff);
-    res.json({ success: true });
-});
-
-app.delete('/admin/staff/:address', async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    await redis.deleteStaff(req.params.address);
-    res.json({ success: true });
-});
-
-// User Profiles & Onboarding
-app.get('/profiles/:address', async (req, res) => {
-    const profile = await redis.getProfile(req.params.address.toLowerCase());
-    res.json(profile || { error: 'Profile not found' });
-});
-
-app.post('/profiles', express.json(), async (req, res) => {
-    // Accept both flat format { address, username, bio, avatar }
-    // and the nested format from OnboardingFlow { address, profile: { username, avatar, xHandle } }
-    const { address } = req.body;
-    const flat = req.body;
-    const nested = req.body.profile || {};
-
-    const username = nested.username || flat.username;
-    const bio = nested.bio || flat.bio || '';
-    const avatar = nested.avatar || flat.avatar;
-    const xHandle = nested.xHandle || flat.xHandle || '';
-    const discordHandle = nested.discordHandle || flat.discordHandle || '';
-    const onboardedAt = nested.onboardedAt || flat.onboardedAt || null;
-
-    if (!address || !username) return res.status(400).json({ error: 'Address and username required' });
-    
-    const profile = {
-        address: address.toLowerCase(),
-        username,
-        bio,
-        xHandle,
-        discordHandle,
-        avatar: avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-        onboardedAt,
-        createdAt: Date.now()
-    };
-    
-    await redis.saveProfile(address.toLowerCase(), profile);
-    res.json({ success: true, profile });
-});
-
-// Admin: All Profiles (Directory)
-app.get('/admin/profiles', async (req, res) => {
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (req.headers['authorization'] !== `Bearer ${adminToken}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    const profiles = await redis.getAllProfiles();
-    res.json(profiles);
-});
-
-server.listen(PORT, '0.0.0.0', async () => {
+// Start Server
+const PORT = process.env.PORT || 3010;
+server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    
-    // Initialize Socket Service for Real-time Admin Events
-    socketService.init(server);
-
-    // Start Binary Options (Classic) Processor
-    processor.init();
-    
-    roundsProcessor.start().catch(e => {
-        console.error('Rounds processor fail:', e.message);
-    });
-
-    keepAlive.startKeepAlive();
+    require('./keeper/processor'); // Start background indexer
 });
-
-

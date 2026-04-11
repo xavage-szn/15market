@@ -109,16 +109,30 @@ class BlockchainService {
         
         for (let i = 0; i < retries; i++) {
             try {
+                // Use standard provider for Main Balances as requested
                 const balancePromise = this.provider.getBalance(address);
                 const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error("Timeout")), 15000)
+                    setTimeout(() => reject(new Error("Timeout")), 10000)
                 );
                 return await Promise.race([balancePromise, timeoutPromise]);
             } catch (e) {
-                // If standard RPC fails, we return 0 rather than exposing Thirdweb to balance traffic
                 if (i === retries - 1) return 0n;
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 500));
             }
+        }
+    }
+
+    // NEW: High-speed balance check for the Trading Account (Session Wallet)
+    // We use Thirdweb here because this check is on the critical trade-execution path.
+    async getSessionBalance(address) {
+        if (!this.highSpeedProvider) return await this.getNativeBalance(address);
+        try {
+            return await Promise.race([
+                this.highSpeedProvider.getBalance(address),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Thirdweb Timeout")), 10000))
+            ]);
+        } catch (e) {
+            return await this.getNativeBalance(address); // Fallback
         }
     }
 

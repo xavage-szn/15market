@@ -61,7 +61,7 @@ router.post('/session-enter', async (req, res) => {
         const val = ethers.parseEther(cleanAmount);
         
         // --- ADDED BALANCE CHECK ---
-        const balance = await blockchainService.blockchain.getNativeBalance(sessionAddr);
+        const balance = await blockchainService.blockchain.getSessionBalance(sessionAddr);
         const gasBuffer = ethers.parseUnits("0.05", "ether");
         if (balance < (val + gasBuffer)) {
             return res.status(400).json({ 
@@ -77,7 +77,7 @@ router.post('/session-enter', async (req, res) => {
         console.log(`[RoundsApi] Session Round Entry: ${address} -> Session: ${sessionAddr} | Round: ${roundId} | Contract: ${contractAddr}`);
 
         // We use the blockchainService.enterRound helper which handles nonces and gas via Thirdweb
-        const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet, address, contractAddr);
+        const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet, sessionAddr, contractAddr);
         
         console.log(`[RoundsApi] Broadcasted: ${tx.hash}`);
 
