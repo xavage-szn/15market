@@ -34,7 +34,8 @@ class NonceManager {
                     const count = await Promise.race([
                         provider.getTransactionCount(address, 'pending'),
                         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
-                    ]);
+                    ]).catch(() => provider.getTransactionCount(address, 'latest'));
+                    
                     await redisStore.redis.setnx(redisKey, count);
                 }
 
@@ -48,23 +49,20 @@ class NonceManager {
                     const count = await Promise.race([
                         provider.getTransactionCount(address, 'pending'),
                         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
-                    ]);
+                    ]).catch(() => provider.getTransactionCount(address, 'latest'));
                     this.nonces.set(addr, count);
                 }
                 finalNonce = this.nonces.get(addr);
                 this.nonces.set(addr, finalNonce + 1);
             }
 
-            console.log(`[Nonce] Dispensed for ${addr.slice(0,10)}...: ${finalNonce} (Method: ${redisStore.isCloud ? 'Redis' : 'Memory'})`);
+            console.log(`[Nonce] Dispensed for ${addr.slice(0,10)}...: ${finalNonce}`);
             return finalNonce;
 
         } catch (e) {
             console.error(`[NonceManager] Critical error for ${addr}:`, e.message);
             // On failure, fall back to chain as a last resort
-            return await Promise.race([
-                provider.getTransactionCount(address, 'pending'),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
-            ]).catch(() => 0);
+            return await provider.getTransactionCount(address, 'latest').catch(() => 0);
         } finally {
             release();
         }
@@ -73,29 +71,13 @@ class NonceManager {
     async syncWithChain(address, provider, force = false) {
         const addr = address.toLowerCase();
         try {
-            console.log(`[Nonce] Force syncing ${addr} from chain (Mode: pending)...`);
-            const queries = [
-                "https://rpc.testnet.arc.network",
-                "https://arc-testnet.drpc.org"
-            ].map(async (url) => {
-                try {
-                    const p = new ethers.JsonRpcProvider(url, 5042002, { staticNetwork: true });
-                    const n = await Promise.race([
-                        p.getTransactionCount(address, 'pending'),
-                        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
-                    ]);
-                    return Number(n);
-                } catch (e) {
-                    return -1;
-                }
-            });
-
-            const results = await Promise.all(queries);
-            const chainNonce = results.reduce((max, curr) => (curr > max ? curr : max), -1);
-
-            if (chainNonce === -1) {
-                return await provider.getTransactionCount(address, 'pending'); // Final fallback 
-            }
+            console.log(`[Nonce] Force syncing ${addr} from chain...`);
+            
+            // Try pending count, fallback to latest
+            const chainNonce = await Promise.race([
+                provider.getTransactionCount(address, 'pending'),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000))
+            ]).catch(() => provider.getTransactionCount(address, 'latest'));
 
             const currentKey = `nnc:${addr}`;
             let currentLocal;
@@ -106,10 +88,8 @@ class NonceManager {
                 currentLocal = this.nonces.has(addr) ? this.nonces.get(addr) : -1;
             }
 
-            // High Water Mark protection: Never set nonce backwards unless explicitly forced
-            // Stale RPCs often return a lower 'pending' count than reality.
+            // High Water Mark protection
             if (!force && chainNonce < currentLocal) {
-                console.warn(`[Nonce] Chain nonce (${chainNonce}) lower than cached (${currentLocal}) for ${addr}. Skipping.`);
                 return currentLocal;
             }
 
@@ -118,12 +98,11 @@ class NonceManager {
             } else {
                 this.nonces.set(addr, chainNonce);
             }
-            console.log(`[Nonce] Synced ${addr} to ${chainNonce} (was: ${currentLocal})`);
+            console.log(`[Nonce] Synced ${addr} to ${chainNonce}`);
             return chainNonce;
 
         } catch (e) {
             console.error(`[Nonce] Sync failed for ${addr}:`, e.message);
-            // Fallback to latest if pending fails
             const fallback = await provider.getTransactionCount(address, 'latest').catch(() => 0);
             if (redisStore.isCloud) await redisStore.redis.set(`nnc:${addr}`, fallback);
             else this.nonces.set(addr, fallback);

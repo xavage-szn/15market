@@ -24,6 +24,7 @@ contract ArcRounds is Ownable, ReentrancyGuard {
 
     struct Entry {
         address user;
+        address payoutAddress; // Added for session wallet support
         uint256 amount;
         uint8 direction; // 0 = DOWN (Short), 1 = UP (Long)
         bool claimed;
@@ -46,7 +47,7 @@ contract ArcRounds is Ownable, ReentrancyGuard {
      * @dev Users enter a round by sending ETH (native USDC on ARC is gas).
      * For USDC as ERC-20, we would use transferFrom. Assuming native USDC/Gas context here.
      */
-    function enterRound(uint256 _roundId, uint8 _direction) external payable nonReentrant {
+    function enterRound(uint256 _roundId, uint8 _direction, address _payoutAddress) external payable nonReentrant {
         require(msg.value > 0, "Amount must be > 0");
         require(_direction == 0 || _direction == 1, "Invalid direction");
         require(!rounds[_roundId].exists || rounds[_roundId].lockTimestamp == 0, "Round already locked");
@@ -61,6 +62,7 @@ contract ArcRounds is Ownable, ReentrancyGuard {
         }
 
         entries[_roundId][msg.sender].user = msg.sender;
+        entries[_roundId][msg.sender].payoutAddress = _payoutAddress == address(0) ? msg.sender : _payoutAddress;
         entries[_roundId][msg.sender].amount += msg.value;
         entries[_roundId][msg.sender].direction = _direction;
 
@@ -140,10 +142,11 @@ contract ArcRounds is Ownable, ReentrancyGuard {
                 
                 // CRITICAL FIX: Mark as claimed BEFORE the call to prevent reentrancy (though not possible with nonReentrant on parent)
                 // Also use .call instead of .transfer to prevent one failed transfer from blocking the whole round.
+                address payoutTarget = entry.payoutAddress == address(0) ? user : entry.payoutAddress;
                 entry.claimed = true;
-                (bool success, ) = payable(user).call{value: payout}("");
+                (bool success, ) = payable(payoutTarget).call{value: payout}("");
                 if (success) {
-                    emit PayoutClaimed(_roundId, user, payout);
+                    emit PayoutClaimed(_roundId, payoutTarget, payout);
                 } else {
                     // If transfer fails (e.g., recipient is a contract that reverts), 
                     // we UNMARK it as claimed so they can still try to manual-claim via claimPayout later.
@@ -170,11 +173,12 @@ contract ArcRounds is Ownable, ReentrancyGuard {
             address user = _users[i];
             Entry storage entry = entries[_roundId][user];
             if (entry.direction == result && entry.amount > 0 && !entry.claimed) {
+                address payoutTarget = entry.payoutAddress == address(0) ? user : entry.payoutAddress;
                 entry.claimed = true;
                 uint256 payout = (entry.amount * distributable) / winningPool;
-                (bool success, ) = payable(user).call{value: payout}("");
+                (bool success, ) = payable(payoutTarget).call{value: payout}("");
                 if (success) {
-                    emit PayoutClaimed(_roundId, user, payout);
+                    emit PayoutClaimed(_roundId, payoutTarget, payout);
                 } else {
                     entry.claimed = false; // Reset for next retry
                 }
@@ -201,11 +205,13 @@ contract ArcRounds is Ownable, ReentrancyGuard {
         uint256 distributable = totalPool - fee;
         uint256 winningPool = (result == 1) ? round.totalLong : round.totalShort;
 
+        address payoutTarget = entry.payoutAddress == address(0) ? msg.sender : entry.payoutAddress;
         entry.claimed = true;
         uint256 payout = (entry.amount * distributable) / winningPool;
         
-        payable(msg.sender).transfer(payout);
-        emit PayoutClaimed(_roundId, msg.sender, payout);
+        (bool success, ) = payable(payoutTarget).call{value: payout}("");
+        require(success, "Transfer failed");
+        emit PayoutClaimed(_roundId, payoutTarget, payout);
     }
 
     function setFee(uint256 _bps) external onlyOwner {

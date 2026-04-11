@@ -8,7 +8,7 @@ class RoundsBlockchain {
         this.abi = [
             "function lockRound(uint256 _roundId, uint256 _price) external",
             "function settleRound(uint256 _roundId, uint256 _price) external",
-            "function enterRound(uint256 _roundId, uint8 _direction) external payable"
+            "function enterRound(uint256 _roundId, uint8 _direction, address _payoutAddress) external payable"
         ];
         this.contract = null;
         this.highSpeedContract = null;
@@ -34,16 +34,13 @@ class RoundsBlockchain {
         
         if (blockchain.highSpeedProvider) {
             this.highSpeedContract = new ethers.Contract(this.contractAddress, this.abi, blockchain.wallet.connect(blockchain.highSpeedProvider));
-            console.log("[RoundsBlockchain] High-speed provider ready for settlements.");
+            console.log("[RoundsBlockchain] High-speed provider ready.");
         }
 
         // Reuse the settlement isolated provider if available
         if (blockchain.settleWallet) {
             this.settleContract = new ethers.Contract(this.contractAddress, this.abi, blockchain.settleWallet);
-            console.log("[RoundsBlockchain] Settlement provider ready.");
         }
-        
-        console.log(`[RoundsBlockchain] Initialized for contract: ${this.contractAddress}`);
     }
 
     async lockRound(roundId, price, options = {}) {
@@ -78,11 +75,23 @@ class RoundsBlockchain {
         });
     }
 
-    async enterRound(roundId, direction, value, wallet, addressOverride = null) {
+    async enterRound(roundId, direction, value, wallet, payoutAddress, addressOverride = null) {
         await this.ensureReady();
         const target = addressOverride || this.contractAddress;
-        const contract = new ethers.Contract(target, this.abi, wallet);
-        return await contract.enterRound(roundId, direction, { value, gasLimit: 1000000 });
+        
+        // Use high speed provider for gas and nonce
+        const fees = await blockchain._getGasPrice();
+        const provider = blockchain.highSpeedProvider || blockchain.provider;
+        const nonce = await nonceManager.getNonce(wallet.address, provider);
+
+        const contract = new ethers.Contract(target, this.abi, wallet.connect(provider));
+        return await contract.enterRound(roundId, direction, payoutAddress, { 
+            value, 
+            nonce,
+            maxFeePerGas: fees.maxFeePerGas,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+            gasLimit: 800000 
+        });
     }
 }
 

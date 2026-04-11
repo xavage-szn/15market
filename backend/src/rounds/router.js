@@ -76,11 +76,10 @@ router.post('/session-enter', async (req, res) => {
         
         console.log(`[RoundsApi] Session Round Entry: ${address} -> Session: ${sessionAddr} | Round: ${roundId} | Contract: ${contractAddr}`);
 
-        // We use a high gas limit since sessions might be complex
-        // We override the contract address if SESSION_MARKET is set
-        const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet, contractAddr);
+        // We use the blockchainService.enterRound helper which handles nonces and gas via Thirdweb
+        const tx = await blockchainService.enterRound(roundId, direction, val, connectedWallet, address, contractAddr);
         
-        console.log(`[RoundsApi] Broadcated: ${tx.hash}`);
+        console.log(`[RoundsApi] Broadcasted: ${tx.hash}`);
 
         // 3. Update Redis state (Actual count)
         const sideKey = side.toLowerCase() === 'up' ? 'long' : 'short';
