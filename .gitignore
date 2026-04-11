@@ -55,3 +55,7 @@ sol_prediction/test-ledger/
 
 # Hardhat artifacts cache
 arc_prediction/cache/
+
+# Diagnostic Scripts
+backend/diag_*.js
+15market/diag_*.js
