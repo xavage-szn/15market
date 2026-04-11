@@ -107,13 +107,16 @@ app.post('/session/trade', async (req, res) => {
         const cleanAmount = (amount || "0").toString().replace(',', '.');
         const amtWei = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
         
-        const realisticGasBuffer = ethers.parseUnits("0.05", "ether"); 
+        // Lowered buffer to 0.01 for better local testing flexibility
+        const realisticGasBuffer = ethers.parseUnits("0.01", "ether"); 
         const totalNeeded = amtWei + realisticGasBuffer;
 
+        console.log(`[AutoSigner] Balance Check: Have ${ethers.formatEther(balance)} | Need ${ethers.formatEther(totalNeeded)} (Stake: ${cleanAmount})`);
+
         if (balance < totalNeeded) {
-            return res.status(400).json({ 
-                error: `Insufficient Balance. Session wallet ${sessionAddr} has ${parseFloat(ethers.formatEther(balance)).toFixed(4)} USDC. Need ${cleanAmount} USDC stake + 0.05 for gas.` 
-            });
+            const err = `Insufficient Balance. Session wallet ${sessionAddr} has ${parseFloat(ethers.formatEther(balance)).toFixed(4)} USDC. Need ${cleanAmount} USDC stake + 0.01 for gas.`;
+            console.warn(`[AutoSigner] Blocked: ${err}`);
+            return res.status(400).json({ error: err });
         }
 
         // 4. NONCE & SIGNING
