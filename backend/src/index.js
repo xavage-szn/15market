@@ -49,19 +49,41 @@ app.get('/profiles/:address', async (req, res) => {
 
 app.post('/profiles', async (req, res) => {
     try {
-        const { address, username, xHandle, avatar } = req.body;
+        const { address, username, xHandle, avatar, onboardedAt } = req.body;
         if (!address || !username) return res.status(400).json({ error: 'Address and Username required' });
-        
+
+        // Merge with existing profile so we don't overwrite fields
+        const existing = await redis.getProfile(address) || {};
         const profile = {
+            ...existing,
             address: address.toLowerCase(),
             username: username.trim(),
-            xHandle: (xHandle || '').trim(),
-            avatar: avatar || '',
-            onboardedAt: Date.now()
+            xHandle: (xHandle || existing.xHandle || '').trim(),
+            avatar: avatar || existing.avatar || '',
+            onboardedAt: existing.onboardedAt || onboardedAt || Date.now()
         };
 
         await redis.saveProfile(address, profile);
         res.json({ success: true, profile });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Partial profile update (avatar, xHandle, username individually)
+app.patch('/profiles/:address', async (req, res) => {
+    try {
+        const addr = req.params.address.toLowerCase();
+        const existing = await redis.getProfile(addr);
+        if (!existing) return res.status(404).json({ error: 'Profile not found' });
+
+        const allowed = ['username', 'xHandle', 'avatar', 'xProfileImage'];
+        const updates = {};
+        allowed.forEach(field => { if (req.body[field] !== undefined) updates[field] = req.body[field]; });
+
+        const updated = { ...existing, ...updates };
+        await redis.saveProfile(addr, updated);
+        res.json({ success: true, profile: updated });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -281,28 +303,7 @@ app.get('/history/:address', async (req, res) => {
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
 
-// --- Profiles API ---
-app.get('/profiles/:address', async (req, res) => {
-    try {
-        const profile = await redis.getProfile(req.params.address);
-        res.json(profile || null);
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
 
-app.post('/profiles', async (req, res) => {
-    try {
-        const { address, username, xHandle, avatar, onboardedAt } = req.body;
-        if (!address || !username) return res.status(400).json({ error: 'Missing address or username' });
-        
-        const profile = { address, username, xHandle, avatar, onboardedAt };
-        await redis.saveProfile(address, profile);
-        res.json({ success: true, profile });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
 
 // --- 5. Admin API ---
 app.get('/admin/stats', async (req, res) => {

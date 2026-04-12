@@ -2,7 +2,7 @@ import { useAccount } from "wagmi";
 import { useState, useEffect, useCallback } from "react";
 import { KEEPER_URL_ARC } from "../constants";
 
-export function WalletBalance({ theme, balanceOverride }) {
+export function WalletBalance({ theme, balanceOverride, label }) {
     const { isConnected, address } = useAccount();
     const [internalBalance, setInternalBalance] = useState(0);
 
@@ -46,6 +46,7 @@ export function WalletBalance({ theme, balanceOverride }) {
             />
 
             <span className={`text-[10px] font-bold font-mono tracking-wide ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                {label && <span className="opacity-40 mr-1">{label}:</span>}
                 {balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDC
             </span>
         </div>

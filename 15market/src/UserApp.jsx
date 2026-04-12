@@ -2461,7 +2461,10 @@ export default function UserApp() {
                 ))}
               </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
+              <div className="flex items-center gap-2">
+                <WalletBalance network={network} theme={theme} balanceOverride={parseFloat(evmBalance || '0')} label="MAIN" />
+                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} label="SESSION" />
+              </div>
               <button onClick={() => setView("dashboard")} className="p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
@@ -2488,8 +2491,9 @@ export default function UserApp() {
                   </button>
                 ))}
               </div>
-              <div className="scale-[0.8] origin-center -mx-1.5">
+              <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
                 <ThemeToggle theme={theme} onToggle={toggleTheme} />
+                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
               </div>
               <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{

@@ -22,6 +22,10 @@ storage.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+settlement_activity.log
+
+# Persistent User Data (server-side, do not commit)
+backend/profiles_db.json
 
 # IDE/Editor
 .vscode/

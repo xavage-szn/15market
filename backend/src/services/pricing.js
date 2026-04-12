@@ -49,6 +49,22 @@ class PricingService {
             });
         }
 
+        if (config.binance) {
+            sources.push({
+                name: "BINANCE",
+                url: `https://api.binance.com/api/v3/ticker/price?symbol=${config.binance}`,
+                parse: (d) => parseFloat(d.price)
+            });
+        }
+
+        if (config.mexc) {
+            sources.push({
+                name: "MEXC",
+                url: `https://api.mexc.com/api/v3/ticker/price?symbol=${config.mexc}`,
+                parse: (d) => parseFloat(d.price)
+            });
+        }
+
         return sources;
     }
 
@@ -141,12 +157,23 @@ class PricingService {
             console.error(`[Pricing] Pyth Historical Fallback failed for ${symbol}:`, e.message);
         }
 
-        // 3. Absolute Fallback: Current Price (prevents eternal pending)
-        // If the trade expired less than 60 seconds ago, it's safe enough to use current price
-        // rather than failing forever.
-        if (Date.now() - targetTime < 60000) {
-            console.log(`[Pricing] Hard Fallback: Using current price for ${symbol} as it just expired`);
-            return await this.getPrice(symbol);
+        // 3. Fallback to Binance Klines API (More reliable than Pyth for historicals)
+        try {
+            const configs = {
+                'BTC': "BTCUSDT", 'ETH': "ETHUSDT", 'SOL': "SOLUSDT", 
+                'JUP': "JUPUSDT", 'XRP': "XRPUSDT", 'MON': "BTCUSDT"
+            };
+            const binanceSym = configs[symbol] || "BTCUSDT";
+            // Get 1m kline containing targetTime
+            const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSym}&interval=1m&startTime=${targetTime - 30000}&limit=1`;
+            const res = await this.axiosInstance.get(url);
+            if (res.data && res.data[0]) {
+                const closePrice = parseFloat(res.data[0][4]); // Index 4 is Close Price
+                console.log(`[Pricing] Binance Historical Fallback for ${symbol} @ ${targetTime}: ${closePrice}`);
+                return closePrice;
+            }
+        } catch (e) {
+            console.error(`[Pricing] Binance Historical Fallback failed for ${symbol}:`, e.message);
         }
 
         return null;

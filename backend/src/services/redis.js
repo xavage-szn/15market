@@ -1,7 +1,35 @@
 const Redis = require('ioredis');
 const path = require('path');
+const fs = require('fs');
 // Vault decommissioned.
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+
+// ─── PERSISTENT PROFILES FILE (survives Redis outages & server restarts) ──────
+const PROFILES_FILE = path.join(__dirname, '..', '..', 'profiles_db.json');
+function _loadProfilesFromDisk() {
+    try {
+        if (fs.existsSync(PROFILES_FILE)) {
+            const raw = fs.readFileSync(PROFILES_FILE, 'utf8');
+            const obj = JSON.parse(raw);
+            const map = new Map();
+            Object.entries(obj).forEach(([k, v]) => map.set(k, v));
+            console.log(`[Profiles] Loaded ${map.size} profiles from disk.`);
+            return map;
+        }
+    } catch (e) {
+        console.error('[Profiles] Failed to load profiles_db.json:', e.message);
+    }
+    return new Map();
+}
+function _saveProfilesToDisk(profilesMap) {
+    try {
+        const obj = {};
+        profilesMap.forEach((v, k) => obj[k] = v);
+        fs.writeFileSync(PROFILES_FILE, JSON.stringify(obj, null, 2), 'utf8');
+    } catch (e) {
+        console.error('[Profiles] Failed to write profiles_db.json:', e.message);
+    }
+}
 
 const RAW_REDIS_URL = process.env.REDIS_URL ? process.env.REDIS_URL.trim().replace(/^["'\s]+|["'\s]+$/g, '') : undefined;
 const REDIS_URL = RAW_REDIS_URL;
@@ -65,7 +93,36 @@ class RedisStore {
         this.campaigns = [];
         this.settings = null;
         this._lastBlock = 31400000;
-        console.warn('[Memory] Data will not persist across restarts.');
+        // Load profiles from disk immediately on startup — this is the source of truth
+        this._profiles = _loadProfilesFromDisk();
+        console.warn('[Memory] Trade data will not persist across restarts (use Redis). Profiles are disk-persisted.');
+        // After 5s, try to migrate any Redis-only profiles to disk (one-time sync)
+        setTimeout(() => this._migrateRedisProfilesToDisk(), 5000);
+    }
+
+    async _migrateRedisProfilesToDisk() {
+        if (!this.isCloud || !this.redis || this.redis.status !== 'ready') return;
+        try {
+            const data = await this.redis.hgetall('15market_profiles');
+            if (!data) return;
+            let added = 0;
+            Object.entries(data).forEach(([addr, raw]) => {
+                try {
+                    if (!this._profiles.has(addr)) {
+                        this._profiles.set(addr, JSON.parse(raw));
+                        added++;
+                    }
+                } catch (_) {}
+            });
+            if (added > 0) {
+                _saveProfilesToDisk(this._profiles);
+                console.log(`[Profiles] Migrated ${added} cloud profiles to disk.`);
+            } else {
+                console.log(`[Profiles] Disk is up-to-date with Redis (${this._profiles.size} profiles).`);
+            }
+        } catch (e) {
+            console.error('[Profiles] Redis migration failed:', e.message);
+        }
     }
 
 
@@ -421,36 +478,73 @@ class RedisStore {
     // ─── PROFILE & STAFF MANAGEMENT ──────────────────────────────────────────────
 
     async saveProfile(address, profile) {
+        const addr = address.toLowerCase();
+        const enriched = { ...profile, updatedAt: Date.now() };
+
+        // 1. ALWAYS write to in-memory map first (instant reads)
+        if (!this._profiles) this._profiles = _loadProfilesFromDisk();
+        this._profiles.set(addr, enriched);
+
+        // 2. ALWAYS persist to disk (survives server restarts & Redis outages)
+        _saveProfilesToDisk(this._profiles);
+
+        // 3. ALSO write to Redis if available (for multi-instance sync)
         try {
             if (this.isCloud && this.redis && this.redis.status === 'ready') {
-                await this.redis.hset('15market_profiles', address.toLowerCase(), JSON.stringify(profile));
+                await this.redis.hset('15market_profiles', addr, JSON.stringify(enriched));
             }
         } catch (e) {
-            console.error(`[Redis] saveProfile failed for ${address}:`, e.message);
+            console.error(`[Redis] saveProfile to cloud failed for ${addr}:`, e.message);
+            // Disk already saved above — this is non-fatal
         }
-        
-        if (!this._profiles) this._profiles = new Map();
-        this._profiles.set(address.toLowerCase(), profile);
+
+        console.log(`[Profiles] Saved profile for ${addr} (username: ${enriched.username})`);
     }
 
     async getProfile(address) {
+        const addr = address.toLowerCase();
+
+        // 1. Check in-memory first (fastest, loaded from disk on startup)
+        if (!this._profiles) this._profiles = _loadProfilesFromDisk();
+        const memProfile = this._profiles.get(addr);
+        if (memProfile) return memProfile;
+
+        // 2. If not found in memory, try Redis (in case of cloud-only write)
         try {
             if (this.isCloud && this.redis && this.redis.status === 'ready') {
-                const data = await this.redis.hget('15market_profiles', address.toLowerCase());
-                return data ? JSON.parse(data) : null;
+                const data = await this.redis.hget('15market_profiles', addr);
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    // Backfill to memory & disk for next time
+                    this._profiles.set(addr, parsed);
+                    _saveProfilesToDisk(this._profiles);
+                    return parsed;
+                }
             }
         } catch (e) {
-            console.error(`[Redis] getProfile failed for ${address}:`, e.message);
+            console.error(`[Redis] getProfile from cloud failed for ${addr}:`, e.message);
         }
-        return this._profiles?.get(address.toLowerCase()) || null;
+
+        return null;
     }
 
     async getAllProfiles() {
-        if (this.isCloud) {
-            const data = await this.redis.hgetall('15market_profiles');
-            return Object.values(data || {}).map(JSON.parse);
-        }
-        return Array.from(this._profiles?.values() || []);
+        // Merge disk profiles with Redis if available
+        if (!this._profiles) this._profiles = _loadProfilesFromDisk();
+        const merged = new Map(this._profiles);
+
+        try {
+            if (this.isCloud && this.redis && this.redis.status === 'ready') {
+                const data = await this.redis.hgetall('15market_profiles');
+                if (data) {
+                    Object.entries(data).forEach(([k, v]) => {
+                        try { if (!merged.has(k)) merged.set(k, JSON.parse(v)); } catch (_) {}
+                    });
+                }
+            }
+        } catch (e) { /* fallback to disk is fine */ }
+
+        return Array.from(merged.values());
     }
 
     async saveStaff(staff) {

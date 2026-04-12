@@ -75,29 +75,44 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
             notify("Please connect your wallet first.", "error");
             return;
         }
+        if (!username.trim()) {
+            notify("Username cannot be empty.", "error");
+            return;
+        }
         setIsSaving(true);
         notify("Syncing Profile...", "pending");
         try {
-            const res = await fetch(`${KEEPER_URL_ARC}/profiles`, {
-                method: 'POST',
+            // Use PATCH to update only provided fields without overwriting anything else
+            const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    address: address.toLowerCase(),
-                    profile: {
-                        username: username,
-                        xHandle: xHandle,
-                        discordHandle: discordHandle,
-                        avatar: avatar
-                    }
+                    username: username.trim(),
+                    xHandle: xHandle.trim(),
+                    avatar: avatar
                 })
             });
 
-            if (!res.ok) throw new Error("Failed to save profile on backend.");
+            // Fallback: if PATCH not found (new user), create via POST
+            if (res.status === 404) {
+                const postRes = await fetch(`${KEEPER_URL_ARC}/profiles`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: address.toLowerCase(),
+                        username: username.trim(),
+                        xHandle: xHandle.trim(),
+                        avatar: avatar
+                    })
+                });
+                if (!postRes.ok) throw new Error("Failed to create profile.");
+            } else if (!res.ok) {
+                throw new Error("Failed to save profile on backend.");
+            }
 
-            notify("Profile synced successfully!", "success");
+            notify("Profile saved!", "success");
             if (onUpdate) onUpdate();
             onClose();
-            // UserApp polling will catch this within 2s, but we can trigger a manual fetch if we had a prop for it
         } catch (err) {
             console.error("Save profile error:", err);
             notify("Failed to save profile: " + err.message, "error");
