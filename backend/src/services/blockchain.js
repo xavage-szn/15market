@@ -21,7 +21,6 @@ class BlockchainService {
         this.rpc = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
         this.backupRpc = process.env.ARC_RPC_BACKUP || "https://arc-testnet.drpc.org";
         this.rpcs = [
-            this.twRpc, // High-speed Thirdweb first
             this.rpc,   // Public Arc
             this.backupRpc,
             "https://rpc-drpc.testnet.arc.network"
@@ -214,7 +213,8 @@ class BlockchainService {
     }
 
     async getPastEvents(eventName, fromBlock, toBlock) {
-        const contract = this.highSpeedContract || this.contract;
+        // Use STANDARD contract for history to save High-Speed (Thirdweb) RPC units!
+        const contract = this.contract;
         if (!contract) return [];
         try {
             return await contract.queryFilter(eventName, fromBlock, toBlock);
