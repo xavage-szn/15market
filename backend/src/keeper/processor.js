@@ -119,7 +119,7 @@ class TradeProcessor {
                 }
 
                 // Scan in small chunks to avoid RPC timeouts
-                const lookback = 500; // Reduced from 1000 to prevent Thirdweb/Arc timeouts
+                const lookback = 100; // Drastically reduced to prevent Arc RPC timeout crashes
                 const endBlock = Math.min(startBlock + lookback, currentBlock);
 
                 console.log(`[Processor] Syncing: ${startBlock} -> ${endBlock} (Target: ${currentBlock})`);

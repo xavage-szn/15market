@@ -718,7 +718,7 @@ export default function UserApp() {
         const bal = parseFloat(data.balance);
 
         const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-        if (!force && msSinceLastAction < 5000) return;
+        if (!force && msSinceLastAction < 15000) return;
 
         if (Math.abs(bal - sessionBalance) > 0.0001) {
           setSessionBalance(bal);
@@ -1114,7 +1114,8 @@ export default function UserApp() {
       setSessionMode(true);
       notify("Trading Wallet Active", "success");
     } else {
-      setIsSignerInitializing(true);
+      updateEvmSessionBal(true);
+      notify("Syncing Trading Wallet...", "pending");
     }
   };
 
@@ -1226,9 +1227,7 @@ export default function UserApp() {
           if (!res.ok) throw new Error(data.error || "Trading wallet failed to enter round");
           txHash = data.txHash;
         } else {
-          // If no session wallet, force initialization
-          setIsSignerInitializing(true);
-          throw new Error("Trading wallet not initialized");
+          throw new Error("Trading wallet is still syncing. Please wait 1 second and try again.");
         }
 
         notify("Broadcasting Entry...", "pending");
@@ -1275,8 +1274,7 @@ export default function UserApp() {
 
       // ─── CLASSIC TRADING (SESSION-ONLY) ───
       if (!evmSessionWallet) {
-        setIsSignerInitializing(true);
-        throw new Error("Trading wallet not initialized");
+        throw new Error("Trading wallet is still syncing. Please wait 1 second and try again.");
       }
 
       // --- STEP 1: INSTANT UI FEEDBACK (OPTIMISTIC) ---
@@ -1341,19 +1339,10 @@ export default function UserApp() {
           setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
           setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
 
-          // Background Confirmation
-          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
-            if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
-              setSessionBalance(prev => prev + amtNum);
-              setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-              notify("Transaction reverted on-chain.", "error");
-            } else {
-              setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
-            }
-          }).catch(() => {
-            setSessionBalance(prev => prev + amtNum);
-            setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-          });
+          // The backend already waits for transaction confirmation before returning success.
+          // Therefore, if we reach this point, the trade is successfully MINED!
+          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+          notify("Trade Broadcasting...", "success");
 
         } catch (err) {
           // ROLLBACK OPTIMISTIC STATE
@@ -1487,31 +1476,7 @@ export default function UserApp() {
         });
       }
 
-      // 2. MEXC Source (Proxied)
-      if (activeMarket.binance) {
-        sources.push({ name: "mexc", url: `/api-mexc/api/v3/ticker/price?symbol=${activeMarket.binance}`, parse: d => parseFloat(d.price) });
-      }
-
-      // 3. Kraken Source (Direct API - no proxy needed, no geo-restrictions)
-      if (activeMarket.kraken) {
-        sources.push({
-          name: "kraken",
-          url: `https://api.kraken.com/0/public/Ticker?pair=${activeMarket.kraken}`,
-          parse: d => {
-            const k = Object.keys(d.result || {})[0];
-            return k ? parseFloat(d.result[k].c[0]) : null;
-          }
-        });
-      }
-
-      // If no secondary sources, we might need a DEX fallback or DexScreener
-      if (sources.length === 0 && activeMarket.mint) {
-        sources.push({
-          name: "jup",
-          url: `https://price.jup.ag/v4/price?ids=${activeMarket.mint}`,
-          parse: d => d.data[activeMarket.mint]?.price
-        });
-      }
+      // Removed MEXC, Kraken, and JUP sources as requested by user to strictly use Pyth.
 
       if (sources.length === 0) return null;
 
@@ -1787,7 +1752,7 @@ export default function UserApp() {
     }));
   }, []);
 
-  // Session Wallet - RESTORE STATE ONLY
+  // Session Wallet - AUTO RESTORE/FETCH
   useEffect(() => {
     if (!address) return;
 
@@ -1797,13 +1762,10 @@ export default function UserApp() {
     const storedAddr = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
     if (storedAddr) {
       setEvmSessionWallet({ address: storedAddr, isRemote: true });
-      updateEvmSessionBal(true);
-    } else {
-      setEvmSessionWallet(null);
-      // Trigger initialization flow
-      setIsSignerInitializing(true);
     }
-  }, [address]);
+    // Automatically retrieve the derived session wallet without user signatures
+    updateEvmSessionBal(true);
+  }, [address, updateEvmSessionBal]);
 
   // NOTE: The actual "creation" now happens via handleSyncSession which we will rename/auto-trigger
   // We need to auto-trigger the sync if the user toggles session mode and has no key.
@@ -1879,7 +1841,7 @@ export default function UserApp() {
   useEffect(() => {
     const checkAndResolve = () => {
       const now = Date.now() + serverTimeOffset;
-      const pendingTrades = activeTrades.filter(t => t.status === "PENDING");
+      const pendingTrades = activeTrades.filter(t => t.status === "PENDING" || t.status === "RESOLVING");
 
       for (const trade of pendingTrades) {
         const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);

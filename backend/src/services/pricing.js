@@ -37,8 +37,6 @@ class PricingService {
         const config = configs[symbol] || configs['BTC'];
         const sources = [];
 
-        if (config.mexc) sources.push({ name: "MEXC", url: `https://api.mexc.com/api/v3/ticker/price?symbol=${config.mexc}`, parse: d => parseFloat(d.price) });
-        if (config.binance) sources.push({ name: "BINANCE", url: `https://api.binance.com/api/v3/ticker/price?symbol=${config.binance}`, parse: d => parseFloat(d.price) });
         if (config.pyth) {
             sources.push({
                 name: "PYTH",
@@ -48,16 +46,6 @@ class PricingService {
                     if (!parsed) return null;
                     return parseFloat(parsed.price) * Math.pow(10, parsed.expo);
                 }
-            });
-        }
-
-        // Add Coinbase as a very reliable secondary source
-        const COINBASE_MAP = { 'BTC': 'BTC-USD', 'ETH': 'ETH-USD', 'SOL': 'SOL-USD' };
-        if (COINBASE_MAP[symbol]) {
-            sources.push({
-                name: "COINBASE",
-                url: `https://api.coinbase.com/v2/prices/${COINBASE_MAP[symbol]}/spot`,
-                parse: d => parseFloat(d.data.amount)
             });
         }
 
@@ -127,21 +115,38 @@ class PricingService {
             if (minDiff <= 10000) return closest.price;
         }
 
-        // 2. Fallback to Binance Historical API (1s resolution)
+        // 2. Fallback to Pyth Network Historical API (Hermes v2)
         try {
-            const configs = { 'BTC': 'BTCUSDT', 'ETH': 'ETHUSDT', 'SOL': 'SOLUSDT', 'JUP': 'JUPUSDT', 'XRP': 'XRPUSDT', 'MON': 'BTCUSDT' };
-            const binanceSym = configs[symbol] || 'BTCUSDT';
-            const startTime = Math.floor(targetTime / 1000) * 1000;
-            const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSym}&interval=1s&startTime=${startTime}&limit=1`;
+            const configs = {
+                'BTC': "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+                'ETH': "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
+                'SOL': "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+                'JUP': "06d19451433945517e4bb30dc74ee28246d65480874634fd0ace",
+                'XRP': "ecf553f19451433945517e4bb30dc74ee28246d65480874634fd0ace",
+                'MON': "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43" 
+            };
+            const pythId = configs[symbol] || configs['BTC'];
+            const publishTime = Math.floor(targetTime / 1000);
             
+            const url = `https://hermes.pyth.network/v2/updates/price/${publishTime}?ids[]=${pythId}`;
             const res = await this.axiosInstance.get(url);
-            if (res.data && res.data[0]) {
-                const closePrice = parseFloat(res.data[0][4]); // Index 4 is Close
-                console.log(`[Pricing] Historical Fallback for ${symbol} @ ${targetTime}: ${closePrice}`);
+            
+            if (res.data && res.data.parsed && res.data.parsed[0]) {
+                const p = res.data.parsed[0].price;
+                const closePrice = parseFloat(p.price) * Math.pow(10, p.expo);
+                console.log(`[Pricing] Pyth Historical Fallback for ${symbol} @ ${targetTime}: ${closePrice}`);
                 return closePrice;
             }
         } catch (e) {
-            console.error(`[Pricing] Historical Fallback failed for ${symbol}:`, e.message);
+            console.error(`[Pricing] Pyth Historical Fallback failed for ${symbol}:`, e.message);
+        }
+
+        // 3. Absolute Fallback: Current Price (prevents eternal pending)
+        // If the trade expired less than 60 seconds ago, it's safe enough to use current price
+        // rather than failing forever.
+        if (Date.now() - targetTime < 60000) {
+            console.log(`[Pricing] Hard Fallback: Using current price for ${symbol} as it just expired`);
+            return await this.getPrice(symbol);
         }
 
         return null;

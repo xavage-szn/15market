@@ -147,15 +147,21 @@ app.post('/session/trade', async (req, res) => {
         });
 
         console.log(`[AutoSigner] Trade broadcasted: ${tx.hash}`);
-        const receipt = await tx.wait();
-        if (receipt.status !== 1) throw new Error("On-chain transaction failed");
-        console.log(`[AutoSigner] Trade MINED: ${tx.hash}`);
 
+        // Return immediately so the UI feels instant and avoids Vercel/HTTP timeouts.
         res.json({ 
             success: true, 
             txHash: tx.hash,
             sessionAddress: sessionAddr,
-            status: 'mined'
+            status: 'broadcasted'
+        });
+
+        // Background wait to monitor failure, log appropriately
+        tx.wait().then(receipt => {
+             if (receipt.status !== 1) console.error(`[AutoSigner] Trade Reverted: ${tx.hash}`);
+             else console.log(`[AutoSigner] Trade MINED: ${tx.hash}`);
+        }).catch(err => {
+             console.error(`[AutoSigner] Trade Network/Wait Error: ${err.message}`);
         });
 
     } catch (e) {
@@ -240,6 +246,29 @@ app.get('/history/:address', async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
+
+// --- Profiles API ---
+app.get('/profiles/:address', async (req, res) => {
+    try {
+        const profile = await redis.getProfile(req.params.address);
+        res.json(profile || null);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/profiles', async (req, res) => {
+    try {
+        const { address, username, xHandle, avatar, onboardedAt } = req.body;
+        if (!address || !username) return res.status(400).json({ error: 'Missing address or username' });
+        
+        const profile = { address, username, xHandle, avatar, onboardedAt };
+        await redis.saveProfile(address, profile);
+        res.json({ success: true, profile });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // --- 5. Admin API ---
 app.get('/admin/stats', async (req, res) => {
