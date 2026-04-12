@@ -202,6 +202,40 @@ app.post('/session/sweep', async (req, res) => {
     }
 });
 
+// --- 3.5. Trade API (Classic Mode Settlement) ---
+app.post('/settle', async (req, res) => {
+    try {
+        const { id, exitPrice } = req.body;
+        if (!id || !exitPrice) return res.status(400).json({ error: 'Missing parameters' });
+        
+        const tradeId = id.toString();
+        const currentTrade = await redis.getTrade(tradeId);
+        
+        if (currentTrade) {
+            // Only lock the price if it hasn't been locked yet
+            if (!currentTrade.lockedExitPrice) {
+                // Determine win/loss locally to set RESOLVING properly or just leave it for processor
+                await redis.setTrade(tradeId, { 
+                    ...currentTrade, 
+                    lockedExitPrice: exitPrice.toString(),
+                    status: 'RESOLVING' 
+                });
+                
+                console.log(`[Backend/settle] Trade ${tradeId} locked exit price at ${exitPrice}`);
+                
+                // Immediately trigger settlement loop to process this trade right away
+                const processor = require('./keeper/processor');
+                processor._settleSingleTrade({ ...currentTrade, lockedExitPrice: exitPrice.toString(), status: 'RESOLVING' }, exitPrice).catch(e => console.error(`[Settle API] Immediate settle error:`, e));
+            }
+        }
+        
+        res.json({ success: true, lockedPrice: exitPrice });
+    } catch (e) {
+        console.error(`[Backend/settle] Error:`, e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- 4. Platform Data API ---
 app.get('/settings', async (req, res) => {
     const settings = await redis.getSettings();
