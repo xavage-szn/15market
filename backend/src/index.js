@@ -80,6 +80,11 @@ app.post('/profiles', async (req, res) => {
   try {
     if (!redis) throw new Error("Redis connection required");
 
+    const existing = await redis.get(`user:${addr}`);
+    if (existing) {
+        return res.json({ success: true, profile: JSON.parse(existing), message: "User already exists" });
+    }
+
     // Save Profile to Redis
     await redis.set(`user:${addr}`, JSON.stringify(profile));
     
@@ -467,6 +472,15 @@ app.get('/campaigns', (req, res) => res.json([]));
 app.get('/winner-banner', (req, res) => res.json(null));
 app.get('/time', (req, res) => res.json({ time: Date.now() }));
 app.get('/health', (req, res) => res.send('OK'));
+
+// --- Global Error Boundary ---
+app.use((err, req, res, next) => {
+  console.error(`[GlobalError] ${req.method} ${req.url}:`, err);
+  res.status(500).json({ 
+    error: "Internal Server Error", 
+    message: process.env.NODE_ENV === 'development' ? err.message : "Something went wrong" 
+  });
+});
 
 const PORT = process.env.PORT || 3010; 
 server.listen(PORT, '0.0.0.0', () => {
