@@ -2508,34 +2508,7 @@ export default function UserApp() {
     );
   }
 
-  // --- Real-time Socket Sync (SUB-SECOND Accuracy) ---
-  useEffect(() => {
-    if (!address) return;
-    
-    // Join private room for targeted updates
-    socketService.emit('join_user', address);
 
-    const cleanupBalance = socketService.on('balance_update', (data) => {
-      console.log('💰 [Socket] Real-time Balance update:', data);
-      if (data.balance) {
-        setSessionBalance(parseFloat(data.balance));
-      }
-      
-      if (data.reason === 'WIN') {
-        notify(`VICTORY! +${data.balance} USDC added to Session Wallet`, "success");
-        setTimeout(() => updateEvmSessionBal(true), 1000);
-      }
-    });
-
-    const cleanupTrade = socketService.on('trade_placed', (data) => {
-       console.log('✅ [Socket] Trade broadcast confirmed');
-    });
-
-    return () => {
-      cleanupBalance();
-      cleanupTrade();
-    };
-  }, [address, updateEvmSessionBal]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
