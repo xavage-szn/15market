@@ -2,11 +2,7 @@ const { ethers } = require('ethers');
 require('dotenv').config();
 
 const ARC_RPCS = [
-  process.env.ARC_RPC || "https://rpc.testnet.arc.network",
-  "https://arc-testnet.drpc.org",
-  "https://5042002.rpc.thirdweb.com",
-  "https://rpc.testnet.arc.network", // Redundant check
-  "https://arc.drpc.org" // Backup
+  "https://rpc.testnet.arc.network"
 ];
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
@@ -41,6 +37,10 @@ class BlockchainService {
       "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
     ];
 
+    // Standard wallet for metrics/admin lookups
+    this.mainProvider = this.providers[0];
+    this.arcWallet = new ethers.Wallet(PRIVATE_KEY, this.mainProvider);
+
     // Create a contract instance for EACH provider to enable racing
     this.contracts = this.providers.map(p => {
         const wallet = new ethers.Wallet(PRIVATE_KEY, p);
@@ -63,10 +63,10 @@ class BlockchainService {
     // Attempt balancing across ALL providers simultaneously
     const balancePromises = this.providers.map(async (provider, idx) => {
         try {
-            const bal = await this.callWithTimeout(provider.getBalance(address), 10000);
+            const bal = await this.callWithTimeout(provider.getBalance(address), 15000); // 15s timeout
             return ethers.formatEther(bal);
         } catch (e) {
-            console.warn(`[Blockchain] Provider ${idx} (${ARC_RPCS[idx]}) failed for ${address}: ${e.message}`);
+            console.warn(`[Blockchain] Provider ${idx} (${ARC_RPCS[idx]}) failed: [${e.code || 'TIMEOUT'}] ${e.message}`);
             throw e;
         }
     });

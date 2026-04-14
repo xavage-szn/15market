@@ -1,14 +1,8 @@
 const express = require('express');
 const axios = require('axios');
+
 const proxy = require('express-http-proxy');
 require('dotenv').config();
-
-// --- SSL/TLS Bypass for Local Dev Stability ---
-// This resolves the 0x80092013 revocation check failure on local Windows machines
-if (process.env.NODE_ENV !== 'production') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  console.log("🔓 [Security] Local SSL Revocation Bypass Active (Local Dev Mode)");
-}
 
 const cors = require('cors');
 const http = require('http');
@@ -38,73 +32,54 @@ let oracleReady = false;
 
 const fetchConcurrentPrices = async () => {
   const assets = [
-    { id: 'btc', symbol: 'BTCUSDT' },
-    { id: 'eth', symbol: 'ETHUSDT' },
-    { id: 'sol', symbol: 'SOLUSDT' },
-    { id: 'mon', symbol: 'MONUSDT' }
+    { id: 'btc', pair: 'BTCUSDT' },
+    { id: 'eth', pair: 'ETHUSDT' },
+    { id: 'sol', pair: 'SOLUSDT' }
   ];
 
-  const pricePromises = assets.map(async (asset) => {
-    const fetchFromBinance = async () => {
-      const res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 5000 });
-      return parseFloat(res.data.price);
-    };
+  // Strategy: BULK FETCH (One request for all prices)
+  const tryBulkBinance = async () => {
+    const res = await axios.get('https://api.binance.com/api/v3/ticker/price', { timeout: 8000 });
+    const dict = {};
+    res.data.forEach(t => dict[t.symbol] = t.price);
+    return dict;
+  };
 
-    const fetchFromMexc = async () => {
-      const res = await axios.get(`https://api.mexc.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 5000 });
-      return parseFloat(res.data.price);
-    };
+  const tryBulkMexc = async () => {
+    const res = await axios.get('https://api.mexc.com/api/v3/ticker/price', { timeout: 8000 });
+    const dict = {};
+    res.data.forEach(t => dict[t.symbol] = t.price);
+    return dict;
+  };
 
-    const fetchFromPyth = async () => {
-      // BTC, ETH, SOL price IDs for Pyth
-      const pythIds = {
-        'btc': 'e62df6c8b4a27e183f5e49c0528c4aa2ac2f346b0a9c19d57513055ca74c33f4',
-        'eth': 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
-        'sol': 'ef0d8b6fda2ceba41da3678a3169b59d9df5691d1d3bb73241211ef5ca3102ea'
-      };
-      if (!pythIds[asset.id]) throw new Error("No Pyth ID");
-      const res = await axios.get(`https://benchmarks.pyth.network/v1/updates/price/latest?ids=${pythIds[asset.id]}`, { timeout: 5000 });
-      // Pyth returns price * 10^expo. e.g. 6500000000 with expo -8.
-      const data = res.data[0];
-      return parseFloat(data.price.price) * Math.pow(10, data.price.expo);
-    };
-
+  try {
+    // Try Binance Bulk First
+    let bulkData;
     try {
-      // Racing across ALL 3 sources for EVERY asset
-      const fastestPrice = await Promise.any([
-        fetchFromBinance(),
-        fetchFromMexc(),
-        fetchFromPyth()
-      ]);
-      prices[asset.id] = fastestPrice;
+        bulkData = await tryBulkBinance();
     } catch (e) {
-      if (asset.id !== 'mon') {
-        console.error(`[Oracle] ❌ Total failure for ${asset.id} across ALL sources (Binance, MEXC, Pyth):`, e.message);
-      }
-      
-      if (asset.id === 'mon' && prices[asset.id] === 0) {
-          prices[asset.id] = 1.0; 
-      }
+        console.warn("[Oracle] Binance Bulk failed, trying MEXC Bulk...");
+        bulkData = await tryBulkMexc();
     }
-  });
 
-  await Promise.allSettled(pricePromises);
-  
-  const allReady = Object.entries(prices)
-    .filter(([id]) => id !== 'mon') // MON is optional if it's not live yet
-    .every(([_, p]) => p > 0);
+    assets.forEach(asset => {
+        if (bulkData[asset.pair]) {
+            prices[asset.id] = parseFloat(bulkData[asset.pair]);
+        }
+    });
 
-  if (!allReady) {
-    console.warn(`[Oracle] Price oracle is not ready. Missing prices for: ${Object.entries(prices).filter(([_, p]) => p <= 0).map(([id]) => id).join(', ')}`);
-    oracleReady = false;
-  } else {
-    if (!oracleReady) console.log("[Oracle] Price oracle is now READY (Connected via Concurrent Feed)");
-    oracleReady = true;
+    oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
+    if (oracleReady) {
+        console.log(`[Oracle] ✅ TICKER: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
+        io.emit('price_update', prices);
+    }
+  } catch (e) {
+    console.error("[Oracle] ❌ Global Oracle Failure:", e.message);
   }
 };
 
-// Start Oracle Pulse (1s Concurrent Feed)
-setInterval(fetchConcurrentPrices, 1000);
+// Start Oracle Pulse (2s interval to reduce local network load)
+setInterval(fetchConcurrentPrices, 2000);
 
 const emitAdminStats = async () => {
   try {
