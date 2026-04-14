@@ -241,6 +241,18 @@ export default function UserApp() {
   const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
   const [isAnimatingTheme, setIsAnimatingTheme] = useState(false);
   const [targetTheme, setTargetTheme] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('15market_theme', theme);
@@ -459,6 +471,11 @@ export default function UserApp() {
     }, 200);
 
     try {
+      if (!navigator.onLine) {
+        setIsGlobalLoading(false);
+        return;
+      }
+
       // PROMISE 1: Check if user exists (Onboarding check)
       const profilePromise = Promise.race([
         fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`),
@@ -474,7 +491,14 @@ export default function UserApp() {
       const [pRes, rRes] = await Promise.all([profilePromise, roundsPromise]);
       
       let pData = null;
-      if (pRes.ok) pData = await pRes.json();
+      if (pRes.ok) {
+        pData = await pRes.json();
+      } else if (pRes.status === 404) {
+        pData = { error: "Not Found" };
+      } else {
+        // Network or Server error, don't trigger onboarding redirect
+        throw new Error(`Profile fetch failed with status: ${pRes.status}`);
+      }
       
       let rData = { authorized: false };
       if (rRes.ok) rData = await rRes.json();
@@ -482,22 +506,30 @@ export default function UserApp() {
       const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
 
       // Update Profile & Onboarding State Stealthily
-      if ((!pData || pData.error) && !localOnboarded) {
-        // New user detected
+      if (pData?.error === "Not Found" && !localOnboarded) {
+        // New user detected - ONLY if it's a confirmed 404
         setUserProfile({ address: addr, isInitial: true });
         setShowOnboarding(true);
-      } else {
+      } else if (pData && !pData.error) {
         // Returning user
-        setUserProfile(pData || { address: addr, username: `Trader_${addr.slice(2, 6)}` });
+        setUserProfile(pData);
         setShowOnboarding(false);
         localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+      } else if (localOnboarded) {
+        // Fallback to local state if server is flaky but user is known to be onboarded
+        setUserProfile({ address: addr, username: `Trader_${addr.slice(2, 6)}` });
+        setShowOnboarding(false);
       }
 
       // Update Rounds Access State
       setHasRoundsAccess(rRes.ok ? rData.authorized === true : false);
 
     } catch (e) {
-      // Quiet fail for stealth
+      console.warn("[StealthChecks] Network or Server error:", e.message);
+      // Quiet fail for stealth - preserve current state to avoid bouncing to onboarding
+      if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
+        setShowOnboarding(false);
+      }
       setHasRoundsAccess(false);
     } finally {
       clearInterval(progressInterval);
@@ -1780,9 +1812,9 @@ export default function UserApp() {
 
   // Slider / amount handlers - active balance aware
   const activeBal = useMemo(() => {
-    const bal = sessionMode ? sessionBalance : balance;
+    const bal = sessionMode ? sessionBalance : parseFloat(evmBalance || '0');
     return bal;
-  }, [sessionMode, sessionBalance, balance]);
+  }, [sessionMode, sessionBalance, evmBalance]);
 
   const handleSliderChange = useCallback((e) => {
     const val = e.target.value;
@@ -2462,7 +2494,7 @@ export default function UserApp() {
               </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <div className="flex items-center gap-2">
-                <WalletBalance network={network} theme={theme} balanceOverride={parseFloat(evmBalance || '0')} label="MAIN" />
+                {/* Desktop: Only show session balance per user request */}
                 <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} label="SESSION" />
               </div>
               <button onClick={() => setView("dashboard")} className="p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
@@ -2493,7 +2525,6 @@ export default function UserApp() {
               </div>
               <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
                 <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
               </div>
               <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{
@@ -2628,7 +2659,7 @@ export default function UserApp() {
                         {gameMode === 'rounds' ? (
                           <RoundsTerminal
                             price={price}
-                            balance={balance}
+                            balance={parseFloat(evmBalance || '0')}
                             executeTrade={executeTrade}
                             isExecuting={isExecuting}
                             theme={theme}
@@ -2739,7 +2770,7 @@ export default function UserApp() {
                             {gameMode === 'rounds' ? (
                               <RoundsTerminal
                                 price={price}
-                                balance={balance}
+                                balance={parseFloat(evmBalance || '0')}
                                 executeTrade={executeTrade}
                                 isExecuting={isExecuting}
                                 theme={theme}
@@ -2758,7 +2789,7 @@ export default function UserApp() {
                                 transparent={true}
                                 activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
                                 sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
                                 sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
                                 theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
                                 refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
@@ -2833,6 +2864,46 @@ export default function UserApp() {
 
       <AnimatePresence>
         {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+      </AnimatePresence>
+
+      {/* Network Status Overlay */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="fixed top-0 left-0 w-full z-[200000] bg-red-600/90 backdrop-blur-xl border-b border-white/10"
+          >
+            <div className="flex items-center justify-center gap-3 py-1.5 px-4 overflow-hidden">
+              <div className="flex items-center gap-2">
+                <Activity size={10} className="text-white animate-pulse" />
+                <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
+                  Disconnected • Internet Connection Lost
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+        
+        {isOnline && navigator.onLine && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ 
+              opacity: [0, 1, 1, 0],
+              height: ['auto', 'auto', 'auto', 0]
+            }}
+            transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
+            className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
+          >
+            <div className="flex items-center justify-center gap-3 py-1.5 px-4">
+              <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
+                <CheckCircle size={10} />
+                Network Reconnected • System Online
+              </span>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}

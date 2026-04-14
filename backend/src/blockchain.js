@@ -104,7 +104,7 @@ class BlockchainService {
         id: bet.id.toString(),
         user: bet.user,
         amount: ethers.formatEther(bet.amount),
-        direction: bet.direction === 0 ? 'UP' : 'DOWN',
+        direction: bet.direction === 1 ? 'UP' : 'DOWN',
         entryPrice: bet.entryPrice.toString(),
         duration: bet.duration.toString(),
         settled: bet.settled,
@@ -135,6 +135,23 @@ class BlockchainService {
       }
     }
     return null;
+  }
+
+  async placeBet(betId, direction, duration, entryPrice, marketId, amount) {
+    console.log(`[Blockchain] Placing bet ${betId}...`);
+    const val = ethers.parseEther(amount.toString());
+    
+    // Use Arc Official as primary for placing
+    const tx = await this.arcContract.placeBet(
+      betId, 
+      direction, 
+      duration, 
+      entryPrice, 
+      marketId, 
+      this.arcWallet.address, // Payout comes back to Treasury for Redis credit
+      { value: val }
+    );
+    return await tx.wait();
   }
 }
 

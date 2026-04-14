@@ -312,7 +312,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-xl font-black text-[#3CB371] tabular-nums">${(sessionBalance || 0).toFixed(2)}</div>
+                                        <div className="text-xl font-black text-[#3CB371] tabular-nums">${(parseFloat(sessionBalance || 0)).toFixed(2)}</div>
                                     </div>
 
                                     {/* Main Wallet Source */}
@@ -323,7 +323,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                 <span className={`text-[9px] font-mono font-bold ${isLight ? 'text-[#0a261a]/60' : 'text-white/60'}`}>{truncate(address)}</span>
                                             </div>
                                             <div className={`text-sm font-black ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>
-                                                ${(evmBalance || 0).toFixed(2)}
+                                                ${(parseFloat(evmBalance || 0)).toFixed(2)}
                                             </div>
                                         </div>
                                     </div>

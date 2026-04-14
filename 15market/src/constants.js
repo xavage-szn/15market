@@ -6,8 +6,8 @@ export const ARC_CHAIN_ID = 5042002;
 
 const TW_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID;
 export const ARC_RPCS = [
-    TW_ID ? `https://5042002.rpc.thirdweb.com/${TW_ID}` : "https://5042002.rpc.thirdweb.com",
     "https://rpc.testnet.arc.network",
+    TW_ID ? `https://5042002.rpc.thirdweb.com/${TW_ID}` : "https://5042002.rpc.thirdweb.com",
     "https://arc-testnet.drpc.org"
 ];
 export const ARC_RPC = ARC_RPCS[0];
