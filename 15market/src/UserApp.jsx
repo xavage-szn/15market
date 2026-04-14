@@ -23,7 +23,6 @@ import { publicClient } from "./client";
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
-import { AdminDashboard } from "./components/AdminDashboard";
 
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
@@ -1360,11 +1359,15 @@ export default function UserApp() {
       notify("Broadcasting Trade...", "pending");
 
       // --- STEP 2: BACKGROUND EXECUTION ---
-      (async () => {
+      const backgroundTrade = async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // Reduced to 8s (fast broadcast)
+        
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
               address,
               tradeParams: {
@@ -1378,29 +1381,32 @@ export default function UserApp() {
             })
           });
 
+          clearTimeout(timeoutId);
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Session trade failed");
           
           txHash = data.txHash;
 
           // Update optimistic trade with real TX hash
-          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
-          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
+          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING" } : t));
+          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING" } : t));
 
           // The backend already waits for transaction confirmation before returning success.
-          // Therefore, if we reach this point, the trade is successfully MINED!
           setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
           notify("Trade Broadcasting...", "success");
 
         } catch (err) {
+          clearTimeout(timeoutId);
+          console.error("[Trade] Execution failed:", err.message);
           // ROLLBACK OPTIMISTIC STATE
           setSessionBalance(prev => prev + amtNum);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(`Execution Error: ${err.message}`, "error");
+          notify(`Execution Error: ${err.name === 'AbortError' ? 'RPC Timeout' : err.message}`, "error");
         }
-      })();
+      };
 
+      backgroundTrade();
       setIsExecuting(false);
 
     } catch (err) {
@@ -1508,12 +1514,9 @@ export default function UserApp() {
     try {
       const sources = [];
 
-      // 1. Pyth Sources (Multiple Hermes endpoints for redundancy)
+      // 1. Pyth (Primary - Best for on-chain alignment)
       if (activeMarket.pythId) {
         const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
-
-        // Hermes v2 expects ids[] array syntax and full 0x hex
-        // PRODUCTION FIX: Only use Hermes V2. Benchmark V1 returns 422 errors.
         sources.push({
           name: "pyth",
           url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
@@ -1524,7 +1527,23 @@ export default function UserApp() {
         });
       }
 
-      // Removed MEXC, Kraken, and JUP sources as requested by user to strictly use Pyth.
+      // 2. Binance (Extremely fast & reliable fallback)
+      if (activeMarket.binance) {
+        sources.push({
+          name: "binance",
+          url: `https://api.binance.com/api/v3/ticker/price?symbol=${activeMarket.binance.toUpperCase()}`,
+          parse: d => parseFloat(d.price)
+        });
+      }
+
+      // 3. MEXC (Redundant global liquidity source)
+      if (activeMarket.binance) {
+        sources.push({
+          name: "mexc",
+          url: `https://api.mexc.com/api/v3/ticker/price?symbol=${activeMarket.binance.toUpperCase()}`,
+          parse: d => parseFloat(d.price)
+        });
+      }
 
       if (sources.length === 0) return null;
 
@@ -1943,20 +1962,59 @@ export default function UserApp() {
               return [{ ...trade, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }, ...prev];
             });
 
-            // Update activeTrades with locked final status
+            // Update activeTrades with RESOLVING status first
             setActiveTrades(prev => prev.map(t =>
-              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout } : t
+              t.id === trade.id ? { ...t, status: "RESOLVING", settlementPrice: settlementPriceStr } : t
             ));
 
             // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches
-            fetch(`${KEEPER_URL_ARC}/settle`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  id: trade.id,
-                  exitPrice: capturedPrice
-              })
-            }).catch(() => { });
+            const settleTrade = async () => {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 10000); // Reduced to 10s
+              
+              try {
+                const res = await fetch(`${KEEPER_URL_ARC}/settle`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  signal: controller.signal,
+                  body: JSON.stringify({
+                    id: trade.id,
+                    exitPrice: capturedPrice
+                  })
+                });
+                
+                clearTimeout(timeoutId);
+                if (!res.ok) throw new Error("Settlement request failed");
+                
+                const data = await res.json();
+                console.log(`[Settlement] Backend confirmed for ${trade.id}. Result: ${data.won ? 'WON' : 'LOST'}`);
+
+                // Update final result into history and active states
+                setTradeHistory(prev => prev.map(t =>
+                  String(t.id || t.tx || t.nonce) === tradeIdStr
+                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }
+                    : t
+                ));
+                setActiveTrades(prev => prev.map(t =>
+                  t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout } : t
+                ));
+
+                // Instantly refresh balance to show winnings
+                setTimeout(() => updateEvmSessionBal(true), 1000);
+
+              } catch (err) {
+                clearTimeout(timeoutId);
+                console.error(`[Settlement] Error for ${trade.id}:`, err.message);
+                // Even if backend fails, we keep the local resolution so the user isn't stuck "RESOLVING"
+                // The next poll will eventually sync it if the backend succeeds later
+                setActiveTrades(prev => prev.map(t =>
+                  t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout } : t
+                ));
+                resolvingInProgress.current.delete(trade.id);
+              }
+            };
+
+            settleTrade();
           }
         }
       }
@@ -2464,7 +2522,6 @@ export default function UserApp() {
       {view === "dashboard" ? (
         <DashboardPage
           onBack={() => setView("trading")}
-          onAdmin={() => setView("admin")}
           wallet={wallet}
           sessionBalance={sessionBalance}
           evmBalance={parseFloat(evmBalance || "0")}
@@ -2482,13 +2539,6 @@ export default function UserApp() {
             setSelectedTransaction(tx);
             setIsTransactionReceiptOpen(true);
           }}
-        />
-      ) : view === "admin" ? (
-        <AdminDashboard
-          onBack={() => setView("dashboard")}
-          theme={theme}
-          notify={notify}
-          platformSettings={platformSettings}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">

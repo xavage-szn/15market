@@ -88,68 +88,12 @@ function LiveExecutionComponent({
         return () => clearInterval(interval);
     }, []);
 
-    // --- SETTLEMENT CONTROLLER ---
-    // Monitors trades and triggers settlement + local state lock when timer expires
-    // Performance Optimization: Use refs for values that change fast but don't need to trigger re-render of the outer shell
+    // --- UI-ONLY MONITORING ---
     const priceRefInternal = useRef(price);
     useEffect(() => { priceRefInternal.current = price; }, [price]);
 
-    useEffect(() => {
-        const now = Date.now();
-        const priceVal = parseFloat(priceRefInternal.current);
-
-        activeTrades.forEach(trade => {
-            const start = trade.startTime || trade.timestamp || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000));
-            const duration = trade.duration || 15;
-            const expiryMs = trade.expiry || trade.expiryMs || (start ? (start + (duration * 1000)) : (now + (duration * 1000)));
-
-            // STABILITY FIX: Ensure countdown doesn't exceed duration due to clock skew
-            const timerExpired = now >= expiryMs;
-
-            const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
-            const isResolving = trade.status === "RESOLVING";
-
-            if (timerExpired && !isFinal && !isResolving && !frozenPnL.current[trade.id] && !trade.lockedExitPrice) {
-                const entryPriceVal = parseFloat(trade.entryPrice);
-                const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
-                const isWin = isUpTrade ? (priceVal > entryPriceVal) : (priceVal < entryPriceVal);
-
-                // Freeze at the current price exactly when the timer hits zero
-                const lockedPrice = priceVal.toFixed(8);
-
-                console.log(`[Finality] Trade ${trade.id} expired. Locking exit price: ${lockedPrice}`);
-
-                // 1. Freeze locally for immediate UI response
-                frozenPnL.current[trade.id] = {
-                    status: isWin ? "WON" : "LOST",
-                    exitPrice: lockedPrice
-                };
-
-                // 2. Nudge Backend
-                fetch(`${KEEPER_URL_ARC}/settle`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: trade.id,
-                        exitPrice: lockedPrice,
-                        won: isWin,
-                        status: isWin ? "WON" : "LOST"
-                    })
-                }).catch(() => { });
-
-                // Calculate expected payout
-                const durationNum = trade.duration || 15;
-                const multiplierAmt = durationNum <= 5 ? 2.90 : (durationNum <= 10 ? 2.40 : 1.90);
-                const amtParsed = parseFloat(trade.amount);
-                const calcPayout = isWin ? (amtParsed * multiplierAmt).toFixed(2) : "0.00";
-
-                // 3. Update Parent State (Syncs Chart & Other UI)
-                setActiveTrades(prev => prev.map(t =>
-                    t.id === trade.id ? { ...t, lockedExitPrice: lockedPrice, status: isWin ? "WON" : "LOST", payout: calcPayout } : t
-                ));
-            }
-        });
-    }, [elapsed, activeTrades, price, setActiveTrades]);
+    const frozenPnL = useRef({}); // tradeId -> { status, exitPrice }
+    const lastTimeRef = useRef({}); // tradeId -> lastTime
 
     const removeTrade = (id) => {
         setActiveTrades(prev => prev.filter(t => t.id !== id));
@@ -161,10 +105,6 @@ function LiveExecutionComponent({
             setIsExpanded(false);
         }
     }, [activeTrades.length]);
-
-    // Keep track of 'frozen' results to prevent UI flicker during settlement phase
-    const frozenPnL = useRef({}); // tradeId -> { status, exitPrice }
-    const lastTimeRef = useRef({}); // tradeId -> lastTime
 
     return (
         <div className="flex flex-col gap-1 relative min-h-0 h-full">

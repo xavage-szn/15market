@@ -133,13 +133,13 @@ app.get('/session/balance/:address', async (req, res) => {
     const balanceKey = `balance:${addr}`;
     let balance = await redis.get(balanceKey);
     
-    // Auto-flush mock legacy balances here too for returning users
+    // Auto-flush mock legacy balances or missing balances for returning users
     const bNum = parseFloat(balance || '0');
-    if (bNum === 100.0) {
+    if (!balance || bNum === 100.0) {
       const onChainBalance = await blockchain.getBalance(addr);
       balance = onChainBalance || '0.0';
       await redis.set(balanceKey, balance);
-      console.log(`[Balance] Flushed legacy mock for ${addr} via GET request (Numeric Match).`);
+      console.log(`[Balance] Synced missing/mock balance for ${addr} via GET request.`);
     }
 
     res.json({ balance: balance || '0.0' });
@@ -261,9 +261,10 @@ app.post('/session/trade', async (req, res) => {
     io.emit('new_trade', activityRecord);
     trackActivity(userAddr);
 
+    console.log(`[API] Trade placement SUCCESS for ${id}. TX: ${receipt.hash}`);
     res.json({ success: true, txHash: receipt.hash });
   } catch (error) {
-    console.error("[API] Trade execution failed:", error);
+    console.error(`[API] Trade execution failed for ${id}:`, error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -346,7 +347,7 @@ app.post('/settle', async (req, res) => {
     console.error(`[API] Settlement failed for bet ${id}:`, error.message);
     res.status(500).json({ 
       error: "Settlement processing failed", 
-      details: error.message 
+      message: error.message 
     });
   }
 });
@@ -486,7 +487,7 @@ app.get('/active-market', (req, res) => res.json({ activeId: 'btc' }));
 app.get('/campaigns', (req, res) => res.json([]));
 app.get('/winner-banner', (req, res) => res.json(null));
 app.get('/time', (req, res) => res.json({ time: Date.now() }));
-app.get('/health', (req, res) => res.send('OK'));
+app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: Date.now(), version: '1.2.5' }));
 
 // --- Global Error Boundary ---
 app.use((err, req, res, next) => {

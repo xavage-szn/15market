@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
@@ -80,14 +80,13 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
         setIsSyncing(true);
         try {
             // Sync to Keeper (Handle + Image)
-            await fetch(`${KEEPER_URL_ARC}/profile`, {
+            await fetch(`${KEEPER_URL_ARC}/profiles`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    address: address,
+                    address: address.toLowerCase(),
                     username: userProfile?.username || `Trader_${address.slice(0, 4)}`,
-                    xHandle: handle,
-                    xProfileImage: image || "",
+                    avatar: image || "",
                 })
             });
 
@@ -104,7 +103,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
         try {
             // AUTHORITATIVE BACKEND METRICS
             if (address) {
-                const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${address}`);
+                const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data && data.stats) {
