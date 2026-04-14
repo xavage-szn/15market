@@ -15,6 +15,38 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// --- Socket & Metrics Helpers ---
+
+const emitAdminStats = async () => {
+  try {
+    const totalVolume = await redis.get('stats:total_volume') || '0';
+    const totalTrades = await redis.get('stats:total_trades') || '0';
+    const treasuryBalance = await blockchain.getBalance(blockchain.arcWallet.address);
+    const activeUsersCount = await redis.scard('stats:active_users_set') || 0;
+
+    io.emit('admin_metrics_update', {
+      totalVolume,
+      totalTrades,
+      treasuryBalance,
+      activeUsers: activeUsersCount,
+      timestamp: Date.now()
+    });
+  } catch (e) {
+    console.error("[Metrics] Pulse failed:", e.message);
+  }
+};
+
+// Periodic Metrics Pulse (5s)
+setInterval(emitAdminStats, 5000);
+
+const trackActivity = async (addr) => {
+  if (!addr) return;
+  const key = 'stats:active_users_set';
+  await redis.sadd(key, addr.toLowerCase());
+  // Expire the entire set occasionally or use individual TTLs? 
+  // For simplicity, we just keep them for the current session.
+};
+
 // --- User Profile / Onboarding ---
 
 app.get('/profiles/:address', async (req, res) => {
@@ -62,6 +94,10 @@ app.post('/profiles', async (req, res) => {
       type: 'ONBOARDING',
       timestamp: Date.now()
     }));
+
+    const profileData = { ...profile, theme: avatar || 'default' };
+    io.emit('user_onboarded', profileData);
+    trackActivity(addr);
 
     res.json({ success: true, profile });
   } catch (error) {
@@ -119,14 +155,20 @@ app.post('/session/init', async (req, res) => {
   
   const addr = address.toLowerCase();
   try {
-    const balance = await redis.get(`balance:${addr}`) || '100.0';
-    if (!(await redis.get(`balance:${addr}`))) {
-      await redis.set(`balance:${addr}`, '100.0');
+    const exists = await redis.get(`balance:${addr}`);
+    let balance = exists;
+    
+    if (!exists) {
+      // Fetch REAL on-chain balance as the starting point
+      const onChainBalance = await blockchain.getBalance(addr);
+      balance = onChainBalance || '0.0';
+      await redis.set(`balance:${addr}`, balance);
+      console.log(`[Session] Initialized ${addr} with on-chain balance: ${balance}`);
     }
     
     res.json({ 
       success: true, 
-      sessionAddress: addr, // In simplified mode, session = main or deterministic
+      sessionAddress: addr, 
       balance 
     });
   } catch (e) {
@@ -152,8 +194,20 @@ app.post('/session/trade', async (req, res) => {
       return res.status(400).json({ error: "Insufficient session balance" });
     }
 
-    // 2. Map Bet to User in Redis (CRITICAL for settlement)
-    await redis.set(`bet_owner:${id}`, userAddr, 'EX', 86400); // 24h expiry
+    // 2. Map Bet to User & Store Details in Redis (CRITICAL for authoritative locking)
+    const tradeData = {
+      id,
+      userAddr,
+      direction,
+      amount,
+      entryPrice,
+      duration,
+      marketId,
+      timestamp: Date.now(),
+      status: 'PENDING'
+    };
+    await redis.set(`bet_owner:${id}`, userAddr, 'EX', 86400); 
+    await redis.set(`trade:${id}`, JSON.stringify(tradeData), 'EX', 86400);
 
     // 3. Execute On-Chain Bet
     const receipt = await blockchain.placeBet(id, direction, duration, entryPrice, marketId, amount);
@@ -162,15 +216,27 @@ app.post('/session/trade', async (req, res) => {
     const newBal = currentBal - stake;
     await redis.set(`balance:${userAddr}`, newBal.toFixed(4));
 
-    // 5. Log Activity
-    await redis.lpush(`activity:${userAddr}`, JSON.stringify({
+    // 5. Update Global Stats
+    await redis.incrbyfloat('stats:total_volume', stake);
+    await redis.incr('stats:total_trades');
+
+    // 6. Log Activity & Emit Socket
+    const activityRecord = {
       type: 'TRADE_PLACED',
       id,
       amount,
       direction,
+      symbol: marketId === 1 ? 'BTC' : (marketId === 0 ? 'ETH' : 'USDC'),
       timestamp: Date.now(),
-      txHash: receipt.hash
-    }));
+      txHash: receipt.hash,
+      userAddr
+    };
+
+    await redis.lpush(`activity:${userAddr}`, JSON.stringify(activityRecord));
+    
+    // Admin Instant Indexing
+    io.emit('new_trade', activityRecord);
+    trackActivity(userAddr);
 
     res.json({ success: true, txHash: receipt.hash });
   } catch (error) {
@@ -193,55 +259,66 @@ app.get('/history/:address', async (req, res) => {
 });
 
 app.post('/settle', async (req, res) => {
-  const { id, exitPrice } = req.body;
-  console.log(`[API] Settling trade ${id} at ${exitPrice}...`);
+  const { id, exitPrice, won, status } = req.body;
+  console.log(`[API] Authoritative Settlement for ${id}: ${status} at ${exitPrice}`);
   
   try {
-    // 1. Execute on-chain settlement (Parallel Arc/Thirdweb)
+    // 1. LOCK THE RESULT (Source of Truth)
+    // We store the frontend's calculated result as the ground truth in Redis
+    const lockedResult = {
+      exitPrice,
+      won: won === true || status === "WON",
+      status: status || (won ? "WON" : "LOST"),
+      lockedAt: Date.now()
+    };
+    await redis.set(`locked_result:${id}`, JSON.stringify(lockedResult), 'EX', 86400);
+
+    // 2. Execute on-chain settlement
     const receipt = await blockchain.settleBet(id, exitPrice);
     
-    // 2. Parse the result from the transaction receipt
-    const event = blockchain.parseSettlementEvent(receipt);
-    
-    if (event) {
-      console.log(`[API] Bet ${id} settled. Won: ${event.won}, Payout: ${event.payout} ARC`);
+    // 3. Update Session Balance based on the LOCKED result (Authoritative)
+    const betOwner = await redis.get(`bet_owner:${id}`);
+    if (betOwner) {
+      const userAddr = betOwner.toLowerCase();
       
-      // 3. If won, update the user's session balance
-      if (event.won && parseFloat(event.payout) > 0) {
-        // Find who owns this bet ID
-        const betOwner = await redis.get(`bet_owner:${id}`) || event.user.toLowerCase();
-        const userAddr = betOwner;
-        
-        // Use Redis for balance calculation
+      const tradeStr = await redis.get(`trade:${id}`);
+      let payout = 0;
+      if (tradeStr) {
+        const trade = JSON.parse(tradeStr);
+        const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
+        if (lockedResult.won) payout = parseFloat(trade.amount) * multiplier;
+      }
+
+      const activityData = {
+        type: 'TRADE_SETTLED',
+        betId: id,
+        won: lockedResult.won,
+        payout: payout.toFixed(4),
+        exitPrice,
+        timestamp: Date.now(),
+        userAddr
+      };
+
+      if (payout > 0) {
         const currentBalanceStr = await redis.get(`balance:${userAddr}`);
         const currentBalance = parseFloat(currentBalanceStr || '100.0');
-        const newBalance = currentBalance + parseFloat(event.payout);
-        
-        // Persist to Redis
+        const newBalance = currentBalance + payout;
         await redis.set(`balance:${userAddr}`, newBalance.toFixed(4));
-
-        // Log Activity to Redis
-        await redis.lpush(`activity:${userAddr}`, JSON.stringify({
-          type: 'TRADE_SETTLED',
-          betId: id,
-          won: event.won,
-          payout: event.payout,
-          timestamp: Date.now()
-        }));
-          
-        console.log(`[API] Credited ${event.payout} to session wallet (Redis) for ${userAddr}. New Balance: ${newBalance.toFixed(4)}`);
+        console.log(`[API] Locked Win: Credited ${payout.toFixed(4)} to ${userAddr}.`);
       }
+
+      await redis.lpush(`activity:${userAddr}`, JSON.stringify(activityData));
       
-      res.json({ 
-        success: true, 
-        won: event.won, 
-        payout: event.payout,
-        txHash: receipt.hash 
-      });
-    } else {
-      console.warn(`[API] Settlement transaction succeeded but BetSettled event not found in receipt for ${id}`);
-      res.json({ success: true, txHash: receipt.hash });
+      // Admin Instant Settlement Update
+      io.emit('trade_settled', activityData);
+      trackActivity(userAddr);
     }
+    
+    res.json({ 
+      success: true, 
+      won: lockedResult.won, 
+      txHash: receipt.hash 
+    });
   } catch (error) {
     console.error(`[API] Settlement failed for bet ${id}:`, error.message);
     res.status(500).json({ 
@@ -251,14 +328,42 @@ app.post('/settle', async (req, res) => {
   }
 });
 
-// --- Platform Stats & Misc ---
+// --- Platform Stats & Admin ---
 
 app.get('/settings', (req, res) => {
   res.json({
     minBet: 0.1,
     maxBet: 10000,
     maintenanceMode: false,
-    tradingHalted: false
+    tradingHalted: false,
+    systemBanner: "",
+    bannerLevel: "info"
+  });
+});
+
+app.post('/settings', async (req, res) => {
+  const settings = req.body;
+  // In a real app, verify ADMIN_TOKEN here
+  io.emit('settings_updated', settings);
+  res.json({ success: true, settings });
+});
+
+app.post('/broadcast', async (req, res) => {
+  const { text, duration, level } = req.body;
+  io.emit('broadcast_received', { text, duration, level });
+  res.json({ success: true });
+});
+
+app.get('/protocol-stats', async (req, res) => {
+  const totalVolume = await redis.get('stats:total_volume') || '0';
+  const totalTrades = await redis.get('stats:total_trades') || '0';
+  const activeUsers = await redis.scard('stats:active_users_set') || 0;
+  
+  res.json({
+    totalVolume,
+    totalTrades,
+    activeUsers,
+    treasuryBalance: await blockchain.getBalance(blockchain.arcWallet.address)
   });
 });
 
