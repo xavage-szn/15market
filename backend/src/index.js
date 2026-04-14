@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const db = require('./database');
 const blockchain = require('./blockchain');
+const redis = require('./redis');
 require('dotenv').config();
 
 const app = express();
@@ -17,24 +18,48 @@ app.use(express.json());
 
 // --- User Profile / Onboarding ---
 
-app.get('/profiles/:address', (req, res) => {
+app.get('/profiles/:address', async (req, res) => {
   const { address } = req.params;
-  const user = db.prepare('SELECT * FROM users WHERE address = ?').get(address.toLowerCase());
-  if (user) {
-    res.json({ ...user, onboarded: true });
-  } else {
-    res.status(404).json({ error: "User not found" });
+  const addr = address.toLowerCase();
+
+  try {
+    // 1. Try Redis first (Primary/Fast Cache)
+    if (redis) {
+      const cachedUser = await redis.get(`user:${addr}`);
+      if (cachedUser) {
+        console.log(`[Profile] Cache hit for ${addr}`);
+        return res.json({ ...JSON.parse(cachedUser), onboarded: true });
+      }
+    }
+
+    // 2. Fallback to SQLite
+    const user = db.prepare('SELECT * FROM users WHERE address = ?').get(addr);
+    if (user) {
+      console.log(`[Profile] Disk hit for ${addr}, caching...`);
+      if (redis) {
+        await redis.set(`user:${addr}`, JSON.stringify(user));
+      }
+      res.json({ ...user, onboarded: true });
+    } else {
+      res.status(404).json({ error: "User not found" });
+    }
+  } catch (err) {
+    console.error("Profile fetch error:", err);
+    res.status(500).json({ error: "Server error fetching profile" });
   }
 });
 
-app.post('/profiles', (req, res) => {
+app.post('/profiles', async (req, res) => {
   const { address, username, xHandle, avatar } = req.body;
   if (!address || !username) {
     return res.status(400).json({ error: "Address and username are required" });
   }
 
   const addr = address.toLowerCase();
+  const profile = { address: addr, username, xUsername: xHandle || '', onboarded: 1 };
+
   try {
+    // 1. Save to SQLite
     db.prepare(`
       INSERT INTO users (address, username, xUsername, onboarded)
       VALUES (?, ?, ?, 1)
@@ -44,10 +69,20 @@ app.post('/profiles', (req, res) => {
         onboarded = 1
     `).run(addr, username, xHandle || '');
     
-    // Initialize session balance if not exists
+    // 2. Save to Redis
+    if (redis) {
+      await redis.set(`user:${addr}`, JSON.stringify(profile));
+      // Also log activity
+      await redis.lpush(`activity:${addr}`, JSON.stringify({
+        type: 'ONBOARDING',
+        timestamp: Date.now()
+      }));
+    }
+
+    // Initialize session balance if not exists (SQLite)
     db.prepare('INSERT OR IGNORE INTO session_balances (address, balance) VALUES (?, ?)').run(addr, '100.0');
     
-    res.json({ success: true, profile: { address: addr, username, xHandle, avatar } });
+    res.json({ success: true, profile });
   } catch (error) {
     console.error("Onboarding error:", error);
     res.status(500).json({ error: "Failed to onboard user" });
@@ -62,10 +97,21 @@ app.get('/balance/:address', async (req, res) => {
   res.json({ balance });
 });
 
-app.get('/session/balance/:address', (req, res) => {
+app.get('/session/balance/:address', async (req, res) => {
   const { address } = req.params;
-  const row = db.prepare('SELECT balance FROM session_balances WHERE address = ?').get(address.toLowerCase());
-  res.json({ balance: row ? row.balance : '100.0' }); // Default 100 for dev
+  const addr = address.toLowerCase();
+
+  // Try Redis first
+  if (redis) {
+    const cachedBalance = await redis.get(`balance:${addr}`);
+    if (cachedBalance) return res.json({ balance: cachedBalance });
+  }
+
+  const row = db.prepare('SELECT balance FROM session_balances WHERE address = ?').get(addr);
+  const balance = row ? row.balance : '100.0';
+
+  if (redis) await redis.set(`balance:${addr}`, balance, 'EX', 60); // Cache for 60s
+  res.json({ balance });
 });
 
 // --- Rounds & Access Checks ---
@@ -114,6 +160,18 @@ app.post('/settle', async (req, res) => {
             balance = excluded.balance,
             last_updated = CURRENT_TIMESTAMP
         `).run(userAddr, newBalance.toFixed(4));
+        
+        // 4. Update Redis Balance & Activity
+        if (redis) {
+          await redis.set(`balance:${userAddr}`, newBalance.toFixed(4), 'EX', 3600);
+          await redis.lpush(`activity:${userAddr}`, JSON.stringify({
+            type: 'TRADE_SETTLED',
+            betId: id,
+            won: event.won,
+            payout: event.payout,
+            timestamp: Date.now()
+          }));
+        }
           
         console.log(`[API] Credited ${event.payout} to session wallet for ${userAddr}. New Balance: ${newBalance.toFixed(4)}`);
       }
