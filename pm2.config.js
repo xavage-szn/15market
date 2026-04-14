@@ -21,6 +21,17 @@ module.exports = {
             env: {
                 NODE_ENV: 'production'
             }
+        },
+        {
+            name: '15market-rounds',
+            script: 'rounds-backend/index.js',
+            instances: 1,
+            autorestart: true,
+            watch: false,
+            env: {
+                PORT: 3011,
+                NODE_ENV: 'production'
+            }
         }
     ]
 };

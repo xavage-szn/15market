@@ -30,11 +30,13 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
     // Generate synthetic history for "always-there" effect
     useEffect(() => {
-        if (!currentPrice || hasGeneratedSynthetic.current) return;
+        if (!currentPrice) return;
+        
+        // Reset if symbol changed (or first load)
         const now = Date.now();
         const startPrice = parseFloat(currentPrice);
         
-        // Generate synthetic history ONLY ONCE
+        // Generate synthetic history
         const history = [];
         for (let i = 240; i >= 0; i--) {
             const t = now - (i * 500);
@@ -43,7 +45,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
         }
         priceHistoryRef.current = history;
         hasGeneratedSynthetic.current = true;
-    }, [currentPrice]);
+    }, [currentPrice, symbol]); // Add symbol to trigger regeneration on asset switch
 
     useEffect(() => {
         const historyInterval = setInterval(() => {

@@ -4,6 +4,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const blockchain = require('./blockchain');
 const redis = require('./redis');
+const axios = require('axios');
+const proxy = require('express-http-proxy');
 require('dotenv').config();
 
 const app = express();
@@ -16,6 +18,67 @@ app.use(cors());
 app.use(express.json());
 
 // --- Socket & Metrics Helpers ---
+
+// Price Oracle State
+let prices = {
+  btc: 0,
+  eth: 0,
+  sol: 0,
+  mon: 0
+};
+let activeMarketId = 'btc';
+let oracleReady = false;
+
+const fetchConcurrentPrices = async () => {
+  const assets = [
+    { id: 'btc', symbol: 'BTCUSDT' },
+    { id: 'eth', symbol: 'ETHUSDT' },
+    { id: 'sol', symbol: 'SOLUSDT' },
+    { id: 'mon', symbol: 'MONUSDT' }
+  ];
+
+  const pricePromises = assets.map(async (asset) => {
+    try {
+      // Primary: Binance (Concurrent & Optimized)
+      const res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 1500 });
+      if (res.data && res.data.price) {
+        prices[asset.id] = parseFloat(res.data.price);
+        return;
+      }
+    } catch (e) {
+      // Fallback: MEXC
+      try {
+        const resMexc = await axios.get(`https://api.mexc.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 1500 });
+        if (resMexc.data && resMexc.data.price) {
+           prices[asset.id] = parseFloat(resMexc.data.price);
+           return;
+        }
+      } catch (ee) {}
+    }
+    
+    // Recovery for MON if missing from majors (Since it's often a test/new asset)
+    if (asset.id === 'mon' && prices[asset.id] === 0) {
+        prices[asset.id] = 1.0; 
+    }
+  });
+
+  await Promise.allSettled(pricePromises);
+  
+  const allReady = Object.entries(prices)
+    .filter(([id]) => id !== 'mon') // MON is optional if it's not live yet
+    .every(([_, p]) => p > 0);
+
+  if (!allReady) {
+    console.warn(`[Oracle] Price oracle is not ready. Missing prices for: ${Object.entries(prices).filter(([_, p]) => p <= 0).map(([id]) => id).join(', ')}`);
+    oracleReady = false;
+  } else {
+    if (!oracleReady) console.log("[Oracle] Price oracle is now READY (Connected via Concurrent Feed)");
+    oracleReady = true;
+  }
+};
+
+// Start Oracle Pulse (1s Concurrent Feed)
+setInterval(fetchConcurrentPrices, 1000);
 
 const emitAdminStats = async () => {
   try {
@@ -35,6 +98,33 @@ const emitAdminStats = async () => {
     console.error("[Metrics] Pulse failed:", e.message);
   }
 };
+
+// --- Real-time Event Hub ---
+io.on('connection', (socket) => {
+  console.log(`[Socket] New connection: ${socket.id}`);
+
+  // Admin Auth
+  socket.on('auth_admin', (token) => {
+    if (token === process.env.ADMIN_TOKEN) {
+      socket.join('admin_room');
+      console.log(`[Socket] Socket ${socket.id} authorized as ADMIN`);
+      socket.emit('auth_success');
+    }
+  });
+
+  // User Room Joining (for personal balance/trade updates)
+  socket.on('join_user', (address) => {
+    if (address) {
+      const room = address.toLowerCase();
+      socket.join(room);
+      console.log(`[Socket] User ${address} joined their private room: ${room}`);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket] Connection closed: ${socket.id}`);
+  });
+});
 
 // Periodic Metrics Pulse (5s)
 setInterval(emitAdminStats, 5000);
@@ -148,25 +238,18 @@ app.get('/session/balance/:address', async (req, res) => {
   }
 });
 
-// --- Rounds & Access Checks ---
+// --- Rounds & Access Proxy (Forward to Rounds-Backend on port 3011) ---
 
-app.get('/rounds/access/check/:address', (req, res) => {
-  res.json({ authorized: true });
-});
-
-app.get('/rounds/status', (req, res) => {
-  res.json({
-    live: null,
-    next: { id: Date.now(), pools: { long: 0, short: 0, participants: 0 } }
-  });
-});
-
-app.post('/rounds/session-enter', async (req, res) => {
-  // Rounds P2P Entry
-  const { address, roundId, direction, amount } = req.body;
-  console.log(`[Rounds] User ${address} entering round ${roundId}`);
-  res.json({ success: true, txHash: "0x" + "0".repeat(64) }); 
-});
+app.use('/rounds', proxy('http://localhost:3011', {
+  proxyReqOptDecorator: function(proxyReqOpts, srcReq) {
+    // Forward relevant headers
+    return proxyReqOpts;
+  },
+  proxyErrorHandler: function(err, res, next) {
+    console.warn("[Proxy] Rounds-Backend connection error:", err.message);
+    res.status(503).json({ error: "Rounds service temporarily unavailable" });
+  }
+}));
 
 // --- Session Management ---
 
@@ -262,6 +345,13 @@ app.post('/session/trade', async (req, res) => {
     trackActivity(userAddr);
 
     console.log(`[API] Trade placement SUCCESS for ${id}. TX: ${receipt.hash}`);
+    
+    // Notify client if they are in the room
+    const betOwner = await redis.get(`bet_owner:${id}`);
+    if (betOwner) {
+      io.to(betOwner.toLowerCase()).emit('trade_placed', { id, txHash: receipt.hash });
+    }
+
     res.json({ success: true, txHash: receipt.hash });
   } catch (error) {
     console.error(`[API] Trade execution failed for ${id}:`, error.message);
@@ -329,6 +419,11 @@ app.post('/settle', async (req, res) => {
         const newBalance = currentBalance + payout;
         await redis.set(`balance:${userAddr}`, newBalance.toFixed(4));
         console.log(`[API] Locked Win: Credited ${payout.toFixed(4)} to ${userAddr}.`);
+        
+        // INSTANT PUSH: Meeting the <5s requirement
+        io.to(userAddr).emit('balance_update', { balance: newBalance.toFixed(4), reason: 'WIN', betId: id });
+      } else {
+        io.to(userAddr).emit('balance_update', { reason: 'LOSS', betId: id });
       }
 
       await redis.lpush(`activity:${userAddr}`, JSON.stringify(activityData));
@@ -479,15 +574,38 @@ app.get('/listings', (req, res) => {
   res.json([
     { id: 'btc', symbol: 'BTC', binance: 'BTCUSDT' },
     { id: 'eth', symbol: 'ETH', binance: 'ETHUSDT' },
-    { id: 'sol', symbol: 'SOL', binance: 'SOLUSDT' }
+    { id: 'sol', symbol: 'SOL', binance: 'SOLUSDT' },
+    { id: 'mon', symbol: 'MON', binance: 'MONUSDT' }
   ]);
 });
 
-app.get('/active-market', (req, res) => res.json({ activeId: 'btc' }));
+app.get('/prices', (req, res) => {
+  if (!oracleReady) return res.status(503).json({ error: "Price oracle is not ready", status: 'WAITING' });
+  res.json(prices);
+});
+
+app.get('/active-market', (req, res) => res.json({ activeId: activeMarketId }));
+
+app.post('/active-market', (req, res) => {
+  const { activeId } = req.body;
+  if (activeId) {
+    activeMarketId = activeId;
+    console.log(`[Market] Switched active market to: ${activeId}`);
+    io.emit('market_changed', { activeId });
+    res.json({ success: true, activeId });
+  } else {
+    res.status(400).json({ error: "activeId required" });
+  }
+});
 app.get('/campaigns', (req, res) => res.json([]));
 app.get('/winner-banner', (req, res) => res.json(null));
 app.get('/time', (req, res) => res.json({ time: Date.now() }));
-app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: Date.now(), version: '1.2.5' }));
+app.get('/health', (req, res) => res.json({ 
+  status: 'OK', 
+  oracle: oracleReady ? 'READY' : 'NOT_READY',
+  timestamp: Date.now(), 
+  version: '1.2.6' 
+}));
 
 // --- Global Error Boundary ---
 app.use((err, req, res, next) => {
