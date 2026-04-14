@@ -66,20 +66,22 @@ class BlockchainService {
             const bal = await this.callWithTimeout(provider.getBalance(address), 10000);
             return ethers.formatEther(bal);
         } catch (e) {
-            throw new Error(`Provider ${idx} failed: ${e.message}`);
+            console.warn(`[Blockchain] Provider ${idx} (${ARC_RPCS[idx]}) failed for ${address}: ${e.message}`);
+            throw e;
         }
     });
 
     try {
       // Use the FIRST successful response from any provider
-      return await Promise.any(balancePromises);
+      const result = await Promise.any(balancePromises);
+      return result;
     } catch (error) {
-      if (retryCount < 3) {
-          console.warn(`[Blockchain] Balance fetch failed for ${address}. Retrying (${retryCount + 1}/3)...`);
-          await new Promise(r => setTimeout(r, 1000));
+      if (retryCount < 2) {
+          console.warn(`[Blockchain] ⚠️ Cycle ${retryCount + 1} failed. Re-initiating race across all sources for ${address}...`);
+          await new Promise(r => setTimeout(r, 2000));
           return this.getBalance(address, retryCount + 1);
       }
-      console.error("[Blockchain] TOTAL FAILURE: All RPC providers failed after retries for balance.");
+      console.error("[Blockchain] ❌ FATAL REJECTION: All 5 RPC streams are unreachable from your current network.");
       return "0";
     }
   }

@@ -37,27 +37,46 @@ const fetchConcurrentPrices = async () => {
   ];
 
   const pricePromises = assets.map(async (asset) => {
+    const fetchFromBinance = async () => {
+      const res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 5000 });
+      return parseFloat(res.data.price);
+    };
+
+    const fetchFromMexc = async () => {
+      const res = await axios.get(`https://api.mexc.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 5000 });
+      return parseFloat(res.data.price);
+    };
+
+    const fetchFromPyth = async () => {
+      // BTC, ETH, SOL price IDs for Pyth
+      const pythIds = {
+        'btc': 'e62df6c8b4a27e183f5e49c0528c4aa2ac2f346b0a9c19d57513055ca74c33f4',
+        'eth': 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
+        'sol': 'ef0d8b6fda2ceba41da3678a3169b59d9df5691d1d3bb73241211ef5ca3102ea'
+      };
+      if (!pythIds[asset.id]) throw new Error("No Pyth ID");
+      const res = await axios.get(`https://benchmarks.pyth.network/v1/updates/price/latest?ids=${pythIds[asset.id]}`, { timeout: 5000 });
+      // Pyth returns price * 10^expo. e.g. 6500000000 with expo -8.
+      const data = res.data[0];
+      return parseFloat(data.price.price) * Math.pow(10, data.price.expo);
+    };
+
     try {
-      // Primary: Binance (Concurrent & Optimized)
-      // Increase timeout for local dev environments (3000ms)
-      const res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 3000 });
-      if (res.data && res.data.price) {
-        prices[asset.id] = parseFloat(res.data.price);
-        return;
-      }
+      // Racing across ALL 3 sources for EVERY asset
+      const fastestPrice = await Promise.any([
+        fetchFromBinance(),
+        fetchFromMexc(),
+        fetchFromPyth()
+      ]);
+      prices[asset.id] = fastestPrice;
     } catch (e) {
-      // Fallback: MEXC
-      try {
-        const resMexc = await axios.get(`https://api.mexc.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 1500 });
-        if (resMexc.data && resMexc.data.price) {
-           prices[asset.id] = parseFloat(resMexc.data.price);
-           return;
-        }
-      } catch (ee) {}
-    }
-    
-    if (asset.id === 'mon' && prices[asset.id] === 0) {
-        prices[asset.id] = 1.0; 
+      if (asset.id !== 'mon') {
+        console.error(`[Oracle] ❌ Total failure for ${asset.id} across ALL sources (Binance, MEXC, Pyth):`, e.message);
+      }
+      
+      if (asset.id === 'mon' && prices[asset.id] === 0) {
+          prices[asset.id] = 1.0; 
+      }
     }
   });
 
