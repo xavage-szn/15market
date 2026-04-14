@@ -112,16 +112,31 @@ export const OnboardingFlow = ({ address, onComplete, theme }) => {
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="flex justify-center gap-4 mb-8">
-                                        {AVATARS.map((url, i) => (
-                                            <button 
-                                                key={i}
-                                                onClick={() => setSelectedAvatar(url)}
-                                                className={`w-12 h-12 rounded-full border-2 transition-all ${selectedAvatar === url ? 'border-[#3CB371] scale-110' : 'border-transparent opacity-40 hover:opacity-100'}`}
-                                            >
-                                                <img src={url} alt="Avatar" className="w-full h-full rounded-full" />
-                                            </button>
-                                        ))}
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex justify-center gap-3 overflow-x-auto no-scrollbar py-2">
+                                            {AVATARS.map((url, i) => (
+                                                <button 
+                                                    key={i}
+                                                    onClick={() => setSelectedAvatar(url)}
+                                                    className={`shrink-0 w-12 h-12 rounded-full border-2 transition-all ${selectedAvatar === url ? 'border-[#3CB371] scale-110' : 'border-transparent opacity-40 hover:opacity-100'}`}
+                                                >
+                                                    <img src={url} alt="Avatar" className="w-full h-full rounded-full" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                        
+                                        <div className="relative">
+                                            <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20">
+                                                <Camera size={16} />
+                                            </div>
+                                            <input 
+                                                type="text" 
+                                                value={selectedAvatar.startsWith('http') && !AVATARS.includes(selectedAvatar) ? selectedAvatar : ''}
+                                                onChange={(e) => setSelectedAvatar(e.target.value)}
+                                                placeholder="Custom Avatar URL (Optional)"
+                                                className={`w-full py-4 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-white/5 border-white/10'} border focus:border-[#3CB371] outline-none text-xs font-bold transition-all placeholder:text-white/10`}
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="relative">

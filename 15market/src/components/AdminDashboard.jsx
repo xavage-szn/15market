@@ -17,9 +17,14 @@ import {
     WifiOff,
     RefreshCw,
     Activity,
-    ArrowLeft
+    ArrowLeft,
+    Globe,
+    TrendingUp,
+    DollarSign,
+    Users
 } from "lucide-react";
 import { KEEPER_URL_ARC, ADMIN_TOKEN } from "../constants";
+import { socketService } from "../utils/socket";
 
 export function AdminDashboard({ onBack, theme, notify, platformSettings: initialSettings }) {
     const isLight = theme === 'light';
@@ -38,7 +43,71 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
     const [isConnected, setIsConnected] = useState(true);
     const [syncProgress, setSyncProgress] = useState(0);
 
-    // Heartbeat to stabilize connection perception
+    const [stats, setStats] = useState({
+        totalVolume: "0.00",
+        totalTrades: "0",
+        activeUsers: "0",
+        treasuryBalance: "0.00"
+    });
+    
+    const [recentActivity, setRecentActivity] = useState([]);
+    const [liveUsers, setLiveUsers] = useState([]); // { lat, lng, id } for map
+
+    // Real-time Event Subscriptions
+    useEffect(() => {
+        socketService.connect();
+
+        // 1. Metrics Pulse
+        const unbindMetrics = socketService.on('admin_metrics_update', (data) => {
+            setStats(prev => ({
+                ...prev,
+                totalVolume: data.totalVolume,
+                totalTrades: data.totalTrades,
+                activeUsers: data.activeUsers,
+                treasuryBalance: data.treasuryBalance
+            }));
+            setIsConnected(true);
+        });
+
+        // 2. New Trade (Sub-second Indexing)
+        const unbindTrades = socketService.on('new_trade', (trade) => {
+            setRecentActivity(prev => [trade, ...prev].slice(0, 50));
+            // Trigger a mini-pulse on the stats if needed, or wait for next heartbeat
+        });
+
+        // 3. User Onboarding (Geo Pin)
+        const unbindUsers = socketService.on('user_onboarded', (user) => {
+            const newPin = {
+                id: Date.now(),
+                x: Math.random() * 80 + 10, // Randomish for demo, could use IP geo
+                y: Math.random() * 60 + 20
+            };
+            setLiveUsers(prev => [...prev, newPin]);
+            setTimeout(() => {
+                setLiveUsers(prev => prev.filter(p => p.id !== newPin.id));
+            }, 5000);
+        });
+
+        // 4. Initial Fetch
+        const fetchStats = async () => {
+            try {
+                const res = await fetch(`${KEEPER_URL_ARC}/protocol-stats`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setStats(data);
+                }
+            } catch (e) {}
+        };
+        fetchStats();
+
+        return () => {
+            unbindMetrics();
+            unbindTrades();
+            unbindUsers();
+        };
+    }, []);
+
+    // Heartbeat for connection status
     useEffect(() => {
         const interval = setInterval(async () => {
             try {
@@ -264,21 +333,55 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                         </AdminCard>
 
                         <AdminCard title="Platform Metrics" icon={Activity} accent="#3CB371">
-                             <div className="grid grid-cols-3 gap-6">
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {[
-                                    { label: 'Active Users', value: '428', icon: Zap },
-                                    { label: 'Sync Status', value: 'Healthy', icon: Check },
-                                    { label: 'Node Uptime', value: '99.98%', icon: Clock }
+                                    { label: 'Total Volume', value: `$${parseFloat(stats.totalVolume).toLocaleString()}`, icon: DollarSign, color: '#3CB371' },
+                                    { label: 'Active Users', value: stats.activeUsers, icon: Users, color: '#3b82f6' },
+                                    { label: 'Total Trades', value: stats.totalTrades, icon: TrendingUp, color: '#f59e0b' },
+                                    { label: 'Treasury', value: `${parseFloat(stats.treasuryBalance).toFixed(2)} ARC`, icon: Zap, color: '#ef4444' }
                                 ].map((stat, i) => (
-                                    <div key={i} className={`p-4 rounded-2xl border ${isLight ? 'bg-white border-black/5' : 'bg-white/5 border-white/5'}`}>
+                                    <div key={i} className={`p-4 rounded-2xl border ${isLight ? 'bg-white border-black/5' : 'bg-white/5 border-white/5 shadow-inner'}`}>
                                         <div className="flex items-center gap-2 mb-2 opacity-40">
-                                            <stat.icon size={12} />
+                                            <stat.icon size={12} style={{ color: stat.color }} />
                                             <span className="text-[8px] font-black uppercase tracking-widest">{stat.label}</span>
                                         </div>
-                                        <div className={`text-lg font-black ${isLight ? 'text-black' : 'text-white'}`}>{stat.value}</div>
+                                        <div className={`text-lg font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{stat.value}</div>
                                     </div>
                                 ))}
                              </div>
+                        </AdminCard>
+
+                        <AdminCard title="Global User Presence" icon={Globe} accent="#3b82f6">
+                            <div className={`relative w-full aspect-[2/1] rounded-3xl overflow-hidden border ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10' : 'bg-black/40 border-white/5'}`}>
+                                {/* Simplified SVG World Map */}
+                                <svg className="w-full h-full opacity-20" viewBox="0 0 800 400" fill="currentColor">
+                                    <path d="M150,100 Q200,80 250,100 T350,120 T450,100 T550,80 T650,100 T750,120 L750,300 Q650,320 550,300 T450,280 T350,300 T250,320 T150,300 Z" opacity="0.5" />
+                                    <circle cx="200" cy="150" r="40" />
+                                    <circle cx="500" cy="200" r="60" />
+                                    <circle cx="650" cy="120" r="30" />
+                                </svg>
+                                
+                                {/* Live Pulsing Pins */}
+                                <AnimatePresence>
+                                    {liveUsers.map(user => (
+                                        <motion.div
+                                            key={user.id}
+                                            initial={{ scale: 0, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            exit={{ scale: 2, opacity: 0 }}
+                                            className="absolute w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_15px_#3b82f6]"
+                                            style={{ left: `${user.x}%`, top: `${user.y}%` }}
+                                        >
+                                            <div className="absolute inset-x-[-4px] inset-y-[-4px] border-2 border-blue-500 rounded-full animate-ping" />
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+                                
+                                <div className="absolute bottom-4 left-6 flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                    <span className="text-[8px] font-black uppercase tracking-widest opacity-40">Live Incoming Traffic</span>
+                                </div>
+                            </div>
                         </AdminCard>
                     </div>
 
@@ -348,6 +451,41 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                                         {platformSettings.systemBanner || "No active manual broadcast. Platform running standard tickers."}
                                     </p>
                                 </div>
+                            </div>
+                        </AdminCard>
+
+                        <AdminCard title="Recent Activity" icon={Clock} accent="#f59e0b">
+                            <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto no-scrollbar">
+                                {recentActivity.length === 0 ? (
+                                    <div className="py-10 text-center opacity-20 text-[9px] font-black uppercase tracking-widest">
+                                        No recent trades detected
+                                    </div>
+                                ) : (
+                                    recentActivity.map((act, i) => (
+                                        <motion.div 
+                                            initial={{ x: -20, opacity: 0 }}
+                                            animate={{ x: 0, opacity: 1 }}
+                                            key={act.id || i}
+                                            className={`p-3 rounded-2xl border flex items-center justify-between ${isLight ? 'bg-white border-black/5' : 'bg-white/5 border-white/5'}`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${act.direction === 'UP' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-red-500/10 text-red-500'}`}>
+                                                    {act.direction === 'UP' ? <TrendingUp size={14} /> : <TrendingUp size={14} className="rotate-180" />}
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] font-black uppercase">{act.userAddr?.slice(0, 6)}...{act.userAddr?.slice(-4)}</div>
+                                                    <div className="text-[8px] opacity-40 font-bold uppercase">{act.symbol} • ${act.amount}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className={`text-[10px] font-black ${act.won ? 'text-[#3CB371]' : (act.type === 'TRADE_PLACED' ? 'text-amber-500' : 'text-red-500')}`}>
+                                                    {act.type === 'TRADE_PLACED' ? 'PENDING' : (act.won ? `+$${act.payout}` : 'LOST')}
+                                                </div>
+                                                <div className="text-[8px] opacity-20 font-mono capitalize">{new Date(act.timestamp).toLocaleTimeString()}</div>
+                                            </div>
+                                        </motion.div>
+                                    ))
+                                )}
                             </div>
                         </AdminCard>
                     </div>

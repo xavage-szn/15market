@@ -275,20 +275,53 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                         <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
                             {/* Profile & Auto-Signer Compact Card */}
                             <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px]">
-                                        <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#c8ddd2]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
-                                            {userProfile?.xProfileImage ? (
-                                                <img src={userProfile.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <User size={20} className={isLight ? 'text-[#3CB371]/40' : 'text-white/50'} />
-                                            )}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px]">
+                                            <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#c8ddd2]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
+                                                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                                                    <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <User size={20} className={isLight ? 'text-[#3CB371]/40' : 'text-white/50'} />
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h2 className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} leading-tight`}>{userProfile?.username || "Trader"}</h2>
+                                            <div className={`text-[8px] font-mono uppercase tracking-widest opacity-40`}>{truncate(address)}</div>
                                         </div>
                                     </div>
-                                    <div>
-                                        <h2 className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} leading-tight`}>{userProfile?.username || "Trader"}</h2>
-                                        <div className={`text-[8px] font-mono uppercase tracking-widest opacity-40`}>{truncate(address)}</div>
-                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => setPromptConfig({
+                                            title: "Edit Profile",
+                                            placeholder: "New Username",
+                                            onConfirm: (newName) => {
+                                                setPromptConfig({
+                                                    title: "Profile Avatar",
+                                                    placeholder: "Avatar URL",
+                                                    onConfirm: async (newAvatar) => {
+                                                        try {
+                                                            const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                                                                method: 'PATCH',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ username: newName, avatar: newAvatar })
+                                                            });
+                                                            if (res.ok) {
+                                                                setToast("Profile Updated!");
+                                                                setTimeout(() => window.location.reload(), 1000);
+                                                            }
+                                                        } catch (e) {
+                                                            setToast("Update Failed");
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        })}
+                                        className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all`}
+                                    >
+                                        <Settings size={14} className="opacity-40" />
+                                    </button>
                                 </div>
 
                                 <div className="h-px bg-white/5 w-full" />
@@ -312,7 +345,36 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-xl font-black text-[#3CB371] tabular-nums">${(parseFloat(sessionBalance || 0)).toFixed(2)}</div>
+                                        <div className="flex items-center gap-3">
+                                            {isSyncing && <RotateCw size={12} className="animate-spin text-[#3CB371]" />}
+                                            <button 
+                                                onClick={async () => {
+                                                    if (!address) return;
+                                                    setIsSyncing(true);
+                                                    try {
+                                                        const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ address: address.toLowerCase() })
+                                                        });
+                                                        if (res.ok) {
+                                                            const data = await res.json();
+                                                            setToast(`Synced: ${parseFloat(data.balance).toFixed(2)} USDC`);
+                                                            setTimeout(() => window.location.reload(), 1500);
+                                                        }
+                                                    } catch (e) {
+                                                        setToast("Sync Failed");
+                                                    } finally {
+                                                        setIsSyncing(false);
+                                                    }
+                                                }}
+                                                className={`p-1.5 rounded-lg border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all group`}
+                                                title="Hard Sync with Blockchain"
+                                            >
+                                                <RotateCw size={10} className={`${isSyncing ? 'opacity-0' : 'opacity-40 group-hover:opacity-100'}`} />
+                                            </button>
+                                            <div className="text-xl font-black text-[#3CB371] tabular-nums">${(parseFloat(sessionBalance || 0)).toFixed(2)}</div>
+                                        </div>
                                     </div>
 
                                     {/* Main Wallet Source */}

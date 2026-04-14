@@ -91,7 +91,8 @@ app.post('/profiles', async (req, res) => {
     // Initialize session balance from on-chain if not exists or if it's the legacy mock '100.0'
     const balanceKey = `balance:${addr}`;
     let balance = await redis.get(balanceKey);
-    if (!balance || balance === '100.0' || balance === '100') {
+    const bNum = parseFloat(balance || '0');
+    if (!balance || bNum === 100.0) {
       const onChainBalance = await blockchain.getBalance(addr);
       balance = onChainBalance || '0.0';
       await redis.set(balanceKey, balance);
@@ -129,7 +130,18 @@ app.get('/session/balance/:address', async (req, res) => {
 
   try {
     if (!redis) return res.json({ balance: '0.0' });
-    const balance = await redis.get(`balance:${addr}`);
+    const balanceKey = `balance:${addr}`;
+    let balance = await redis.get(balanceKey);
+    
+    // Auto-flush mock legacy balances here too for returning users
+    const bNum = parseFloat(balance || '0');
+    if (bNum === 100.0) {
+      const onChainBalance = await blockchain.getBalance(addr);
+      balance = onChainBalance || '0.0';
+      await redis.set(balanceKey, balance);
+      console.log(`[Balance] Flushed legacy mock for ${addr} via GET request (Numeric Match).`);
+    }
+
     res.json({ balance: balance || '0.0' });
   } catch (e) {
     res.json({ balance: '0.0' });
@@ -168,11 +180,12 @@ app.post('/session/init', async (req, res) => {
     let balance = await redis.get(balanceKey);
     
     // If no balance exists, or it's the legacy mock '100.0', sync from on-chain IMMEDIATELY
-    if (!balance || balance === '100.0' || balance === '100') {
+    const bNum = parseFloat(balance || '0');
+    if (!balance || bNum === 100.0) {
       const onChainBalance = await blockchain.getBalance(addr);
       balance = onChainBalance || '0.0';
       await redis.set(balanceKey, balance);
-      console.log(`[Session] Flushed legacy mock/null balance for ${addr}. Synced with REAL on-chain: ${balance}`);
+      console.log(`[Session] Flushed legacy mock/null balance for ${addr}. Synced with REAL on-chain (Numeric Match): ${balance}`);
     }
     
     res.json({ 

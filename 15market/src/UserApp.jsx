@@ -451,6 +451,7 @@ export default function UserApp() {
 
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [hasRoundsAccess, setHasRoundsAccess] = useState(null); // null = unknown, true/false = verified
 
   const performStealthChecks = useCallback(async (addr) => {
@@ -458,11 +459,11 @@ export default function UserApp() {
     
     setIsGlobalLoading(true);
     setGlobalLoadingProgress(0);
+    setIsOffline(!navigator.onLine);
 
     const startTime = Date.now();
-    const MIN_LOAD_TIME = 5000; // 5s "premium" feel as requested
+    const MIN_LOAD_TIME = 5000;
     
-    // Progress bar simulation for the stealth checks
     const progressInterval = setInterval(() => {
       setGlobalLoadingProgress(prev => {
         if (prev < 90) return prev + (Math.random() * 5);
@@ -470,80 +471,95 @@ export default function UserApp() {
       });
     }, 200);
 
-    try {
-      if (!navigator.onLine) {
-        setIsGlobalLoading(false);
-        return;
+    const runChecks = async () => {
+      try {
+        if (!navigator.onLine) {
+          setIsOffline(true);
+          return false;
+        }
+        setIsOffline(false);
+
+        // 1. Database User Verification (SILENT)
+        const profileRes = await fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
+        
+        if (profileRes && profileRes.ok) {
+          const pData = await profileRes.json();
+          setUserProfile(pData);
+          setShowOnboarding(false);
+          localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+        } else if (profileRes && profileRes.status === 404) {
+          // New User - check local storage to prevent flash if they JUST onboarded
+          const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
+          if (!localOnboarded) {
+            setUserProfile({ address: addr, isInitial: true });
+            setShowOnboarding(true);
+          } else {
+            setShowOnboarding(false);
+          }
+        }
+
+        // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
+        const sessionRes = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: addr.toLowerCase() })
+        }).catch(() => null);
+        
+        if (sessionRes && sessionRes.ok) {
+          const sData = await sessionRes.json();
+          setSessionBalance(parseFloat(sData.balance || 0));
+        }
+
+        // 3. Rounds Access Check
+        const roundsRes = await fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => null);
+        if (roundsRes && roundsRes.ok) {
+          const rData = await roundsRes.json();
+          setHasRoundsAccess(rData.authorized === true);
+        }
+
+        return true;
+      } catch (e) {
+        console.warn("[StealthChecks] Attempt failed:", e.message);
+        return false;
       }
+    };
 
-      // PROMISE 1: Check if user exists (Onboarding check)
-      const profilePromise = Promise.race([
-        fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Profile Timeout")), 10000))
-      ]);
+    // Retry loop if offline or network fail
+    let success = await runChecks();
+    if (!success) {
+      const retryInterval = setInterval(async () => {
+        if (navigator.onLine) {
+          success = await runChecks();
+          if (success) clearInterval(retryInterval);
+        } else {
+          setIsOffline(true);
+        }
+      }, 3000);
       
-      // PROMISE 2: Check if user has Rounds access
-      const roundsPromise = Promise.race([
-        fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Access Timeout")), 10000))
-      ]);
-
-      const [pRes, rRes] = await Promise.all([profilePromise, roundsPromise]);
-      
-      let pData = null;
-      if (pRes.ok) {
-        pData = await pRes.json();
-      } else if (pRes.status === 404) {
-        pData = { error: "Not Found" };
-      } else {
-        // Network or Server error, don't trigger onboarding redirect
-        throw new Error(`Profile fetch failed with status: ${pRes.status}`);
-      }
-      
-      let rData = { authorized: false };
-      if (rRes.ok) rData = await rRes.json();
-
-      const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
-
-      // Update Profile & Onboarding State Stealthily
-      if (pData?.error === "Not Found" && !localOnboarded) {
-        // New user detected - ONLY if it's a confirmed 404
-        setUserProfile({ address: addr, isInitial: true });
-        setShowOnboarding(true);
-      } else if (pData && !pData.error) {
-        // Returning user
-        setUserProfile(pData);
-        setShowOnboarding(false);
-        localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
-      } else if (localOnboarded) {
-        // Fallback to local state if server is flaky but user is known to be onboarded
-        setUserProfile({ address: addr, username: `Trader_${addr.slice(2, 6)}` });
-        setShowOnboarding(false);
-      }
-
-      // Update Rounds Access State
-      setHasRoundsAccess(rRes.ok ? rData.authorized === true : false);
-
-    } catch (e) {
-      console.warn("[StealthChecks] Network or Server error:", e.message);
-      // Quiet fail for stealth - preserve current state to avoid bouncing to onboarding
+      // We don't block the UI forever if it's already cached
       if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
-        setShowOnboarding(false);
+        setTimeout(() => { if (!success) setIsGlobalLoading(false); }, 10000);
       }
-      setHasRoundsAccess(false);
-    } finally {
+    }
+
+    // Wrap up
+    const finish = () => {
       clearInterval(progressInterval);
       setGlobalLoadingProgress(100);
-      
-      // Ensure we hit the 5s target for aesthetics
       const elapsed = Date.now() - startTime;
       const remains = Math.max(0, MIN_LOAD_TIME - elapsed);
-      
-      setTimeout(() => {
-        setIsGlobalLoading(false);
-      }, remains);
+      setTimeout(() => setIsGlobalLoading(false), remains);
+    };
+
+    if (success) {
+      finish();
+    } else {
+      // If still failing after initial wait, but we have local proof, let them in
+      if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
+        finish();
+      }
     }
-  }, []);
+  }, [address]);
 
   // Trigger stealth checks when wallet connects or changes
   useEffect(() => {
@@ -2342,20 +2358,30 @@ export default function UserApp() {
     }
   }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
-  if (isLoading) return (
+  if (isLoading || isGlobalLoading) return (
     <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center bg-black/40">
       <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative mb-20 flex flex-col items-center justify-center">
         <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
         <img src="/logo.png" alt="logo" className="h-32 lg:h-48 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
       </motion.div>
 
-      <div className="flex flex-col items-center justify-center w-full">
-        <MascotLoader
-          status="running"
-          progress={loadingProgress}
-          label="Pre-Flight Systems Check"
-          theme={theme}
-        />
+      <div className="flex flex-col items-center justify-center w-full max-w-sm px-4">
+        {isOffline ? (
+          <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-3xl text-center backdrop-blur-xl animate-pulse">
+            <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
+            <h3 className="text-white font-black uppercase tracking-tighter text-xl mb-2">Internet Disconnected</h3>
+            <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+              We've lost contact with the momentum engine. Please check your connection to resume trading.
+            </p>
+          </div>
+        ) : (
+          <MascotLoader
+            status="running"
+            progress={isGlobalLoading ? globalLoadingProgress : loadingProgress}
+            label={isGlobalLoading ? "Confirming On-Chain Identity" : "Pre-Flight Systems Check"}
+            theme={theme}
+          />
+        )}
       </div>
     </div>
   );
@@ -2924,33 +2950,6 @@ export default function UserApp() {
         transaction={selectedTransaction}
       />
 
-      {/* GET STEALTH VERIFICATION OVERLAY */}
-      <AnimatePresence>
-        {isGlobalLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
-          >
-            <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
-              <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
-              <MascotLoader 
-                progress={globalLoadingProgress} 
-                status="running" 
-                label="INITIALIZING..." 
-                theme="dark" 
-              />
-            </div>
-            
-            {/* Visual Flair */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden origin-center">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#3CB371]/5 rounded-full blur-[120px] animate-pulse" />
-              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#3CB371]/30 to-transparent animate-scanLine" />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Onboarding Flow for new users */}
       {showOnboarding && address && !isGlobalLoading && (
