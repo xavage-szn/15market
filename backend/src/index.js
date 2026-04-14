@@ -2,6 +2,14 @@ const express = require('express');
 const axios = require('axios');
 const proxy = require('express-http-proxy');
 require('dotenv').config();
+
+// --- SSL/TLS Bypass for Local Dev Stability ---
+// This resolves the 0x80092013 revocation check failure on local Windows machines
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  console.log("🔓 [Security] Local SSL Revocation Bypass Active (Local Dev Mode)");
+}
+
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');

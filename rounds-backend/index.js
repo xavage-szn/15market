@@ -10,6 +10,10 @@ const payoutKeeper = require('./src/payoutKeeper');
 
 const nodemailer = require('nodemailer');
 
+// --- SSL/TLS Bypass for Local Dev Stability ---
+if (process.env.NODE_ENV !== 'production') {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
 
 const app = express();
 const PORT = process.env.PORT || 3011;
