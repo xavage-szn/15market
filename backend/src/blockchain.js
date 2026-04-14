@@ -1,8 +1,14 @@
 const { ethers } = require('ethers');
 require('dotenv').config();
 
-const ARC_RPC = process.env.ARC_RPC || "https://rpc.testnet.arc.network";
-const THIRDWEB_RPC = process.env.THIRDWEB_RPC || "https://5042002.rpc.thirdweb.com";
+const ARC_RPCS = [
+  process.env.ARC_RPC || "https://rpc.testnet.arc.network",
+  "https://arc-testnet.drpc.org",
+  "https://5042002.rpc.thirdweb.com",
+  "https://rpc.testnet.arc.network", // Redundant check
+  "https://arc.drpc.org" // Backup
+];
+
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
 
@@ -12,20 +18,19 @@ if (!PRIVATE_KEY || !CONTRACT_ADDRESS) {
 
 class BlockchainService {
   constructor() {
-    this.arcProvider = new ethers.JsonRpcProvider(ARC_RPC);
-    
-    // Thirdweb Provider with Secret Key authentication
-    const twRequest = new ethers.FetchRequest(THIRDWEB_RPC);
-    if (process.env.THIRDWEB_SECRET_KEY) {
-      twRequest.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
-    }
-    this.twProvider = new ethers.JsonRpcProvider(twRequest);
-    
-    // Signer on Thirdweb for fast settlements
-    this.twWallet = new ethers.Wallet(PRIVATE_KEY, this.twProvider);
-    
-    // Signer on Arc Official as fallback
-    this.arcWallet = new ethers.Wallet(PRIVATE_KEY, this.arcProvider);
+    this.chainId = 5042002;
+    // Initialize multiple providers for aggressive redundancy
+    this.providers = ARC_RPCS.map(url => {
+        const fetchRequest = new ethers.FetchRequest(url);
+        // Add Thirdweb secret key if it's a thirdweb URL
+        if (url.includes('thirdweb.com') && process.env.THIRDWEB_SECRET_KEY) {
+          fetchRequest.setHeader("x-secret-key", process.env.THIRDWEB_SECRET_KEY);
+        }
+        return new ethers.JsonRpcProvider(fetchRequest, this.chainId, { staticNetwork: true });
+    });
+
+    this.mainProvider = this.providers[0];
+    this.arcWallet = new ethers.Wallet(PRIVATE_KEY, this.mainProvider);
 
     this.abi = [
       "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
@@ -36,36 +41,45 @@ class BlockchainService {
       "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
     ];
 
-    this.twContract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, this.twWallet);
-    this.arcContract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, this.arcWallet);
+    // Create a contract instance for EACH provider to enable racing
+    this.contracts = this.providers.map(p => {
+        const wallet = new ethers.Wallet(PRIVATE_KEY, p);
+        return new ethers.Contract(CONTRACT_ADDRESS, this.abi, wallet);
+    });
 
-    // Speed Optimization: Track nonces locally to avoid round-trip delays
+    // Speed Optimization: Track nonces locally
     this.localNonce = null;
     this.nonceLock = false;
   }
 
-  // Helper for timed RPC calls
-  async callWithTimeout(promise, timeoutMs = 4000) {
+  async callWithTimeout(promise, timeoutMs = 8000) {
     const timeout = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('RPC_TIMEOUT')), timeoutMs)
     );
     return Promise.race([promise, timeout]);
   }
 
-  async getBalance(address) {
-    // Race both providers for balance to stay fast
-    const getBal = (provider, name) => async () => {
-      const b = await this.callWithTimeout(provider.getBalance(address), 3500);
-      return ethers.formatEther(b);
-    };
+  async getBalance(address, retryCount = 0) {
+    // Attempt balancing across ALL providers simultaneously
+    const balancePromises = this.providers.map(async (provider, idx) => {
+        try {
+            const bal = await this.callWithTimeout(provider.getBalance(address), 10000);
+            return ethers.formatEther(bal);
+        } catch (e) {
+            throw new Error(`Provider ${idx} failed: ${e.message}`);
+        }
+    });
 
     try {
-      return await Promise.any([
-        getBal(this.arcProvider, "Arc")(),
-        getBal(this.twProvider, "Thirdweb")()
-      ]);
+      // Use the FIRST successful response from any provider
+      return await Promise.any(balancePromises);
     } catch (error) {
-      console.error("[Blockchain] All balance sources failed/timed out:", error.message);
+      if (retryCount < 3) {
+          console.warn(`[Blockchain] Balance fetch failed for ${address}. Retrying (${retryCount + 1}/3)...`);
+          await new Promise(r => setTimeout(r, 1000));
+          return this.getBalance(address, retryCount + 1);
+      }
+      console.error("[Blockchain] TOTAL FAILURE: All RPC providers failed after retries for balance.");
       return "0";
     }
   }
@@ -76,16 +90,13 @@ class BlockchainService {
     this.nonceLock = true;
 
     try {
-      // Fetch nonces in parallel but don't block if one hangs
+      // Fetch nonces in parallel across all providers
       const fetchNonce = (provider) => 
-        this.callWithTimeout(provider.getTransactionCount(this.arcWallet.address, 'pending'), 3000)
+        this.callWithTimeout(provider.getTransactionCount(this.arcWallet.address, 'pending'), 5000)
         .catch(() => 0);
 
-      const [arcNonce, twNonce] = await Promise.all([
-        fetchNonce(this.arcProvider),
-        fetchNonce(this.twProvider)
-      ]);
-      const chainNonce = Math.max(arcNonce, twNonce);
+      const nonces = await Promise.all(this.providers.map(fetchNonce));
+      const chainNonce = Math.max(...nonces);
 
       if (this.localNonce === null || chainNonce > this.localNonce) {
         this.localNonce = chainNonce;
@@ -99,54 +110,45 @@ class BlockchainService {
   }
 
   async settleBet(betId, exitPrice) {
-    console.log(`[Blockchain] Settling bet ${betId} instantly...`);
+    console.log(`[Blockchain] Settling bet ${betId} instantly racing ${this.contracts.length} sources...`);
     const nonce = await this.getNextNonce();
     const txOptions = { nonce, gasLimit: 600000 }; 
 
-    // Race for the FASTEST BROADCAST (not the mining)
-    const broadcastPromise = (contract) => async () => {
-      const tx = await this.callWithTimeout(contract.settleBet(betId, exitPrice, txOptions), 3500);
-      console.log(`[Blockchain] Broadcasted settlement for ${betId} (TX: ${tx.hash})`);
-      // Background mining wait
-      tx.wait().then(r => console.log(`[Blockchain] Confirmed settlement for ${betId}`)).catch(e => console.error(`[Blockchain] Settlement mining failed for ${betId}:`, e.message));
+    const broadcastPromise = (contract, idx) => async () => {
+      const tx = await this.callWithTimeout(contract.settleBet(betId, exitPrice, txOptions), 8000);
+      console.log(`[Blockchain] Broadcasted settlement for ${betId} via Provider ${idx} (TX: ${tx.hash})`);
+      tx.wait().catch(e => {}); 
       return tx;
     };
 
-    // Attempt individual broadcasts
     try {
-      const tx = await Promise.any([
-        broadcastPromise(this.arcContract)(),
-        broadcastPromise(this.twContract)()
-      ]);
-      return { hash: tx.hash }; // Return immediately to API
+      const tx = await Promise.any(this.contracts.map((c, i) => broadcastPromise(c, i)()));
+      return { hash: tx.hash };
     } catch (error) {
-      console.error(`[Blockchain] All settlement broadcasts failed for ${betId}:`, error.message);
+      console.error(`[Blockchain] All ${this.contracts.length} settlement broadcasts failed for ${betId}:`, error.message);
       this.localNonce = null; 
       throw error;
     }
   }
 
   async placeBet(betId, direction, duration, entryPrice, marketId, amount) {
-    console.log(`[Blockchain] Placing bet ${betId} instantly...`);
+    console.log(`[Blockchain] Placing bet ${betId} racing ${this.contracts.length} sources...`);
     const val = ethers.parseEther(amount.toString());
     const nonce = await this.getNextNonce();
     const txOptions = { value: val, nonce, gasLimit: 800000 };
 
-    const broadcastPromise = (contract) => async () => {
-      const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, this.arcWallet.address, txOptions), 3500);
-      console.log(`[Blockchain] Broadcasted bet ${betId} (TX: ${tx.hash})`);
-      tx.wait().catch(e => console.error(`[Blockchain] Bet mining failed for ${betId}:`, e.message));
+    const broadcastPromise = (contract, idx) => async () => {
+      const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, this.arcWallet.address, txOptions), 8000);
+      console.log(`[Blockchain] Broadcasted bet ${betId} via Provider ${idx} (TX: ${tx.hash})`);
+      tx.wait().catch(e => {});
       return tx;
     };
 
     try {
-      const tx = await Promise.any([
-        broadcastPromise(this.arcContract)(),
-        broadcastPromise(this.twContract)()
-      ]);
+      const tx = await Promise.any(this.contracts.map((c, i) => broadcastPromise(c, i)()));
       return { hash: tx.hash };
     } catch (error) {
-      console.error(`[Blockchain] All trade broadcasts failed for ${betId}:`, error.message);
+      console.error(`[Blockchain] All ${this.contracts.length} trade broadcasts failed for ${betId}:`, error.message);
       this.localNonce = null;
       throw error;
     }
@@ -154,18 +156,20 @@ class BlockchainService {
 
   async getBetDetails(betId) {
     try {
-      const bet = await this.arcContract.bets(betId);
-      return {
-        id: bet.id.toString(),
-        user: bet.user,
-        amount: ethers.formatEther(bet.amount),
-        direction: bet.direction === 1 ? 'UP' : 'DOWN',
-        entryPrice: bet.entryPrice.toString(),
-        duration: bet.duration.toString(),
-        settled: bet.settled,
-        won: bet.won,
-        settlementPrice: bet.settlementPrice.toString()
-      };
+      return await Promise.any(this.contracts.map(async (c) => {
+          const bet = await this.callWithTimeout(c.bets(betId), 5000);
+          return {
+            id: bet.id.toString(),
+            user: bet.user,
+            amount: ethers.formatEther(bet.amount),
+            direction: bet.direction === 1 ? 'UP' : 'DOWN',
+            entryPrice: bet.entryPrice.toString(),
+            duration: bet.duration.toString(),
+            settled: bet.settled,
+            won: bet.won,
+            settlementPrice: bet.settlementPrice.toString()
+          };
+      }));
     } catch (error) {
       console.error(`Error fetching bet ${betId}:`, error);
       return null;
@@ -193,23 +197,18 @@ class BlockchainService {
   }
 
   async transfer(to, amount) {
-    console.log(`[Blockchain] Transferring ${amount} to ${to}...`);
+    console.log(`[Blockchain] Transferring ${amount} to ${to} racing all sources...`);
     const val = ethers.parseEther(amount.toString());
     
-    // Attempt transfer via Arc Official
     try {
-      const tx = await this.arcWallet.sendTransaction({
-        to: to,
-        value: val
-      });
+      const tx = await Promise.any(this.contracts.map(async (c) => {
+          const wallet = c.runner;
+          return await wallet.sendTransaction({ to, value: val });
+      }));
       return await tx.wait();
     } catch (error) {
-      console.error("[Blockchain] Transfer failed on Arc, trying Thirdweb fallback:", error.message);
-      const tx = await this.twWallet.sendTransaction({
-        to: to,
-        value: val
-      });
-      return await tx.wait();
+      console.error("[Blockchain] All transfer attempts failed:", error.message);
+      throw error;
     }
   }
 }

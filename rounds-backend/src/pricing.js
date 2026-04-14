@@ -22,6 +22,12 @@ async function getPrice(symbol) {
         return price;
     } catch (e) {
         console.error(`[Pricing] Concurrent fetch failed for ${symbol}:`, e.message);
+        const IS_LOCAL = process.env.NODE_ENV !== 'production';
+        if (IS_LOCAL) {
+            const mocks = { BTC: 65000, ETH: 3500, SOL: 150 };
+            const cleanSym = symbol.toUpperCase().replace('USDT', '');
+            return mocks[cleanSym] || 1.0;
+        }
         return null;
     }
 }

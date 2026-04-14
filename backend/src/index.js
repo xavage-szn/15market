@@ -1,13 +1,12 @@
 const express = require('express');
+const axios = require('axios');
+const proxy = require('express-http-proxy');
+require('dotenv').config();
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const blockchain = require('./blockchain');
 const redis = require('./redis');
-const axios = require('axios');
-const proxy = require('express-http-proxy');
-require('dotenv').config();
-
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -40,7 +39,8 @@ const fetchConcurrentPrices = async () => {
   const pricePromises = assets.map(async (asset) => {
     try {
       // Primary: Binance (Concurrent & Optimized)
-      const res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 1500 });
+      // Increase timeout for local dev environments (3000ms)
+      const res = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${asset.symbol}`, { timeout: 3000 });
       if (res.data && res.data.price) {
         prices[asset.id] = parseFloat(res.data.price);
         return;
@@ -56,7 +56,6 @@ const fetchConcurrentPrices = async () => {
       } catch (ee) {}
     }
     
-    // Recovery for MON if missing from majors (Since it's often a test/new asset)
     if (asset.id === 'mon' && prices[asset.id] === 0) {
         prices[asset.id] = 1.0; 
     }
