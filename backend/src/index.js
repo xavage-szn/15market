@@ -155,15 +155,14 @@ app.post('/session/init', async (req, res) => {
   
   const addr = address.toLowerCase();
   try {
-    const exists = await redis.get(`balance:${addr}`);
-    let balance = exists;
+    const activityCount = await redis.llen(`activity:${addr}`);
     
-    if (!exists) {
+    if (!exists || (exists === '100.0' && activityCount === 0)) {
       // Fetch REAL on-chain balance as the starting point
       const onChainBalance = await blockchain.getBalance(addr);
       balance = onChainBalance || '0.0';
       await redis.set(`balance:${addr}`, balance);
-      console.log(`[Session] Initialized ${addr} with on-chain balance: ${balance}`);
+      console.log(`[Session] Syncing ${addr} with real on-chain balance: ${balance}`);
     }
     
     res.json({ 
