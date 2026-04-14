@@ -88,11 +88,14 @@ app.post('/profiles', async (req, res) => {
     // Save Profile to Redis
     await redis.set(`user:${addr}`, JSON.stringify(profile));
     
-    // Initialize session balance from on-chain if not exists
-    const existingBalance = await redis.get(`balance:${addr}`);
-    if (!existingBalance) {
+    // Initialize session balance from on-chain if not exists or if it's the legacy mock '100.0'
+    const balanceKey = `balance:${addr}`;
+    let balance = await redis.get(balanceKey);
+    if (!balance || balance === '100.0' || balance === '100') {
       const onChainBalance = await blockchain.getBalance(addr);
-      await redis.set(`balance:${addr}`, onChainBalance || '0.0');
+      balance = onChainBalance || '0.0';
+      await redis.set(balanceKey, balance);
+      console.log(`[Onboarding] Flushed legacy mock/null balance for ${addr}. Synced with REAL on-chain: ${balance}`);
     }
 
     // Log activity
@@ -161,16 +164,15 @@ app.post('/session/init', async (req, res) => {
   
   const addr = address.toLowerCase();
   try {
-    const activityCount = await redis.llen(`activity:${addr}`);
-    let balance = await redis.get(`balance:${addr}`);
+    const balanceKey = `balance:${addr}`;
+    let balance = await redis.get(balanceKey);
     
-    // If no balance or it looks like a leftover mock, sync from on-chain
-    if (!balance || (balance === '100.0' && activityCount === 0)) {
-      // Fetch REAL on-chain balance as the starting point
+    // If no balance exists, or it's the legacy mock '100.0', sync from on-chain IMMEDIATELY
+    if (!balance || balance === '100.0' || balance === '100') {
       const onChainBalance = await blockchain.getBalance(addr);
       balance = onChainBalance || '0.0';
-      await redis.set(`balance:${addr}`, balance);
-      console.log(`[Session] Syncing ${addr} with real on-chain balance: ${balance}`);
+      await redis.set(balanceKey, balance);
+      console.log(`[Session] Flushed legacy mock/null balance for ${addr}. Synced with REAL on-chain: ${balance}`);
     }
     
     res.json({ 
