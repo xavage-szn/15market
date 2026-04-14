@@ -83,10 +83,11 @@ app.post('/profiles', async (req, res) => {
     // Save Profile to Redis
     await redis.set(`user:${addr}`, JSON.stringify(profile));
     
-    // Initialize session balance if not exists
+    // Initialize session balance from on-chain if not exists
     const existingBalance = await redis.get(`balance:${addr}`);
     if (!existingBalance) {
-      await redis.set(`balance:${addr}`, '100.0');
+      const onChainBalance = await blockchain.getBalance(addr);
+      await redis.set(`balance:${addr}`, onChainBalance || '0.0');
     }
 
     // Log activity
@@ -119,11 +120,11 @@ app.get('/session/balance/:address', async (req, res) => {
   const addr = address.toLowerCase();
 
   try {
-    if (!redis) return res.json({ balance: '100.0' });
+    if (!redis) return res.json({ balance: '0.0' });
     const balance = await redis.get(`balance:${addr}`);
-    res.json({ balance: balance || '100.0' });
+    res.json({ balance: balance || '0.0' });
   } catch (e) {
-    res.json({ balance: '100.0' });
+    res.json({ balance: '0.0' });
   }
 });
 
@@ -156,8 +157,10 @@ app.post('/session/init', async (req, res) => {
   const addr = address.toLowerCase();
   try {
     const activityCount = await redis.llen(`activity:${addr}`);
+    let balance = await redis.get(`balance:${addr}`);
     
-    if (!exists || (exists === '100.0' && activityCount === 0)) {
+    // If no balance or it looks like a leftover mock, sync from on-chain
+    if (!balance || (balance === '100.0' && activityCount === 0)) {
       // Fetch REAL on-chain balance as the starting point
       const onChainBalance = await blockchain.getBalance(addr);
       balance = onChainBalance || '0.0';
@@ -167,7 +170,7 @@ app.post('/session/init', async (req, res) => {
     
     res.json({ 
       success: true, 
-      sessionAddress: addr, 
+      sessionAddress: blockchain.arcWallet.address, 
       balance 
     });
   } catch (e) {
@@ -186,7 +189,8 @@ app.post('/session/trade', async (req, res) => {
 
   try {
     // 1. Check & Deduct Balance
-    const currentBal = parseFloat(await redis.get(`balance:${userAddr}`) || '100.0');
+    const currentBalStr = await redis.get(`balance:${userAddr}`);
+    const currentBal = parseFloat(currentBalStr || '0.0');
     const stake = parseFloat(amount);
     
     if (currentBal < stake) {
@@ -300,7 +304,7 @@ app.post('/settle', async (req, res) => {
 
       if (payout > 0) {
         const currentBalanceStr = await redis.get(`balance:${userAddr}`);
-        const currentBalance = parseFloat(currentBalanceStr || '100.0');
+        const currentBalance = parseFloat(currentBalanceStr || '0.0');
         const newBalance = currentBalance + payout;
         await redis.set(`balance:${userAddr}`, newBalance.toFixed(4));
         console.log(`[API] Locked Win: Credited ${payout.toFixed(4)} to ${userAddr}.`);
@@ -351,6 +355,90 @@ app.post('/broadcast', async (req, res) => {
   const { text, duration, level } = req.body;
   io.emit('broadcast_received', { text, duration, level });
   res.json({ success: true });
+});
+
+app.post('/push-tx', async (req, res) => {
+  const { address, transaction } = req.body;
+  if (!address || !transaction) return res.status(400).json({ error: "Missing data" });
+
+  const addr = address.toLowerCase();
+  try {
+    if (transaction.type === 'DEPOSIT') {
+      const amount = parseFloat(transaction.amount);
+      const currentBal = parseFloat(await redis.get(`balance:${addr}`) || '0.0');
+      const newBal = currentBal + amount;
+      await redis.set(`balance:${addr}`, newBal.toFixed(4));
+      
+      await redis.lpush(`activity:${addr}`, JSON.stringify({
+        ...transaction,
+        timestamp: Date.now()
+      }));
+      
+      console.log(`[Deposit] Credited ${amount} to ${addr}. New Balance: ${newBal}`);
+      res.json({ success: true, balance: newBal.toFixed(4) });
+    } else {
+      res.json({ success: true });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/session/withdraw', async (req, res) => {
+  const { address, amount } = req.body;
+  if (!address || !amount) return res.status(400).json({ error: "Missing data" });
+
+  const addr = address.toLowerCase();
+  try {
+    const currentBal = parseFloat(await redis.get(`balance:${addr}`) || '0.0');
+    const withdrawAmt = parseFloat(amount);
+
+    if (currentBal < withdrawAmt) {
+      return res.status(400).json({ error: "Insufficient session balance" });
+    }
+
+    // 1. Deduct from Redis
+    const newBal = currentBal - withdrawAmt;
+    await redis.set(`balance:${addr}`, newBal.toFixed(4));
+
+    // 2. Perform on-chain transfer
+    const receipt = await blockchain.transfer(addr, withdrawAmt);
+
+    // 3. Log Activity
+    const activity = {
+      type: 'WITHDRAW',
+      amount: withdrawAmt.toFixed(4),
+      timestamp: Date.now(),
+      txHash: receipt.hash,
+      userAddr: addr
+    };
+    await redis.lpush(`activity:${addr}`, JSON.stringify(activity));
+
+    console.log(`[Withdraw] User ${addr} withdrew ${withdrawAmt}. TX: ${receipt.hash}`);
+    res.json({ success: true, txHash: receipt.hash, balance: newBal.toFixed(4) });
+  } catch (e) {
+    console.error("[Withdraw] Error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/profiles/:address', async (req, res) => {
+  const { address } = req.params;
+  const updates = req.body;
+  const addr = address.toLowerCase();
+
+  try {
+    const userData = await redis.get(`user:${addr}`);
+    if (!userData) return res.status(404).json({ error: "User not found" });
+
+    const currentProfile = JSON.parse(userData);
+    const updatedProfile = { ...currentProfile, ...updates };
+    
+    await redis.set(`user:${addr}`, JSON.stringify(updatedProfile));
+    res.json({ success: true, profile: updatedProfile });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/protocol-stats', async (req, res) => {

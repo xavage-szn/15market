@@ -137,6 +137,27 @@ class BlockchainService {
     return null;
   }
 
+  async transfer(to, amount) {
+    console.log(`[Blockchain] Transferring ${amount} to ${to}...`);
+    const val = ethers.parseEther(amount.toString());
+    
+    // Attempt transfer via Arc Official
+    try {
+      const tx = await this.arcWallet.sendTransaction({
+        to: to,
+        value: val
+      });
+      return await tx.wait();
+    } catch (error) {
+      console.error("[Blockchain] Transfer failed on Arc, trying Thirdweb fallback:", error.message);
+      const tx = await this.twWallet.sendTransaction({
+        to: to,
+        value: val
+      });
+      return await tx.wait();
+    }
+  }
+
   async placeBet(betId, direction, duration, entryPrice, marketId, amount) {
     console.log(`[Blockchain] Placing bet ${betId}...`);
     const val = ethers.parseEther(amount.toString());
