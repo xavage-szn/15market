@@ -1,342 +1,168 @@
 const express = require('express');
+const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
-const { ethers } = require('ethers');
-const path = require('path');
-const fs = require('fs');
+const db = require('./database');
+const blockchain = require('./blockchain');
 require('dotenv').config();
-
-const blockchain = require('./services/blockchain');
-const redis = require('./services/redis');
-const { deriveUserWallet } = require('./services/walletDerivation');
-const nonceManager = require('./services/nonceManager');
-const roundsRouter = require('./rounds/router');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: ["http://localhost:3000", "https://15market.online", "https://www.15market.online"], methods: ["GET", "POST"] }
+  cors: { origin: "*" }
 });
 
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/rounds', roundsRouter);
+// --- User Profile / Onboarding ---
 
-// --- 1. Wallet & Balance API ---
-app.get('/balance/:address', async (req, res) => {
-    try {
-        const bal = await blockchain.getNativeBalance(req.params.address);
-        res.json({ balance: ethers.formatEther(bal) });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+app.get('/profiles/:address', (req, res) => {
+  const { address } = req.params;
+  const user = db.prepare('SELECT * FROM users WHERE address = ?').get(address.toLowerCase());
+  if (user) {
+    res.json({ ...user, onboarded: true });
+  } else {
+    res.status(404).json({ error: "User not found" });
+  }
 });
 
-// --- User Profile Endpoints ---
-app.get('/profiles/:address', async (req, res) => {
-    try {
-        const address = req.params.address.toLowerCase();
-        const profile = await redis.getProfile(address);
-        if (!profile) return res.status(404).json({ error: 'Profile not found' });
-        res.json(profile);
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
+app.post('/profiles', (req, res) => {
+  const { address, username, xHandle, avatar } = req.body;
+  if (!address || !username) {
+    return res.status(400).json({ error: "Address and username are required" });
+  }
 
-app.post('/profiles', async (req, res) => {
-    try {
-        const { address, username, xHandle, avatar, onboardedAt } = req.body;
-        if (!address || !username) return res.status(400).json({ error: 'Address and Username required' });
-
-        // Merge with existing profile so we don't overwrite fields
-        const existing = await redis.getProfile(address) || {};
-        const profile = {
-            ...existing,
-            address: address.toLowerCase(),
-            username: username.trim(),
-            xHandle: (xHandle || existing.xHandle || '').trim(),
-            avatar: avatar || existing.avatar || '',
-            onboardedAt: existing.onboardedAt || onboardedAt || Date.now()
-        };
-
-        await redis.saveProfile(address, profile);
-        res.json({ success: true, profile });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// Partial profile update (avatar, xHandle, username individually)
-app.patch('/profiles/:address', async (req, res) => {
-    try {
-        const addr = req.params.address.toLowerCase();
-        const existing = await redis.getProfile(addr);
-        if (!existing) return res.status(404).json({ error: 'Profile not found' });
-
-        const allowed = ['username', 'xHandle', 'avatar', 'xProfileImage'];
-        const updates = {};
-        allowed.forEach(field => { if (req.body[field] !== undefined) updates[field] = req.body[field]; });
-
-        const updated = { ...existing, ...updates };
-        await redis.saveProfile(addr, updated);
-        res.json({ success: true, profile: updated });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.get('/session/balance/:address', async (req, res) => {
-    try {
-        const { address: sessionAddr } = deriveUserWallet(req.params.address);
-        const bal = await blockchain.getSessionBalance(sessionAddr);
-        res.json({ balance: ethers.formatEther(bal), sessionAddress: sessionAddr });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// --- 2. Auto-Signer Trade Execution ---
-app.post('/session/trade', async (req, res) => {
-    console.log(`[AutoSigner] Incoming Trade Request for: ${req.body.address || 'Unknown'}`);
-    // Support both flat params and tradeParams wrapper used by V2 UI
-    const body = req.body.tradeParams ? { ...req.body.tradeParams, address: req.body.address } : req.body;
-    const { address, amount, direction, duration, id, marketId, entryPrice } = body;
+  const addr = address.toLowerCase();
+  try {
+    db.prepare(`
+      INSERT INTO users (address, username, xUsername, onboarded)
+      VALUES (?, ?, ?, 1)
+      ON CONFLICT(address) DO UPDATE SET
+        username = excluded.username,
+        xUsername = excluded.xUsername,
+        onboarded = 1
+    `).run(addr, username, xHandle || '');
     
-    if (!address || !amount || direction === undefined || !duration || !id) {
-        return res.status(400).json({ error: 'Missing trade parameters' });
-    }
-
-    // 1. DEDUPLICATE & LOCK
-    const lock = await redis.lockTrade(id);
-    if (!lock) return res.status(409).json({ error: 'Trade ID collision' });
-
-    try {
-        // 2. DERIVATION & CONTRACT SELECTION
-        const { wallet, address: sessionAddr } = deriveUserWallet(address);
-        
-        // CRITICAL FIX: Save session→main wallet mapping
-        await redis.saveSessionMapping(sessionAddr.toLowerCase(), address.toLowerCase());
-        
-        const contractAddr = process.env.SESSION_MARKET || process.env.ARC_CONTRACT_ADDRESS;
-        console.log(`[AutoSigner] Dispatching ID ${id} to Contract: ${contractAddr} | Session: ${sessionAddr}`);
-
-        // 3. FLIGHT CHECKS
-        const balance = await blockchain.getSessionBalance(sessionAddr);
-        const cleanAmount = (amount || "0").toString().replace(',', '.');
-        const amtWei = ethers.parseUnits(parseFloat(cleanAmount).toFixed(18), 18);
-        
-        // Lowered buffer to 0.01 for better local testing flexibility
-        const realisticGasBuffer = ethers.parseUnits("0.01", "ether"); 
-        const totalNeeded = amtWei + realisticGasBuffer;
-
-        console.log(`[AutoSigner] Balance Check: Have ${ethers.formatEther(balance)} | Need ${ethers.formatEther(totalNeeded)} (Stake: ${cleanAmount})`);
-
-        if (balance < totalNeeded) {
-            const err = `Insufficient Balance. Session wallet ${sessionAddr} has ${parseFloat(ethers.formatEther(balance)).toFixed(4)} USDC. Need ${cleanAmount} USDC stake + 0.01 for gas.`;
-            console.warn(`[AutoSigner] Blocked: ${err}`);
-            return res.status(400).json({ error: err });
-        }
-
-        // 4. NONCE & SIGNING
-        const nonce = await nonceManager.getNonce(sessionAddr, blockchain.highSpeedProvider || blockchain.provider);
-        const entryVal = BigInt(Math.floor(Number(entryPrice || 0) * 1e8));
-        const fees = await blockchain._getGasPrice();
-
-        const txArgs = [
-            BigInt(id),
-            Number(direction),
-            BigInt(duration),
-            entryVal,
-            Number(marketId || 0),
-            sessionAddr // Winnings stay in Trading Account
-        ];
-
-        console.log(`[AutoSigner] Sending TX: Nonce=${nonce} | MaxFee=${fees.maxFeePerGas} | To=${contractAddr}`);
-
-        const tx = await wallet.connect(blockchain.highSpeedProvider || blockchain.provider).sendTransaction({
-            to: contractAddr,
-            data: blockchain.contract.interface.encodeFunctionData("placeBet", txArgs),
-            value: amtWei,
-            nonce,
-            maxFeePerGas: fees.maxFeePerGas,
-            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-            gasLimit: 300000,
-            chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
-        });
-
-        console.log(`[AutoSigner] Trade broadcasted: ${tx.hash}`);
-
-        // Return immediately so the UI feels instant and avoids Vercel/HTTP timeouts.
-        res.json({ 
-            success: true, 
-            txHash: tx.hash,
-            sessionAddress: sessionAddr,
-            status: 'broadcasted'
-        });
-
-        // Background wait to monitor failure, log appropriately
-        tx.wait().then(receipt => {
-             if (receipt.status !== 1) console.error(`[AutoSigner] Trade Reverted: ${tx.hash}`);
-             else console.log(`[AutoSigner] Trade MINED: ${tx.hash}`);
-        }).catch(err => {
-             console.error(`[AutoSigner] Trade Network/Wait Error: ${err.message}`);
-        });
-
-    } catch (e) {
-        console.error(`[AutoSigner] Trade Failure:`, e.message);
-        res.status(500).json({ error: e.message });
-    }
+    // Initialize session balance if not exists
+    db.prepare('INSERT OR IGNORE INTO session_balances (address, balance) VALUES (?, ?)').run(addr, '100.0');
+    
+    res.json({ success: true, profile: { address: addr, username, xHandle, avatar } });
+  } catch (error) {
+    console.error("Onboarding error:", error);
+    res.status(500).json({ error: "Failed to onboard user" });
+  }
 });
 
-// --- 3. Withdraw/Sweep Session Funds ---
-app.post('/session/sweep', async (req, res) => {
-    const { address } = req.body;
-    try {
-        const { wallet, address: sessionAddr } = deriveUserWallet(address);
-        const balance = await blockchain.getSessionBalance(sessionAddr);
-        
-        const gasBuffer = ethers.parseEther("0.005");
-        if (balance <= gasBuffer) {
-            return res.status(400).json({ error: 'Balance too low to sweep (need > 0.005 for gas)' });
-        }
+// --- Balances ---
 
-        const sweepAmt = balance - gasBuffer;
-        const fees = await blockchain._getGasPrice();
-        const nonce = await nonceManager.getNonce(sessionAddr, blockchain.highSpeedProvider || blockchain.provider);
-
-        const tx = await wallet.connect(blockchain.highSpeedProvider || blockchain.provider).sendTransaction({
-            to: address,
-            value: sweepAmt,
-            nonce,
-            maxFeePerGas: fees.maxFeePerGas,
-            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-            gasLimit: 100000,
-            chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
-        });
-
-        res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sweepAmt) });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+app.get('/balance/:address', async (req, res) => {
+  const { address } = req.params;
+  const balance = await blockchain.getBalance(address);
+  res.json({ balance });
 });
 
-// --- 3.5. Trade API (Classic Mode Settlement) ---
+app.get('/session/balance/:address', (req, res) => {
+  const { address } = req.params;
+  const row = db.prepare('SELECT balance FROM session_balances WHERE address = ?').get(address.toLowerCase());
+  res.json({ balance: row ? row.balance : '100.0' }); // Default 100 for dev
+});
+
+// --- Rounds & Access Checks ---
+
+app.get('/rounds/access/check/:address', (req, res) => {
+  res.json({ authorized: true });
+});
+
+app.get('/rounds/status', (req, res) => {
+  res.json({
+    live: null,
+    next: { id: Date.now(), pools: { long: 0, short: 0, participants: 0 } }
+  });
+});
+
+// --- Trades ---
+
 app.post('/settle', async (req, res) => {
-    try {
-        const { id, exitPrice } = req.body;
-        if (!id || !exitPrice) return res.status(400).json({ error: 'Missing parameters' });
+  const { id, exitPrice } = req.body;
+  console.log(`[API] Settling trade ${id} at ${exitPrice}...`);
+  
+  try {
+    // 1. Execute on-chain settlement (Parallel Arc/Thirdweb)
+    const receipt = await blockchain.settleBet(id, exitPrice);
+    
+    // 2. Parse the result from the transaction receipt
+    const event = blockchain.parseSettlementEvent(receipt);
+    
+    if (event) {
+      console.log(`[API] Bet ${id} settled. Won: ${event.won}, Payout: ${event.payout} ARC`);
+      
+      // 3. If won, update the user's session balance in SQLite
+      if (event.won && parseFloat(event.payout) > 0) {
+        const userAddr = event.user.toLowerCase();
         
-        const tradeId = id.toString();
-        const currentTrade = await redis.getTrade(tradeId);
+        // Fetch current session balance
+        const row = db.prepare('SELECT balance FROM session_balances WHERE address = ?').get(userAddr);
+        const currentBalance = parseFloat(row ? row.balance : '100.0');
+        const newBalance = currentBalance + parseFloat(event.payout);
         
-        if (currentTrade) {
-            // Only lock the price if it hasn't been locked yet
-            if (!currentTrade.lockedExitPrice) {
-                // Determine win/loss locally to set RESOLVING properly or just leave it for processor
-                await redis.setTrade(tradeId, { 
-                    ...currentTrade, 
-                    lockedExitPrice: exitPrice.toString(),
-                    status: 'RESOLVING' 
-                });
-                
-                console.log(`[Backend/settle] Trade ${tradeId} locked exit price at ${exitPrice}`);
-                
-                // Immediately trigger settlement loop to process this trade right away
-                const processor = require('./keeper/processor');
-                processor._settleSingleTrade({ ...currentTrade, lockedExitPrice: exitPrice.toString(), status: 'RESOLVING' }, exitPrice).catch(e => console.error(`[Settle API] Immediate settle error:`, e));
-            }
-        }
-        
-        res.json({ success: true, lockedPrice: exitPrice });
-    } catch (e) {
-        console.error(`[Backend/settle] Error:`, e);
-        res.status(500).json({ error: e.message });
+        // Update session balance (UPSERT)
+        db.prepare(`
+          INSERT INTO session_balances (address, balance) 
+          VALUES (?, ?)
+          ON CONFLICT(address) DO UPDATE SET 
+            balance = excluded.balance,
+            last_updated = CURRENT_TIMESTAMP
+        `).run(userAddr, newBalance.toFixed(4));
+          
+        console.log(`[API] Credited ${event.payout} to session wallet for ${userAddr}. New Balance: ${newBalance.toFixed(4)}`);
+      }
+      
+      res.json({ 
+        success: true, 
+        won: event.won, 
+        payout: event.payout,
+        txHash: receipt.hash 
+      });
+    } else {
+      console.warn(`[API] Settlement transaction succeeded but BetSettled event not found in receipt for ${id}`);
+      res.json({ success: true, txHash: receipt.hash });
     }
-});
-
-// --- 4. Platform Data API ---
-app.get('/settings', async (req, res) => {
-    const settings = await redis.getSettings();
-    res.json(settings || { maintenanceMode: false, tradingHalted: false });
-});
-
-app.get('/broadcast', async (req, res) => {
-    const b = await redis.getBroadcast();
-    res.json(b || { active: false, message: "" });
-});
-
-app.get('/campaigns', async (req, res) => {
-    const campaigns = await redis.getCampaigns();
-    res.json(campaigns || []);
-});
-
-app.get('/protocol-stats', async (req, res) => {
-    const history = await redis.getFullHistory();
-    const volume = history.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-    res.json({
-        totalVolume: volume,
-        totalTrades: history.length,
-        activeTrades: (await redis.getAllActiveTrades()).length
+  } catch (error) {
+    console.error(`[API] Settlement failed for bet ${id}:`, error.message);
+    res.status(500).json({ 
+      error: "Settlement processing failed", 
+      details: error.message 
     });
+  }
 });
 
-app.get('/history', async (req, res) => {
-    const history = await redis.getFullHistory();
-    // Sort by timestamp desc
-    res.json(history.sort((a,b) => b.timestamp - a.timestamp).slice(0, 100));
+// --- Platform Stats & Misc ---
+
+app.get('/settings', (req, res) => {
+  res.json({
+    minBet: 0.1,
+    maxBet: 10000,
+    maintenanceMode: false,
+    tradingHalted: false
+  });
 });
 
-app.get('/history/:address', async (req, res) => {
-    const target = req.params.address.toLowerCase();
-    const history = await redis.getFullHistory();
-    const filtered = history.filter(t => 
-        t.user?.toLowerCase() === target || 
-        t.mainAddress?.toLowerCase() === target
-    );
-    res.json(filtered.sort((a,b) => b.timestamp - a.timestamp));
+app.get('/listings', (req, res) => {
+  res.json([
+    { id: 'btc', symbol: 'BTC', binance: 'BTCUSDT' },
+    { id: 'eth', symbol: 'ETH', binance: 'ETHUSDT' },
+    { id: 'sol', symbol: 'SOL', binance: 'SOLUSDT' }
+  ]);
 });
 
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
+app.get('/active-market', (req, res) => res.json({ activeId: 'btc' }));
+app.get('/campaigns', (req, res) => res.json([]));
+app.get('/winner-banner', (req, res) => res.json(null));
+app.get('/time', (req, res) => res.json({ time: Date.now() }));
+app.get('/health', (req, res) => res.send('OK'));
 
-
-
-// --- 5. Admin API ---
-app.get('/admin/stats', async (req, res) => {
-    const stats = await redis.getStats();
-    res.json(stats);
-});
-
-app.post('/admin/withdraw', async (req, res) => {
-    const { amount, destination, token } = req.body;
-    if (token !== process.env.ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
-
-    try {
-        const sendWei = ethers.parseEther(amount.toString());
-        const tx = await blockchain.wallet.sendTransaction({
-            to: destination,
-            value: sendWei,
-            chainId: Number(process.env.ARC_CHAIN_ID || 5042002)
-        });
-        res.json({ success: true, txHash: tx.hash, amount: amount });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// --- 5. Real-Time Events ---
-blockchain.onBetPlaced((data) => {
-    io.emit('bet_placed', data);
-});
-
-// Start Server
-const PORT = process.env.PORT || 3010;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    const processor = require('./keeper/processor'); 
-    processor.init(); // CRITICAL: Start the settlement & payout engine
+const PORT = 3010; // Forced to 3010 as per user's .env
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Simplified 15market Backend running on port ${PORT}`);
 });
