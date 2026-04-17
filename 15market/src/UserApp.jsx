@@ -1055,7 +1055,12 @@ export default function UserApp() {
   // Real-time Balance Sync
   useEffect(() => {
     if (!address) return;
+    // JOIN room once per address change
     socketService.emit('join', address.toLowerCase());
+  }, [address]);
+
+  useEffect(() => {
+    if (!address) return;
     const unbind = socketService.on('balance_update', (data) => {
       if (data.balance) {
         setSessionBalance(parseFloat(data.balance));
