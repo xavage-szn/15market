@@ -533,14 +533,21 @@ app.post('/push-tx', async (req, res) => {
   }
 });
 
-app.post('/session/withdraw', async (req, res) => {
+app.post('/session/cashout', async (req, res) => {
   const { address, amount } = req.body;
-  if (!address || !amount) return res.status(400).json({ error: "Missing data" });
+  if (!address || amount === undefined) return res.status(400).json({ error: "Missing data" });
 
   const addr = address.toLowerCase();
   try {
-    const currentBal = parseFloat(await redis.get(`balance:${addr}`) || '0.0');
+    const currentBalStr = await redis.get(`balance:${addr}`);
+    const currentBal = parseFloat(currentBalStr || '0.0');
     const withdrawAmt = parseFloat(amount);
+    
+    console.log(`[Withdraw] Request: User ${addr} | Amt: ${amount} | CurrentBal: ${currentBal}`);
+
+    if (isNaN(withdrawAmt) || withdrawAmt <= 0) {
+      return res.status(400).json({ error: "Invalid withdrawal amount" });
+    }
 
     if (currentBal < withdrawAmt) {
       return res.status(400).json({ error: "Insufficient session balance" });

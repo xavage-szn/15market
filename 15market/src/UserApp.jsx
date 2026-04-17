@@ -2395,7 +2395,7 @@ export default function UserApp() {
 
       let res;
       try {
-        res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
+        res = await fetch(`${KEEPER_URL_ARC}/session/cashout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
