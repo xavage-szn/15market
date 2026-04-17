@@ -2342,11 +2342,21 @@ export default function UserApp() {
         };
         setTransactionHistory(prev => [newTx, ...prev]);
 
-        fetch(`${KEEPER_URL_ARC}/push-tx`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address, transaction: newTx })
-        }).catch(e => {});
+        // Robust retry loop to guarantee Redis is credited
+        let retries = 3;
+        const pushDeposit = () => {
+          fetch(`${KEEPER_URL_ARC}/session/record`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address, transaction: newTx })
+          }).catch(e => {
+            if (retries > 0) {
+              retries--;
+              setTimeout(pushDeposit, 2000);
+            }
+          });
+        };
+        pushDeposit();
 
       } catch (evmErr) {
         notify(`Deposit failed: ${evmErr.shortMessage || evmErr.message}`, "error");

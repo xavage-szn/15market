@@ -515,7 +515,7 @@ app.post('/broadcast', async (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/push-tx', async (req, res) => {
+app.post('/session/record', async (req, res) => {
   const { address, transaction } = req.body;
   if (!address || !transaction) return res.status(400).json({ error: "Missing data" });
 
