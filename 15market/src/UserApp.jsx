@@ -1920,6 +1920,34 @@ export default function UserApp() {
     }, 1000);
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
+
+  // Emergency Garbage Collection for Stuck Trades
+  useEffect(() => {
+    setActiveTrades(prev => {
+      const now = Date.now();
+      let changed = false;
+      const cleaned = prev.map(t => {
+        const start = t.startTime || (t.id > 1000000000000 ? t.id : Math.floor(t.id / 100) * 1000);
+        // If a trade has been stuck in PENDING/RESOLVING for > 2 minutes past its theoretical lifespan, mark it as LOST.
+        if ((t.status === "PENDING" || t.status === "RESOLVING") && (now - start > 120000)) {
+          changed = true;
+          return { ...t, status: "LOST", payout: "0.00" };
+        }
+        return t;
+      });
+      
+      if (changed) {
+        setTradeHistory(h => {
+          const hMap = new Map();
+          h.forEach(x => hMap.set(x.id, x));
+          cleaned.forEach(c => hMap.set(c.id, c));
+          return Array.from(hMap.values()).sort((a,b) => b.id - a.id);
+        });
+      }
+      return changed ? cleaned : prev;
+    });
+  }, []);
+
   // Cleanup resolution lock if trade is cleared manually
   useEffect(() => {
     // Clean up IDs that are no longer in activeTrades
