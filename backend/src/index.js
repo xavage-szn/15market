@@ -398,15 +398,27 @@ app.get('/history/:address', async (req, res) => {
 
 app.post('/settle', async (req, res) => {
   const { id, exitPrice, won, status } = req.body;
-  console.log(`[API] Authoritative Settlement for ${id}: ${status} at ${exitPrice}`);
-  
   try {
     // 1. LOCK THE RESULT (Source of Truth)
-    // We store the frontend's calculated result as the ground truth in Redis
+    const tradeStr = await redis.get(`trade:${id}`);
+    if (!tradeStr) return res.status(404).json({ error: "Trade not found for settlement" });
+    const trade = JSON.parse(tradeStr);
+
+    // Calculate outcome authoritatively if not provided or to verify
+    const entryPriceNum = parseFloat(trade.entryPrice);
+    const exitPriceNum = parseFloat(exitPrice);
+    const direction = Number(trade.direction); // 1 = UP, 0 = DOWN
+    
+    let isWon = won;
+    if (isWon === undefined) {
+      if (direction === 1) isWon = exitPriceNum > entryPriceNum;
+      else isWon = exitPriceNum < entryPriceNum;
+    }
+
     const lockedResult = {
       exitPrice,
-      won: won === true || status === "WON",
-      status: status || (won ? "WON" : "LOST"),
+      won: isWon,
+      status: isWon ? "WON" : "LOST",
       lockedAt: Date.now()
     };
     await redis.set(`locked_result:${id}`, JSON.stringify(lockedResult), 'EX', 86400);
@@ -419,14 +431,10 @@ app.post('/settle', async (req, res) => {
     if (betOwner) {
       const userAddr = betOwner.toLowerCase();
       
-      const tradeStr = await redis.get(`trade:${id}`);
       let payout = 0;
-      if (tradeStr) {
-        const trade = JSON.parse(tradeStr);
-        const durationSec = Number(trade.duration);
-        const multiplier = durationSec <= 5 ? 2.90 : (durationSec <= 10 ? 2.40 : 1.90);
-        if (lockedResult.won) payout = parseFloat(trade.amount) * multiplier;
-      }
+      const durationSec = Number(trade.duration);
+      const multiplier = durationSec <= 5 ? 2.90 : (durationSec <= 10 ? 2.40 : 1.90);
+      if (lockedResult.won) payout = parseFloat(trade.amount) * multiplier;
 
       const activityData = {
         type: 'TRADE_SETTLED',

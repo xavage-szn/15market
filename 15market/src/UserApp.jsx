@@ -2013,7 +2013,9 @@ export default function UserApp() {
                   signal: controller.signal,
                   body: JSON.stringify({
                     id: trade.id,
-                    exitPrice: capturedPrice
+                    exitPrice: capturedPrice,
+                    won: isWon,
+                    status: finalStatus
                   })
                 });
                 
