@@ -307,7 +307,7 @@ app.post('/session/init', async (req, res) => {
 
 // --- Trades ---
 
-app.post('/session/trade', async (req, res) => {
+app.post('/session/execute', async (req, res) => {
   const { address, tradeParams } = req.body;
   if (!address || !tradeParams) return res.status(400).json({ error: "Missing params" });
 
@@ -405,7 +405,11 @@ app.post('/settle', async (req, res) => {
     const trade = JSON.parse(tradeStr);
 
     // Calculate outcome authoritatively if not provided or to verify
-    const entryPriceNum = parseFloat(trade.entryPrice);
+    let entryPriceNum = parseFloat(trade.entryPrice);
+    // Descale entryPrice to match raw exitPrice for logic calculation
+    if (trade.marketId === 2) entryPriceNum = entryPriceNum / 1000000;
+    else entryPriceNum = entryPriceNum / 100;
+
     const exitPriceNum = parseFloat(exitPrice);
     const direction = Number(trade.direction); // 1 = UP, 0 = DOWN
     
@@ -424,7 +428,12 @@ app.post('/settle', async (req, res) => {
     await redis.set(`locked_result:${id}`, JSON.stringify(lockedResult), 'EX', 86400);
 
     // 2. Execute on-chain settlement
-    const receipt = await blockchain.settleBet(id, exitPrice);
+    // MUST scale exitPrice back up for the smart contract to correctly agree with the win!
+    let scaledExitPrice = exitPriceNum;
+    if (trade.marketId === 2) scaledExitPrice = Math.floor(exitPriceNum * 1000000);
+    else scaledExitPrice = Math.floor(exitPriceNum * 100);
+
+    const receipt = await blockchain.settleBet(id, scaledExitPrice);
     
     // 3. Update Session Balance based on the LOCKED result (Authoritative)
     const betOwner = await redis.get(`bet_owner:${id}`);

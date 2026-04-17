@@ -1374,7 +1374,7 @@ export default function UserApp() {
         const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for stability
         
         try {
-          const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
+          const res = await fetch(`${KEEPER_URL_ARC}/session/execute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: controller.signal,
@@ -1965,7 +1965,10 @@ export default function UserApp() {
             }
 
             // Determine Outcome Locally
-            const ePrice = parseFloat(trade.entryPrice);
+            let ePrice = parseFloat(trade.entryPrice);
+            if (trade.marketId === 2) ePrice = ePrice / 1000000;
+            else ePrice = ePrice / 100;
+
             const isUp = String(trade.direction) === "1" || String(trade.direction).toUpperCase() === "UP";
             const diff = capturedPrice - ePrice;
             const isWon = isUp ? diff > 0 : diff < 0;
