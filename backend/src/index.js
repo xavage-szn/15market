@@ -427,13 +427,13 @@ app.post('/settle', async (req, res) => {
     };
     await redis.set(`locked_result:${id}`, JSON.stringify(lockedResult), 'EX', 86400);
 
-    // 2. Execute on-chain settlement
+    // 2. Execute on-chain settlement (Run asynchronously to prevent blocking instant UI/Balance updates)
     // MUST scale exitPrice back up for the smart contract to correctly agree with the win!
     let scaledExitPrice = exitPriceNum;
     if (trade.marketId === 2) scaledExitPrice = Math.floor(exitPriceNum * 1000000);
     else scaledExitPrice = Math.floor(exitPriceNum * 100);
 
-    const receipt = await blockchain.settleBet(id, scaledExitPrice);
+    blockchain.settleBet(id, scaledExitPrice).catch(e => console.error(`[Settlement] On-chain delay for ${id}:`, e.message));
     
     // 3. Update Session Balance based on the LOCKED result (Authoritative)
     const betOwner = await redis.get(`bet_owner:${id}`);
@@ -478,7 +478,7 @@ app.post('/settle', async (req, res) => {
     res.json({ 
       success: true, 
       won: lockedResult.won, 
-      txHash: receipt.hash 
+      txHash: "async_settlement" 
     });
   } catch (error) {
     console.error(`[API] Settlement failed for bet ${id}:`, error.message);

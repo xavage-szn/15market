@@ -2322,6 +2322,7 @@ export default function UserApp() {
         });
 
         notify("Deposit Transaction Broadcasted!", "success");
+        setSessionBalance(prev => prev + amtNum); // Optimistic UI Update
 
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");
