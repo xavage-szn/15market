@@ -2,6 +2,7 @@ const { ethers } = require('ethers');
 require('dotenv').config();
 
 const ARC_RPCS = [
+  "https://arc-testnet.g.alchemy.com/v2/7eF4g7VDugrZQdNDi_HMj",
   "https://rpc.testnet.arc.network"
 ];
 

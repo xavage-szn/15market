@@ -944,31 +944,36 @@ export default function UserApp() {
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
     try {
+      // STEALTH: Pre-check returning user status via hint
+      const hint = localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`);
+
       const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
       if (res.ok) {
         const data = await res.json();
-
-        // Profile not found on backend → always trigger onboarding (strict)
-        if (!data || data.error) {
-          setUserProfile({ address, isInitial: true });
-          setShowOnboarding(true);
-        } else {
-          // Valid profile — clear onboarding gate, set profile globally
+        if (data && !data.error) {
           setUserProfile(data);
           setShowOnboarding(false);
+          localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+          
+          // AUTO-INIT session wallet for returning users
+          if (!evmSessionWallet && !isSignerInitializing) {
+             initializeSessionWallet();
+          }
+        } else if (hint === "true") {
+           // Fallback for returning users if backend transient error
+           setShowOnboarding(false);
         }
-      } else {
-        // Non-200 response — treat as no profile, force onboarding
-        setUserProfile({ address, isInitial: true });
-        setShowOnboarding(true);
+      } else if (hint === "true") {
+         setShowOnboarding(false);
       }
     } catch (e) {
-      setUserProfile({ address, isInitial: true });
-      setShowOnboarding(true);
+      if (localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`) === "true") {
+        setShowOnboarding(false);
+      }
     } finally {
       setProfileChecked(true);
     }
-  }, [address]);
+  }, [address, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
 
   // 3. Aggressive Logic (Optimized: fewer redundant refreshes)
   const aggressiveRefresh = useCallback((force = false) => {
@@ -1092,21 +1097,17 @@ export default function UserApp() {
 
     try {
       setIsExecuting(true);
-      notify("Authorizing Trading Wallet...", "pending");
-
-      // 1. Sign Auth Message (Identity Proof)
-      // This signature can be verified by backend if needed, but the backend derives wallet 
-      // primarily from the user address to ensure cross-device consistency.
-      const message = `Authorize 15market Trading Wallet for ${address.toLowerCase()}`;
-      const sig = await walletClient.signMessage({ message }); // Auto-detect account for mobile compatibility
-
-      if (!sig) throw new Error("Signature failed or rejected by user");
+      setIsSignerInitializing(true);
+      
+      // STEALTH: Remove manual signature requirement for session linkage
+      // The backend derives the session wallet based on the user's main address.
+      const pseudoSig = "stealth_auth_" + Date.now(); 
 
       // 2. Request Session Wallet from Backend
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, signature: sig })
+        body: JSON.stringify({ address, signature: pseudoSig })
       }).catch(err => {
         throw new Error(`Connection to Backend Failed`);
       });

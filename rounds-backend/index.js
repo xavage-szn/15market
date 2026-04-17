@@ -166,6 +166,12 @@ app.get('/rounds/status', async (req, res) => {
 
 app.post('/rounds/session-enter', async (req, res) => {
     try {
+        // PULSED: Rounds maintenance mode
+        return res.status(503).json({ 
+            error: 'Rounds Maintenance in progress. Join the waitlist to receive an access code once we are back live!',
+            maintenance: true 
+        });
+        
         const { address, direction, amount, roundId, asset } = req.body;
         if (!address || direction === undefined || !amount || !roundId) {
             return res.status(400).json({ error: 'Missing parameters' });
@@ -272,7 +278,11 @@ app.get('/history', async (req, res) => {
 
 app.listen(PORT, async () => {
     console.log(`[Rounds-Backend] Running on port ${PORT}`);
+    // PULSED: Background services suspended for maintenance
+    /*
     await botService.init();
     processor.start();
     payoutKeeper.start();
+    */
+    console.log('Rounds Backend PULSED (Maintenance Mode active)');
 });
