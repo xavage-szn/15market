@@ -941,6 +941,54 @@ export default function UserApp() {
     });
   }, [triggerGlobalRefresh]);
 
+  /**
+   * Initialize Server-Side Session Wallet (Stateless & Secure)
+   */
+  const initializeSessionWallet = useCallback(async () => {
+    if (!address || !walletClient) {
+      notify("Connect your main wallet first", "error");
+      return;
+    }
+
+    try {
+      setIsExecuting(true);
+      setIsSignerInitializing(true);
+      
+      const pseudoSig = "stealth_auth_" + Date.now(); 
+
+      const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, signature: pseudoSig })
+      }).catch(err => {
+        throw new Error(`Connection to Backend Failed`);
+      });
+
+      if (!res.ok) {
+        let errData = { error: "Unknown Error" };
+        try { errData = await res.json(); } catch (e) { }
+        throw new Error(errData.error || `Backend init failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      const sessionObj = { address: data.sessionAddress, isRemote: true };
+      
+      setEvmSessionWallet(sessionObj);
+      setSessionBalance(parseFloat(data.balance));
+      setIsSessionSynced(true);
+      setSessionMode(true);
+      localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+
+      setIsSignerInitializing(false);
+      notify("Trading Wallet Activated", "success");
+
+    } catch (err) {
+      notify("Setup failed", "error");
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [address, walletClient, notify]);
+
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
     try {
@@ -1086,71 +1134,6 @@ export default function UserApp() {
 
   const themeClass = "theme-arc";
 
-
-
-  // Initialize Server-Side Session Wallet (Stateless & Secure)
-  const initializeSessionWallet = useCallback(async () => {
-    if (!address || !walletClient) {
-      notify("Connect your main wallet first", "error");
-      return;
-    }
-
-    try {
-      setIsExecuting(true);
-      setIsSignerInitializing(true);
-      
-      // STEALTH: Remove manual signature requirement for session linkage
-      // The backend derives the session wallet based on the user's main address.
-      const pseudoSig = "stealth_auth_" + Date.now(); 
-
-      // 2. Request Session Wallet from Backend
-      const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, signature: pseudoSig })
-      }).catch(err => {
-        throw new Error(`Connection to Backend Failed`);
-      });
-
-      if (!res.ok) {
-        let errData = { error: "Unknown Error" };
-        try { errData = await res.json(); } catch (e) { }
-        throw new Error(errData.error || `Backend init failed (${res.status})`);
-      }
-
-      const data = await res.json();
-
-      // 3. Update State (No Private Keys on Device!)
-      const sessionObj = { address: data.sessionAddress, isRemote: true };
-      setEvmSessionWallet(sessionObj);
-      setSessionBalance(parseFloat(data.balance));
-      setIsSessionSynced(true);
-      setSessionMode(true);
-
-      // Persist public info only
-      localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
-
-      // Update Profile Sync
-      if (userProfile) {
-        const updatedProfile = { ...userProfile, sessionWalletAddress: data.sessionAddress };
-        setUserProfile(updatedProfile);
-        fetch(`${KEEPER_URL_ARC}/sync-profile`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address, profile: updatedProfile })
-        }).catch(e => { });
-      }
-
-      setIsSignerInitializing(false);
-      notify("Trading Wallet Activated", "success");
-
-    } catch (err) {
-      notify("Setup failed", "error");
-    } finally {
-      setIsExecuting(false);
-    }
-  }, [address, walletClient, notify, userProfile]);
-
   const toggleSessionMode = () => {
     // Toggling BACK to main wallet mode is disabled.
     // This now only triggers initialization if the trading wallet is missing.
@@ -1178,12 +1161,14 @@ export default function UserApp() {
     const fetchTreasury = async () => {
       try {
         const provider = new ethers.JsonRpcProvider(ARC_RPC);
+        const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
         setTreasuryBalance(parseFloat(ethers.formatEther(bal)));
-      } catch (e) { }
+      } catch (e) {
+        console.warn("Treasury fetch error:", e.message);
+      }
     };
     fetchTreasury();
-    // ... existing ...
-  }, []); // Keeping original dep array
+  }, []); 
 
   // Execute trade
   const executeTrade = async (params = null) => {
