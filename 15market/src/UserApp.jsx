@@ -674,6 +674,11 @@ export default function UserApp() {
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
+
+  const notify = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+  }, []);
+
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   const activeTradesRef = useRef([]);
   const tradeHistoryRef = useRef([]);
@@ -1063,10 +1068,6 @@ export default function UserApp() {
       return () => clearInterval(interval);
     }
   }, [address, triggerGlobalRefresh, fetchMyProfile]);
-
-  const notify = useCallback((message, type = 'success') => {
-    setToast({ message, type });
-  }, []);
 
   const closeToast = useCallback(() => {
     setToast(null);
