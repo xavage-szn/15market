@@ -45,7 +45,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
         }
         priceHistoryRef.current = history;
         hasGeneratedSynthetic.current = true;
-    }, [currentPrice, symbol]); // Add symbol to trigger regeneration on asset switch
+    }, [symbol]); // Remove currentPrice to prevent regeneration on every tick
 
     useEffect(() => {
         const historyInterval = setInterval(() => {

@@ -400,7 +400,8 @@ app.post('/settle', async (req, res) => {
       let payout = 0;
       if (tradeStr) {
         const trade = JSON.parse(tradeStr);
-        const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
+        const durationSec = Number(trade.duration);
+        const multiplier = durationSec <= 5 ? 2.90 : (durationSec <= 10 ? 2.40 : 1.90);
         if (lockedResult.won) payout = parseFloat(trade.amount) * multiplier;
       }
 
@@ -422,7 +423,7 @@ app.post('/settle', async (req, res) => {
         console.log(`[API] Locked Win: Credited ${payout.toFixed(4)} to ${userAddr}.`);
         
         // INSTANT PUSH: Meeting the <5s requirement
-        io.to(userAddr).emit('balance_update', { balance: newBalance.toFixed(4), reason: 'WIN', betId: id });
+        io.to(userAddr).emit('balance_update', { balance: newBalance.toFixed(4), reason: 'WIN', betId: id, payout: payout.toFixed(4) });
       } else {
         io.to(userAddr).emit('balance_update', { reason: 'LOSS', betId: id });
       }

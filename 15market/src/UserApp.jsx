@@ -697,6 +697,8 @@ export default function UserApp() {
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
   );
 
+
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
@@ -770,7 +772,7 @@ export default function UserApp() {
         const bal = parseFloat(data.balance);
 
         const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-        if (!force && msSinceLastAction < 15000) return;
+        if (!force && msSinceLastAction < 3000) return;
 
         if (Math.abs(bal - sessionBalance) > 0.0001) {
           setSessionBalance(bal);
@@ -1049,6 +1051,22 @@ export default function UserApp() {
   useEffect(() => {
     if (address) triggerGlobalRefresh(true);
   }, [address, triggerGlobalRefresh]);
+
+  // Real-time Balance Sync
+  useEffect(() => {
+    if (!address) return;
+    socketService.emit('join', address.toLowerCase());
+    const unbind = socketService.on('balance_update', (data) => {
+      if (data.balance) {
+        setSessionBalance(parseFloat(data.balance));
+      }
+      if (data.reason === 'WIN') {
+        notify(`Payout Received: +$${data.payout || ''}`, "success");
+        triggerGlobalRefresh(true);
+      }
+    });
+    return () => unbind();
+  }, [address, notify, triggerGlobalRefresh]);
 
 
   // Periodic Universal Sync (Optimized for Instant Pulse Mode)
@@ -1348,7 +1366,7 @@ export default function UserApp() {
       // --- STEP 2: BACKGROUND EXECUTION ---
       const backgroundTrade = async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // Reduced to 8s (fast broadcast)
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for stability
         
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
