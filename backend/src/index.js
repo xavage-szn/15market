@@ -70,16 +70,26 @@ const fetchConcurrentPrices = async () => {
 
     oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
     if (oracleReady) {
-        console.log(`[Oracle] ✅ TICKER: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
+        // io.emit('price_update', prices);  // We can emit, but we should be stealthy with logs
         io.emit('price_update', prices);
     }
   } catch (e) {
-    console.error("[Oracle] ❌ Global Oracle Failure:", e.message);
+    if (e.response && e.response.status === 429) {
+        console.warn("[Oracle] ⚠️ Rate limited by Upstream (429). Switching to stealth mode.");
+    } else {
+        console.error("[Oracle] ❌ Global Oracle Failure:", e.message);
+    }
   }
 };
 
-// Start Oracle Pulse (2s interval to reduce local network load)
-setInterval(fetchConcurrentPrices, 2000);
+// Start Oracle Pulse (Adaptive Stealth Mode)
+// We only ping if there are active socket connections, and we've slowed it down to 5s
+setInterval(() => {
+    const activeClients = io.engine.clientsCount || 0;
+    if (activeClients > 0) {
+        fetchConcurrentPrices();
+    }
+}, 5000);
 
 const emitAdminStats = async () => {
   try {
