@@ -206,9 +206,12 @@ class BlockchainService {
     try {
       const tx = await Promise.any(this.contracts.map(async (c) => {
           const wallet = c.runner;
+          // For withdrawals, we don't strictly enforce nonce here yet, 
+          // but we race across all RPCs to ensure the broadcast hits.
           return await wallet.sendTransaction({ to, value: val });
       }));
-      return await tx.wait();
+      // We return the TX object immediately. The caller (index.js) can decide to wait or respond.
+      return tx;
     } catch (error) {
       console.error("[Blockchain] All transfer attempts failed:", error.message);
       throw error;

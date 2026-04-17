@@ -85,12 +85,17 @@ const fetchConcurrentPrices = async () => {
 // 1. Initial Sync on Startup
 fetchConcurrentPrices();
 
-// 2. Adaptive Pulse
-// We ping every 5s if there's activity.
+// 2. Continuous Pulse (Restored to 2s as requested)
+let tickerCounter = 0;
 setInterval(() => {
-    const activeClients = io.engine.clientsCount || 0;
-    if (activeClients > 0) fetchConcurrentPrices();
-}, 5000);
+    fetchConcurrentPrices();
+    // Low-frequency ticker log (every 10 pulses / 20s) to keep logs clean but useful
+    tickerCounter++;
+    if (tickerCounter >= 10 && oracleReady) {
+        console.log(`[Oracle] ✅ TICKER: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
+        tickerCounter = 0;
+    }
+}, 2000);
 
 // 3. Instant Sync on Connection (Meeting the "when its needed" requirement)
 io.on('connection', (socket) => {
@@ -263,16 +268,12 @@ app.get('/session/balance/:address', async (req, res) => {
 
 // --- Rounds & Access Proxy (Forward to Rounds-Backend on port 3011) ---
 
-app.use('/rounds', proxy('http://localhost:3011', {
-  proxyReqOptDecorator: function(proxyReqOpts, srcReq) {
-    // Forward relevant headers
-    return proxyReqOpts;
-  },
-  proxyErrorHandler: function(err, res, next) {
-    console.warn("[Proxy] Rounds-Backend connection error:", err.message);
-    res.status(503).json({ error: "Rounds service temporarily unavailable" });
-  }
-}));
+app.use('/rounds', (req, res) => {
+  res.status(503).json({ 
+    success: false, 
+    error: "Rounds service is currently paused. Please use the waitlist to request access." 
+  });
+});
 
 // --- Session Management ---
 

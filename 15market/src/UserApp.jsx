@@ -1602,24 +1602,47 @@ export default function UserApp() {
   useEffect(() => {
     socketService.connect();
     
-    // Listen for real-time setting updates from Admin
-    const unbind = socketService.on('settings_updated', (newSettings) => {
-      console.log("[Socket] Applying platform settings update...");
+    // Real-time Setting Updates from Admin
+    const unbindSettings = socketService.on('settings_updated', (newSettings) => {
       setPlatformSettings(prev => ({ ...prev, ...newSettings }));
-      
-      // Update local storage for persistence across refreshes
       localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
     });
 
-    return () => unbind();
-  }, []);
+    // Real-time Price Updates (Stealth Streaming)
+    const unbindPrices = socketService.on('price_update', (newPrices) => {
+      if (!newPrices) return;
+      // Get price for currently active market
+      const fresh = newPrices[activeMarket.id.toLowerCase()];
+      if (fresh && fresh > 0) {
+        const truncated = Math.floor(fresh * 100) / 100;
+        const pStr = truncated.toFixed(2);
+        
+        // Only update if price changed to keep chart smooth
+        if (pStr !== priceRef.current) {
+          setPrice(pStr);
+          priceRef.current = pStr;
+          setIsLoading(false);
+          
+          // Sync history buffer for expiry lookups
+          const now = Date.now();
+          priceHistoryRef.current.push({ p: truncated, t: now });
+          if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+        }
+      }
+    });
+
+    return () => {
+      unbindSettings();
+      unbindPrices();
+    };
+  }, [activeMarket.id]);
 
   useEffect(() => {
     let active = true;
     const loop = async () => {
       if (!active) return;
       await fetchCurrentPrice();
-      if (active) setTimeout(loop, 300);
+      if (active) setTimeout(loop, 2000);
     };
     loop();
     return () => { active = false; };
@@ -2366,7 +2389,7 @@ export default function UserApp() {
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 25000); // 25s max
+      const fetchTimeout = setTimeout(() => controller.abort(), 60000); // Increased to 60s for mainnet stability
 
       let res;
       try {
