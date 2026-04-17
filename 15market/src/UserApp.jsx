@@ -1405,6 +1405,9 @@ export default function UserApp() {
           setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
           notify("Trade Broadcasting...", "success");
 
+          // Guard against balance sync reset
+          lastOptimisticActionTime.current = Date.now();
+
         } catch (err) {
           clearTimeout(timeoutId);
           console.error("[Trade] Execution failed:", err.message);
@@ -2323,6 +2326,7 @@ export default function UserApp() {
 
         notify("Deposit Transaction Broadcasted!", "success");
         setSessionBalance(prev => prev + amtNum); // Optimistic UI Update
+        lastOptimisticActionTime.current = Date.now(); // Guard against stale sync
 
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");

@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+const { ethers } = require('ethers');
 
 const proxy = require('express-http-proxy');
 require('dotenv').config();
@@ -30,6 +31,42 @@ let prices = {
 let activeMarketId = 'btc';
 let oracleReady = false;
 
+const WebSocket = require('ws');
+let binanceWs;
+
+const initBinanceWs = () => {
+  if (binanceWs) {
+    try { binanceWs.close(); } catch (e) {}
+  }
+
+  // Stream aggregated prices for BTC, ETH, SOL
+  binanceWs = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker/ethusdt@ticker/solusdt@ticker');
+
+  binanceWs.on('message', (data) => {
+    const msg = JSON.parse(data);
+    const symbolMap = { 'BTCUSDT': 'btc', 'ETHUSDT': 'eth', 'SOLUSDT': 'sol' };
+    const id = symbolMap[msg.s];
+    if (id) {
+      prices[id] = parseFloat(msg.c);
+      oracleReady = true;
+      // High-frequency push (don't debounce for the frontend, let it handle the stream)
+      io.emit('price_update', prices);
+    }
+  });
+
+  binanceWs.on('error', (err) => {
+    console.warn("[Oracle] WebSocket Error, falling back to HTTP:", err.message);
+  });
+
+  binanceWs.on('close', () => {
+    console.log("[Oracle] WebSocket Closed. Reconnecting in 5s...");
+    setTimeout(initBinanceWs, 5000);
+  });
+};
+
+// Start WebSocket Oracle
+initBinanceWs();
+
 const fetchConcurrentPrices = async () => {
   const assets = [
     { id: 'btc', pair: 'BTCUSDT' },
@@ -58,7 +95,6 @@ const fetchConcurrentPrices = async () => {
     try {
         bulkData = await tryBulkBinance();
     } catch (e) {
-        console.warn("[Oracle] Binance Bulk failed, trying MEXC Bulk...");
         bulkData = await tryBulkMexc();
     }
 
@@ -73,23 +109,20 @@ const fetchConcurrentPrices = async () => {
         io.emit('price_update', prices);
     }
   } catch (e) {
-    if (e.response && e.response.status === 429) {
-        console.warn("[Oracle] ⚠️ Rate limited by Upstream (429). Switching to stealth mode.");
-    } else {
-        console.error("[Oracle] ❌ Global Oracle Failure:", e.message);
-    }
+    // Silently handle fallback errors
   }
 };
+
+// Fallback Polling (Reduced frequency since WS is primary)
+setInterval(fetchConcurrentPrices, 10000);
 
 // --- ORACLE LIFECYCLE ---
 // 1. Initial Sync on Startup
 fetchConcurrentPrices();
 
-// 2. Continuous Pulse (Restored to 2s as requested)
+// 2. High-frequency Pulse for Room Members (2s debounce for state sync)
 let tickerCounter = 0;
 setInterval(() => {
-    fetchConcurrentPrices();
-    // Low-frequency ticker log (every 10 pulses / 20s) to keep logs clean but useful
     tickerCounter++;
     if (tickerCounter >= 10 && oracleReady) {
         console.log(`[Oracle] ✅ TICKER: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
@@ -247,20 +280,22 @@ app.get('/session/balance/:address', async (req, res) => {
   const addr = address.toLowerCase();
 
   try {
-    if (!redis) return res.json({ balance: '0.0' });
-    const balanceKey = `balance:${addr}`;
-    let balance = await redis.get(balanceKey);
-    
-    // Auto-flush mock legacy balances or missing balances for returning users
-    const bNum = parseFloat(balance || '0');
-    if (!balance || bNum === 100.0) {
-      const onChainBalance = await blockchain.getBalance(addr);
-      balance = onChainBalance || '0.0';
-      await redis.set(balanceKey, balance);
-      console.log(`[Balance] Synced missing/mock balance for ${addr} via GET request.`);
+    const sessionAddr = await redis.get(`addr:${addr}`);
+    if (!sessionAddr) {
+      return res.json({ balance: '0.0' });
     }
 
-    res.json({ balance: balance || '0.0' });
+    // Always fetch REAL on-chain balance for the true session wallet
+    const balance = await blockchain.getBalance(sessionAddr);
+    
+    // Update Redis cache purely for stats/sorting
+    await redis.set(`balance:${addr}`, balance || '0.0');
+
+    res.json({ 
+      success: true,
+      balance: balance || '0.0',
+      sessionAddress: sessionAddr
+    });
   } catch (e) {
     res.json({ balance: '0.0' });
   }
@@ -283,22 +318,27 @@ app.post('/session/init', async (req, res) => {
   
   const addr = address.toLowerCase();
   try {
-    const balanceKey = `balance:${addr}`;
-    let balance = await redis.get(balanceKey);
+    let pk = await redis.get(`pk:${addr}`);
+    let sessionAddr = await redis.get(`addr:${addr}`);
     
-    // If no balance exists, or it's the legacy mock '100.0', sync from on-chain IMMEDIATELY
-    const bNum = parseFloat(balance || '0');
-    if (!balance || bNum === 100.0) {
-      const onChainBalance = await blockchain.getBalance(addr);
-      balance = onChainBalance || '0.0';
-      await redis.set(balanceKey, balance);
-      console.log(`[Session] Flushed legacy mock/null balance for ${addr}. Synced with REAL on-chain (Numeric Match): ${balance}`);
+    if (!pk) {
+       const w = ethers.Wallet.createRandom();
+       pk = w.privateKey;
+       sessionAddr = w.address;
+       await redis.set(`pk:${addr}`, pk);
+       await redis.set(`addr:${addr}`, sessionAddr);
+       console.log(`[Session] Created True Embedded Account for ${addr}: ${sessionAddr}`);
     }
+    
+    // Completely skip Redis logic — the on-chain balance IS the exact balance!
+    const balance = await blockchain.getBalance(sessionAddr);
+    // Sync to Redis purely for backend compatibility/stats processing
+    await redis.set(`balance:${addr}`, balance || '0.0');
     
     res.json({ 
       success: true, 
-      sessionAddress: blockchain.arcWallet.address, 
-      balance 
+      sessionAddress: sessionAddr, 
+      balance: balance || '0.0'
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -311,17 +351,21 @@ app.post('/session/execute', async (req, res) => {
   const { address, tradeParams } = req.body;
   if (!address || !tradeParams) return res.status(400).json({ error: "Missing params" });
 
-  const userAddr = address.toLowerCase();
+  const pk = await redis.get(`pk:${userAddr}`);
+  if (!pk) return res.status(400).json({ error: "Session wallet not found" });
+
   const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
   try {
-    // 1. Check & Deduct Balance
-    const currentBalStr = await redis.get(`balance:${userAddr}`);
-    const currentBal = parseFloat(currentBalStr || '0.0');
+    // 1. Check On-chain Balance via the burner!
+    const walletAddress = await redis.get(`addr:${userAddr}`);
+    const currentOnChainBal = await blockchain.getBalance(walletAddress);
+    const currentBal = parseFloat(currentOnChainBal || '0.0');
     const stake = parseFloat(amount);
     
-    if (currentBal < stake) {
-      return res.status(400).json({ error: "Insufficient session balance" });
+    // Check if they have enough balance to cover the stake + estimated gas buffer
+    if (currentBal < stake + 0.0005) { 
+      return res.status(400).json({ error: "Insufficient session balance (make sure to leave a little for gas!)" });
     }
 
     // 2. Map Bet to User & Store Details in Redis (CRITICAL for authoritative locking)
@@ -339,12 +383,9 @@ app.post('/session/execute', async (req, res) => {
     await redis.set(`bet_owner:${id}`, userAddr, 'EX', 86400); 
     await redis.set(`trade:${id}`, JSON.stringify(tradeData), 'EX', 86400);
 
-    // 3. Execute On-Chain Bet
-    const receipt = await blockchain.placeBet(id, direction, duration, entryPrice, marketId, amount);
-    
-    // 4. Update Balance in Redis
-    const newBal = currentBal - stake;
-    await redis.set(`balance:${userAddr}`, newBal.toFixed(4));
+    // 3. Execute On-Chain Bet natively via User's embedded wallet key!
+    const receipt = await blockchain.placeBetForUser(pk, id, direction, duration, entryPrice, marketId, amount);
+
 
     // 5. Update Global Stats
     await redis.incrbyfloat('stats:total_volume', stake);
@@ -548,28 +589,31 @@ app.post('/session/cashout', async (req, res) => {
 
   const addr = address.toLowerCase();
   try {
-    const currentBalStr = await redis.get(`balance:${addr}`);
-    const currentBal = parseFloat(currentBalStr || '0.0');
+    const pk = await redis.get(`pk:${addr}`);
+    const sessionAddr = await redis.get(`addr:${addr}`);
+    if (!pk || !sessionAddr) {
+      return res.status(404).json({ error: "Session wallet not found" });
+    }
+
+    // Always check real balance before sweeping
+    const currentOnChainBal = await blockchain.getBalance(sessionAddr);
+    const currentBal = parseFloat(currentOnChainBal || '0.0');
     const withdrawAmt = parseFloat(amount);
     
-    console.log(`[Withdraw] Request: User ${addr} | Amt: ${amount} | CurrentBal: ${currentBal}`);
+    console.log(`[Withdraw] True Native Sweep: User ${addr} | From ${sessionAddr} | Amt: ${amount} | CurrentBal: ${currentBal}`);
 
     if (isNaN(withdrawAmt) || withdrawAmt <= 0) {
       return res.status(400).json({ error: "Invalid withdrawal amount" });
     }
 
     if (currentBal < withdrawAmt) {
-      return res.status(400).json({ error: "Insufficient session balance" });
+      return res.status(400).json({ error: "Insufficient session balance on-chain" });
     }
 
-    // 1. Deduct from Redis
-    const newBal = currentBal - withdrawAmt;
-    await redis.set(`balance:${addr}`, newBal.toFixed(4));
+    // 1. Perform true on-chain transfer from Burner to Main Wallet
+    const receipt = await blockchain.withdrawBurner(pk, addr, withdrawAmt);
 
-    // 2. Perform on-chain transfer
-    const receipt = await blockchain.transfer(addr, withdrawAmt);
-
-    // 3. Log Activity
+    // 2. Log Activity
     const activity = {
       type: 'WITHDRAW',
       amount: withdrawAmt.toFixed(4),
@@ -579,10 +623,15 @@ app.post('/session/cashout', async (req, res) => {
     };
     await redis.lpush(`activity:${addr}`, JSON.stringify(activity));
 
-    console.log(`[Withdraw] User ${addr} withdrew ${withdrawAmt}. TX: ${receipt.hash}`);
-    res.json({ success: true, txHash: receipt.hash, balance: newBal.toFixed(4) });
+    console.log(`[Withdraw] True Native Sweep SUCCESS. TX: ${receipt.hash}`);
+    
+    // Return the new approximate balance (will sync properly on next refresh)
+    const newBal = (currentBal - withdrawAmt).toFixed(4);
+    await redis.set(`balance:${addr}`, newBal);
+
+    res.json({ success: true, txHash: receipt.hash, balance: newBal });
   } catch (e) {
-    console.error("[Withdraw] Error:", e.message);
+    console.error("[Withdraw] True Native Sweep Error:", e.message);
     res.status(500).json({ error: e.message });
   }
 });

@@ -199,21 +199,34 @@ class BlockchainService {
     return null;
   }
 
-  async transfer(to, amount) {
-    console.log(`[Blockchain] Transferring ${amount} to ${to} racing all sources...`);
+  async placeBetForUser(privateKey, betId, direction, duration, entryPrice, marketId, amount) {
+    console.log(`[Blockchain] Placing bet ${betId} natively via True Embedded Wallet...`);
+    const val = ethers.parseEther(amount.toString());
+    const burnerWallet = new ethers.Wallet(privateKey, this.mainProvider);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, burnerWallet);
+    const txOptions = { value: val }; 
+
+    try {
+      const tx = await contract.placeBet(betId, direction, duration, entryPrice, marketId, burnerWallet.address, txOptions);
+      console.log(`[Blockchain] Broadcasted True Native Bet ${betId} (TX: ${tx.hash})`);
+      tx.wait().catch(e => {});
+      return { hash: tx.hash };
+    } catch (error) {
+      console.error(`[Blockchain] True Embedded Wallet broadcast failed for ${betId}:`, error.message);
+      throw error;
+    }
+  }
+
+  async withdrawBurner(privateKey, to, amount) {
+    console.log(`[Blockchain] Sweeping ${amount} from True Embedded Wallet to ${to}...`);
+    const burnerWallet = new ethers.Wallet(privateKey, this.mainProvider);
     const val = ethers.parseEther(amount.toString());
     
     try {
-      const tx = await Promise.any(this.contracts.map(async (c) => {
-          const wallet = c.runner;
-          // For withdrawals, we don't strictly enforce nonce here yet, 
-          // but we race across all RPCs to ensure the broadcast hits.
-          return await wallet.sendTransaction({ to, value: val });
-      }));
-      // We return the TX object immediately. The caller (index.js) can decide to wait or respond.
+      const tx = await burnerWallet.sendTransaction({ to, value: val });
       return tx;
     } catch (error) {
-      console.error("[Blockchain] All transfer attempts failed:", error.message);
+      console.error(`[Blockchain] True Embedded withdraw failed:`, error.message);
       throw error;
     }
   }
