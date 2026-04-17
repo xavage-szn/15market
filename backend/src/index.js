@@ -238,17 +238,7 @@ app.post('/profiles', async (req, res) => {
 
     // Save Profile to Redis
     await redis.set(`user:${addr}`, JSON.stringify(profile));
-    
-    // Initialize session balance from on-chain if not exists or if it's the legacy mock '100.0'
-    const balanceKey = `balance:${addr}`;
-    let balance = await redis.get(balanceKey);
-    const bNum = parseFloat(balance || '0');
-    if (!balance || bNum === 100.0) {
-      const onChainBalance = await blockchain.getBalance(addr);
-      balance = onChainBalance || '0.0';
-      await redis.set(balanceKey, balance);
-      console.log(`[Onboarding] Flushed legacy mock/null balance for ${addr}. Synced with REAL on-chain: ${balance}`);
-    }
+    console.log(`[Onboarding] Profile created for ${addr}. Tracking REAL on-chain balance only.`);
 
     // Log activity
     await redis.lpush(`activity:${addr}`, JSON.stringify({
@@ -288,9 +278,6 @@ app.get('/session/balance/:address', async (req, res) => {
     // Always fetch REAL on-chain balance for the true session wallet
     const balance = await blockchain.getBalance(sessionAddr);
     
-    // Update Redis cache purely for stats/sorting
-    await redis.set(`balance:${addr}`, balance || '0.0');
-
     res.json({ 
       success: true,
       balance: balance || '0.0',
@@ -332,9 +319,6 @@ app.post('/session/init', async (req, res) => {
     
     // Completely skip Redis logic — the on-chain balance IS the exact balance!
     const balance = await blockchain.getBalance(sessionAddr);
-    // Sync to Redis purely for backend compatibility/stats processing
-    await redis.set(`balance:${addr}`, balance || '0.0');
-    
     res.json({ 
       success: true, 
       sessionAddress: sessionAddr, 
@@ -474,9 +458,17 @@ app.post('/settle', async (req, res) => {
     if (trade.marketId === 2) scaledExitPrice = Math.floor(exitPriceNum * 1000000);
     else scaledExitPrice = Math.floor(exitPriceNum * 100);
 
-    blockchain.settleBet(id, scaledExitPrice).catch(e => console.error(`[Settlement] On-chain delay for ${id}:`, e.message));
+    blockchain.settleBet(id, scaledExitPrice).catch(e => {
+       console.error(`[Settlement] On-chain delay for ${id}:`, e.message);
+       if (betOwner) {
+         io.to(betOwner.toLowerCase()).emit('terminal_error', { 
+           message: `On-chain settlement delayed for trade #${id}. Don't worry, funds are safe and will be processed.`,
+           tradeId: id
+         });
+       }
+    });
     
-    // 3. Update Session Balance based on the LOCKED result (Authoritative)
+    // 3. Update Activity Feed based on the LOCKED result (Authoritative)
     const betOwner = await redis.get(`bet_owner:${id}`);
     if (betOwner) {
       const userAddr = betOwner.toLowerCase();
@@ -497,14 +489,16 @@ app.post('/settle', async (req, res) => {
       };
 
       if (payout > 0) {
-        const currentBalanceStr = await redis.get(`balance:${userAddr}`);
-        const currentBalance = parseFloat(currentBalanceStr || '0.0');
-        const newBalance = currentBalance + payout;
-        await redis.set(`balance:${userAddr}`, newBalance.toFixed(4));
-        console.log(`[API] Locked Win: Credited ${payout.toFixed(4)} to ${userAddr}.`);
+        // Fetch fresh on-chain balance to send to client
+        const currentOnChainBal = await blockchain.getBalance(userAddr);
+        console.log(`[API] Locked Win: Trade #${id} WON. User will see update on next on-chain sync.`);
         
-        // INSTANT PUSH: Meeting the <5s requirement
-        io.to(userAddr).emit('balance_update', { balance: newBalance.toFixed(4), reason: 'WIN', betId: id, payout: payout.toFixed(4) });
+        io.to(userAddr).emit('balance_update', { 
+          balance: currentOnChainBal, 
+          reason: 'WIN', 
+          betId: id, 
+          payout: payout.toFixed(4) 
+        });
       } else {
         io.to(userAddr).emit('balance_update', { reason: 'LOSS', betId: id });
       }
@@ -564,17 +558,13 @@ app.post('/session/record', async (req, res) => {
   try {
     if (transaction.type === 'DEPOSIT') {
       const amount = parseFloat(transaction.amount);
-      const currentBal = parseFloat(await redis.get(`balance:${addr}`) || '0.0');
-      const newBal = currentBal + amount;
-      await redis.set(`balance:${addr}`, newBal.toFixed(4));
-      
       await redis.lpush(`activity:${addr}`, JSON.stringify({
         ...transaction,
         timestamp: Date.now()
       }));
       
-      console.log(`[Deposit] Credited ${amount} to ${addr}. New Balance: ${newBal}`);
-      res.json({ success: true, balance: newBal.toFixed(4) });
+      console.log(`[Activity] Recorded transaction for ${addr}`);
+      res.json({ success: true });
     } else {
       res.json({ success: true });
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, Component } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
@@ -48,6 +48,31 @@ import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
 // Vault decommissioned.
 import { socketService } from './utils/socket';
+
+// Robust Error Boundary to prevent platform-wide crashes
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, errorInfo) { console.error("Platform Error caught by Boundary:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-[1000] bg-[#050505] flex flex-col items-center justify-center p-8 text-center text-white">
+          <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 border border-red-500/20">
+            <Shield className="text-red-500" />
+          </div>
+          <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">Platform Interrupted</h1>
+          <p className="text-xs text-white/40 mb-8 max-w-xs">{this.state.error?.message || "An unexpected error occurred in the UI layer."}</p>
+          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#3CB371] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * Mobile Portrait Lock Component
@@ -510,10 +535,12 @@ export default function UserApp() {
         }
 
         // 3. Rounds Access Check
-        const roundsRes = await fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => null);
+        const roundsRes = await fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => ({ ok: false }));
         if (roundsRes && roundsRes.ok) {
           const rData = await roundsRes.json();
           setHasRoundsAccess(rData.authorized === true);
+        } else {
+          setHasRoundsAccess(false); // Resolve to false if server is unreachable
         }
 
         return true;
@@ -771,8 +798,13 @@ export default function UserApp() {
         const data = await res.json();
         const bal = parseFloat(data.balance);
 
+        // --- CRITICAL BALANCE SYNC GUARD (V2) ---
+        // If we recently traded (< 8s ago), we ignore the backend balance unless it's LOWER than current.
+        // This prevents the "revert" issue where we fetch the stale on-chain profile before the tx mines.
         const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-        if (!force && msSinceLastAction < 3000) return;
+        if (!force && msSinceLastAction < 8000) {
+           if (bal >= sessionBalance) return; // Still stale or exact, skip overwrite to protect optimistic deduction
+        }
 
         if (Math.abs(bal - sessionBalance) > 0.0001) {
           setSessionBalance(bal);
@@ -952,30 +984,20 @@ export default function UserApp() {
    * Initialize Server-Side Session Wallet (Stateless & Secure)
    */
   const initializeSessionWallet = useCallback(async () => {
-    if (!address || !walletClient) {
-      notify("Connect your main wallet first", "error");
-      return;
-    }
+    if (!address) return;
 
     try {
-      setIsExecuting(true);
       setIsSignerInitializing(true);
       
-      const pseudoSig = "stealth_auth_" + Date.now(); 
-
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, signature: pseudoSig })
+        body: JSON.stringify({ address })
       }).catch(err => {
         throw new Error(`Connection to Backend Failed`);
       });
 
-      if (!res.ok) {
-        let errData = { error: "Unknown Error" };
-        try { errData = await res.json(); } catch (e) { }
-        throw new Error(errData.error || `Backend init failed (${res.status})`);
-      }
+      if (!res.ok) throw new Error(`Backend init failed`);
 
       const data = await res.json();
       const sessionObj = { address: data.sessionAddress, isRemote: true };
@@ -987,14 +1009,13 @@ export default function UserApp() {
       localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
 
       setIsSignerInitializing(false);
-      notify("Trading Wallet Activated", "success");
+      // notify("Trading Wallet Synced", "success");
 
     } catch (err) {
-      notify("Setup failed", "error");
-    } finally {
-      setIsExecuting(false);
+      setIsSignerInitializing(false);
+      console.warn("Session init fallback:", err.message);
     }
-  }, [address, walletClient, notify]);
+  }, [address]);
 
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
@@ -1027,6 +1048,17 @@ export default function UserApp() {
       }
     } finally {
       setProfileChecked(true);
+    }
+  }, [address, initializeSessionWallet]);
+
+  const hasInitAttempted = useRef(false);
+  useEffect(() => { hasInitAttempted.current = false; }, [address]);
+
+  // AUTO-INITIALIZE Session Wallet as soon as any address is available
+  useEffect(() => {
+    if (address && !evmSessionWallet && !isSignerInitializing && !hasInitAttempted.current) {
+        hasInitAttempted.current = true;
+        initializeSessionWallet();
     }
   }, [address, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
 
@@ -1061,7 +1093,9 @@ export default function UserApp() {
 
   useEffect(() => {
     if (!address) return;
-    const unbind = socketService.on('balance_update', (data) => {
+    
+    // Bind Socket listeners
+    const unbindBal = socketService.on('balance_update', (data) => {
       if (data.balance) {
         setSessionBalance(parseFloat(data.balance));
       }
@@ -1070,7 +1104,16 @@ export default function UserApp() {
         triggerGlobalRefresh(true);
       }
     });
-    return () => unbind();
+
+    const unbindErr = socketService.on('terminal_error', (data) => {
+      notify(data.message, "error");
+      console.error("[Terminal Error]", data);
+    });
+
+    return () => {
+      unbindBal();
+      unbindErr();
+    };
   }, [address, notify, triggerGlobalRefresh]);
 
 
@@ -1159,18 +1202,9 @@ export default function UserApp() {
   const themeClass = "theme-arc";
 
   const toggleSessionMode = () => {
-    // Toggling BACK to main wallet mode is disabled.
-    // This now only triggers initialization if the trading wallet is missing.
-    const storedAddr = localStorage.getItem(`15market_session_addr_${address?.toLowerCase()}`);
-    if (evmSessionWallet?.address || storedAddr) {
-      if (!evmSessionWallet) {
-        setEvmSessionWallet({ address: storedAddr, isRemote: true });
-      }
-      setSessionMode(true);
-      notify("Trading Wallet Active", "success");
-    } else {
-      updateEvmSessionBal(true);
-      notify("Syncing Trading Wallet...", "pending");
+    // Session mode is now the only mode. This just ensures we are synced.
+    if (!evmSessionWallet) {
+       initializeSessionWallet();
     }
   };
 
@@ -1290,6 +1324,9 @@ export default function UserApp() {
         notify("Broadcasting Entry...", "pending");
 
         // --- INSTANT UI START FOR ROUNDS ---
+        lastOptimisticActionTime.current = Date.now();
+        setSessionBalance(prev => Math.max(0, prev - amtNum));
+
         const roundTrade = {
           id: `round-${roundId}-${Date.now()}`,
           type: 'rounds',
@@ -1420,7 +1457,12 @@ export default function UserApp() {
       };
 
       backgroundTrade();
-      setIsExecuting(false);
+      
+      // Safety: If backend hangs forever, we still want to let the user trade again
+      // The toast will auto-close after 20s, but we'll ensure we aren't "blocking" anything
+      setTimeout(() => {
+        setIsExecuting(false);
+      }, 5000);
 
     } catch (err) {
       notify(err.message, "error");
@@ -2554,44 +2596,18 @@ export default function UserApp() {
     </div>
   );
 
-  if (isSignerInitializing) {
+  if (isSignerInitializing && !evmSessionWallet) {
     return (
-      <div className={`${themeClass} fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center`}>
-        <div className="max-w-md w-full bg-[#0D0D0D] border border-[#3CB371]/20 rounded-3xl p-8 relative overflow-hidden shadow-[0_0_100px_rgba(60,179,113,0.1)]">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 pointer-events-none" />
-
-          <div className="w-16 h-16 rounded-full bg-[#3CB371]/10 flex items-center justify-center mx-auto mb-6 border border-[#3CB371]/20">
-            <Shield className="w-8 h-8 text-[#3CB371] animate-pulse" />
-          </div>
-
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">
-            {userProfile?.sessionWalletAddress ? "Restore Trading Account" : "Secure Trading Account Setup"}
-          </h2>
-          <p className="text-white/40 text-xs font-medium leading-relaxed mb-8">
-            {userProfile?.sessionWalletAddress
-              ? `We've detected an existing Trading Wallet linked to your account (${userProfile.sessionWalletAddress.slice(0, 6)}...). Please sign to restore access on this device.`
-              : "To ensure maximum efficiency and high-speed execution, you must authorize a secure Trading Wallet linked to your Main Account."
-            }
-          </p>
-
-          <button
-            onClick={initializeSessionWallet}
-            disabled={isExecuting}
-            className="w-full py-4 rounded-xl bg-[#3CB371] hover:brightness-110 active:scale-[0.98] transition-all text-white font-black uppercase tracking-widest text-sm shadow-[0_10px_40px_-10px_#3CB371]"
-          >
-            {isExecuting ? "Signing..." : "Initialize & Link Wallet"}
-          </button>
-          <AnimatePresence>
-            {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
-          </AnimatePresence>
-        </div>
-      </div>
+       <div className={`${themeClass} fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center`}>
+          <MascotLoader theme={theme} label="Syncing Trading Wallet..." />
+       </div>
     );
   }
 
 
 
   return (
+    <ErrorBoundary>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
       style={{
@@ -3097,5 +3113,6 @@ export default function UserApp() {
         />
       )}
     </motion.div >
+    </ErrorBoundary>
   );
 }

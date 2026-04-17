@@ -64,7 +64,7 @@ class BlockchainService {
     // Attempt balancing across ALL providers simultaneously
     const balancePromises = this.providers.map(async (provider, idx) => {
         try {
-            const bal = await this.callWithTimeout(provider.getBalance(address), 15000); // 15s timeout
+            const bal = await this.callWithTimeout(provider.getBalance(address, 'pending'), 15000); // include mempool for instant feedback
             return ethers.formatEther(bal);
         } catch (e) {
             console.warn(`[Blockchain] Provider ${idx} (${ARC_RPCS[idx]}) failed: [${e.code || 'TIMEOUT'}] ${e.message}`);
@@ -200,33 +200,53 @@ class BlockchainService {
   }
 
   async placeBetForUser(privateKey, betId, direction, duration, entryPrice, marketId, amount) {
-    console.log(`[Blockchain] Placing bet ${betId} natively via True Embedded Wallet...`);
+    console.log(`[Blockchain] Placing native bet ${betId} racing ALL sources...`);
     const val = ethers.parseEther(amount.toString());
-    const burnerWallet = new ethers.Wallet(privateKey, this.mainProvider);
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, burnerWallet);
-    const txOptions = { value: val }; 
+    
+    const broadcastRace = this.providers.map(async (provider, idx) => {
+        try {
+            const burnerWallet = new ethers.Wallet(privateKey, provider);
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, burnerWallet);
+            const txOptions = { value: val, gasLimit: 800000 };
+            
+            const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, burnerWallet.address, txOptions), 10000);
+            console.log(`[Blockchain] Native Broadcast Bet ${betId} via Provider ${idx} (TX: ${tx.hash})`);
+            tx.wait().catch(() => {});
+            return tx;
+        } catch (e) {
+            throw e;
+        }
+    });
 
     try {
-      const tx = await contract.placeBet(betId, direction, duration, entryPrice, marketId, burnerWallet.address, txOptions);
-      console.log(`[Blockchain] Broadcasted True Native Bet ${betId} (TX: ${tx.hash})`);
-      tx.wait().catch(e => {});
+      const tx = await Promise.any(broadcastRace);
       return { hash: tx.hash };
     } catch (error) {
-      console.error(`[Blockchain] True Embedded Wallet broadcast failed for ${betId}:`, error.message);
+      console.error(`[Blockchain] Native broadcast failed across ALL providers for ${betId}:`, error.message);
       throw error;
     }
   }
 
   async withdrawBurner(privateKey, to, amount) {
-    console.log(`[Blockchain] Sweeping ${amount} from True Embedded Wallet to ${to}...`);
-    const burnerWallet = new ethers.Wallet(privateKey, this.mainProvider);
+    console.log(`[Blockchain] Sweeping ${amount} from True Embedded Wallet...`);
     const val = ethers.parseEther(amount.toString());
-    
+
+    const sweepRace = this.providers.map(async (provider, idx) => {
+        try {
+            const burnerWallet = new ethers.Wallet(privateKey, provider);
+            const tx = await this.callWithTimeout(burnerWallet.sendTransaction({ to, value: val }), 12000);
+            console.log(`[Blockchain] Sweep broadcasted via Provider ${idx} (TX: ${tx.hash})`);
+            return tx;
+        } catch (e) {
+            throw e;
+        }
+    });
+
     try {
-      const tx = await burnerWallet.sendTransaction({ to, value: val });
+      const tx = await Promise.any(sweepRace);
       return tx;
     } catch (error) {
-      console.error(`[Blockchain] True Embedded withdraw failed:`, error.message);
+      console.error(`[Blockchain] Native sweep failed across ALL providers:`, error.message);
       throw error;
     }
   }

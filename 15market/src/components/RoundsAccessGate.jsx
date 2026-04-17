@@ -83,7 +83,7 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
     useEffect(() => {
         if (verified === null) {
             setHasAccess(false);
-            setIsChecking(true);
+            setIsChecking(!!address);
         }
         setInputCode('');
         setError('');
@@ -91,7 +91,7 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
         if (active && address && verified === null) {
             checkAccess();
         }
-    }, [address, verified]);
+    }, [address, verified, active, checkAccess]);
 
     // ─── Code Redemption ─────────────────────────────────────────────────────
     const handleVerify = async () => {
