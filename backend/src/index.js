@@ -70,7 +70,6 @@ const fetchConcurrentPrices = async () => {
 
     oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
     if (oracleReady) {
-        // io.emit('price_update', prices);  // We can emit, but we should be stealthy with logs
         io.emit('price_update', prices);
     }
   } catch (e) {
@@ -82,14 +81,27 @@ const fetchConcurrentPrices = async () => {
   }
 };
 
-// Start Oracle Pulse (Adaptive Stealth Mode)
-// We only ping if there are active socket connections, and we've slowed it down to 5s
+// --- ORACLE LIFECYCLE ---
+// 1. Initial Sync on Startup
+fetchConcurrentPrices();
+
+// 2. Adaptive Pulse
+// We ping every 5s if there's activity.
 setInterval(() => {
     const activeClients = io.engine.clientsCount || 0;
-    if (activeClients > 0) {
-        fetchConcurrentPrices();
-    }
+    if (activeClients > 0) fetchConcurrentPrices();
 }, 5000);
+
+// 3. Instant Sync on Connection (Meeting the "when its needed" requirement)
+io.on('connection', (socket) => {
+    console.log('[Socket] Client Connected, triggering priority sync');
+    fetchConcurrentPrices(); 
+    
+    socket.on('join', (room) => {
+        socket.join(room.toLowerCase());
+        console.log(`[Socket] User joined room: ${room}`);
+    });
+});
 
 const emitAdminStats = async () => {
   try {
