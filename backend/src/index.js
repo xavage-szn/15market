@@ -32,77 +32,86 @@ let activeMarketId = 'btc';
 let oracleReady = false;
 
 const WebSocket = require('ws');
-let binanceWs;
+let pythWs;
 
-const initBinanceWs = () => {
-  if (binanceWs) {
-    try { binanceWs.close(); } catch (e) {}
+const PYTH_ID_MAP = {
+  'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43': 'btc',
+  'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace': 'eth',
+  'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d': 'sol',
+  '4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16': 'mon'
+};
+
+const initPythWs = () => {
+  if (pythWs) {
+    try { pythWs.close(); } catch (e) {}
   }
 
-  // Stream aggregated prices for BTC, ETH, SOL
-  binanceWs = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker/ethusdt@ticker/solusdt@ticker');
+  pythWs = new WebSocket('wss://hermes.pyth.network/ws');
 
-  binanceWs.on('message', (data) => {
-    const msg = JSON.parse(data);
-    const symbolMap = { 'BTCUSDT': 'btc', 'ETHUSDT': 'eth', 'SOLUSDT': 'sol' };
-    const id = symbolMap[msg.s];
-    if (id) {
-      prices[id] = parseFloat(msg.c);
-      oracleReady = true;
-      // High-frequency push (don't debounce for the frontend, let it handle the stream)
-      io.emit('price_update', prices);
+  pythWs.on('open', () => {
+    console.log("[Oracle] Pyth WebSocket Connected");
+    const subscribeMsg = {
+      type: "subscribe",
+      ids: Object.keys(PYTH_ID_MAP),
+      verbose: true,
+      binary: false
+    };
+    pythWs.send(JSON.stringify(subscribeMsg));
+  });
+
+  pythWs.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'price_update' && msg.price_update) {
+         const p = msg.price_update;
+         const rawId = p.feed_id.startsWith('0x') ? p.feed_id.slice(2) : p.feed_id;
+         const internalId = PYTH_ID_MAP[rawId.toLowerCase()];
+         if (internalId) {
+           const price = parseFloat(p.price) * Math.pow(10, p.expo);
+           prices[internalId] = price;
+           oracleReady = true;
+           io.emit('price_update', prices);
+         }
+      }
+    } catch (e) {
+      console.warn("[Oracle] Message processing error:", e.message);
     }
   });
 
-  binanceWs.on('error', (err) => {
-    console.warn("[Oracle] WebSocket Error, falling back to HTTP:", err.message);
+  pythWs.on('error', (err) => {
+    console.warn("[Oracle] Pyth WebSocket Error:", err.message);
   });
 
-  binanceWs.on('close', () => {
-    console.log("[Oracle] WebSocket Closed. Reconnecting in 5s...");
-    setTimeout(initBinanceWs, 5000);
+  pythWs.on('close', () => {
+    console.log("[Oracle] Pyth WebSocket Closed. Reconnecting in 5s...");
+    setTimeout(initPythWs, 5000);
   });
 };
 
-// Start WebSocket Oracle
-initBinanceWs();
+// Start Pyth WebSocket Oracle
+initPythWs();
 
 const fetchConcurrentPrices = async () => {
   const assets = [
-    { id: 'btc', pair: 'BTCUSDT' },
-    { id: 'eth', pair: 'ETHUSDT' },
-    { id: 'sol', pair: 'SOLUSDT' }
+    { id: 'btc', pyth: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43' },
+    { id: 'eth', pyth: 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' },
+    { id: 'sol', pyth: 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d' },
+    { id: 'mon', pyth: '4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16' }
   ];
 
-  // Strategy: BULK FETCH (One request for all prices)
-  const tryBulkBinance = async () => {
-    const res = await axios.get('https://api.binance.com/api/v3/ticker/price', { timeout: 8000 });
-    const dict = {};
-    res.data.forEach(t => dict[t.symbol] = t.price);
-    return dict;
-  };
-
-  const tryBulkMexc = async () => {
-    const res = await axios.get('https://api.mexc.com/api/v3/ticker/price', { timeout: 8000 });
-    const dict = {};
-    res.data.forEach(t => dict[t.symbol] = t.price);
-    return dict;
-  };
-
   try {
-    // Try Binance Bulk First
-    let bulkData;
-    try {
-        bulkData = await tryBulkBinance();
-    } catch (e) {
-        bulkData = await tryBulkMexc();
-    }
-
-    assets.forEach(asset => {
-        if (bulkData[asset.pair]) {
-            prices[asset.id] = parseFloat(bulkData[asset.pair]);
+    const idsString = assets.map(a => `ids[]=${a.pyth}`).join('&');
+    const res = await axios.get(`https://hermes.pyth.network/v2/updates/price/latest?${idsString}`, { timeout: 8000 });
+    
+    if (res.data && res.data.parsed) {
+      res.data.parsed.forEach(p => {
+        const asset = assets.find(a => a.pyth === p.id);
+        if (asset) {
+          const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+          prices[asset.id] = price;
         }
-    });
+      });
+    }
 
     oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
     if (oracleReady) {
@@ -335,14 +344,15 @@ app.post('/session/execute', async (req, res) => {
   const { address, tradeParams } = req.body;
   if (!address || !tradeParams) return res.status(400).json({ error: "Missing params" });
 
-  const pk = await redis.get(`pk:${userAddr}`);
+  const addr = address.toLowerCase();
+  const pk = await redis.get(`pk:${addr}`);
   if (!pk) return res.status(400).json({ error: "Session wallet not found" });
 
   const { id, direction, duration, entryPrice, marketId, amount } = tradeParams;
 
   try {
     // 1. Check On-chain Balance via the burner!
-    const walletAddress = await redis.get(`addr:${userAddr}`);
+    const walletAddress = await redis.get(`addr:${addr}`);
     const currentOnChainBal = await blockchain.getBalance(walletAddress);
     const currentBal = parseFloat(currentOnChainBal || '0.0');
     const stake = parseFloat(amount);
@@ -364,7 +374,7 @@ app.post('/session/execute', async (req, res) => {
       timestamp: Date.now(),
       status: 'PENDING'
     };
-    await redis.set(`bet_owner:${id}`, userAddr, 'EX', 86400); 
+    await redis.set(`bet_owner:${id}`, addr, 'EX', 86400); 
     await redis.set(`trade:${id}`, JSON.stringify(tradeData), 'EX', 86400);
 
     // 3. Execute On-Chain Bet natively via User's embedded wallet key!
@@ -384,7 +394,7 @@ app.post('/session/execute', async (req, res) => {
       symbol: marketId === 1 ? 'BTC' : (marketId === 0 ? 'ETH' : 'USDC'),
       timestamp: Date.now(),
       txHash: receipt.hash,
-      userAddr
+      userAddr: addr
     };
 
     await redis.lpush(`activity:${userAddr}`, JSON.stringify(activityRecord));
@@ -660,10 +670,10 @@ app.get('/protocol-stats', async (req, res) => {
 
 app.get('/listings', (req, res) => {
   res.json([
-    { id: 'btc', symbol: 'BTC', binance: 'BTCUSDT' },
-    { id: 'eth', symbol: 'ETH', binance: 'ETHUSDT' },
-    { id: 'sol', symbol: 'SOL', binance: 'SOLUSDT' },
-    { id: 'mon', symbol: 'MON', binance: 'MONUSDT' }
+    { id: 'btc', symbol: 'BTC', name: 'Bitcoin' },
+    { id: 'eth', symbol: 'ETH', name: 'Ethereum' },
+    { id: 'sol', symbol: 'SOL', name: 'Solana' },
+    { id: 'mon', symbol: 'MON', name: 'Monad' }
   ]);
 });
 

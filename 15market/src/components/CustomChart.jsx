@@ -416,32 +416,72 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         return () => clearInterval(interval);
     }, [activeTrades, currentPrice, chartType]);
 
+    const [pythPrice, setPythPrice] = useState(currentPrice);
+    const pythPriceRef = useRef(currentPrice);
+
+    // Direct Pyth Streaming for 1s Chart
+    useEffect(() => {
+        if (!activeMarket?.pythId || timeframe !== '1s') return;
+
+        let es;
+        const connectPyth = () => {
+            const fullId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
+            const url = `https://hermes.pyth.network/v2/updates/price/stream?ids[]=${fullId}`;
+            
+            es = new EventSource(url);
+            
+            es.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.parsed) {
+                        data.parsed.forEach(p => {
+                            const val = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+                            const truncated = Math.floor(val * 100) / 100;
+                            setPythPrice(truncated);
+                            pythPriceRef.current = truncated;
+
+                            // Also update the lightweight charts series if in 1s candle mode
+                            if (seriesRef.current && chartType === 'candles') {
+                                const now = Math.floor(Date.now() / 1000);
+                                if (!current1sCandle.current || now > current1sCandle.current.time) {
+                                    current1sCandle.current = { time: now, open: truncated, high: truncated, low: truncated, close: truncated };
+                                } else {
+                                    current1sCandle.current.high = Math.max(current1sCandle.current.high, truncated);
+                                    current1sCandle.current.low = Math.min(current1sCandle.current.low, truncated);
+                                    current1sCandle.current.close = truncated;
+                                }
+                                seriesRef.current.update(current1sCandle.current);
+                            }
+                        });
+                    }
+                } catch (e) { }
+            };
+
+            es.onerror = () => {
+                es.close();
+                setTimeout(connectPyth, 3000);
+            };
+        };
+
+        connectPyth();
+        return () => { if (es) es.close(); };
+    }, [activeMarket.pythId, timeframe, chartType]);
+
     useEffect(() => {
         if (!currentPrice || !seriesRef.current) return;
         const now = Math.floor(Date.now() / 1000);
         const price = parseFloat(currentPrice);
 
-        if (lastCandleTime.current && now <= lastCandleTime.current) return;
+        // If timeframe is 1s, we prefer the pythPriceRef updates
+        if (timeframe === '1s') return;
 
-        const time = timeframe === '1s' ? now : Math.floor(now / 60) * 60;
-
+        const time = Math.floor(now / 60) * 60;
         if (lastCandleTime.current && time < lastCandleTime.current) return;
 
-        if (timeframe === '1s' || chartType === 'line') {
-            if (chartType === 'candles') {
-                if (!current1sCandle.current || time > current1sCandle.current.time) {
-                    current1sCandle.current = { time, open: price, high: price, low: price, close: price };
-                } else {
-                    current1sCandle.current.high = Math.max(current1sCandle.current.high, price);
-                    current1sCandle.current.low = Math.min(current1sCandle.current.low, price);
-                    current1sCandle.current.close = price;
-                }
-                seriesRef.current.update(current1sCandle.current);
-            } else {
-                seriesRef.current.update({ time, value: price });
-            }
-        } else {
+        if (chartType === 'candles') {
             seriesRef.current.update({ time, close: price });
+        } else {
+            seriesRef.current.update({ time, value: price });
         }
 
         lastCandleTime.current = time;
@@ -515,7 +555,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 {timeframe === '1s' && chartType === 'line' && (
                     <LiveStreamingChart
                         theme={theme}
-                        currentPrice={currentPrice}
+                        currentPrice={pythPrice || currentPrice}
                         symbol={symbol}
                         priceHistory={priceHistory}
                     />
