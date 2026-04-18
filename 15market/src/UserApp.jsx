@@ -2352,12 +2352,6 @@ export default function UserApp() {
           label="Igniting Momentum Engine"
           theme={theme}
         />
-        <button 
-           onClick={() => setIsAppReady(true)}
-           className="mt-8 text-[10px] font-black uppercase text-white/30 hover:text-white transition-colors"
-        >
-           Skip Loading
-        </button>
       </motion.div>
     </div>
   );
