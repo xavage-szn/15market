@@ -35,10 +35,10 @@ const WebSocket = require('ws');
 let pythWs;
 
 const PYTH_ID_MAP = {
-  'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43': 'btc',
-  'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace': 'eth',
-  'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d': 'sol',
-  '4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16': 'mon'
+  '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43': 'btc',
+  '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace': 'eth',
+  '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d': 'sol',
+  '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16': 'mon'
 };
 
 const initPythWs = () => {
@@ -64,13 +64,15 @@ const initPythWs = () => {
       const msg = JSON.parse(data);
       if (msg.type === 'price_update' && msg.price_update) {
          const p = msg.price_update;
-         const rawId = p.feed_id.startsWith('0x') ? p.feed_id.slice(2) : p.feed_id;
+         const rawId = p.feed_id.startsWith('0x') ? p.feed_id : `0x${p.feed_id}`;
          const internalId = PYTH_ID_MAP[rawId.toLowerCase()];
          if (internalId) {
            const price = parseFloat(p.price) * Math.pow(10, p.expo);
-           prices[internalId] = price;
-           oracleReady = true;
-           io.emit('price_update', prices);
+           if (prices[internalId] !== price) {
+             prices[internalId] = price;
+             oracleReady = true;
+             io.emit('price_update', prices);
+           }
          }
       }
     } catch (e) {
@@ -93,10 +95,10 @@ initPythWs();
 
 const fetchConcurrentPrices = async () => {
   const assets = [
-    { id: 'btc', pyth: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43' },
-    { id: 'eth', pyth: 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' },
-    { id: 'sol', pyth: 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d' },
-    { id: 'mon', pyth: '4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16' }
+    { id: 'btc', pyth: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43' },
+    { id: 'eth', pyth: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' },
+    { id: 'sol', pyth: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d' },
+    { id: 'mon', pyth: '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16' }
   ];
 
   try {
@@ -105,12 +107,14 @@ const fetchConcurrentPrices = async () => {
     
     if (res.data && res.data.parsed) {
       res.data.parsed.forEach(p => {
-        const asset = assets.find(a => a.pyth === p.id);
+        const fullId = p.id.startsWith('0x') ? p.id : `0x${p.id}`;
+        const asset = assets.find(a => a.pyth.toLowerCase() === fullId.toLowerCase());
         if (asset) {
           const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
           prices[asset.id] = price;
         }
       });
+      console.log(`[Oracle] HTTP Sync: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
     }
 
     oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
