@@ -10,8 +10,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const blockchain = require('./blockchain');
 const redis = require('./redis');
-const { EvmPriceServiceConnection } = require('@pythnetwork/pyth-evm-js');
-const pythConnection = new EvmPriceServiceConnection("https://hermes.pyth.network");
+const { HermesClient } = require('@pythnetwork/hermes-client');
+const pythConnection = new HermesClient("https://hermes.pyth.network");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -110,11 +110,14 @@ const fetchConcurrentPrices = async () => {
   ];
 
   try {
-    const idsString = assets.map(a => `ids[]=${a.pyth}`).join('&');
-    const res = await axios.get(`https://hermes.pyth.network/v2/updates/price/latest?${idsString}&encoding=hex`, { timeout: 8000 });
+    // 1. Fetch Latest Prices via official SDK (Including Binary VAAs for Pull Model)
+    const latestPrices = await pythConnection.getLatestPriceUpdates(assets.map(a => a.pyth), { 
+        parsed: true,
+        binary: true
+    });
     
-    if (res.data && res.data.parsed) {
-      res.data.parsed.forEach(p => {
+    if (latestPrices && latestPrices.parsed) {
+      latestPrices.parsed.forEach(p => {
         const fullId = p.id.startsWith('0x') ? p.id : `0x${p.id}`;
         const asset = assets.find(a => a.pyth.toLowerCase() === fullId.toLowerCase());
         if (asset) {
@@ -122,28 +125,24 @@ const fetchConcurrentPrices = async () => {
           prices[asset.id] = price;
         }
       });
-      console.log(`[Oracle] HTTP Sync: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
+      console.log(`[Oracle] SDK Sync: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
     }
 
     // --- ON-CHAIN RECOVERY & PULL-UPDATE (Official SDK Integration) ---
-    try {
-        const updateData = await pythConnection.getPriceFeedsUpdateData(assets.map(a => a.pyth));
-        if (updateData && updateData.length > 0) {
-            for (const asset of assets) {
-                if (!prices[asset.id] || prices[asset.id] === 0) {
-                    console.log(`[Oracle] Signal for ${asset.id} missing. Pushing SDK Pull-Update...`);
-                    await blockchain.updatePythPriceOnChain(updateData[0]); 
-                    
-                    const onChainPrice = await blockchain.getPythPriceOnChain(asset.pyth);
-                    if (onChainPrice) {
-                        console.log(`[Oracle] ✅ RECOVERED ${asset.id} on-chain: $${onChainPrice}`);
-                        prices[asset.id] = onChainPrice;
-                    }
+    const updateData = latestPrices.binary.data;
+    if (updateData && updateData.length > 0) {
+        for (const asset of assets) {
+            if (!prices[asset.id] || prices[asset.id] === 0) {
+                console.log(`[Oracle] Signal for ${asset.id} missing. Pushing SDK Pull-Update...`);
+                await blockchain.updatePythPriceOnChain(updateData[0]); 
+                
+                const onChainPrice = await blockchain.getPythPriceOnChain(asset.pyth);
+                if (onChainPrice) {
+                    console.log(`[Oracle] ✅ RECOVERED ${asset.id} on-chain: $${onChainPrice}`);
+                    prices[asset.id] = onChainPrice;
                 }
             }
         }
-    } catch (sdkErr) {
-        console.error("[Oracle] SDK Price Fetch Failed:", sdkErr.message);
     }
 
     oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
@@ -153,7 +152,7 @@ const fetchConcurrentPrices = async () => {
         console.warn(`[Oracle] Signal incomplete: BTC:${prices.btc} ETH:${prices.eth} SOL:${prices.sol}`);
     }
   } catch (e) {
-    console.error("[Oracle] HTTP Sync Failed:", e.message);
+    console.error("[Oracle] Sync Failed:", e.message);
   }
 };
 
