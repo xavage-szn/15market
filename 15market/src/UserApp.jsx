@@ -371,8 +371,12 @@ export default function UserApp() {
   const [duration, setDuration] = useState(15);
   const [timeLeft, setTimeLeft] = useState(15);
 
-  const activeTrade = activeTrades[0] || null; // For backward compatibility in some components  const [isAppReady, setIsAppReady] = useState(false);
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
+  const [isAppReady, setIsAppReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
+
+  const activeTrade = activeTrades[0] || null; 
 
   // Safety Timeout: Reset and trigger whenever a GLOBAL load starts
   useEffect(() => {
@@ -467,8 +471,6 @@ export default function UserApp() {
     };
   });
 
-  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
-  const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [hasRoundsAccess, setHasRoundsAccess] = useState(null); // null = unknown, true/false = verified
 
