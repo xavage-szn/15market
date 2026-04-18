@@ -22,7 +22,7 @@ app.use(express.json());
 
 // --- Socket & Metrics Helpers ---
 
-// Price Oracle State
+// Price Oracle State — used internally for settlement, not broadcast to clients
 let prices = {
   btc: 0,
   eth: 0,
@@ -31,23 +31,12 @@ let prices = {
 let activeMarketId = 'btc';
 let oracleReady = false;
 
-// Initialize Pricing Service
+// Feed settlement prices from Binance WebSocket (backend-only, no socket emission)
 pricing.onPriceUpdate = (newPrices) => {
     prices = { ...newPrices };
     oracleReady = true;
-    io.emit('price_update', prices);
 };
 
-// --- ORACLE LIFECYCLE ---
-// High-frequency Pulse for Room Members (2s debounce for state sync)
-let tickerCounter = 0;
-setInterval(() => {
-  tickerCounter++;
-  if (tickerCounter >= 10 && oracleReady) {
-    console.log(`[Oracle] ✅ TICKER: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
-    tickerCounter = 0;
-  }
-}, 2000);
 
 // Instant Sync on Connection
 io.on('connection', (socket) => {

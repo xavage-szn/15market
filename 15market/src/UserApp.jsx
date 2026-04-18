@@ -1557,109 +1557,57 @@ export default function UserApp() {
 
   const cleanupTimers = useRef({});
 
-  const fetchCurrentPrice = useCallback(async () => {
-    try {
-      // Binance (Authoritative high-frequency source)
-      if (activeMarket.binance) {
-        sources.push({
-          name: "binance",
-          url: `https://api.binance.com/api/v3/ticker/price?symbol=${activeMarket.binance.toUpperCase()}`,
-          parse: d => parseFloat(d.price)
-        });
-      }
+  // ─── DIRECT BINANCE WEBSOCKET ─ Price feed for terminal, order book & signal ───
+  // Pure real-time stream. No cache, no relay, no intermediate state.
+  useEffect(() => {
+    if (!activeMarket?.binance) return;
 
-      if (sources.length === 0) return null;
+    let ws;
+    const sym = activeMarket.binance.toLowerCase();
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const connect = () => {
+      if (ws) ws.close();
+      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@aggTrade`);
 
-      const pricePromises = sources.map(async (src) => {
-        try {
-          const res = await fetch(src.url, {
-            signal: controller.signal,
-            headers: { 'Cache-Control': 'no-cache' }
-          });
-          const data = await res.json();
-          const val = src.parse(data);
-          if (!val || isNaN(val)) throw new Error("Invalid");
-          return val;
-        } catch (e) { throw e; }
-      });
-
-      const fastestPrice = await Promise.any(pricePromises);
-      clearTimeout(timeoutId);
-
-      if (fastestPrice > 0) {
-        // Enforce 2 decimal model as requested (Truncation)
-        const truncated = Math.floor(fastestPrice * 100) / 100;
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        const raw = parseFloat(data.p);
+        if (isNaN(raw) || raw <= 0) return;
+        const truncated = Math.floor(raw * 100) / 100;
         const pStr = truncated.toFixed(2);
-        setPrice(pStr);
-        priceRef.current = pStr;
-        setIsLoading(false);
+        // Only re-render when value actually changes
+        if (pStr !== priceRef.current) {
+          priceRef.current = pStr;
+          setPrice(pStr);
+        }
+      };
 
-        // Record history for precise expiry price retrieval (keep 200-item buffer for chart context)
-        const now = Date.now();
-        priceHistoryRef.current.push({ p: truncated, t: now });
-        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+      ws.onerror = () => ws.close();
+      ws.onclose = () => {
+        if (ws._intentionalClose) return;
+        setTimeout(connect, 3000);
+      };
+    };
 
-        return fastestPrice;
-      }
-    } catch (err) {
-      // Don't let total API failure block the UI forever
-      staticPriceFails.current = (staticPriceFails.current || 0) + 1;
-      if (staticPriceFails.current > 3) setIsLoading(false);
-    }
-    return null;
-  }, [activeMarket]);
+    connect();
+    return () => {
+      if (ws) { ws._intentionalClose = true; ws.close(); }
+    };
+  }, [activeMarket.binance]);
 
+  // ─── SOCKET.IO: Trade events only (no price) ───
   useEffect(() => {
     socketService.connect();
-    
-    // Real-time Setting Updates from Admin
+
     const unbindSettings = socketService.on('settings_updated', (newSettings) => {
       setPlatformSettings(prev => ({ ...prev, ...newSettings }));
       localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
     });
 
-    // Real-time Price Updates (Stealth Streaming)
-    const unbindPrices = socketService.on('price_update', (newPrices) => {
-      if (!newPrices) return;
-      // Get price for currently active market
-      const fresh = newPrices[activeMarket.id.toLowerCase()];
-      if (fresh && fresh > 0) {
-        const truncated = Math.floor(fresh * 100) / 100;
-        const pStr = truncated.toFixed(2);
-        
-        // Only update if price changed to keep chart smooth
-        if (pStr !== priceRef.current) {
-          setPrice(pStr);
-          priceRef.current = pStr;
-          setIsLoading(false);
-          
-          // Sync history buffer for expiry lookups
-          const now = Date.now();
-          priceHistoryRef.current.push({ p: truncated, t: now });
-          if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
-        }
-      }
-    });
-
     return () => {
       unbindSettings();
-      unbindPrices();
     };
-  }, [activeMarket.id]);
-
-  useEffect(() => {
-    let active = true;
-    const loop = async () => {
-      if (!active) return;
-      await fetchCurrentPrice();
-      if (active) setTimeout(loop, 2000);
-    };
-    loop();
-    return () => { active = false; };
-  }, [fetchCurrentPrice]);
+  }, []);
 
   // Sync Market Changes (Across Ports via Keeper)
   useEffect(() => {
