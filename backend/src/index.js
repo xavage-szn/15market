@@ -45,7 +45,7 @@ const PYTH_ID_MAP = {
 
 const initPythWs = () => {
   if (pythWs) {
-    try { pythWs.close(); } catch (e) {}
+    try { pythWs.close(); } catch (e) { }
   }
 
   pythWs = new WebSocket('wss://hermes.pyth.network/ws');
@@ -59,7 +59,7 @@ const initPythWs = () => {
       binary: false
     };
     pythWs.send(JSON.stringify(subscribeMsg));
-    
+
     // Maintain connection
     const pingInterval = setInterval(() => {
       if (pythWs.readyState === WebSocket.OPEN) pythWs.ping();
@@ -71,17 +71,17 @@ const initPythWs = () => {
     try {
       const msg = JSON.parse(data);
       if (msg.type === 'price_update' && msg.price_update) {
-         const p = msg.price_update;
-         const rawId = p.feed_id.startsWith('0x') ? p.feed_id : `0x${p.feed_id}`;
-         const internalId = PYTH_ID_MAP[rawId.toLowerCase()];
-         if (internalId) {
-           const price = parseFloat(p.price) * Math.pow(10, p.expo);
-           if (prices[internalId] !== price) {
-             prices[internalId] = price;
-             oracleReady = true;
-             io.emit('price_update', prices);
-           }
-         }
+        const p = msg.price_update;
+        const rawId = p.feed_id.startsWith('0x') ? p.feed_id : `0x${p.feed_id}`;
+        const internalId = PYTH_ID_MAP[rawId.toLowerCase()];
+        if (internalId) {
+          const price = parseFloat(p.price) * Math.pow(10, p.expo);
+          if (prices[internalId] !== price) {
+            prices[internalId] = price;
+            oracleReady = true;
+            io.emit('price_update', prices);
+          }
+        }
       }
     } catch (e) {
       console.warn("[Oracle] Message processing error:", e.message);
@@ -111,11 +111,11 @@ const fetchConcurrentPrices = async () => {
 
   try {
     // 1. Fetch Latest Prices via official SDK (Including Binary VAAs for Pull Model)
-    const latestPrices = await pythConnection.getLatestPriceUpdates(assets.map(a => a.pyth), { 
-        parsed: true,
-        binary: true
+    const latestPrices = await pythConnection.getLatestPriceUpdates(assets.map(a => a.pyth), {
+      parsed: true,
+      binary: true
     });
-    
+
     if (latestPrices && latestPrices.parsed) {
       latestPrices.parsed.forEach(p => {
         const fullId = p.id.startsWith('0x') ? p.id : `0x${p.id}`;
@@ -131,25 +131,27 @@ const fetchConcurrentPrices = async () => {
     // --- ON-CHAIN RECOVERY & PULL-UPDATE (Official SDK Integration) ---
     const updateData = latestPrices.binary.data;
     if (updateData && updateData.length > 0) {
-        for (const asset of assets) {
-            if (!prices[asset.id] || prices[asset.id] === 0) {
-                console.log(`[Oracle] Signal for ${asset.id} missing. Pushing SDK Pull-Update...`);
-                await blockchain.updatePythPriceOnChain(updateData[0]); 
-                
-                const onChainPrice = await blockchain.getPythPriceOnChain(asset.pyth);
-                if (onChainPrice) {
-                    console.log(`[Oracle] ✅ RECOVERED ${asset.id} on-chain: $${onChainPrice}`);
-                    prices[asset.id] = onChainPrice;
-                }
-            }
+      for (const asset of assets) {
+        if (!prices[asset.id] || prices[asset.id] === 0) {
+          console.log(`[Oracle] Signal for ${asset.id} missing. Pushing SDK Pull-Update...`);
+          await blockchain.updatePythPriceOnChain(updateData[0]);
+
+          const onChainPrice = await blockchain.getPythPriceOnChain(asset.pyth);
+          if (onChainPrice) {
+            console.log(`[Oracle] ✅ RECOVERED ${asset.id} on-chain: $${onChainPrice}`);
+            prices[asset.id] = onChainPrice;
+          }
         }
+      }
     }
 
-    oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
-    if (oracleReady) {
+    // We broadcast if at least one price is valid
+    const hasAnyPrice = Object.values(prices).some(p => p > 0);
+    if (hasAnyPrice) {
         io.emit('price_update', prices);
+        oracleReady = true;
     } else {
-        console.warn(`[Oracle] Signal incomplete: BTC:${prices.btc} ETH:${prices.eth} SOL:${prices.sol}`);
+        console.warn(`[Oracle] Signal completely empty: BTC:${prices.btc} ETH:${prices.eth} SOL:${prices.sol}`);
     }
   } catch (e) {
     console.error("[Oracle] Sync Failed:", e.message);
@@ -166,22 +168,22 @@ fetchConcurrentPrices();
 // 2. High-frequency Pulse for Room Members (2s debounce for state sync)
 let tickerCounter = 0;
 setInterval(() => {
-    tickerCounter++;
-    if (tickerCounter >= 10 && oracleReady) {
-        console.log(`[Oracle] ✅ TICKER: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
-        tickerCounter = 0;
-    }
+  tickerCounter++;
+  if (tickerCounter >= 10 && oracleReady) {
+    console.log(`[Oracle] ✅ TICKER: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
+    tickerCounter = 0;
+  }
 }, 2000);
 
 // 3. Instant Sync on Connection (Meeting the "when its needed" requirement)
 io.on('connection', (socket) => {
-    console.log('[Socket] Client Connected, triggering priority sync');
-    fetchConcurrentPrices(); 
-    
-    socket.on('join', (room) => {
-        socket.join(room.toLowerCase());
-        console.log(`[Socket] User joined room: ${room}`);
-    });
+  console.log('[Socket] Client Connected, triggering priority sync');
+  fetchConcurrentPrices();
+
+  socket.on('join', (room) => {
+    socket.join(room.toLowerCase());
+    console.log(`[Socket] User joined room: ${room}`);
+  });
 });
 
 const emitAdminStats = async () => {
@@ -241,64 +243,7 @@ const trackActivity = async (addr) => {
   // For simplicity, we just keep them for the current session.
 };
 
-// --- User Profile / Onboarding ---
-
-app.get('/profiles/:address', async (req, res) => {
-  const { address } = req.params;
-  const addr = address.toLowerCase();
-
-  try {
-    if (!redis) return res.status(503).json({ error: "Database offline" });
-
-    const userData = await redis.get(`user:${addr}`);
-    if (userData) {
-      res.json({ ...JSON.parse(userData), onboarded: true });
-    } else {
-      res.status(404).json({ error: "User not found" });
-    }
-  } catch (err) {
-    console.error("Profile fetch error:", err);
-    res.status(500).json({ error: "Server error fetching profile" });
-  }
-});
-
-app.post('/profiles', async (req, res) => {
-  const { address, username, xHandle, avatar } = req.body;
-  if (!address || !username) {
-    return res.status(400).json({ error: "Address and username are required" });
-  }
-
-  const addr = address.toLowerCase();
-  const profile = { address: addr, username, xUsername: xHandle || '', onboarded: 1 };
-
-  try {
-    if (!redis) throw new Error("Redis connection required");
-
-    const existing = await redis.get(`user:${addr}`);
-    if (existing) {
-        return res.json({ success: true, profile: JSON.parse(existing), message: "User already exists" });
-    }
-
-    // Save Profile to Redis
-    await redis.set(`user:${addr}`, JSON.stringify(profile));
-    console.log(`[Onboarding] Profile created for ${addr}. Tracking REAL on-chain balance only.`);
-
-    // Log activity
-    await redis.lpush(`activity:${addr}`, JSON.stringify({
-      type: 'ONBOARDING',
-      timestamp: Date.now()
-    }));
-
-    const profileData = { ...profile, theme: avatar || 'default' };
-    io.emit('user_onboarded', profileData);
-    trackActivity(addr);
-
-    res.json({ success: true, profile });
-  } catch (error) {
-    console.error("Onboarding error:", error);
-    res.status(500).json({ error: "Failed to onboard user" });
-  }
-});
+// --- Profile Management Logic is at the end of the file ---
 
 // --- Balances ---
 
@@ -320,8 +265,8 @@ app.get('/session/balance/:address', async (req, res) => {
 
     // Always fetch REAL on-chain balance for the true session wallet
     const balance = await blockchain.getBalance(sessionAddr);
-    
-    res.json({ 
+
+    res.json({
       success: true,
       balance: balance || '0.0',
       sessionAddress: sessionAddr
@@ -334,9 +279,9 @@ app.get('/session/balance/:address', async (req, res) => {
 // --- Rounds & Access Proxy (Forward to Rounds-Backend on port 3011) ---
 
 app.use('/rounds', (req, res) => {
-  res.status(503).json({ 
-    success: false, 
-    error: "Rounds service is currently paused. Please use the waitlist to request access." 
+  res.status(503).json({
+    success: false,
+    error: "Rounds service is currently paused. Please use the waitlist to request access."
   });
 });
 
@@ -345,26 +290,26 @@ app.use('/rounds', (req, res) => {
 app.post('/session/init', async (req, res) => {
   const { address } = req.body;
   if (!address) return res.status(400).json({ error: "Address required" });
-  
+
   const addr = address.toLowerCase();
   try {
     let pk = await redis.get(`pk:${addr}`);
     let sessionAddr = await redis.get(`addr:${addr}`);
-    
+
     if (!pk) {
-       const w = ethers.Wallet.createRandom();
-       pk = w.privateKey;
-       sessionAddr = w.address;
-       await redis.set(`pk:${addr}`, pk);
-       await redis.set(`addr:${addr}`, sessionAddr);
-       console.log(`[Session] Created True Embedded Account for ${addr}: ${sessionAddr}`);
+      const w = ethers.Wallet.createRandom();
+      pk = w.privateKey;
+      sessionAddr = w.address;
+      await redis.set(`pk:${addr}`, pk);
+      await redis.set(`addr:${addr}`, sessionAddr);
+      console.log(`[Session] Created True Embedded Account for ${addr}: ${sessionAddr}`);
     }
-    
+
     // Completely skip Redis logic — the on-chain balance IS the exact balance!
     const balance = await blockchain.getBalance(sessionAddr);
-    res.json({ 
-      success: true, 
-      sessionAddress: sessionAddr, 
+    res.json({
+      success: true,
+      sessionAddress: sessionAddr,
       balance: balance || '0.0'
     });
   } catch (e) {
@@ -390,16 +335,16 @@ app.post('/session/execute', async (req, res) => {
     const currentOnChainBal = await blockchain.getBalance(walletAddress);
     const currentBal = parseFloat(currentOnChainBal || '0.0');
     const stake = parseFloat(amount);
-    
+
     // Check if they have enough balance to cover the stake + estimated gas buffer
-    if (currentBal < stake + 0.0005) { 
+    if (currentBal < stake + 0.0005) {
       return res.status(400).json({ error: "Insufficient session balance (make sure to leave a little for gas!)" });
     }
 
     // 2. Map Bet to User & Store Details in Redis (CRITICAL for authoritative locking)
     const tradeData = {
       id,
-      userAddr,
+      userAddr: addr,
       direction,
       amount,
       entryPrice,
@@ -408,7 +353,7 @@ app.post('/session/execute', async (req, res) => {
       timestamp: Date.now(),
       status: 'PENDING'
     };
-    await redis.set(`bet_owner:${id}`, addr, 'EX', 86400); 
+    await redis.set(`bet_owner:${id}`, addr, 'EX', 86400);
     await redis.set(`trade:${id}`, JSON.stringify(tradeData), 'EX', 86400);
 
     // 3. Execute On-Chain Bet natively via User's embedded wallet key!
@@ -432,13 +377,13 @@ app.post('/session/execute', async (req, res) => {
     };
 
     await redis.lpush(`activity:${userAddr}`, JSON.stringify(activityRecord));
-    
+
     // Admin Instant Indexing
     io.emit('new_trade', activityRecord);
     trackActivity(userAddr);
 
     console.log(`[API] Trade placement SUCCESS for ${id}. TX: ${receipt.hash}`);
-    
+
     // Notify client if they are in the room
     const betOwner = await redis.get(`bet_owner:${id}`);
     if (betOwner) {
@@ -455,7 +400,7 @@ app.post('/session/execute', async (req, res) => {
 app.get('/history/:address', async (req, res) => {
   const { address } = req.params;
   const addr = address.toLowerCase();
-  
+
   try {
     const activities = await redis.lrange(`activity:${addr}`, 0, 50);
     const history = activities.map(a => JSON.parse(a));
@@ -481,7 +426,7 @@ app.post('/settle', async (req, res) => {
 
     const exitPriceNum = parseFloat(exitPrice);
     const direction = Number(trade.direction); // 1 = UP, 0 = DOWN
-    
+
     let isWon = won;
     if (isWon === undefined) {
       if (direction === 1) isWon = exitPriceNum > entryPriceNum;
@@ -503,20 +448,20 @@ app.post('/settle', async (req, res) => {
     else scaledExitPrice = Math.floor(exitPriceNum * 100);
 
     blockchain.settleBet(id, scaledExitPrice).catch(e => {
-       console.error(`[Settlement] On-chain delay for ${id}:`, e.message);
-       if (betOwner) {
-         io.to(betOwner.toLowerCase()).emit('terminal_error', { 
-           message: `On-chain settlement delayed for trade #${id}. Don't worry, funds are safe and will be processed.`,
-           tradeId: id
-         });
-       }
+      console.error(`[Settlement] On-chain delay for ${id}:`, e.message);
+      if (betOwner) {
+        io.to(betOwner.toLowerCase()).emit('terminal_error', {
+          message: `On-chain settlement delayed for trade #${id}. Don't worry, funds are safe and will be processed.`,
+          tradeId: id
+        });
+      }
     });
-    
+
     // 3. Update Activity Feed based on the LOCKED result (Authoritative)
     const betOwner = await redis.get(`bet_owner:${id}`);
     if (betOwner) {
       const userAddr = betOwner.toLowerCase();
-      
+
       let payout = 0;
       const durationSec = Number(trade.duration);
       const multiplier = durationSec <= 5 ? 2.90 : (durationSec <= 10 ? 2.40 : 1.90);
@@ -536,34 +481,34 @@ app.post('/settle', async (req, res) => {
         // Fetch fresh on-chain balance to send to client
         const currentOnChainBal = await blockchain.getBalance(userAddr);
         console.log(`[API] Locked Win: Trade #${id} WON. User will see update on next on-chain sync.`);
-        
-        io.to(userAddr).emit('balance_update', { 
-          balance: currentOnChainBal, 
-          reason: 'WIN', 
-          betId: id, 
-          payout: payout.toFixed(4) 
+
+        io.to(userAddr).emit('balance_update', {
+          balance: currentOnChainBal,
+          reason: 'WIN',
+          betId: id,
+          payout: payout.toFixed(4)
         });
       } else {
         io.to(userAddr).emit('balance_update', { reason: 'LOSS', betId: id });
       }
 
       await redis.lpush(`activity:${userAddr}`, JSON.stringify(activityData));
-      
+
       // Admin Instant Settlement Update
       io.emit('trade_settled', activityData);
       trackActivity(userAddr);
     }
-    
-    res.json({ 
-      success: true, 
-      won: lockedResult.won, 
-      txHash: "async_settlement" 
+
+    res.json({
+      success: true,
+      won: lockedResult.won,
+      txHash: "async_settlement"
     });
   } catch (error) {
     console.error(`[API] Settlement failed for bet ${id}:`, error.message);
-    res.status(500).json({ 
-      error: "Settlement processing failed", 
-      message: error.message 
+    res.status(500).json({
+      error: "Settlement processing failed",
+      message: error.message
     });
   }
 });
@@ -606,7 +551,7 @@ app.post('/session/record', async (req, res) => {
         ...transaction,
         timestamp: Date.now()
       }));
-      
+
       console.log(`[Activity] Recorded transaction for ${addr}`);
       res.json({ success: true });
     } else {
@@ -633,7 +578,7 @@ app.post('/session/cashout', async (req, res) => {
     const currentOnChainBal = await blockchain.getBalance(sessionAddr);
     const currentBal = parseFloat(currentOnChainBal || '0.0');
     const withdrawAmt = parseFloat(amount);
-    
+
     console.log(`[Withdraw] True Native Sweep: User ${addr} | From ${sessionAddr} | Amt: ${amount} | CurrentBal: ${currentBal}`);
 
     if (isNaN(withdrawAmt) || withdrawAmt <= 0) {
@@ -658,7 +603,7 @@ app.post('/session/cashout', async (req, res) => {
     await redis.lpush(`activity:${addr}`, JSON.stringify(activity));
 
     console.log(`[Withdraw] True Native Sweep SUCCESS. TX: ${receipt.hash}`);
-    
+
     // Return the new approximate balance (will sync properly on next refresh)
     const newBal = (currentBal - withdrawAmt).toFixed(4);
     await redis.set(`balance:${addr}`, newBal);
@@ -681,7 +626,7 @@ app.patch('/profiles/:address', async (req, res) => {
 
     const currentProfile = JSON.parse(userData);
     const updatedProfile = { ...currentProfile, ...updates };
-    
+
     await redis.set(`user:${addr}`, JSON.stringify(updatedProfile));
     res.json({ success: true, profile: updatedProfile });
   } catch (e) {
@@ -690,34 +635,34 @@ app.patch('/profiles/:address', async (req, res) => {
 });
 
 app.get('/profiles/:address', async (req, res) => {
-    const { address } = req.params;
-    const addr = address.toLowerCase();
-    try {
-        const data = await redis.get(`user:${addr}`);
-        if (!data) return res.status(404).json({ error: "Profile not found" });
-        res.json(JSON.parse(data));
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+  const { address } = req.params;
+  const addr = address.toLowerCase();
+  try {
+    const data = await redis.get(`user:${addr}`);
+    if (!data) return res.status(404).json({ error: "Profile not found" });
+    res.json(JSON.parse(data));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/profiles', async (req, res) => {
-    const { address, username, xHandle, avatar } = req.body;
-    const addr = address.toLowerCase();
-    try {
-        const profile = { address: addr, username, xHandle, avatar, createdAt: Date.now() };
-        await redis.set(`user:${addr}`, JSON.stringify(profile));
-        res.json(profile);
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+  const { address, username, xHandle, avatar } = req.body;
+  const addr = address.toLowerCase();
+  try {
+    const profile = { address: addr, username, xHandle, avatar, createdAt: Date.now() };
+    await redis.set(`user:${addr}`, JSON.stringify(profile));
+    res.json(profile);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/protocol-stats', async (req, res) => {
   const totalVolume = await redis.get('stats:total_volume') || '0';
   const totalTrades = await redis.get('stats:total_trades') || '0';
   const activeUsers = await redis.scard('stats:active_users_set') || 0;
-  
+
   res.json({
     totalVolume,
     totalTrades,
@@ -756,23 +701,23 @@ app.post('/active-market', (req, res) => {
 app.get('/campaigns', (req, res) => res.json([]));
 app.get('/winner-banner', (req, res) => res.json(null));
 app.get('/time', (req, res) => res.json({ time: Date.now() }));
-app.get('/health', (req, res) => res.json({ 
-  status: 'OK', 
+app.get('/health', (req, res) => res.json({
+  status: 'OK',
   oracle: oracleReady ? 'READY' : 'NOT_READY',
-  timestamp: Date.now(), 
-  version: '1.2.6' 
+  timestamp: Date.now(),
+  version: '1.2.6'
 }));
 
 // --- Global Error Boundary ---
 app.use((err, req, res, next) => {
   console.error(`[GlobalError] ${req.method} ${req.url}:`, err);
-  res.status(500).json({ 
-    error: "Internal Server Error", 
-    message: process.env.NODE_ENV === 'development' ? err.message : "Something went wrong" 
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: process.env.NODE_ENV === 'development' ? err.message : "Something went wrong"
   });
 });
 
-const PORT = process.env.PORT || 3010; 
+const PORT = process.env.PORT || 3010;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Simplified 15market Backend running on port ${PORT}`);
 });

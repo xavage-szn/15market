@@ -295,7 +295,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             smaSeriesRef.current = null;
             tradePriceLines.current.clear();
         };
-    }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType, gridMode]);
+    }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, gridMode]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -401,7 +401,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         updateMarkers();
         const interval = setInterval(updateMarkers, 1000);
         return () => clearInterval(interval);
-    }, [activeTrades, currentPrice, chartType]);
+    }, [activeTrades, currentPrice]);
 
     const [pythPrice, setPythPrice] = useState(currentPrice);
     const pythPriceRef = useRef(currentPrice);
@@ -413,10 +413,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         let es;
         const connectPyth = () => {
             const fullId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
-            const url = `https://hermes.pyth.network/v2/updates/price/stream?ids[]=${fullId}`;
+            // Pyth Hermes V2 Streaming API
+            const id = fullId.startsWith('0x') ? fullId.slice(2) : fullId;
+            const url = `https://hermes.pyth.network/v2/updates/price/stream?ids[]=${id}`;
             
             es = new EventSource(url);
-            
+            console.log(`[Chart] 📡 Connecting to Pyth Stream: ${id}`);
+
             es.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
@@ -427,7 +430,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             const truncated = Math.floor(val * 100) / 100;
                             setPythPrice(truncated);
                             pythPriceRef.current = truncated;
-                            
+
                             // Signal received: Instant clear of the loading state if trapped
                             if (isLoading) {
                                 setIsLoading(false);
@@ -451,7 +454,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
         connectPyth();
         return () => { if (es) es.close(); };
-    }, [activeMarket.pythId, timeframe, chartType]);
+    }, [activeMarket.pythId, timeframe]);
 
     useEffect(() => {
         if (!currentPrice || !seriesRef.current) return;
@@ -471,14 +474,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         const time = Math.floor(now / 60) * 60;
         if (lastCandleTime.current && time < lastCandleTime.current) return;
 
-        if (chartType === 'candles') {
-            seriesRef.current.update({ time, close: price });
-        } else {
-            seriesRef.current.update({ time, value: price });
-        }
+        seriesRef.current.update({ time, value: price });
 
         lastCandleTime.current = time;
-    }, [currentPrice, timeframe, chartType]);
+    }, [currentPrice, timeframe]);
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [tokens, setTokens] = useState(() => {
@@ -593,8 +592,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
                             className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${result.won
-                                    ? 'bg-[#3CB371]/20 border-[#3CB371]/30'
-                                    : 'bg-[#FF4444]/20 border-[#FF4444]/30'
+                                ? 'bg-[#3CB371]/20 border-[#3CB371]/30'
+                                : 'bg-[#FF4444]/20 border-[#FF4444]/30'
                                 }`}
                         >
                             <div className={`w-2 h-2 rounded-full animate-pulse ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
