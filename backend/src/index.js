@@ -10,6 +10,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const blockchain = require('./blockchain');
 const redis = require('./redis');
+const { EvmPriceServiceConnection } = require('@pythnetwork/pyth-evm-js');
+const pythConnection = new EvmPriceServiceConnection("https://hermes.pyth.network");
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -109,7 +111,7 @@ const fetchConcurrentPrices = async () => {
 
   try {
     const idsString = assets.map(a => `ids[]=${a.pyth}`).join('&');
-    const res = await axios.get(`https://hermes.pyth.network/v2/updates/price/latest?${idsString}`, { timeout: 8000 });
+    const res = await axios.get(`https://hermes.pyth.network/v2/updates/price/latest?${idsString}&encoding=hex`, { timeout: 8000 });
     
     if (res.data && res.data.parsed) {
       res.data.parsed.forEach(p => {
@@ -123,16 +125,25 @@ const fetchConcurrentPrices = async () => {
       console.log(`[Oracle] HTTP Sync: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
     }
 
-    // --- ON-CHAIN RECOVERY (New: Per user guide) ---
-    for (const asset of assets) {
-        if (!prices[asset.id] || prices[asset.id] === 0) {
-            console.log(`[Oracle] Signal for ${asset.id} missing. Attempting ON-CHAIN recovery...`);
-            const onChainPrice = await blockchain.getPythPriceOnChain(asset.pyth);
-            if (onChainPrice) {
-                console.log(`[Oracle] ✅ RECOVERED ${asset.id} on-chain: $${onChainPrice}`);
-                prices[asset.id] = onChainPrice;
+    // --- ON-CHAIN RECOVERY & PULL-UPDATE (Official SDK Integration) ---
+    try {
+        const updateData = await pythConnection.getPriceFeedsUpdateData(assets.map(a => a.pyth));
+        if (updateData && updateData.length > 0) {
+            for (const asset of assets) {
+                if (!prices[asset.id] || prices[asset.id] === 0) {
+                    console.log(`[Oracle] Signal for ${asset.id} missing. Pushing SDK Pull-Update...`);
+                    await blockchain.updatePythPriceOnChain(updateData[0]); 
+                    
+                    const onChainPrice = await blockchain.getPythPriceOnChain(asset.pyth);
+                    if (onChainPrice) {
+                        console.log(`[Oracle] ✅ RECOVERED ${asset.id} on-chain: $${onChainPrice}`);
+                        prices[asset.id] = onChainPrice;
+                    }
+                }
             }
         }
+    } catch (sdkErr) {
+        console.error("[Oracle] SDK Price Fetch Failed:", sdkErr.message);
     }
 
     oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);

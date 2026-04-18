@@ -36,7 +36,9 @@ class BlockchainService {
     ];
 
     this.pythAbi = [
-      "function getPriceNoOlderThan(bytes32 id, uint256 age) external view returns (tuple(int64 price, uint64 conf, int32 expo, uint256 publishTime) price)"
+      "function getPriceNoOlderThan(bytes32 id, uint256 age) external view returns (tuple(int64 price, uint64 conf, int32 expo, uint256 publishTime) price)",
+      "function updatePriceFeeds(bytes[] updateData) external payable",
+      "function getUpdateFee(bytes[] updateData) external view returns (uint256 fee)"
     ];
 
     // Standard wallet for metrics/admin lookups
@@ -272,7 +274,37 @@ class BlockchainService {
     try {
       return await Promise.any(race);
     } catch (e) {
-      // If it fails (stale or network), return null
+      return null;
+    }
+  }
+
+  async updatePythPriceOnChain(updateDataHex) {
+    if (!updateDataHex) return;
+    console.log(`[Blockchain] ⚡ Pushing Pyth Pull-Update to Arc contract...`);
+    
+    const updateData = [updateDataHex.startsWith('0x') ? updateDataHex : `0x${updateDataHex}`];
+    
+    const race = this.providers.map(async (provider, idx) => {
+        try {
+            const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+            const pyth = new ethers.Contract(PYTH_CONTRACT_ADDRESS, this.pythAbi, wallet);
+            
+            // 1. Get Fee
+            const fee = await this.callWithTimeout(pyth.getUpdateFee(updateData), 5000);
+            
+            // 2. Submit Update
+            const tx = await this.callWithTimeout(pyth.updatePriceFeeds(updateData, { value: fee, gasLimit: 500000 }), 10000);
+            console.log(`[Blockchain] ✅ Pyth Update SUCCESS via Provider ${idx} (TX: ${tx.hash})`);
+            return tx;
+        } catch (e) {
+            throw e;
+        }
+    });
+
+    try {
+      return await Promise.any(race);
+    } catch (e) {
+      console.error(`[Blockchain] ❌ Pyth Pull-Update failed across all providers:`, e.message);
       return null;
     }
   }
