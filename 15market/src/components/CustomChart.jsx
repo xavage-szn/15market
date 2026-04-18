@@ -473,8 +473,13 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         const now = Math.floor(Date.now() / 1000);
         const price = parseFloat(currentPrice);
 
-        // If timeframe is 1s, we prefer the pythPriceRef updates
-        if (timeframe === '1s') return;
+        // Use backend price as a reliable fallback/heartbeat
+        if (!pythPriceRef.current || timeframe !== '1s') {
+            const val = parseFloat(price);
+            if (seriesRef.current && !isNaN(val)) {
+                seriesRef.current.update({ time: Math.floor(Date.now() / 1000), value: val });
+            }
+        }
 
         const time = Math.floor(now / 60) * 60;
         if (lastCandleTime.current && time < lastCandleTime.current) return;

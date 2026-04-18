@@ -689,6 +689,30 @@ app.patch('/profiles/:address', async (req, res) => {
   }
 });
 
+app.get('/profiles/:address', async (req, res) => {
+    const { address } = req.params;
+    const addr = address.toLowerCase();
+    try {
+        const data = await redis.get(`user:${addr}`);
+        if (!data) return res.status(404).json({ error: "Profile not found" });
+        res.json(JSON.parse(data));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/profiles', async (req, res) => {
+    const { address, username, xHandle, avatar } = req.body;
+    const addr = address.toLowerCase();
+    try {
+        const profile = { address: addr, username, xHandle, avatar, createdAt: Date.now() };
+        await redis.set(`user:${addr}`, JSON.stringify(profile));
+        res.json(profile);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/protocol-stats', async (req, res) => {
   const totalVolume = await redis.get('stats:total_volume') || '0';
   const totalTrades = await redis.get('stats:total_trades') || '0';
