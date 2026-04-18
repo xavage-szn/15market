@@ -68,30 +68,21 @@ class BlockchainService {
   }
 
   async getBalance(address, retryCount = 0) {
-    // Attempt balancing across ALL providers simultaneously
-    const balancePromises = this.providers.map(async (provider, idx) => {
+    // Optimization: Sequential failover instead of aggressive racing to save RPC credits
+    for (let i = 0; i < this.providers.length; i++) {
         try {
-            const bal = await this.callWithTimeout(provider.getBalance(address, 'pending'), 15000); // include mempool for instant feedback
+            const bal = await this.callWithTimeout(this.providers[i].getBalance(address, 'pending'), 10000);
             return ethers.formatEther(bal);
         } catch (e) {
-            console.warn(`[Blockchain] Provider ${idx} (${ARC_RPCS[idx]}) failed: [${e.code || 'TIMEOUT'}] ${e.message}`);
-            throw e;
+            console.warn(`[Blockchain] Provider ${i} failed, trying next...`);
         }
-    });
-
-    try {
-      // Use the FIRST successful response from any provider
-      const result = await Promise.any(balancePromises);
-      return result;
-    } catch (error) {
-      if (retryCount < 2) {
-          console.warn(`[Blockchain] ⚠️ Cycle ${retryCount + 1} failed. Re-initiating race across all sources for ${address}...`);
-          await new Promise(r => setTimeout(r, 2000));
-          return this.getBalance(address, retryCount + 1);
-      }
-      console.error("[Blockchain] ❌ FATAL REJECTION: All 5 RPC streams are unreachable from your current network.");
-      return "0";
     }
+
+    if (retryCount < 2) {
+        await new Promise(r => setTimeout(r, 2000));
+        return this.getBalance(address, retryCount + 1);
+    }
+    return "0";
   }
 
   async getNextNonce() {
@@ -259,23 +250,14 @@ class BlockchainService {
   }
 
   async getPythPriceOnChain(feedId, maxAge = 3600) {
-    // Race across all providers for the fastest on-chain price
-    const race = this.pythContracts.map(async (contract, idx) => {
+    // Sequential failover for on-chain price checks
+    for (let i = 0; i < this.pythContracts.length; i++) {
         try {
-            // feedId must be bytes32 (64 hex chars, with 0x)
-            const result = await this.callWithTimeout(contract.getPriceNoOlderThan(feedId, maxAge), 5000);
-            const price = Number(result.price) * Math.pow(10, Number(result.expo));
-            return price;
-        } catch (e) {
-            throw e;
-        }
-    });
-
-    try {
-      return await Promise.any(race);
-    } catch (e) {
-      return null;
+            const result = await this.callWithTimeout(this.pythContracts[i].getPriceNoOlderThan(feedId, maxAge), 5000);
+            return Number(result.price) * Math.pow(10, Number(result.expo));
+        } catch (e) { }
     }
+    return null;
   }
 
   async updatePythPriceOnChain(updateDataHex) {

@@ -25,8 +25,8 @@ export function WalletBalance({ theme, balanceOverride, label }) {
     useEffect(() => {
         refetchEvm();
         if (isConnected && !balanceOverride) {
-            const interval = setInterval(refetchEvm, 10000);
-            return () => clearInterval(interval);
+            // Balance only fetches once on mount if no override is provided.
+            // In V2, UserApp provides the override so this is just a safety.
         }
     }, [isConnected, refetchEvm, balanceOverride]);
 

@@ -1126,20 +1126,9 @@ export default function UserApp() {
         setEvmSessionWallet({ address: stored, isRemote: true });
       }
 
-      // 2. Continuous Sync (Safe Loop: waits for previous request to finish)
-      let active = true;
-      const syncLoop = async () => {
-        if (!active) return;
-        try {
-          await Promise.all([
-            triggerGlobalRefresh(false),
-            fetchMyProfile()
-          ]);
-        } catch (e) {}
-        if (active) setTimeout(syncLoop, 5000); // 5s is plenty for background sync
-      };
-      syncLoop();
-      return () => { active = false; };
+      // 2. Initial Fetch (Balance only syncs on Mount or Transaction)
+      triggerGlobalRefresh(true);
+      fetchMyProfile();
     }
   }, [address, triggerGlobalRefresh, fetchMyProfile]);
 
