@@ -99,7 +99,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             // Interpolation: Snappier reaction for "Sub-Second" feel
             if (targetPriceRef.current !== null && interpolatedPriceRef.current !== null) {
                 const diff = targetPriceRef.current - interpolatedPriceRef.current;
-                interpolatedPriceRef.current += diff * 0.45; // 3x faster reaction
+                interpolatedPriceRef.current += diff * 0.65; // High-precision snappy flow
             }
 
             const history = priceHistoryRef.current;
@@ -175,7 +175,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                     const x = getX(pt.t);
                     const y = toY(pt.p);
                     // Allow points slightly off-screen to ensure path reaches the edge
-                    if (x < -100 || x > W + 100) return;
+                    if (x < -100 || x > W + 600) return; // Allow more history off-screen right
                     if (firstVisibleX === -1) { ctx.moveTo(x, y); firstVisibleX = x; }
                     else ctx.lineTo(x, y);
                 });
@@ -198,7 +198,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 history.forEach((pt) => {
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x < -100 || x > W + 100) return;
+                    if (x < -100 || x > W + 600) return;
                     if (!started) {
                         ctx.moveTo(x, y);
                         started = true;
@@ -229,17 +229,18 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 ctx.textBaseline = 'middle';
                 ctx.fillText(labelText, liveX + 10 + 8, liveY);
 
-                // Pulse Dot
-                const pulse = Math.sin(nowPx / 200) * 3;
-                const dotSize = 5;
+                // Sub-Second High-Freq Pulse dot (Matching User Request)
+                const pulse = Math.sin(nowPx / 150) * 4; 
+                const dotSize = 4;
                 ctx.beginPath();
                 ctx.arc(liveX, liveY, dotSize, 0, Math.PI * 2);
-                ctx.fillStyle = isLight ? '#48c97f' : '#ffffff';
+                ctx.fillStyle = '#ffffff';
                 ctx.fill();
+                
                 ctx.beginPath();
-                ctx.arc(liveX, liveY, (dotSize + 2) + pulse, 0, Math.PI * 2);
-                ctx.strokeStyle = isLight ? 'rgba(72,201,127,0.6)' : `${GREEN}80`;
-                ctx.lineWidth = 2;
+                ctx.arc(liveX, liveY, (dotSize + 3) + pulse, 0, Math.PI * 2);
+                ctx.strokeStyle = `${GREEN}80`;
+                ctx.lineWidth = 1.5;
                 ctx.stroke();
             }
 

@@ -1536,9 +1536,11 @@ export default function UserApp() {
       { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16', binance: 'SOLUSDT' }, // Temp fallback for MON
     ];
 
-    // MIGRATION: If we have legacy RICE data, purge it to allow Pyth feeds to take over
+    // MIGRATION: Purge legacy tokens missing high-frequency IDs
     const saved = localStorage.getItem('15market_listed_tokens');
-    if (saved && saved.toLowerCase().includes('rice')) {
+    const needsMigration = !saved || !saved.includes('pythId') || !saved.includes('binance') || saved.toLowerCase().includes('rice');
+    
+    if (needsMigration) {
         localStorage.removeItem('15market_listed_tokens');
         localStorage.removeItem('15market_active_token_id');
         return defaultTokens[0];

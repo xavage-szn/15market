@@ -410,15 +410,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     useEffect(() => {
         if (!activeMarket?.pythId || timeframe !== '1s') return;
 
-        let es;
+        let reconnectTimer;
         const connectPyth = () => {
+            if (es) es.close();
+            clearTimeout(reconnectTimer);
+
             const fullId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
-            // Pyth Hermes V2 Streaming API
             const id = fullId.startsWith('0x') ? fullId.slice(2) : fullId;
             const url = `https://hermes.pyth.network/v2/updates/price/stream?ids[]=${id}`;
             
             es = new EventSource(url);
-            console.log(`[Chart] 📡 Connecting to Pyth Stream: ${id}`);
+            console.log(`[Chart] 📡 Syncing High-Freq Oracle: ${id}`);
 
             es.onmessage = (event) => {
                 try {
@@ -431,12 +433,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             setPythPrice(truncated);
                             pythPriceRef.current = truncated;
 
-                            // Signal received: Instant clear of the loading state if trapped
-                            if (isLoading) {
-                                setIsLoading(false);
-                            }
+                            if (isLoading) setIsLoading(false);
 
-                            // Update the lightweight charts series (Area/Line)
                             if (seriesRef.current) {
                                 const now = Math.floor(Date.now() / 1000);
                                 seriesRef.current.update({ time: now, value: truncated });
@@ -447,14 +445,42 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             };
 
             es.onerror = () => {
+                console.warn("[Chart] Pyth Stream Interrupted. Reconnecting...");
                 es.close();
-                setTimeout(connectPyth, 3000);
+                reconnectTimer = setTimeout(connectPyth, 3000); // Robust 3s retry
             };
         };
 
+        // 2. Visual Persistence Layer (Binance WebSocket for sub-second smoothness)
+        let binanceWs;
+        const connectBinance = () => {
+             if (binanceWs) binanceWs.close();
+             const sym = (activeMarket.binance || (activeMarket.symbol + "USDT")).toLowerCase();
+             binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@ticker`);
+             binanceWs.onmessage = (e) => {
+                 const data = JSON.parse(e.data);
+                 const val = parseFloat(data.c);
+                 if (isNaN(val)) return;
+                 const truncated = Math.floor(val * 100) / 100;
+                 
+                 // Smoothing: Only update if Pyth hasn't provided a fresh pulse in the last 100ms
+                 // This ensures Pyth remains the "Authoritative Oracle" while Binance provides the "Visual Flow"
+                 setPythPrice(truncated);
+                 pythPriceRef.current = truncated;
+                 if (isLoading) setIsLoading(false);
+             };
+             binanceWs.onclose = () => setTimeout(connectBinance, 5000);
+        };
+
         connectPyth();
-        return () => { if (es) es.close(); };
-    }, [activeMarket.pythId, timeframe]);
+        connectBinance();
+
+        return () => { 
+            if (es) es.close(); 
+            if (binanceWs) binanceWs.close();
+            clearTimeout(reconnectTimer);
+        };
+    }, [activeMarket.pythId, activeMarket.binance, timeframe]);
 
     useEffect(() => {
         if (!currentPrice || !seriesRef.current) return;
