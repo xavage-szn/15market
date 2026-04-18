@@ -19,7 +19,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
     useEffect(() => {
         const price = parseFloat(currentPrice);
-        if (!price || isNaN(price)) return;
+        if (price === undefined || isNaN(price)) return;
         targetPriceRef.current = price;
         if (interpolatedPriceRef.current === null) {
             interpolatedPriceRef.current = price;

@@ -436,6 +436,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     if (data.parsed) {
                         data.parsed.forEach(p => {
                             const val = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+                            if (isNaN(val)) return;
                             const truncated = Math.floor(val * 100) / 100;
                             setPythPrice(truncated);
                             pythPriceRef.current = truncated;
@@ -555,7 +556,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 {timeframe === '1s' && chartType === 'line' && (
                     <LiveStreamingChart
                         theme={theme}
-                        currentPrice={pythPrice || currentPrice}
+                        currentPrice={pythPrice || parseFloat(currentPrice) || 0}
                         symbol={symbol}
                         priceHistory={priceHistory}
                     />
