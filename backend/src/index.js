@@ -27,8 +27,7 @@ app.use(express.json());
 let prices = {
   btc: 0,
   eth: 0,
-  sol: 0,
-  mon: 0
+  sol: 0
 };
 let activeMarketId = 'btc';
 let oracleReady = false;
@@ -39,8 +38,7 @@ let pythWs;
 const PYTH_ID_MAP = {
   '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43': 'btc',
   '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace': 'eth',
-  '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d': 'sol',
-  '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16': 'mon'
+  '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d': 'sol'
 };
 
 const initPythWs = () => {
@@ -105,8 +103,7 @@ const fetchConcurrentPrices = async () => {
   const assets = [
     { id: 'btc', pyth: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43' },
     { id: 'eth', pyth: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' },
-    { id: 'sol', pyth: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d' },
-    { id: 'mon', pyth: '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16' }
+    { id: 'sol', pyth: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d' }
   ];
 
   try {
