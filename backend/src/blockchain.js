@@ -254,6 +254,8 @@ class BlockchainService {
       console.error(`[Blockchain] Native sweep failed across ALL providers:`, error.message);
       throw error;
     }
+  }
+
   async getPythPriceOnChain(feedId, maxAge = 3600) {
     // Race across all providers for the fastest on-chain price
     const race = this.pythContracts.map(async (contract, idx) => {
