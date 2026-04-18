@@ -56,13 +56,13 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                     priceHistoryRef.current.push({ t: now, p: interpolatedPriceRef.current });
                 }
                 
-                // Keep 120s window + 500 point cap for performance
+                // Keep 120s window + 800 point cap for higher granularity performance
                 const cutoff = now - 120000;
-                if (priceHistoryRef.current.length > 500) {
+                if (priceHistoryRef.current.length > 800) {
                     priceHistoryRef.current = priceHistoryRef.current.filter(pt => pt.t >= cutoff);
                 }
             }
-        }, 50);
+        }, 33); // 30 FPS Sampling
         return () => clearInterval(historyInterval);
     }, []);
 
@@ -96,10 +96,10 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
             ctx.clearRect(0, 0, W, H);
 
-            // Interpolation
+            // Interpolation: Snappier reaction for "Sub-Second" feel
             if (targetPriceRef.current !== null && interpolatedPriceRef.current !== null) {
                 const diff = targetPriceRef.current - interpolatedPriceRef.current;
-                interpolatedPriceRef.current += diff * 0.15;
+                interpolatedPriceRef.current += diff * 0.45; // 3x faster reaction
             }
 
             const history = priceHistoryRef.current;
