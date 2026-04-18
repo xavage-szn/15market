@@ -410,6 +410,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     useEffect(() => {
         if (!activeMarket?.pythId || timeframe !== '1s') return;
 
+        let es;
         let reconnectTimer;
         const connectPyth = () => {
             if (es) es.close();
