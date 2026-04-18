@@ -8,7 +8,6 @@ const ARC_RPCS = [
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
-const PYTH_CONTRACT_ADDRESS = "0x2880aB155794e7179c9eE2e38200202908C17B43"; // Pyth on Arc Testnet
 
 class BlockchainService {
   constructor() {
@@ -35,12 +34,6 @@ class BlockchainService {
       "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
     ];
 
-    this.pythAbi = [
-      "function getPriceNoOlderThan(bytes32 id, uint256 age) external view returns (tuple(int64 price, uint64 conf, int32 expo, uint256 publishTime) price)",
-      "function updatePriceFeeds(bytes[] updateData) external payable",
-      "function getUpdateFee(bytes[] updateData) external view returns (uint256 fee)"
-    ];
-
     // Standard wallet for metrics/admin lookups
     this.mainProvider = this.providers[0];
     this.arcWallet = new ethers.Wallet(PRIVATE_KEY, this.mainProvider);
@@ -49,10 +42,6 @@ class BlockchainService {
     this.contracts = this.providers.map(p => {
         const wallet = new ethers.Wallet(PRIVATE_KEY, p);
         return new ethers.Contract(CONTRACT_ADDRESS, this.abi, wallet);
-    });
-
-    this.pythContracts = this.providers.map(p => {
-        return new ethers.Contract(PYTH_CONTRACT_ADDRESS, this.pythAbi, p);
     });
 
     // Speed Optimization: Track nonces locally
@@ -177,26 +166,6 @@ class BlockchainService {
     }
   }
 
-  parseSettlementEvent(receipt) {
-    for (const log of receipt.logs) {
-      try {
-        const parsed = this.arcContract.interface.parseLog(log);
-        if (parsed && parsed.name === 'BetSettled') {
-          return {
-            id: parsed.args.id.toString(),
-            user: parsed.args.user,
-            settlementPrice: parsed.args.settlementPrice.toString(),
-            won: parsed.args.won,
-            payout: ethers.formatEther(parsed.args.payout)
-          };
-        }
-      } catch (e) {
-        // Log doesn't belong to this contract or wrong interface
-      }
-    }
-    return null;
-  }
-
   async placeBetForUser(privateKey, betId, direction, duration, entryPrice, marketId, amount) {
     console.log(`[Blockchain] Placing native bet ${betId} racing ALL sources...`);
     const val = ethers.parseEther(amount.toString());
@@ -246,48 +215,6 @@ class BlockchainService {
     } catch (error) {
       console.error(`[Blockchain] Native sweep failed across ALL providers:`, error.message);
       throw error;
-    }
-  }
-
-  async getPythPriceOnChain(feedId, maxAge = 3600) {
-    // Sequential failover for on-chain price checks
-    for (let i = 0; i < this.pythContracts.length; i++) {
-        try {
-            const result = await this.callWithTimeout(this.pythContracts[i].getPriceNoOlderThan(feedId, maxAge), 5000);
-            return Number(result.price) * Math.pow(10, Number(result.expo));
-        } catch (e) { }
-    }
-    return null;
-  }
-
-  async updatePythPriceOnChain(updateDataHex) {
-    if (!updateDataHex) return;
-    console.log(`[Blockchain] ⚡ Pushing Pyth Pull-Update to Arc contract...`);
-    
-    const updateData = [updateDataHex.startsWith('0x') ? updateDataHex : `0x${updateDataHex}`];
-    
-    const race = this.providers.map(async (provider, idx) => {
-        try {
-            const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-            const pyth = new ethers.Contract(PYTH_CONTRACT_ADDRESS, this.pythAbi, wallet);
-            
-            // 1. Get Fee
-            const fee = await this.callWithTimeout(pyth.getUpdateFee(updateData), 5000);
-            
-            // 2. Submit Update
-            const tx = await this.callWithTimeout(pyth.updatePriceFeeds(updateData, { value: fee, gasLimit: 500000 }), 10000);
-            console.log(`[Blockchain] ✅ Pyth Update SUCCESS via Provider ${idx} (TX: ${tx.hash})`);
-            return tx;
-        } catch (e) {
-            throw e;
-        }
-    });
-
-    try {
-      return await Promise.any(race);
-    } catch (e) {
-      console.error(`[Blockchain] ❌ Pyth Pull-Update failed across all providers:`, e.message);
-      return null;
     }
   }
 }

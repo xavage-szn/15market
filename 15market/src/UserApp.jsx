@@ -1559,22 +1559,7 @@ export default function UserApp() {
 
   const fetchCurrentPrice = useCallback(async () => {
     try {
-      const sources = [];
-
-      // 1. Pyth (Primary - Best for on-chain alignment)
-      if (activeMarket.pythId) {
-        const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
-        sources.push({
-          name: "pyth",
-          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
-          parse: d => {
-            const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
-          }
-        });
-      }
-
-      // 2. Binance (Extremely fast & reliable fallback)
+      // Binance (Authoritative high-frequency source)
       if (activeMarket.binance) {
         sources.push({
           name: "binance",
@@ -1583,19 +1568,10 @@ export default function UserApp() {
         });
       }
 
-      // 3. MEXC (Redundant global liquidity source)
-      if (activeMarket.binance) {
-        sources.push({
-          name: "mexc",
-          url: `https://api.mexc.com/api/v3/ticker/price?symbol=${activeMarket.binance.toUpperCase()}`,
-          parse: d => parseFloat(d.price)
-        });
-      }
-
       if (sources.length === 0) return null;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
 
       const pricePromises = sources.map(async (src) => {
         try {
@@ -2005,126 +1981,8 @@ export default function UserApp() {
   }, []);
 
   useEffect(() => {
-    const checkAndResolve = () => {
-      const now = Date.now() + serverTimeOffset;
-      const pendingTrades = activeTrades.filter(t => t.status === "PENDING" || t.status === "RESOLVING");
-
-      for (const trade of pendingTrades) {
-        const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
-        const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
-
-        if (now >= expiryMs && (trade.confirmed || trade.tx)) {
-          if (!resolvingInProgress.current.has(trade.id)) {
-            resolvingInProgress.current.add(trade.id);
-
-            // ACCURACY UPGRADE: Find the price in history closest to the exact expiry time
-            let capturedPrice = parseFloat(priceRef.current);
-            if (priceHistoryRef.current.length > 0) {
-              const closest = priceHistoryRef.current.reduce((prev, curr) =>
-                Math.abs(curr.t - expiryMs) < Math.abs(prev.t - expiryMs) ? curr : prev
-              );
-              // Only use history if it's within 1s of expiry
-              if (Math.abs(closest.t - expiryMs) < 1000) {
-                capturedPrice = closest.p;
-              }
-            }
-
-            // Determine Outcome Locally
-            let ePrice = parseFloat(trade.entryPrice);
-            if (trade.marketId === 2) ePrice = ePrice / 1000000;
-            else ePrice = ePrice / 100;
-
-            const isUp = String(trade.direction) === "1" || String(trade.direction).toUpperCase() === "UP";
-            const diff = capturedPrice - ePrice;
-            const isWon = isUp ? diff > 0 : diff < 0;
-            const finalStatus = isWon ? "WON" : "LOST";
-            const settlementPriceStr = capturedPrice.toFixed(2);
-
-            // Calculate expected payout so it's not erased by frontend reconciler
-            const durationNum = trade.duration || 15;
-            const multiplierAmt = durationNum <= 5 ? 2.90 : (durationNum <= 10 ? 2.40 : 1.90);
-            const amtParsed = parseFloat(trade.amount);
-            const calcPayout = isWon ? (amtParsed * multiplierAmt).toFixed(2) : "0.00";
-
-            // 🔒 LOCK THE RESULT: Store in ref so reconciler never overwrites this
-            const tradeIdStr = String(trade.id);
-            lockedResults.current.set(tradeIdStr, { status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout });
-
-            // Also record in tradeHistory immediately with locked result
-
-            setTradeHistory(prev => {
-              const existing = prev.find(t => String(t.id || t.tx || t.nonce) === tradeIdStr);
-              if (existing) {
-                return prev.map(t =>
-                  String(t.id || t.tx || t.nonce) === tradeIdStr
-                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }
-                    : t
-                );
-              }
-              return [{ ...trade, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }, ...prev];
-            });
-
-            // Update activeTrades with RESOLVING status first
-            setActiveTrades(prev => prev.map(t =>
-              t.id === trade.id ? { ...t, status: "RESOLVING", settlementPrice: settlementPriceStr } : t
-            ));
-
-            // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches
-            const settleTrade = async () => {
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 10000); // Reduced to 10s
-              
-              try {
-                const res = await fetch(`${KEEPER_URL_ARC}/settle`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  signal: controller.signal,
-                  body: JSON.stringify({
-                    id: trade.id,
-                    exitPrice: capturedPrice,
-                    won: isWon,
-                    status: finalStatus
-                  })
-                });
-                
-                clearTimeout(timeoutId);
-                if (!res.ok) throw new Error("Settlement request failed");
-                
-                const data = await res.json();
-                console.log(`[Settlement] Backend confirmed for ${trade.id}. Result: ${data.won ? 'WON' : 'LOST'}`);
-
-                // Update final result into history and active states
-                setTradeHistory(prev => prev.map(t =>
-                  String(t.id || t.tx || t.nonce) === tradeIdStr
-                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }
-                    : t
-                ));
-                setActiveTrades(prev => prev.map(t =>
-                  t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout } : t
-                ));
-
-                // Instantly refresh balance to show winnings
-                setTimeout(() => updateEvmSessionBal(true), 1000);
-
-              } catch (err) {
-                clearTimeout(timeoutId);
-                console.error(`[Settlement] Error for ${trade.id}:`, err.message);
-                // Even if backend fails, we keep the local resolution so the user isn't stuck "RESOLVING"
-                // The next poll will eventually sync it if the backend succeeds later
-                setActiveTrades(prev => prev.map(t =>
-                  t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout } : t
-                ));
-                resolvingInProgress.current.delete(trade.id);
-              }
-            };
-
-            settleTrade();
-          }
-        }
-      }
-    };
-    const interval = setInterval(checkAndResolve, 500);
-    return () => clearInterval(interval);
+    // Result Resolution is now handled by the backend.
+    // The frontend will receive 'balance_update' and 'trade_settled' events via Socket.io.
   }, [activeTrades, serverTimeOffset]);
 
   // Safety Cleanup: Remove finalized trades after showing result

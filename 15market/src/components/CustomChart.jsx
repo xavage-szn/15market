@@ -52,29 +52,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         try {
             const apiInterval = getApiInterval(tf);
             const targetCount = 1000;
+            const binanceSymbol = symbol.toUpperCase();
 
-            let url = `/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
+            let url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=${apiInterval}&limit=${targetCount}`;
             const res = await fetch(url);
-
-            const contentType = res.headers.get('content-type');
-            if (contentType && contentType.includes('text/html')) {
-                console.warn("[CHART] Proxy returned HTML. Falling back to direct API fetch.");
-                const directUrl = `https://api.mexc.com/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
-                const directRes = await fetch(directUrl);
-                if (!directRes.ok) return [];
-                const data = await directRes.json();
-                if (!Array.isArray(data)) return [];
-                return data.map(d => ({
-                    time: Math.floor(d[0] / 1000),
-                    open: parseFloat(d[1]),
-                    high: parseFloat(d[2]),
-                    low: parseFloat(d[3]),
-                    close: parseFloat(d[4]),
-                    value: parseFloat(d[4]),
-                    volume: parseFloat(d[5] || 0)
-                }));
-            }
-
             if (!res.ok) return [];
             const data = await res.json();
             if (!Array.isArray(data)) return [];
@@ -406,63 +387,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const [pythPrice, setPythPrice] = useState(currentPrice);
     const pythPriceRef = useRef(currentPrice);
 
-    // Direct Pyth Streaming for 1s Chart
+    // Binance WebSocket for real-time smooth 1s chart
     useEffect(() => {
-        if (!activeMarket?.pythId || timeframe !== '1s') return;
+        if (!activeMarket?.binance || timeframe !== '1s') return;
 
-        let es;
-        let reconnectTimer;
-        const connectPyth = () => {
-            if (es) es.close();
-            clearTimeout(reconnectTimer);
-
-            const fullId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
-            const id = fullId.startsWith('0x') ? fullId.slice(2) : fullId;
-            const url = `https://hermes.pyth.network/v2/updates/price/stream?ids[]=${id}`;
-            
-            es = new EventSource(url);
-            console.log(`[Chart] 📡 Syncing High-Freq Oracle: ${id}`);
-
-            es.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.parsed) {
-                        data.parsed.forEach(p => {
-                            const val = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
-                            if (isNaN(val)) return;
-                            const truncated = Math.floor(val * 100) / 100;
-                            setPythPrice(truncated);
-                            pythPriceRef.current = truncated;
-
-                            if (isLoading) setIsLoading(false);
-                            if (onPriceUpdate) onPriceUpdate(truncated);
-
-                            if (seriesRef.current) {
-                                const now = Math.floor(Date.now() / 1000);
-                                seriesRef.current.update({ time: now, value: truncated });
-                            }
-                        });
-                    }
-                } catch (e) { }
-            };
-
-            es.onerror = () => {
-                console.warn("[Chart] Pyth Stream Interrupted. Reconnecting...");
-                es.close();
-                reconnectTimer = setTimeout(connectPyth, 3000); // Robust 3s retry
-            };
-        };
-
-        // 2. Visual Persistence Layer (Binance WebSocket for sub-second smoothness)
         let binanceWs;
         const connectBinance = () => {
              if (binanceWs) binanceWs.close();
              const sym = (activeMarket.binance || (activeMarket.symbol + "USDT")).toLowerCase();
-             // Switch to aggTrade (Aggregated Trade Stream) for REAL-TIME sub-second movements
+             // aggTrade for real-time precision
              binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@aggTrade`);
              binanceWs.onmessage = (e) => {
                  const data = JSON.parse(e.data);
-                 const val = parseFloat(data.p); // p = price in aggTrade
+                 const val = parseFloat(data.p); 
                  if (isNaN(val)) return;
                  const truncated = Math.floor(val * 100) / 100;
                  
@@ -470,19 +407,21 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                  pythPriceRef.current = truncated;
                  if (isLoading) setIsLoading(false);
                  if (onPriceUpdate) onPriceUpdate(truncated);
+                 
+                 if (seriesRef.current) {
+                    const now = Math.floor(Date.now() / 1000);
+                    seriesRef.current.update({ time: now, value: truncated });
+                 }
              };
              binanceWs.onclose = () => setTimeout(connectBinance, 5000);
         };
 
-        connectPyth();
         connectBinance();
 
         return () => { 
-            if (es) es.close(); 
             if (binanceWs) binanceWs.close();
-            clearTimeout(reconnectTimer);
         };
-    }, [activeMarket.pythId, activeMarket.binance, timeframe]);
+    }, [activeMarket.binance, timeframe]);
 
     useEffect(() => {
         if (!currentPrice || !seriesRef.current) return;

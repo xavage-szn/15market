@@ -53,11 +53,6 @@ export default defineConfig({
       ".trycloudflare.com"
     ],
     proxy: {
-      '/api-mexc': {
-        target: 'https://api.mexc.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-mexc/, '')
-      },
       '/arc-api': {
         target: 'http://127.0.0.1:3010',
         changeOrigin: true,
