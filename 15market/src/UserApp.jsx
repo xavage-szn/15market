@@ -374,14 +374,16 @@ export default function UserApp() {
   const activeTrade = activeTrades[0] || null; // For backward compatibility in some components  const [isAppReady, setIsAppReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
 
-  // Safety Timeout: Ensure app always loads even if price feed or stealth checks are slow
+  // Safety Timeout: Reset and trigger whenever a GLOBAL load starts
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsAppReady(true); 
-      setIsGlobalLoading(false);
-    }, 4000); // 4s absolute maximum wait
-    return () => clearTimeout(timer);
-  }, []);
+    if (isGlobalLoading) {
+      const timer = setTimeout(() => {
+        setIsAppReady(true); 
+        setIsGlobalLoading(false);
+      }, 4000); // 4s absolute maximum wait for any sequence
+      return () => clearTimeout(timer);
+    }
+  }, [isGlobalLoading]);
 
   // Loading progress animation
   useEffect(() => {
