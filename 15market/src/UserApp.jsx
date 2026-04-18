@@ -1579,6 +1579,11 @@ export default function UserApp() {
         if (pStr !== priceRef.current) {
           priceRef.current = pStr;
           setPrice(pStr);
+          
+          // Keep a history buffer for trade expiry lookup and chart passing
+          const now = Date.now();
+          priceHistoryRef.current.push({ p: truncated, t: now });
+          if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
         }
       };
 

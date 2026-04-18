@@ -384,58 +384,22 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         return () => clearInterval(interval);
     }, [activeTrades, currentPrice]);
 
-    const [pythPrice, setPythPrice] = useState(currentPrice);
-    const pythPriceRef = useRef(currentPrice);
-
-    // Binance WebSocket for real-time smooth 1s chart
-    useEffect(() => {
-        if (!activeMarket?.binance || timeframe !== '1s') return;
-
-        let binanceWs;
-        const connectBinance = () => {
-             if (binanceWs) binanceWs.close();
-             const sym = (activeMarket.binance || (activeMarket.symbol + "USDT")).toLowerCase();
-             // aggTrade for real-time precision
-             binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@aggTrade`);
-             binanceWs.onmessage = (e) => {
-                 const data = JSON.parse(e.data);
-                 const val = parseFloat(data.p); 
-                 if (isNaN(val)) return;
-                 const truncated = Math.floor(val * 100) / 100;
-                 
-                 setPythPrice(truncated);
-                 pythPriceRef.current = truncated;
-                 if (isLoading) setIsLoading(false);
-                 if (onPriceUpdate) onPriceUpdate(truncated);
-                 
-                 if (seriesRef.current) {
-                    const now = Math.floor(Date.now() / 1000);
-                    seriesRef.current.update({ time: now, value: truncated });
-                 }
-             };
-             binanceWs.onclose = () => setTimeout(connectBinance, 5000);
-        };
-
-        connectBinance();
-
-        return () => { 
-            if (binanceWs) binanceWs.close();
-        };
-    }, [activeMarket.binance, timeframe]);
-
     useEffect(() => {
         if (!currentPrice || !seriesRef.current) return;
         const now = Math.floor(Date.now() / 1000);
         const price = parseFloat(currentPrice);
 
-        // Use backend price as a reliable fallback/heartbeat
-        if (!pythPriceRef.current || timeframe !== '1s') {
+        // Update Lightweight Chart data
+        if (timeframe !== '1s') {
             const val = parseFloat(price);
             if (seriesRef.current && !isNaN(val)) {
                 seriesRef.current.update({ time: Math.floor(Date.now() / 1000), value: val });
-                // Heartbeat received: Wake up the chart
-                if (isLoading) setIsLoading(false);
             }
+        }
+
+        // Heartbeat received: Wake up the chart
+        if (isLoading && price > 0) {
+            setIsLoading(false);
         }
 
         const time = Math.floor(now / 60) * 60;
@@ -444,7 +408,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         seriesRef.current.update({ time, value: price });
 
         lastCandleTime.current = time;
-    }, [currentPrice, timeframe]);
+    }, [currentPrice, timeframe, isLoading]);
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [tokens, setTokens] = useState(() => {
@@ -521,7 +485,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 {timeframe === '1s' && (
                     <LiveStreamingChart
                         theme={theme}
-                        currentPrice={pythPrice || parseFloat(currentPrice) || 0}
+                        currentPrice={parseFloat(currentPrice) || 0}
                         symbol={symbol}
                         priceHistory={priceHistory}
                     />
