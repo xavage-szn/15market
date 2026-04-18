@@ -17,7 +17,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const lastCandleTime = useRef(null);
 
     const [timeframe, setTimeframe] = useState('1s');
-    const [chartType, setChartType] = useState('line');
     const current1sCandle = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [chartProgress, setChartProgress] = useState(0);
@@ -137,7 +136,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             timeScale: {
                 borderColor: gridColor,
                 timeVisible: true,
-                secondsVisible: timeframe === '1s' || chartType === 'line',
+                secondsVisible: timeframe === '1s',
                 shiftVisibleRangeOnNewBar: true,
                 handleScroll: true,
                 handleScale: true,
@@ -163,26 +162,14 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             minBarSpacing: 0.5,
         });
 
-        if (chartType === 'candles') {
-            const candlestickSeries = chart.addSeries(CandlestickSeries, {
-                upColor: upColor,
-                downColor: downColor,
-                borderVisible: false,
-                wickUpColor: upColor,
-                wickDownColor: downColor,
-                priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-            });
-            seriesRef.current = candlestickSeries;
-        } else {
-            const areaSeries = chart.addSeries(AreaSeries, {
-                lineColor: isDark ? '#2E8B57' : '#1e5a38',
-                topColor: isDark ? 'rgba(46, 139, 87, 0.4)' : 'rgba(30, 90, 56, 0.5)',
-                bottomColor: isDark ? 'rgba(46, 139, 87, 0.0)' : 'rgba(30, 90, 56, 0.05)',
-                lineWidth: 3,
-                priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-            });
-            seriesRef.current = areaSeries;
-        }
+        const areaSeries = chart.addSeries(AreaSeries, {
+            lineColor: isDark ? '#3CB371' : '#1e5a38',
+            topColor: isDark ? 'rgba(60, 179, 113, 0.4)' : 'rgba(30, 90, 56, 0.5)',
+            bottomColor: isDark ? 'rgba(60, 179, 113, 0.0)' : 'rgba(30, 90, 56, 0.05)',
+            lineWidth: 3,
+            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+        });
+        seriesRef.current = areaSeries;
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
             color: '#26a69a',
@@ -446,21 +433,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                 setIsLoading(false);
                             }
 
-                            // Update the lightweight charts series (Line or Candles)
+                            // Update the lightweight charts series (Area/Line)
                             if (seriesRef.current) {
                                 const now = Math.floor(Date.now() / 1000);
-                                if (chartType === 'candles') {
-                                    if (!current1sCandle.current || now > current1sCandle.current.time) {
-                                        current1sCandle.current = { time: now, open: truncated, high: truncated, low: truncated, close: truncated };
-                                    } else {
-                                        current1sCandle.current.high = Math.max(current1sCandle.current.high, truncated);
-                                        current1sCandle.current.low = Math.min(current1sCandle.current.low, truncated);
-                                        current1sCandle.current.close = truncated;
-                                    }
-                                    seriesRef.current.update(current1sCandle.current);
-                                } else {
-                                    seriesRef.current.update({ time: now, value: truncated });
-                                }
+                                seriesRef.current.update({ time: now, value: truncated });
                             }
                         });
                     }
@@ -573,10 +549,10 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             <div className="absolute inset-0 z-10 flex-1 h-full">
                 <div
                     ref={chartContainerRef}
-                    className={`w-full h-full ${timeframe === '1s' && chartType === 'line' ? 'hidden' : 'block'}`}
+                    className={`w-full h-full ${timeframe === '1s' ? 'hidden' : 'block'}`}
                 />
 
-                {timeframe === '1s' && chartType === 'line' && (
+                {timeframe === '1s' && (
                     <LiveStreamingChart
                         theme={theme}
                         currentPrice={pythPrice || parseFloat(currentPrice) || 0}
