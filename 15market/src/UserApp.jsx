@@ -1662,7 +1662,7 @@ export default function UserApp() {
 
         if (market.id !== activeMarket.id) {
           setActiveMarket(market);
-          setTimeout(() => fetchCurrentPrice(), 50);
+          setPrice("0.00");
         }
       }
     };
@@ -1701,9 +1701,9 @@ export default function UserApp() {
     } catch (e) {
     }
 
-    // Trigger price fetch for new market
-    setTimeout(() => fetchCurrentPrice(), 100);
-  }, [activeMarket.id, fetchCurrentPrice]);
+    // Trigger a fast render state reset for the new market
+    setPrice("0.00");
+  }, [activeMarket.id]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
