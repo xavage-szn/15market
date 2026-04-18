@@ -2786,6 +2786,7 @@ export default function UserApp() {
                               activeTrades={activeTrades}
                               currentPrice={price}
                               priceHistory={priceHistoryRef.current}
+                              onPriceUpdate={setPrice}
                             />
                           )}
                         </div>

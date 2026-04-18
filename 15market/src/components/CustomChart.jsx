@@ -7,7 +7,7 @@ import { MascotLoader } from './MascotLoader';
 import { KEEPER_URL_ARC } from "../constants";
 import LiveStreamingChart from './LiveStreamingChart';
 
-export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [] }) {
+export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [], onPriceUpdate }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const seriesRef = useRef(null);
@@ -435,6 +435,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             pythPriceRef.current = truncated;
 
                             if (isLoading) setIsLoading(false);
+                            if (onPriceUpdate) onPriceUpdate(truncated);
 
                             if (seriesRef.current) {
                                 const now = Math.floor(Date.now() / 1000);
@@ -457,18 +458,18 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         const connectBinance = () => {
              if (binanceWs) binanceWs.close();
              const sym = (activeMarket.binance || (activeMarket.symbol + "USDT")).toLowerCase();
-             binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@ticker`);
+             // Switch to aggTrade (Aggregated Trade Stream) for REAL-TIME sub-second movements
+             binanceWs = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@aggTrade`);
              binanceWs.onmessage = (e) => {
                  const data = JSON.parse(e.data);
-                 const val = parseFloat(data.c);
+                 const val = parseFloat(data.p); // p = price in aggTrade
                  if (isNaN(val)) return;
                  const truncated = Math.floor(val * 100) / 100;
                  
-                 // Smoothing: Only update if Pyth hasn't provided a fresh pulse in the last 100ms
-                 // This ensures Pyth remains the "Authoritative Oracle" while Binance provides the "Visual Flow"
                  setPythPrice(truncated);
                  pythPriceRef.current = truncated;
                  if (isLoading) setIsLoading(false);
+                 if (onPriceUpdate) onPriceUpdate(truncated);
              };
              binanceWs.onclose = () => setTimeout(connectBinance, 5000);
         };
