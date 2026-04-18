@@ -1556,15 +1556,21 @@ export default function UserApp() {
 
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43' },
-      { id: 'sol', symbol: 'SOL', name: 'Solana', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d' },
-      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16' },
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
+      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16', binance: 'SOLUSDT' }, // Temp fallback for MON
     ];
 
+    // MIGRATION: If we have legacy RICE data, purge it to allow Pyth feeds to take over
     const saved = localStorage.getItem('15market_listed_tokens');
-    const listed = saved ? JSON.parse(saved) : defaultTokens;
+    if (saved && saved.toLowerCase().includes('rice')) {
+        localStorage.removeItem('15market_listed_tokens');
+        localStorage.removeItem('15market_active_token_id');
+        return defaultTokens[0];
+    }
 
+    const listed = saved ? JSON.parse(saved) : defaultTokens;
     const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
     return listed.find(t => t.id === activeId) || listed[0];
   });

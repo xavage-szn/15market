@@ -440,18 +440,27 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             const truncated = Math.floor(val * 100) / 100;
                             setPythPrice(truncated);
                             pythPriceRef.current = truncated;
+                            
+                            // Signal received: Instant clear of the loading state if trapped
+                            if (isLoading) {
+                                setIsLoading(false);
+                            }
 
-                            // Also update the lightweight charts series if in 1s candle mode
-                            if (seriesRef.current && chartType === 'candles') {
+                            // Update the lightweight charts series (Line or Candles)
+                            if (seriesRef.current) {
                                 const now = Math.floor(Date.now() / 1000);
-                                if (!current1sCandle.current || now > current1sCandle.current.time) {
-                                    current1sCandle.current = { time: now, open: truncated, high: truncated, low: truncated, close: truncated };
+                                if (chartType === 'candles') {
+                                    if (!current1sCandle.current || now > current1sCandle.current.time) {
+                                        current1sCandle.current = { time: now, open: truncated, high: truncated, low: truncated, close: truncated };
+                                    } else {
+                                        current1sCandle.current.high = Math.max(current1sCandle.current.high, truncated);
+                                        current1sCandle.current.low = Math.min(current1sCandle.current.low, truncated);
+                                        current1sCandle.current.close = truncated;
+                                    }
+                                    seriesRef.current.update(current1sCandle.current);
                                 } else {
-                                    current1sCandle.current.high = Math.max(current1sCandle.current.high, truncated);
-                                    current1sCandle.current.low = Math.min(current1sCandle.current.low, truncated);
-                                    current1sCandle.current.close = truncated;
+                                    seriesRef.current.update({ time: now, value: truncated });
                                 }
-                                seriesRef.current.update(current1sCandle.current);
                             }
                         });
                     }
@@ -478,6 +487,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             const val = parseFloat(price);
             if (seriesRef.current && !isNaN(val)) {
                 seriesRef.current.update({ time: Math.floor(Date.now() / 1000), value: val });
+                // Heartbeat received: Wake up the chart
+                if (isLoading) setIsLoading(false);
             }
         }
 
@@ -495,12 +506,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [tokens, setTokens] = useState(() => {
-        const saved = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
-        return saved.length > 0 ? saved : [
+        const defaultList = [
             { id: 'eth', symbol: 'ETH', name: 'Ethereum' },
             { id: 'btc', symbol: 'BTC', name: 'Bitcoin' },
             { id: 'sol', symbol: 'SOL', name: 'Solana' },
+            { id: 'mon', symbol: 'MON', name: 'Monad' },
         ];
+        const savedRaw = localStorage.getItem('15market_listed_tokens');
+        if (savedRaw && savedRaw.toLowerCase().includes('rice')) {
+            localStorage.removeItem('15market_listed_tokens');
+            return defaultList;
+        }
+        const saved = JSON.parse(savedRaw || '[]');
+        return saved.length > 0 ? saved : defaultList;
     });
 
     const tradeResults = useMemo(() => {
