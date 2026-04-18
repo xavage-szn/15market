@@ -496,8 +496,22 @@ export default function UserApp() {
         }
         setIsOffline(false);
 
+        // Timeout helper to prevent infinite loading if backend hangs
+        const fetchWithTimeout = async (url, options = {}) => {
+          const controller = new AbortController();
+          const id = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout
+          try {
+            const res = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(id);
+            return res;
+          } catch (e) {
+            clearTimeout(id);
+            throw e;
+          }
+        };
+
         // 1. Database User Verification (SILENT)
-        const profileRes = await fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
+        const profileRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
         
         if (profileRes && profileRes.ok) {
           const pData = await profileRes.json();
@@ -516,7 +530,7 @@ export default function UserApp() {
         }
 
         // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
-        const sessionRes = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+        const sessionRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/session/init`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: addr.toLowerCase() })
@@ -528,7 +542,7 @@ export default function UserApp() {
         }
 
         // 3. Rounds Access Check
-        const roundsRes = await fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => ({ ok: false }));
+        const roundsRes = await fetchWithTimeout(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => ({ ok: false }));
         if (roundsRes && roundsRes.ok) {
           const rData = await roundsRes.json();
           setHasRoundsAccess(rData.authorized === true);
@@ -2345,11 +2359,11 @@ export default function UserApp() {
 
   if (!isAppReady && isGlobalLoading) return (
     <div className="fixed inset-0 z-[1000] backdrop-blur-md flex flex-col items-center justify-center bg-black/60">
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-12">
+        <img src="/logo.png" alt="15market" className="h-12 object-contain" />
         <MascotLoader
           status="running"
           progress={loadingProgress}
-          label="Igniting Momentum Engine"
           theme={theme}
         />
       </motion.div>

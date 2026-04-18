@@ -45,9 +45,14 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
         // If we already have global verification, we skip the initial fetch 
         // but keep the function for periodic background re-checks.
         try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 3000);
+            
             const res = await fetch(`${KEEPER_URL_ROUNDS}/access/check/${address}`, {
-                cache: 'no-store'
+                cache: 'no-store',
+                signal: controller.signal
             });
+            clearTimeout(id);
             if (!res.ok) throw new Error('Server error');
             const data = await res.json();
             const authorized = data.authorized === true;

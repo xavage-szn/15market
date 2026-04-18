@@ -122,11 +122,6 @@ export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loadin
                 />
             </div>
 
-            <div className="flex flex-col items-center gap-1.5 mt-2">
-                <p className="text-[11px] font-black uppercase text-[#3CB371] tracking-[0.5em] animate-pulse text-center">
-                    {progress >= 100 ? "V1 ROTATE • AIRBORNE" : label}
-                </p>
-            </div>
         </div>
     );
 };
