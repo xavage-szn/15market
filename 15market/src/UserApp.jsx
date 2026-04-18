@@ -371,38 +371,30 @@ export default function UserApp() {
   const [duration, setDuration] = useState(15);
   const [timeLeft, setTimeLeft] = useState(15);
 
-  const activeTrade = activeTrades[0] || null; // For backward compatibility in some components
-  const [isLoading, setIsLoading] = useState(true);
+  const activeTrade = activeTrades[0] || null; // For backward compatibility in some components  const [isAppReady, setIsAppReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const loadingTimeoutRef = useRef(null);
-  const lastTradeTimeRef = useRef(0);
 
-  // Safety Timeout: Ensure app always loads even if price feed is slow
+  // Safety Timeout: Ensure app always loads even if price feed or stealth checks are slow
   useEffect(() => {
-    loadingTimeoutRef.current = setTimeout(() => {
-      if (isLoading) {
-        setIsLoading(false);
-      }
-    }, 5000); // 5 seconds max loading
-    return () => clearTimeout(loadingTimeoutRef.current);
-  }, [isLoading]);
+    const timer = setTimeout(() => {
+      setIsAppReady(true); 
+      setIsGlobalLoading(false);
+    }, 4000); // 4s absolute maximum wait
+    return () => clearTimeout(timer);
+  }, []);
 
   // Loading progress animation
   useEffect(() => {
-    if (isLoading) {
+    if (!isAppReady) {
       const interval = setInterval(() => {
-        setLoadingProgress(prev => {
-          if (prev < 95) { // Stop just before 100 to wait for actual data
-            return prev + 1;
-          }
-          return prev;
-        });
-      }, 50); // Increment every 50ms
+        setLoadingProgress(prev => (prev < 98 ? prev + (100 - prev) * 0.1 : prev));
+      }, 100);
       return () => clearInterval(interval);
     } else {
-      setLoadingProgress(100); // Instantly complete if loading finishes
+      setLoadingProgress(100);
     }
-  }, [isLoading]);
+  }, [isAppReady]);
+
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -485,15 +477,12 @@ export default function UserApp() {
     setGlobalLoadingProgress(0);
     setIsOffline(!navigator.onLine);
 
-    const startTime = Date.now();
-    const MIN_LOAD_TIME = 5000;
-    
     const progressInterval = setInterval(() => {
       setGlobalLoadingProgress(prev => {
-        if (prev < 90) return prev + (Math.random() * 5);
+        if (prev < 90) return prev + (Math.random() * 10);
         return prev;
       });
-    }, 200);
+    }, 100);
 
     const runChecks = async () => {
       try {
@@ -568,13 +557,11 @@ export default function UserApp() {
       }
     }
 
-    // Wrap up
+    // Wrap up: Instant delivery
     const finish = () => {
       clearInterval(progressInterval);
       setGlobalLoadingProgress(100);
-      const elapsed = Date.now() - startTime;
-      const remains = Math.max(0, MIN_LOAD_TIME - elapsed);
-      setTimeout(() => setIsGlobalLoading(false), remains);
+      setIsGlobalLoading(false);
     };
 
     if (success) {
@@ -618,7 +605,7 @@ export default function UserApp() {
 
   useEffect(() => {
     fetchGlobalSettings();
-    const interval = setInterval(fetchGlobalSettings, 3000); // 3s sync for real-time maintenance
+    const interval = setInterval(fetchGlobalSettings, 30000); // 30s sync for maintenance (optimized)
 
     const syncLocal = () => {
       try {
@@ -719,34 +706,30 @@ export default function UserApp() {
   // Prevents the reconciler from re-inserting them from backend data.
   const removedTradeIds = useRef(new Set());
 
-  // Orientation & Device Detection for V2 Forced Landscape
+  // Orientation & Device Detection (Decoupled & Robust)
   const [isPortrait, setIsPortrait] = useState(
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
   );
-
-
+  const [isSmallScreen, setIsSmallScreen] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
-      const portrait = window.innerHeight > window.innerWidth;
-      setIsPortrait(portrait);
-      // Use orientation-based detection: Portrait = Mobile UI, Landscape = Desktop UI
-      setIsSmallScreen(portrait); 
+      setIsPortrait(window.innerHeight > window.innerWidth);
+      setIsSmallScreen(window.innerWidth < 1024); 
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
-    handleResize(); // Initial check
+    handleResize();
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
     };
   }, []);
 
-  const [isSmallScreen, setIsSmallScreen] = useState(
-    typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
-  );
-  const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
+  const showPortraitLock = false; 
 
 
 
@@ -2543,31 +2526,22 @@ export default function UserApp() {
     }
   }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
-  if (isLoading || isGlobalLoading) return (
-    <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center bg-black/40">
-      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative mb-20 flex flex-col items-center justify-center">
-        <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
-        <img src="/logo.png" alt="logo" className="h-32 lg:h-48 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
+  if (!isAppReady && isGlobalLoading) return (
+    <div className="fixed inset-0 z-[1000] backdrop-blur-md flex flex-col items-center justify-center bg-black/60">
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center">
+        <MascotLoader
+          status="running"
+          progress={loadingProgress}
+          label="Igniting Momentum Engine"
+          theme={theme}
+        />
+        <button 
+           onClick={() => setIsAppReady(true)}
+           className="mt-8 text-[10px] font-black uppercase text-white/30 hover:text-white transition-colors"
+        >
+           Skip Loading
+        </button>
       </motion.div>
-
-      <div className="flex flex-col items-center justify-center w-full max-w-sm px-4">
-        {isOffline ? (
-          <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-3xl text-center backdrop-blur-xl animate-pulse">
-            <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
-            <h3 className="text-white font-black uppercase tracking-tighter text-xl mb-2">Internet Disconnected</h3>
-            <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-              We've lost contact with the momentum engine. Please check your connection to resume trading.
-            </p>
-          </div>
-        ) : (
-          <MascotLoader
-            status="running"
-            progress={isGlobalLoading ? globalLoadingProgress : loadingProgress}
-            label={isGlobalLoading ? "Confirming On-Chain Identity" : "Pre-Flight Systems Check"}
-            theme={theme}
-          />
-        )}
-      </div>
     </div>
   );
 
