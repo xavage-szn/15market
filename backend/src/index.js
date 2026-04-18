@@ -49,7 +49,7 @@ const initPythWs = () => {
   pythWs = new WebSocket('wss://hermes.pyth.network/ws');
 
   pythWs.on('open', () => {
-    console.log("[Oracle] Pyth WebSocket Connected");
+    console.log("[Oracle] Pyth WebSocket Connected. Subscribing...");
     const subscribeMsg = {
       type: "subscribe",
       ids: Object.keys(PYTH_ID_MAP),
@@ -57,6 +57,12 @@ const initPythWs = () => {
       binary: false
     };
     pythWs.send(JSON.stringify(subscribeMsg));
+    
+    // Maintain connection
+    const pingInterval = setInterval(() => {
+      if (pythWs.readyState === WebSocket.OPEN) pythWs.ping();
+    }, 30000);
+    pythWs.on('close', () => clearInterval(pingInterval));
   });
 
   pythWs.on('message', (data) => {
@@ -117,12 +123,26 @@ const fetchConcurrentPrices = async () => {
       console.log(`[Oracle] HTTP Sync: BTC:$${prices.btc} | ETH:$${prices.eth} | SOL:$${prices.sol}`);
     }
 
+    // --- ON-CHAIN RECOVERY (New: Per user guide) ---
+    for (const asset of assets) {
+        if (!prices[asset.id] || prices[asset.id] === 0) {
+            console.log(`[Oracle] Signal for ${asset.id} missing. Attempting ON-CHAIN recovery...`);
+            const onChainPrice = await blockchain.getPythPriceOnChain(asset.pyth);
+            if (onChainPrice) {
+                console.log(`[Oracle] ✅ RECOVERED ${asset.id} on-chain: $${onChainPrice}`);
+                prices[asset.id] = onChainPrice;
+            }
+        }
+    }
+
     oracleReady = (prices.btc > 0 && prices.eth > 0 && prices.sol > 0);
     if (oracleReady) {
         io.emit('price_update', prices);
+    } else {
+        console.warn(`[Oracle] Signal incomplete: BTC:${prices.btc} ETH:${prices.eth} SOL:${prices.sol}`);
     }
   } catch (e) {
-    // Silently handle fallback errors
+    console.error("[Oracle] HTTP Sync Failed:", e.message);
   }
 };
 

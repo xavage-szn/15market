@@ -8,10 +8,7 @@ const ARC_RPCS = [
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.ARC_CONTRACT_ADDRESS;
-
-if (!PRIVATE_KEY || !CONTRACT_ADDRESS) {
-  console.error("Missing environment variables for blockchain service");
-}
+const PYTH_CONTRACT_ADDRESS = "0x2880aB155794e7179c9eE2e38200202908C17B43"; // Pyth on Arc Testnet
 
 class BlockchainService {
   constructor() {
@@ -38,6 +35,10 @@ class BlockchainService {
       "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
     ];
 
+    this.pythAbi = [
+      "function getPriceNoOlderThan(bytes32 id, uint256 age) external view returns (tuple(int64 price, uint64 conf, int32 expo, uint256 publishTime) price)"
+    ];
+
     // Standard wallet for metrics/admin lookups
     this.mainProvider = this.providers[0];
     this.arcWallet = new ethers.Wallet(PRIVATE_KEY, this.mainProvider);
@@ -46,6 +47,10 @@ class BlockchainService {
     this.contracts = this.providers.map(p => {
         const wallet = new ethers.Wallet(PRIVATE_KEY, p);
         return new ethers.Contract(CONTRACT_ADDRESS, this.abi, wallet);
+    });
+
+    this.pythContracts = this.providers.map(p => {
+        return new ethers.Contract(PYTH_CONTRACT_ADDRESS, this.pythAbi, p);
     });
 
     // Speed Optimization: Track nonces locally
@@ -248,6 +253,25 @@ class BlockchainService {
     } catch (error) {
       console.error(`[Blockchain] Native sweep failed across ALL providers:`, error.message);
       throw error;
+    }
+  async getPythPriceOnChain(feedId, maxAge = 3600) {
+    // Race across all providers for the fastest on-chain price
+    const race = this.pythContracts.map(async (contract, idx) => {
+        try {
+            // feedId must be bytes32 (64 hex chars, with 0x)
+            const result = await this.callWithTimeout(contract.getPriceNoOlderThan(feedId, maxAge), 5000);
+            const price = Number(result.price) * Math.pow(10, Number(result.expo));
+            return price;
+        } catch (e) {
+            throw e;
+        }
+    });
+
+    try {
+      return await Promise.any(race);
+    } catch (e) {
+      // If it fails (stale or network), return null
+      return null;
     }
   }
 }
