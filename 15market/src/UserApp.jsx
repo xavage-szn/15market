@@ -1604,37 +1604,41 @@ export default function UserApp() {
     ];
     let currentIdx = 0;
 
-    const processPrice = (rawPrice) => {
-      if (!rawPrice || rawPrice <= 0) return;
-      const truncated = Math.floor(rawPrice * 100) / 100;
-      const pStr = truncated.toFixed(2);
-      const now = Date.now();
+  // ─── EXCLUSIVE DIRECT FEED ─ Independent Pipe for Chart & UI ───
+  useEffect(() => {
+    if (!activeMarket?.binance) return;
 
-      if (pStr !== priceRef.current) {
-        priceRef.current = pStr;
-        lastPriceUpdateRef.current = now;
-        priceHistoryRef.current.push({ t: now, p: truncated });
-        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
-
-        // 100 FPS Trigger
-        if (now - lastRenderTime.current > 10) {
-          setPrice(pStr);
-          lastRenderTime.current = now;
-        }
-      }
-    };
+    let ws;
+    const baseSym = activeMarket.binance.toUpperCase().replace('USDT', '');
+    const symCoinbase = `${baseSym}-USD`;
+    const symKraken = `${baseSym === 'BTC' ? 'XBT' : baseSym}/USD`;
+    
+    // Providers with direct connectivity
+    const providers = [
+      { name: 'COINBASE', url: 'wss://ws-feed.exchange.coinbase.com' },
+      { name: 'KRAKEN', url: 'wss://ws.kraken.com' }
+    ];
+    let currentIdx = 0;
+    
+    const lastRenderTime = { current: 0 };
+    lastPriceUpdateRef.current = Date.now();
 
     const connect = () => {
-      if (ws) { 
-        try { ws.onclose = null; ws.close(); } catch (e) { } 
+      // Clean up previous before switching/reconnecting
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        try { ws.close(); } catch (e) { }
       }
-      
+
       const p = providers[currentIdx];
-      console.log(`[Stream] Connecting to ${p.name}...`);
+      console.log(`[Stream] Direct Pipe: ${p.name} for ${baseSym}`);
       ws = new WebSocket(p.url);
 
       ws.onopen = () => {
-        console.log(`[Stream] Feed Live: ${p.name}`);
+        console.log(`[Stream] Independent Link Active: ${p.name}`);
         if (p.name === 'COINBASE') {
           ws.send(JSON.stringify({ type: "subscribe", product_ids: [symCoinbase], channels: ["ticker"] }));
         } else if (p.name === 'KRAKEN') {
@@ -1644,10 +1648,31 @@ export default function UserApp() {
 
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
+        let rawPrice = 0;
+
         if (data.type === 'ticker' && data.price) {
-          processPrice(parseFloat(data.price));
+          rawPrice = parseFloat(data.price);
         } else if (Array.isArray(data) && data[1]?.c) {
-          processPrice(parseFloat(data[1].c[0]));
+          rawPrice = parseFloat(data[1].c[0]);
+        }
+
+        if (rawPrice > 0) {
+          const truncated = Math.floor(rawPrice * 100) / 100;
+          const pStr = truncated.toFixed(2);
+          const now = Date.now();
+
+          if (pStr !== priceRef.current) {
+            priceRef.current = pStr;
+            lastPriceUpdateRef.current = now;
+            priceHistoryRef.current.push({ t: now, p: truncated });
+            if (priceHistoryRef.current.length > 250) priceHistoryRef.current.shift();
+
+            // High-frequency UI tick
+            if (now - lastRenderTime.current > 10) {
+              setPrice(pStr);
+              lastRenderTime.current = now;
+            }
+          }
         }
       };
 
@@ -1655,39 +1680,27 @@ export default function UserApp() {
       ws.onclose = () => {
         if (!activeMarket) return;
         currentIdx = (currentIdx + 1) % providers.length;
-        setTimeout(connect, 2000);
+        setTimeout(connect, 3000); // 3s backoff to avoid glitching
       };
     };
 
-    // Robust Pulse Guard (Bridges WS gaps and fixes 'Stuck' production prices)
-    const monitorInterval = setInterval(async () => {
-      const now = Date.now();
-      const silence = now - lastPriceUpdateRef.current;
-      
-      // If silent for > 3s, something is stuck. Try REST poll + WS Reconnect.
-      if (silence > 3000) {
-        console.log(`[Stream] Signal Lost (${silence}ms silence). Healing...`);
-        try {
-          const res = await fetch(`https://api.coinbase.com/v2/prices/${baseSym}-USD/spot`);
-          const d = await res.json();
-          if (d.data?.amount) processPrice(parseFloat(d.data.amount));
-        } catch (e) { }
-        
-        // Force WS cycle if really dead
-        if (silence > 6000) {
-          console.warn("[Stream] Connection dead. Recycling feed...");
-          connect();
-        }
-      }
-    }, 2000);
-
+    // Instant reset on asset switch
+    priceHistoryRef.current = [];
+    priceRef.current = "0.00";
+    setPrice("0.00");
+    
     connect();
 
     return () => { 
-      if (ws) { ws.onclose = null; ws.close(); }
-      clearInterval(monitorInterval);
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        ws.close(); 
+      }
     };
-  }, [activeMarket]);
+  }, [activeMarket.id]); // Strict dependency on market ID for switching
 
   // ─── SOCKET.IO: Trade events only (no price) ───
   useEffect(() => {
