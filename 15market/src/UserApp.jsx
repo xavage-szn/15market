@@ -1721,17 +1721,7 @@ export default function UserApp() {
           }
         }
 
-        // 2. Fetch Remote Active Market (LIVE SYNC)
-        const activeRes = await fetch(`${targetUrl}/active-market`);
-        const activeData = await activeRes.json();
-        if (activeData && activeData.activeId) {
-          const currentLocalActiveId = localStorage.getItem('15market_active_token_id');
-          if (currentLocalActiveId !== activeData.activeId) {
-            localStorage.setItem('15market_active_token_id', activeData.activeId);
-          }
-        }
-
-        // 3. Fetch Remote Platform Settings
+        // 2. Fetch Remote Platform Settings
         const settingsRes = await fetch(`${targetUrl}/settings`);
         const settingsData = await settingsRes.json();
         if (settingsData) {
@@ -1744,39 +1734,16 @@ export default function UserApp() {
         // Fallback to local storage if keeper is down
       }
 
+      // NO LONGER FORCIBLY OVERWRITING activeId FROM BACKEND
+      // Use local selection as the authority
       const listed = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
-      const activeId = localStorage.getItem('15market_active_token_id') || 'eth'; // Default to ETH
+      const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
       const market = listed.find(t => t.id === activeId);
 
-      if (market) {
-        // Safety: Ensure binance symbol exists for chart
-        if (!market.binance) {
-          market.binance = `${market.symbol}USDT`;
-        }
-
-        if (market.id !== activeMarket.id) {
-          setActiveMarket(market);
-          setPrice("0.00");
-        }
-      }
-      // Polling fallback check: If Binance WS is dead (>10s), fetch from backend oracle
-      const now = Date.now();
-      if (now - lastPriceUpdateRef.current > 10000) {
-        try {
-          const priceRes = await fetch(`${targetUrl}/prices`);
-          if (priceRes.ok) {
-            const allPrices = await priceRes.json();
-            const oraclePrice = allPrices[activeMarket.id.toLowerCase()];
-            if (oraclePrice && oraclePrice > 0) {
-              const pStr = oraclePrice.toFixed(2);
-              if (pStr !== priceRef.current) {
-                priceRef.current = pStr;
-                lastPriceUpdateRef.current = Date.now(); // Reset health check timer on oracle success
-                setPrice(pStr);
-              }
-            }
-          }
-        } catch (e) { /* ignore fallback errors */ }
+      if (market && market.id !== activeMarket.id) {
+        // Re-sync with current local authority
+        setActiveMarket(market);
+        setPrice("0");
       }
     };
 
