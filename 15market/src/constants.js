@@ -25,8 +25,9 @@ const isLocal = typeof window !== 'undefined' &&
     !isNative &&
     (window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('192.168.') ||
-        window.location.hostname.includes('10.'));
+        /^192\.168\./.test(window.location.hostname) ||
+        /^10\./.test(window.location.hostname) ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(window.location.hostname)); // Precise Private IP ranges
 
 // Derivation logic:
 // 1. If VITE_KEEPER_URL is an absolute URL (starts with http), use it always.
