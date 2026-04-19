@@ -476,8 +476,6 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
 
     // ─── LIVE PRICE → CHART UPDATES (from our own WS) ───
     useEffect(() => {
-        if (!livePriceRef.current || !seriesRef.current) return;
-
         const updateInterval = setInterval(() => {
             const price = livePriceRef.current;
             if (!price || !seriesRef.current) return;
@@ -497,10 +495,10 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [tokens, setTokens] = useState(() => {
         const defaultList = [
-            { id: 'eth', symbol: 'ETH', name: 'Ethereum' },
-            { id: 'btc', symbol: 'BTC', name: 'Bitcoin' },
-            { id: 'sol', symbol: 'SOL', name: 'Solana' },
-            { id: 'mon', symbol: 'MON', name: 'Monad' },
+            { id: 'eth', symbol: 'ETH', name: 'Ethereum', binance: 'ETHUSDT' },
+            { id: 'btc', symbol: 'BTC', name: 'Bitcoin', binance: 'BTCUSDT' },
+            { id: 'sol', symbol: 'SOL', name: 'Solana', binance: 'SOLUSDT' },
+            { id: 'mon', symbol: 'MON', name: 'Monad', binance: 'SOLUSDT' },
         ];
         const savedRaw = localStorage.getItem('15market_listed_tokens');
         if (savedRaw && (savedRaw.toLowerCase().includes('price') || !savedRaw.includes('binance'))) {
