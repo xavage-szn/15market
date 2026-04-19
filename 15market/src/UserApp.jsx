@@ -724,6 +724,7 @@ export default function UserApp() {
   // 🗑️ REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
   // Prevents the reconciler from re-inserting them from backend data.
   const removedTradeIds = useRef(new Set());
+  const cleanupTimers = useRef({});
 
   // Orientation & Device Detection (Decoupled & Robust)
   const [isPortrait, setIsPortrait] = useState(
@@ -1580,8 +1581,6 @@ export default function UserApp() {
     return { ...defaultData, ...found };
   });
 
-  const cleanupTimers = useRef({});
-  const removedTradeIds = useRef(new Set()); // Dedup removal set
   const priceRef = useRef("0.00");
   const lastPriceUpdateRef = useRef(0);
   const priceHistoryRef = useRef([]);
