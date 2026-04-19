@@ -58,6 +58,26 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
     // ─── BINANCE WEBSOCKET: INDEPENDENT PRICE FEED ───
     useEffect(() => {
         const binanceSymbol = symbol.toLowerCase();
+        let isMounted = true;
+
+        // 1. FAST-START: Instantly fetch the current price via REST
+        // so we don't have to wait for the first WS trade event (which can take seconds)
+        fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol.toUpperCase()}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!isMounted) return;
+                const price = parseFloat(data.price);
+                if (price > 0 && !livePriceRef.current) {
+                    livePriceRef.current = price;
+                    setLivePrice(price);
+                    setIsLoading(false);
+                    if (onPriceUpdate) {
+                        const truncated = Math.floor(price * 100) / 100;
+                        onPriceUpdate(truncated.toFixed(2));
+                    }
+                }
+            })
+            .catch(e => console.warn('[Chart REST] Failed to fetch initial price', e));
 
         const connectWs = () => {
             // Clean up any existing connection
@@ -66,7 +86,8 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
                 wsRef.current = null;
             }
 
-            const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSymbol}@trade`);
+            // 2. USE DEFAULT PORT 443: Avoids 9443 which is often blocked by corporate/ISP firewalls
+            const ws = new WebSocket(`wss://stream.binance.com/ws/${binanceSymbol}@trade`);
             wsRef.current = ws;
 
             ws.onopen = () => {
