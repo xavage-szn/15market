@@ -1127,7 +1127,11 @@ export default function UserApp() {
   useEffect(() => {
     if (address) {
       // 1. Instant Retention: Load session wallet from storage as soon as main wallet connects
-      const stored = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
+      let stored;
+      try {
+        stored = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
+      } catch (e) { console.warn("[Security] LocalStorage access restricted"); }
+
       if (stored && (!evmSessionWallet || evmSessionWallet.address !== stored)) {
         setEvmSessionWallet({ address: stored, isRemote: true });
       }
@@ -1576,6 +1580,12 @@ export default function UserApp() {
     return { ...defaultData, ...found };
   });
 
+  const cleanupTimers = useRef({});
+  const removedTradeIds = useRef(new Set()); // Dedup removal set
+  const priceRef = useRef("0.00");
+  const lastPriceUpdateRef = useRef(0);
+  const priceHistoryRef = useRef([]);
+
   // ─── EXCLUSIVE COINBASE WEBSOCKET ─ Premium Price Feed for Chart & UI ───
   useEffect(() => {
     if (!activeMarket?.binance) return;
@@ -1591,7 +1601,9 @@ export default function UserApp() {
       }
       
       console.log(`[Stream] Connecting to Exclusive Feed: Coinbase (${sym})`);
-      ws = new WebSocket('wss://ws-feed.exchange.coinbase.com');
+      // Use absolute WSS path for mobile security (prevents 'insecure operation' on Safari)
+      const feedUrl = 'wss://ws-feed.exchange.coinbase.com';
+      ws = new WebSocket(feedUrl);
 
       ws.onopen = () => {
         console.log(`[Stream] Coinbase Connected`);
