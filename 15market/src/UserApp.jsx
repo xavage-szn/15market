@@ -1576,39 +1576,62 @@ export default function UserApp() {
     return { ...defaultData, ...found };
   });
 
-
-
-  const cleanupTimers = useRef({});
-
-  // ─── DIRECT BINANCE WEBSOCKET ─ Price feed for terminal, order book & signal ───
-  // Pure real-time stream. No cache, no relay, no intermediate state.
+  // ─── DIRECT MULTI-SOURCE WEBSOCKET ─ Geographic Resilience for Chart & UI ───
   useEffect(() => {
     if (!activeMarket?.binance) return;
 
     let ws;
-    const sym = activeMarket.binance.toLowerCase();
-    const lastRenderTime = { current: 0 }; // Local throttle ref for this market session
+    const sym = activeMarket.binance.toUpperCase();
+    const providers = [
+      `wss://stream.binance.com:9443/ws/${sym.toLowerCase()}@aggTrade`,
+      `wss://stream.binance.us:9443/ws/${sym.toLowerCase()}@aggTrade`,
+      `wss://wsprod.okx.com:8443/ws/v5/public`
+    ];
+    let currentIdx = 0;
+    const lastRenderTime = { current: 0 };
 
     const connect = () => {
-      if (ws) ws.close();
-      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${sym}@aggTrade`);
+      if (ws) {
+        try { ws.close(); } catch (e) { }
+      }
+      
+      const url = providers[currentIdx];
+      console.log(`[Stream] Connecting to Provider ${currentIdx}: ${url}`);
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        console.log(`[Stream] Connected to Provider ${currentIdx}`);
+        if (url.includes('okx')) {
+          // OKX Subscription format
+          ws.send(JSON.stringify({
+            op: "subscribe",
+            args: [{ channel: "index-tickers", instId: sym.replace('USDT', '-USDT') }]
+          }));
+        }
+      };
 
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
-        const raw = parseFloat(data.p);
-        if (isNaN(raw) || raw <= 0) return;
-        const truncated = Math.floor(raw * 100) / 100;
+        let rawPrice = 0;
+
+        if (data.p) { // Binance format
+          rawPrice = parseFloat(data.p);
+        } else if (data.data && data.data[0]?.idxPx) { // OKX format
+          rawPrice = parseFloat(data.data[0].idxPx);
+        }
+
+        if (!rawPrice || rawPrice <= 0) return;
+
+        const truncated = Math.floor(rawPrice * 100) / 100;
         const pStr = truncated.toFixed(2);
-        // Internal data always updates at full speed
+        const now = Date.now();
+
         if (pStr !== priceRef.current) {
           priceRef.current = pStr;
-          lastPriceUpdateRef.current = Date.now();
-          
-          const now = Date.now();
+          lastPriceUpdateRef.current = now;
           priceHistoryRef.current.push({ p: truncated, t: now });
           if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
 
-          // Throttle UI re-renders to ~100FPS (10ms) for ultra-smooth nonstop streaming
           if (now - lastRenderTime.current > 10) {
             setPrice(pStr);
             lastRenderTime.current = now;
@@ -1616,18 +1639,20 @@ export default function UserApp() {
         }
       };
 
-      ws.onerror = () => ws.close();
+      ws.onerror = (err) => {
+        console.warn(`[Stream] Provider ${currentIdx} failed. Cycling...`);
+        ws.close();
+      };
+
       ws.onclose = () => {
-        if (ws._intentionalClose) return;
+        currentIdx = (currentIdx + 1) % providers.length;
         setTimeout(connect, 3000);
       };
     };
 
     connect();
-    return () => {
-      if (ws) { ws._intentionalClose = true; ws.close(); }
-    };
-  }, [activeMarket.binance]);
+    return () => { if (ws) ws.close(); };
+  }, [activeMarket]);
 
   // ─── SOCKET.IO: Trade events only (no price) ───
   useEffect(() => {
