@@ -1588,26 +1588,51 @@ export default function UserApp() {
     if (!activeMarket?.binance) return;
 
     let ws;
-    const symCoinbase = activeMarket.binance.toUpperCase().replace('USDT', '-USD');
-    const symKraken = activeMarket.binance.toUpperCase().replace('USDT', '/USD');
-    const lastRenderTime = { current: 0 };
+    let pollInterval;
+    const baseSym = activeMarket.binance.toUpperCase().replace('USDT', '');
+    const symCoinbase = `${baseSym}-USD`;
+    // Kraken uses XBT for BTC
+    const krakenBase = baseSym === 'BTC' ? 'XBT' : baseSym;
+    const symKraken = `${krakenBase}/USD`;
     
-    // Direct providers ONLY - No backend relay
+    const lastRenderTime = { current: 0 };
+    lastPriceUpdateRef.current = Date.now();
+    
     const providers = [
       { name: 'COINBASE', url: 'wss://ws-feed.exchange.coinbase.com' },
       { name: 'KRAKEN', url: 'wss://ws.kraken.com' }
     ];
     let currentIdx = 0;
 
+    const processPrice = (rawPrice) => {
+      if (!rawPrice || rawPrice <= 0) return;
+      const truncated = Math.floor(rawPrice * 100) / 100;
+      const pStr = truncated.toFixed(2);
+      const now = Date.now();
+
+      if (pStr !== priceRef.current) {
+        priceRef.current = pStr;
+        lastPriceUpdateRef.current = now;
+        priceHistoryRef.current.push({ p: truncated, t: now });
+        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+
+        // High-frequency UI tick
+        if (now - lastRenderTime.current > 10) {
+          setPrice(pStr);
+          lastRenderTime.current = now;
+        }
+      }
+    };
+
     const connect = () => {
       if (ws) { try { ws.close(); } catch (e) { } }
       
       const p = providers[currentIdx];
-      console.log(`[Stream] Connecting Directly to ${p.name} (${p.url})`);
+      console.log(`[Stream] Direct Attempt: ${p.name} (${p.url}) for ${baseSym}`);
       ws = new WebSocket(p.url);
 
       ws.onopen = () => {
-        console.log(`[Stream] Direct Connection Active: ${p.name}`);
+        console.log(`[Stream] Direct Feed Established: ${p.name}`);
         if (p.name === 'COINBASE') {
           ws.send(JSON.stringify({
             type: "subscribe",
@@ -1625,35 +1650,15 @@ export default function UserApp() {
 
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
-        let rawPrice = 0;
-
         if (data.type === 'ticker' && data.price) { // Coinbase
-          rawPrice = parseFloat(data.price);
+          processPrice(parseFloat(data.price));
         } else if (Array.isArray(data) && data[1]?.c) { // Kraken
-          rawPrice = parseFloat(data[1].c[0]);
-        }
-
-        if (!rawPrice || rawPrice <= 0) return;
-
-        const truncated = Math.floor(rawPrice * 100) / 100;
-        const pStr = truncated.toFixed(2);
-        const now = Date.now();
-
-        if (pStr !== priceRef.current) {
-          priceRef.current = pStr;
-          lastPriceUpdateRef.current = now;
-          priceHistoryRef.current.push({ p: truncated, t: now });
-          if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
-
-          if (now - lastRenderTime.current > 10) {
-            setPrice(pStr);
-            lastRenderTime.current = now;
-          }
+          processPrice(parseFloat(data[1].c[0]));
         }
       };
 
       ws.onerror = (err) => {
-        console.warn(`[Stream] Direct ${p.name} failed. Attempting next provider...`);
+        console.warn(`[Stream] ${p.name} connection failed.`);
         ws.close();
       };
 
@@ -1663,9 +1668,25 @@ export default function UserApp() {
       };
     };
 
+    // REST Fallback (Polls every 5s if WS is silent)
+    pollInterval = setInterval(async () => {
+      const silenceDuration = Date.now() - lastPriceUpdateRef.current;
+      if (silenceDuration > 5000) {
+        console.log("[Stream] WS Silent. Polling REST Fallback...");
+        try {
+          const res = await fetch(`https://api.coinbase.com/v2/prices/${baseSym}-USD/spot`);
+          const d = await res.json();
+          if (d.data?.amount) processPrice(parseFloat(d.data.amount));
+        } catch (e) { }
+      }
+    }, 5000);
+
     connect();
 
-    return () => { if (ws) ws.close(); };
+    return () => { 
+      if (ws) ws.close(); 
+      clearInterval(pollInterval);
+    };
   }, [activeMarket]);
 
   // ─── SOCKET.IO: Trade events only (no price) ───
