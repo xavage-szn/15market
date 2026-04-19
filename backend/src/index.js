@@ -516,7 +516,8 @@ const recoverPendingSettlements = async () => {
 };
 
 // Start Server and Recovery
-server.listen(3010, () => {
-  console.log('Backend running on port 3010');
+const PORT = process.env.PORT || 3010;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend running on port ${PORT}`);
   setTimeout(recoverPendingSettlements, 5000); // Wait for price sync before recovery
 });
