@@ -1583,26 +1583,7 @@ export default function UserApp() {
 
 
 
-  // ─── EXCLUSIVE DIRECT FEED ─ Independent Pipe for Chart & UI ───
-  useEffect(() => {
-    if (!activeMarket?.binance) return;
 
-    let ws;
-    let pollInterval;
-    const baseSym = activeMarket.binance.toUpperCase().replace('USDT', '');
-    const symCoinbase = `${baseSym}-USD`;
-    // Kraken uses XBT for BTC
-    const krakenBase = baseSym === 'BTC' ? 'XBT' : baseSym;
-    const symKraken = `${krakenBase}/USD`;
-    
-    const lastRenderTime = { current: 0 };
-    lastPriceUpdateRef.current = Date.now();
-    
-    const providers = [
-      { name: 'COINBASE', url: 'wss://ws-feed.exchange.coinbase.com' },
-      { name: 'KRAKEN', url: 'wss://ws.kraken.com' }
-    ];
-    let currentIdx = 0;
 
   // ─── EXCLUSIVE DIRECT FEED ─ Independent Pipe for Chart & UI ───
   useEffect(() => {
