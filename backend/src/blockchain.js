@@ -80,28 +80,31 @@ class BlockchainService {
     return "0";
   }
 
-  async getNextNonce() {
-    // Wait for lock
-    while (this.nonceLock) await new Promise(r => setTimeout(r, 50));
-    this.nonceLock = true;
+  async getNextNonce(address = null) {
+    const targetAddress = address || this.arcWallet.address;
+    
+    // Simple per-address lock key
+    const lockKey = `nonce_lock_${targetAddress.toLowerCase()}`;
+    while (this[lockKey]) await new Promise(r => setTimeout(r, 50));
+    this[lockKey] = true;
 
     try {
-      // Fetch nonces in parallel across all providers
+      this.localNonces = this.localNonces || {};
       const fetchNonce = (provider) => 
-        this.callWithTimeout(provider.getTransactionCount(this.arcWallet.address, 'pending'), 5000)
+        this.callWithTimeout(provider.getTransactionCount(targetAddress, 'pending'), 5000)
         .catch(() => 0);
 
       const nonces = await Promise.all(this.providers.map(fetchNonce));
       const chainNonce = Math.max(...nonces);
 
-      if (this.localNonce === null || chainNonce > this.localNonce) {
-        this.localNonce = chainNonce;
+      if (this.localNonces[targetAddress] === undefined || chainNonce > this.localNonces[targetAddress]) {
+        this.localNonces[targetAddress] = chainNonce;
       } else {
-        this.localNonce++;
+        this.localNonces[targetAddress]++;
       }
-      return this.localNonce;
+      return this.localNonces[targetAddress];
     } finally {
-      this.nonceLock = false;
+      this[lockKey] = false;
     }
   }
 
@@ -181,7 +184,8 @@ class BlockchainService {
         try {
             const burnerWallet = new ethers.Wallet(privateKey, provider);
             const contract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, burnerWallet);
-            const txOptions = { value: val, gasLimit: 800000 };
+            const nonce = await this.getNextNonce(burnerWallet.address);
+            const txOptions = { value: val, gasLimit: 800000, nonce };
             
             const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, burnerWallet.address, txOptions), 10000);
             console.log(`[Blockchain] Native Broadcast Bet ${betId} via Provider ${idx} (TX: ${tx.hash})`);

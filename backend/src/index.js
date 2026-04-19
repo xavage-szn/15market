@@ -206,6 +206,7 @@ app.post('/session/execute', async (req, res) => {
     };
     await redis.set(`bet_owner:${id}`, addr, 'EX', 86400);
     await redis.set(`trade:${id}`, JSON.stringify(tradeData), 'EX', 86400);
+    await redis.sadd('active_trades', id); // Track for recovery
 
     const receipt = await blockchain.placeBetForUser(pk, id, direction, duration, entryPrice, marketId, amount);
 
@@ -284,6 +285,7 @@ app.post('/session/execute', async (req, res) => {
             });
 
             console.log(`[Settlement] Auto-settled trade #${id}: ${won ? 'WON' : 'LOST'} @ $${exitPrice}`);
+            await redis.srem('active_trades', id); // Cleanup set
         } catch (e) {
             console.error(`[Settlement] Auto-settlement failed for trade #${id}:`, e.message);
         }
@@ -476,7 +478,45 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-const PORT = process.env.PORT || 3010;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend running on port ${PORT}`);
+// --- RECOVERY LOGIC: Settle any trades missed during downtime ---
+const recoverPendingSettlements = async () => {
+    console.log("[Recovery] Scanning for missed settlements...");
+    try {
+        const activeIds = await redis.smembers('active_trades');
+        const now = Date.now();
+
+        for (const id of activeIds) {
+            const raw = await redis.get(`trade:${id}`);
+            if (!raw) {
+                await redis.srem('active_trades', id);
+                continue;
+            }
+            const trade = JSON.parse(raw);
+            const expiry = trade.timestamp + (parseInt(trade.duration) * 1000);
+
+            if (now > expiry + 2000) {
+                console.log(`[Recovery] Found abandoned trade #${id}. Attempting retroactive settlement...`);
+                // Trigger settlement logic (dry-run/re-execution)
+                const symbol = ['eth', 'btc', 'sol'][trade.marketId] || 'eth';
+                const exitPrice = pricing.getPrice(symbol);
+                if (exitPrice > 0) {
+                    let scaledExitPrice = exitPrice;
+                    if (trade.marketId === 2) scaledExitPrice = Math.floor(exitPrice * 1000000);
+                    else scaledExitPrice = Math.floor(exitPrice * 100);
+
+                    await blockchain.settleBet(id, scaledExitPrice).catch(e => console.warn(`[Recovery] Settlement failed for ${id}:`, e.message));
+                    await redis.srem('active_trades', id);
+                    console.log(`[Recovery] Settled trade #${id} successfully.`);
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[Recovery] Failed:", e.message);
+    }
+};
+
+// Start Server and Recovery
+server.listen(3010, () => {
+  console.log('Backend running on port 3010');
+  setTimeout(recoverPendingSettlements, 5000); // Wait for price sync before recovery
 });
