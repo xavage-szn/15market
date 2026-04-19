@@ -42,18 +42,14 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 const PRODUCTION_BACKEND = "https://api.15market.online";
 
 const getBaseUrl = (envValue) => {
+    // FORCE LOCALHOST on local machine to avoid mixed-env 404s
+    if (isLocal) return "http://localhost:3010";
+
     // If it's already an absolute production URL, use it immediately
     if (envValue && (envValue.startsWith('https://') || envValue.includes('.online') || envValue.includes('.market'))) {
         return envValue;
     }
-    // Fallback to localhost only if we are truly in a local browser environment
-    const final = envValue || (isLocal ? "http://localhost:3010" : PRODUCTION_BACKEND);
-    if (isLocal && final === PRODUCTION_BACKEND) {
-        console.log("🛠️ [Config] Connecting to Production Backend from Localhost");
-    } else if (isLocal) {
-        console.log(`🛠️ [Config] Local Mode: Using ${final}`);
-    }
-    return final;
+    return envValue || PRODUCTION_BACKEND;
 };
 
 const rawKeeperUrl = getBaseUrl(envUrl);

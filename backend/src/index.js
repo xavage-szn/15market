@@ -435,6 +435,24 @@ app.post('/profiles', async (req, res) => {
   }
 });
 
+app.get('/campaigns', (req, res) => {
+    res.json([
+        { id: 'early-adopter', name: 'Early Adopter Bonus', endTime: Date.now() + (86400000 * 30), description: 'Join the vanguard of Arc traders.' }
+    ]);
+});
+
+app.get('/winner-banner', (req, res) => {
+    res.json({ address: "0x...123", amount: "1000", market: "BTC", timestamp: Date.now() });
+});
+
+app.get('/enroll', async (req, res) => {
+    const { campaignId, address } = req.query;
+    if (!campaignId || !address) return res.status(400).json({ error: "Missing params" });
+    const key = `enrollment:${campaignId}:${address.toLowerCase()}`;
+    const enrolled = await redis.get(key);
+    res.json({ enrolled: !!enrolled });
+});
+
 app.get('/protocol-stats', async (req, res) => {
   const totalVolume = await redis.get('stats:total_volume') || '0';
   const totalTrades = await redis.get('stats:total_trades') || '0';
