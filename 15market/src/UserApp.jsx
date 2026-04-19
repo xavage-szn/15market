@@ -1617,36 +1617,53 @@ export default function UserApp() {
 
         const rawPrice = parseFloat(data.price);
         if (!rawPrice || rawPrice <= 0) return;
-
-        const truncated = Math.floor(rawPrice * 100) / 100;
-        const pStr = truncated.toFixed(2);
-        const now = Date.now();
-
-        if (pStr !== priceRef.current) {
-          priceRef.current = pStr;
-          lastPriceUpdateRef.current = now;
-          priceHistoryRef.current.push({ p: truncated, t: now });
-          if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
-
-          if (now - lastRenderTime.current > 10) {
-            setPrice(pStr);
-            lastRenderTime.current = now;
-          }
-        }
+        processPrice(rawPrice);
       };
 
       ws.onerror = (err) => {
-        console.warn(`[Stream] Coinbase error:`, err.message);
+        console.warn(`[Stream] Coinbase direct failed. Falling back to Backend Relay...`);
         ws.close();
       };
 
       ws.onclose = () => {
-        setTimeout(connect, 3000);
+        setTimeout(connect, 5000);
       };
     };
 
+    const processPrice = (rawPrice) => {
+      const truncated = Math.floor(rawPrice * 100) / 100;
+      const pStr = truncated.toFixed(2);
+      const now = Date.now();
+
+      if (pStr !== priceRef.current) {
+        priceRef.current = pStr;
+        lastPriceUpdateRef.current = now;
+        priceHistoryRef.current.push({ p: truncated, t: now });
+        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+
+        if (now - lastRenderTime.current > 10) {
+          setPrice(pStr);
+          lastRenderTime.current = now;
+        }
+      }
+    };
+
     connect();
-    return () => { if (ws) ws.close(); };
+
+    // Secondary/Fallback listener via Socket.io
+    const unbindRelay = socketService.on('price_update', (data) => {
+      if (ws && ws.readyState === WebSocket.OPEN) return; // Ignore relay if direct is active
+      const symInternal = activeMarket.id?.toLowerCase() || 'eth';
+      const relayedPrice = data[symInternal];
+      if (relayedPrice && relayedPrice > 0) {
+        processPrice(relayedPrice);
+      }
+    });
+
+    return () => { 
+      if (ws) ws.close();
+      unbindRelay();
+    };
   }, [activeMarket]);
 
   // ─── SOCKET.IO: Trade events only (no price) ───
