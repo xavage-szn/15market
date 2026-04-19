@@ -1613,10 +1613,10 @@ export default function UserApp() {
       if (pStr !== priceRef.current) {
         priceRef.current = pStr;
         lastPriceUpdateRef.current = now;
-        priceHistoryRef.current.push({ p: truncated, t: now });
+        priceHistoryRef.current.push({ t: now, p: truncated });
         if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
 
-        // High-frequency UI tick
+        // 100 FPS Trigger
         if (now - lastRenderTime.current > 10) {
           setPrice(pStr);
           lastRenderTime.current = now;
@@ -1625,67 +1625,67 @@ export default function UserApp() {
     };
 
     const connect = () => {
-      if (ws) { try { ws.close(); } catch (e) { } }
+      if (ws) { 
+        try { ws.onclose = null; ws.close(); } catch (e) { } 
+      }
       
       const p = providers[currentIdx];
-      console.log(`[Stream] Direct Attempt: ${p.name} (${p.url}) for ${baseSym}`);
+      console.log(`[Stream] Connecting to ${p.name}...`);
       ws = new WebSocket(p.url);
 
       ws.onopen = () => {
-        console.log(`[Stream] Direct Feed Established: ${p.name}`);
+        console.log(`[Stream] Feed Live: ${p.name}`);
         if (p.name === 'COINBASE') {
-          ws.send(JSON.stringify({
-            type: "subscribe",
-            product_ids: [symCoinbase],
-            channels: ["ticker"]
-          }));
+          ws.send(JSON.stringify({ type: "subscribe", product_ids: [symCoinbase], channels: ["ticker"] }));
         } else if (p.name === 'KRAKEN') {
-          ws.send(JSON.stringify({
-            event: "subscribe",
-            pair: [symKraken],
-            subscription: { name: "ticker" }
-          }));
+          ws.send(JSON.stringify({ event: "subscribe", pair: [symKraken], subscription: { name: "ticker" } }));
         }
       };
 
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
-        if (data.type === 'ticker' && data.price) { // Coinbase
+        if (data.type === 'ticker' && data.price) {
           processPrice(parseFloat(data.price));
-        } else if (Array.isArray(data) && data[1]?.c) { // Kraken
+        } else if (Array.isArray(data) && data[1]?.c) {
           processPrice(parseFloat(data[1].c[0]));
         }
       };
 
-      ws.onerror = (err) => {
-        console.warn(`[Stream] ${p.name} connection failed.`);
-        ws.close();
-      };
-
+      ws.onerror = () => ws.close();
       ws.onclose = () => {
+        if (!activeMarket) return;
         currentIdx = (currentIdx + 1) % providers.length;
-        setTimeout(connect, 3000);
+        setTimeout(connect, 2000);
       };
     };
 
-    // REST Fallback (Polls every 5s if WS is silent)
-    pollInterval = setInterval(async () => {
-      const silenceDuration = Date.now() - lastPriceUpdateRef.current;
-      if (silenceDuration > 5000) {
-        console.log("[Stream] WS Silent. Polling REST Fallback...");
+    // Robust Pulse Guard (Bridges WS gaps and fixes 'Stuck' production prices)
+    const monitorInterval = setInterval(async () => {
+      const now = Date.now();
+      const silence = now - lastPriceUpdateRef.current;
+      
+      // If silent for > 3s, something is stuck. Try REST poll + WS Reconnect.
+      if (silence > 3000) {
+        console.log(`[Stream] Signal Lost (${silence}ms silence). Healing...`);
         try {
           const res = await fetch(`https://api.coinbase.com/v2/prices/${baseSym}-USD/spot`);
           const d = await res.json();
           if (d.data?.amount) processPrice(parseFloat(d.data.amount));
         } catch (e) { }
+        
+        // Force WS cycle if really dead
+        if (silence > 6000) {
+          console.warn("[Stream] Connection dead. Recycling feed...");
+          connect();
+        }
       }
-    }, 5000);
+    }, 2000);
 
     connect();
 
     return () => { 
-      if (ws) ws.close(); 
-      clearInterval(pollInterval);
+      if (ws) { ws.onclose = null; ws.close(); }
+      clearInterval(monitorInterval);
     };
   }, [activeMarket]);
 

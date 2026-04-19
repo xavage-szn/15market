@@ -2,7 +2,7 @@ const { ethers } = require('ethers');
 require('dotenv').config();
 
 const ARC_RPCS = [
-  "https://5042002.rpc.thirdweb.com", // Thirdweb Premium
+  "https://5042002.rpc.thirdweb.com", // Thirdweb Premium - Hardcoded as Absolute Priority #1
   "https://arc-testnet.g.alchemy.com/v2/7eF4g7VDugrZQdNDi_HMj",
   "https://rpc.testnet.arc.network",
   "https://arc-testnet.drpc.org"
@@ -36,10 +36,6 @@ class BlockchainService {
       "event BetSettled(uint256 indexed id, address indexed user, uint256 settlementPrice, bool won, uint256 payout)"
     ];
 
-    // Standard wallet for metrics/admin lookups
-    this.mainProvider = this.providers[0];
-    this.arcWallet = new ethers.Wallet(PRIVATE_KEY, this.mainProvider);
-
     // Create a contract instance for EACH provider to enable racing
     this.contracts = (this.providers || []).filter(p => p).map(p => {
         const wallet = new ethers.Wallet(PRIVATE_KEY, p);
@@ -47,15 +43,14 @@ class BlockchainService {
     });
 
     if (this.contracts.length === 0) {
-        console.error("❌ [Blockchain] FATAL: No valid providers initialized. Check ARC_RPCS in blockchain.js.");
+        console.error("❌ [Blockchain] FATAL: No valid providers initialized.");
     }
 
     // Speed Optimization: Track nonces locally
-    this.localNonce = null;
-    this.nonceLock = false;
+    this.localNonces = {};
   }
 
-  async callWithTimeout(promise, timeoutMs = 4000) {
+  async callWithTimeout(promise, timeoutMs = 8000) {
     const timeout = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('RPC_TIMEOUT')), timeoutMs)
     );
@@ -63,35 +58,24 @@ class BlockchainService {
   }
 
   async getBalance(address, retryCount = 0) {
-    // Optimization: Sequential failover instead of aggressive racing to save RPC credits
     for (let i = 0; i < this.providers.length; i++) {
         try {
-            const bal = await this.callWithTimeout(this.providers[i].getBalance(address, 'pending'), 10000);
+            const bal = await this.callWithTimeout(this.providers[i].getBalance(address, 'pending'), 5000);
             return ethers.formatEther(bal);
-        } catch (e) {
-            console.warn(`[Blockchain] Provider ${i} failed, trying next...`);
-        }
-    }
-
-    if (retryCount < 2) {
-        await new Promise(r => setTimeout(r, 2000));
-        return this.getBalance(address, retryCount + 1);
+        } catch (e) {}
     }
     return "0";
   }
 
-  async getNextNonce(address = null) {
-    const targetAddress = address || this.arcWallet.address;
-    
-    // Simple per-address lock key
-    const lockKey = `nonce_lock_${targetAddress.toLowerCase()}`;
+  async getNextNonce(address) {
+    const targetAddress = address.toLowerCase();
+    const lockKey = `nonce_lock_${targetAddress}`;
     while (this[lockKey]) await new Promise(r => setTimeout(r, 50));
     this[lockKey] = true;
 
     try {
-      this.localNonces = this.localNonces || {};
       const fetchNonce = (provider) => 
-        this.callWithTimeout(provider.getTransactionCount(targetAddress, 'pending'), 5000)
+        this.callWithTimeout(provider.getTransactionCount(targetAddress, 'pending'), 4000)
         .catch(() => 0);
 
       const nonces = await Promise.all(this.providers.map(fetchNonce));
@@ -109,110 +93,56 @@ class BlockchainService {
   }
 
   async settleBet(betId, exitPrice) {
-    console.log(`[Blockchain] Settling bet ${betId} instantly racing ${this.contracts.length} sources...`);
-    const nonce = await this.getNextNonce();
+    console.log(`[Blockchain] Settling bet ${betId} via Priority Broadcast...`);
+    const nonce = await this.getNextNonce(this.arcWallet.address);
     const txOptions = { nonce, gasLimit: 600000 }; 
 
-    const broadcastPromise = (contract, idx) => async () => {
-      const tx = await this.callWithTimeout(contract.settleBet(betId, exitPrice, txOptions), 8000);
-      console.log(`[Blockchain] Broadcasted settlement for ${betId} via Provider ${idx} (TX: ${tx.hash})`);
-      tx.wait().catch(e => {}); 
-      return tx;
-    };
+    // Racing to BROADCAST, not waiting for confirmations here
+    const broadcastRace = this.contracts.map(async (contract, idx) => {
+      try {
+        const tx = await this.callWithTimeout(contract.settleBet(betId, exitPrice, txOptions), 8000);
+        console.log(`[Blockchain] Settle Broadcast SUCCESS via Provider ${idx} (TX: ${tx.hash})`);
+        tx.wait().catch(() => {}); // Wait in background
+        return tx;
+      } catch (e) {
+        throw e;
+      }
+    });
 
     try {
-      const tx = await Promise.any(this.contracts.map((c, i) => broadcastPromise(c, i)()));
+      const tx = await Promise.any(broadcastRace);
       return { hash: tx.hash };
-    } catch (error) {
-      console.error(`[Blockchain] All ${this.contracts.length} settlement broadcasts failed for ${betId}:`, error.message);
-      this.localNonce = null; 
-      throw error;
-    }
-  }
-
-  async placeBet(betId, direction, duration, entryPrice, marketId, amount) {
-    console.log(`[Blockchain] Placing bet ${betId} racing ${this.contracts.length} sources...`);
-    const val = ethers.parseEther(amount.toString());
-    const nonce = await this.getNextNonce();
-    
-    // FETCH PRIORITY FEE
-    const feeData = await this.mainProvider.getFeeData();
-    const priorityFee = (feeData.maxPriorityFeePerGas || ethers.parseUnits("1", "gwei")) * 120n / 100n; // +20% buffer
-    const maxFee = (feeData.maxFeePerGas || ethers.parseUnits("2", "gwei")) * 120n / 100n;
-
-    const txOptions = { 
-        value: val, 
-        nonce, 
-        gasLimit: 800000,
-        maxPriorityFeePerGas: priorityFee,
-        maxFeePerGas: maxFee
-    };
-
-    const broadcastPromise = (contract, idx) => async () => {
-      const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, this.arcWallet.address, txOptions), 5000);
-      console.log(`[Blockchain] Broadcasted bet ${betId} via Provider ${idx} (TX: ${tx.hash})`);
-      tx.wait().catch(e => {});
-      return tx;
-    };
-
-    try {
-      const tx = await Promise.any(this.contracts.map((c, i) => broadcastPromise(c, i)()));
-      return { hash: tx.hash };
-    } catch (error) {
-      const detailedError = error.errors ? error.errors.map(e => e.message).join(' | ') : error.message;
-      console.error(`[Blockchain] All ${this.contracts.length} trade broadcasts failed for ${betId}: ${detailedError}`);
-      if (this.localNonces) this.localNonces[this.arcWallet.address] = null;
-      throw new Error(`Blockchain Broadcast Failed: ${detailedError}`);
-    }
-  }
-
-  async getBetDetails(betId) {
-    try {
-      return await Promise.any(this.contracts.map(async (c) => {
-          const bet = await this.callWithTimeout(c.bets(betId), 5000);
-          return {
-            id: bet.id.toString(),
-            user: bet.user,
-            amount: ethers.formatEther(bet.amount),
-            direction: bet.direction === 1 ? 'UP' : 'DOWN',
-            entryPrice: bet.entryPrice.toString(),
-            duration: bet.duration.toString(),
-            settled: bet.settled,
-            won: bet.won,
-            settlementPrice: bet.settlementPrice.toString()
-          };
-      }));
-    } catch (error) {
-      console.error(`Error fetching bet ${betId}:`, error);
-      return null;
+    } catch (e) {
+      this.localNonces[this.arcWallet.address.toLowerCase()] = null; 
+      throw e;
     }
   }
 
   async placeBetForUser(privateKey, betId, direction, duration, entryPrice, marketId, amount) {
-    console.log(`[Blockchain] Placing native bet ${betId} racing ALL sources...`);
     const val = ethers.parseEther(amount.toString());
-    
+    const burnerWallet = new ethers.Wallet(privateKey);
+    const nonce = await this.getNextNonce(burnerWallet.address);
+
     const broadcastRace = this.providers.map(async (provider, idx) => {
         try {
-            const burnerWallet = new ethers.Wallet(privateKey, provider);
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, burnerWallet);
-            const nonce = await this.getNextNonce(burnerWallet.address);
+            const wallet = new ethers.Wallet(privateKey, provider);
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, wallet);
             
             const feeData = await provider.getFeeData();
-            const priorityFee = (feeData.maxPriorityFeePerGas || ethers.parseUnits("1", "gwei")) * 130n / 100n; // +30% for session wallets
-            const maxFee = (feeData.maxFeePerGas || ethers.parseUnits("2", "gwei")) * 130n / 100n;
+            const priorityFee = (feeData.maxPriorityFeePerGas || ethers.parseUnits("1", "gwei")) * 150n / 100n; // +50% priority
+            const maxFee = (feeData.maxFeePerGas || ethers.parseUnits("2", "gwei")) * 150n / 100n;
 
             const txOptions = { 
                 value: val, 
-                gasLimit: 800000, 
-                nonce,
+                nonce, 
+                gasLimit: 800000,
                 maxPriorityFeePerGas: priorityFee,
                 maxFeePerGas: maxFee
             };
             
             const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, burnerWallet.address, txOptions), 10000);
             console.log(`[Blockchain] Native Broadcast Bet ${betId} via Provider ${idx} (TX: ${tx.hash})`);
-            tx.wait().catch(() => {});
+            tx.wait().catch(() => {}); // Background wait
             return tx;
         } catch (e) {
             throw e;
@@ -223,46 +153,39 @@ class BlockchainService {
       const tx = await Promise.any(broadcastRace);
       return { hash: tx.hash };
     } catch (error) {
-      const detailedError = error.errors ? error.errors.map(e => e.message).join(' | ') : error.message;
-      console.error(`[Blockchain] Native broadcast failed across ALL providers for ${betId}: ${detailedError}`);
-      throw new Error(`On-chain Execution Failed: ${detailedError}`);
+      this.localNonces[burnerWallet.address.toLowerCase()] = null;
+      throw error;
     }
   }
 
   async withdrawBurner(privateKey, to, amount) {
-    console.log(`[Blockchain] Sweeping ${amount} from True Embedded Wallet...`);
     const val = ethers.parseEther(amount.toString());
+    const burnerWallet = new ethers.Wallet(privateKey);
+    const nonce = await this.getNextNonce(burnerWallet.address);
 
     const sweepRace = this.providers.map(async (provider, idx) => {
         try {
-            const burnerWallet = new ethers.Wallet(privateKey, provider);
-            
+            const wallet = new ethers.Wallet(privateKey, provider);
             const feeData = await provider.getFeeData();
-            const priorityFee = (feeData.maxPriorityFeePerGas || ethers.parseUnits("1", "gwei")) * 130n / 100n; // +30% buffer
-            const maxFee = (feeData.maxFeePerGas || ethers.parseUnits("2", "gwei")) * 130n / 100n;
-
             const txOptions = { 
                 to, 
                 value: val,
-                maxPriorityFeePerGas: priorityFee,
-                maxFeePerGas: maxFee,
-                gasLimit: 30000 // Standard ETH transfer
+                nonce,
+                maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas || 1000000000n) * 200n / 100n,
+                maxFeePerGas: (feeData.maxFeePerGas || 2000000000n) * 200n / 100n,
+                gasLimit: 30000 
             };
-
-            const tx = await this.callWithTimeout(burnerWallet.sendTransaction(txOptions), 12000);
-            console.log(`[Blockchain] Sweep broadcasted via Provider ${idx} (TX: ${tx.hash})`);
+            const tx = await this.callWithTimeout(wallet.sendTransaction(txOptions), 10000);
             return tx;
-        } catch (e) {
-            throw e;
-        }
+        } catch (e) { throw e; }
     });
 
     try {
       const tx = await Promise.any(sweepRace);
-      return tx;
-    } catch (error) {
-      console.error(`[Blockchain] Native sweep failed across ALL providers:`, error.message);
-      throw error;
+      return { hash: tx.hash };
+    } catch (e) {
+      this.localNonces[burnerWallet.address.toLowerCase()] = null;
+      throw e;
     }
   }
 }
