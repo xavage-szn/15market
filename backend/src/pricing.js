@@ -10,7 +10,8 @@ class PricingService {
         this.providers = [
             `wss://stream.binance.com:9443/stream?streams=`,
             `wss://stream.binance.us:9443/stream?streams=`,
-            `wss://wsprod.okx.com:8443/ws/v5/public` // Neutral fallback
+            `wss://ws-feed.exchange.coinbase.com`, // Premium Fallback
+            `wss://wsprod.okx.com:8443/ws/v5/public` 
         ];
         this.init();
     }
@@ -19,18 +20,25 @@ class PricingService {
         const baseUrl = this.providers[this.currentProviderIndex];
         console.log(`[Pricing] Attempting connection to Provider ${this.currentProviderIndex}: ${baseUrl}`);
 
-        if (baseUrl.includes('binance')) {
-            const streams = Object.keys(this.markets).map(m => `${m.toLowerCase()}@aggTrade`).join('/');
-            this.ws = new WebSocket(`${baseUrl}${streams}`);
-        } else {
-            // OKX / Alternative Logic
-            this.ws = new WebSocket(baseUrl);
-        }
+        this.ws = new WebSocket(baseUrl);
 
         this.ws.on('open', () => {
             console.log(`[Pricing] Connected to Priority Feed (Provider ${this.currentProviderIndex})`);
-            if (baseUrl.includes('okx')) {
-                // Subscribe to OKX tickers
+            if (baseUrl.includes('binance')) {
+                const streamsPath = Object.keys(this.markets).map(m => `${m.toLowerCase()}@aggTrade`).join('/');
+                // Binance needs the streams in the URL, but if we opened just the base, we might need to re-open.
+                // Re-init with correct URL for Binance.
+                this.ws.terminate();
+                this.ws = new WebSocket(`${baseUrl}${streamsPath}`);
+                this.ws.on('open', () => console.log(`[Pricing] Binance Streams Active`));
+            } else if (baseUrl.includes('coinbase')) {
+                const productIds = Object.keys(this.markets).map(m => m.replace('USDT', '-USD'));
+                this.ws.send(JSON.stringify({
+                    type: "subscribe",
+                    product_ids: productIds,
+                    channels: ["ticker"]
+                }));
+            } else if (baseUrl.includes('okx')) {
                 const args = Object.keys(this.markets).map(m => ({ channel: "index-tickers", instId: m.replace('USDT', '-USDT') }));
                 this.ws.send(JSON.stringify({ op: "subscribe", args }));
             }
@@ -45,6 +53,10 @@ class PricingService {
                     // Binance Format
                     symbol = data.data.s;
                     price = parseFloat(data.data.p);
+                } else if (data.type === 'ticker') {
+                    // Coinbase Format
+                    symbol = data.product_id.replace('-USD', 'USDT');
+                    price = parseFloat(data.price);
                 } else if (data.arg && data.data) {
                     // OKX Format
                     symbol = data.arg.instId.replace('-', '');

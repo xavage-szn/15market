@@ -1585,6 +1585,7 @@ export default function UserApp() {
     const providers = [
       `wss://stream.binance.com:9443/ws/${sym.toLowerCase()}@aggTrade`,
       `wss://stream.binance.us:9443/ws/${sym.toLowerCase()}@aggTrade`,
+      `wss://ws-feed.exchange.coinbase.com`, // Premium US Fallback
       `wss://wsprod.okx.com:8443/ws/v5/public`
     ];
     let currentIdx = 0;
@@ -1601,8 +1602,13 @@ export default function UserApp() {
 
       ws.onopen = () => {
         console.log(`[Stream] Connected to Provider ${currentIdx}`);
-        if (url.includes('okx')) {
-          // OKX Subscription format
+        if (url.includes('coinbase')) {
+          ws.send(JSON.stringify({
+             type: "subscribe",
+             product_ids: [sym.replace('USDT', '-USD')],
+             channels: ["ticker"]
+          }));
+        } else if (url.includes('okx')) {
           ws.send(JSON.stringify({
             op: "subscribe",
             args: [{ channel: "index-tickers", instId: sym.replace('USDT', '-USDT') }]
@@ -1616,6 +1622,8 @@ export default function UserApp() {
 
         if (data.p) { // Binance format
           rawPrice = parseFloat(data.p);
+        } else if (data.type === 'ticker' && data.price) { // Coinbase format
+          rawPrice = parseFloat(data.price);
         } else if (data.data && data.data[0]?.idxPx) { // OKX format
           rawPrice = parseFloat(data.data[0].idxPx);
         }
