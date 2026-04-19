@@ -210,6 +210,7 @@ app.post('/session/execute', async (req, res) => {
     await redis.set(`bet_owner:${id}`, addr, 'EX', 86400);
     await redis.set(`trade:${id}`, JSON.stringify(tradeData), 'EX', 86400);
     await redis.sadd('active_trades', id); // Track for recovery
+    pricing.trackTrade(true); // Power on price feed for monitoring
 
     const receipt = await blockchain.placeBetForUser(pk, id, direction, duration, entryPrice, marketId, amount);
 
@@ -292,6 +293,7 @@ app.post('/session/execute', async (req, res) => {
 
             console.log(`[Settlement] Auto-settled trade #${id}: ${won ? 'WON' : 'LOST'} @ $${exitPrice}`);
             await redis.srem('active_trades', id); // Cleanup set
+            pricing.trackTrade(false); // Hibernate if last trade settled
             emitAdminStats(); // Event-driven update
         } catch (e) {
             console.error(`[Settlement] Auto-settlement failed for trade #${id}:`, e.message);
@@ -523,6 +525,7 @@ const recoverPendingSettlements = async () => {
         const now = Date.now();
 
         for (const id of activeIds) {
+            pricing.trackTrade(true); // Power on for recovery
             const raw = await redis.get(`trade:${id}`);
             if (!raw) {
                 await redis.srem('active_trades', id);

@@ -3,53 +3,102 @@ const WebSocket = require('ws');
 class PricingService {
     constructor() {
         this.prices = { btc: 0, eth: 0, sol: 0 };
-        this.markets = {
-            'BTC-USD': 'btc',
-            'ETH-USD': 'eth',
-            'SOL-USD': 'sol'
-        };
+        this.marketsC = { 'BTC-USD': 'btc', 'ETH-USD': 'eth', 'SOL-USD': 'sol' };
+        this.marketsK = { 'BTC/USD': 'btc', 'ETH/USD': 'eth', 'SOL/USD': 'sol' };
         this.ws = null;
         this.onPriceUpdate = null;
-        this.init();
+        this.currentProviderIndex = 0;
+        this.activeTradeCount = 0;
+        this.providers = [
+            { name: 'COINBASE', url: 'wss://ws-feed.exchange.coinbase.com' },
+            { name: 'KRAKEN', url: 'wss://ws.kraken.com' }
+        ];
+    }
+
+    // Lazy Connect: Only connect if one or more trades are in progress
+    trackTrade(isStarting) {
+        if (isStarting) {
+            this.activeTradeCount++;
+            if (!this.ws) {
+                console.log("[Pricing] Trade detected. Powering on price feed...");
+                this.init();
+            }
+        } else {
+            this.activeTradeCount = Math.max(0, this.activeTradeCount - 1);
+            if (this.activeTradeCount === 0 && this.ws) {
+                console.log("[Pricing] All trades settled. Hibernating price feed...");
+                this.terminate();
+            }
+        }
     }
 
     init() {
-        const url = 'wss://ws-feed.exchange.coinbase.com';
-        console.log(`[Pricing] Connecting to Institutional Feed: Coinbase...`);
+        if (this.ws) this.terminate();
 
-        this.ws = new WebSocket(url);
+        const p = this.providers[this.currentProviderIndex];
+        console.log(`[Pricing] Connecting to ${p.name}...`);
+        this.ws = new WebSocket(p.url);
 
         this.ws.on('open', () => {
-            console.log(`[Pricing] Coinbase Stream Active`);
-            this.ws.send(JSON.stringify({
-                type: "subscribe",
-                product_ids: Object.keys(this.markets),
-                channels: ["ticker"]
-            }));
+            console.log(`[Pricing] ${p.name} Stream Active`);
+            if (p.name === 'COINBASE') {
+                this.ws.send(JSON.stringify({
+                    type: "subscribe",
+                    product_ids: Object.keys(this.marketsC),
+                    channels: ["ticker"]
+                }));
+            } else if (p.name === 'KRAKEN') {
+                this.ws.send(JSON.stringify({
+                    event: "subscribe",
+                    pair: Object.keys(this.marketsK),
+                    subscription: { name: "ticker" }
+                }));
+            }
         });
 
         this.ws.on('message', (rawData) => {
             try {
                 const data = JSON.parse(rawData);
-                if (data.type === 'ticker' && data.product_id && data.price) {
-                    const internalId = this.markets[data.product_id];
-                    const price = parseFloat(data.price);
-                    if (internalId && price > 0) {
-                        this.prices[internalId] = price;
-                        if (this.onPriceUpdate) this.onPriceUpdate(this.prices);
-                    }
+                let internalId, price;
+
+                if (data.type === 'ticker' && data.product_id && data.price) { // Coinbase
+                    internalId = this.marketsC[data.product_id];
+                    price = parseFloat(data.price);
+                } else if (Array.isArray(data) && data[1]?.c) { // Kraken
+                    internalId = this.marketsK[data[3]];
+                    price = parseFloat(data[1].c[0]);
+                }
+
+                if (internalId && price > 0) {
+                    this.prices[internalId] = price;
+                    if (this.onPriceUpdate) this.onPriceUpdate(this.prices);
                 }
             } catch (e) {}
         });
 
         this.ws.on('error', (err) => {
-            console.error(`[Pricing] Coinbase Error:`, err.message);
+            console.error(`[Pricing] ${p.name} Error:`, err.message);
+            this.cycleProvider();
         });
 
         this.ws.on('close', () => {
-            console.log("[Pricing] Coinbase Feed closed. Reconnecting...");
-            setTimeout(() => this.init(), 3000);
+            if (this.activeTradeCount > 0) {
+                console.log("[Pricing] Feed lost while trade active. Reconnecting...");
+                setTimeout(() => this.init(), 3000);
+            }
         });
+    }
+
+    cycleProvider() {
+        this.currentProviderIndex = (this.currentProviderIndex + 1) % this.providers.length;
+        this.init();
+    }
+
+    terminate() {
+        if (this.ws) {
+            this.ws.terminate();
+            this.ws = null;
+        }
     }
 
     getPrice(marketId) {

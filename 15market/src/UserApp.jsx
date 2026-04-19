@@ -1583,87 +1583,89 @@ export default function UserApp() {
 
 
 
-  // ─── EXCLUSIVE COINBASE WEBSOCKET ─ Premium Price Feed for Chart & UI ───
+  // ─── EXCLUSIVE DIRECT FEED ─ Independent Pipe for Chart & UI ───
   useEffect(() => {
     if (!activeMarket?.binance) return;
 
     let ws;
-    // Map internal symbol to Coinbase product ID (BTCUSDT -> BTC-USD)
-    const sym = activeMarket.binance.toUpperCase().replace('USDT', '-USD');
+    const symCoinbase = activeMarket.binance.toUpperCase().replace('USDT', '-USD');
+    const symKraken = activeMarket.binance.toUpperCase().replace('USDT', '/USD');
     const lastRenderTime = { current: 0 };
+    
+    // Direct providers ONLY - No backend relay
+    const providers = [
+      { name: 'COINBASE', url: 'wss://ws-feed.exchange.coinbase.com' },
+      { name: 'KRAKEN', url: 'wss://ws.kraken.com' }
+    ];
+    let currentIdx = 0;
 
     const connect = () => {
-      if (ws) {
-        try { ws.close(); } catch (e) { }
-      }
+      if (ws) { try { ws.close(); } catch (e) { } }
       
-      console.log(`[Stream] Connecting to Exclusive Feed: Coinbase (${sym})`);
-      // Use absolute WSS path for mobile security (prevents 'insecure operation' on Safari)
-      const feedUrl = 'wss://ws-feed.exchange.coinbase.com';
-      ws = new WebSocket(feedUrl);
+      const p = providers[currentIdx];
+      console.log(`[Stream] Connecting Directly to ${p.name} (${p.url})`);
+      ws = new WebSocket(p.url);
 
       ws.onopen = () => {
-        console.log(`[Stream] Coinbase Connected`);
-        ws.send(JSON.stringify({
-          type: "subscribe",
-          product_ids: [sym],
-          channels: ["ticker"]
-        }));
+        console.log(`[Stream] Direct Connection Active: ${p.name}`);
+        if (p.name === 'COINBASE') {
+          ws.send(JSON.stringify({
+            type: "subscribe",
+            product_ids: [symCoinbase],
+            channels: ["ticker"]
+          }));
+        } else if (p.name === 'KRAKEN') {
+          ws.send(JSON.stringify({
+            event: "subscribe",
+            pair: [symKraken],
+            subscription: { name: "ticker" }
+          }));
+        }
       };
 
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
-        if (data.type !== 'ticker' || !data.price) return;
+        let rawPrice = 0;
 
-        const rawPrice = parseFloat(data.price);
+        if (data.type === 'ticker' && data.price) { // Coinbase
+          rawPrice = parseFloat(data.price);
+        } else if (Array.isArray(data) && data[1]?.c) { // Kraken
+          rawPrice = parseFloat(data[1].c[0]);
+        }
+
         if (!rawPrice || rawPrice <= 0) return;
-        processPrice(rawPrice);
+
+        const truncated = Math.floor(rawPrice * 100) / 100;
+        const pStr = truncated.toFixed(2);
+        const now = Date.now();
+
+        if (pStr !== priceRef.current) {
+          priceRef.current = pStr;
+          lastPriceUpdateRef.current = now;
+          priceHistoryRef.current.push({ p: truncated, t: now });
+          if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+
+          if (now - lastRenderTime.current > 10) {
+            setPrice(pStr);
+            lastRenderTime.current = now;
+          }
+        }
       };
 
       ws.onerror = (err) => {
-        console.warn(`[Stream] Coinbase direct failed. Falling back to Backend Relay...`);
+        console.warn(`[Stream] Direct ${p.name} failed. Attempting next provider...`);
         ws.close();
       };
 
       ws.onclose = () => {
-        setTimeout(connect, 5000);
+        currentIdx = (currentIdx + 1) % providers.length;
+        setTimeout(connect, 3000);
       };
-    };
-
-    const processPrice = (rawPrice) => {
-      const truncated = Math.floor(rawPrice * 100) / 100;
-      const pStr = truncated.toFixed(2);
-      const now = Date.now();
-
-      if (pStr !== priceRef.current) {
-        priceRef.current = pStr;
-        lastPriceUpdateRef.current = now;
-        priceHistoryRef.current.push({ p: truncated, t: now });
-        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
-
-        if (now - lastRenderTime.current > 10) {
-          setPrice(pStr);
-          lastRenderTime.current = now;
-        }
-      }
     };
 
     connect();
 
-    // Secondary/Fallback listener via Socket.io
-    const unbindRelay = socketService.on('price_update', (data) => {
-      if (ws && ws.readyState === WebSocket.OPEN) return; // Ignore relay if direct is active
-      const symInternal = activeMarket.id?.toLowerCase() || 'eth';
-      const relayedPrice = data[symInternal];
-      if (relayedPrice && relayedPrice > 0) {
-        processPrice(relayedPrice);
-      }
-    });
-
-    return () => { 
-      if (ws) ws.close();
-      unbindRelay();
-    };
+    return () => { if (ws) ws.close(); };
   }, [activeMarket]);
 
   // ─── SOCKET.IO: Trade events only (no price) ───
