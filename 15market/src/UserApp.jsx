@@ -1585,88 +1585,19 @@ export default function UserApp() {
 
 
 
-  // ─── GOLDEN SIGNAL ENGINE (RESTORED FROM COMMIT 95cd1b5) ───
-  const fetchCurrentPrice = useCallback(async () => {
-    try {
-      const sources = [];
-      const baseSym = activeMarket.binance.toUpperCase().replace('USDT', '');
-      
-      // 1. Pyth Network (Ultra-low latency Hermes)
-      if (activeMarket.pythId) {
-        const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
-        sources.push({
-          name: "pyth",
-          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
-          parse: d => {
-            const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
-          }
-        });
-      }
+  // ─── CHART-DRIVEN PRICE (Chart is 100% independent) ───
+  // The CustomChart widget owns the Binance WebSocket and pushes
+  // price updates to us via the onPriceUpdate callback.
+  // We no longer run any REST polling for price — the chart is self-sufficient.
+  const handleChartPriceUpdate = useCallback((priceStr) => {
+    if (!priceStr || priceStr === priceRef.current) return;
+    priceRef.current = priceStr;
+    lastPriceUpdateRef.current = Date.now();
+    setPrice(priceStr);
+    setIsLoading(false);
+  }, []);
 
-      // 2. Kraken Public API (Bulletproof - No CORS/Geo-blocks)
-      const krakenSym = baseSym === 'BTC' ? 'XBTUSD' : `${baseSym}USD`;
-      sources.push({
-        name: "kraken",
-        url: `https://api.kraken.com/0/public/Ticker?pair=${krakenSym}`,
-        parse: d => {
-          const k = Object.keys(d.result || {})[0];
-          return k ? parseFloat(d.result[k].c[0]) : null;
-        }
-      });
-
-      // 3. Binance Public API (Global liquidity source)
-      sources.push({
-        name: "binance",
-        url: `https://api.binance.com/api/v3/ticker/price?symbol=${baseSym}USDT`,
-        parse: d => parseFloat(d.price)
-      });
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
-
-      const pricePromises = sources.map(async (src) => {
-        try {
-          const res = await fetch(src.url, { signal: controller.signal });
-          const data = await res.json();
-          const val = src.parse(data);
-          if (!val || isNaN(val)) throw new Error("Invalid");
-          return val;
-        } catch (e) { throw e; }
-      });
-
-      const fastestPrice = await Promise.any(pricePromises);
-      clearTimeout(timeoutId);
-
-      if (fastestPrice > 0) {
-        const truncated = Math.floor(fastestPrice * 100) / 100;
-        const pStr = truncated.toFixed(2);
-        const now = Date.now();
-
-        if (pStr !== priceRef.current) {
-          priceRef.current = pStr;
-          lastPriceUpdateRef.current = now;
-          priceHistoryRef.current.push({ t: now, p: truncated });
-          if (priceHistoryRef.current.length > 300) priceHistoryRef.current.shift();
-          setPrice(pStr);
-          setIsLoading(false);
-        }
-      }
-    } catch (err) { }
-  }, [activeMarket.id]);
-
-  useEffect(() => {
-    let active = true;
-    const loop = async () => {
-      if (!active) return;
-      await fetchCurrentPrice();
-      if (active) setTimeout(loop, 250); // High-frequency 250ms race
-    };
-    loop();
-    return () => { active = false; };
-  }, [fetchCurrentPrice]); // Strict dependency on market ID for switching
-
-  // ─── SOCKET.IO: Trade events only (no price) ───
+  // ─── SOCKET.IO: Trade events + Backend-Authoritative Settlement ───
   useEffect(() => {
     socketService.connect();
 
@@ -1675,10 +1606,69 @@ export default function UserApp() {
       localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
     });
 
+    // ── BACKEND-AUTHORITATIVE SETTLEMENT ──
+    // The backend is the ONLY source of truth for trade results.
+    // It monitors price via high-speed feed during the trade, locks the
+    // exit price at expiry, settles on-chain, and emits this event.
+    const unbindSettled = socketService.on('trade_settled', (data) => {
+      if (!data?.betId) return;
+
+      // Only process if this trade belongs to the current user (main or session wallet)
+      const isMine = data.userAddr && (
+        (address && data.userAddr.toLowerCase() === address.toLowerCase()) ||
+        (evmSessionWallet && data.userAddr.toLowerCase() === evmSessionWallet.address.toLowerCase())
+      );
+
+      if (!isMine) return;
+
+      const betId = data.betId.toString();
+      const finalStatus = data.won ? 'WON' : 'LOST';
+      const exitPrice = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
+      const payout = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
+
+      console.log(`[Settlement] Backend settled #${betId}: ${finalStatus} @ $${exitPrice}`);
+
+      // Lock the result so no other path can override it
+      lockedResults.current.set(betId, { status: finalStatus, settlementPrice: exitPrice });
+
+      const updateTrade = (t) => {
+        const isMatch = (t.id && t.id.toString() === betId) ||
+          (t.nonce && t.nonce.toString() === betId);
+        if (isMatch) {
+          return {
+            ...t,
+            status: finalStatus,
+            settlementPrice: exitPrice,
+            payout,
+            backendSettled: true,
+            chainConfirmed: true,
+          };
+        }
+        return t;
+      };
+
+      setActiveTrades(prev => prev.map(updateTrade));
+      setTradeHistory(prev => prev.map(updateTrade));
+
+      if (data.won) {
+        notify(`Trade WON! +$${payout}`, 'success');
+      } else {
+        notify('Trade LOST.', 'error');
+      }
+
+      // Refresh balance after settlement
+      lastOptimisticActionTime.current = 0;
+      setTimeout(() => {
+        updateEvmSessionBal(true);
+        refetchEvmBalance(true);
+      }, 1500);
+    });
+
     return () => {
       unbindSettings();
+      unbindSettled();
     };
-  }, []);
+  }, [notify, updateEvmSessionBal, refetchEvmBalance, address, evmSessionWallet]);
 
   // Sync Market Changes (Across Ports via Keeper)
   useEffect(() => {
@@ -2655,14 +2645,11 @@ export default function UserApp() {
                             <CustomChart
                               symbol={activeMarket.binance}
                               theme={theme}
-                              network={network}
                               activeMarket={activeMarket}
                               uiVersion={uiVersion}
                               setActiveMarket={handleMarketChange}
                               activeTrades={activeTrades}
-                              currentPrice={price}
-                              priceHistory={priceHistoryRef.current}
-                              onPriceUpdate={setPrice}
+                              onPriceUpdate={handleChartPriceUpdate}
                             />
                           )}
                         </div>

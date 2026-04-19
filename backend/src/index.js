@@ -237,68 +237,110 @@ app.post('/session/execute', async (req, res) => {
     io.to(addr).emit('trade_placed', { id, txHash: receipt.hash });
     emitAdminStats(); // Event-driven update
 
-    // --- AUTOMATED SETTLEMENT TIMER ---
+    // --- AUTOMATED SETTLEMENT TIMER (SUBSECOND FINALITY) ---
+    // Backend is the SOLE authority for trade results. Price feed is
+    // monitored in real-time for the duration of this trade. At expiry,
+    // the exit price is locked and used as the only source of truth.
     const durationMs = parseInt(duration) * 1000;
     setTimeout(async () => {
         try {
-            console.log(`[Settlement] Timer expired for trade #${id}. Settling...`);
+            console.log(`[Settlement] Timer expired for trade #${id}. Locking exit price...`);
             const assetMap = ['eth', 'btc', 'sol'];
             const symbol = assetMap[marketId] || 'eth';
+
+            // LOCK EXIT PRICE — This is the final, authoritative price for settlement
             const exitPrice = pricing.getPrice(symbol);
 
             if (!exitPrice || exitPrice <= 0) {
-                console.error(`[Settlement] Price missing for ${symbol} at expiry of #${id}`);
+                console.error(`[Settlement] CRITICAL: Price missing for ${symbol} at expiry of #${id}. Retrying in 2s...`);
+                // Retry once after 2s in case of brief feed interruption
+                setTimeout(async () => {
+                    const retryPrice = pricing.getPrice(symbol);
+                    if (!retryPrice || retryPrice <= 0) {
+                        console.error(`[Settlement] Price still missing for #${id}. Marking as LOST by default.`);
+                        const lossData = {
+                            type: 'TRADE_SETTLED', betId: id, won: false, payout: '0.00',
+                            exitPrice: 0, entryPrice, timestamp: Date.now(), userAddr: addr
+                        };
+                        await redis.lpush(`activity:${addr}`, JSON.stringify(lossData));
+                        io.to(addr).emit('trade_settled', lossData);
+                        io.emit('trade_settled', lossData);
+                        await redis.srem('active_trades', id);
+                        pricing.trackTrade(false);
+                        return;
+                    }
+                    // Process with retry price
+                    await settleTradeWithPrice(retryPrice);
+                }, 2000);
                 return;
             }
 
-            // Calculate win/loss
-            let entryPriceNum = parseFloat(entryPrice);
-            if (marketId === 2) entryPriceNum = entryPriceNum / 1000000; // SOL scaling if applicable
-            else entryPriceNum = entryPriceNum / 100;
+            await settleTradeWithPrice(exitPrice);
 
-            const isUp = parseInt(direction) === 1;
-            const won = isUp ? exitPrice > entryPriceNum : exitPrice < entryPriceNum;
+            async function settleTradeWithPrice(lockedExitPrice) {
+                // Calculate win/loss against locked price
+                let entryPriceNum = parseFloat(entryPrice);
+                if (marketId === 2) entryPriceNum = entryPriceNum / 1000000;
+                else entryPriceNum = entryPriceNum / 100;
 
-            // Execute on-chain with Priority
-            let scaledExitPrice = exitPrice;
-            if (marketId === 2) scaledExitPrice = Math.floor(exitPrice * 1000000);
-            else scaledExitPrice = Math.floor(exitPrice * 100);
+                const isUp = parseInt(direction) === 1;
+                const won = isUp ? lockedExitPrice > entryPriceNum : lockedExitPrice < entryPriceNum;
 
-            // Don't await the wait() - just broadcast and let the listener handle the rest
-            const settlementTx = await blockchain.settleBet(id, scaledExitPrice);
-            console.log(`[Settlement] Broadcasted settlement for #${id}. TX: ${settlementTx.hash}`);
+                // Execute on-chain settlement via Thirdweb high-speed RPC
+                let scaledExitPrice = lockedExitPrice;
+                if (marketId === 2) scaledExitPrice = Math.floor(lockedExitPrice * 1000000);
+                else scaledExitPrice = Math.floor(lockedExitPrice * 100);
 
-            const multiplier = parseInt(duration) <= 5 ? 2.90 : (parseInt(duration) <= 10 ? 2.40 : 1.90);
-            const payout = won ? (stake * multiplier).toFixed(4) : "0.00";
+                const settlementTx = await blockchain.settleBet(id, scaledExitPrice);
+                console.log(`[Settlement] On-chain TX for #${id}: ${settlementTx?.hash || 'N/A'}`);
 
-            const activityData = {
-                type: 'TRADE_SETTLED',
-                betId: id,
-                won,
-                payout,
-                exitPrice,
-                timestamp: Date.now(),
-                userAddr: addr
-            };
+                const multiplier = parseInt(duration) <= 5 ? 2.90 : (parseInt(duration) <= 10 ? 2.40 : 1.90);
+                const payout = won ? (stake * multiplier).toFixed(4) : "0.00";
 
-            await redis.lpush(`activity:${addr}`, JSON.stringify(activityData));
-            io.emit('trade_settled', activityData);
+                // Build authoritative settlement event
+                const settlementEvent = {
+                    type: 'TRADE_SETTLED',
+                    betId: id,
+                    won,
+                    payout,
+                    exitPrice: lockedExitPrice,
+                    entryPrice,
+                    direction,
+                    duration,
+                    marketId,
+                    amount: stake,
+                    timestamp: Date.now(),
+                    userAddr: addr,
+                    txHash: settlementTx?.hash || null
+                };
 
-            io.to(addr).emit('balance_update', {
-                balance: await blockchain.getBalance(addr), // approximate main if needed, but session is better
-                reason: won ? 'WIN' : 'LOSS',
-                betId: id,
-                payout
-            });
+                // Persist to activity history
+                await redis.lpush(`activity:${addr}`, JSON.stringify(settlementEvent));
 
-            console.log(`[Settlement] Auto-settled trade #${id}: ${won ? 'WON' : 'LOST'} @ $${exitPrice}`);
-            await redis.srem('active_trades', id); // Cleanup set
-            pricing.trackTrade(false); // Hibernate if last trade settled
-            emitAdminStats(); // Event-driven update
+                // EMIT TO USER'S PRIVATE ROOM (targeted, instant delivery)
+                io.to(addr).emit('trade_settled', settlementEvent);
+                // EMIT GLOBALLY (for admin dashboard and observers)
+                io.emit('trade_settled', settlementEvent);
+
+                // Also emit balance update for immediate UI sync
+                const sessionAddr = await redis.get(`addr:${addr}`);
+                const balanceAddr = sessionAddr || addr;
+                io.to(addr).emit('balance_update', {
+                    balance: await blockchain.getBalance(balanceAddr),
+                    reason: won ? 'WIN' : 'LOSS',
+                    betId: id,
+                    payout
+                });
+
+                console.log(`[Settlement] ✓ Trade #${id}: ${won ? 'WON' : 'LOST'} @ $${lockedExitPrice} | Payout: ${payout}`);
+                await redis.srem('active_trades', id);
+                pricing.trackTrade(false);
+                emitAdminStats();
+            }
         } catch (e) {
             console.error(`[Settlement] Auto-settlement failed for trade #${id}:`, e.message);
         }
-    }, durationMs + 1000); // 1s buffer for chain propagation
+    }, durationMs + 500); // 500ms buffer for subsecond finality
 
     res.json({ success: true, txHash: receipt.hash });
   } catch (error) {
