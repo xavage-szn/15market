@@ -3,7 +3,9 @@ require('dotenv').config();
 
 const ARC_RPCS = [
   "https://arc-testnet.g.alchemy.com/v2/7eF4g7VDugrZQdNDi_HMj",
-  "https://rpc.testnet.arc.network"
+  "https://rpc.testnet.arc.network",
+  "https://arc-testnet.drpc.org",
+  "https://rpc.blockdaemon.testnet.arc.network"
 ];
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
@@ -142,9 +144,10 @@ class BlockchainService {
       const tx = await Promise.any(this.contracts.map((c, i) => broadcastPromise(c, i)()));
       return { hash: tx.hash };
     } catch (error) {
-      console.error(`[Blockchain] All ${this.contracts.length} trade broadcasts failed for ${betId}:`, error.message);
+      const detailedError = error.errors ? error.errors.map(e => e.message).join(' | ') : error.message;
+      console.error(`[Blockchain] All ${this.contracts.length} trade broadcasts failed for ${betId}: ${detailedError}`);
       this.localNonce = null;
-      throw error;
+      throw new Error(`Blockchain Broadcast Failed: ${detailedError}`);
     }
   }
 
@@ -193,8 +196,9 @@ class BlockchainService {
       const tx = await Promise.any(broadcastRace);
       return { hash: tx.hash };
     } catch (error) {
-      console.error(`[Blockchain] Native broadcast failed across ALL providers for ${betId}:`, error.message);
-      throw error;
+      const detailedError = error.errors ? error.errors.map(e => e.message).join(' | ') : error.message;
+      console.error(`[Blockchain] Native broadcast failed across ALL providers for ${betId}: ${detailedError}`);
+      throw new Error(`On-chain Execution Failed: ${detailedError}`);
     }
   }
 
