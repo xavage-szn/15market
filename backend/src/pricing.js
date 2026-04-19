@@ -2,66 +2,83 @@ const WebSocket = require('ws');
 
 class PricingService {
     constructor() {
-        this.prices = {
-            btc: 0,
-            eth: 0,
-            sol: 0
-        };
-        this.markets = {
-            'BTCUSDT': 'btc',
-            'ETHUSDT': 'eth',
-            'SOLUSDT': 'sol'
-        };
+        this.prices = { btc: 0, eth: 0, sol: 0 };
+        this.markets = { 'BTCUSDT': 'btc', 'ETHUSDT': 'eth', 'SOLUSDT': 'sol' };
         this.ws = null;
         this.onPriceUpdate = null;
+        this.currentProviderIndex = 0;
+        this.providers = [
+            `wss://stream.binance.com:9443/stream?streams=`,
+            `wss://stream.binance.us:9443/stream?streams=`,
+            `wss://wsprod.okx.com:8443/ws/v5/public` // Neutral fallback
+        ];
         this.init();
     }
 
     init() {
-        if (this.ws) {
-            try { this.ws.close(); } catch (e) {}
+        const baseUrl = this.providers[this.currentProviderIndex];
+        console.log(`[Pricing] Attempting connection to Provider ${this.currentProviderIndex}: ${baseUrl}`);
+
+        if (baseUrl.includes('binance')) {
+            const streams = Object.keys(this.markets).map(m => `${m.toLowerCase()}@aggTrade`).join('/');
+            this.ws = new WebSocket(`${baseUrl}${streams}`);
+        } else {
+            // OKX / Alternative Logic
+            this.ws = new WebSocket(baseUrl);
         }
 
-        console.log("[Pricing] Connecting to Binance WebSocket...");
-        // aggTrade stream for real-time sub-second price
-        const streams = Object.keys(this.markets).map(m => `${m.toLowerCase()}@aggTrade`).join('/');
-        this.ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
-
         this.ws.on('open', () => {
-            console.log("[Pricing] Binance WebSocket Connected");
+            console.log(`[Pricing] Connected to Priority Feed (Provider ${this.currentProviderIndex})`);
+            if (baseUrl.includes('okx')) {
+                // Subscribe to OKX tickers
+                const args = Object.keys(this.markets).map(m => ({ channel: "index-tickers", instId: m.replace('USDT', '-USDT') }));
+                this.ws.send(JSON.stringify({ op: "subscribe", args }));
+            }
         });
 
         this.ws.on('message', (rawData) => {
             try {
                 const data = JSON.parse(rawData);
-                const stream = data.stream;
-                const payload = data.data;
-                
-                const symbol = payload.s; // Symbol
-                const price = parseFloat(payload.p); // Price
-                const internalId = this.markets[symbol];
+                let symbol, price;
 
-                if (internalId && price > 0) {
-                    if (this.prices[internalId] !== price) {
-                        this.prices[internalId] = price;
-                        if (this.onPriceUpdate) {
-                            this.onPriceUpdate(this.prices);
-                        }
-                    }
+                if (data.stream && data.data) {
+                    // Binance Format
+                    symbol = data.data.s;
+                    price = parseFloat(data.data.p);
+                } else if (data.arg && data.data) {
+                    // OKX Format
+                    symbol = data.arg.instId.replace('-', '');
+                    price = parseFloat(data.data[0].idxPx);
                 }
-            } catch (e) {
-                // console.warn("[Pricing] Message error:", e.message);
-            }
+
+                const internalId = this.markets[symbol];
+                if (internalId && price > 0) {
+                    this.prices[internalId] = price;
+                    if (this.onPriceUpdate) this.onPriceUpdate(this.prices);
+                }
+            } catch (e) {}
         });
 
         this.ws.on('error', (err) => {
-            console.warn("[Pricing] WebSocket Error:", err.message);
+            console.warn(`[Pricing] Provider ${this.currentProviderIndex} Error:`, err.message);
+            if (err.message.includes('451')) {
+                console.error("🛑 [Pricing] Region blocked by provider. Switching region...");
+            }
+            this.cycleProvider();
         });
 
         this.ws.on('close', () => {
-            console.log("[Pricing] WebSocket Closed. Reconnecting in 5s...");
+            console.log("[Pricing] Feed closed. Reconnecting...");
             setTimeout(() => this.init(), 5000);
         });
+    }
+
+    cycleProvider() {
+        this.currentProviderIndex = (this.currentProviderIndex + 1) % this.providers.length;
+        if (this.ws) {
+            this.ws.terminate();
+            this.ws = null;
+        }
     }
 
     getPrice(marketId) {
