@@ -254,12 +254,14 @@ app.post('/session/execute', async (req, res) => {
             const isUp = parseInt(direction) === 1;
             const won = isUp ? exitPrice > entryPriceNum : exitPrice < entryPriceNum;
 
-            // Execute on-chain
+            // Execute on-chain with Priority
             let scaledExitPrice = exitPrice;
             if (marketId === 2) scaledExitPrice = Math.floor(exitPrice * 1000000);
             else scaledExitPrice = Math.floor(exitPrice * 100);
 
-            await blockchain.settleBet(id, scaledExitPrice);
+            // Don't await the wait() - just broadcast and let the listener handle the rest
+            const settlementTx = await blockchain.settleBet(id, scaledExitPrice);
+            console.log(`[Settlement] Broadcasted settlement for #${id}. TX: ${settlementTx.hash}`);
 
             const multiplier = parseInt(duration) <= 5 ? 2.90 : (parseInt(duration) <= 10 ? 2.40 : 1.90);
             const payout = won ? (stake * multiplier).toFixed(4) : "0.00";
@@ -464,6 +466,36 @@ app.post('/active-market', (req, res) => {
   } else {
     res.status(400).json({ error: "activeId required" });
   }
+});
+
+app.post('/admin/flush-trades', async (req, res) => {
+    const { token } = req.body;
+    if (token !== process.env.ADMIN_TOKEN) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+        const activeIds = await redis.smembers('active_trades');
+        console.log(`[Admin] Force-settling ${activeIds.length} trades as LOSS before purge...`);
+
+        for (const id of activeIds) {
+            try {
+                const raw = await redis.get(`trade:${id}`);
+                if (raw) {
+                    const trade = JSON.parse(raw);
+                    const exitPrice = (trade.direction === 1 || trade.direction === "UP") ? 10 : 999999999; // Force Loss
+                    await blockchain.settleBet(id, Math.floor(exitPrice * 100));
+                }
+            } catch (e) {
+                console.warn(`[Admin] Could not settle #${id} on-chain:`, e.message);
+            }
+        }
+
+        await redis.flushall();
+        blockchain.localNonces = {};
+        console.log(`[Admin] TOTAL SYSTEM PURGE COMPLETE.`);
+        res.json({ success: true, message: `System Reset: ${activeIds.length} trades purged.` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get('/time', (req, res) => res.json({ time: Date.now() }));

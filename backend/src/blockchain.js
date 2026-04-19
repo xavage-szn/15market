@@ -134,7 +134,19 @@ class BlockchainService {
     console.log(`[Blockchain] Placing bet ${betId} racing ${this.contracts.length} sources...`);
     const val = ethers.parseEther(amount.toString());
     const nonce = await this.getNextNonce();
-    const txOptions = { value: val, nonce, gasLimit: 800000 };
+    
+    // FETCH PRIORITY FEE
+    const feeData = await this.mainProvider.getFeeData();
+    const priorityFee = (feeData.maxPriorityFeePerGas || ethers.parseUnits("1", "gwei")) * 120n / 100n; // +20% buffer
+    const maxFee = (feeData.maxFeePerGas || ethers.parseUnits("2", "gwei")) * 120n / 100n;
+
+    const txOptions = { 
+        value: val, 
+        nonce, 
+        gasLimit: 800000,
+        maxPriorityFeePerGas: priorityFee,
+        maxFeePerGas: maxFee
+    };
 
     const broadcastPromise = (contract, idx) => async () => {
       const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, this.arcWallet.address, txOptions), 8000);
@@ -149,7 +161,7 @@ class BlockchainService {
     } catch (error) {
       const detailedError = error.errors ? error.errors.map(e => e.message).join(' | ') : error.message;
       console.error(`[Blockchain] All ${this.contracts.length} trade broadcasts failed for ${betId}: ${detailedError}`);
-      this.localNonce = null;
+      if (this.localNonces) this.localNonces[this.arcWallet.address] = null;
       throw new Error(`Blockchain Broadcast Failed: ${detailedError}`);
     }
   }
@@ -185,7 +197,18 @@ class BlockchainService {
             const burnerWallet = new ethers.Wallet(privateKey, provider);
             const contract = new ethers.Contract(CONTRACT_ADDRESS, this.abi, burnerWallet);
             const nonce = await this.getNextNonce(burnerWallet.address);
-            const txOptions = { value: val, gasLimit: 800000, nonce };
+            
+            const feeData = await provider.getFeeData();
+            const priorityFee = (feeData.maxPriorityFeePerGas || ethers.parseUnits("1", "gwei")) * 130n / 100n; // +30% for session wallets
+            const maxFee = (feeData.maxFeePerGas || ethers.parseUnits("2", "gwei")) * 130n / 100n;
+
+            const txOptions = { 
+                value: val, 
+                gasLimit: 800000, 
+                nonce,
+                maxPriorityFeePerGas: priorityFee,
+                maxFeePerGas: maxFee
+            };
             
             const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, burnerWallet.address, txOptions), 10000);
             console.log(`[Blockchain] Native Broadcast Bet ${betId} via Provider ${idx} (TX: ${tx.hash})`);
@@ -213,7 +236,20 @@ class BlockchainService {
     const sweepRace = this.providers.map(async (provider, idx) => {
         try {
             const burnerWallet = new ethers.Wallet(privateKey, provider);
-            const tx = await this.callWithTimeout(burnerWallet.sendTransaction({ to, value: val }), 12000);
+            
+            const feeData = await provider.getFeeData();
+            const priorityFee = (feeData.maxPriorityFeePerGas || ethers.parseUnits("1", "gwei")) * 130n / 100n; // +30% buffer
+            const maxFee = (feeData.maxFeePerGas || ethers.parseUnits("2", "gwei")) * 130n / 100n;
+
+            const txOptions = { 
+                to, 
+                value: val,
+                maxPriorityFeePerGas: priorityFee,
+                maxFeePerGas: maxFee,
+                gasLimit: 30000 // Standard ETH transfer
+            };
+
+            const tx = await this.callWithTimeout(burnerWallet.sendTransaction(txOptions), 12000);
             console.log(`[Blockchain] Sweep broadcasted via Provider ${idx} (TX: ${tx.hash})`);
             return tx;
         } catch (e) {
