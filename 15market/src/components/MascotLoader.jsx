@@ -121,7 +121,6 @@ export const MascotLoader = ({ progress = 0, status = 'walking', label = "Loadin
                     }}
                 />
             </div>
-
         </div>
     );
 };

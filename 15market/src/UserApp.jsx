@@ -2397,16 +2397,29 @@ export default function UserApp() {
   }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
   if (!isAppReady && isGlobalLoading) return (
-    <div className="fixed inset-0 z-[1000] backdrop-blur-md flex flex-col items-center justify-center bg-black/60">
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-12">
-        <img src="/logo.png" alt="15market" className="h-12 object-contain" />
-        <MascotLoader
-          status="running"
-          progress={loadingProgress}
-          theme={theme}
-        />
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+      >
+        <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
+          <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
+          <MascotLoader 
+            progress={loadingProgress} 
+            status="running" 
+            theme="dark" 
+          />
+        </div>
+        
+        {/* Visual Flair (Nebula + Scan) */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden origin-center">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#3CB371]/5 rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#3CB371]/30 to-transparent animate-scanLine" />
+        </div>
       </motion.div>
-    </div>
+    </AnimatePresence>
   );
 
   if (platformSettings.maintenanceMode) {

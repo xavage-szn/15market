@@ -110,6 +110,21 @@ body {
   animation: pulse-soft 3s ease-in-out infinite;
 }
 
+@keyframes scanLine {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+.animate-scanLine {
+  animation: scanLine 4s linear infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+
 /* Glassmorphism Utilities */
 .glass-panel {
   background: var(--glass-bg);
