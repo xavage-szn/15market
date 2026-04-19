@@ -114,19 +114,26 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             const windowMs = 20000;
             const oldest = nowPx - windowMs;
 
-            // Y-Scale
-            const visiblePts = history.filter(pt => pt.t >= oldest);
+            // Optimized Windowing: Find first visible point without full filter
+            let firstVisibleIdx = 0;
+            while (firstVisibleIdx < history.length && history[firstVisibleIdx].t < oldest) {
+                firstVisibleIdx++;
+            }
+            const visiblePts = history.slice(firstVisibleIdx);
+
             let lo = latestPriceVal * 0.9998;
             let hi = latestPriceVal * 1.0002;
 
             if (visiblePts.length > 0) {
-                const prices = visiblePts.map(pt => pt.p);
-                const pMin = Math.min(...prices, latestPriceVal);
-                const pMax = Math.max(...prices, latestPriceVal);
+                let pMin = latestPriceVal;
+                let pMax = latestPriceVal;
+                for (let i = 0; i < visiblePts.length; i++) {
+                    const p = visiblePts[i].p;
+                    if (p < pMin) pMin = p;
+                    if (p > pMax) pMax = p;
+                }
                 
-                // Centering Logic: find max deviation from current price
                 const deviation = Math.max(pMax - latestPriceVal, latestPriceVal - pMin);
-                // Use a minimum deviation of 0.05% of price to avoid flat lines
                 const minDev = latestPriceVal * 0.0005;
                 const finalDev = Math.max(deviation, minDev);
 
@@ -171,14 +178,14 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
                 ctx.beginPath();
                 let firstVisibleX = -1;
-                history.forEach((pt) => {
+                for (let i = firstVisibleIdx; i < history.length; i++) {
+                    const pt = history[i];
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    // Allow points slightly off-screen to ensure path reaches the edge
-                    if (x < -100 || x > W + 600) return; // Allow more history off-screen right
+                    if (x > W + 600) break; 
                     if (firstVisibleX === -1) { ctx.moveTo(x, y); firstVisibleX = x; }
                     else ctx.lineTo(x, y);
-                });
+                }
                 ctx.lineTo(liveX, liveY);
                 if (firstVisibleX !== -1) {
                     ctx.lineTo(liveX, H);
@@ -195,17 +202,18 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 ctx.lineJoin = 'round';
                 ctx.beginPath();
                 let started = false;
-                history.forEach((pt) => {
+                for (let i = firstVisibleIdx; i < history.length; i++) {
+                    const pt = history[i];
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x < -100 || x > W + 600) return;
+                    if (x > W + 600) break;
                     if (!started) {
                         ctx.moveTo(x, y);
                         started = true;
                     } else {
                         ctx.lineTo(x, y);
                     }
-                });ctx.lineTo(liveX, liveY);
+                }ctx.lineTo(liveX, liveY);
                 ctx.stroke();
 
                 // Horizontal Price Line (Crosshair)

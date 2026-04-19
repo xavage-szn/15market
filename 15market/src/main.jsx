@@ -22,8 +22,8 @@ const queryClient = new QueryClient();
   const suppressedErrors = [
     "TypeError: Cannot read properties of undefined (reading 'includes')", // Para SDK Storage Listener bug
     "violates the document's Content Security Policy", // CSP noise
-    "hermes.pyth.network/v2/updates/price/latest", // Pyth redundancy failures
-    "benchmarks.pyth.network/v1/updates/price/latest" // Pyth redundancy failures
+    "api.binance.com", // Binance monitoring
+    "stream.binance.com" // WebSocket monitoring
   ];
 
   console.error = (...args) => {

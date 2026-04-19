@@ -419,7 +419,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             { id: 'mon', symbol: 'MON', name: 'Monad' },
         ];
         const savedRaw = localStorage.getItem('15market_listed_tokens');
-        if (savedRaw && savedRaw.toLowerCase().includes('rice')) {
+        if (savedRaw && (savedRaw.toLowerCase().includes('price') || !savedRaw.includes('binance'))) {
             localStorage.removeItem('15market_listed_tokens');
             return defaultList;
         }

@@ -439,9 +439,10 @@ app.get('/protocol-stats', async (req, res) => {
 
 app.get('/listings', (req, res) => {
   res.json([
-    { id: 'btc', symbol: 'BTC', name: 'Bitcoin' },
-    { id: 'eth', symbol: 'ETH', name: 'Ethereum' },
-    { id: 'sol', symbol: 'SOL', name: 'Solana' }
+    { id: 'btc', symbol: 'BTC', name: 'Bitcoin', binance: 'BTCUSDT' },
+    { id: 'eth', symbol: 'ETH', name: 'Ethereum', binance: 'ETHUSDT' },
+    { id: 'sol', symbol: 'SOL', name: 'Solana', binance: 'SOLUSDT' },
+    { id: 'mon', symbol: 'MON', name: 'Monad', binance: 'SOLUSDT' },
   ]);
 });
 

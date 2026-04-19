@@ -47,7 +47,7 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
         try {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), 3000);
-            
+
             const res = await fetch(`${KEEPER_URL_ROUNDS}/access/check/${address}`, {
                 cache: 'no-store',
                 signal: controller.signal
@@ -154,7 +154,10 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
 
     // ─── Guard conditions ─────────────────────────────────────────────────────
 
-    // While checking, show nothing (prevents flicker of protected content)
+    // Only render children instantly when active=false (non-rounds mode) OR verified by server
+    if (!active || hasAccess) return children;
+
+    // While checking for Rounds mode specifically, show loading spinner
     if (isChecking) {
         return (
             <div className="w-full h-full min-h-[400px] flex items-center justify-center">
@@ -165,9 +168,6 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
             </div>
         );
     }
-
-    // Only render children when active=false (non-rounds mode) OR verified by server
-    if (!active || hasAccess) return children;
 
     // ─── Gate UI ──────────────────────────────────────────────────────────────
     return (
@@ -182,9 +182,8 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className={`relative z-10 max-w-md w-full p-8 rounded-[40px] border shadow-2xl ${
-                            isDark ? 'bg-[#0f110f] border-white/10 text-white' : 'bg-white border-[#3CB371]/20 text-black'
-                        }`}
+                        className={`relative z-10 max-w-md w-full p-8 rounded-[40px] border shadow-2xl ${isDark ? 'bg-[#0f110f] border-white/10 text-white' : 'bg-white border-[#3CB371]/20 text-black'
+                            }`}
                     >
                         <div className="flex flex-col items-center text-center">
                             <motion.div
@@ -215,9 +214,8 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
                                     placeholder="ENTER ACCESS CODE"
                                     maxLength={12}
                                     disabled={!address || isVerifying}
-                                    className={`w-full px-6 py-5 rounded-2xl text-center font-black tracking-widest outline-none border-2 transition-all disabled:opacity-40 ${
-                                        isDark ? 'bg-white/5 border-white/5 focus:border-[#3CB371]/30' : 'bg-black/5 border-black/5 focus:border-[#3CB371]/30'
-                                    } ${error ? 'border-red-500/50 animate-shake' : ''}`}
+                                    className={`w-full px-6 py-5 rounded-2xl text-center font-black tracking-widest outline-none border-2 transition-all disabled:opacity-40 ${isDark ? 'bg-white/5 border-white/5 focus:border-[#3CB371]/30' : 'bg-black/5 border-black/5 focus:border-[#3CB371]/30'
+                                        } ${error ? 'border-red-500/50 animate-shake' : ''}`}
                                 />
                                 <button
                                     onClick={handleVerify}
@@ -261,9 +259,8 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className={`relative z-10 max-w-md w-full p-8 rounded-[40px] border shadow-2xl ${
-                            isDark ? 'bg-[#0f110f] border-white/10 text-white' : 'bg-white border-[#3CB371]/20 text-black'
-                        }`}
+                        className={`relative z-10 max-w-md w-full p-8 rounded-[40px] border shadow-2xl ${isDark ? 'bg-[#0f110f] border-white/10 text-white' : 'bg-white border-[#3CB371]/20 text-black'
+                            }`}
                     >
                         <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Beta Application</h2>
                         <p className={`text-[10px] font-bold uppercase tracking-widest mb-6 ${isDark ? 'text-white/40' : 'text-black/40'}`}>
@@ -310,9 +307,8 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
                         key="success"
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className={`relative z-10 max-w-md w-full p-8 rounded-[40px] border shadow-2xl text-center ${
-                            isDark ? 'bg-[#0f110f] border-white/10 text-white' : 'bg-white border-[#3CB371]/20 text-black'
-                        }`}
+                        className={`relative z-10 max-w-md w-full p-8 rounded-[40px] border shadow-2xl text-center ${isDark ? 'bg-[#0f110f] border-white/10 text-white' : 'bg-white border-[#3CB371]/20 text-black'
+                            }`}
                     >
                         <ShieldCheck size={48} className="text-[#3CB371] mx-auto mb-4" />
                         <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Application Sent!</h2>
@@ -349,9 +345,8 @@ const GateInput = ({ icon, placeholder, value, onChange, type = 'text', isDark, 
             value={value}
             onChange={e => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`w-full pl-12 pr-6 py-4 rounded-xl text-xs font-bold outline-none border-2 transition-all ${
-                isDark ? 'bg-white/5 border-white/5 focus:border-[#3CB371]/30' : 'bg-black/5 border-black/5 focus:border-[#3CB371]/30'
-            }`}
+            className={`w-full pl-12 pr-6 py-4 rounded-xl text-xs font-bold outline-none border-2 transition-all ${isDark ? 'bg-white/5 border-white/5 focus:border-[#3CB371]/30' : 'bg-black/5 border-black/5 focus:border-[#3CB371]/30'
+                }`}
         />
     </div>
 );

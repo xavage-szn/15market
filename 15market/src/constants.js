@@ -43,9 +43,11 @@ const PRODUCTION_BACKEND = "https://api.15market.online";
 const getBaseUrl = (envValue) => {
     // Directly use the provided environment variable, or fallback to the production backend.
     // This allows localhost to test against production by simply setting it in .env
-    const final = envValue || PRODUCTION_BACKEND;
+    const final = envValue || (isLocal ? "http://localhost:3010" : PRODUCTION_BACKEND);
     if (isLocal && final === PRODUCTION_BACKEND) {
         console.log("🛠️ [Config] Connecting to Production Backend from Localhost");
+    } else if (isLocal) {
+        console.log(`🛠️ [Config] Local Mode: Using ${final}`);
     }
     return final;
 };

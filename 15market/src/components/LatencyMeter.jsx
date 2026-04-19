@@ -23,9 +23,9 @@ export function LatencyMeter({ currentNetwork = 'arc' }) {
             const rpcTime = Math.round(rpcEnd - rpcStart);
             setRpcLatency(rpcTime);
 
-            // Measure Price API Latency (Pyth Hermes as primary)
+            // Measure Price API Latency (Binance as primary)
             const priceStart = performance.now();
-            await fetch("https://hermes.pyth.network/v2/updates/price/latest?ids[]=0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d");
+            await fetch("https://api.binance.com/api/v3/ping");
             const priceEnd = performance.now();
             const priceTime = Math.round(priceEnd - priceStart);
             setPriceLatency(priceTime);

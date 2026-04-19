@@ -715,6 +715,7 @@ export default function UserApp() {
   const activeTradesRef = useRef([]);
   const tradeHistoryRef = useRef([]);
   const priceRef = useRef("0.00");
+  const lastPriceUpdateRef = useRef(Date.now());
   const priceHistoryRef = useRef([]);
   const lastOptimisticActionTime = useRef(0);
   // 🔒 RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
@@ -748,6 +749,10 @@ export default function UserApp() {
   }, []);
 
   const showPortraitLock = false; 
+
+  const handleRoundsUnlock = useCallback(() => {
+    console.log('[AccessGate] Rounds access verified & unlocked');
+  }, []);
 
 
 
@@ -1546,15 +1551,15 @@ export default function UserApp() {
 
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT' },
-      { id: 'sol', symbol: 'SOL', name: 'Solana', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT' },
-      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x4896f6ea3b80e77d6ba58d55d214a1a38459207e2c9f52f41682f6f58fe64f16', binance: 'SOLUSDT' }, // Temp fallback for MON
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', binance: 'ETHUSDT' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', binance: 'BTCUSDT' },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', binance: 'SOLUSDT' },
+      { id: 'mon', symbol: 'MON', name: 'Monad', binance: 'SOLUSDT' }, 
     ];
 
     // MIGRATION: Purge legacy tokens missing high-frequency IDs
     const saved = localStorage.getItem('15market_listed_tokens');
-    const needsMigration = !saved || !saved.includes('pythId') || !saved.includes('binance') || saved.toLowerCase().includes('rice');
+    const needsMigration = !saved || !saved.includes('binance') || saved.toLowerCase().includes('price');
     
     if (needsMigration) {
         localStorage.removeItem('15market_listed_tokens');
@@ -1562,9 +1567,13 @@ export default function UserApp() {
         return defaultTokens[0];
     }
 
-    const listed = saved ? JSON.parse(saved) : defaultTokens;
+    const listedRaw = saved ? JSON.parse(saved) : defaultTokens;
     const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
-    return listed.find(t => t.id === activeId) || listed[0];
+    const found = listedRaw.find(t => t.id === activeId) || listedRaw[0];
+
+    // V2 ROBUSTNESS: Always merge with default metadata to ensure binance symbol exists
+    const defaultData = defaultTokens.find(t => t.id === found.id) || defaultTokens[0];
+    return { ...defaultData, ...found };
   });
 
 
@@ -1578,6 +1587,7 @@ export default function UserApp() {
 
     let ws;
     const sym = activeMarket.binance.toLowerCase();
+    const lastRenderTime = { current: 0 }; // Local throttle ref for this market session
 
     const connect = () => {
       if (ws) ws.close();
@@ -1589,15 +1599,20 @@ export default function UserApp() {
         if (isNaN(raw) || raw <= 0) return;
         const truncated = Math.floor(raw * 100) / 100;
         const pStr = truncated.toFixed(2);
-        // Only re-render when value actually changes
+        // Internal data always updates at full speed
         if (pStr !== priceRef.current) {
           priceRef.current = pStr;
-          setPrice(pStr);
+          lastPriceUpdateRef.current = Date.now();
           
-          // Keep a history buffer for trade expiry lookup and chart passing
           const now = Date.now();
           priceHistoryRef.current.push({ p: truncated, t: now });
           if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+
+          // Throttle UI re-renders to ~20FPS (50ms) to prevent lag/hanging
+          if (now - lastRenderTime.current > 50) {
+            setPrice(pStr);
+            lastRenderTime.current = now;
+          }
         }
       };
 
@@ -1684,6 +1699,25 @@ export default function UserApp() {
           setPrice("0.00");
         }
       }
+      // Polling fallback check: If Binance WS is dead (>10s), fetch from backend oracle
+      const now = Date.now();
+      if (now - lastPriceUpdateRef.current > 10000) {
+        try {
+          const priceRes = await fetch(`${targetUrl}/prices`);
+          if (priceRes.ok) {
+            const allPrices = await priceRes.json();
+            const oraclePrice = allPrices[activeMarket.id.toLowerCase()];
+            if (oraclePrice && oraclePrice > 0) {
+              const pStr = oraclePrice.toFixed(2);
+              if (pStr !== priceRef.current) {
+                priceRef.current = pStr;
+                lastPriceUpdateRef.current = Date.now(); // Reset health check timer on oracle success
+                setPrice(pStr);
+              }
+            }
+          }
+        } catch (e) { /* ignore fallback errors */ }
+      }
     };
 
     // Initial sync on mount
@@ -1721,6 +1755,7 @@ export default function UserApp() {
     }
 
     // Trigger a fast render state reset for the new market
+    priceRef.current = "0.00";
     setPrice("0.00");
   }, [activeMarket.id]);
 
@@ -2532,7 +2567,12 @@ export default function UserApp() {
 
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
-            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} verified={hasRoundsAccess} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
+            <RoundsAccessGate 
+              theme={theme} 
+              active={gameMode === 'rounds'} 
+              verified={hasRoundsAccess} 
+              onUnlock={handleRoundsUnlock}
+            >
                 <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden' : 'h-auto lg:h-[calc(100vh-105px)] landscape:h-[calc(100vh-105px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
