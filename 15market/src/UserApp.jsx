@@ -1455,7 +1455,7 @@ export default function UserApp() {
           setSessionBalance(prev => prev + amtNum);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(`Execution Error: ${err.name === 'AbortError' ? 'RPC Timeout' : err.message}`, "error");
+          notify(`Execution Error: ${err.name === 'AbortError' ? 'RPC Timeout' : err.message} (Target: ${KEEPER_URL_ARC})`, "error");
         }
       };
 

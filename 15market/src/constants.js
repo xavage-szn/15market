@@ -41,8 +41,11 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 const PRODUCTION_BACKEND = "https://api.15market.online";
 
 const getBaseUrl = (envValue) => {
-    // Directly use the provided environment variable, or fallback to the production backend.
-    // This allows localhost to test against production by simply setting it in .env
+    // If it's already an absolute production URL, use it immediately
+    if (envValue && (envValue.startsWith('https://') || envValue.includes('.online') || envValue.includes('.market'))) {
+        return envValue;
+    }
+    // Fallback to localhost only if we are truly in a local browser environment
     const final = envValue || (isLocal ? "http://localhost:3010" : PRODUCTION_BACKEND);
     if (isLocal && final === PRODUCTION_BACKEND) {
         console.log("🛠️ [Config] Connecting to Production Backend from Localhost");
