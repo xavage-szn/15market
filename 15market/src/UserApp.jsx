@@ -1581,9 +1581,7 @@ export default function UserApp() {
     return { ...defaultData, ...found };
   });
 
-  const priceRef = useRef("0.00");
-  const lastPriceUpdateRef = useRef(0);
-  const priceHistoryRef = useRef([]);
+
 
   // ─── EXCLUSIVE COINBASE WEBSOCKET ─ Premium Price Feed for Chart & UI ───
   useEffect(() => {
