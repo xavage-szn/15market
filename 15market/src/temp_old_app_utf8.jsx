@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo, Component } from "react";
+﻿import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
@@ -23,6 +23,7 @@ import { publicClient } from "./client";
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
+import { AdminDashboard } from "./components/AdminDashboard";
 
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
@@ -48,31 +49,6 @@ import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
 // Vault decommissioned.
 import { socketService } from './utils/socket';
-
-// Robust Error Boundary to prevent platform-wide crashes
-class ErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error, errorInfo) { console.error("Platform Error caught by Boundary:", error, errorInfo); }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="fixed inset-0 z-[1000] bg-[#050505] flex flex-col items-center justify-center p-8 text-center text-white">
-          <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 border border-red-500/20">
-            <Shield className="text-red-500" />
-          </div>
-          <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">Platform Interrupted</h1>
-          <p className="text-xs text-white/40 mb-8 max-w-xs">{this.state.error?.message || "An unexpected error occurred in the UI layer."}</p>
-          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#3CB371] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 /**
  * Mobile Portrait Lock Component
@@ -207,7 +183,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
 
                   <div className="flex items-center justify-between">
                     <div className="text-[10px] opacity-40">
-                      ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      ${Number(trade.entryPrice).toFixed(2)} ΓÇó {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -265,18 +241,6 @@ export default function UserApp() {
   const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
   const [isAnimatingTheme, setIsAnimatingTheme] = useState(false);
   const [targetTheme, setTargetTheme] = useState(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
 
   useEffect(() => {
     localStorage.setItem('15market_theme', theme);
@@ -371,36 +335,38 @@ export default function UserApp() {
   const [duration, setDuration] = useState(15);
   const [timeLeft, setTimeLeft] = useState(15);
 
-  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
-  const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
-  const [isAppReady, setIsAppReady] = useState(false);
+  const activeTrade = activeTrades[0] || null; // For backward compatibility in some components
+  const [isLoading, setIsLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const loadingTimeoutRef = useRef(null);
+  const lastTradeTimeRef = useRef(0);
 
-  const activeTrade = activeTrades[0] || null; 
-
-  // Safety Timeout: Reset and trigger whenever a GLOBAL load starts
+  // Safety Timeout: Ensure app always loads even if price feed is slow
   useEffect(() => {
-    if (isGlobalLoading) {
-      const timer = setTimeout(() => {
-        setIsAppReady(true); 
-        setIsGlobalLoading(false);
-      }, 4000); // 4s absolute maximum wait for any sequence
-      return () => clearTimeout(timer);
-    }
-  }, [isGlobalLoading]);
+    loadingTimeoutRef.current = setTimeout(() => {
+      if (isLoading) {
+        setIsLoading(false);
+      }
+    }, 5000); // 5 seconds max loading
+    return () => clearTimeout(loadingTimeoutRef.current);
+  }, [isLoading]);
 
   // Loading progress animation
   useEffect(() => {
-    if (!isAppReady) {
+    if (isLoading) {
       const interval = setInterval(() => {
-        setLoadingProgress(prev => (prev < 98 ? prev + (100 - prev) * 0.1 : prev));
-      }, 100);
+        setLoadingProgress(prev => {
+          if (prev < 95) { // Stop just before 100 to wait for actual data
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 50); // Increment every 50ms
       return () => clearInterval(interval);
     } else {
-      setLoadingProgress(100);
+      setLoadingProgress(100); // Instantly complete if loading finishes
     }
-  }, [isAppReady]);
-
+  }, [isLoading]);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -454,7 +420,7 @@ export default function UserApp() {
   const [roundsTradeHistory, setRoundsTradeHistory] = useState(() => loadLocalTrades(address, true, 'rounds'));
   const [activeRounds, setActiveRounds] = useState(() => loadLocalTrades(address, false, 'rounds'));
 
-  // Rounds chart state — populated by RoundsTerminal via onRoundPhaseChange
+  // Rounds chart state ΓÇö populated by RoundsTerminal via onRoundPhaseChange
   const [roundsChartState, setRoundsChartState] = useState(null);
   const [platformSettings, setPlatformSettings] = useState(() => {
     try {
@@ -471,7 +437,8 @@ export default function UserApp() {
     };
   });
 
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
   const [hasRoundsAccess, setHasRoundsAccess] = useState(null); // null = unknown, true/false = verified
 
   const performStealthChecks = useCallback(async (addr) => {
@@ -479,118 +446,72 @@ export default function UserApp() {
     
     setIsGlobalLoading(true);
     setGlobalLoadingProgress(0);
-    setIsOffline(!navigator.onLine);
 
+    const startTime = Date.now();
+    const MIN_LOAD_TIME = 5000; // 5s "premium" feel as requested
+    
+    // Progress bar simulation for the stealth checks
     const progressInterval = setInterval(() => {
       setGlobalLoadingProgress(prev => {
-        if (prev < 90) return prev + (Math.random() * 10);
+        if (prev < 90) return prev + (Math.random() * 5);
         return prev;
       });
-    }, 100);
+    }, 200);
 
-    const runChecks = async () => {
-      try {
-        if (!navigator.onLine) {
-          setIsOffline(true);
-          return false;
-        }
-        setIsOffline(false);
-
-        // Timeout helper to prevent infinite loading if backend hangs
-        const fetchWithTimeout = async (url, options = {}) => {
-          const controller = new AbortController();
-          const id = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout
-          try {
-            const res = await fetch(url, { ...options, signal: controller.signal });
-            clearTimeout(id);
-            return res;
-          } catch (e) {
-            clearTimeout(id);
-            throw e;
-          }
-        };
-
-        // 1. Database User Verification (SILENT)
-        const profileRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
-        
-        if (profileRes && profileRes.ok) {
-          const pData = await profileRes.json();
-          setUserProfile(pData);
-          setShowOnboarding(false);
-          localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
-        } else if (profileRes && profileRes.status === 404) {
-          // New User - check local storage to prevent flash if they JUST onboarded
-          const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
-          if (!localOnboarded) {
-            setUserProfile({ address: addr, isInitial: true });
-            setShowOnboarding(true);
-          } else {
-            setShowOnboarding(false);
-          }
-        }
-
-        // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
-        const sessionRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/session/init`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: addr.toLowerCase() })
-        }).catch(() => null);
-        
-        if (sessionRes && sessionRes.ok) {
-          const sData = await sessionRes.json();
-          setSessionBalance(parseFloat(sData.balance || 0));
-        }
-
-        // 3. Rounds Access Check
-        const roundsRes = await fetchWithTimeout(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => ({ ok: false }));
-        if (roundsRes && roundsRes.ok) {
-          const rData = await roundsRes.json();
-          setHasRoundsAccess(rData.authorized === true);
-        } else {
-          setHasRoundsAccess(false); // Resolve to false if server is unreachable
-        }
-
-        return true;
-      } catch (e) {
-        console.warn("[StealthChecks] Attempt failed:", e.message);
-        return false;
-      }
-    };
-
-    // Retry loop if offline or network fail
-    let success = await runChecks();
-    if (!success) {
-      const retryInterval = setInterval(async () => {
-        if (navigator.onLine) {
-          success = await runChecks();
-          if (success) clearInterval(retryInterval);
-        } else {
-          setIsOffline(true);
-        }
-      }, 3000);
+    try {
+      // PROMISE 1: Check if user exists (Onboarding check)
+      const profilePromise = Promise.race([
+        fetch(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Profile Timeout")), 10000))
+      ]);
       
-      // We don't block the UI forever if it's already cached
-      if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
-        setTimeout(() => { if (!success) setIsGlobalLoading(false); }, 10000);
-      }
-    }
+      // PROMISE 2: Check if user has Rounds access
+      const roundsPromise = Promise.race([
+        fetch(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Access Timeout")), 10000))
+      ]);
 
-    // Wrap up: Instant delivery
-    const finish = () => {
+      const [pRes, rRes] = await Promise.all([profilePromise, roundsPromise]);
+      
+      let pData = null;
+      if (pRes.ok) pData = await pRes.json();
+      
+      let rData = { authorized: false };
+      if (rRes.ok) rData = await rRes.json();
+
+      const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
+
+      // Update Profile & Onboarding State Stealthily
+      if ((!pData || pData.error) && !localOnboarded) {
+        // New user detected
+        setUserProfile({ address: addr, isInitial: true });
+        setShowOnboarding(true);
+      } else {
+        // Returning user
+        setUserProfile(pData || { address: addr, username: `Trader_${addr.slice(2, 6)}` });
+        setShowOnboarding(false);
+        localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+      }
+
+      // Update Rounds Access State
+      setHasRoundsAccess(rRes.ok ? rData.authorized === true : false);
+
+    } catch (e) {
+      // Quiet fail for stealth
+      setHasRoundsAccess(false);
+    } finally {
       clearInterval(progressInterval);
       setGlobalLoadingProgress(100);
-      setIsGlobalLoading(false);
-    };
-
-    if (success) {
-      finish();
-    } else {
-      // If still failing after initial wait, but we have local proof, let them in
-      if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
-        finish();
-      }
+      
+      // Ensure we hit the 5s target for aesthetics
+      const elapsed = Date.now() - startTime;
+      const remains = Math.max(0, MIN_LOAD_TIME - elapsed);
+      
+      setTimeout(() => {
+        setIsGlobalLoading(false);
+      }, remains);
     }
-  }, [address]);
+  }, []);
 
   // Trigger stealth checks when wallet connects or changes
   useEffect(() => {
@@ -623,7 +544,7 @@ export default function UserApp() {
 
   useEffect(() => {
     fetchGlobalSettings();
-    const interval = setInterval(fetchGlobalSettings, 30000); // 30s sync for maintenance (optimized)
+    const interval = setInterval(fetchGlobalSettings, 3000); // 3s sync for real-time maintenance
 
     const syncLocal = () => {
       try {
@@ -706,54 +627,45 @@ export default function UserApp() {
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type }
-
-  const notify = useCallback((message, type = 'success') => {
-    setToast({ message, type });
-  }, []);
-
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   const activeTradesRef = useRef([]);
   const tradeHistoryRef = useRef([]);
   const priceRef = useRef("0.00");
-  const lastPriceUpdateRef = useRef(Date.now());
   const priceHistoryRef = useRef([]);
   const lastOptimisticActionTime = useRef(0);
-  // 🔒 RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
+  // ≡ƒöÆ RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
   // The reconciler will NEVER downgrade a locked result, preventing glitches.
-  const lockedResults = useRef(new Map()); // tradeId → { status, settlementPrice }
-  // 🗑️ REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
+  const lockedResults = useRef(new Map()); // tradeId ΓåÆ { status, settlementPrice }
+  // ≡ƒùæ∩╕Å REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
   // Prevents the reconciler from re-inserting them from backend data.
   const removedTradeIds = useRef(new Set());
-  const cleanupTimers = useRef({});
 
-  // Orientation & Device Detection (Decoupled & Robust)
+  // Orientation & Device Detection for V2 Forced Landscape
   const [isPortrait, setIsPortrait] = useState(
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
-  );
-  const [isSmallScreen, setIsSmallScreen] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
   );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
-      setIsPortrait(window.innerHeight > window.innerWidth);
-      setIsSmallScreen(window.innerWidth < 1024); 
+      const portrait = window.innerHeight > window.innerWidth;
+      setIsPortrait(portrait);
+      // Use orientation-based detection: Portrait = Mobile UI, Landscape = Desktop UI
+      setIsSmallScreen(portrait); 
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
-    handleResize();
+    handleResize(); // Initial check
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
     };
   }, []);
 
-  const showPortraitLock = false; 
-
-  const handleRoundsUnlock = useCallback(() => {
-    console.log('[AccessGate] Rounds access verified & unlocked');
-  }, []);
+  const [isSmallScreen, setIsSmallScreen] = useState(
+    typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
+  );
+  const showPortraitLock = false; // Restriction removed: V2 now supports mobile/portrait layout
 
 
 
@@ -805,13 +717,8 @@ export default function UserApp() {
         const data = await res.json();
         const bal = parseFloat(data.balance);
 
-        // --- CRITICAL BALANCE SYNC GUARD (V2) ---
-        // If we recently traded (< 8s ago), we ignore the backend balance unless it's LOWER than current.
-        // This prevents the "revert" issue where we fetch the stale on-chain profile before the tx mines.
         const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-        if (!force && msSinceLastAction < 8000) {
-           if (bal >= sessionBalance) return; // Still stale or exact, skip overwrite to protect optimistic deduction
-        }
+        if (!force && msSinceLastAction < 5000) return;
 
         if (Math.abs(bal - sessionBalance) > 0.0001) {
           setSessionBalance(bal);
@@ -912,7 +819,7 @@ export default function UserApp() {
 
       const backendActive = backendAll.filter(t => {
         const tid = String(t.id || t.tx || t.nonce);
-        // 🗑️ Never re-insert trades that have been fully removed from active view
+        // ≡ƒùæ∩╕Å Never re-insert trades that have been fully removed from active view
         if (removedTradeIds.current.has(tid)) return false;
         return ["PENDING", "RESOLVING"].includes(t.status);
       }).map(t => {
@@ -933,7 +840,7 @@ export default function UserApp() {
         const btId = String(bt.id || bt.tx || bt.nonce);
         const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
 
-        // 🔒 CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
+        // ≡ƒöÆ CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
         // the backend revert it to PENDING/RESOLVING. The local lock is ground truth.
         const locked = lockedResults.current.get(btId);
         if (locked) {
@@ -987,87 +894,34 @@ export default function UserApp() {
     });
   }, [triggerGlobalRefresh]);
 
-  /**
-   * Initialize Server-Side Session Wallet (Stateless & Secure)
-   */
-  const initializeSessionWallet = useCallback(async () => {
-    if (!address) return;
-
-    try {
-      setIsSignerInitializing(true);
-      
-      const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address })
-      }).catch(err => {
-        throw new Error(`Connection to Backend Failed`);
-      });
-
-      if (!res.ok) throw new Error(`Backend init failed`);
-
-      const data = await res.json();
-      const sessionObj = { address: data.sessionAddress, isRemote: true };
-      
-      setEvmSessionWallet(sessionObj);
-      setSessionBalance(parseFloat(data.balance));
-      setIsSessionSynced(true);
-      setSessionMode(true);
-      localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
-
-      setIsSignerInitializing(false);
-      // notify("Trading Wallet Synced", "success");
-
-    } catch (err) {
-      setIsSignerInitializing(false);
-      console.warn("Session init fallback:", err.message);
-    }
-  }, [address]);
-
   const fetchMyProfile = useCallback(async () => {
     if (!address) return;
     try {
-      // STEALTH: Pre-check returning user status via hint
-      const hint = localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`);
-
       const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
       if (res.ok) {
         const data = await res.json();
-        if (data && !data.error) {
+
+        // Profile not found on backend ΓåÆ always trigger onboarding (strict)
+        if (!data || data.error) {
+          setUserProfile({ address, isInitial: true });
+          setShowOnboarding(true);
+        } else {
+          // Valid profile ΓÇö clear onboarding gate, set profile globally
           setUserProfile(data);
           setShowOnboarding(false);
-          localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
-          
-          // AUTO-INIT session wallet for returning users
-          if (!evmSessionWallet && !isSignerInitializing) {
-             initializeSessionWallet();
-          }
-        } else if (hint === "true") {
-           // Fallback for returning users if backend transient error
-           setShowOnboarding(false);
         }
-      } else if (hint === "true") {
-         setShowOnboarding(false);
+      } else {
+        // Non-200 response ΓÇö treat as no profile, force onboarding
+        setUserProfile({ address, isInitial: true });
+        setShowOnboarding(true);
       }
     } catch (e) {
-      if (localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`) === "true") {
-        setShowOnboarding(false);
-      }
+      setUserProfile({ address, isInitial: true });
+      setShowOnboarding(true);
     } finally {
       setProfileChecked(true);
     }
-  }, [address, initializeSessionWallet]);
-
-  const hasInitAttempted = useRef(false);
-  useEffect(() => { hasInitAttempted.current = false; }, [address]);
-
-  // AUTO-INITIALIZE Session Wallet as soon as any address is available
-  useEffect(() => {
-    if (address && !evmSessionWallet && !isSignerInitializing && !hasInitAttempted.current) {
-        hasInitAttempted.current = true;
-        initializeSessionWallet();
-    }
-  }, [address, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
+  }, [address]);
 
   // 3. Aggressive Logic (Optimized: fewer redundant refreshes)
   const aggressiveRefresh = useCallback((force = false) => {
@@ -1091,57 +945,28 @@ export default function UserApp() {
     if (address) triggerGlobalRefresh(true);
   }, [address, triggerGlobalRefresh]);
 
-  // Real-time Balance Sync
-  useEffect(() => {
-    if (!address) return;
-    // JOIN room once per address change
-    socketService.emit('join', address.toLowerCase());
-  }, [address]);
-
-  useEffect(() => {
-    if (!address) return;
-    
-    // Bind Socket listeners
-    const unbindBal = socketService.on('balance_update', (data) => {
-      if (data.balance) {
-        setSessionBalance(parseFloat(data.balance));
-      }
-      if (data.reason === 'WIN') {
-        notify(`Payout Received: +$${data.payout || ''}`, "success");
-        triggerGlobalRefresh(true);
-      }
-    });
-
-    const unbindErr = socketService.on('terminal_error', (data) => {
-      notify(data.message, "error");
-      console.error("[Terminal Error]", data);
-    });
-
-    return () => {
-      unbindBal();
-      unbindErr();
-    };
-  }, [address, notify, triggerGlobalRefresh]);
-
 
   // Periodic Universal Sync (Optimized for Instant Pulse Mode)
   useEffect(() => {
     if (address) {
       // 1. Instant Retention: Load session wallet from storage as soon as main wallet connects
-      let stored;
-      try {
-        stored = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
-      } catch (e) { console.warn("[Security] LocalStorage access restricted"); }
-
+      const stored = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
       if (stored && (!evmSessionWallet || evmSessionWallet.address !== stored)) {
         setEvmSessionWallet({ address: stored, isRemote: true });
       }
 
-      // 2. Initial Fetch (Balance only syncs on Mount or Transaction)
-      triggerGlobalRefresh(true);
-      fetchMyProfile();
+      // 2. Continuous Sync
+      const interval = setInterval(() => {
+        triggerGlobalRefresh(false);
+        fetchMyProfile();
+      }, 2000);
+      return () => clearInterval(interval);
     }
   }, [address, triggerGlobalRefresh, fetchMyProfile]);
+
+  const notify = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+  }, []);
 
   const closeToast = useCallback(() => {
     setToast(null);
@@ -1209,10 +1034,87 @@ export default function UserApp() {
 
   const themeClass = "theme-arc";
 
+
+
+  // Initialize Server-Side Session Wallet (Stateless & Secure)
+  const initializeSessionWallet = useCallback(async () => {
+    if (!address || !walletClient) {
+      notify("Connect your main wallet first", "error");
+      return;
+    }
+
+    try {
+      setIsExecuting(true);
+      notify("Authorizing Trading Wallet...", "pending");
+
+      // 1. Sign Auth Message (Identity Proof)
+      // This signature can be verified by backend if needed, but the backend derives wallet 
+      // primarily from the user address to ensure cross-device consistency.
+      const message = `Authorize 15market Trading Wallet for ${address.toLowerCase()}`;
+      const sig = await walletClient.signMessage({ message }); // Auto-detect account for mobile compatibility
+
+      if (!sig) throw new Error("Signature failed or rejected by user");
+
+      // 2. Request Session Wallet from Backend
+      const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, signature: sig })
+      }).catch(err => {
+        throw new Error(`Connection to Backend Failed`);
+      });
+
+      if (!res.ok) {
+        let errData = { error: "Unknown Error" };
+        try { errData = await res.json(); } catch (e) { }
+        throw new Error(errData.error || `Backend init failed (${res.status})`);
+      }
+
+      const data = await res.json();
+
+      // 3. Update State (No Private Keys on Device!)
+      const sessionObj = { address: data.sessionAddress, isRemote: true };
+      setEvmSessionWallet(sessionObj);
+      setSessionBalance(parseFloat(data.balance));
+      setIsSessionSynced(true);
+      setSessionMode(true);
+
+      // Persist public info only
+      localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+
+      // Update Profile Sync
+      if (userProfile) {
+        const updatedProfile = { ...userProfile, sessionWalletAddress: data.sessionAddress };
+        setUserProfile(updatedProfile);
+        fetch(`${KEEPER_URL_ARC}/sync-profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, profile: updatedProfile })
+        }).catch(e => { });
+      }
+
+      setIsSignerInitializing(false);
+      notify("Trading Wallet Activated", "success");
+
+    } catch (err) {
+      notify("Setup failed", "error");
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [address, walletClient, notify, userProfile]);
+
   const toggleSessionMode = () => {
-    // Session mode is now the only mode. This just ensures we are synced.
-    if (!evmSessionWallet) {
-       initializeSessionWallet();
+    // Toggling BACK to main wallet mode is disabled.
+    // This now only triggers initialization if the trading wallet is missing.
+    const storedAddr = localStorage.getItem(`15market_session_addr_${address?.toLowerCase()}`);
+    if (evmSessionWallet?.address || storedAddr) {
+      if (!evmSessionWallet) {
+        setEvmSessionWallet({ address: storedAddr, isRemote: true });
+      }
+      setSessionMode(true);
+      notify("Trading Wallet Active", "success");
+    } else {
+      setIsSignerInitializing(true);
     }
   };
 
@@ -1227,14 +1129,12 @@ export default function UserApp() {
     const fetchTreasury = async () => {
       try {
         const provider = new ethers.JsonRpcProvider(ARC_RPC);
-        const bal = await provider.getBalance(ARC_CONTRACT_ADDRESS);
         setTreasuryBalance(parseFloat(ethers.formatEther(bal)));
-      } catch (e) {
-        console.warn("Treasury fetch error:", e.message);
-      }
+      } catch (e) { }
     };
     fetchTreasury();
-  }, []); 
+    // ... existing ...
+  }, []); // Keeping original dep array
 
   // Execute trade
   const executeTrade = async (params = null) => {
@@ -1300,7 +1200,7 @@ export default function UserApp() {
       
       let txHash;
 
-      // ─── ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ───
+      // ΓöÇΓöÇΓöÇ ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ΓöÇΓöÇΓöÇ
       if (activeType === 'rounds') {
         const roundId = params.roundId || params.poolId;
         const dirVal = (activeDirection === "UP" ? 1 : 0);
@@ -1326,15 +1226,14 @@ export default function UserApp() {
           if (!res.ok) throw new Error(data.error || "Trading wallet failed to enter round");
           txHash = data.txHash;
         } else {
-          throw new Error("Trading wallet is still syncing. Please wait 1 second and try again.");
+          // If no session wallet, force initialization
+          setIsSignerInitializing(true);
+          throw new Error("Trading wallet not initialized");
         }
 
         notify("Broadcasting Entry...", "pending");
 
         // --- INSTANT UI START FOR ROUNDS ---
-        lastOptimisticActionTime.current = Date.now();
-        setSessionBalance(prev => Math.max(0, prev - amtNum));
-
         const roundTrade = {
           id: `round-${roundId}-${Date.now()}`,
           type: 'rounds',
@@ -1374,9 +1273,10 @@ export default function UserApp() {
         return;
       }
 
-      // ─── CLASSIC TRADING (SESSION-ONLY) ───
+      // ΓöÇΓöÇΓöÇ CLASSIC TRADING (SESSION-ONLY) ΓöÇΓöÇΓöÇ
       if (!evmSessionWallet) {
-        throw new Error("Trading wallet is still syncing. Please wait 1 second and try again.");
+        setIsSignerInitializing(true);
+        throw new Error("Trading wallet not initialized");
       }
 
       // --- STEP 1: INSTANT UI FEEDBACK (OPTIMISTIC) ---
@@ -1414,15 +1314,11 @@ export default function UserApp() {
       notify("Broadcasting Trade...", "pending");
 
       // --- STEP 2: BACKGROUND EXECUTION ---
-      const backgroundTrade = async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for stability
-        
+      (async () => {
         try {
-          const res = await fetch(`${KEEPER_URL_ARC}/session/execute`, {
+          const res = await fetch(`${KEEPER_URL_ARC}/session/trade`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
             body: JSON.stringify({
               address,
               tradeParams: {
@@ -1436,41 +1332,39 @@ export default function UserApp() {
             })
           });
 
-          clearTimeout(timeoutId);
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Session trade failed");
           
           txHash = data.txHash;
 
           // Update optimistic trade with real TX hash
-          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING" } : t));
-          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING" } : t));
+          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
+          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash } : t));
 
-          // The backend already waits for transaction confirmation before returning success.
-          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
-          notify("Trade Broadcasting...", "success");
-
-          // Guard against balance sync reset
-          lastOptimisticActionTime.current = Date.now();
+          // Background Confirmation
+          publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }).then((receipt) => {
+            if (!receipt || (receipt.status !== "success" && receipt.status !== 1)) {
+              setSessionBalance(prev => prev + amtNum);
+              setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+              notify("Transaction reverted on-chain.", "error");
+            } else {
+              setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+            }
+          }).catch(() => {
+            setSessionBalance(prev => prev + amtNum);
+            setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+          });
 
         } catch (err) {
-          clearTimeout(timeoutId);
-          console.error("[Trade] Execution failed:", err.message);
           // ROLLBACK OPTIMISTIC STATE
           setSessionBalance(prev => prev + amtNum);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(`Execution Error: ${err.name === 'AbortError' ? 'RPC Timeout' : err.message} (Target: ${KEEPER_URL_ARC})`, "error");
+          notify(`Execution Error: ${err.message}`, "error");
         }
-      };
+      })();
 
-      backgroundTrade();
-      
-      // Safety: If backend hangs forever, we still want to let the user trade again
-      // The toast will auto-close after 20s, but we'll ensure we aren't "blocking" anything
-      setTimeout(() => {
-        setIsExecuting(false);
-      }, 5000);
+      setIsExecuting(false);
 
     } catch (err) {
       notify(err.message, "error");
@@ -1556,44 +1450,33 @@ export default function UserApp() {
 
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', binance: 'ETHUSDT' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', binance: 'BTCUSDT' },
-      { id: 'sol', symbol: 'SOL', name: 'Solana', binance: 'SOLUSDT' },
-      { id: 'mon', symbol: 'MON', name: 'Monad', binance: 'SOLUSDT' }, 
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT', kraken: 'ETHUSD' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT', kraken: 'XBTUSD' },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
+      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x0000000000000000000000000000000000000000000000000000000000000000', binance: 'MONUSDT' },
     ];
 
-    // MIGRATION: Purge legacy tokens missing high-frequency IDs
     const saved = localStorage.getItem('15market_listed_tokens');
-    const needsMigration = !saved || !saved.includes('binance') || saved.toLowerCase().includes('price');
-    
-    if (needsMigration) {
-        localStorage.removeItem('15market_listed_tokens');
-        localStorage.removeItem('15market_active_token_id');
-        return defaultTokens[0];
-    }
+    const listed = saved ? JSON.parse(saved) : defaultTokens;
 
-    const listedRaw = saved ? JSON.parse(saved) : defaultTokens;
     const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
-    const found = listedRaw.find(t => t.id === activeId) || listedRaw[0];
-
-    // V2 ROBUSTNESS: Always merge with default metadata to ensure binance symbol exists
-    const defaultData = defaultTokens.find(t => t.id === found.id) || defaultTokens[0];
-    return { ...defaultData, ...found };
+    return listed.find(t => t.id === activeId) || listed[0];
   });
 
 
 
+  const cleanupTimers = useRef({});
 
-
-  // ─── GOLDEN SIGNAL ENGINE (RESTORED FROM COMMIT 95cd1b5) ───
   const fetchCurrentPrice = useCallback(async () => {
     try {
       const sources = [];
-      const baseSym = activeMarket.binance.toUpperCase().replace('USDT', '');
-      
-      // 1. Pyth Network (Ultra-low latency Hermes)
+
+      // 1. Pyth Sources (Multiple Hermes endpoints for redundancy)
       if (activeMarket.pythId) {
         const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
+
+        // Hermes v2 expects ids[] array syntax and full 0x hex
+        // PRODUCTION FIX: Only use Hermes V2. Benchmark V1 returns 422 errors.
         sources.push({
           name: "pyth",
           url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
@@ -1604,30 +1487,43 @@ export default function UserApp() {
         });
       }
 
-      // 2. Kraken Public API (Bulletproof - No CORS/Geo-blocks)
-      const krakenSym = baseSym === 'BTC' ? 'XBTUSD' : `${baseSym}USD`;
-      sources.push({
-        name: "kraken",
-        url: `https://api.kraken.com/0/public/Ticker?pair=${krakenSym}`,
-        parse: d => {
-          const k = Object.keys(d.result || {})[0];
-          return k ? parseFloat(d.result[k].c[0]) : null;
-        }
-      });
+      // 2. MEXC Source (Proxied)
+      if (activeMarket.binance) {
+        sources.push({ name: "mexc", url: `/api-mexc/api/v3/ticker/price?symbol=${activeMarket.binance}`, parse: d => parseFloat(d.price) });
+      }
 
-      // 3. Binance Public API (Global liquidity source)
-      sources.push({
-        name: "binance",
-        url: `https://api.binance.com/api/v3/ticker/price?symbol=${baseSym}USDT`,
-        parse: d => parseFloat(d.price)
-      });
+      // 3. Kraken Source (Direct API - no proxy needed, no geo-restrictions)
+      if (activeMarket.kraken) {
+        sources.push({
+          name: "kraken",
+          url: `https://api.kraken.com/0/public/Ticker?pair=${activeMarket.kraken}`,
+          parse: d => {
+            const k = Object.keys(d.result || {})[0];
+            return k ? parseFloat(d.result[k].c[0]) : null;
+          }
+        });
+      }
+
+      // If no secondary sources, we might need a DEX fallback or DexScreener
+      if (sources.length === 0 && activeMarket.mint) {
+        sources.push({
+          name: "jup",
+          url: `https://price.jup.ag/v4/price?ids=${activeMarket.mint}`,
+          parse: d => d.data[activeMarket.mint]?.price
+        });
+      }
+
+      if (sources.length === 0) return null;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
 
       const pricePromises = sources.map(async (src) => {
         try {
-          const res = await fetch(src.url, { signal: controller.signal });
+          const res = await fetch(src.url, {
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' }
+          });
           const data = await res.json();
           const val = src.parse(data);
           if (!val || isNaN(val)) throw new Error("Invalid");
@@ -1639,46 +1535,53 @@ export default function UserApp() {
       clearTimeout(timeoutId);
 
       if (fastestPrice > 0) {
+        // Enforce 2 decimal model as requested (Truncation)
         const truncated = Math.floor(fastestPrice * 100) / 100;
         const pStr = truncated.toFixed(2);
-        const now = Date.now();
+        setPrice(pStr);
+        priceRef.current = pStr;
+        setIsLoading(false);
 
-        if (pStr !== priceRef.current) {
-          priceRef.current = pStr;
-          lastPriceUpdateRef.current = now;
-          priceHistoryRef.current.push({ t: now, p: truncated });
-          if (priceHistoryRef.current.length > 300) priceHistoryRef.current.shift();
-          setPrice(pStr);
-          setIsLoading(false);
-        }
+        // Record history for precise expiry price retrieval (keep 200-item buffer for chart context)
+        const now = Date.now();
+        priceHistoryRef.current.push({ p: truncated, t: now });
+        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+
+        return fastestPrice;
       }
-    } catch (err) { }
-  }, [activeMarket.id]);
+    } catch (err) {
+      // Don't let total API failure block the UI forever
+      staticPriceFails.current = (staticPriceFails.current || 0) + 1;
+      if (staticPriceFails.current > 3) setIsLoading(false);
+    }
+    return null;
+  }, [activeMarket]);
+
+  useEffect(() => {
+    socketService.connect();
+    
+    // Listen for real-time setting updates from Admin
+    const unbind = socketService.on('settings_updated', (newSettings) => {
+      console.log("[Socket] Applying platform settings update...");
+      setPlatformSettings(prev => ({ ...prev, ...newSettings }));
+      
+      // Update local storage for persistence across refreshes
+      localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
+    });
+
+    return () => unbind();
+  }, []);
 
   useEffect(() => {
     let active = true;
     const loop = async () => {
       if (!active) return;
       await fetchCurrentPrice();
-      if (active) setTimeout(loop, 250); // High-frequency 250ms race
+      if (active) setTimeout(loop, 300);
     };
     loop();
     return () => { active = false; };
-  }, [fetchCurrentPrice]); // Strict dependency on market ID for switching
-
-  // ─── SOCKET.IO: Trade events only (no price) ───
-  useEffect(() => {
-    socketService.connect();
-
-    const unbindSettings = socketService.on('settings_updated', (newSettings) => {
-      setPlatformSettings(prev => ({ ...prev, ...newSettings }));
-      localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
-    });
-
-    return () => {
-      unbindSettings();
-    };
-  }, []);
+  }, [fetchCurrentPrice]);
 
   // Sync Market Changes (Across Ports via Keeper)
   useEffect(() => {
@@ -1698,7 +1601,17 @@ export default function UserApp() {
           }
         }
 
-        // 2. Fetch Remote Platform Settings
+        // 2. Fetch Remote Active Market (LIVE SYNC)
+        const activeRes = await fetch(`${targetUrl}/active-market`);
+        const activeData = await activeRes.json();
+        if (activeData && activeData.activeId) {
+          const currentLocalActiveId = localStorage.getItem('15market_active_token_id');
+          if (currentLocalActiveId !== activeData.activeId) {
+            localStorage.setItem('15market_active_token_id', activeData.activeId);
+          }
+        }
+
+        // 3. Fetch Remote Platform Settings
         const settingsRes = await fetch(`${targetUrl}/settings`);
         const settingsData = await settingsRes.json();
         if (settingsData) {
@@ -1711,16 +1624,20 @@ export default function UserApp() {
         // Fallback to local storage if keeper is down
       }
 
-      // NO LONGER FORCIBLY OVERWRITING activeId FROM BACKEND
-      // Use local selection as the authority
       const listed = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
-      const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
+      const activeId = localStorage.getItem('15market_active_token_id') || 'eth'; // Default to ETH
       const market = listed.find(t => t.id === activeId);
 
-      if (market && market.id !== activeMarket.id) {
-        // Re-sync with current local authority
-        setActiveMarket(market);
-        setPrice("0");
+      if (market) {
+        // Safety: Ensure binance symbol exists for chart
+        if (!market.binance) {
+          market.binance = `${market.symbol}USDT`;
+        }
+
+        if (market.id !== activeMarket.id) {
+          setActiveMarket(market);
+          setTimeout(() => fetchCurrentPrice(), 50);
+        }
       }
     };
 
@@ -1745,7 +1662,6 @@ export default function UserApp() {
 
     localStorage.setItem('15market_active_token_id', newMarket.id);
     setActiveMarket(newMarket);
-    setIsLoading(true); // Show loader during asset transition
     priceHistoryRef.current = []; // Clear history to avoid phantom lines when switching tokens
 
     // Sync with keeper
@@ -1758,10 +1674,9 @@ export default function UserApp() {
     } catch (e) {
     }
 
-    // Trigger a fast render state reset for the new market
-    priceRef.current = "0.00";
-    setPrice("0.00");
-  }, [activeMarket.id]);
+    // Trigger price fetch for new market
+    setTimeout(() => fetchCurrentPrice(), 100);
+  }, [activeMarket.id, fetchCurrentPrice]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -1872,7 +1787,7 @@ export default function UserApp() {
     }));
   }, []);
 
-  // Session Wallet - AUTO RESTORE/FETCH
+  // Session Wallet - RESTORE STATE ONLY
   useEffect(() => {
     if (!address) return;
 
@@ -1882,10 +1797,13 @@ export default function UserApp() {
     const storedAddr = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
     if (storedAddr) {
       setEvmSessionWallet({ address: storedAddr, isRemote: true });
+      updateEvmSessionBal(true);
+    } else {
+      setEvmSessionWallet(null);
+      // Trigger initialization flow
+      setIsSignerInitializing(true);
     }
-    // Automatically retrieve the derived session wallet without user signatures
-    updateEvmSessionBal(true);
-  }, [address, updateEvmSessionBal]);
+  }, [address]);
 
   // NOTE: The actual "creation" now happens via handleSyncSession which we will rename/auto-trigger
   // We need to auto-trigger the sync if the user toggles session mode and has no key.
@@ -1900,9 +1818,9 @@ export default function UserApp() {
 
   // Slider / amount handlers - active balance aware
   const activeBal = useMemo(() => {
-    const bal = sessionMode ? sessionBalance : parseFloat(evmBalance || '0');
+    const bal = sessionMode ? sessionBalance : balance;
     return bal;
-  }, [sessionMode, sessionBalance, evmBalance]);
+  }, [sessionMode, sessionBalance, balance]);
 
   const handleSliderChange = useCallback((e) => {
     const val = e.target.value;
@@ -1939,34 +1857,6 @@ export default function UserApp() {
     }, 1000);
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
-
-  // Emergency Garbage Collection for Stuck Trades
-  useEffect(() => {
-    setActiveTrades(prev => {
-      const now = Date.now();
-      let changed = false;
-      const cleaned = prev.map(t => {
-        const start = t.startTime || (t.id > 1000000000000 ? t.id : Math.floor(t.id / 100) * 1000);
-        // If a trade has been stuck in PENDING/RESOLVING for > 2 minutes past its theoretical lifespan, mark it as LOST.
-        if ((t.status === "PENDING" || t.status === "RESOLVING") && (now - start > 120000)) {
-          changed = true;
-          return { ...t, status: "LOST", payout: "0.00" };
-        }
-        return t;
-      });
-      
-      if (changed) {
-        setTradeHistory(h => {
-          const hMap = new Map();
-          h.forEach(x => hMap.set(x.id, x));
-          cleaned.forEach(c => hMap.set(c.id, c));
-          return Array.from(hMap.values()).sort((a,b) => b.id - a.id);
-        });
-      }
-      return changed ? cleaned : prev;
-    });
-  }, []);
-
   // Cleanup resolution lock if trade is cleared manually
   useEffect(() => {
     // Clean up IDs that are no longer in activeTrades
@@ -1987,8 +1877,82 @@ export default function UserApp() {
   }, []);
 
   useEffect(() => {
-    // Result Resolution is now handled by the backend.
-    // The frontend will receive 'balance_update' and 'trade_settled' events via Socket.io.
+    const checkAndResolve = () => {
+      const now = Date.now() + serverTimeOffset;
+      const pendingTrades = activeTrades.filter(t => t.status === "PENDING");
+
+      for (const trade of pendingTrades) {
+        const start = trade.startTime || (trade.id > 1000000000000 ? trade.id : Math.floor(trade.id / 100) * 1000);
+        const expiryMs = trade.expiryMs || (start + (trade.duration * 1000));
+
+        if (now >= expiryMs && (trade.confirmed || trade.tx)) {
+          if (!resolvingInProgress.current.has(trade.id)) {
+            resolvingInProgress.current.add(trade.id);
+
+            // ACCURACY UPGRADE: Find the price in history closest to the exact expiry time
+            let capturedPrice = parseFloat(priceRef.current);
+            if (priceHistoryRef.current.length > 0) {
+              const closest = priceHistoryRef.current.reduce((prev, curr) =>
+                Math.abs(curr.t - expiryMs) < Math.abs(prev.t - expiryMs) ? curr : prev
+              );
+              // Only use history if it's within 1s of expiry
+              if (Math.abs(closest.t - expiryMs) < 1000) {
+                capturedPrice = closest.p;
+              }
+            }
+
+            // Determine Outcome Locally
+            const ePrice = parseFloat(trade.entryPrice);
+            const isUp = String(trade.direction) === "1" || String(trade.direction).toUpperCase() === "UP";
+            const diff = capturedPrice - ePrice;
+            const isWon = isUp ? diff > 0 : diff < 0;
+            const finalStatus = isWon ? "WON" : "LOST";
+            const settlementPriceStr = capturedPrice.toFixed(2);
+
+            // Calculate expected payout so it's not erased by frontend reconciler
+            const durationNum = trade.duration || 15;
+            const multiplierAmt = durationNum <= 5 ? 2.90 : (durationNum <= 10 ? 2.40 : 1.90);
+            const amtParsed = parseFloat(trade.amount);
+            const calcPayout = isWon ? (amtParsed * multiplierAmt).toFixed(2) : "0.00";
+
+            // ≡ƒöÆ LOCK THE RESULT: Store in ref so reconciler never overwrites this
+            const tradeIdStr = String(trade.id);
+            lockedResults.current.set(tradeIdStr, { status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout });
+
+            // Also record in tradeHistory immediately with locked result
+
+            setTradeHistory(prev => {
+              const existing = prev.find(t => String(t.id || t.tx || t.nonce) === tradeIdStr);
+              if (existing) {
+                return prev.map(t =>
+                  String(t.id || t.tx || t.nonce) === tradeIdStr
+                    ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }
+                    : t
+                );
+              }
+              return [{ ...trade, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout }, ...prev];
+            });
+
+            // Update activeTrades with locked final status
+            setActiveTrades(prev => prev.map(t =>
+              t.id === trade.id ? { ...t, status: finalStatus, settlementPrice: settlementPriceStr, payout: calcPayout } : t
+            ));
+
+            // Explicit Lock Nudge: Send EXACT price to backend to guarantee outcome matches
+            fetch(`${KEEPER_URL_ARC}/settle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  id: trade.id,
+                  exitPrice: capturedPrice
+              })
+            }).catch(() => { });
+          }
+        }
+      }
+    };
+    const interval = setInterval(checkAndResolve, 500);
+    return () => clearInterval(interval);
   }, [activeTrades, serverTimeOffset]);
 
   // Safety Cleanup: Remove finalized trades after showing result
@@ -2001,7 +1965,7 @@ export default function UserApp() {
       if (tid && !cleanupTimers.current[tid]) {
         // Start a removal timer ONLY if one doesn't exist for this specific trade
         cleanupTimers.current[tid] = setTimeout(() => {
-          // 🗑️ Mark as permanently removed so the reconciler never re-adds it
+          // ≡ƒùæ∩╕Å Mark as permanently removed so the reconciler never re-adds it
           removedTradeIds.current.add(String(tid));
           setActiveTrades(prev => prev.filter(t => (t.id || t.tx || t.nonce) !== tid));
           delete cleanupTimers.current[tid];
@@ -2026,7 +1990,7 @@ export default function UserApp() {
 
 
 
-  // Arc Settlement Listener — with dedup to prevent double-crediting
+  // Arc Settlement Listener ΓÇö with dedup to prevent double-crediting
   const processedSettlements = useRef(new Set());
   const creditedPayouts = useRef(new Set()); // Track which betIds have had balance credited
 
@@ -2045,7 +2009,7 @@ export default function UserApp() {
           if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
             const betId = id.toString();
 
-            // 🛑 DEDUP: Skip if we already processed this exact settlement event
+            // ≡ƒ¢æ DEDUP: Skip if we already processed this exact settlement event
             const eventKey = `${betId}_${log.transactionHash}`;
             if (processedSettlements.current.has(eventKey)) {
               return;
@@ -2082,7 +2046,7 @@ export default function UserApp() {
             if (won) {
               const payoutNum = parseFloat(formattedPayout);
 
-              // 🔥 DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
+              // ≡ƒöÑ DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
               // Check activeTradesRef to see if the trade already has balanceApplied
               const existingTrade = activeTradesRef.current.find(t =>
                 (t.id && t.id.toString() === betId) || (t.nonce && t.nonce.toString() === betId)
@@ -2202,7 +2166,7 @@ export default function UserApp() {
       }
 
       if (!walletClient) {
-        notify("Wallet client not ready — please reconnect your wallet", "error");
+        notify("Wallet client not ready ΓÇö please reconnect your wallet", "error");
         return;
       }
 
@@ -2223,8 +2187,6 @@ export default function UserApp() {
         });
 
         notify("Deposit Transaction Broadcasted!", "success");
-        setSessionBalance(prev => prev + amtNum); // Optimistic UI Update
-        lastOptimisticActionTime.current = Date.now(); // Guard against stale sync
 
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");
@@ -2244,21 +2206,11 @@ export default function UserApp() {
         };
         setTransactionHistory(prev => [newTx, ...prev]);
 
-        // Robust retry loop to guarantee Redis is credited
-        let retries = 3;
-        const pushDeposit = () => {
-          fetch(`${KEEPER_URL_ARC}/session/record`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address, transaction: newTx })
-          }).catch(e => {
-            if (retries > 0) {
-              retries--;
-              setTimeout(pushDeposit, 2000);
-            }
-          });
-        };
-        pushDeposit();
+        fetch(`${KEEPER_URL_ARC}/push-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, transaction: newTx })
+        }).catch(e => {});
 
       } catch (evmErr) {
         notify(`Deposit failed: ${evmErr.shortMessage || evmErr.message}`, "error");
@@ -2318,7 +2270,7 @@ export default function UserApp() {
         } else {
           throw new Error("No wallet available to sign");
         }
-        console.log("✅ [WITHDRAW] User authorized");
+        console.log("Γ£à [WITHDRAW] User authorized");
       } catch (sigErr) {
         if (sigErr.code === 4001 || sigErr.message?.includes('rejected') || sigErr.message?.includes('denied')) {
           notify("Withdrawal cancelled by user", "error");
@@ -2331,15 +2283,15 @@ export default function UserApp() {
 
       notify("Processing sweep...", "pending");
 
-      // Fix floating-point precision before sending (e.g. 0.49500000000000004 → "0.495000")
+      // Fix floating-point precision before sending (e.g. 0.49500000000000004 ΓåÆ "0.495000")
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 60000); // Increased to 60s for mainnet stability
+      const fetchTimeout = setTimeout(() => controller.abort(), 25000); // 25s max
 
       let res;
       try {
-        res = await fetch(`${KEEPER_URL_ARC}/session/cashout`, {
+        res = await fetch(`${KEEPER_URL_ARC}/session/withdraw`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
@@ -2351,7 +2303,7 @@ export default function UserApp() {
         });
       } catch (fetchErr) {
         if (fetchErr.name === 'AbortError') {
-          throw new Error("Network timeout — Arc RPC may be congested. Try again in a moment.");
+          throw new Error("Network timeout ΓÇö Arc RPC may be congested. Try again in a moment.");
         }
         throw fetchErr;
       } finally {
@@ -2396,16 +2348,21 @@ export default function UserApp() {
     }
   }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
-  if (!isAppReady && isGlobalLoading) return (
-    <div className="fixed inset-0 z-[1000] backdrop-blur-md flex flex-col items-center justify-center bg-black/60">
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-12">
-        <img src="/logo.png" alt="15market" className="h-12 object-contain" />
+  if (isLoading) return (
+    <div className="fixed inset-0 z-[100] backdrop-blur-sm flex flex-col items-center justify-center bg-black/40">
+      <motion.div animate={{ opacity: [0.4, 1, 0.4], scale: [0.95, 1.05, 0.95] }} transition={{ duration: 2, repeat: Infinity }} className="relative mb-20 flex flex-col items-center justify-center">
+        <div className="absolute inset-0 blur-[60px] bg-[#3CB371] opacity-20" />
+        <img src="/logo.png" alt="logo" className="h-32 lg:h-48 w-auto relative z-10 drop-shadow-[0_0_40px_#3CB37160]" />
+      </motion.div>
+
+      <div className="flex flex-col items-center justify-center w-full">
         <MascotLoader
           status="running"
           progress={loadingProgress}
+          label="Pre-Flight Systems Check"
           theme={theme}
         />
-      </motion.div>
+      </div>
     </div>
   );
 
@@ -2437,18 +2394,42 @@ export default function UserApp() {
     </div>
   );
 
-  if (isSignerInitializing && !evmSessionWallet) {
+  if (isSignerInitializing) {
     return (
-       <div className={`${themeClass} fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center`}>
-          <MascotLoader theme={theme} label="Syncing Trading Wallet..." />
-       </div>
+      <div className={`${themeClass} fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center`}>
+        <div className="max-w-md w-full bg-[#0D0D0D] border border-[#3CB371]/20 rounded-3xl p-8 relative overflow-hidden shadow-[0_0_100px_rgba(60,179,113,0.1)]">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 pointer-events-none" />
+
+          <div className="w-16 h-16 rounded-full bg-[#3CB371]/10 flex items-center justify-center mx-auto mb-6 border border-[#3CB371]/20">
+            <Shield className="w-8 h-8 text-[#3CB371] animate-pulse" />
+          </div>
+
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">
+            {userProfile?.sessionWalletAddress ? "Restore Trading Account" : "Secure Trading Account Setup"}
+          </h2>
+          <p className="text-white/40 text-xs font-medium leading-relaxed mb-8">
+            {userProfile?.sessionWalletAddress
+              ? `We've detected an existing Trading Wallet linked to your account (${userProfile.sessionWalletAddress.slice(0, 6)}...). Please sign to restore access on this device.`
+              : "To ensure maximum efficiency and high-speed execution, you must authorize a secure Trading Wallet linked to your Main Account."
+            }
+          </p>
+
+          <button
+            onClick={initializeSessionWallet}
+            disabled={isExecuting}
+            className="w-full py-4 rounded-xl bg-[#3CB371] hover:brightness-110 active:scale-[0.98] transition-all text-white font-black uppercase tracking-widest text-sm shadow-[0_10px_40px_-10px_#3CB371]"
+          >
+            {isExecuting ? "Signing..." : "Initialize & Link Wallet"}
+          </button>
+          <AnimatePresence>
+            {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+          </AnimatePresence>
+        </div>
+      </div>
     );
   }
 
-
-
   return (
-    <ErrorBoundary>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
       style={{
@@ -2463,6 +2444,7 @@ export default function UserApp() {
       {view === "dashboard" ? (
         <DashboardPage
           onBack={() => setView("trading")}
+          onAdmin={() => setView("admin")}
           wallet={wallet}
           sessionBalance={sessionBalance}
           evmBalance={parseFloat(evmBalance || "0")}
@@ -2480,6 +2462,13 @@ export default function UserApp() {
             setSelectedTransaction(tx);
             setIsTransactionReceiptOpen(true);
           }}
+        />
+      ) : view === "admin" ? (
+        <AdminDashboard
+          onBack={() => setView("dashboard")}
+          theme={theme}
+          notify={notify}
+          platformSettings={platformSettings}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
@@ -2510,10 +2499,7 @@ export default function UserApp() {
                 ))}
               </div>
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <div className="flex items-center gap-2">
-                {/* Desktop: Only show session balance per user request */}
-                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} label="SESSION" />
-              </div>
+              <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
               <button onClick={() => setView("dashboard")} className="p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
@@ -2540,7 +2526,7 @@ export default function UserApp() {
                   </button>
                 ))}
               </div>
-              <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
+              <div className="scale-[0.8] origin-center -mx-1.5">
                 <ThemeToggle theme={theme} onToggle={toggleTheme} />
               </div>
               <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95"
@@ -2571,12 +2557,7 @@ export default function UserApp() {
 
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
-            <RoundsAccessGate 
-              theme={theme} 
-              active={gameMode === 'rounds'} 
-              verified={hasRoundsAccess} 
-              onUnlock={handleRoundsUnlock}
-            >
+            <RoundsAccessGate theme={theme} active={gameMode === 'rounds'} verified={hasRoundsAccess} onUnlock={() => console.log('[AccessGate] Rounds access verified & unlocked')}>
                 <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden' : 'h-auto lg:h-[calc(100vh-105px)] landscape:h-[calc(100vh-105px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
@@ -2649,7 +2630,6 @@ export default function UserApp() {
                               activeTrades={activeTrades}
                               currentPrice={price}
                               priceHistory={priceHistoryRef.current}
-                              onPriceUpdate={setPrice}
                             />
                           )}
                         </div>
@@ -2682,7 +2662,7 @@ export default function UserApp() {
                         {gameMode === 'rounds' ? (
                           <RoundsTerminal
                             price={price}
-                            balance={parseFloat(evmBalance || '0')}
+                            balance={balance}
                             executeTrade={executeTrade}
                             isExecuting={isExecuting}
                             theme={theme}
@@ -2793,7 +2773,7 @@ export default function UserApp() {
                             {gameMode === 'rounds' ? (
                               <RoundsTerminal
                                 price={price}
-                                balance={parseFloat(evmBalance || '0')}
+                                balance={balance}
                                 executeTrade={executeTrade}
                                 isExecuting={isExecuting}
                                 theme={theme}
@@ -2812,7 +2792,7 @@ export default function UserApp() {
                                 transparent={true}
                                 activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
                                 sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
+                                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
                                 sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
                                 theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
                                 refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
@@ -2827,7 +2807,7 @@ export default function UserApp() {
                           </div>
                         </div>
 
-                        {/* Active Trade / Controls Box — hidden in Rounds */}
+                        {/* Active Trade / Controls Box ΓÇö hidden in Rounds */}
                         {gameMode !== 'rounds' && (
                           <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                             style={{
@@ -2889,52 +2869,12 @@ export default function UserApp() {
         {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
       </AnimatePresence>
 
-      {/* Network Status Overlay */}
-      <AnimatePresence>
-        {!isOnline && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="fixed top-0 left-0 w-full z-[200000] bg-red-600/90 backdrop-blur-xl border-b border-white/10"
-          >
-            <div className="flex items-center justify-center gap-3 py-1.5 px-4 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <Activity size={10} className="text-white animate-pulse" />
-                <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
-                  Disconnected • Internet Connection Lost
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-        
-        {isOnline && navigator.onLine && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ 
-              opacity: [0, 1, 1, 0],
-              height: ['auto', 'auto', 'auto', 0]
-            }}
-            transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
-            className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
-          >
-            <div className="flex items-center justify-center gap-3 py-1.5 px-4">
-              <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
-                <CheckCircle size={10} />
-                Network Reconnected • System Online
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
         style={{ fontFamily: 'Arial, sans-serif' }}>
         <div className="flex items-center gap-4 pointer-events-auto">
           <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
           <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-            © 2026 15market
+            ┬⌐ 2026 15market
           </span>
         </div>
         <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
@@ -2947,6 +2887,33 @@ export default function UserApp() {
         transaction={selectedTransaction}
       />
 
+      {/* GET STEALTH VERIFICATION OVERLAY */}
+      <AnimatePresence>
+        {isGlobalLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+          >
+            <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
+              <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
+              <MascotLoader 
+                progress={globalLoadingProgress} 
+                status="running" 
+                label="INITIALIZING..." 
+                theme="dark" 
+              />
+            </div>
+            
+            {/* Visual Flair */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden origin-center">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#3CB371]/5 rounded-full blur-[120px] animate-pulse" />
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#3CB371]/30 to-transparent animate-scanLine" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Onboarding Flow for new users */}
       {showOnboarding && address && !isGlobalLoading && (
@@ -2960,6 +2927,5 @@ export default function UserApp() {
         />
       )}
     </motion.div >
-    </ErrorBoundary>
   );
 }
