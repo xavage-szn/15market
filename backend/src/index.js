@@ -74,6 +74,10 @@ io.on('connection', (socket) => {
 });
 
 const emitAdminStats = async () => {
+  // Only pulse if there's someone in the admin room to see it
+  const adminRoom = io.sockets.adapter.rooms.get('admin_room');
+  if (!adminRoom || adminRoom.size === 0) return;
+
   try {
     const totalVolume = await redis.get('stats:total_volume') || '0';
     const totalTrades = await redis.get('stats:total_trades') || '0';
@@ -88,12 +92,11 @@ const emitAdminStats = async () => {
       timestamp: Date.now()
     });
   } catch (e) {
-    console.error("[Metrics] Pulse failed:", e.message);
+    // console.error("[Metrics] Pulse failed:", e.message);
   }
 };
 
-// Periodic Metrics Pulse (5s)
-setInterval(emitAdminStats, 5000);
+// Periodic Metrics Pulse REMOVED — Now entirely event-driven by trade actions.
 
 const trackActivity = async (addr) => {
   if (!addr) return;
@@ -231,6 +234,7 @@ app.post('/session/execute', async (req, res) => {
     console.log(`[API] Trade placement SUCCESS for ${id}. TX: ${receipt.hash}`);
 
     io.to(addr).emit('trade_placed', { id, txHash: receipt.hash });
+    emitAdminStats(); // Event-driven update
 
     // --- AUTOMATED SETTLEMENT TIMER ---
     const durationMs = parseInt(duration) * 1000;
@@ -288,6 +292,7 @@ app.post('/session/execute', async (req, res) => {
 
             console.log(`[Settlement] Auto-settled trade #${id}: ${won ? 'WON' : 'LOST'} @ $${exitPrice}`);
             await redis.srem('active_trades', id); // Cleanup set
+            emitAdminStats(); // Event-driven update
         } catch (e) {
             console.error(`[Settlement] Auto-settlement failed for trade #${id}:`, e.message);
         }
