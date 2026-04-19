@@ -1608,8 +1608,8 @@ export default function UserApp() {
           priceHistoryRef.current.push({ p: truncated, t: now });
           if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
 
-          // Throttle UI re-renders to ~20FPS (50ms) to prevent lag/hanging
-          if (now - lastRenderTime.current > 50) {
+          // Throttle UI re-renders to ~100FPS (10ms) for ultra-smooth nonstop streaming
+          if (now - lastRenderTime.current > 10) {
             setPrice(pStr);
             lastRenderTime.current = now;
           }
