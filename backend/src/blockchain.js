@@ -2,10 +2,10 @@ const { ethers } = require('ethers');
 require('dotenv').config();
 
 const ARC_RPCS = [
+  "https://5042002.rpc.thirdweb.com", // Thirdweb Premium
   "https://arc-testnet.g.alchemy.com/v2/7eF4g7VDugrZQdNDi_HMj",
   "https://rpc.testnet.arc.network",
-  "https://arc-testnet.drpc.org",
-  "https://rpc.blockdaemon.testnet.arc.network"
+  "https://arc-testnet.drpc.org"
 ];
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
@@ -55,7 +55,7 @@ class BlockchainService {
     this.nonceLock = false;
   }
 
-  async callWithTimeout(promise, timeoutMs = 8000) {
+  async callWithTimeout(promise, timeoutMs = 4000) {
     const timeout = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('RPC_TIMEOUT')), timeoutMs)
     );
@@ -149,7 +149,7 @@ class BlockchainService {
     };
 
     const broadcastPromise = (contract, idx) => async () => {
-      const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, this.arcWallet.address, txOptions), 8000);
+      const tx = await this.callWithTimeout(contract.placeBet(betId, direction, duration, entryPrice, marketId, this.arcWallet.address, txOptions), 5000);
       console.log(`[Blockchain] Broadcasted bet ${betId} via Provider ${idx} (TX: ${tx.hash})`);
       tx.wait().catch(e => {});
       return tx;
