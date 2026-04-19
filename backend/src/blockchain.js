@@ -39,10 +39,14 @@ class BlockchainService {
     this.arcWallet = new ethers.Wallet(PRIVATE_KEY, this.mainProvider);
 
     // Create a contract instance for EACH provider to enable racing
-    this.contracts = this.providers.map(p => {
+    this.contracts = (this.providers || []).filter(p => p).map(p => {
         const wallet = new ethers.Wallet(PRIVATE_KEY, p);
         return new ethers.Contract(CONTRACT_ADDRESS, this.abi, wallet);
     });
+
+    if (this.contracts.length === 0) {
+        console.error("❌ [Blockchain] FATAL: No valid providers initialized. Check ARC_RPCS in blockchain.js.");
+    }
 
     // Speed Optimization: Track nonces locally
     this.localNonce = null;
