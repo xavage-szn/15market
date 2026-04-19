@@ -1604,22 +1604,27 @@ export default function UserApp() {
     const lastRenderTime = { current: 0 };
     lastPriceUpdateRef.current = Date.now();
 
+    // Triple-Layer Failover: Coinbase WS -> Kraken WS -> High-Speed REST
     const connect = () => {
-      // Clean up previous before switching/reconnecting
       if (ws) {
-        ws.onopen = null;
-        ws.onmessage = null;
-        ws.onerror = null;
-        ws.onclose = null;
+        ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
         try { ws.close(); } catch (e) { }
       }
 
       const p = providers[currentIdx];
-      console.log(`[Stream] Direct Pipe: ${p.name} for ${baseSym}`);
+      console.log(`[Stream] Attempting Direct Feed: ${p.name}`);
       ws = new WebSocket(p.url);
 
+      const connTimeout = setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          console.warn(`[Stream] ${p.name} connection timed out. Cycling...`);
+          ws.close();
+        }
+      }, 5000);
+
       ws.onopen = () => {
-        console.log(`[Stream] Independent Link Active: ${p.name}`);
+        clearTimeout(connTimeout);
+        console.log(`[Stream] Independent Feed Established: ${p.name}`);
         if (p.name === 'COINBASE') {
           ws.send(JSON.stringify({ type: "subscribe", product_ids: [symCoinbase], channels: ["ticker"] }));
         } else if (p.name === 'KRAKEN') {
@@ -1630,69 +1635,57 @@ export default function UserApp() {
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
         let rawPrice = 0;
+        if (data.type === 'ticker' && data.price) rawPrice = parseFloat(data.price);
+        else if (Array.isArray(data) && data[1]?.c) rawPrice = parseFloat(data[1].c[0]);
 
-        if (data.type === 'ticker' && data.price) {
-          rawPrice = parseFloat(data.price);
-        } else if (Array.isArray(data) && data[1]?.c) {
-          rawPrice = parseFloat(data[1].c[0]);
-        }
-
-        if (rawPrice > 0) {
-          const truncated = Math.floor(rawPrice * 100) / 100;
-          const pStr = truncated.toFixed(2);
-          const now = Date.now();
-
-          if (pStr !== priceRef.current) {
-            priceRef.current = pStr;
-            lastPriceUpdateRef.current = now;
-            priceHistoryRef.current.push({ t: now, p: truncated });
-            if (priceHistoryRef.current.length > 250) priceHistoryRef.current.shift();
-
-            // High-frequency UI tick
-            if (now - lastRenderTime.current > 10) {
-              setPrice(pStr);
-              lastRenderTime.current = now;
-            }
-          }
-        }
+        if (rawPrice > 0) processPrice(rawPrice);
       };
 
       ws.onerror = () => ws.close();
       ws.onclose = () => {
+        clearTimeout(connTimeout);
         if (!activeMarket) return;
         currentIdx = (currentIdx + 1) % providers.length;
-        setTimeout(connect, 3000); // 3s backoff to avoid glitching
+        setTimeout(connect, 2000);
       };
     };
 
-    // Instant reset on asset switch
-    priceHistoryRef.current = [];
-    priceRef.current = "0";
-    setPrice("0");
-    
-    // Seed the price immediately via REST so the chart isn't stuck at 0
+    // Continuous Watchdog: If WS is dead/blocked, stream via REST to keep signal alive
+    const watchdog = setInterval(async () => {
+      const silence = Date.now() - lastPriceUpdateRef.current;
+      if (silence > 4000) {
+        console.log("[Stream] WS Blocked or Silent. Activating REST Recovery Stream...");
+        try {
+          // Try Coinbase REST
+          let res = await fetch(`https://api.coinbase.com/v2/prices/${baseSym}-USD/spot`);
+          let d = await res.json();
+          if (d.data?.amount) {
+            processPrice(parseFloat(d.data.amount));
+          } else {
+             // Second REST Backup: Binance Public
+             res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${baseSym}USDT`);
+             d = await res.json();
+             if (d.price) processPrice(parseFloat(d.price));
+          }
+        } catch (e) { }
+      }
+    }, 4000);
+
+    // Initial Bootstrap
     const bootstrap = async () => {
       try {
         const res = await fetch(`https://api.coinbase.com/v2/prices/${baseSym}-USD/spot`);
         const d = await res.json();
-        if (d.data?.amount && priceRef.current === "0") {
-          console.log(`[Stream] Bootstrapped ${baseSym} @ $${d.data.amount}`);
-          processPrice(parseFloat(d.data.amount));
-        }
+        if (d.data?.amount && priceRef.current === "0") processPrice(parseFloat(d.data.amount));
       } catch (e) { }
     };
-    bootstrap();
 
+    bootstrap();
     connect();
 
     return () => { 
-      if (ws) {
-        ws.onopen = null;
-        ws.onmessage = null;
-        ws.onerror = null;
-        ws.onclose = null;
-        ws.close(); 
-      }
+      if (ws) { ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null; ws.close(); }
+      clearInterval(watchdog);
     };
   }, [activeMarket.id]); // Strict dependency on market ID for switching
 
