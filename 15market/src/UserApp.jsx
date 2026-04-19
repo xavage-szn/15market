@@ -1576,19 +1576,13 @@ export default function UserApp() {
     return { ...defaultData, ...found };
   });
 
-  // ─── DIRECT MULTI-SOURCE WEBSOCKET ─ Geographic Resilience for Chart & UI ───
+  // ─── EXCLUSIVE COINBASE WEBSOCKET ─ Premium Price Feed for Chart & UI ───
   useEffect(() => {
     if (!activeMarket?.binance) return;
 
     let ws;
-    const sym = activeMarket.binance.toUpperCase();
-    const providers = [
-      `wss://stream.binance.com:9443/ws/${sym.toLowerCase()}@aggTrade`,
-      `wss://stream.binance.us:9443/ws/${sym.toLowerCase()}@aggTrade`,
-      `wss://ws-feed.exchange.coinbase.com`, // Premium US Fallback
-      `wss://wsprod.okx.com:8443/ws/v5/public`
-    ];
-    let currentIdx = 0;
+    // Map internal symbol to Coinbase product ID (BTCUSDT -> BTC-USD)
+    const sym = activeMarket.binance.toUpperCase().replace('USDT', '-USD');
     const lastRenderTime = { current: 0 };
 
     const connect = () => {
@@ -1596,38 +1590,23 @@ export default function UserApp() {
         try { ws.close(); } catch (e) { }
       }
       
-      const url = providers[currentIdx];
-      console.log(`[Stream] Connecting to Provider ${currentIdx}: ${url}`);
-      ws = new WebSocket(url);
+      console.log(`[Stream] Connecting to Exclusive Feed: Coinbase (${sym})`);
+      ws = new WebSocket('wss://ws-feed.exchange.coinbase.com');
 
       ws.onopen = () => {
-        console.log(`[Stream] Connected to Provider ${currentIdx}`);
-        if (url.includes('coinbase')) {
-          ws.send(JSON.stringify({
-             type: "subscribe",
-             product_ids: [sym.replace('USDT', '-USD')],
-             channels: ["ticker"]
-          }));
-        } else if (url.includes('okx')) {
-          ws.send(JSON.stringify({
-            op: "subscribe",
-            args: [{ channel: "index-tickers", instId: sym.replace('USDT', '-USDT') }]
-          }));
-        }
+        console.log(`[Stream] Coinbase Connected`);
+        ws.send(JSON.stringify({
+          type: "subscribe",
+          product_ids: [sym],
+          channels: ["ticker"]
+        }));
       };
 
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
-        let rawPrice = 0;
+        if (data.type !== 'ticker' || !data.price) return;
 
-        if (data.p) { // Binance format
-          rawPrice = parseFloat(data.p);
-        } else if (data.type === 'ticker' && data.price) { // Coinbase format
-          rawPrice = parseFloat(data.price);
-        } else if (data.data && data.data[0]?.idxPx) { // OKX format
-          rawPrice = parseFloat(data.data[0].idxPx);
-        }
-
+        const rawPrice = parseFloat(data.price);
         if (!rawPrice || rawPrice <= 0) return;
 
         const truncated = Math.floor(rawPrice * 100) / 100;
@@ -1648,12 +1627,11 @@ export default function UserApp() {
       };
 
       ws.onerror = (err) => {
-        console.warn(`[Stream] Provider ${currentIdx} failed. Cycling...`);
+        console.warn(`[Stream] Coinbase error:`, err.message);
         ws.close();
       };
 
       ws.onclose = () => {
-        currentIdx = (currentIdx + 1) % providers.length;
         setTimeout(connect, 3000);
       };
     };
