@@ -1667,9 +1667,22 @@ export default function UserApp() {
 
     // Instant reset on asset switch
     priceHistoryRef.current = [];
-    priceRef.current = "0.00";
-    setPrice("0.00");
+    priceRef.current = "0";
+    setPrice("0");
     
+    // Seed the price immediately via REST so the chart isn't stuck at 0
+    const bootstrap = async () => {
+      try {
+        const res = await fetch(`https://api.coinbase.com/v2/prices/${baseSym}-USD/spot`);
+        const d = await res.json();
+        if (d.data?.amount && priceRef.current === "0") {
+          console.log(`[Stream] Bootstrapped ${baseSym} @ $${d.data.amount}`);
+          processPrice(parseFloat(d.data.amount));
+        }
+      } catch (e) { }
+    };
+    bootstrap();
+
     connect();
 
     return () => { 
