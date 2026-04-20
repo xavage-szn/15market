@@ -37,6 +37,10 @@ pricing.onPriceUpdate = (newPrices) => {
     oracleReady = true;
 };
 
+// Keep oracle warm for UI/chart consumers, not only during active trades.
+// Without this, /prices can stay 503 indefinitely when there are no open trades.
+pricing.trackTrade(true);
+
 
 // Instant Sync on Connection
 io.on('connection', (socket) => {
@@ -518,8 +522,12 @@ app.get('/listings', (req, res) => {
 });
 
 app.get('/prices', (req, res) => {
-  if (!oracleReady) return res.status(503).json({ error: "Price oracle is not ready" });
-  res.json(prices);
+  const hasAnyPrice = Object.values(prices || {}).some((v) => Number(v) > 0);
+  res.json({
+    ...prices,
+    oracleReady,
+    hasAnyPrice,
+  });
 });
 
 app.get('/active-market', (req, res) => res.json({ activeId: activeMarketId }));

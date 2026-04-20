@@ -43,7 +43,7 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import SideHistoryPane from "./components/SideHistoryPane";
 
 import { RoundsTerminal } from "./components/RoundsTerminal";
-import RoundsChart from "./components/RoundsChart";
+// Rounds chart logic merged into LiveStreamingChart/CustomChart for performance
 import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
 // Vault decommissioned.
@@ -1554,19 +1554,28 @@ export default function UserApp() {
   // Dynamic Market State
 
 
+  const defaultTokens = useMemo(() => ([
+    { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT', kraken: 'ETHUSD' },
+    { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT', kraken: 'XBTUSD' },
+    { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
+    { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x0000000000000000000000000000000000000000000000000000000000000000', binance: 'MONUSDT' },
+  ]), []);
+
+  const mergeMarketWithDefault = useCallback((market) => {
+    if (!market?.id) return market;
+    const fallback = defaultTokens.find(t => t.id === market.id);
+    return fallback ? { ...fallback, ...market } : market;
+  }, [defaultTokens]);
+
   const [activeMarket, setActiveMarket] = useState(() => {
-    const defaultTokens = [
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT', kraken: 'ETHUSD' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT', kraken: 'XBTUSD' },
-      { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
-      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x0000000000000000000000000000000000000000000000000000000000000000', binance: 'MONUSDT' },
-    ];
 
     const saved = localStorage.getItem('15market_listed_tokens');
     const listed = saved ? JSON.parse(saved) : defaultTokens;
 
     const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
-    return listed.find(t => t.id === activeId) || listed[0];
+    const selected = listed.find(t => t.id === activeId) || listed[0];
+    const fallback = defaultTokens.find(t => t.id === selected?.id);
+    return fallback ? { ...fallback, ...selected } : selected;
   });
 
 
@@ -1576,6 +1585,31 @@ export default function UserApp() {
   const fetchCurrentPrice = useCallback(async () => {
     try {
       const sources = [];
+      // #region agent log
+      fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:start',message:'Starting price fetch for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,binance:activeMarket?.binance,hasPyth:!!activeMarket?.pythId,hasKraken:!!activeMarket?.kraken},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      // 0. Keeper Backend Source (authoritative backend cache, resilient against client geo/CORS blocks)
+      sources.push({
+        name: "keeper",
+        url: `${KEEPER_URL_ARC}/prices`,
+        parse: d => {
+          const key = activeMarket?.id?.toLowerCase();
+          const val = key ? d?.[key] : null;
+          return val ? parseFloat(val) : null;
+        }
+      });
+
+      // 0. Keeper Backend Source (authoritative backend cache, resilient against client geo/CORS blocks)
+      sources.push({
+        name: "keeper",
+        url: `${KEEPER_URL_ARC}/prices`,
+        parse: d => {
+          const key = activeMarket?.id?.toLowerCase();
+          const val = key ? d?.[key] : null;
+          return val ? parseFloat(val) : null;
+        }
+      });
 
       // 1. Pyth Sources (Multiple Hermes endpoints for redundancy)
       if (activeMarket.pythId) {
@@ -1620,6 +1654,9 @@ export default function UserApp() {
       }
 
       if (sources.length === 0) return null;
+      // #region agent log
+      fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:sources',message:'Resolved price sources for market',data:{marketId:activeMarket?.id,sources:sources.map(s=>s.name)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1500);
@@ -1634,7 +1671,12 @@ export default function UserApp() {
           const val = src.parse(data);
           if (!val || isNaN(val)) throw new Error("Invalid");
           return val;
-        } catch (e) { throw e; }
+        } catch (e) {
+          // #region agent log
+          fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:fetchCurrentPrice:sourceError',message:'A price source failed',data:{marketId:activeMarket?.id,source:src.name,error:e?.message || 'unknown'},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          throw e;
+        }
       });
 
       const fastestPrice = await Promise.any(pricePromises);
@@ -1646,6 +1688,9 @@ export default function UserApp() {
         const pStr = truncated.toFixed(2);
         setPrice(pStr);
         priceRef.current = pStr;
+        // #region agent log
+        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:success',message:'Price updated from fastest source',data:{marketId:activeMarket?.id,price:pStr},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (typeof setIsLoading === 'function') setIsLoading(false);
         setIsGlobalLoading(false);
 
@@ -1657,6 +1702,9 @@ export default function UserApp() {
         return fastestPrice;
       }
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:fetchCurrentPrice:allFailed',message:'All price sources failed for market',data:{marketId:activeMarket?.id,error:err?.message || 'unknown'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       // Don't let total API failure block the UI forever
       staticPriceFails.current = (staticPriceFails.current || 0) + 1;
       if (staticPriceFails.current > 3) {
@@ -1787,10 +1835,14 @@ export default function UserApp() {
       const listed = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
       const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
       const market = listed.find(t => t.id === activeId);
+      const resolvedMarket = mergeMarketWithDefault(market);
 
-      if (market && market.id !== activeMarket.id) {
+      if (resolvedMarket && resolvedMarket.id !== activeMarket.id) {
+        // #region agent log
+        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:syncMarket:override',message:'syncMarket overriding active market from localStorage/listings',data:{from:activeMarket?.id,to:resolvedMarket?.id,listingHasBinance:!!resolvedMarket?.binance,listingHasPyth:!!resolvedMarket?.pythId},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         // Re-sync with current local authority
-        setActiveMarket(market);
+        setActiveMarket(resolvedMarket);
         setPrice("0");
       }
     };
@@ -1812,10 +1864,14 @@ export default function UserApp() {
 
   // Handle market changes from UI (persist to localStorage and sync with keeper)
   const handleMarketChange = useCallback(async (newMarket) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:handleMarketChange:entry',message:'User requested market switch',data:{current:activeMarket?.id,next:newMarket?.id,nextHasBinance:!!newMarket?.binance,nextHasPyth:!!newMarket?.pythId},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!newMarket || newMarket.id === activeMarket.id) return;
 
     localStorage.setItem('15market_active_token_id', newMarket.id);
-    setActiveMarket(newMarket);
+    const resolvedMarket = mergeMarketWithDefault(newMarket);
+    setActiveMarket(resolvedMarket);
     if (typeof setIsLoading === 'function') setIsLoading(true); // Show loader during asset transition
     priceHistoryRef.current = []; // Clear history to avoid phantom lines when switching tokens
 
@@ -1831,7 +1887,7 @@ export default function UserApp() {
 
     // Trigger price fetch for new market
     setTimeout(() => fetchCurrentPrice(), 100);
-  }, [activeMarket.id, fetchCurrentPrice]);
+  }, [activeMarket.id, fetchCurrentPrice, mergeMarketWithDefault]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -2705,35 +2761,17 @@ export default function UserApp() {
                       <div className="flex-1 w-full h-full flex relative">
                         {/* Chart Area */}
                         <div className="flex-1 w-full h-full relative min-w-0">
-                          {gameMode === 'rounds' ? (
-                            <RoundsChart
-                              theme={theme}
-                              currentPrice={price}
-                              entryPrice={roundsChartState?.entryPrice || price}
-                              timeLeft={roundsChartState?.timeLeft || 0}
-                              totalDuration={roundsChartState?.phase === 'entry' ? 10 : 15}
-                              pools={roundsChartState?.pools || { long: 0, short: 0 }}
-                              userDirection={roundsChartState?.userDirection}
-                              odds={roundsChartState?.odds}
-                              onResult={roundsChartState?.onResult}
-                              isSettled={roundsChartState?.isSettled}
-                              phase={roundsChartState?.phase || 'entry'}
-                              result={roundsChartState?.result}
-                              priceHistory={priceHistoryRef.current}
-                            />
-                          ) : (
-                            <CustomChart
-                              symbol={activeMarket.binance}
-                              theme={theme}
-                              network={network}
-                              activeMarket={activeMarket}
-                              uiVersion={uiVersion}
-                              setActiveMarket={handleMarketChange}
-                              activeTrades={activeTrades}
-                              currentPrice={price}
-                              priceHistory={priceHistoryRef.current}
-                            />
-                          )}
+                          <CustomChart
+                            symbol={activeMarket?.binance || 'BTCUSDT'}
+                            theme={theme}
+                            network={network}
+                            activeMarket={activeMarket}
+                            uiVersion={uiVersion}
+                            setActiveMarket={handleMarketChange}
+                            activeTrades={activeTrades}
+                            currentPrice={price}
+                            priceHistory={priceHistoryRef.current}
+                          />
                         </div>
 
                         {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
