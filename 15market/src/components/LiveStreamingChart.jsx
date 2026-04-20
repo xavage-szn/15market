@@ -19,7 +19,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
     useEffect(() => {
         const price = parseFloat(currentPrice);
-        if (price === undefined || isNaN(price)) return;
+        if (!price || isNaN(price)) return;
         targetPriceRef.current = price;
         if (interpolatedPriceRef.current === null) {
             interpolatedPriceRef.current = price;
@@ -30,20 +30,20 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
     // Generate synthetic history for "always-there" effect
     useEffect(() => {
-        if (!currentPrice) return;
-        if (hasGeneratedSynthetic.current === symbol) return;
-
-        const startPrice = parseFloat(currentPrice);
-        const history = [];
+        if (!currentPrice || hasGeneratedSynthetic.current) return;
         const now = Date.now();
+        const startPrice = parseFloat(currentPrice);
+        
+        // Generate synthetic history ONLY ONCE
+        const history = [];
         for (let i = 240; i >= 0; i--) {
             const t = now - (i * 500);
             const p = startPrice + (Math.random() - 0.5) * (startPrice * 0.0003);
             history.push({ t, p: parseFloat(p.toFixed(2)) });
         }
         priceHistoryRef.current = history;
-        hasGeneratedSynthetic.current = symbol;
-    }, [currentPrice, symbol]); // Keep currentPrice but use ref to debounce synthesis once per symbol arrival
+        hasGeneratedSynthetic.current = true;
+    }, [currentPrice]);
 
     useEffect(() => {
         const historyInterval = setInterval(() => {
@@ -56,13 +56,13 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                     priceHistoryRef.current.push({ t: now, p: interpolatedPriceRef.current });
                 }
                 
-                // Keep 120s window + 800 point cap for higher granularity performance
+                // Keep 120s window + 500 point cap for performance
                 const cutoff = now - 120000;
-                if (priceHistoryRef.current.length > 800) {
+                if (priceHistoryRef.current.length > 500) {
                     priceHistoryRef.current = priceHistoryRef.current.filter(pt => pt.t >= cutoff);
                 }
             }
-        }, 33); // 30 FPS Sampling
+        }, 50);
         return () => clearInterval(historyInterval);
     }, []);
 
@@ -96,10 +96,10 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
             ctx.clearRect(0, 0, W, H);
 
-            // Interpolation: Snappier reaction for "Sub-Second" feel
+            // Interpolation
             if (targetPriceRef.current !== null && interpolatedPriceRef.current !== null) {
                 const diff = targetPriceRef.current - interpolatedPriceRef.current;
-                interpolatedPriceRef.current += diff * 0.65; // High-precision snappy flow
+                interpolatedPriceRef.current += diff * 0.15;
             }
 
             const history = priceHistoryRef.current;
@@ -114,26 +114,19 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             const windowMs = 20000;
             const oldest = nowPx - windowMs;
 
-            // Optimized Windowing: Find first visible point without full filter
-            let firstVisibleIdx = 0;
-            while (firstVisibleIdx < history.length && history[firstVisibleIdx].t < oldest) {
-                firstVisibleIdx++;
-            }
-            const visiblePts = history.slice(firstVisibleIdx);
-
+            // Y-Scale
+            const visiblePts = history.filter(pt => pt.t >= oldest);
             let lo = latestPriceVal * 0.9998;
             let hi = latestPriceVal * 1.0002;
 
             if (visiblePts.length > 0) {
-                let pMin = latestPriceVal;
-                let pMax = latestPriceVal;
-                for (let i = 0; i < visiblePts.length; i++) {
-                    const p = visiblePts[i].p;
-                    if (p < pMin) pMin = p;
-                    if (p > pMax) pMax = p;
-                }
+                const prices = visiblePts.map(pt => pt.p);
+                const pMin = Math.min(...prices, latestPriceVal);
+                const pMax = Math.max(...prices, latestPriceVal);
                 
+                // Centering Logic: find max deviation from current price
                 const deviation = Math.max(pMax - latestPriceVal, latestPriceVal - pMin);
+                // Use a minimum deviation of 0.05% of price to avoid flat lines
                 const minDev = latestPriceVal * 0.0005;
                 const finalDev = Math.max(deviation, minDev);
 
@@ -178,14 +171,14 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
                 ctx.beginPath();
                 let firstVisibleX = -1;
-                for (let i = firstVisibleIdx; i < history.length; i++) {
-                    const pt = history[i];
+                history.forEach((pt) => {
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x > W + 600) break; 
+                    // Allow points slightly off-screen to ensure path reaches the edge
+                    if (x < -100 || x > W + 100) return;
                     if (firstVisibleX === -1) { ctx.moveTo(x, y); firstVisibleX = x; }
                     else ctx.lineTo(x, y);
-                }
+                });
                 ctx.lineTo(liveX, liveY);
                 if (firstVisibleX !== -1) {
                     ctx.lineTo(liveX, H);
@@ -202,18 +195,17 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 ctx.lineJoin = 'round';
                 ctx.beginPath();
                 let started = false;
-                for (let i = firstVisibleIdx; i < history.length; i++) {
-                    const pt = history[i];
+                history.forEach((pt) => {
                     const x = getX(pt.t);
                     const y = toY(pt.p);
-                    if (x > W + 600) break;
+                    if (x < -100 || x > W + 100) return;
                     if (!started) {
                         ctx.moveTo(x, y);
                         started = true;
                     } else {
                         ctx.lineTo(x, y);
                     }
-                }ctx.lineTo(liveX, liveY);
+                });ctx.lineTo(liveX, liveY);
                 ctx.stroke();
 
                 // Horizontal Price Line (Crosshair)
@@ -237,18 +229,17 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
                 ctx.textBaseline = 'middle';
                 ctx.fillText(labelText, liveX + 10 + 8, liveY);
 
-                // Sub-Second High-Freq Pulse dot (Matching User Request)
-                const pulse = Math.sin(nowPx / 150) * 4; 
-                const dotSize = 4;
+                // Pulse Dot
+                const pulse = Math.sin(nowPx / 200) * 3;
+                const dotSize = 5;
                 ctx.beginPath();
                 ctx.arc(liveX, liveY, dotSize, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = isLight ? '#48c97f' : '#ffffff';
                 ctx.fill();
-                
                 ctx.beginPath();
-                ctx.arc(liveX, liveY, (dotSize + 3) + pulse, 0, Math.PI * 2);
-                ctx.strokeStyle = `${GREEN}80`;
-                ctx.lineWidth = 1.5;
+                ctx.arc(liveX, liveY, (dotSize + 2) + pulse, 0, Math.PI * 2);
+                ctx.strokeStyle = isLight ? 'rgba(72,201,127,0.6)' : `${GREEN}80`;
+                ctx.lineWidth = 2;
                 ctx.stroke();
             }
 

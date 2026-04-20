@@ -1556,46 +1556,127 @@ export default function UserApp() {
 
   const [activeMarket, setActiveMarket] = useState(() => {
     const defaultTokens = [
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', binance: 'ETHUSDT' },
-      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', binance: 'BTCUSDT' },
-      { id: 'sol', symbol: 'SOL', name: 'Solana', binance: 'SOLUSDT' },
-      { id: 'mon', symbol: 'MON', name: 'Monad', binance: 'SOLUSDT' }, 
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', pair: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640', pythId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace', binance: 'ETHUSDT', kraken: 'ETHUSD' },
+      { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT', kraken: 'XBTUSD' },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
+      { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x0000000000000000000000000000000000000000000000000000000000000000', binance: 'MONUSDT' },
     ];
 
-    // MIGRATION: Purge legacy tokens missing high-frequency IDs
     const saved = localStorage.getItem('15market_listed_tokens');
-    const needsMigration = !saved || !saved.includes('binance') || saved.toLowerCase().includes('price');
-    
-    if (needsMigration) {
-        localStorage.removeItem('15market_listed_tokens');
-        localStorage.removeItem('15market_active_token_id');
-        return defaultTokens[0];
-    }
+    const listed = saved ? JSON.parse(saved) : defaultTokens;
 
-    const listedRaw = saved ? JSON.parse(saved) : defaultTokens;
     const activeId = localStorage.getItem('15market_active_token_id') || 'eth';
-    const found = listedRaw.find(t => t.id === activeId) || listedRaw[0];
-
-    // V2 ROBUSTNESS: Always merge with default metadata to ensure binance symbol exists
-    const defaultData = defaultTokens.find(t => t.id === found.id) || defaultTokens[0];
-    return { ...defaultData, ...found };
+    return listed.find(t => t.id === activeId) || listed[0];
   });
 
 
 
 
 
-  // ─── CHART-DRIVEN PRICE (Chart is 100% independent) ───
-  // The CustomChart widget owns the Binance WebSocket and pushes
-  // price updates to us via the onPriceUpdate callback.
-  // We no longer run any REST polling for price — the chart is self-sufficient.
-  const handleChartPriceUpdate = useCallback((priceStr) => {
-    if (!priceStr || priceStr === priceRef.current) return;
-    priceRef.current = priceStr;
-    lastPriceUpdateRef.current = Date.now();
-    setPrice(priceStr);
-    setIsLoading(false);
-  }, []);
+  const fetchCurrentPrice = useCallback(async () => {
+    try {
+      const sources = [];
+
+      // 1. Pyth Sources (Multiple Hermes endpoints for redundancy)
+      if (activeMarket.pythId) {
+        const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
+
+        // Hermes v2 expects ids[] array syntax and full 0x hex
+        // PRODUCTION FIX: Only use Hermes V2. Benchmark V1 returns 422 errors.
+        sources.push({
+          name: "pyth",
+          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
+          parse: d => {
+            const p = d.parsed?.[0]?.price;
+            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+          }
+        });
+      }
+
+      // 2. MEXC Source (Proxied)
+      if (activeMarket.binance) {
+        sources.push({ name: "mexc", url: `/api-mexc/api/v3/ticker/price?symbol=${activeMarket.binance}`, parse: d => parseFloat(d.price) });
+      }
+
+      // 3. Kraken Source (Direct API - no proxy needed, no geo-restrictions)
+      if (activeMarket.kraken) {
+        sources.push({
+          name: "kraken",
+          url: `https://api.kraken.com/0/public/Ticker?pair=${activeMarket.kraken}`,
+          parse: d => {
+            const k = Object.keys(d.result || {})[0];
+            return k ? parseFloat(d.result[k].c[0]) : null;
+          }
+        });
+      }
+
+      // If no secondary sources, we might need a DEX fallback or DexScreener
+      if (sources.length === 0 && activeMarket.mint) {
+        sources.push({
+          name: "jup",
+          url: `https://price.jup.ag/v4/price?ids=${activeMarket.mint}`,
+          parse: d => d.data[activeMarket.mint]?.price
+        });
+      }
+
+      if (sources.length === 0) return null;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+      const pricePromises = sources.map(async (src) => {
+        try {
+          const res = await fetch(src.url, {
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+          const data = await res.json();
+          const val = src.parse(data);
+          if (!val || isNaN(val)) throw new Error("Invalid");
+          return val;
+        } catch (e) { throw e; }
+      });
+
+      const fastestPrice = await Promise.any(pricePromises);
+      clearTimeout(timeoutId);
+
+      if (fastestPrice > 0) {
+        // Enforce 2 decimal model as requested (Truncation)
+        const truncated = Math.floor(fastestPrice * 100) / 100;
+        const pStr = truncated.toFixed(2);
+        setPrice(pStr);
+        priceRef.current = pStr;
+        if (typeof setIsLoading === 'function') setIsLoading(false);
+        setIsGlobalLoading(false);
+
+        // Record history for precise expiry price retrieval (keep 200-item buffer for chart context)
+        const now = Date.now();
+        priceHistoryRef.current.push({ p: truncated, t: now });
+        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+
+        return fastestPrice;
+      }
+    } catch (err) {
+      // Don't let total API failure block the UI forever
+      staticPriceFails.current = (staticPriceFails.current || 0) + 1;
+      if (staticPriceFails.current > 3) {
+          if (typeof setIsLoading === 'function') setIsLoading(false);
+          setIsGlobalLoading(false);
+      }
+    }
+    return null;
+  }, [activeMarket]);
+
+  useEffect(() => {
+    let active = true;
+    const loop = async () => {
+      if (!active) return;
+      await fetchCurrentPrice();
+      if (active) setTimeout(loop, 300);
+    };
+    loop();
+    return () => { active = false; };
+  }, [fetchCurrentPrice]);
 
   // ─── SOCKET.IO: Trade events + Backend-Authoritative Settlement ───
   useEffect(() => {
@@ -1735,7 +1816,7 @@ export default function UserApp() {
 
     localStorage.setItem('15market_active_token_id', newMarket.id);
     setActiveMarket(newMarket);
-    setIsLoading(true); // Show loader during asset transition
+    if (typeof setIsLoading === 'function') setIsLoading(true); // Show loader during asset transition
     priceHistoryRef.current = []; // Clear history to avoid phantom lines when switching tokens
 
     // Sync with keeper
@@ -1748,10 +1829,9 @@ export default function UserApp() {
     } catch (e) {
     }
 
-    // Trigger a fast render state reset for the new market
-    priceRef.current = "0.00";
-    setPrice("0.00");
-  }, [activeMarket.id]);
+    // Trigger price fetch for new market
+    setTimeout(() => fetchCurrentPrice(), 100);
+  }, [activeMarket.id, fetchCurrentPrice]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -2645,11 +2725,13 @@ export default function UserApp() {
                             <CustomChart
                               symbol={activeMarket.binance}
                               theme={theme}
+                              network={network}
                               activeMarket={activeMarket}
                               uiVersion={uiVersion}
                               setActiveMarket={handleMarketChange}
                               activeTrades={activeTrades}
-                              onPriceUpdate={handleChartPriceUpdate}
+                              currentPrice={price}
+                              priceHistory={priceHistoryRef.current}
                             />
                           )}
                         </div>

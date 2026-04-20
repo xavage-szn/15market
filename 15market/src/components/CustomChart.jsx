@@ -1,157 +1,47 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { createChart, ColorType, CrosshairMode, HistogramSeries, LineSeries, AreaSeries } from 'lightweight-charts';
+import { createChart, ColorType, CrosshairMode, CandlestickSeries, HistogramSeries, LineSeries, AreaSeries } from 'lightweight-charts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Zap } from 'lucide-react';
+import { Settings, Maximize2, Camera, Info, Search, TrendingUp, BarChart3, Clock, ChevronDown, Zap, Activity } from 'lucide-react';
 
 import { MascotLoader } from './MascotLoader';
+import { KEEPER_URL_ARC } from "../constants";
 import LiveStreamingChart from './LiveStreamingChart';
 
-/**
- * INDEPENDENT CHART WIDGET
- * ─────────────────────────
- * This chart is 100% self-sufficient. It fetches its own price feed via
- * Binance WebSocket and REST API. It does NOT depend on the backend or
- * parent component for price data.
- *
- * Props:
- *   - symbol: Binance trading pair (e.g. 'ETHUSDT')
- *   - theme: 'dark' | 'light'
- *   - activeMarket: current market object
- *   - setActiveMarket: market change handler
- *   - activeTrades: array of active trades for markers
- *   - uiVersion: UI layout version
- *   - onPriceUpdate: optional callback to expose the live price to parent
- */
-export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', onPriceUpdate }) {
+export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [] }) {
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
     const seriesRef = useRef(null);
+    const areaSeriesRef = useRef(null);
     const volumeSeriesRef = useRef(null);
     const smaSeriesRef = useRef(null);
     const lastCandleTime = useRef(null);
 
     const [timeframe, setTimeframe] = useState('1s');
+    const [chartType, setChartType] = useState('line');
+    const current1sCandle = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     const [chartProgress, setChartProgress] = useState(0);
     const [loaderStatus, setLoaderStatus] = useState('walking');
+    const errorRef = useRef(null);
     const isFirstLoad = useRef(true);
 
     const [gridMode, setGridMode] = useState('none');
     const [isFullscreen, setIsFullscreen] = useState(false);
-
-    // ─── INDEPENDENT PRICE STATE ───
-    const [livePrice, setLivePrice] = useState(0);
-    const livePriceRef = useRef(0);
-    const priceHistoryRef = useRef([]);
-    const wsRef = useRef(null);
-    const wsReconnectTimer = useRef(null);
+    const [showSettings, setShowSettings] = useState(false);
 
     const isDark = theme !== 'light';
     const textColor = isDark ? '#D9D9D9' : '#0f2618';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(60, 179, 113, 0.1)';
 
+    const controlBg = isDark ? 'bg-black/60' : 'bg-[#bed9ce]/90';
     const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#b5d3c7]/95';
     const controlBorder = isDark ? 'border-white/10' : 'border-[#3CB371]/25';
     const controlText = isDark ? 'text-white' : 'text-[#0a261a]';
     const controlTextDim = isDark ? 'text-white/40' : 'text-[#0a261a]/60';
 
-    // ─── BINANCE WEBSOCKET: INDEPENDENT PRICE FEED ───
-    useEffect(() => {
-        const binanceSymbol = symbol.toLowerCase();
-        let isMounted = true;
+    const upColor = '#3CB371';
+    const downColor = '#FF4444';
 
-        // 1. FAST-START: Instantly fetch the current price via REST
-        // so we don't have to wait for the first WS trade event (which can take seconds)
-        fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol.toUpperCase()}`)
-            .then(res => res.json())
-            .then(data => {
-                if (!isMounted) return;
-                const price = parseFloat(data.price);
-                if (price > 0 && !livePriceRef.current) {
-                    livePriceRef.current = price;
-                    setLivePrice(price);
-                    setIsLoading(false);
-                    if (onPriceUpdate) {
-                        const truncated = Math.floor(price * 100) / 100;
-                        onPriceUpdate(truncated.toFixed(2));
-                    }
-                }
-            })
-            .catch(e => console.warn('[Chart REST] Failed to fetch initial price', e));
-
-        const connectWs = () => {
-            // Clean up any existing connection
-            if (wsRef.current) {
-                try { wsRef.current.close(); } catch (e) {}
-                wsRef.current = null;
-            }
-
-            // 2. USE DEFAULT PORT 443: Avoids 9443 which is often blocked by corporate/ISP firewalls
-            const ws = new WebSocket(`wss://stream.binance.com/ws/${binanceSymbol}@trade`);
-            wsRef.current = ws;
-
-            ws.onopen = () => {
-                console.log(`[Chart WS] Connected to Binance stream: ${binanceSymbol}`);
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.p) {
-                        const price = parseFloat(data.p);
-                        if (price > 0) {
-                            livePriceRef.current = price;
-                            const now = Date.now();
-
-                            // Throttle React state updates to ~4Hz to prevent render storms
-                            if (!ws._lastStateUpdate || now - ws._lastStateUpdate > 250) {
-                                ws._lastStateUpdate = now;
-                                setLivePrice(price);
-
-                                // Expose to parent for trade entry price capture
-                                if (onPriceUpdate) {
-                                    const truncated = Math.floor(price * 100) / 100;
-                                    onPriceUpdate(truncated.toFixed(2));
-                                }
-                            }
-
-                            // Always push to history for the streaming chart
-                            priceHistoryRef.current.push({ t: now, p: price });
-                            if (priceHistoryRef.current.length > 600) {
-                                priceHistoryRef.current = priceHistoryRef.current.slice(-400);
-                            }
-
-                            // Wake up the chart if still loading
-                            if (isLoading && price > 0) {
-                                setIsLoading(false);
-                            }
-                        }
-                    }
-                } catch (e) {}
-            };
-
-            ws.onerror = (err) => {
-                console.warn('[Chart WS] Error:', err);
-            };
-
-            ws.onclose = () => {
-                console.log('[Chart WS] Disconnected. Reconnecting in 3s...');
-                wsReconnectTimer.current = setTimeout(connectWs, 3000);
-            };
-        };
-
-        connectWs();
-
-        return () => {
-            if (wsReconnectTimer.current) clearTimeout(wsReconnectTimer.current);
-            if (wsRef.current) {
-                try { wsRef.current.close(); } catch (e) {}
-                wsRef.current = null;
-            }
-        };
-    }, [symbol]); // Reconnect on symbol change
-
-    // ─── BINANCE REST: HISTORICAL KLINES ───
     const getApiInterval = (tf) => {
         if (tf === '1s') return '1m';
         if (tf === '5m') return '5m';
@@ -162,9 +52,30 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
     const fetchKlines = useCallback(async (tf) => {
         try {
             const apiInterval = getApiInterval(tf);
-            const binanceSymbol = symbol.toUpperCase();
-            const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=${apiInterval}&limit=1000`;
+            const targetCount = 1000;
+
+            let url = `/api-mexc/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
             const res = await fetch(url);
+
+            const contentType = res.headers.get('content-type');
+            if (contentType && contentType.includes('text/html')) {
+                console.warn("[CHART] Proxy returned HTML. Falling back to direct API fetch.");
+                const directUrl = `https://api.mexc.com/api/v3/klines?symbol=${symbol}&interval=${apiInterval}&limit=${targetCount}`;
+                const directRes = await fetch(directUrl);
+                if (!directRes.ok) return [];
+                const data = await directRes.json();
+                if (!Array.isArray(data)) return [];
+                return data.map(d => ({
+                    time: Math.floor(d[0] / 1000),
+                    open: parseFloat(d[1]),
+                    high: parseFloat(d[2]),
+                    low: parseFloat(d[3]),
+                    close: parseFloat(d[4]),
+                    value: parseFloat(d[4]),
+                    volume: parseFloat(d[5] || 0)
+                }));
+            }
+
             if (!res.ok) return [];
             const data = await res.json();
             if (!Array.isArray(data)) return [];
@@ -185,8 +96,8 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
     }, [symbol]);
 
     const tradePriceLines = useRef(new Map());
+    const tradeExpiryLines = useRef(new Map());
 
-    // ─── LIGHTWEIGHT CHARTS INIT ───
     useEffect(() => {
         if (!chartContainerRef.current) return;
 
@@ -226,7 +137,7 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
             timeScale: {
                 borderColor: gridColor,
                 timeVisible: true,
-                secondsVisible: timeframe === '1s',
+                secondsVisible: timeframe === '1s' || chartType === 'line',
                 shiftVisibleRangeOnNewBar: true,
                 handleScroll: true,
                 handleScale: true,
@@ -252,14 +163,26 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
             minBarSpacing: 0.5,
         });
 
-        const areaSeries = chart.addSeries(AreaSeries, {
-            lineColor: isDark ? '#3CB371' : '#1e5a38',
-            topColor: isDark ? 'rgba(60, 179, 113, 0.4)' : 'rgba(30, 90, 56, 0.5)',
-            bottomColor: isDark ? 'rgba(60, 179, 113, 0.0)' : 'rgba(30, 90, 56, 0.05)',
-            lineWidth: 3,
-            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-        });
-        seriesRef.current = areaSeries;
+        if (chartType === 'candles') {
+            const candlestickSeries = chart.addSeries(CandlestickSeries, {
+                upColor: upColor,
+                downColor: downColor,
+                borderVisible: false,
+                wickUpColor: upColor,
+                wickDownColor: downColor,
+                priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+            });
+            seriesRef.current = candlestickSeries;
+        } else {
+            const areaSeries = chart.addSeries(AreaSeries, {
+                lineColor: isDark ? '#2E8B57' : '#1e5a38',
+                topColor: isDark ? 'rgba(46, 139, 87, 0.4)' : 'rgba(30, 90, 56, 0.5)',
+                bottomColor: isDark ? 'rgba(46, 139, 87, 0.0)' : 'rgba(30, 90, 56, 0.05)',
+                lineWidth: 3,
+                priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+            });
+            seriesRef.current = areaSeries;
+        }
 
         const volumeSeries = chart.addSeries(HistogramSeries, {
             color: '#26a69a',
@@ -385,9 +308,8 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
             smaSeriesRef.current = null;
             tradePriceLines.current.clear();
         };
-    }, [theme, fetchKlines, textColor, gridColor, timeframe, symbol, gridMode]);
+    }, [theme, fetchKlines, textColor, gridColor, upColor, downColor, timeframe, symbol, chartType, gridMode]);
 
-    // ─── ESCAPE KEY FOR FULLSCREEN ───
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
@@ -396,7 +318,6 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isFullscreen]);
 
-    // ─── TRADE MARKERS ON CHART ───
     useEffect(() => {
         if (!seriesRef.current || !chartRef.current) return;
 
@@ -421,7 +342,7 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
 
             activeTrades.forEach(trade => {
                 const id = String(trade.id);
-                const entryPrice = parseFloat(trade.entryPrice || livePriceRef.current);
+                const entryPrice = parseFloat(trade.entryPrice || currentPrice);
                 const isCall = trade.direction === "UP" || trade.direction === "buy";
 
                 const startTime = (trade.startTime || trade.nonce) > 1000000000000
@@ -493,58 +414,64 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
         updateMarkers();
         const interval = setInterval(updateMarkers, 1000);
         return () => clearInterval(interval);
-    }, [activeTrades]);
+    }, [activeTrades, currentPrice, chartType]);
 
-    // ─── LIVE PRICE → CHART UPDATES (from our own WS) ───
     useEffect(() => {
-        const updateInterval = setInterval(() => {
-            const price = livePriceRef.current;
-            if (!price || !seriesRef.current) return;
+        if (!currentPrice || !seriesRef.current) return;
+        const now = Math.floor(Date.now() / 1000);
+        const price = parseFloat(currentPrice);
 
-            if (timeframe !== '1s') {
-                const time = Math.floor(Date.now() / 60000) * 60;
-                if (lastCandleTime.current && time < lastCandleTime.current) return;
+        if (lastCandleTime.current && now <= lastCandleTime.current) return;
+
+        const time = timeframe === '1s' ? now : Math.floor(now / 60) * 60;
+
+        if (lastCandleTime.current && time < lastCandleTime.current) return;
+
+        if (timeframe === '1s' || chartType === 'line') {
+            if (chartType === 'candles') {
+                if (!current1sCandle.current || time > current1sCandle.current.time) {
+                    current1sCandle.current = { time, open: price, high: price, low: price, close: price };
+                } else {
+                    current1sCandle.current.high = Math.max(current1sCandle.current.high, price);
+                    current1sCandle.current.low = Math.min(current1sCandle.current.low, price);
+                    current1sCandle.current.close = price;
+                }
+                seriesRef.current.update(current1sCandle.current);
+            } else {
                 seriesRef.current.update({ time, value: price });
-                lastCandleTime.current = time;
             }
-        }, 500);
+        } else {
+            seriesRef.current.update({ time, close: price });
+        }
 
-        return () => clearInterval(updateInterval);
-    }, [timeframe]);
+        lastCandleTime.current = time;
+    }, [currentPrice, timeframe, chartType]);
 
-    // ─── TOKEN SELECTOR STATE ───
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [tokens, setTokens] = useState(() => {
-        const defaultList = [
-            { id: 'eth', symbol: 'ETH', name: 'Ethereum', binance: 'ETHUSDT' },
-            { id: 'btc', symbol: 'BTC', name: 'Bitcoin', binance: 'BTCUSDT' },
-            { id: 'sol', symbol: 'SOL', name: 'Solana', binance: 'SOLUSDT' },
-            { id: 'mon', symbol: 'MON', name: 'Monad', binance: 'SOLUSDT' },
+        const saved = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
+        return saved.length > 0 ? saved : [
+            { id: 'eth', symbol: 'ETH', name: 'Ethereum' },
+            { id: 'btc', symbol: 'BTC', name: 'Bitcoin' },
+            { id: 'sol', symbol: 'SOL', name: 'Solana' },
         ];
-        const savedRaw = localStorage.getItem('15market_listed_tokens');
-        if (savedRaw && (savedRaw.toLowerCase().includes('price') || !savedRaw.includes('binance'))) {
-            localStorage.removeItem('15market_listed_tokens');
-            return defaultList;
-        }
-        const saved = JSON.parse(savedRaw || '[]');
-        return saved.length > 0 ? saved : defaultList;
     });
 
-    // ─── LIVE TRADE RESULTS OVERLAY ───
     const tradeResults = useMemo(() => {
         const now = Date.now();
         return activeTrades.map(trade => {
             const entryPrice = parseFloat(trade.entryPrice);
+            const isExpired = trade.expiry ? (now > trade.expiry) : false;
             const referencePrice = (trade.lockedExitPrice || trade.settlementPrice)
                 ? parseFloat(trade.lockedExitPrice || trade.settlementPrice)
-                : livePriceRef.current;
+                : parseFloat(currentPrice);
 
             const isCall = trade.direction === "UP" || trade.direction === "buy" || trade.direction === 1;
             const won = isCall ? referencePrice > entryPrice : referencePrice < entryPrice;
             const diff = Math.abs(referencePrice - entryPrice).toFixed(4);
             return { id: trade.id, won, diff, amount: trade.amount };
         });
-    }, [activeTrades, livePrice]);
+    }, [activeTrades, currentPrice]);
 
     const toggleFullscreen = () => {
         if (!isFullscreen) {
@@ -582,15 +509,15 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
             <div className="absolute inset-0 z-10 flex-1 h-full">
                 <div
                     ref={chartContainerRef}
-                    className={`w-full h-full ${timeframe === '1s' ? 'hidden' : 'block'}`}
+                    className={`w-full h-full ${timeframe === '1s' && chartType === 'line' ? 'hidden' : 'block'}`}
                 />
 
-                {timeframe === '1s' && (
+                {timeframe === '1s' && chartType === 'line' && (
                     <LiveStreamingChart
                         theme={theme}
-                        currentPrice={livePriceRef.current || 0}
+                        currentPrice={currentPrice}
                         symbol={symbol}
-                        priceHistory={priceHistoryRef.current}
+                        priceHistory={priceHistory}
                     />
                 )}
 
@@ -626,8 +553,8 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
                             className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${result.won
-                                ? 'bg-[#3CB371]/20 border-[#3CB371]/30'
-                                : 'bg-[#FF4444]/20 border-[#FF4444]/30'
+                                    ? 'bg-[#3CB371]/20 border-[#3CB371]/30'
+                                    : 'bg-[#FF4444]/20 border-[#FF4444]/30'
                                 }`}
                         >
                             <div className={`w-2 h-2 rounded-full animate-pulse ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
@@ -643,8 +570,10 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
             <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
                 <div className="flex items-center justify-between gap-2 pointer-events-auto">
 
-                    {/* LEFT: symbol selector */}
+                    {/* LEFT: Live badge + symbol selector */}
                     <div className="flex items-center gap-2">
+
+
                         <div
                             className={`flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:${controlBorder} pointer-events-auto group`}
                             onClick={() => setIsSelectorOpen(!isSelectorOpen)}
@@ -654,16 +583,13 @@ export default function CustomChart({ symbol = 'ETHUSDT', theme = 'dark', active
                             </h2>
                             <ChevronDown size={14} className="text-[#3CB371] transition-transform duration-300 group-hover:scale-110" />
                         </div>
-
-                        {/* Live price badge */}
-                        {livePrice > 0 && (
-                            <div className={`px-2 py-0.5 rounded-lg text-[11px] font-black tabular-nums ${isDark ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-[#1e5a38]/10 text-[#1e5a38]'}`}>
-                                ${livePrice.toFixed(2)}
-                            </div>
-                        )}
                     </div>
+                    {/* END LEFT */}
+
+                    {/* RIGHT: Settings + Fullscreen (Removed) */}
                 </div>
             </div>
+
 
             <AnimatePresence>
                 {isSelectorOpen && (
