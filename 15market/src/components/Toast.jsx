@@ -4,8 +4,8 @@ import { CheckCircle, XCircle, X, Loader2, Info } from 'lucide-react';
 
 function Toast({ message, type = 'success', onClose }) {
     useEffect(() => {
-        // Auto-close all toasts (pending after 20s, others after 5s)
-        const duration = type === 'pending' ? 20000 : 5000;
+        // Auto-close all toasts (pending after 4s — just indicates submission, not full confirmation)
+        const duration = type === 'pending' ? 4000 : 5000;
         const timer = setTimeout(() => {
             onClose();
         }, duration);

@@ -14,6 +14,13 @@ class PricingService {
         this.reconnectTimeout = null;
         this.restInterval = null;
         this.intentionalClose = false;
+
+        // Heartbeat state
+        this.heartbeatInterval = null;
+        this.lastMessageTime = 0;
+        this.HEARTBEAT_INTERVAL_MS = 15000; // check every 15s
+        this.HEARTBEAT_STALE_MS = 25000;    // consider stale if no message for 25s
+
         this.providers = [
             { name: 'COINBASE', url: 'wss://ws-feed.exchange.coinbase.com' },
             { name: 'KRAKEN', url: 'wss://ws.kraken.com' }
@@ -39,34 +46,45 @@ class PricingService {
 
     init() {
         if (this.isConnecting) return;
-        
+
         if (this.reconnectTimeout) {
             clearTimeout(this.reconnectTimeout);
             this.reconnectTimeout = null;
         }
 
-        this.terminate(); // Clean up existing state
+        // Terminate existing WS cleanly BEFORE creating a new one.
+        // We capture the old instance first so event handlers on the OLD socket
+        // can detect they are stale and self-suppress.
+        this._terminateCurrentWs();
 
         this.isConnecting = true;
-        this.intentionalClose = false;
+        this.lastMessageTime = Date.now(); // reset so heartbeat starts fresh
+
         const p = this.providers[this.currentProviderIndex];
         console.log(`[Pricing] Connecting to ${p.name} WS...`);
-        
-        try {
-            this.ws = new WebSocket(p.url, { handshakeTimeout: 10000 });
 
-            this.ws.on('open', () => {
+        try {
+            const wsInstance = new WebSocket(p.url, { handshakeTimeout: 10000 });
+            this.ws = wsInstance; // assign BEFORE handlers so checks work
+
+            wsInstance.on('open', () => {
+                // Ignore if we've already moved on to another socket
+                if (this.ws !== wsInstance) return;
+
                 this.isConnecting = false;
+                this.lastMessageTime = Date.now();
                 this.stopRestFallback();
+                this._startHeartbeat(wsInstance);
                 console.log(`[Pricing] ${p.name} Stream Active`);
+
                 if (p.name === 'COINBASE') {
-                    this.ws.send(JSON.stringify({
+                    wsInstance.send(JSON.stringify({
                         type: "subscribe",
                         product_ids: Object.keys(this.marketsC),
                         channels: ["ticker"]
                     }));
                 } else if (p.name === 'KRAKEN') {
-                    this.ws.send(JSON.stringify({
+                    wsInstance.send(JSON.stringify({
                         event: "subscribe",
                         pair: Object.keys(this.marketsK),
                         subscription: { name: "ticker" }
@@ -74,7 +92,11 @@ class PricingService {
                 }
             });
 
-            this.ws.on('message', (rawData) => {
+            wsInstance.on('message', (rawData) => {
+                // Ignore messages from a superseded socket
+                if (this.ws !== wsInstance) return;
+
+                this.lastMessageTime = Date.now();
                 try {
                     const data = JSON.parse(rawData);
                     let internalId, price;
@@ -94,18 +116,21 @@ class PricingService {
                 } catch (e) {}
             });
 
-            this.ws.on('error', (err) => {
-                if (this.intentionalClose) return;
+            wsInstance.on('error', (err) => {
+                if (this.ws !== wsInstance) return; // stale socket — ignore
                 console.error(`[Pricing] ${p.name} WS Error:`, err.message);
                 this.isConnecting = false;
+                this._stopHeartbeat();
                 this.startRestFallback();
                 this.scheduleReconnect(true);
             });
 
-            this.ws.on('close', () => {
-                if (this.intentionalClose) return;
+            wsInstance.on('close', () => {
+                if (this.ws !== wsInstance) return; // stale socket — ignore
                 console.log(`[Pricing] ${p.name} WS Connection lost.`);
                 this.isConnecting = false;
+                this.ws = null;
+                this._stopHeartbeat();
                 this.startRestFallback();
                 if (this.activeTradeCount > 0) {
                     this.scheduleReconnect(false);
@@ -115,14 +140,53 @@ class PricingService {
         } catch (e) {
             console.error(`[Pricing] Setup Error:`, e.message);
             this.isConnecting = false;
+            this._stopHeartbeat();
             this.startRestFallback();
             this.scheduleReconnect(true);
         }
     }
 
+    // ── Heartbeat ──────────────────────────────────────────────────────────────
+    // Exchanges can silently stop sending messages without closing the socket.
+    // We detect this by checking how long ago the last message arrived.
+    _startHeartbeat(wsInstance) {
+        this._stopHeartbeat();
+        this.heartbeatInterval = setInterval(() => {
+            // Guard: only act if this heartbeat still belongs to the current socket
+            if (this.ws !== wsInstance) {
+                this._stopHeartbeat();
+                return;
+            }
+            const msSinceMsg = Date.now() - this.lastMessageTime;
+            if (msSinceMsg > this.HEARTBEAT_STALE_MS) {
+                console.warn(`[Pricing] Heartbeat timeout (${Math.round(msSinceMsg / 1000)}s silence). Reconnecting...`);
+                this.startRestFallback();
+                this.scheduleReconnect(false);
+            }
+        }, this.HEARTBEAT_INTERVAL_MS);
+    }
+
+    _stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
+
+    // ── Internal terminate (no activeTradeCount side-effects) ──────────────────
+    // Replaces the old terminate() for use inside init() so we don't accidentally
+    // kill the feed when we just want to replace the socket.
+    _terminateCurrentWs() {
+        if (this.ws) {
+            try { this.ws.terminate(); } catch (e) {}
+            this.ws = null; // null FIRST — event handlers check this
+        }
+        this.isConnecting = false;
+        this._stopHeartbeat();
+    }
+
     async fetchRestPrices() {
         try {
-            // Use MEXC or Binance as REST fallback
             const response = await axios.get('https://api.binance.com/api/v3/ticker/price', { timeout: 3000 });
             const data = response.data;
             if (!Array.isArray(data)) return;
@@ -161,7 +225,7 @@ class PricingService {
         if (this.reconnectTimeout) return;
         if (cycle) this.currentProviderIndex = (this.currentProviderIndex + 1) % this.providers.length;
 
-        const delay = cycle ? 10000 : 5000; // Increased delay to avoid spamming
+        const delay = cycle ? 10000 : 5000;
         console.log(`[Pricing] Reconnecting WS in ${delay}ms...`);
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null;
@@ -169,19 +233,14 @@ class PricingService {
         }, delay);
     }
 
+    // Public terminate — called when activeTradeCount hits 0
     terminate() {
-        if (this.ws) {
-            this.intentionalClose = true;
-            try { this.ws.terminate(); } catch (e) {}
-            this.ws = null;
-        }
-        this.isConnecting = false;
+        this._terminateCurrentWs();
         if (this.reconnectTimeout) {
             clearTimeout(this.reconnectTimeout);
             this.reconnectTimeout = null;
         }
-        // Note: we don't stop REST here if it was running, 
-        // unless activeTradeCount reached 0 in trackTrade.
+        // Don't stop REST here — let activeTradeCount=0 in trackTrade() decide
     }
 
     getPrice(marketId) {

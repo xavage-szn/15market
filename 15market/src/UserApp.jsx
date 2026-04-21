@@ -696,6 +696,8 @@ export default function UserApp() {
   const [sessionMode, setSessionMode] = useState(true);
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
   const [sessionBalance, setSessionBalance] = useState(0);
+  // Ref that always mirrors sessionBalance — used by async callbacks to avoid stale closures
+  const sessionBalanceRef = useRef(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
   const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
   const [isSignerInitializing, setIsSignerInitializing] = useState(false);
@@ -795,6 +797,12 @@ export default function UserApp() {
     }
   }, [address]);
 
+  // Keep sessionBalanceRef in sync with sessionBalance state so async
+  // callbacks always read the live value without stale-closure issues.
+  useEffect(() => {
+    sessionBalanceRef.current = sessionBalance;
+  }, [sessionBalance]);
+
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
 
@@ -806,14 +814,15 @@ export default function UserApp() {
         const bal = parseFloat(data.balance);
 
         // --- CRITICAL BALANCE SYNC GUARD (V2) ---
-        // If we recently traded (< 8s ago), we ignore the backend balance unless it's LOWER than current.
-        // This prevents the "revert" issue where we fetch the stale on-chain profile before the tx mines.
+        // Use sessionBalanceRef.current (always live) instead of the stale
+        // sessionBalance closure value to accurately guard optimistic deductions.
         const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+        const currentBal = sessionBalanceRef.current;
         if (!force && msSinceLastAction < 8000) {
-           if (bal >= sessionBalance) return; // Still stale or exact, skip overwrite to protect optimistic deduction
+          if (bal >= currentBal) return; // Backend still shows pre-deduction value — protect optimistic UI
         }
 
-        if (Math.abs(bal - sessionBalance) > 0.0001) {
+        if (Math.abs(bal - currentBal) > 0.0001) {
           setSessionBalance(bal);
         }
 
@@ -1090,6 +1099,20 @@ export default function UserApp() {
   useEffect(() => {
     if (address) triggerGlobalRefresh(true);
   }, [address, triggerGlobalRefresh]);
+
+  // Periodic session balance refresh (every 12s) — catches cases where
+  // socket balance_update events are missed and no other trigger fires.
+  useEffect(() => {
+    if (!address) return;
+    const interval = setInterval(() => {
+      // Only poll if we're not in the optimistic guard window
+      const msSinceAction = Date.now() - lastOptimisticActionTime.current;
+      if (msSinceAction > 8000) {
+        updateEvmSessionBal(false);
+      }
+    }, 12000);
+    return () => clearInterval(interval);
+  }, [address, updateEvmSessionBal]);
 
   // Real-time Balance Sync
   useEffect(() => {
@@ -1399,19 +1422,22 @@ export default function UserApp() {
         expiryMs: confirmedNow + (activeDuration * 1000),
         symbol: activeMarket?.symbol || 'ETH',
         isSessionTrade: true,
-        confirmed: false, 
+        confirmed: false,
         isOptimistic: true // Marker for local cleanup if failed
       };
 
       const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
-      
+
+      // --- INSTANT BALANCE DEDUCTION (optimistic) ---
+      // Stamp the time BEFORE setSessionBalance so the guard in updateEvmSessionBal
+      // uses the correct reference point when it runs on the next tick.
       lastOptimisticActionTime.current = Date.now();
       setSessionBalance(prev => Math.max(0, prev - amtNum));
       setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
       setIsExecuting(false); // RELEASE BUTTON IMMEDIATELY FOR INSTANT FEEL
-      triggerGlobalRefresh(false); // Do NOT force, let the throttle protect our optimistic state
-      notify("Broadcasting Trade...", "pending");
+      // Do NOT call triggerGlobalRefresh here — it would race against the optimistic deduction
+      notify("Submitting Trade...", "pending");
 
       // --- STEP 2: BACKGROUND EXECUTION ---
       const backgroundTrade = async () => {
@@ -1448,19 +1474,27 @@ export default function UserApp() {
 
           // The backend already waits for transaction confirmation before returning success.
           setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
-          notify("Trade Broadcasting...", "success");
+          notify("Trade Submitted ✓", "success");
 
-          // Guard against balance sync reset
+          // Extend the guard window so the next periodic poll doesn't overwrite
+          // the optimistic balance before the chain confirms.
           lastOptimisticActionTime.current = Date.now();
+
+          // Force-refresh the real on-chain session balance ~1.5s after submission.
+          // By then the tx should be broadcast and the mempool balance updated.
+          setTimeout(() => updateEvmSessionBal(true), 1500);
 
         } catch (err) {
           clearTimeout(timeoutId);
           console.error("[Trade] Execution failed:", err.message);
-          // ROLLBACK OPTIMISTIC STATE
+          // ROLLBACK OPTIMISTIC STATE — restore the deducted balance
+          lastOptimisticActionTime.current = 0; // clear guard so refresh can correct immediately
           setSessionBalance(prev => prev + amtNum);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(`Execution Error: ${err.name === 'AbortError' ? 'RPC Timeout' : err.message} (Target: ${KEEPER_URL_ARC})`, "error");
+          notify(`Trade Failed: ${err.name === 'AbortError' ? 'RPC Timeout' : err.message}`, "error");
+          // Immediately sync real balance to confirm rollback
+          setTimeout(() => updateEvmSessionBal(true), 500);
         }
       };
 
