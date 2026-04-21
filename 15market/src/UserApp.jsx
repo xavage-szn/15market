@@ -793,7 +793,7 @@ export default function UserApp() {
         setEvmBalance(formatUnits(balWei, 18));
       } catch (err) {}
     }
-  }, [address, evmBalance]);
+  }, [address]);
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
@@ -827,7 +827,7 @@ export default function UserApp() {
         setSessionBalance(parseFloat(formatUnits(balWei, 18)));
       }
     } catch (err) { }
-  }, [address, sessionBalance, evmSessionWallet]);
+  }, [address, evmSessionWallet]);
 
   const triggerGlobalRefresh = useCallback((force = false) => {
     refetchEvmBalance(force);

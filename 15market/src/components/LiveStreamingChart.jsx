@@ -4,98 +4,65 @@ import React, { useEffect, useRef } from 'react';
  * LiveStreamingChart — A specialized Canvas-based line chart for 1s timeframe.
  * HIGH PERFORMANCE: Optimized drawing routines to avoid lags and redundant allocations.
  */
-export default function LiveStreamingChart({ theme, currentPrice, symbol, priceHistory = [] }) {
+function LiveStreamingChartComponent({ theme, currentPrice, symbol }) {
     const canvasRef = useRef(null);
-    const priceHistoryRef = useRef(priceHistory || []);
+    const priceHistoryRef = useRef([]);
     const rafRef = useRef(null);
     const targetPriceRef = useRef(null);
     const interpolatedPriceRef = useRef(null);
-    const lastInvalidPriceRef = useRef(null);
+    const startTimeRef = useRef(null);
+    const gradRef = useRef(null);
+    
+    // Y-Axis Smoothing
+    const yMinRef = useRef(null);
+    const yMaxRef = useRef(null);
+
+    const lastHRef = useRef(0);
+    const lastThemeRef = useRef(theme);
 
     const isLight = theme === 'light';
     const GREEN = '#3CB371';
-    // Remove grid as requested
-    const GRID_COLOR = 'transparent';
 
+    // Update target price and session start time
     useEffect(() => {
         const price = parseFloat(currentPrice);
-        if (!price || isNaN(price)) {
-            if (lastInvalidPriceRef.current !== currentPrice) {
-                lastInvalidPriceRef.current = currentPrice;
-                // #region agent log
-                fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H2',location:'LiveStreamingChart.jsx:currentPrice:invalid',message:'Chart received invalid currentPrice',data:{symbol,currentPrice},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
-            }
-            return;
-        }
+        if (isNaN(price)) return;
         targetPriceRef.current = price;
         if (interpolatedPriceRef.current === null) {
             interpolatedPriceRef.current = price;
         }
+        if (startTimeRef.current === null) {
+            startTimeRef.current = Date.now();
+        }
     }, [currentPrice]);
 
-    useEffect(() => {
-        // #region agent log
-        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H4',location:'LiveStreamingChart.jsx:symbol:change',message:'Chart symbol/render context changed',data:{symbol,currentPrice,propHistoryLength:Array.isArray(priceHistory) ? priceHistory.length : -1},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-    }, [symbol]);
-
-    const hasGeneratedSynthetic = useRef(false);
-
-    // Reset canvas state when switching markets to prevent path remnants from previous symbols.
+    // Reset state on symbol change
     useEffect(() => {
         priceHistoryRef.current = [];
-        hasGeneratedSynthetic.current = false;
         targetPriceRef.current = null;
         interpolatedPriceRef.current = null;
-        lastInvalidPriceRef.current = null;
+        startTimeRef.current = null;
+        yMinRef.current = null;
+        yMaxRef.current = null;
     }, [symbol]);
 
-    // Generate synthetic history for "always-there" effect
-    useEffect(() => {
-        if (!currentPrice || hasGeneratedSynthetic.current) return;
-        const now = Date.now();
-        const startPrice = parseFloat(currentPrice);
-        
-        // Generate synthetic history ONLY ONCE
-        const history = [];
-        for (let i = 240; i >= 0; i--) {
-            const t = now - (i * 500);
-            const p = startPrice + (Math.random() - 0.5) * (startPrice * 0.0003);
-            history.push({ t, p: parseFloat(p.toFixed(2)) });
-        }
-        priceHistoryRef.current = history;
-        hasGeneratedSynthetic.current = true;
-    }, [currentPrice]);
-
+    // History management
     useEffect(() => {
         const historyInterval = setInterval(() => {
             if (interpolatedPriceRef.current !== null) {
                 const now = Date.now();
                 const history = priceHistoryRef.current;
                 const lastPt = history[history.length - 1];
-                
-                // Strict Monotonicity to prevent wrapping glitches
                 if (!lastPt || now > lastPt.t) {
                     history.push({ t: now, p: interpolatedPriceRef.current });
                 }
-                
-                // Efficient capping (O(1) amortized)
-                if (history.length > 800) {
-                    priceHistoryRef.current = history.slice(-500);
+                if (history.length > 1000) {
+                    priceHistoryRef.current = history.slice(-600);
                 }
             }
         }, 100);
         return () => clearInterval(historyInterval);
     }, []);
-
-    // Sync history from prop on mount
-    useEffect(() => {
-        if (priceHistory && priceHistory.length > 0 && priceHistoryRef.current.length <= 1) {
-            const incoming = [...priceHistory].sort((a,b) => a.t - b.t);
-            priceHistoryRef.current = incoming;
-        }
-    }, [priceHistory]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -111,107 +78,123 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             }
 
             const dpr = window.devicePixelRatio || 1;
-            const targetW = W * dpr;
-            const targetH = H * dpr;
-            if (canvas.width !== targetW || canvas.height !== targetH) {
-                canvas.width = targetW;
-                canvas.height = targetH;
+            if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+                canvas.width = W * dpr;
+                canvas.height = H * dpr;
                 ctx.scale(dpr, dpr);
             }
 
             ctx.clearRect(0, 0, W, H);
 
-            // Interpolation (Smooth Move)
+            // FASTER INTERPOLATION (0.4 instead of 0.3)
             if (targetPriceRef.current !== null && interpolatedPriceRef.current !== null) {
                 const diff = targetPriceRef.current - interpolatedPriceRef.current;
-                interpolatedPriceRef.current += diff * 0.15;
+                interpolatedPriceRef.current += diff * 0.4;
             }
 
             const history = priceHistoryRef.current;
             const latestPriceVal = interpolatedPriceRef.current;
-            if (!latestPriceVal || history.length === 0) {
+            if (latestPriceVal === null || history.length === 0 || !startTimeRef.current) {
                 rafRef.current = requestAnimationFrame(draw);
                 return;
             }
 
-            // Window Configuration
             const nowPx = Date.now();
             const windowMs = 20000;
-            const oldest = nowPx - windowMs;
+            const elapsed = nowPx - startTimeRef.current;
+            const viewStartTime = elapsed < windowMs ? startTimeRef.current : nowPx - windowMs;
+            const oldest = viewStartTime;
 
-            // Keep only visible-time points to avoid stale offscreen path remnants.
-            const visiblePoints = [];
+            const isMobile = W < 600;
+            const latestPriceValStr = latestPriceVal.toFixed(2);
+            ctx.font = `bold ${isMobile ? 14 : 12}px IBM Plex Mono, monospace`;
+            const labelW = ctx.measureText(latestPriceValStr).width + 16;
+            const liveXBoundary = W - labelW - 15;
+            const getX = (t) => ((t - viewStartTime) / windowMs) * liveXBoundary;
+
             let pMin = latestPriceVal;
             let pMax = latestPriceVal;
+            let firstIdx = -1;
+            let lastIdx = -1;
+
             for (let i = 0; i < history.length; i++) {
                 const pt = history[i];
                 if (pt.t < oldest) continue;
                 const x = getX(pt.t);
-                if (x < 0 || x > liveX) continue;
-                visiblePoints.push({ x, y: 0, p: pt.p });
+                if (x < 0) continue;
+                if (x > liveXBoundary) break;
+                
+                if (firstIdx === -1) firstIdx = i;
+                lastIdx = i;
                 if (pt.p < pMin) pMin = pt.p;
                 if (pt.p > pMax) pMax = pt.p;
             }
 
-            // Fallback for empty screen
-            const deviation = Math.max(pMax - latestPriceVal, latestPriceVal - pMin);
-            const minDev = latestPriceVal * 0.0005;
-            const finalDev = Math.max(deviation, minDev);
-
-            const lo = latestPriceVal - finalDev;
-            const hi = latestPriceVal + finalDev;
-            const range = hi - lo || 1;
-
-            const toY = (p) => H - ((p - lo) / range) * H;
-            const isMobile = W < 600;
-            const labelText = latestPriceVal.toFixed(2);
-            ctx.font = `bold ${isMobile ? 14 : 12}px IBM Plex Mono, monospace`;
-            const labelW = ctx.measureText(labelText).width + 16;
-            const liveX = W - labelW - 15;
-            const liveY = toY(latestPriceVal);
-
-            const getX = (t) => liveX - ((nowPx - t) / windowMs) * W;
-
-            // Drawing
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-
-            // AREA FILL
-            const fillGrad = ctx.createLinearGradient(0, 0, 0, H);
-            fillGrad.addColorStop(0, isLight ? 'rgba(72,201,127,0.3)' : `${GREEN}33`);
-            fillGrad.addColorStop(1, 'transparent');
-
-            if (visiblePoints.length === 0) {
+            if (firstIdx === -1) {
                 rafRef.current = requestAnimationFrame(draw);
                 return;
             }
 
-            for (let i = 0; i < visiblePoints.length; i++) {
-                visiblePoints[i].y = toY(visiblePoints[i].p);
+            // Vertical Scaling with Smoothing
+            const deviation = Math.max(pMax - latestPriceVal, latestPriceVal - pMin);
+            const minDev = latestPriceVal * 0.0005;
+            const finalDev = Math.max(deviation, minDev);
+            const targetLo = latestPriceVal - finalDev;
+            const targetHi = latestPriceVal + finalDev;
+
+            if (yMinRef.current === null) {
+                yMinRef.current = targetLo;
+                yMaxRef.current = targetHi;
+            } else {
+                yMinRef.current += (targetLo - yMinRef.current) * 0.15;
+                yMaxRef.current += (targetHi - yMaxRef.current) * 0.15;
             }
 
+            const lo = yMinRef.current;
+            const hi = yMaxRef.current;
+            const range = hi - lo || 1;
+            const toY = (p) => H - ((p - lo) / range) * H;
+            
+            const liveX = getX(nowPx);
+            const liveY = toY(latestPriceVal);
+
+            // Cache Gradient
+            if (!gradRef.current || lastHRef.current !== H || lastThemeRef.current !== theme) {
+                const fillGrad = ctx.createLinearGradient(0, 0, 0, H);
+                fillGrad.addColorStop(0, isLight ? 'rgba(72,201,127,0.3)' : `${GREEN}33`);
+                fillGrad.addColorStop(1, 'transparent');
+                gradRef.current = fillGrad;
+                lastHRef.current = H;
+                lastThemeRef.current = theme;
+            }
+
+            const startX = getX(history[firstIdx].t);
+            const startY = toY(history[firstIdx].p);
+
+            // FILL
             ctx.beginPath();
-            const firstX = visiblePoints[0].x;
-            const firstY = visiblePoints[0].y;
-            ctx.moveTo(firstX, firstY);
-            for (let i = 1; i < visiblePoints.length; i++) {
-                ctx.lineTo(visiblePoints[i].x, visiblePoints[i].y);
+            ctx.moveTo(startX, startY);
+            for (let i = firstIdx + 1; i <= lastIdx; i++) {
+                ctx.lineTo(getX(history[i].t), toY(history[i].p));
             }
             ctx.lineTo(liveX, liveY);
-
-            // Close area path
-            const lastPathX = liveX;
-            ctx.save();
-            ctx.lineTo(lastPathX, H);
-            ctx.lineTo(firstX, H);
+            ctx.lineTo(liveX, H + 20);
+            ctx.lineTo(startX, H + 20);
             ctx.closePath();
-            ctx.fillStyle = fillGrad;
+            ctx.fillStyle = gradRef.current;
             ctx.fill();
-            ctx.restore();
 
-            // STROKE LINE
+            // STROKE
+            ctx.beginPath();
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
             ctx.lineWidth = 3;
             ctx.strokeStyle = isLight ? '#1e5a38' : GREEN;
+            ctx.moveTo(startX, startY);
+            for (let i = firstIdx + 1; i <= lastIdx; i++) {
+                ctx.lineTo(getX(history[i].t), toY(history[i].p));
+            }
+            ctx.lineTo(liveX, liveY);
             ctx.stroke();
 
             // CROSSHAIR
@@ -223,7 +206,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // LIVE BADGE
+            // BADGE
             const labelH = 20;
             ctx.fillStyle = isLight ? '#1e5a38' : GREEN;
             ctx.beginPath();
@@ -231,9 +214,9 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
             ctx.fill();
             ctx.fillStyle = '#ffffff';
             ctx.textBaseline = 'middle';
-            ctx.fillText(labelText, liveX + 16, liveY);
+            ctx.fillText(latestPriceValStr, liveX + 16, liveY);
 
-            // PULSE DOT
+            // PULSE
             const pulse = Math.sin(nowPx / 250) * 2;
             ctx.beginPath();
             ctx.arc(liveX, liveY, 4, 0, Math.PI * 2);
@@ -250,7 +233,7 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
 
         draw();
         return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-    }, [theme, isLight, symbol]);
+    }, [theme, symbol]);
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -258,3 +241,6 @@ export default function LiveStreamingChart({ theme, currentPrice, symbol, priceH
         </div>
     );
 }
+
+export const LiveStreamingChart = React.memo(LiveStreamingChartComponent);
+export default LiveStreamingChart;

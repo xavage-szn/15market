@@ -13,9 +13,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const tokens = useMemo(() => {
         const saved = JSON.parse(localStorage.getItem('15market_listed_tokens') || '[]');
-        // #region agent log
-        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H5',location:'CustomChart.jsx:tokens:init',message:'Chart token list initialized from storage',data:{tokenCount:Array.isArray(saved) ? saved.length : 0,firstTokenId:Array.isArray(saved) && saved[0] ? saved[0].id : null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return saved.length > 0 ? saved : [
             { id: 'eth', symbol: 'ETH', name: 'Ethereum' },
             { id: 'btc', symbol: 'BTC', name: 'Bitcoin' },
@@ -112,9 +109,6 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`absolute top-16 left-4 z-[100] w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto`}>
                         {tokens.map(t => (
                             <button key={t.id} onClick={() => {
-                                // #region agent log
-                                fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H4',location:'CustomChart.jsx:tokenClick',message:'Chart token selected by user',data:{selectedId:t?.id,selectedSymbol:t?.symbol,hasBinance:!!t?.binance,hasPyth:!!t?.pythId},timestamp:Date.now()})}).catch(()=>{});
-                                // #endregion
                                 setActiveMarket(t);
                                 setIsSelectorOpen(false);
                             }} className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}>
@@ -128,3 +122,4 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         </div>
     );
 }
+
