@@ -1533,7 +1533,8 @@ export default function UserApp() {
     };
 
     fetchTradeHistory();
-    const interval = setInterval(fetchTradeHistory, 3000); // Poll every 3s for fast result sync
+    // 30s fallback poll — socket events handle instant updates now
+    const interval = setInterval(fetchTradeHistory, 30000);
     return () => clearInterval(interval);
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
 
@@ -1776,48 +1777,60 @@ export default function UserApp() {
     const unbindSettled = socketService.on('trade_settled', (data) => {
       if (!data?.betId) return;
 
-      // Only process if this trade belongs to the current user (main or session wallet)
       const isMine = data.userAddr && (
         (address && data.userAddr.toLowerCase() === address.toLowerCase()) ||
         (evmSessionWallet && data.userAddr.toLowerCase() === evmSessionWallet.address.toLowerCase())
       );
-
       if (!isMine) return;
 
-      const betId = data.betId.toString();
+      const betId       = data.betId.toString();
       const finalStatus = data.won ? 'WON' : 'LOST';
-      const exitPrice = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
-      const payout = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
+      const exitPrice   = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
+      const payout      = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
 
       console.log(`[Settlement] Backend settled #${betId}: ${finalStatus} @ $${exitPrice}`);
-
-      // Lock the result so no other path can override it
       lockedResults.current.set(betId, { status: finalStatus, settlementPrice: exitPrice });
 
-      const updateTrade = (t) => {
-        const isMatch = (t.id && t.id.toString() === betId) ||
-          (t.nonce && t.nonce.toString() === betId);
-        if (isMatch) {
-          return {
-            ...t,
-            status: finalStatus,
-            settlementPrice: exitPrice,
-            payout,
-            backendSettled: true,
-            chainConfirmed: true,
-          };
-        }
-        return t;
+      // Build the fully-settled trade record from the backend report
+      const settledRecord = {
+        id:              betId,
+        nonce:           betId,
+        status:          finalStatus,
+        settlementPrice: exitPrice,
+        entryPrice:      data.entryPrice ? parseFloat(data.entryPrice).toFixed(2) : '0.00',
+        exitPrice,
+        payout,
+        won:             data.won,
+        direction:       data.direction === 1 ? 'UP' : 'DOWN',
+        amount:          data.amount,
+        symbol:          data.symbol || 'ETH',
+        duration:        data.duration,
+        multiplier:      data.multiplier,
+        timestamp:       data.timestamp || Date.now(),
+        txHash:          data.txHash,
+        tx:              data.txHash,
+        backendSettled:  true,
+        chainConfirmed:  true,
+        balanceApplied:  true,
       };
 
-      setActiveTrades(prev => prev.map(updateTrade));
-      setTradeHistory(prev => prev.map(updateTrade));
+      // Immediately update both active trades and history
+      setActiveTrades(prev => prev.map(t => {
+        const isMatch = String(t.id) === betId || String(t.nonce) === betId;
+        return isMatch ? { ...t, ...settledRecord } : t;
+      }));
 
-      if (data.won) {
-        notify(`Trade WON! +$${payout}`, 'success');
-      } else {
-        notify('Trade LOST.', 'error');
-      }
+      setTradeHistory(prev => {
+        const exists = prev.find(t => String(t.id || t.tx || t.nonce) === betId);
+        if (exists) {
+          return prev.map(t => String(t.id || t.tx || t.nonce) === betId ? { ...t, ...settledRecord } : t);
+        }
+        // If not found locally (e.g., page refreshed mid-trade), prepend the settled record
+        return [settledRecord, ...prev];
+      });
+
+      if (data.won) notify(`Trade WON! +$${payout}`, 'success');
+      else notify('Trade LOST.', 'error');
 
       // Refresh balance after settlement
       lastOptimisticActionTime.current = 0;
@@ -1832,6 +1845,27 @@ export default function UserApp() {
       unbindSettled();
     };
   }, [notify, updateEvmSessionBal, refetchEvmBalance, address, evmSessionWallet]);
+
+  // ── Backend-Authoritative Trade Ticks ────────────────────────────────────────
+  // The backend TradeMonitor emits trade_tick every second per active trade.
+  // We use these to drive the countdown and live price in ActiveTradesSidebar.
+  useEffect(() => {
+    if (!address) return;
+
+    const unbindTick = socketService.on('trade_tick', (data) => {
+      if (!data?.betId) return;
+      setActiveTrades(prev => prev.map(t =>
+        String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId)
+          ? { ...t, timeLeft: data.timeLeft, livePrice: data.currentPrice, isWinning: data.isWinning }
+          : t
+      ));
+    });
+
+    // trade_settled: immediately move trade to history with full settlement data
+    const unbindSettledFull = socketService.on('trade_settled_full', () => {}); // placeholder
+
+    return () => { unbindTick(); unbindSettledFull(); };
+  }, [address]);
 
   // Sync Market Changes (Across Ports via Keeper)
   useEffect(() => {

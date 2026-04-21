@@ -5,50 +5,32 @@ import { motion, AnimatePresence } from 'framer-motion';
 const GREEN_COLOR = "#3CB371"; // WON is Green
 const RED_COLOR = "#FF7F50";   // LOST is Coral
 
-// Cache server offset globally to avoid redundant fetches across multiple active trades
-let cachedServerOffset = 0;
-let isSyncingTime = false;
+// Smoothly interpolates the backend-authoritative timeLeft
+function TradeCountdown({ timeLeft, isDark }) {
+    const [displayTime, setDisplayTime] = useState(timeLeft || 0);
 
-function TradeCountdown({ expiry, isDark }) {
-    const [timeLeft, setTimeLeft] = useState(0);
-    const [offset, setOffset] = useState(cachedServerOffset);
-
+    // Sync to backend tick when it arrives
     useEffect(() => {
-        if (cachedServerOffset === 0 && !isSyncingTime) {
-            isSyncingTime = true;
-            fetch('https://api.15market.online/time')
-                .then(r => r.json())
-                .then(d => {
-                    const newOffset = d.time - Date.now();
-                    cachedServerOffset = newOffset;
-                    setOffset(newOffset);
-                    isSyncingTime = false;
-                })
-                .catch(() => { isSyncingTime = false; });
+        if (timeLeft !== undefined) {
+            setDisplayTime(timeLeft);
         }
+    }, [timeLeft]);
+
+    // Smooth client-side interpolation between 1s backend ticks
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setDisplayTime(prev => Math.max(0, prev - 0.1));
+        }, 100);
+        return () => clearInterval(interval);
     }, []);
 
-    useEffect(() => {
-        const updateTimer = () => {
-            // Determine if expiry is in ms or seconds
-            const expirySec = expiry > 1e11 ? expiry / 1000 : expiry;
-            const nowSec = (Date.now() + offset) / 1000;
-            const remaining = Math.max(0, expirySec - nowSec);
-            setTimeLeft(remaining);
-        };
-
-        updateTimer();
-        const interval = setInterval(updateTimer, 100);
-        return () => clearInterval(interval);
-    }, [expiry, offset]);
-
-    if (timeLeft === 0) return null;
+    if (displayTime <= 0) return null;
 
     return (
         <div className={`flex items-center justify-center gap-1.5 mt-2 pt-2 border-t ${isDark ? 'border-white/5' : 'border-[#0f2618]/5'}`}>
             <Timer size={10} className="text-[#3CB371] animate-pulse" />
             <span className={`text-[10px] font-mono font-black tabular-nums tracking-tighter ${isDark ? 'text-white/80' : 'text-[#0f2618]/80'}`}>
-                {timeLeft.toFixed(1)}s
+                {displayTime.toFixed(1)}s
             </span>
         </div>
     );
@@ -91,8 +73,12 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                         activeTrades.map((trade) => {
                             const isLong = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
                             const entryPrice = parseFloat(trade.entryPrice);
-                            const current = parseFloat(price);
-                            const isWinning = isLong ? current > entryPrice : current < entryPrice;
+                            // Use backend livePrice if available, fallback to global price
+                            const current = trade.livePrice ? parseFloat(trade.livePrice) : parseFloat(price);
+                            // Use backend isWinning if available, otherwise compute locally
+                            const isWinning = trade.isWinning !== undefined 
+                                ? trade.isWinning 
+                                : (isLong ? current > entryPrice : current < entryPrice);
 
                             const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;
 
@@ -170,7 +156,7 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                         </div>
                                     </div>
 
-                                    <TradeCountdown expiry={trade.expiry} isDark={isDark} />
+                                    <TradeCountdown timeLeft={trade.timeLeft} isDark={isDark} />
 
                                     {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST') && (
                                         <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#3CB371]/10'} flex flex-col items-center justify-center rounded-xl border`}>
