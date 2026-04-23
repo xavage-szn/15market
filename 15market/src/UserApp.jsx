@@ -1306,7 +1306,7 @@ export default function UserApp() {
     const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
     const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
     const dirVal = (activeDirection === "buy" || activeDirection === "UP") ? 1 : 0;
-    const entryPriceParams = Math.floor(activePrice * 100000000);
+    const entryPriceParams = (assetId === 2) ? Math.floor(activePrice * 1000000) : Math.floor(activePrice * 100);
     const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 };
     const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
     const activeUserAddr = (sessionMode && evmSessionWallet) ? evmSessionWallet.address : address;
@@ -1482,7 +1482,7 @@ export default function UserApp() {
 
           // Force-refresh the real on-chain session balance ~1.5s after submission.
           // By then the tx should be broadcast and the mempool balance updated.
-          setTimeout(() => updateEvmSessionBal(true), 1500);
+          setTimeout(() => updateEvmSessionBal(false), 1500);
 
         } catch (err) {
           clearTimeout(timeoutId);

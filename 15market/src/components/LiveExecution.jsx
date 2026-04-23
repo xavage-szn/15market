@@ -84,7 +84,7 @@ function LiveExecutionComponent({
     useEffect(() => {
         const interval = setInterval(() => {
             setElapsed(Date.now() - startTimeRef.current);
-        }, 33);
+        }, 100);
         return () => clearInterval(interval);
     }, []);
 
@@ -165,7 +165,6 @@ function LiveExecutionComponent({
                             <>
                                 {visibleTrades.map((visibleTrade, idx) => (
                                     <motion.div
-                                        layout
                                         key={visibleTrade.id}
                                         className={idx > 0 ? 'opacity-80 scale-95 origin-top transition-all hover:opacity-100 hover:scale-100' : ''}
                                     >
