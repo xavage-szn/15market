@@ -42,14 +42,20 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 const PRODUCTION_BACKEND = "https://api.15market.online";
 
 const getBaseUrl = (envValue) => {
-    // FORCE LOCALHOST on local machine to avoid mixed-env 404s
-    if (isLocal) return "http://localhost:3010";
-
-    // If it's already an absolute production URL, use it immediately
-    if (envValue && (envValue.startsWith('https://') || envValue.includes('.online') || envValue.includes('.market'))) {
+    // Absolute env URLs always win (works for local + production).
+    if (envValue && (envValue.startsWith('http://') || envValue.startsWith('https://'))) {
         return envValue;
     }
-    return envValue || PRODUCTION_BACKEND;
+
+    // Optional explicit local override for developers.
+    if (isLocal && import.meta.env.VITE_FORCE_LOCAL_BACKEND === 'true') {
+        return "http://localhost:3010";
+    }
+
+    // Relative path env values (e.g. /arc-api) are still supported.
+    if (envValue) return envValue;
+
+    return PRODUCTION_BACKEND;
 };
 
 const rawKeeperUrl = getBaseUrl(envUrl);

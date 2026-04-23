@@ -727,6 +727,9 @@ export default function UserApp() {
   // Prevents the reconciler from re-inserting them from backend data.
   const removedTradeIds = useRef(new Set());
   const cleanupTimers = useRef({});
+  const tickProbeRef = useRef({});
+  const execProbeSeqRef = useRef(0);
+  const priceProbeRef = useRef({ start: 0, success: 0, fail: 0 });
 
   // Orientation & Device Detection (Decoupled & Robust)
   const [isPortrait, setIsPortrait] = useState(
@@ -752,6 +755,10 @@ export default function UserApp() {
   }, []);
 
   const showPortraitLock = false; 
+
+  const postDebugLog = useCallback((payload) => {
+    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'488cf3'},body:JSON.stringify({sessionId:'488cf3',...payload,timestamp:Date.now()})}).catch(()=>{});
+  }, []);
 
   const handleRoundsUnlock = useCallback(() => {
     console.log('[AccessGate] Rounds access verified & unlocked');
@@ -1261,6 +1268,10 @@ export default function UserApp() {
 
   // Execute trade
   const executeTrade = async (params = null) => {
+    const probeId = `exec-${Date.now()}-${++execProbeSeqRef.current}`;
+    // #region agent log
+    postDebugLog({runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:executeTrade:entry',message:'executeTrade entry',data:{probeId,isExecuting,gameMode,paramsType:params?.type || null,sessionMode,sessionBalance:sessionBalanceRef.current,amount,duration,direction}});
+    // #endregion
     if (isExecuting) return;
 
     // Determine if we are placing a Rounds trade vs Classic trade
@@ -1292,6 +1303,9 @@ export default function UserApp() {
     if (stakeAmt + gasMargin > currentBal) {
       return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. ${sessionMode ? `Session wallet needs at least ${stakeAmt + gasMargin} USDC (Stake + Gas room)` : `Balance: ${currentBal.toFixed(3)}`}`, "error");
     }
+    // #region agent log
+    postDebugLog({runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:executeTrade:validated',message:'trade validated pre-submit',data:{probeId,activeType,stakeAmt,currentBal,gasMargin,activeDirection,activeDuration}});
+    // #endregion
 
     if (Number(activeAmount) < parseFloat(platformSettings.minBet) && activeType !== 'rounds') {
       return notify(`Min trade: ${platformSettings.minBet} ${network === 'arc' ? 'USDC' : 'SOL'}`, "error");
@@ -1332,6 +1346,9 @@ export default function UserApp() {
         // --- OPTIMISTIC BALANCE DEDUCTION (instant UI feedback) ---
         setSessionBalance(prev => Math.max(0, prev - amtNum));
         lastOptimisticActionTime.current = Date.now();
+        // #region agent log
+        postDebugLog({runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:executeTrade:rounds:deduct1',message:'rounds first optimistic deduction applied',data:{probeId,amtNum,balanceBefore:sessionBalanceRef.current}});
+        // #endregion
 
         if (evmSessionWallet) {
           // AUTO-SIGNER MODE (SESSION WALLET)
@@ -1357,6 +1374,9 @@ export default function UserApp() {
         // --- INSTANT UI START FOR ROUNDS ---
         lastOptimisticActionTime.current = Date.now();
         setSessionBalance(prev => Math.max(0, prev - amtNum));
+        // #region agent log
+        postDebugLog({runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:executeTrade:rounds:deduct2',message:'rounds second optimistic deduction applied',data:{probeId,amtNum,balanceBefore:sessionBalanceRef.current}});
+        // #endregion
 
         const roundTrade = {
           id: `round-${roundId}-${Date.now()}`,
@@ -1445,6 +1465,9 @@ export default function UserApp() {
         const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for stability
         
         try {
+          // #region agent log
+          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:request',message:'classic backend request started',data:{probeId,tradeId,activeDuration,assetId,entryPriceParams}});
+          // #endregion
           const res = await fetch(`${KEEPER_URL_ARC}/session/execute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1465,6 +1488,9 @@ export default function UserApp() {
           clearTimeout(timeoutId);
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Session trade failed");
+          // #region agent log
+          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:success',message:'classic backend request success',data:{probeId,tradeId,txHash:data?.txHash || null}});
+          // #endregion
           
           txHash = data.txHash;
 
@@ -1487,6 +1513,9 @@ export default function UserApp() {
         } catch (err) {
           clearTimeout(timeoutId);
           console.error("[Trade] Execution failed:", err.message);
+          // #region agent log
+          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:error',message:'classic backend request failed',data:{probeId,tradeId,error:err?.message || 'unknown',name:err?.name || 'Error'}});
+          // #endregion
           // ROLLBACK OPTIMISTIC STATE — restore the deducted balance
           lastOptimisticActionTime.current = 0; // clear guard so refresh can correct immediately
           setSessionBalance(prev => prev + amtNum);
@@ -1507,6 +1536,9 @@ export default function UserApp() {
       }, 5000);
 
     } catch (err) {
+      // #region agent log
+      postDebugLog({runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:executeTrade:outerCatch',message:'executeTrade failed before background completion',data:{probeId,error:err?.message || 'unknown',name:err?.name || 'Error'}});
+      // #endregion
       notify(err.message, "error");
       setIsExecuting(false);
     }
@@ -1620,20 +1652,16 @@ export default function UserApp() {
   const fetchCurrentPrice = useCallback(async () => {
     try {
       const sources = [];
+      const nowProbe = Date.now();
+      if ((nowProbe - (priceProbeRef.current.start || 0)) > 5000) {
+        priceProbeRef.current.start = nowProbe;
+        // #region agent log
+        postDebugLog({runId:'initial',hypothesisId:'H6',location:'UserApp.jsx:fetchCurrentPrice:start',message:'price fetch cycle started',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,binance:activeMarket?.binance || null,hasPyth:!!activeMarket?.pythId}});
+        // #endregion
+      }
       // #region agent log
       fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:start',message:'Starting price fetch for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,binance:activeMarket?.binance,hasPyth:!!activeMarket?.pythId,hasKraken:!!activeMarket?.kraken},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
-
-      // 0. Keeper Backend Source (authoritative backend cache, resilient against client geo/CORS blocks)
-      sources.push({
-        name: "keeper",
-        url: `${KEEPER_URL_ARC}/prices`,
-        parse: d => {
-          const key = activeMarket?.id?.toLowerCase();
-          const val = key ? d?.[key] : null;
-          return val ? parseFloat(val) : null;
-        }
-      });
 
       // 0. Keeper Backend Source (authoritative backend cache, resilient against client geo/CORS blocks)
       sources.push({
@@ -1662,10 +1690,8 @@ export default function UserApp() {
         });
       }
 
-      // 2. MEXC Source (Proxied)
-      if (activeMarket.binance) {
-        sources.push({ name: "mexc", url: `/api-mexc/api/v3/ticker/price?symbol=${activeMarket.binance}`, parse: d => parseFloat(d.price) });
-      }
+      // 2. MEXC/Binance-symbol source intentionally removed.
+      // Region restrictions can make this source flaky in some geographies.
 
       // 3. Kraken Source (Direct API - no proxy needed, no geo-restrictions)
       if (activeMarket.kraken) {
@@ -1688,7 +1714,15 @@ export default function UserApp() {
         });
       }
 
-      if (sources.length === 0) return null;
+      if (sources.length === 0) {
+        // #region agent log
+        postDebugLog({runId:'initial',hypothesisId:'H7',location:'UserApp.jsx:fetchCurrentPrice:noSources',message:'no sources resolved for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,mint:activeMarket?.mint || null}});
+        // #endregion
+        return null;
+      }
+      // #region agent log
+      postDebugLog({runId:'initial',hypothesisId:'H12',location:'UserApp.jsx:fetchCurrentPrice:sourcePlan',message:'price source plan after binance-source removal',data:{marketId:activeMarket?.id,sources:sources.map(s=>s.name)}});
+      // #endregion
       // #region agent log
       fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:sources',message:'Resolved price sources for market',data:{marketId:activeMarket?.id,sources:sources.map(s=>s.name)},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
@@ -1723,6 +1757,13 @@ export default function UserApp() {
         const pStr = truncated.toFixed(2);
         setPrice(pStr);
         priceRef.current = pStr;
+        const nowSuccess = Date.now();
+        if ((nowSuccess - (priceProbeRef.current.success || 0)) > 5000) {
+          priceProbeRef.current.success = nowSuccess;
+          // #region agent log
+          postDebugLog({runId:'initial',hypothesisId:'H6',location:'UserApp.jsx:fetchCurrentPrice:success',message:'price updated',data:{marketId:activeMarket?.id,price:pStr,sourcesCount:sources.length}});
+          // #endregion
+        }
         // #region agent log
         fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:success',message:'Price updated from fastest source',data:{marketId:activeMarket?.id,price:pStr},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
@@ -1737,6 +1778,13 @@ export default function UserApp() {
         return fastestPrice;
       }
     } catch (err) {
+      const nowFail = Date.now();
+      if ((nowFail - (priceProbeRef.current.fail || 0)) > 3000) {
+        priceProbeRef.current.fail = nowFail;
+        // #region agent log
+        postDebugLog({runId:'initial',hypothesisId:'H8',location:'UserApp.jsx:fetchCurrentPrice:allFailed',message:'all price requests failed',data:{marketId:activeMarket?.id,error:err?.message || 'unknown'}});
+        // #endregion
+      }
       // #region agent log
       fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:fetchCurrentPrice:allFailed',message:'All price sources failed for market',data:{marketId:activeMarket?.id,error:err?.message || 'unknown'},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
@@ -1854,6 +1902,16 @@ export default function UserApp() {
 
     const unbindTick = socketService.on('trade_tick', (data) => {
       if (!data?.betId) return;
+      const now = Date.now();
+      const tickKey = String(data.betId);
+      const prevTick = tickProbeRef.current[tickKey] || null;
+      const gapMs = prevTick ? (now - prevTick.ts) : 0;
+      tickProbeRef.current[tickKey] = { ts: now, sample: (prevTick?.sample || 0) + 1, timeLeft: data.timeLeft };
+      if (!prevTick || gapMs > 1500) {
+        // #region agent log
+        postDebugLog({runId:'initial',hypothesisId:'H5',location:'UserApp.jsx:socket:trade_tick',message:'trade tick cadence sample',data:{betId:tickKey,timeLeft:data.timeLeft,gapMs,isFirstTick:!prevTick,sample:tickProbeRef.current[tickKey].sample}});
+        // #endregion
+      }
       setActiveTrades(prev => prev.map(t =>
         String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId)
           ? { ...t, timeLeft: data.timeLeft, livePrice: data.currentPrice, isWinning: data.isWinning }
@@ -1865,7 +1923,7 @@ export default function UserApp() {
     const unbindSettledFull = socketService.on('trade_settled_full', () => {}); // placeholder
 
     return () => { unbindTick(); unbindSettledFull(); };
-  }, [address]);
+  }, [address, postDebugLog]);
 
   // Sync Market Changes (Across Ports via Keeper)
   useEffect(() => {
@@ -1906,6 +1964,9 @@ export default function UserApp() {
       const resolvedMarket = mergeMarketWithDefault(market);
 
       if (resolvedMarket && resolvedMarket.id !== activeMarket.id) {
+        // #region agent log
+        postDebugLog({runId:'initial',hypothesisId:'H9',location:'UserApp.jsx:syncMarket:override',message:'syncMarket changed active market and reset price',data:{from:activeMarket?.id,to:resolvedMarket?.id}});
+        // #endregion
         // #region agent log
         fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:syncMarket:override',message:'syncMarket overriding active market from localStorage/listings',data:{from:activeMarket?.id,to:resolvedMarket?.id,listingHasBinance:!!resolvedMarket?.binance,listingHasPyth:!!resolvedMarket?.pythId},timestamp:Date.now()})}).catch(()=>{});
         // #endregion

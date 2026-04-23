@@ -19,6 +19,7 @@ function LiveStreamingChartComponent({ theme, currentPrice, symbol }) {
 
     const lastHRef = useRef(0);
     const lastThemeRef = useRef(theme);
+    const debugProbeRef = useRef({ badPriceTs: 0, emptyDrawTs: 0 });
 
     const isLight = theme === 'light';
     const GREEN = '#3CB371';
@@ -26,7 +27,16 @@ function LiveStreamingChartComponent({ theme, currentPrice, symbol }) {
     // Update target price and session start time
     useEffect(() => {
         const price = parseFloat(currentPrice);
-        if (isNaN(price)) return;
+        if (isNaN(price)) {
+            const now = Date.now();
+            if ((now - (debugProbeRef.current.badPriceTs || 0)) > 5000) {
+                debugProbeRef.current.badPriceTs = now;
+                // #region agent log
+                fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'488cf3'},body:JSON.stringify({sessionId:'488cf3',runId:'initial',hypothesisId:'H10',location:'LiveStreamingChart.jsx:priceEffect:invalid',message:'currentPrice is invalid for chart',data:{symbol,currentPrice},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+            }
+            return;
+        }
         targetPriceRef.current = price;
         if (interpolatedPriceRef.current === null) {
             interpolatedPriceRef.current = price;
@@ -95,6 +105,13 @@ function LiveStreamingChartComponent({ theme, currentPrice, symbol }) {
             const history = priceHistoryRef.current;
             const latestPriceVal = interpolatedPriceRef.current;
             if (latestPriceVal === null || history.length === 0 || !startTimeRef.current) {
+                const now = Date.now();
+                if ((now - (debugProbeRef.current.emptyDrawTs || 0)) > 5000) {
+                    debugProbeRef.current.emptyDrawTs = now;
+                    // #region agent log
+                    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'488cf3'},body:JSON.stringify({sessionId:'488cf3',runId:'initial',hypothesisId:'H11',location:'LiveStreamingChart.jsx:draw:noData',message:'chart draw skipped due to missing data',data:{symbol,latestPriceVal,historyLength:history.length,hasStart:!!startTimeRef.current},timestamp:Date.now()})}).catch(()=>{});
+                    // #endregion
+                }
                 rafRef.current = requestAnimationFrame(draw);
                 return;
             }
