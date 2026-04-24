@@ -1320,9 +1320,9 @@ export default function UserApp() {
     const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
     const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
     const dirVal = (activeDirection === "buy" || activeDirection === "UP") ? 1 : 0;
-    const entryPriceParams = (assetId === 2) ? Math.floor(activePrice * 1000000) : Math.floor(activePrice * 100);
     const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 };
     const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
+    const entryPriceParams = (assetId === 2) ? Math.floor(activePrice * 1000000) : Math.floor(activePrice * 100);
     const activeUserAddr = (sessionMode && evmSessionWallet) ? evmSessionWallet.address : address;
     const now = Date.now();
     const amtNum = parseFloat(activeAmount);
@@ -1663,8 +1663,8 @@ export default function UserApp() {
       fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:start',message:'Starting price fetch for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,binance:activeMarket?.binance,hasPyth:!!activeMarket?.pythId,hasKraken:!!activeMarket?.kraken},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
 
-      // 0. Keeper Backend Source (authoritative backend cache, resilient against client geo/CORS blocks)
-      sources.push({
+      // 0. Keeper Backend Source (authoritative + lightest CPU path)
+      const keeperSource = {
         name: "keeper",
         url: `${KEEPER_URL_ARC}/prices`,
         parse: d => {
@@ -1672,7 +1672,7 @@ export default function UserApp() {
           const val = key ? d?.[key] : null;
           return val ? parseFloat(val) : null;
         }
-      });
+      };
 
       // 1. Pyth Sources (Multiple Hermes endpoints for redundancy)
       if (activeMarket.pythId) {
@@ -1714,42 +1714,48 @@ export default function UserApp() {
         });
       }
 
-      if (sources.length === 0) {
-        // #region agent log
-        postDebugLog({runId:'initial',hypothesisId:'H7',location:'UserApp.jsx:fetchCurrentPrice:noSources',message:'no sources resolved for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,mint:activeMarket?.mint || null}});
-        // #endregion
-        return null;
-      }
-      // #region agent log
-      postDebugLog({runId:'initial',hypothesisId:'H12',location:'UserApp.jsx:fetchCurrentPrice:sourcePlan',message:'price source plan after binance-source removal',data:{marketId:activeMarket?.id,sources:sources.map(s=>s.name)}});
-      // #endregion
-      // #region agent log
-      fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:sources',message:'Resolved price sources for market',data:{marketId:activeMarket?.id,sources:sources.map(s=>s.name)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500);
-
-      const pricePromises = sources.map(async (src) => {
-        try {
-          const res = await fetch(src.url, {
-            signal: controller.signal,
-            headers: { 'Cache-Control': 'no-cache' }
-          });
-          const data = await res.json();
-          const val = src.parse(data);
-          if (!val || isNaN(val)) throw new Error("Invalid");
-          return val;
-        } catch (e) {
-          // #region agent log
-          fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:fetchCurrentPrice:sourceError',message:'A price source failed',data:{marketId:activeMarket?.id,source:src.name,error:e?.message || 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-          throw e;
+      // First try backend price only for stability and low client CPU/network usage.
+      let fastestPrice = null;
+      try {
+        const keeperRes = await fetch(keeperSource.url, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        const keeperData = await keeperRes.json();
+        const keeperVal = keeperSource.parse(keeperData);
+        if (keeperVal && !isNaN(keeperVal) && keeperVal > 0) {
+          fastestPrice = keeperVal;
         }
-      });
+      } catch (e) {
+        // keeper miss falls through to external fallback
+      }
 
-      const fastestPrice = await Promise.any(pricePromises);
-      clearTimeout(timeoutId);
+      // Fallback path: external feeds only when backend cache misses.
+      if (!fastestPrice) {
+        if (sources.length === 0) {
+          // #region agent log
+          postDebugLog({runId:'initial',hypothesisId:'H7',location:'UserApp.jsx:fetchCurrentPrice:noSources',message:'no sources resolved for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,mint:activeMarket?.mint || null}});
+          // #endregion
+          return null;
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const pricePromises = sources.map(async (src) => {
+          try {
+            const res = await fetch(src.url, {
+              signal: controller.signal,
+              headers: { 'Cache-Control': 'no-cache' }
+            });
+            const data = await res.json();
+            const val = src.parse(data);
+            if (!val || isNaN(val)) throw new Error("Invalid");
+            return val;
+          } catch (e) {
+            throw e;
+          }
+        });
+        fastestPrice = await Promise.any(pricePromises);
+        clearTimeout(timeoutId);
+      }
 
       if (fastestPrice > 0) {
         // Enforce 2 decimal model as requested (Truncation)
