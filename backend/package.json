@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "worker:payout": "node src/payoutWorker.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run worker:payout\""
   },
   "dependencies": {
     "axios": "^1.15.0",
@@ -19,6 +21,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "nodemon": "^3.1.0"
   }
 }
