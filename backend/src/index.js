@@ -9,7 +9,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const blockchain = require('./blockchain');
 const redis = require('./redis');
-const pricing = require('./pricing');
+const frontendPricing = require('./pricingFrontend');
+const backendPricing = require('./pricingBackend');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +18,12 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(cors());
 app.use(express.json());
+
+const debugLog = (hypothesisId, location, message, data = {}, runId = 'initial') => {
+    // #region agent log
+    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'28cfd1'},body:JSON.stringify({sessionId:'28cfd1',runId,hypothesisId,location,message,data,timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+};
 
 // Active trade monitors — betId → TradeMonitor instance
 const activeMonitors = new Map();
@@ -38,7 +45,7 @@ class TradeMonitor {
         this.marketId    = parseInt(marketId);
         this.symbol      = symbol; // 'eth' | 'btc' | 'sol'
         this.stake       = parseFloat(amount);
-        this.latestPrice = pricing.getPrice(symbol) || this.entryPriceActual;
+        this.latestPrice = backendPricing.getPrice(symbol) || this.entryPriceActual;
         this.tickInterval  = null;
         this.settleTimer   = null;
         this.settled       = false;
@@ -50,10 +57,16 @@ class TradeMonitor {
         let elapsed    = 0;
 
         // Subscribe to live pricing feed
-        pricing.subscribe(this.betId, (prices) => {
+        backendPricing.subscribe(this.betId, (prices) => {
             const p = prices[this.symbol];
             if (p && p > 0) this.latestPrice = p;
         });
+        debugLog(
+            'H3',
+            'backend/src/index.js:TradeMonitor.start',
+            'trade monitor subscribed to pricing',
+            { betId: this.betId, symbol: this.symbol, entryPriceActual: this.entryPriceActual, latestPriceAtStart: this.latestPrice }
+        );
 
         // Emit trade_tick every second
         this.tickInterval = setInterval(() => {
@@ -93,7 +106,7 @@ class TradeMonitor {
         if (!exitPrice || exitPrice <= 0) {
             // Single 2s retry
             await new Promise(r => setTimeout(r, 2000));
-            exitPrice = pricing.getPrice(this.symbol);
+            exitPrice = backendPricing.getPrice(this.symbol);
         }
         if (!exitPrice || exitPrice <= 0) {
             console.error(`[TradeMonitor] ✗ No price for #${this.betId}. Settling as LOST.`);
@@ -126,7 +139,7 @@ class TradeMonitor {
 
         await this._emitSettlement(won, exitPrice, payout, settleTx?.hash);
         await redis.srem('active_trades', this.betId);
-        pricing.trackTrade(false);
+        backendPricing.trackTrade(false);
         activeMonitors.delete(this.betId);
         emitAdminStats();
     }
@@ -179,7 +192,7 @@ class TradeMonitor {
         clearTimeout(this.settleTimer);
         this.tickInterval = null;
         this.settleTimer  = null;
-        pricing.unsubscribe(this.betId);
+        backendPricing.unsubscribe(this.betId);
     }
 
     stop() { this.settled = true; this._cleanup(); }
@@ -190,13 +203,15 @@ class TradeMonitor {
 let prices    = { btc: 0, eth: 0, sol: 0 };
 let oracleReady = false;
 
-pricing.onPriceUpdate = (newPrices) => {
+frontendPricing.onPriceUpdate = (newPrices) => {
     prices = { ...newPrices };
     oracleReady = true;
 };
 
-// Keep oracle warm always
-pricing.trackTrade(true);
+// Keep frontend chart/oracle feed warm always.
+frontendPricing.ensureConnected();
+// Keep backend trade feed warm so trades can start instantly.
+backendPricing.ensureConnected();
 
 // Socket
 io.on('connection', (socket) => {
@@ -287,6 +302,12 @@ app.post('/session/execute', async (req, res) => {
     const symbol   = assetMap[parseInt(marketId)] || 'eth';
 
     try {
+        debugLog(
+            'H5',
+            'backend/src/index.js:/session/execute:entry',
+            'session execute entered',
+            { hasAddress: Boolean(address), hasTradeParams: Boolean(tradeParams), tradeId: id, marketId, duration, amount }
+        );
         const walletAddress    = await redis.get(`addr:${addr}`);
         const currentOnChainBal = await blockchain.getBalance(walletAddress);
         const currentBal       = parseFloat(currentOnChainBal || '0.0');
@@ -295,17 +316,29 @@ app.post('/session/execute', async (req, res) => {
         if (currentBal < stake + 0.0005) return res.status(400).json({ error: "Insufficient session balance" });
 
         // Capture actual dollar price at entry time (used by monitor for tick display & comparison)
-        const entryPriceActual = pricing.getPrice(symbol) || 0;
+        const entryPriceActual = backendPricing.getPrice(symbol) || 0;
+        debugLog(
+            'H3',
+            'backend/src/index.js:/session/execute:beforePlaceBet',
+            'captured entry price before placing trade',
+            { tradeId: id, symbol, entryPriceActual, hasAnyPrice: entryPriceActual > 0 }
+        );
 
         // Persist trade to Redis
         const tradeData = { id, userAddr: addr, direction, amount, entryPrice, entryPriceActual, duration, marketId, symbol, timestamp: Date.now(), status: 'PENDING' };
         await redis.set(`bet_owner:${id}`, addr, 'EX', 86400);
         await redis.set(`trade:${id}`, JSON.stringify(tradeData), 'EX', 86400);
         await redis.sadd('active_trades', id);
-        pricing.trackTrade(true);
+        backendPricing.trackTrade(true);
 
         // Place bet on-chain
         const receipt = await blockchain.placeBetForUser(pk, id, direction, duration, entryPrice, marketId, amount);
+        debugLog(
+            'H5',
+            'backend/src/index.js:/session/execute:afterPlaceBet',
+            'blockchain placeBetForUser returned',
+            { tradeId: id, txHash: receipt?.hash || null, symbol }
+        );
 
         await redis.incrbyfloat('stats:total_volume', stake);
         await redis.incr('stats:total_trades');
@@ -331,6 +364,12 @@ app.post('/session/execute', async (req, res) => {
         res.json({ success: true, txHash: receipt.hash });
     } catch (error) {
         console.error(`[API] Trade execution failed:`, error.message);
+        debugLog(
+            'H5',
+            'backend/src/index.js:/session/execute:catch',
+            'session execute failed',
+            { tradeId: req?.body?.tradeParams?.id || null, error: error.message }
+        );
         res.status(500).json({ error: error.message });
     }
 });
@@ -495,7 +534,7 @@ const recoverPendingSettlements = async () => {
         const now       = Date.now();
 
         for (const id of activeIds) {
-            pricing.trackTrade(true);
+            backendPricing.trackTrade(true);
             const raw = await redis.get(`trade:${id}`);
             if (!raw) { await redis.srem('active_trades', id); continue; }
 
@@ -507,12 +546,12 @@ const recoverPendingSettlements = async () => {
                 console.log(`[Recovery] Settling abandoned trade #${id}...`);
                 const assetMap = ['eth', 'btc', 'sol'];
                 const symbol   = assetMap[trade.marketId] || 'eth';
-                const exitPrice = pricing.getPrice(symbol);
+                const exitPrice = backendPricing.getPrice(symbol);
                 if (exitPrice > 0) {
                     let scaledExit = trade.marketId === 2 ? Math.floor(exitPrice * 1000000) : Math.floor(exitPrice * 100);
                     await blockchain.settleBet(id, scaledExit).catch(e => console.warn(`[Recovery] Settle failed #${id}:`, e.message));
                     await redis.srem('active_trades', id);
-                    pricing.trackTrade(false);
+                    backendPricing.trackTrade(false);
                 }
             } else {
                 // Still within window — restart the monitor with remaining time

@@ -1,21 +1,18 @@
 const WebSocket = require('ws');
 const axios = require('axios');
 
-class PricingService {
+class BackendPricingService {
     constructor() {
         this.prices = { btc: 0, eth: 0, sol: 0 };
         this.marketsC = { 'BTC-USD': 'btc', 'ETH-USD': 'eth', 'SOL-USD': 'sol' };
         this.marketsK = { 'BTC/USD': 'btc', 'ETH/USD': 'eth', 'SOL/USD': 'sol' };
         this.ws = null;
-        // Multi-subscriber map: id → callback(prices)
-        // Supports both per-trade monitors AND the legacy single onPriceUpdate
         this.subscribers = new Map();
         this.currentProviderIndex = 0;
         this.activeTradeCount = 0;
         this.isConnecting = false;
         this.reconnectTimeout = null;
         this.restInterval = null;
-        // Heartbeat
         this.heartbeatInterval = null;
         this.lastMessageTime = 0;
         this.HEARTBEAT_INTERVAL_MS = 15000;
@@ -33,16 +30,6 @@ class PricingService {
         // #endregion
     }
 
-    // ── Backward-compat: index.js does `pricing.onPriceUpdate = fn` ────────────
-    set onPriceUpdate(fn) {
-        if (fn) this.subscribers.set('__main__', fn);
-        else this.subscribers.delete('__main__');
-    }
-    get onPriceUpdate() {
-        return this.subscribers.get('__main__') || null;
-    }
-
-    // ── Per-trade subscription API ─────────────────────────────────────────────
     subscribe(id, fn) { this.subscribers.set(String(id), fn); }
     unsubscribe(id)   { this.subscribers.delete(String(id)); }
 
@@ -52,32 +39,28 @@ class PricingService {
         });
     }
 
-    // ── Lazy Connect ───────────────────────────────────────────────────────────
+    ensureConnected() {
+        if (!this.ws && !this.isConnecting) this.init();
+    }
+
     trackTrade(isStarting) {
         if (isStarting) {
             this.activeTradeCount++;
             this._debugLog(
                 'H1',
-                'backend/src/pricing.js:trackTrade:start',
+                'backend/src/pricingBackend.js:trackTrade:start',
                 'trackTrade start received',
                 { activeTradeCount: this.activeTradeCount, hasWs: Boolean(this.ws), isConnecting: this.isConnecting, subscribers: this.subscribers.size }
             );
-            if (!this.ws && !this.isConnecting) {
-                console.log("[Pricing] Trade detected. Powering on price feed...");
-                this.init();
-            }
+            if (!this.ws && !this.isConnecting) this.init();
         } else {
             this.activeTradeCount = Math.max(0, this.activeTradeCount - 1);
             this._debugLog(
                 'H1',
-                'backend/src/pricing.js:trackTrade:stop',
+                'backend/src/pricingBackend.js:trackTrade:stop',
                 'trackTrade stop received',
                 { activeTradeCount: this.activeTradeCount, hasWs: Boolean(this.ws), isConnecting: this.isConnecting, subscribers: this.subscribers.size }
             );
-            if (this.activeTradeCount === 0 && (this.ws || this.isConnecting)) {
-                console.log("[Pricing] All trades settled. Hibernating price feed...");
-                this.terminate();
-            }
         }
     }
 
@@ -90,10 +73,9 @@ class PricingService {
         this.lastMessageTime = Date.now();
         const p = this.providers[this.currentProviderIndex];
         this._hasLoggedFirstPrice = false;
-        console.log(`[Pricing] Connecting to ${p.name} WS...`);
         this._debugLog(
             'H2',
-            'backend/src/pricing.js:init',
+            'backend/src/pricingBackend.js:init',
             'pricing init called',
             { provider: p.name, providerIndex: this.currentProviderIndex, activeTradeCount: this.activeTradeCount }
         );
@@ -108,17 +90,16 @@ class PricingService {
                 this.lastMessageTime = Date.now();
                 this.stopRestFallback();
                 this._startHeartbeat(wsInstance);
-                console.log(`[Pricing] ${p.name} Stream Active`);
                 this._debugLog(
                     'H2',
-                    'backend/src/pricing.js:ws:open',
+                    'backend/src/pricingBackend.js:ws:open',
                     'pricing websocket opened',
                     { provider: p.name, activeTradeCount: this.activeTradeCount, subscribers: this.subscribers.size }
                 );
                 if (p.name === 'COINBASE') {
-                    wsInstance.send(JSON.stringify({ type: "subscribe", product_ids: Object.keys(this.marketsC), channels: ["ticker"] }));
+                    wsInstance.send(JSON.stringify({ type: 'subscribe', product_ids: Object.keys(this.marketsC), channels: ['ticker'] }));
                 } else if (p.name === 'KRAKEN') {
-                    wsInstance.send(JSON.stringify({ event: "subscribe", pair: Object.keys(this.marketsK), subscription: { name: "ticker" } }));
+                    wsInstance.send(JSON.stringify({ event: 'subscribe', pair: Object.keys(this.marketsK), subscription: { name: 'ticker' } }));
                 }
             });
 
@@ -141,7 +122,7 @@ class PricingService {
                             this._hasLoggedFirstPrice = true;
                             this._debugLog(
                                 'H3',
-                                'backend/src/pricing.js:ws:message:firstPrice',
+                                'backend/src/pricingBackend.js:ws:message:firstPrice',
                                 'first valid live price received',
                                 { market: internalId, price, provider: p.name }
                             );
@@ -153,10 +134,9 @@ class PricingService {
 
             wsInstance.on('error', (err) => {
                 if (this.ws !== wsInstance) return;
-                console.error(`[Pricing] ${p.name} WS Error:`, err.message);
                 this._debugLog(
                     'H4',
-                    'backend/src/pricing.js:ws:error',
+                    'backend/src/pricingBackend.js:ws:error',
                     'pricing websocket error',
                     { provider: p.name, error: err.message, activeTradeCount: this.activeTradeCount }
                 );
@@ -168,10 +148,9 @@ class PricingService {
 
             wsInstance.on('close', () => {
                 if (this.ws !== wsInstance) return;
-                console.log(`[Pricing] ${p.name} WS Connection lost.`);
                 this._debugLog(
                     'H4',
-                    'backend/src/pricing.js:ws:close',
+                    'backend/src/pricingBackend.js:ws:close',
                     'pricing websocket closed',
                     { provider: p.name, activeTradeCount: this.activeTradeCount, isConnecting: this.isConnecting }
                 );
@@ -179,11 +158,9 @@ class PricingService {
                 this.ws = null;
                 this._stopHeartbeat();
                 this.startRestFallback();
-                if (this.activeTradeCount > 0) this.scheduleReconnect(false);
+                this.scheduleReconnect(false);
             });
-
         } catch (e) {
-            console.error(`[Pricing] Setup Error:`, e.message);
             this.isConnecting = false;
             this._stopHeartbeat();
             this.startRestFallback();
@@ -197,7 +174,6 @@ class PricingService {
             if (this.ws !== wsInstance) { this._stopHeartbeat(); return; }
             const msSinceMsg = Date.now() - this.lastMessageTime;
             if (msSinceMsg > this.HEARTBEAT_STALE_MS) {
-                console.warn(`[Pricing] Heartbeat timeout (${Math.round(msSinceMsg / 1000)}s silence). Reconnecting...`);
                 this.startRestFallback();
                 this.scheduleReconnect(false);
             }
@@ -226,36 +202,27 @@ class PricingService {
             if (eth) this.prices.eth = parseFloat(eth.price);
             if (sol) this.prices.sol = parseFloat(sol.price);
             this._notifyAll();
-            console.log("[Pricing] Updated prices via REST Fallback");
         } catch (e) {}
     }
 
     startRestFallback() {
         if (this.restInterval) return;
-        console.log("[Pricing] Starting REST fallback polling (5s interval)...");
         this.fetchRestPrices();
         this.restInterval = setInterval(() => this.fetchRestPrices(), 5000);
     }
 
     stopRestFallback() {
-        if (this.restInterval) { clearInterval(this.restInterval); this.restInterval = null; console.log("[Pricing] REST fallback stopped."); }
+        if (this.restInterval) { clearInterval(this.restInterval); this.restInterval = null; }
     }
 
     scheduleReconnect(cycle = false) {
         if (this.reconnectTimeout) return;
         if (cycle) this.currentProviderIndex = (this.currentProviderIndex + 1) % this.providers.length;
         const delay = cycle ? 10000 : 5000;
-        console.log(`[Pricing] Reconnecting WS in ${delay}ms...`);
         this.reconnectTimeout = setTimeout(() => { this.reconnectTimeout = null; this.init(); }, delay);
     }
 
-    terminate() {
-        this._terminateCurrentWs();
-        if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
-    }
-
     getPrice(marketId) { return this.prices[marketId.toLowerCase()] || 0; }
-    getAllPrices() { return this.prices; }
 }
 
-module.exports = new PricingService();
+module.exports = new BackendPricingService();
