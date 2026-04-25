@@ -113,16 +113,12 @@ function Root() {
               theme: 'dark',
               accentColor: '#3CB371', // 15market Green
               showWalletLoginFirst: true,
-              logo: 'https://15market.online/logo.png',
+              logo: 'https://15market.com/logo.png',
               walletList: ['metamask', 'coinbase_wallet', 'rainbow', 'rabby_wallet', 'wallet_connect'],
             },
             defaultChain: arcTestnet,
             supportedChains: [arcTestnet],
-            externalWallets: {
-              solana: {
-                connectors: [],
-              },
-            },
+            externalWallets: {},
             embeddedWallets: {
               createOnLogin: 'users-without-wallets',
             },
