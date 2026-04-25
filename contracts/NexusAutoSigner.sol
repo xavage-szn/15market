@@ -144,6 +144,15 @@ contract NexusAutoSignerFactory {
         )))));
     }
 
+    function createWallet(address player) external {
+        require(msg.sender == operator || msg.sender == player, "Unauthorized");
+        require(playerToWallet[player] == address(0), "Already exists");
+        bytes32 salt = keccak256(abi.encodePacked(player));
+        address wallet = address(new NexusAutoSignerWallet{salt: salt}(player, operator, usdc));
+        playerToWallet[player] = wallet;
+        emit WalletDeployed(player, wallet);
+    }
+
     function deployAndDeposit(uint256 amount) external {
         address wallet = playerToWallet[msg.sender];
         if (wallet == address(0)) {

@@ -115,7 +115,7 @@ app.get('/profiles/:address', async (req, res) => {
   // Also provide the deterministic smart wallet address
   let walletAddress = null;
   try {
-    walletAddress = await factoryContract.getWalletAddress(addr);
+    walletAddress = await factoryContract.playerToWallet(addr);
   } catch (e) {
     console.error("Failed to get wallet address:", e);
   }
@@ -144,15 +144,15 @@ app.post('/profiles', async (req, res) => {
     
     // 2. If not linked, trigger deployment/linkage
     if (!walletAddress || walletAddress === ethers.ZeroAddress) {
-      console.log(`🛠️ [FACTORY] Deploying smart wallet for ${address}...`);
+      console.log(`🛠️ [FACTORY] Creating smart wallet for ${address}...`);
       try {
-        const tx = await factoryContract.deployWallet(address);
+        const tx = await factoryContract.createWallet(address);
         await tx.wait();
         walletAddress = await factoryContract.playerToWallet(address);
-        console.log(`✅ [FACTORY] Wallet deployed: ${walletAddress}`);
+        console.log(`✅ [FACTORY] Wallet created: ${walletAddress}`);
       } catch (deployErr) {
-        console.error("Factory deployWallet failed, falling back to getWalletAddress:", deployErr.message);
-        // Fallback to deterministic address if deployment fails (might already be deployed or different function)
+        console.error("Factory createWallet failed, falling back to getWalletAddress:", deployErr.message);
+        // Fallback to deterministic address if transaction fails
         walletAddress = await factoryContract.getWalletAddress(address);
       }
     }
