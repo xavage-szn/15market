@@ -29,6 +29,7 @@ const WALLET_ABI = [
 const FACTORY_ABI = [
     "function playerToWallet(address player) view returns (address)",
     "function getWalletAddress(address player) view returns (address)",
+    "function deployWallet(address player) returns (address)",
     "event WalletDeployed(address indexed player, address wallet)"
 ];
 

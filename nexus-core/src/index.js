@@ -13,6 +13,7 @@ const ClassicEngine = require('./classic');
 
 const { ethers } = require('ethers');
 const { RedisMirrorService, SettlementService, setupBatchSweepJob, FACTORY_ABI } = require('./services/nexus-auto-signer');
+const profiles = require('./profiles');
 
 // --- Setup Server ---
 const app = express();
@@ -103,6 +104,70 @@ app.post('/session/execute', async (req, res) => {
 app.get('/history/:address', (req, res) => {
   const addr = classicEngine.normalizeAddr(req.params.address);
   res.json(cache.userHistory.get(addr) || []);
+});
+
+// --- API Routes (Profiles & Identity) ---
+
+app.get('/profiles/:address', async (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  const profile = profiles.get(addr);
+  
+  // Also provide the deterministic smart wallet address
+  let walletAddress = null;
+  try {
+    walletAddress = await factoryContract.getWalletAddress(addr);
+  } catch (e) {
+    console.error("Failed to get wallet address:", e);
+  }
+
+  if (!profile) {
+    return res.json({ success: true, profile: null, walletAddress });
+  }
+
+  // Add some mock stats for the dashboard if missing
+  const stats = profile.stats || {
+    totalTrades: cache.userHistory.get(addr)?.length || 0,
+    totalWins: cache.userHistory.get(addr)?.filter(h => h.won).length || 0
+  };
+
+  res.json({ success: true, profile, stats, walletAddress });
+});
+
+app.post('/profiles', async (req, res) => {
+  const { address, username, xHandle, avatar } = req.body;
+  if (!address) return res.status(400).json({ error: 'Address required' });
+
+  let walletAddress = null;
+  try {
+    // 1. Check if wallet already linked
+    walletAddress = await factoryContract.playerToWallet(address);
+    
+    // 2. If not linked, trigger deployment/linkage
+    if (!walletAddress || walletAddress === ethers.ZeroAddress) {
+      console.log(`🛠️ [FACTORY] Deploying smart wallet for ${address}...`);
+      try {
+        const tx = await factoryContract.deployWallet(address);
+        await tx.wait();
+        walletAddress = await factoryContract.playerToWallet(address);
+        console.log(`✅ [FACTORY] Wallet deployed: ${walletAddress}`);
+      } catch (deployErr) {
+        console.error("Factory deployWallet failed, falling back to getWalletAddress:", deployErr.message);
+        // Fallback to deterministic address if deployment fails (might already be deployed or different function)
+        walletAddress = await factoryContract.getWalletAddress(address);
+      }
+    }
+  } catch (e) {
+    console.error("Factory interaction failed:", e);
+  }
+
+  const profile = profiles.upsert(address, { username, xHandle, avatar, walletAddress });
+  res.json({ success: true, profile, walletAddress });
+});
+
+app.patch('/profiles/:address', async (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  const profile = profiles.upsert(addr, req.body);
+  res.json({ success: true, profile });
 });
 
 // --- API Routes (Global) ---
