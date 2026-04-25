@@ -108,12 +108,13 @@ function Root() {
         <PrivyProvider
           appId={PRIVY_APP_ID}
           config={{
-            loginMethods: ['email', 'wallet', 'google', 'twitter', 'apple', 'discord'],
+            loginMethods: ['wallet'],
             appearance: {
               theme: 'dark',
-              accentColor: '#3CB371',
+              accentColor: '#3CB371', // 15market Green
               showWalletLoginFirst: true,
               logo: 'https://15market.online/logo.png',
+              walletList: ['metamask', 'coinbase_wallet', 'rainbow', 'wallet_connect'],
             },
             defaultChain: arcTestnet,
             supportedChains: [arcTestnet],
