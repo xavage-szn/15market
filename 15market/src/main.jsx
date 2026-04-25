@@ -118,11 +118,7 @@ function Root() {
             },
             defaultChain: arcTestnet,
             supportedChains: [arcTestnet],
-            externalWallets: {
-              ethereum: {
-                connectors: ['metamask', 'coinbase_wallet', 'rainbow', 'okx_wallet', 'phantom'],
-              },
-            },
+            externalWallets: {},
             embeddedWallets: {
               createOnLogin: 'users-without-wallets',
             },
