@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppKit } from '@reown/appkit/react';
+import { usePrivy } from '@privy-io/react-auth';
 import { useAccount, useSwitchChain } from 'wagmi';
-import { publicClient } from "../client";
-import { formatEther } from "viem";
 import { ARC_CHAIN_ID } from "../constants";
 
 export function UnifiedWalletButton({ theme }) {
     const navigate = useNavigate();
-    const { open } = useAppKit();
+    const { login, logout, authenticated, user } = usePrivy();
     const { address, isConnected, chainId: connectedChainId } = useAccount();
     const { switchChain } = useSwitchChain();
     const [isConnecting, setIsConnecting] = useState(false);
@@ -23,37 +21,42 @@ export function UnifiedWalletButton({ theme }) {
 
     // Navigate to trade page after connection on correct chain
     useEffect(() => {
-        if (isConnected && connectedChainId === ARC_CHAIN_ID) {
+        if (authenticated && address && connectedChainId === ARC_CHAIN_ID) {
             console.log("✅ [WALLET] Connected to Arc Testnet, navigating to trade page...");
-            setTimeout(() => navigate('/'), 500);
+            // setTimeout(() => navigate('/'), 500); // Optional auto-navigation
         }
-    }, [isConnected, connectedChainId, navigate]);
+    }, [authenticated, address, connectedChainId, navigate]);
 
-    const displayAddress = address;
+    const displayAddress = address || user?.wallet?.address;
     const currentColor = '#3CB371';
 
-    // Open Reown modal
-    const handleClick = async () => {
+    // Open Privy login modal
+    const handleLogin = async () => {
         if (isConnecting) return;
-
-        console.log("🖱️ [WALLET BUTTON] Clicked (Reown)", { isConnected, isConnecting, address });
-
         setIsConnecting(true);
         try {
-            console.log("📂 [WALLET] Opening Reown Modal...");
-            await open();
+            console.log("📂 [WALLET] Opening Privy Modal...");
+            await login();
         } catch (err) {
-            console.error("Connect failed:", err);
+            console.error("Login failed:", err);
         } finally {
-            // Keep the button locked for 2s to prevent mobile double-taps
-            setTimeout(() => setIsConnecting(false), 2000);
+            setTimeout(() => setIsConnecting(false), 1000);
         }
     };
 
-    if (!isConnected) {
+    const handleLogout = async () => {
+        try {
+            await logout();
+            console.log("🚪 [WALLET] Logged out");
+        } catch (err) {
+            console.error("Logout failed:", err);
+        }
+    };
+
+    if (!authenticated) {
         return (
             <button
-                onClick={handleClick}
+                onClick={handleLogin}
                 className="px-4 lg:px-8 py-2.5 lg:py-3 font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] rounded-full transition-all active:scale-95 text-white relative overflow-hidden group shadow-xl"
                 style={{
                     backgroundColor: '#3CB371',
@@ -69,7 +72,8 @@ export function UnifiedWalletButton({ theme }) {
 
     return (
         <button
-            onClick={handleClick}
+            onClick={handleLogout}
+            title="Click to Logout"
             className={`flex items-center gap-2 lg:gap-3 px-2 lg:px-4 py-1.5 lg:py-2 rounded-full border backdrop-blur-md transition-all duration-300 group`}
             style={{
                 backgroundColor: theme === 'light' ? `${currentColor}08` : `${currentColor}15`,

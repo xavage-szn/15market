@@ -7,10 +7,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
-import { WagmiProvider } from 'wagmi';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PrivyProvider } from '@privy-io/react-auth';
+import { WagmiProvider } from '@privy-io/wagmi';
 import { config } from './wagmiConfig';
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PRIVY_APP_ID, arcTestnet } from './constants';
 
 const queryClient = new QueryClient();
 
@@ -103,13 +104,31 @@ class ErrorBoundary extends React.Component {
 function Root() {
   return (
     <React.StrictMode>
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
-        </QueryClientProvider>
-      </WagmiProvider>
+      <QueryClientProvider client={queryClient}>
+        <PrivyProvider
+          appId={PRIVY_APP_ID}
+          config={{
+            loginMethods: ['email', 'wallet', 'google', 'twitter', 'apple', 'discord'],
+            appearance: {
+              theme: 'dark',
+              accentColor: '#3CB371',
+              showWalletLoginFirst: true,
+              logo: 'https://15market.online/logo.png',
+            },
+            defaultChain: arcTestnet,
+            supportedChains: [arcTestnet],
+            embeddedWallets: {
+              createOnLogin: 'users-without-wallets',
+            },
+          }}
+        >
+          <WagmiProvider config={config}>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </WagmiProvider>
+        </PrivyProvider>
+      </QueryClientProvider>
     </React.StrictMode>
   );
 }

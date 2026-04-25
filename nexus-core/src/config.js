@@ -1,0 +1,43 @@
+// ============================================================
+// nexus-core/src/config.js
+// Single source of truth for all configuration
+// ============================================================
+require('dotenv').config();
+
+module.exports = {
+  // Network
+  PORT: Number(process.env.PORT || 3010),
+  ROUNDS_PORT: Number(process.env.ROUNDS_PORT || 3011),
+  
+  // Blockchain / Arc Testnet
+  CHAIN_ID: Number(process.env.CHAIN_ID || 5042002),
+  RPCS: [
+    process.env.ARC_RPC_1,
+    process.env.ARC_RPC_2,
+    process.env.ARC_RPC_3,
+    process.env.ARC_RPC_4
+  ].filter(Boolean),
+  THIRDWEB_SECRET_KEY: process.env.THIRDWEB_SECRET_KEY,
+  PRIVATE_KEY: process.env.PRIVATE_KEY,
+  CONTRACT_ADDRESS: process.env.ARC_CONTRACT_ADDRESS,
+  ROUNDS_CONTRACT_ADDRESS: process.env.ROUNDS_CONTRACT_ADDRESS,
+  
+  // Classic Trades
+  BATCH_WINDOW_MS: Number(process.env.SETTLEMENT_BATCH_WINDOW_MS || 25),
+  SETTLEMENT_CONCURRENCY: Number(process.env.SETTLEMENT_CONCURRENCY || 16),
+  DEFAULT_MULTIPLIER: Number(process.env.DEFAULT_MULTIPLIER || 1.95),
+  DEFAULT_SESSION_BALANCE: Number(process.env.DEFAULT_SESSION_BALANCE || 1000),
+  PAYOUT_INLINE_FALLBACK: String(process.env.PAYOUT_INLINE_FALLBACK || 'true') === 'true',
+  
+  // Privy Integration
+  USE_PRIVY_SMART_WALLETS: String(process.env.USE_PRIVY_SMART_WALLETS || 'false') === 'true',
+  PRIVY_APP_ID: process.env.PRIVY_APP_ID || '',
+  PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET || '',
+
+  // Redis
+  REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
+
+  // Auto-Signer
+  FACTORY_ADDRESS: process.env.ARC_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000',
+  TREASURY_ADDRESS: process.env.TREASURY_ADDRESS || '0x0000000000000000000000000000000000000000',
+};

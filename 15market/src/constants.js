@@ -83,8 +83,9 @@ if (!isLocal && KEEPER_URL_ARC.includes('localhost')) {
 }
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 
-// 2. Project ID
+// 2. Project ID (Legacy Reown removed, keeping for compatibility if needed elsewhere)
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
+export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmisfdm6o00j9jr0d2tjntq58";
 
 // 3. Chain Definition for Arc
 export const arcTestnet = defineChain({

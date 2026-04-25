@@ -1,0 +1,21 @@
+{
+  "name": "nexus-core",
+  "version": "1.0.0",
+  "description": "15market — unified ultra-low-latency execution + settlement + rounds engine",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@privy-io/node": "^0.16.0",
+    "bullmq": "^5.76.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.4",
+    "express": "^4.19.2",
+    "ioredis": "^5.3.2",
+    "socket.io": "^4.7.5",
+    "ws": "^8.17.1"
+  }
+}
