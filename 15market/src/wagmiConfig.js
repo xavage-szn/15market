@@ -1,14 +1,13 @@
 import { createConfig, http } from 'wagmi';
-import { arcTestnet } from './constants';
-
-/**
- * Wagmi Configuration for 15market
- * 
- * Standard wagmi config to be used with PrivyProvider.
- */
+import { injected, walletConnect } from 'wagmi/connectors';
+import { arcTestnet, projectId } from './constants';
 
 export const config = createConfig({
     chains: [arcTestnet],
+    connectors: [
+        injected(),
+        walletConnect({ projectId }),
+    ],
     transports: {
         [arcTestnet.id]: http(),
     },
