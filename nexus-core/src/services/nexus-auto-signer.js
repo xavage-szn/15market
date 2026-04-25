@@ -40,55 +40,94 @@ class RedisMirrorService {
     constructor(factoryContract, operatorWallet) {
         this.factoryContract = factoryContract;
         this.operatorWallet = operatorWallet;
-        this.setupListeners();
+        this.lastProcessedBlock = null;
+        this.wallets = new Set();
+        this.startSyncLoop();
     }
 
-    async setupListeners() {
-        console.log("📡 [RedisMirror] Setting up listeners...");
+    async startSyncLoop() {
+        console.log("📡 [RedisMirror] Starting stateless sync loop...");
         
-        // Listen for new wallet deployments
-        this.factoryContract.on("WalletDeployed", (player, wallet) => {
-            console.log(`🆕 [WALLET] New wallet deployed for ${player}: ${wallet}`);
-            this.trackWallet(player, wallet);
-        });
+        setInterval(async () => {
+            try {
+                const provider = this.operatorWallet.provider;
+                const currentBlock = await provider.getBlockNumber();
+                
+                if (!this.lastProcessedBlock) {
+                    this.lastProcessedBlock = currentBlock - 20; // Look back 20 blocks on start
+                }
 
-        // Initialize tracking for existing wallets
-        // In a production app, we would query the factory for all existing wallets
-    }
+                if (currentBlock <= this.lastProcessedBlock) return;
 
-    async trackWallet(player, walletAddress) {
-        const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
-        
-        walletContract.on("Deposit", async (owner, amount, newAvailable) => {
-            console.log(`💰 [DEPOSIT] ${owner}: ${ethers.formatUnits(amount, 6)} USDC`);
-            await redis.set(`balance:${owner.toLowerCase()}:available`, newAvailable.toString());
-        });
+                const fromBlock = this.lastProcessedBlock + 1;
+                const toBlock = currentBlock;
 
-        walletContract.on("StakeLocked", async (tradeId, owner, amount, remaining) => {
-            console.log(`🔒 [LOCKED] ${tradeId} for ${owner}`);
-            await redis.set(`balance:${owner.toLowerCase()}:available`, remaining.toString());
-            await redis.incrby(`balance:${owner.toLowerCase()}:locked`, amount.toString());
-        });
+                // 1. Sync new wallet deployments
+                const deploymentLogs = await provider.getLogs({
+                    address: await this.factoryContract.getAddress(),
+                    topics: [ethers.id("WalletDeployed(address,address)")],
+                    fromBlock,
+                    toBlock
+                });
 
-        walletContract.on("TradeSettledWin", async (tradeId, owner, stake, profit, totalPayout) => {
-            console.log(`🏆 [WIN] ${tradeId} for ${owner}`);
-            const available = await walletContract.availableBalance();
-            const locked = await walletContract.lockedBalance();
-            await redis.set(`balance:${owner.toLowerCase()}:available`, available.toString());
-            await redis.set(`balance:${owner.toLowerCase()}:locked`, locked.toString());
-        });
+                for (const log of deploymentLogs) {
+                    const parsed = this.factoryContract.interface.parseLog(log);
+                    const { player, wallet } = parsed.args;
+                    console.log(`🆕 [WALLET] New wallet detected: ${wallet}`);
+                    this.wallets.add(wallet.toLowerCase());
+                }
 
-        walletContract.on("TradeSettledLoss", async (tradeId, owner, amount, pendingLossTotal) => {
-            console.log(`💀 [LOSS] ${tradeId} for ${owner}`);
-            const locked = await walletContract.lockedBalance();
-            await redis.set(`balance:${owner.toLowerCase()}:locked`, locked.toString());
-            await redis.set(`balance:${owner.toLowerCase()}:pending_loss`, pendingLossTotal.toString());
-        });
+                // 2. Sync balances for all active wallets
+                if (this.wallets.size > 0) {
+                    const walletAddresses = Array.from(this.wallets);
+                    const walletInterface = new ethers.Interface(WALLET_ABI);
+                    
+                    const eventLogs = await provider.getLogs({
+                        address: walletAddresses,
+                        fromBlock,
+                        toBlock
+                    });
 
-        walletContract.on("Withdrawal", async (owner, amount, remaining) => {
-            console.log(`💸 [WITHDRAW] ${owner}: ${ethers.formatUnits(amount, 6)} USDC`);
-            await redis.set(`balance:${owner.toLowerCase()}:available`, remaining.toString());
-        });
+                    for (const log of eventLogs) {
+                        try {
+                            const parsed = walletInterface.parseLog(log);
+                            const walletContract = new ethers.Contract(log.address, WALLET_ABI, this.operatorWallet);
+                            
+                            if (parsed.name === "Deposit") {
+                                const { player, newAvailableBalance } = parsed.args;
+                                await redis.set(`balance:${player.toLowerCase()}:available`, newAvailableBalance.toString());
+                            } else if (parsed.name === "StakeLocked") {
+                                const { player, amount, remainingAvailable } = parsed.args;
+                                await redis.set(`balance:${player.toLowerCase()}:available`, remainingAvailable.toString());
+                                await redis.incrby(`balance:${player.toLowerCase()}:locked`, amount.toString());
+                            } else if (parsed.name === "TradeSettledWin") {
+                                const { player } = parsed.args;
+                                const available = await walletContract.availableBalance();
+                                const locked = await walletContract.lockedBalance();
+                                await redis.set(`balance:${player.toLowerCase()}:available`, available.toString());
+                                await redis.set(`balance:${player.toLowerCase()}:locked`, locked.toString());
+                            } else if (parsed.name === "TradeSettledLoss") {
+                                const { player, pendingLossTotal } = parsed.args;
+                                const locked = await walletContract.lockedBalance();
+                                await redis.set(`balance:${player.toLowerCase()}:locked`, locked.toString());
+                                await redis.set(`balance:${player.toLowerCase()}:pending_loss`, pendingLossTotal.toString());
+                            } else if (parsed.name === "Withdrawal") {
+                                const { player, remainingBalance } = parsed.args;
+                                await redis.set(`balance:${player.toLowerCase()}:available`, remainingBalance.toString());
+                            }
+                        } catch (e) {
+                            // Skip if log is not from our ABI
+                        }
+                    }
+                }
+
+                this.lastProcessedBlock = toBlock;
+            } catch (err) {
+                if (!err.message.includes("filter not found")) {
+                    console.error("⚠️ [RedisMirror] Sync error:", err.message);
+                }
+            }
+        }, 3000);
     }
 }
 
