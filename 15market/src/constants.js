@@ -6,6 +6,7 @@ export const ARC_CHAIN_ID = 5042002;
 
 const TW_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID;
 export const ARC_RPCS = [
+    "https://5042002.rpc.thirdweb.com", // Thirdweb (New Primary)
     "https://rpc.testnet.arc.network", // Arc Official
     "https://arc-testnet.drpc.org",    // Arc dRPC
 ];
@@ -39,7 +40,7 @@ const envUrlArc = import.meta.env.VITE_KEEPER_URL_ARC;
 
 // If we are local, and the env variable is missing or pointing to the production domain,
 // we should default to the local backend to prevent "Failed to Fetch" or CORS errors.
-const PRODUCTION_BACKEND = "https://api.15market.online";
+const PRODUCTION_BACKEND = "https://api.15market.com";
 
 const getBaseUrl = (envValue) => {
     // Absolute env URLs always win (works for local + production).
@@ -98,10 +99,10 @@ export const arcTestnet = defineChain({
     },
     rpcUrls: {
         default: {
-            http: [ALCHEMY_RPC, ...ARC_RPCS],
+            http: [...ARC_RPCS, ALCHEMY_RPC],
         },
         public: {
-            http: [ALCHEMY_RPC, ...ARC_RPCS],
+            http: [...ARC_RPCS, ALCHEMY_RPC],
         },
     },
     blockExplorers: {
