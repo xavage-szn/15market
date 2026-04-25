@@ -114,7 +114,7 @@ function Root() {
               accentColor: '#3CB371', // 15market Green
               showWalletLoginFirst: true,
               logo: 'https://15market.com/logo.png',
-              walletList: ['metamask', 'coinbase_wallet', 'rainbow', 'okx_wallet', 'phantom', 'detected_ethereum_wallets', 'wallet_connect'],
+              walletList: ['detected_ethereum_wallets', 'metamask', 'coinbase_wallet', 'rainbow', 'okx_wallet', 'phantom', 'wallet_connect', 'wallet_connect_qr'],
             },
             defaultChain: arcTestnet,
             supportedChains: [arcTestnet],
