@@ -100,18 +100,20 @@ app.post('/session/init', async (req, res) => {
     // 2. Fetch real balance
     const onChainBal = await provider.getBalance(walletAddress);
     
+    const formattedBal = ethers.formatEther(onChainBal);
+    
     const session = cache.getOrCreateSession(userAddr, {
       identityKey: userAddr,
       walletAddress: identity.walletAddress,
       sessionAddress: walletAddress || null,
-      balance: Number(onChainBal),
+      balance: parseFloat(formattedBal),
     });
 
     res.json({
       success: true,
       walletAddress: session.walletAddress,
       sessionAddress: session.sessionAddress,
-      balance: String(onChainBal),
+      balance: formattedBal,
     });
   } catch (err) {
     res.status(500).json({ error: "Session init failed" });
@@ -134,21 +136,22 @@ app.get('/session/balance/:address', async (req, res) => {
     const onChainBal = await provider.getBalance(walletAddress);
 
     // 4. Update session cache (if exists) or create a temporary one
+    const formattedBal = ethers.formatEther(onChainBal);
     if (session) {
-      session.balance = Number(onChainBal);
+      session.balance = parseFloat(formattedBal);
       session.sessionAddress = walletAddress;
     } else {
       session = {
         identityKey: raw,
         walletAddress: raw,
         sessionAddress: walletAddress,
-        balance: Number(onChainBal)
+        balance: parseFloat(formattedBal)
       };
     }
 
     res.json({
       success: true,
-      balance: String(onChainBal),
+      balance: formattedBal,
       walletAddress: raw,
       sessionAddress: walletAddress,
     });
