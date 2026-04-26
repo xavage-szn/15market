@@ -6,9 +6,8 @@ export const ARC_CHAIN_ID = 5042002;
 
 const TW_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID;
 export const ARC_RPCS = [
-    "https://5042002.rpc.thirdweb.com", // Thirdweb (New Primary)
+    TW_ID ? `https://5042002.rpc.thirdweb.com/${TW_ID}` : "https://5042002.rpc.thirdweb.com", // Thirdweb (Primary)
     "https://rpc.testnet.arc.network", // Arc Official
-    "https://arc-testnet.drpc.org",    // Arc dRPC
 ];
 // --- RPC STRATEGY ---
 // Alchemy: Critical Jobs (Trades/Settlements)
@@ -104,10 +103,10 @@ export const arcTestnet = defineChain({
     },
     rpcUrls: {
         default: {
-            http: [...ARC_RPCS, ALCHEMY_RPC],
+            http: [...ARC_RPCS],
         },
         public: {
-            http: [...ARC_RPCS, ALCHEMY_RPC],
+            http: [...ARC_RPCS],
         },
     },
     blockExplorers: {

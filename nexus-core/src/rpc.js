@@ -11,7 +11,11 @@ class RPCManager {
     
     // Initialize multiple providers for redundancy
     this.providers = config.RPCS.map(url => {
-      const fetchRequest = new ethers.FetchRequest(url);
+      let rpcUrl = url;
+      if (url.includes('thirdweb.com') && config.THIRDWEB_CLIENT_ID && !url.includes(config.THIRDWEB_CLIENT_ID)) {
+        rpcUrl = url.endsWith('/') ? `${url}${config.THIRDWEB_CLIENT_ID}` : `${url}/${config.THIRDWEB_CLIENT_ID}`;
+      }
+      const fetchRequest = new ethers.FetchRequest(rpcUrl);
       if (url.includes('thirdweb.com') && config.THIRDWEB_SECRET_KEY) {
         fetchRequest.setHeader("x-secret-key", config.THIRDWEB_SECRET_KEY);
       }
@@ -22,7 +26,15 @@ class RPCManager {
       console.warn("⚠️ [RPCManager] No valid providers initialized. Some features will fail.");
     }
 
-    this.mainProvider = this.providers[0];
+    // High-availability fallback provider
+    this.provider = new ethers.FallbackProvider(this.providers.map((p, i) => ({
+      provider: p,
+      priority: i,
+      weight: 1,
+      stallTimeout: 2500
+    })));
+
+    this.mainProvider = this.provider;
     if (config.PRIVATE_KEY) {
       this.wallet = new ethers.Wallet(config.PRIVATE_KEY, this.mainProvider);
     }

@@ -134,10 +134,13 @@ class RedisMirrorService {
 }
 
 class SettlementService {
-  constructor(operatorWallet, io) {
+  constructor(operatorWallet, io, factoryAddress) {
     this.operatorWallet = operatorWallet;
     this.io = io;
     this.isPolling = false;
+    this.factoryAddress = factoryAddress;
+    this.factoryContract = new ethers.Contract(factoryAddress, FACTORY_ABI, operatorWallet);
+    this.tradeCounterKey = 'global:trade_counter';
   }
 
   async startSettlementPoller() {
@@ -168,17 +171,18 @@ class SettlementService {
   }
 
   async submitTrade(playerId, symbol, direction, stake, duration) {
-    // Deterministic Session Wallet Derivation (EOA Model)
-    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + playerId.toLowerCase());
-    const privateKey = ethers.keccak256(entropy);
-    const wallet = new ethers.Wallet(privateKey, this.operatorWallet.provider);
-    const walletAddress = wallet.address;
-
-    const tradeId = ethers.id(`${playerId}-${Date.now()}`);
-
     try {
-      const tx = await walletContract.lockStake(tradeId, ethers.parseUnits(stake, 6));
+      const walletAddress = await this.factoryContract.playerToWallet(playerId);
+      if (walletAddress === ethers.ZeroAddress) {
+         throw new Error("User has no smart contract wallet. Deposit first.");
+      }
+      
+      const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
+      const tradeId = ethers.id(`${playerId}-${Date.now()}`);
+      const stakeWei = ethers.parseUnits(stake, 18); // Assuming 18 decimals for Arc native/USDC
+
+      // 1. Lock Stake on-chain in the SCW
+      const tx = await walletContract.lockStake(tradeId, stakeWei);
       await tx.wait();
 
       const trade = {
@@ -194,29 +198,17 @@ class SettlementService {
       await redis.set(`trade:${tradeId}`, JSON.stringify(trade));
       await redis.sadd(`active_trades`, tradeId);
       
-      const placedEvent = {
-        type: 'TRADE_PLACED',
-        id: tradeId,
-        amount: stake,
-        direction,
-        symbol: symbol.toUpperCase(),
-        timestamp: Date.now(),
-        userAddr: playerId,
-      };
-      cache.pushHistory(playerId, placedEvent);
-
       this.io.to(playerId.toLowerCase()).emit('trade_placed', trade);
-
       return { tradeId, success: true };
     } catch (err) {
-      console.error("LockStake failed:", err);
-      return { tradeId, success: false, error: err.message };
+      console.error("submitTrade failed:", err);
+      return { success: false, error: err.message };
     }
   }
 
   async settleTrade(tradeId) {
     const tradeData = await redis.get(`trade:${tradeId}`);
-    if (!tradeData) return { tradeId, success: false, outcome: 'LOSS' };
+    if (!tradeData) return;
     
     const trade = JSON.parse(tradeData);
     const exitPrice = await this.getLatestPrice(trade.symbol);
@@ -226,22 +218,43 @@ class SettlementService {
     const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
 
     try {
-      // ON-CHAIN SETTLEMENT FOR EOAs DISABLED 
-      // (Requires specific contract or operator-to-EOA logic)
-      // For now, we rely on the Classic Engine's virtual settlement
-      console.log(`[SettlementService] Virtual settlement for ${tradeId}`);
-      const tx = { hash: '0x' + '0'.repeat(64) }; // Mock hash for virtual settlement
+      let tx;
+      const stakeWei = ethers.parseUnits(trade.stakeAmount, 18);
+
+      if (won) {
+        // WIN: Payout profit from treasury/pool to user SCW
+        // In this SCW model, settleWin usually releases stake + adds profit
+        const profit = (parseFloat(trade.stakeAmount) * 0.95).toFixed(6); // 95% profit
+        const profitWei = ethers.parseUnits(profit, 18);
+        
+        console.log(`[Settlement] WIN for ${tradeId}. Paying out profit...`);
+        tx = await walletContract.settleWin(tradeId, stakeWei, profitWei);
+      } else {
+        // LOSS: Finalize loss in SCW (moves to pendingLoss)
+        console.log(`[Settlement] LOSS for ${tradeId}. Finalizing loss...`);
+        tx = await walletContract.settleLoss(tradeId, stakeWei);
+      }
+
+      await tx.wait();
       
+      // Cleanup
       await redis.del(`trade:${tradeId}`);
       await redis.srem(`active_trades`, tradeId);
+
+      // Increment Global Trade Counter for Batch Sweep
+      const currentCount = await redis.incr(this.tradeCounterKey);
+      if (currentCount >= 5) {
+        console.log("📦 [SettlementService] Batch limit reached (5 trades). Triggering global sweep...");
+        await redis.set(this.tradeCounterKey, "0");
+        this.triggerBatchSweep();
+      }
 
       const result = {
         tradeId,
         success: true,
         outcome: won ? 'WIN' : 'LOSS',
-        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toString() : '0',
+        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(4) : '0',
         txHash: tx.hash,
-        type: 'TRADE_SETTLED',
         won,
         entryPrice: trade.entryPrice,
         exitPrice,
@@ -256,8 +269,31 @@ class SettlementService {
       this.io.to(trade.playerId.toLowerCase()).emit('trade_settled', result);
       return result;
     } catch (err) {
-      console.error("Settlement failed:", err);
+      console.error(`Settlement failed for ${tradeId}:`, err);
       return { tradeId, success: false, error: err.message };
+    }
+  }
+
+  async triggerBatchSweep() {
+    try {
+      const keys = await redis.keys('balance:*:pending_loss');
+      const treasury = process.env.TREASURY_ADDRESS;
+      
+      for (const key of keys) {
+        const val = await redis.get(key);
+        if (val && BigInt(val) > 0n) {
+          const player = key.split(':')[1];
+          const walletAddress = await this.factoryContract.playerToWallet(player);
+          const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
+          
+          console.log(`[SWEEP] Sweeping losses for ${player} to treasury...`);
+          const tx = await walletContract.sweepLosses(treasury);
+          await tx.wait();
+          await redis.set(key, "0");
+        }
+      }
+    } catch (err) {
+      console.error("Batch sweep execution failed:", err);
     }
   }
 

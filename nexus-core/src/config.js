@@ -18,6 +18,7 @@ module.exports = {
     process.env.ARC_RPC_4
   ].filter(Boolean),
   THIRDWEB_SECRET_KEY: process.env.THIRDWEB_SECRET_KEY,
+  THIRDWEB_CLIENT_ID: process.env.THIRDWEB_CLIENT_ID,
   PRIVATE_KEY: process.env.PRIVATE_KEY,
   CONTRACT_ADDRESS: process.env.ARC_CONTRACT_ADDRESS,
   ROUNDS_CONTRACT_ADDRESS: process.env.ROUNDS_CONTRACT_ADDRESS,

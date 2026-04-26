@@ -9,7 +9,9 @@ const { Server } = require('socket.io');
 
 const config = require('./config');
 const cache = require('./cache');
+const rpc = require('./rpc');
 const ClassicEngine = require('./classic');
+const RoundsEngine = require('./rounds');
 
 const { ethers } = require('ethers');
 const { RedisMirrorService, SettlementService, setupBatchSweepJob } = require('./services/nexus-auto-signer');
@@ -23,33 +25,17 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(cors());
 app.use(express.json());
 
-// --- Blockchain Setup ---
-const providers = config.RPCS.map(url => {
-  const fetchRequest = new ethers.FetchRequest(url);
-  if (url.includes('thirdweb.com') && config.THIRDWEB_SECRET_KEY) {
-    fetchRequest.setHeader("x-secret-key", config.THIRDWEB_SECRET_KEY);
-  }
-  return new ethers.JsonRpcProvider(fetchRequest, config.CHAIN_ID, { staticNetwork: true });
-});
-
-// Use FallbackProvider for high availability
-const provider = new ethers.FallbackProvider(providers.map((p, i) => ({
-  provider: p,
-  priority: i,
-  weight: 1,
-  stallTimeout: 2000
-})));
-
-const operatorWallet = new ethers.Wallet(config.PRIVATE_KEY, provider);
+const provider = rpc.mainProvider;
+const operatorWallet = rpc.wallet;
 
 // --- Initialize Engines ---
 const classicEngine = new ClassicEngine(io);
-const settlementService = new SettlementService(operatorWallet, io);
-// Redis Mirror now logic handled via engine balance sync
-// setupBatchSweepJob(operatorWallet);
+const roundsEngine = new RoundsEngine(io);
+const settlementService = new SettlementService(operatorWallet, io, config.FACTORY_ADDRESS);
 
 settlementService.startSettlementPoller();
 classicEngine.start();
+roundsEngine.start();
 
 // --- INTERNAL PRICE FEED (Built-in Price Service) ---
 const Redis = require('ioredis');
@@ -108,11 +94,31 @@ async function syncBackendPrices() {
 
 // --- Socket.IO ---
 io.on('connection', (socket) => {
-  // Price streaming moved to standalone frontend price service (port 3012)
   socket.on('join_user', (address) => {
-    const room = classicEngine.normalizeAddr(address);
+    const room = String(address || '').toLowerCase();
     if (room) socket.join(room);
   });
+});
+
+// --- API Routes (Global Settings) ---
+app.get('/settings', (req, res) => {
+  res.json({
+    minBet: config.DEFAULT_MIN_BET || 1.0,
+    maxBet: 1000000.0,
+    maintenanceMode: false,
+    tradingHalted: false,
+    systemBanner: "",
+    bannerLevel: "info"
+  });
+});
+
+app.get('/balance/:address', async (req, res) => {
+  try {
+    const bal = await rpc.getBalance(req.params.address);
+    res.json({ success: true, balance: bal });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch balance" });
+  }
 });
 
 // --- API Routes (Classic) ---
@@ -200,15 +206,108 @@ app.post('/session/execute', async (req, res) => {
   if (!address || !tradeParams) return res.status(400).json({ error: 'Missing params' });
 
   // Route all user trades through the low-latency classic engine path.
-  const result = classicEngine.placeTrade(tradeParams, { address });
+  const result = await classicEngine.placeTrade(tradeParams, { address });
 
   if (!result.success) return res.status(400).json({ error: result.error });
   res.json(result);
 });
 
+app.post('/session/cashout', async (req, res) => {
+  try {
+    const { address, amount } = req.body;
+    if (!address || !amount) return res.status(400).json({ error: 'Missing params' });
+
+    const addr = classicEngine.normalizeAddr(address);
+    
+    // Derive the same session wallet
+    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + addr);
+    const privateKey = ethers.keccak256(entropy);
+    const wallet = new ethers.Wallet(privateKey, provider);
+    
+    const amtWei = ethers.parseEther(amount.toString());
+    const bal = await provider.getBalance(wallet.address);
+    
+    if (bal < amtWei) {
+      return res.status(400).json({ error: `Insufficient balance. Available: ${ethers.formatEther(bal)}` });
+    }
+
+    // Send transaction
+    const tx = await wallet.sendTransaction({
+      to: address,
+      value: amtWei,
+    });
+    
+    // Update local cache balance if session exists
+    const session = cache.sessions.get(addr);
+    if (session) {
+      session.balance = Math.max(0, session.balance - parseFloat(amount));
+      io.to(addr).emit('balance_update', {
+        balance: String(session.balance),
+        reason: 'WITHDRAW',
+      });
+    }
+
+    res.json({ success: true, txHash: tx.hash });
+  } catch (err) {
+    console.error("Cashout error:", err);
+    res.status(500).json({ error: err.message || "Cashout failed" });
+  }
+});
+
 app.get('/history/:address', (req, res) => {
   const addr = classicEngine.normalizeAddr(req.params.address);
   res.json(cache.userHistory.get(addr) || []);
+});
+
+// --- API Routes (Rounds) ---
+app.get('/rounds/access/check/:address', (req, res) => {
+  res.json({ authorized: true });
+});
+
+app.post('/rounds/session-enter', async (req, res) => {
+  try {
+    const { address, roundId, direction, amount } = req.body;
+    if (!address || !amount) return res.status(400).json({ error: 'Missing params' });
+
+    const addr = classicEngine.normalizeAddr(address);
+    let session = cache.sessions.get(addr);
+    
+    // Initialize session if missing (same as classic)
+    if (!session) {
+      const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+      const entropy = ethers.toUtf8Bytes(MASTER_SECRET + addr);
+      const privateKey = ethers.keccak256(entropy);
+      const wallet = new ethers.Wallet(privateKey);
+      const balStr = await rpc.getBalance(wallet.address);
+      session = cache.getOrCreateSession(addr, {
+        identityKey: addr,
+        walletAddress: addr,
+        sessionAddress: wallet.address,
+        balance: parseFloat(balStr)
+      });
+    }
+
+    const amtNum = parseFloat(amount);
+    if (session.balance < amtNum) {
+      return res.status(400).json({ error: 'Insufficient session balance' });
+    }
+
+    session.balance = Number((session.balance - amtNum).toFixed(4));
+    
+    // Simulate entry
+    const txHash = `round_sim_${Date.now()}`;
+    
+    io.to(addr).emit('balance_update', {
+      balance: String(session.balance),
+      reason: 'ROUND_ENTER',
+      amount: amtNum
+    });
+
+    res.json({ success: true, txHash });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- API Routes (Profiles & Identity) ---

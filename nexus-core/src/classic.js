@@ -4,6 +4,8 @@
 // ============================================================
 const cache = require('./cache');
 const config = require('./config');
+const rpc = require('./rpc');
+const { ethers } = require('ethers');
 
 class ClassicEngine {
   constructor(io) {
@@ -37,18 +39,30 @@ class ClassicEngine {
     return { ok: true, identityKey: walletAddress, walletAddress };
   }
 
-  placeTrade(tradeParams, identityPayload) {
+  async placeTrade(tradeParams, identityPayload) {
     const identity = this.resolveSessionIdentity(identityPayload);
     if (!identity.ok) return { success: false, error: identity.error };
 
     const userAddr = identity.identityKey;
-    const suffix = (identity.walletAddress || 'anon').slice(2, 10);
-    const session = cache.getOrCreateSession(userAddr, {
-      identityKey: userAddr,
-      walletAddress: identity.walletAddress,
-      sessionAddress: `session_${suffix}`,
-      balance: config.DEFAULT_SESSION_BALANCE,
-    });
+    
+    // Deterministic Session Wallet Derivation (EOA Model) - MUST MATCH index.js
+    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
+    const privateKey = ethers.keccak256(entropy);
+    const sessionWallet = new ethers.Wallet(privateKey);
+    const sessionAddress = sessionWallet.address;
+
+    let session = cache.sessions.get(userAddr);
+    if (!session) {
+      // Initialize with real on-chain balance
+      const balanceStr = await rpc.getBalance(sessionAddress);
+      session = cache.getOrCreateSession(userAddr, {
+        identityKey: userAddr,
+        walletAddress: identity.walletAddress,
+        sessionAddress: sessionAddress,
+        balance: parseFloat(balanceStr),
+      });
+    }
 
     const amount = Number(tradeParams.amount);
     if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
