@@ -21,14 +21,21 @@ const PORT = process.env.PRICE_FRONTEND_PORT || 3012;
 
 app.get('/prices', (req, res) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.json({ ...prices, oracleReady: true, hasAnyPrice: true });
+  // Flatten for backward compatibility with REST consumers
+  res.json({
+    btc: prices.btc.price,
+    eth: prices.eth.price,
+    sol: prices.sol.price,
+    oracleReady: true,
+    hasAnyPrice: true
+  });
 });
 
-// Track prices
+// Track prices with timestamps for consistency
 const prices = {
-  btc: 0,
-  eth: 0,
-  sol: 0
+  btc: { price: 0, ts: 0 },
+  eth: { price: 0, ts: 0 },
+  sol: { price: 0, ts: 0 }
 };
 
 const PYTH_IDS = {
@@ -48,28 +55,67 @@ async function fetchPythPrices() {
     }
     const data = await res.json();
 
+    let count = 0;
     data.parsed.forEach(p => {
-      const id = p.id.startsWith('0x') ? p.id : `0x${p.id}`;
+      const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
       const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+      const publishTime = p.price.publish_time * 1000;
 
-      if (id === PYTH_IDS.btc) prices.btc = price;
-      if (id === PYTH_IDS.eth) prices.eth = price;
-      if (id === PYTH_IDS.sol) prices.sol = price;
+      const targetBtc = PYTH_IDS.btc.toLowerCase();
+      const targetEth = PYTH_IDS.eth.toLowerCase();
+      const targetSol = PYTH_IDS.sol.toLowerCase();
+
+      if (id === targetBtc) { prices.btc.price = price; prices.btc.ts = publishTime; count++; }
+      if (id === targetEth) { prices.eth.price = price; prices.eth.ts = publishTime; count++; }
+      if (id === targetSol) { prices.sol.price = price; prices.sol.ts = publishTime; count++; }
     });
-
-    io.emit('price_update', prices);
+    // console.log(`[Pyth Poller] Updated ${count} prices`);
   } catch (err) {
     console.error('[Pyth Poller] Error:', err.message);
   }
 }
 
-// Poll Pyth every 500ms for high-frequency updates
-setInterval(fetchPythPrices, 500);
+// Poll Pyth every 300ms
+setInterval(fetchPythPrices, 300);
+
+// ============================================================
+// THE METRONOME: Steady Pulse Emitter
+// ============================================================
+// We emit at a fixed interval (e.g., 50ms = 20Hz) to ensure the 
+// frontend signal never stalls. The frontend chart can then
+// interpolate between these pulses at 60fps for maximum smoothness.
+// ============================================================
+setInterval(() => {
+  // Only emit if we have data for at least one asset
+  const hasAnyPrice = prices.btc.price > 0 || prices.eth.price > 0 || prices.sol.price > 0;
+  
+  if (hasAnyPrice) {
+    const payload = {
+      btc: prices.btc.price,
+      eth: prices.eth.price,
+      sol: prices.sol.price,
+      ts: {
+        btc: prices.btc.ts || Date.now(),
+        eth: prices.eth.ts || Date.now(),
+        sol: prices.sol.ts || Date.now()
+      },
+      pulse: Date.now()
+    };
+    io.emit('price_update', payload);
+  }
+}, 100); // 10Hz is more than enough for smooth interpolation
 
 io.on('connection', (socket) => {
   console.log(`[Price-Frontend] New client connected: ${socket.id}`);
-  // Send current prices immediately on connection
-  socket.emit('price_update', prices);
+  
+  // Initial state (flat payload for compatibility + ts for new logic)
+  socket.emit('price_update', {
+    btc: prices.btc.price,
+    eth: prices.eth.price,
+    sol: prices.sol.price,
+    ts: { btc: prices.btc.ts, eth: prices.eth.ts, sol: prices.sol.ts },
+    pulse: Date.now()
+  });
 
   socket.on('disconnect', () => {
     console.log(`[Price-Frontend] Client disconnected: ${socket.id}`);

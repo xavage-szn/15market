@@ -62,14 +62,20 @@ async function syncBackendPrices() {
     const keys = ['btc', 'eth', 'sol'];
     for (const k of keys) {
       const val = await priceRedis.get(`price:${k}`);
-      if (val) cache.prices[k] = parseFloat(val);
+      const ts = await priceRedis.get(`price:${k}:ts`);
+      if (val) {
+        cache.prices[k] = parseFloat(val);
+        // Using the Pyth Source Timestamp ensures the engine is aligned with the external oracle
+        cache.priceMeta[k] = { updatedAt: Number(ts || Date.now()) };
+      }
     }
   } catch (e) {
     console.error("[Backend Price Sync] Redis error:", e.message);
   }
 }
 
-setInterval(syncBackendPrices, 500);
+// Sync from Redis frequently to ensure near-instant settlement alignment
+setInterval(syncBackendPrices, 100);
 
 
 // --- Socket.IO ---
@@ -164,16 +170,10 @@ app.get('/session/balance/:address', async (req, res) => {
 app.post('/session/execute', async (req, res) => {
   const { address, tradeParams } = req.body;
   if (!address || !tradeParams) return res.status(400).json({ error: 'Missing params' });
-  
-  // tradeParams: { symbol, direction, amount, duration }
-  const result = await settlementService.submitTrade(
-    address, 
-    tradeParams.symbol || 'eth', 
-    Number(tradeParams.direction), 
-    tradeParams.amount, 
-    Number(tradeParams.duration || 5)
-  );
-  
+
+  // Route all user trades through the low-latency classic engine path.
+  const result = classicEngine.placeTrade(tradeParams, { address });
+
   if (!result.success) return res.status(400).json({ error: result.error });
   res.json(result);
 });

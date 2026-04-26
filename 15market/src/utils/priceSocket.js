@@ -5,24 +5,42 @@ class PriceSocketService {
     constructor() {
         this.socket = null;
         this.listeners = new Map();
+        this.isConnecting = false;
     }
 
     connect() {
-        if (this.socket?.connected) return;
+        if (this.socket?.connected || this.isConnecting) return;
+        this.isConnecting = true;
 
         console.log(`[PriceSocket] Connecting to ${PRICE_FEED_URL}...`);
         this.socket = io(PRICE_FEED_URL, {
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000,
-            timeout: 5000
+            transports: ['websocket', 'polling'],
+            upgrade: true,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 800,
+            reconnectionDelayMax: 4000,
+            timeout: 10000,
+            forceNew: false,
+            autoConnect: true,
         });
 
         this.socket.on("connect", () => {
+            this.isConnecting = false;
             console.log("[PriceSocket] Stream Link Active");
         });
 
         this.socket.on("disconnect", () => {
             console.log("[PriceSocket] Stream Link Lost");
+        });
+
+        this.socket.on("connect_error", (err) => {
+            this.isConnecting = false;
+            console.warn("[PriceSocket] Connect error:", err?.message || "unknown");
+        });
+
+        this.socket.on("reconnect_attempt", () => {
+            console.log("[PriceSocket] Reconnecting stream...");
         });
     }
 

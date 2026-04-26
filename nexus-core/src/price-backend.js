@@ -33,6 +33,7 @@ async function fetchPythPrices() {
     for (const p of data.parsed) {
       const id = p.id.startsWith('0x') ? p.id : `0x${p.id}`;
       const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+      const publishTime = p.price.publish_time * 1000; // Convert to ms
 
       let key = '';
       if (id === PYTH_IDS.btc) { key = 'btc'; prices.btc = price; }
@@ -41,7 +42,9 @@ async function fetchPythPrices() {
 
       if (key) {
         // Update Redis for settlement engine
+        // Using Pyth's actual publish_time ensures consistency across different feed services
         await redis.set(`price:${key}`, price.toString());
+        await redis.set(`price:${key}:ts`, String(publishTime));
       }
     }
   } catch (err) {
@@ -49,10 +52,11 @@ async function fetchPythPrices() {
   }
 }
 
-// Log prices every 10 seconds to show it's working
+// Log prices every 10 seconds
 setInterval(() => {
   console.log(`[Price-Backend] BTC: ${prices.btc} | ETH: ${prices.eth} | SOL: ${prices.sol}`);
 }, 10000);
 
-// Poll Pyth every 500ms
-setInterval(fetchPythPrices, 500);
+// Warm immediately, then poll every 300ms for high-frequency settlement readiness
+fetchPythPrices().catch(() => {});
+setInterval(fetchPythPrices, 300);

@@ -15,6 +15,16 @@ class Cache {
     
     // Market data
     this.prices = { btc: 65000, eth: 3200, sol: 145 };
+    this.priceMeta = {
+      btc: { updatedAt: 0 },
+      eth: { updatedAt: 0 },
+      sol: { updatedAt: 0 },
+    };
+    this.priceMeta = {
+      btc: { updatedAt: 0 },
+      eth: { updatedAt: 0 },
+      sol: { updatedAt: 0 },
+    };
     
     // Rounds state
     this.roundsState = new Map();

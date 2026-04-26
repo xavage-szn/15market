@@ -1818,24 +1818,30 @@ export default function UserApp() {
     return () => { active = false; };
   }, [fetchCurrentPrice]);
 
-  // ─── STANDALONE FRONTEND PRICE FEED (No Ties to Backend) ───
+  // ─── STANDALONE FRONTEND PRICE FEED (Pulse Metronome Version) ───
   useEffect(() => {
     priceSocketService.connect();
 
-    const unbindPrices = priceSocketService.on('price_update', (allPrices) => {
+    const unbindPrices = priceSocketService.on('price_update', (payload) => {
       const currentAssetId = activeMarket?.id?.toLowerCase();
-      if (currentAssetId && allPrices[currentAssetId]) {
-        const p = allPrices[currentAssetId];
+      
+      if (currentAssetId && typeof payload[currentAssetId] === 'number') {
+        const p = payload[currentAssetId];
+        const sourceTs = payload.ts?.[currentAssetId] || Date.now();
+        
         const truncated = Math.floor(p * 100) / 100;
         const pStr = truncated.toFixed(2);
         
+        // Debug: Log once every 50 updates to check stream health
+        if (Math.random() < 0.02) console.log(`[PriceStream] ${currentAssetId}: ${pStr} (Pulse: ${payload.pulse})`);
+
         setPrice(pStr);
         priceRef.current = pStr;
         
-        // Update history for charts/expiry logic
-        const now = Date.now();
-        priceHistoryRef.current.push({ p: truncated, t: now });
-        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+        priceHistoryRef.current.push({ p: truncated, t: sourceTs });
+        if (priceHistoryRef.current.length > 400) priceHistoryRef.current.shift();
+        
+        lastPriceUpdateRef.current = Date.now();
       }
     });
 

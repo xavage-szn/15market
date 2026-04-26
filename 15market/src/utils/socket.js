@@ -11,9 +11,10 @@ class SocketService {
         if (this.socket?.connected) return;
 
         this.socket = io(KEEPER_URL_ARC, {
+            transports: ['websocket'],
             reconnectionAttempts: 10,
             reconnectionDelay: 1000,
-            timeout: 5000
+            timeout: 10000
         });
 
         this.socket.on("connect", () => {
