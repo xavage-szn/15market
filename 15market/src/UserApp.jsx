@@ -1665,8 +1665,8 @@ export default function UserApp() {
 
     const poll = async () => {
       try {
-        const ids = Object.values(PYTH_IDS).map(id => id.replace('0x', '')).join(',');
-        const url = `https://hermes.pyth.network/v2/updates/price/latest?ids=${ids}`;
+        const query = Object.values(PYTH_IDS).map(id => `ids[]=${id}`).join('&');
+        const url = `https://hermes.pyth.network/v2/updates/price/latest?${query}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error("Hermes fail");
         const data = await res.json();

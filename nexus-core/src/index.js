@@ -64,8 +64,8 @@ const PYTH_IDS = {
 const https = require('https');
 
 async function pollPythPrices() {
-  const ids = Object.values(PYTH_IDS).map(id => id.replace('0x', '')).join(',');
-  const url = `https://hermes.pyth.network/v2/updates/price/latest?ids=${ids}`;
+  const query = Object.values(PYTH_IDS).map(id => `ids[]=${id}`).join('&');
+  const url = `https://hermes.pyth.network/v2/updates/price/latest?${query}`;
   
   https.get(url, (res) => {
     let data = '';
