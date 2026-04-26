@@ -1922,9 +1922,8 @@ export default function UserApp() {
     } catch (e) {
     }
 
-    // Trigger price fetch for new market
-    setTimeout(() => fetchCurrentPrice(), 100);
-  }, [activeMarket.id, fetchCurrentPrice, mergeMarketWithDefault]);
+    // Trigger price fetch for new market (now handled by embedded service)
+  }, [activeMarket.id, mergeMarketWithDefault]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
