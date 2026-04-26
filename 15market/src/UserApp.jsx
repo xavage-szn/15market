@@ -47,7 +47,6 @@ import { RoundsTerminal } from "./components/RoundsTerminal";
 import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
 import { socketService } from './utils/socket';
-import { priceSocketService } from './utils/priceSocket';
 
 // Robust Error Boundary to prevent platform-wide crashes
 class ErrorBoundary extends Component {
@@ -1818,23 +1817,59 @@ export default function UserApp() {
     return () => { active = false; };
   }, [fetchCurrentPrice]);
 
-  // ─── STANDALONE FRONTEND PRICE FEED (Pulse Metronome Version) ───
-  useEffect(() => {
-    priceSocketService.connect();
+  // ─── EMBEDDED FRONTEND PRICE SERVICE ───
+  // This logic runs as a built-in background service for the frontend.
+  const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, ts: {} });
 
-    const unbindPrices = priceSocketService.on('price_update', (payload) => {
+  // 1. Poller: Fetch from Pyth Hermes every 300ms
+  useEffect(() => {
+    let active = true;
+    const PYTH_IDS = {
+      btc: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
+      eth: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
+      sol: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'
+    };
+
+    const poll = async () => {
+      try {
+        const ids = Object.values(PYTH_IDS).map(id => `ids[]=${id.replace('0x', '')}`).join('&');
+        const url = `https://hermes.pyth.network/v2/updates/price/latest?${ids}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Hermes fail");
+        const data = await res.json();
+
+        data.parsed.forEach(p => {
+          const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
+          const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+          const publishTime = p.price.publish_time * 1000;
+
+          for (const [key, pythId] of Object.entries(PYTH_IDS)) {
+            if (id === pythId.toLowerCase()) {
+              oraclePricesRef.current[key] = price;
+              oraclePricesRef.current.ts[key] = publishTime;
+            }
+          }
+        });
+      } catch (e) {
+        // Fallback or silent fail
+      }
+      if (active) setTimeout(poll, 300);
+    };
+    poll();
+    return () => { active = false; };
+  }, []);
+
+  // 2. Metronome: 100ms Pulse loop to drive UI/Chart
+  useEffect(() => {
+    const pulseLoop = setInterval(() => {
       const currentAssetId = activeMarket?.id?.toLowerCase();
-      
-      if (currentAssetId && typeof payload[currentAssetId] === 'number') {
-        const p = payload[currentAssetId];
-        const sourceTs = payload.ts?.[currentAssetId] || Date.now();
-        
+      const p = oraclePricesRef.current[currentAssetId];
+      const sourceTs = oraclePricesRef.current.ts[currentAssetId] || Date.now();
+
+      if (typeof p === 'number' && p > 0) {
         const truncated = Math.floor(p * 100) / 100;
         const pStr = truncated.toFixed(2);
         
-        // Debug: Log once every 50 updates to check stream health
-        if (Math.random() < 0.02) console.log(`[PriceStream] ${currentAssetId}: ${pStr} (Pulse: ${payload.pulse})`);
-
         setPrice(pStr);
         priceRef.current = pStr;
         
@@ -1843,9 +1878,9 @@ export default function UserApp() {
         
         lastPriceUpdateRef.current = Date.now();
       }
-    });
+    }, 100);
 
-    return () => unbindPrices();
+    return () => clearInterval(pulseLoop);
   }, [activeMarket]);
 
   // ─── SOCKET.IO: Trade events + Backend-Authoritative Settlement ───

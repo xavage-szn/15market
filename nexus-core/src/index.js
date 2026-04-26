@@ -51,31 +51,53 @@ const settlementService = new SettlementService(operatorWallet, io);
 settlementService.startSettlementPoller();
 classicEngine.start();
 
-// --- Backend Internal Price Sync (from Redis) ---
-// This allows the settlement engine to have its own authoritative price source 
-// independent of the frontend's streaming feed.
+// --- INTERNAL PRICE FEED (Built-in Price Service) ---
 const Redis = require('ioredis');
 const priceRedis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
-async function syncBackendPrices() {
+const PYTH_IDS = {
+  btc: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
+  eth: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
+  sol: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'
+};
+
+async function pollPythPrices() {
   try {
-    const keys = ['btc', 'eth', 'sol'];
-    for (const k of keys) {
-      const val = await priceRedis.get(`price:${k}`);
-      const ts = await priceRedis.get(`price:${k}:ts`);
-      if (val) {
-        cache.prices[k] = parseFloat(val);
-        // Using the Pyth Source Timestamp ensures the engine is aligned with the external oracle
-        cache.priceMeta[k] = { updatedAt: Number(ts || Date.now()) };
+    const ids = Object.values(PYTH_IDS).map(id => `ids[]=${id.replace('0x', '')}`).join('&');
+    const url = `https://hermes.pyth.network/v2/updates/price/latest?${ids}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    data.parsed.forEach(p => {
+      const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
+      const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+      const publishTime = p.price.publish_time * 1000;
+
+      for (const [key, pythId] of Object.entries(PYTH_IDS)) {
+        if (id === pythId.toLowerCase()) {
+          // 1. Update internal cache for immediate settlement
+          cache.prices[key] = price;
+          cache.priceMeta[key] = { updatedAt: publishTime };
+          
+          // 2. Mirror to Redis for system-wide visibility
+          priceRedis.set(`price:${key}`, price.toString());
+          priceRedis.set(`price:${key}:ts`, publishTime.toString());
+        }
       }
-    }
-  } catch (e) {
-    console.error("[Backend Price Sync] Redis error:", e.message);
+    });
+  } catch (err) {
+    console.error('[Internal-Price-Feed] Error:', err.message);
   }
 }
 
-// Sync from Redis frequently to ensure near-instant settlement alignment
-setInterval(syncBackendPrices, 100);
+// Start the internal price feed (300ms polling for oracle efficiency)
+setInterval(pollPythPrices, 300);
+
+// Also keep a fast internal sync from cache (redundant but safe for high-frequency settlement)
+async function syncBackendPrices() {
+  // Logic now handled by pollPythPrices directly updating cache
+}
 
 
 // --- Socket.IO ---
