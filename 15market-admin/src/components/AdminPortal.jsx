@@ -1341,7 +1341,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     ];
 
     const distributionData = [
-        { name: 'Protocol Vault', value: 95, color: '#3CB371' },
+        { name: 'Protocol Assets', value: 95, color: '#3CB371' },
         { name: 'Misc', value: 5, color: '#ffffff20' }
     ];
 
@@ -1678,7 +1678,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                         <div className="space-y-6">
                             <div className="text-center space-y-2">
                                 <h3 className="text-xs font-black text-[#3CB371] uppercase tracking-widest">Operator Onboarding</h3>
-                                <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest">Initialize your administrative vault keys.</p>
+                                <p className="text-[9px] text-white/30 uppercase font-bold tracking-widest">Initialize your administrative access keys.</p>
                             </div>
 
                             <div className="space-y-4">
@@ -2167,7 +2167,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                             icon={Database}
                                             label="Arc Treasury"
                                             value={`${unifiedMetrics.displayReserve} ${unifiedMetrics.currencyUnit}`}
-                                            trend="VAULT"
+                                            trend="ASSETS"
                                             positive={true}
                                         />
                                         <StatCard

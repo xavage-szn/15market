@@ -75,6 +75,9 @@ export const KEEPER_URL_ARC = ensureAbsolute(rawKeeperUrlArc).endsWith('/') ? en
 
 export const KEEPER_URL_ROUNDS = `${KEEPER_URL_ARC}/rounds`;
 
+export const PRICE_FEED_URL = isLocal ? "http://localhost:3012" : "https://prices.15market.com";
+
+
 
 // PRODUCTION DIAGNOSTIC - Helps find "Failed to Fetch" causes
 console.log(`🌐 [Config] API Endpoint: ${KEEPER_URL_ARC}`);
@@ -84,9 +87,8 @@ if (!isLocal && KEEPER_URL_ARC.includes('localhost')) {
 }
 export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 
-// 2. Project ID (Legacy Reown removed, keeping for compatibility if needed elsewhere)
+// 2. Project ID (Reown / WalletConnect)
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
-export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID || "cmisfdm6o00j9jr0d2tjntq58";
 
 // 3. Chain Definition for Arc
 export const arcTestnet = defineChain({

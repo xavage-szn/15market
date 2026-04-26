@@ -3,23 +3,19 @@
     "version": "1.0.0",
     "private": true,
     "scripts": {
-        "install:all": "npm install && npm run install:backend && npm run install:rounds && npm run install:ui && npm run install:admin",
-        "install:backend": "cd backend && npm install",
-        "install:rounds": "cd rounds-backend && npm install",
+        "install:all": "npm install && npm run install:backend && npm run install:ui && npm run install:admin",
+        "install:backend": "cd nexus-core && npm install",
         "install:ui": "cd 15market && npm install --legacy-peer-deps",
         "install:admin": "cd 15market-admin && npm install --legacy-peer-deps",
-        "build": "npm run build:ui && npm run build:admin && npm run build:rounds",
+        "build": "npm run build:ui && npm run build:admin",
         "build:ui": "cd 15market && npm install --legacy-peer-deps && npm run build",
         "build:admin": "cd 15market-admin && npm install --legacy-peer-deps && npm run build",
-        "build:rounds": "cd rounds-backend && npm install && npm run build",
-        "start": "concurrently -n \"ARC,ADMIN,UI\" -c \"magenta,green,cyan\" \"npm run start:arc\" \"npm run start:admin\" \"npm run start:ui\"",
-        "start:arc": "cd backend && npm start",
+        "start": "concurrently -n \"BACKEND,ADMIN,UI\" -c \"magenta,green,cyan\" \"npm run start:backend\" \"npm run start:admin\" \"npm run start:ui\"",
+        "start:backend": "cd nexus-core && npm start",
         "start:admin": "cd 15market-admin && npm run dev",
         "start:ui": "cd 15market && npm run dev",
-        "render:build:backend": "cd backend && npm install",
-        "render:start:backend": "cd backend && node src/index.js",
-        "render:build:rounds": "cd rounds-backend && npm install",
-        "render:start:rounds": "cd rounds-backend && node index.js"
+        "render:build:backend": "cd nexus-core && npm install",
+        "render:start:backend": "cd nexus-core && node src/index.js"
     },
     "devDependencies": {
         "concurrently": "^9.1.2"

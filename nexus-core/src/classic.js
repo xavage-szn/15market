@@ -27,21 +27,14 @@ class ClassicEngine {
   }
 
   resolveSessionIdentity(payload = {}) {
-    const address = this.normalizeAddr(payload.address);
-    const privyUserId = String(payload.privyUserId || '').trim();
-    const privyWalletAddress = this.normalizeAddr(payload.privyWalletAddress);
-    const fallbackWallet = /^0x[a-fA-F0-9]{40}$/.test(address) ? address : '';
-    const walletAddress = /^0x[a-fA-F0-9]{40}$/.test(privyWalletAddress) ? privyWalletAddress : fallbackWallet;
+    const walletAddress = this.normalizeAddr(payload.address);
 
-    if (config.USE_PRIVY_SMART_WALLETS && !walletAddress) {
-      return { ok: false, error: 'Privy wallet address required when Privy mode is enabled.' };
-    }
-    if (!walletAddress) {
-      return { ok: false, error: 'Valid wallet address required.' };
+    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      return { ok: false, error: 'Valid EVM wallet address required.' };
     }
 
-    const identityKey = privyUserId ? `privy:${privyUserId}:${walletAddress}` : walletAddress;
-    return { ok: true, identityKey, walletAddress, privyUserId: privyUserId || null };
+    // Identity key is the wallet address (Reown / WalletConnect)
+    return { ok: true, identityKey: walletAddress, walletAddress };
   }
 
   placeTrade(tradeParams, identityPayload) {
@@ -53,7 +46,6 @@ class ClassicEngine {
     const session = cache.getOrCreateSession(userAddr, {
       identityKey: userAddr,
       walletAddress: identity.walletAddress,
-      privyUserId: identity.privyUserId,
       sessionAddress: `session_${suffix}`,
       balance: config.DEFAULT_SESSION_BALANCE,
     });
@@ -76,7 +68,6 @@ class ClassicEngine {
       id,
       userAddr,
       walletAddress: session.walletAddress,
-      privyUserId: session.privyUserId,
       direction,
       duration,
       marketId,
@@ -197,7 +188,6 @@ class ClassicEngine {
       tradeId: trade.id,
       userAddr: trade.userAddr,
       walletAddress: trade.walletAddress || trade.userAddr,
-      privyUserId: trade.privyUserId || null,
       amount: trade.payout,
       queuedAt: Date.now(),
       status: 'QUEUED',

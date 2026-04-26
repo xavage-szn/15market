@@ -3,7 +3,7 @@ services:
   - type: web
     name: 15market-backend
     env: node
-    rootDir: backend
+    rootDir: nexus-core
     buildCommand: npm install
     startCommand: npm start
     envVars:
@@ -14,8 +14,6 @@ services:
       # These should be set in the Render Dashboard for security, but listed here for clarity
       - fromContext: env
         key: PRIVATE_KEY
-      - fromContext: env
-        key: SESSION_MASTER_SECRET
       - fromContext: env
         key: ARC_CONTRACT_ADDRESS
       - fromContext: env
@@ -37,8 +35,6 @@ services:
         value: https://15market-backend.onrender.com
       - key: VITE_KEEPER_URL_ARC
         value: https://15market-backend.onrender.com
-      - key: VITE_KEEPER_URL_ROUNDS
-        value: https://15market-backend.onrender.com/rounds
 
   # Admin Frontend Service (Static Site)
   - type: static
@@ -52,7 +48,3 @@ services:
         value: https://15market-backend.onrender.com
       - key: VITE_KEEPER_URL_ARC
         value: https://15market-backend.onrender.com
-      - key: VITE_KEEPER_URL_ROUNDS
-        value: https://15market-backend.onrender.com/rounds
-
-

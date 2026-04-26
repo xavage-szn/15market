@@ -194,7 +194,7 @@ export default function RoundsAccessGate({ children, theme, active, onUnlock, ve
                                 {error ? <ShieldAlert size={32} className="text-red-500" /> : <Lock size={32} className="text-[#3CB371]" />}
                             </motion.div>
 
-                            <h2 className="text-3xl font-black uppercase tracking-tighter mb-2">Vault Protected</h2>
+                            <h2 className="text-3xl font-black uppercase tracking-tighter mb-2">Secure Access</h2>
                             <p className={`text-[10px] font-bold uppercase tracking-widest mb-8 ${isDark ? 'text-white/40' : 'text-black/40'}`}>
                                 Invite-only Beta access to Rounds Terminal.
                             </p>

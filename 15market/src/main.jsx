@@ -7,13 +7,39 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
-import { PrivyProvider } from '@privy-io/react-auth';
-import { WagmiProvider } from '@privy-io/wagmi';
-import { config } from './wagmiConfig';
+import { createAppKit } from '@reown/appkit/react';
+import { WagmiProvider } from 'wagmi';
+import { wagmiAdapter, config } from './wagmiConfig';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PRIVY_APP_ID, arcTestnet } from './constants';
+import { arcTestnet, projectId } from './constants';
 
 const queryClient = new QueryClient();
+
+// --- Initialize Reown AppKit ---
+// createAppKit wires up the modal, wagmi adapter, and network configuration globally.
+// It MUST be called before any component that uses useAppKit/useAccount etc.
+createAppKit({
+  adapters: [wagmiAdapter],
+  networks: [arcTestnet],
+  projectId,
+  metadata: {
+    name: '15market',
+    description: '15market — Ultra-low-latency binary options trading on Arc Testnet',
+    url: 'https://15market.com',
+    icons: ['https://15market.com/logo.png'],
+  },
+  features: {
+    analytics: false,
+    socials: false,
+    email: false,
+  },
+  themeMode: 'dark',
+  themeVariables: {
+    '--w3m-accent': '#3CB371',
+    '--w3m-border-radius-master': '12px',
+  },
+  defaultNetwork: arcTestnet,
+});
 
 // #region agent log
 fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H6',location:'main.jsx:startup',message:'App startup probe log emitted',data:{href:window.location.href},timestamp:Date.now()})}).catch(()=>{});
@@ -104,33 +130,13 @@ class ErrorBoundary extends React.Component {
 function Root() {
   return (
     <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <PrivyProvider
-          appId={PRIVY_APP_ID}
-          config={{
-            loginMethods: ['wallet'],
-            appearance: {
-              theme: 'dark',
-              accentColor: '#3CB371', // 15market Green
-              showWalletLoginFirst: true,
-              logo: 'https://15market.com/logo.png',
-              walletList: ['detected_ethereum_wallets', 'metamask', 'coinbase_wallet', 'rainbow', 'okx_wallet', 'phantom', 'wallet_connect', 'wallet_connect_qr'],
-            },
-            defaultChain: arcTestnet,
-            supportedChains: [arcTestnet],
-            externalWallets: {},
-            embeddedWallets: {
-              createOnLogin: 'users-without-wallets',
-            },
-          }}
-        >
-          <WagmiProvider config={config}>
-            <ErrorBoundary>
-              <App />
-            </ErrorBoundary>
-          </WagmiProvider>
-        </PrivyProvider>
-      </QueryClientProvider>
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
+        </QueryClientProvider>
+      </WagmiProvider>
     </React.StrictMode>
   );
 }

@@ -29,10 +29,7 @@ module.exports = {
   DEFAULT_SESSION_BALANCE: Number(process.env.DEFAULT_SESSION_BALANCE || 1000),
   PAYOUT_INLINE_FALLBACK: String(process.env.PAYOUT_INLINE_FALLBACK || 'true') === 'true',
   
-  // Privy Integration
-  USE_PRIVY_SMART_WALLETS: String(process.env.USE_PRIVY_SMART_WALLETS || 'false') === 'true',
-  PRIVY_APP_ID: process.env.PRIVY_APP_ID || '',
-  PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET || '',
+  // Auth: wallet address-based identity (Reown / WalletConnect)
 
   // Redis
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',

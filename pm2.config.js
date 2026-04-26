@@ -2,7 +2,7 @@ module.exports = {
     apps: [
         {
             name: '15market-backend',
-            script: 'backend/src/index.js',
+            script: 'nexus-core/src/index.js',
             instances: 1,
             autorestart: true,
             watch: false,
@@ -13,23 +13,23 @@ module.exports = {
             }
         },
         {
-            name: 'keep-alive',
-            script: 'keep-alive.js',
+            name: '15market-price-frontend',
+            script: 'nexus-core/src/price-frontend.js',
             instances: 1,
             autorestart: true,
             watch: false,
             env: {
+                PORT: 3012,
                 NODE_ENV: 'production'
             }
         },
         {
-            name: '15market-rounds',
-            script: 'rounds-backend/index.js',
+            name: '15market-price-backend',
+            script: 'nexus-core/src/price-backend.js',
             instances: 1,
             autorestart: true,
             watch: false,
             env: {
-                PORT: 3011,
                 NODE_ENV: 'production'
             }
         }

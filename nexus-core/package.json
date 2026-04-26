@@ -5,10 +5,11 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "price-frontend": "node src/price-frontend.js",
+    "price-backend": "node src/price-backend.js",
     "dev": "node --watch src/index.js"
   },
   "dependencies": {
-    "@privy-io/node": "^0.16.0",
     "bullmq": "^5.76.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

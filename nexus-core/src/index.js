@@ -12,7 +12,7 @@ const cache = require('./cache');
 const ClassicEngine = require('./classic');
 
 const { ethers } = require('ethers');
-const { RedisMirrorService, SettlementService, setupBatchSweepJob, FACTORY_ABI } = require('./services/nexus-auto-signer');
+const { RedisMirrorService, SettlementService, setupBatchSweepJob } = require('./services/nexus-auto-signer');
 const profiles = require('./profiles');
 
 // --- Setup Server ---
@@ -24,23 +24,57 @@ app.use(cors());
 app.use(express.json());
 
 // --- Blockchain Setup ---
-const provider = new ethers.JsonRpcProvider(config.RPCS[0]);
+const providers = config.RPCS.map(url => {
+  const fetchRequest = new ethers.FetchRequest(url);
+  if (url.includes('thirdweb.com') && config.THIRDWEB_SECRET_KEY) {
+    fetchRequest.setHeader("x-secret-key", config.THIRDWEB_SECRET_KEY);
+  }
+  return new ethers.JsonRpcProvider(fetchRequest, config.CHAIN_ID, { staticNetwork: true });
+});
+
+// Use FallbackProvider for high availability
+const provider = new ethers.FallbackProvider(providers.map((p, i) => ({
+  provider: p,
+  priority: i,
+  weight: 1,
+  stallTimeout: 2000
+})));
+
 const operatorWallet = new ethers.Wallet(config.PRIVATE_KEY, provider);
-const factoryContract = new ethers.Contract(config.FACTORY_ADDRESS, FACTORY_ABI, operatorWallet);
 
 // --- Initialize Engines ---
 const classicEngine = new ClassicEngine(io);
-const settlementService = new SettlementService(operatorWallet, factoryContract, io);
-const redisMirror = new RedisMirrorService(factoryContract, operatorWallet);
-setupBatchSweepJob(operatorWallet, factoryContract);
+const settlementService = new SettlementService(operatorWallet, io);
+// Redis Mirror now logic handled via engine balance sync
+// setupBatchSweepJob(operatorWallet);
 
 settlementService.startSettlementPoller();
 classicEngine.start();
 
+// --- Backend Internal Price Sync (from Redis) ---
+// This allows the settlement engine to have its own authoritative price source 
+// independent of the frontend's streaming feed.
+const Redis = require('ioredis');
+const priceRedis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
+async function syncBackendPrices() {
+  try {
+    const keys = ['btc', 'eth', 'sol'];
+    for (const k of keys) {
+      const val = await priceRedis.get(`price:${k}`);
+      if (val) cache.prices[k] = parseFloat(val);
+    }
+  } catch (e) {
+    console.error("[Backend Price Sync] Redis error:", e.message);
+  }
+}
+
+setInterval(syncBackendPrices, 500);
+
 
 // --- Socket.IO ---
 io.on('connection', (socket) => {
-  socket.emit('price_update', cache.prices);
+  // Price streaming moved to standalone frontend price service (port 3012)
   socket.on('join_user', (address) => {
     const room = classicEngine.normalizeAddr(address);
     if (room) socket.join(room);
@@ -49,39 +83,79 @@ io.on('connection', (socket) => {
 
 // --- API Routes (Classic) ---
 
-app.post('/session/init', (req, res) => {
-  const identity = classicEngine.resolveSessionIdentity(req.body || {});
-  if (!identity.ok) return res.status(400).json({ error: identity.error });
-  
-  const userAddr = identity.identityKey;
-  const suffix = (identity.walletAddress || 'anon').slice(2, 10);
-  const session = cache.getOrCreateSession(userAddr, {
-    identityKey: userAddr,
-    walletAddress: identity.walletAddress,
-    privyUserId: identity.privyUserId,
-    sessionAddress: `session_${suffix}`,
-    balance: config.DEFAULT_SESSION_BALANCE,
-  });
+app.post('/session/init', async (req, res) => {
+  try {
+    const identity = classicEngine.resolveSessionIdentity(req.body || {});
+    if (!identity.ok) return res.status(400).json({ error: identity.error });
+    
+    const userAddr = identity.identityKey;
+    
+    // 1. Deterministic Session Wallet Derivation (EOA Model)
+    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
+    const privateKey = ethers.keccak256(entropy);
+    const wallet = new ethers.Wallet(privateKey);
+    const walletAddress = wallet.address;
+    
+    // 2. Fetch real balance
+    const onChainBal = await provider.getBalance(walletAddress);
+    
+    const session = cache.getOrCreateSession(userAddr, {
+      identityKey: userAddr,
+      walletAddress: identity.walletAddress,
+      sessionAddress: walletAddress || null,
+      balance: Number(onChainBal),
+    });
 
-  res.json({
-    success: true,
-    walletAddress: session.walletAddress,
-    privyUserId: session.privyUserId,
-    sessionAddress: session.sessionAddress,
-    balance: String(session.balance),
-  });
+    res.json({
+      success: true,
+      walletAddress: session.walletAddress,
+      sessionAddress: session.sessionAddress,
+      balance: String(onChainBal),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Session init failed" });
+  }
 });
 
-app.get('/session/balance/:address', (req, res) => {
-  const raw = classicEngine.normalizeAddr(req.params.address);
-  const session = cache.sessions.get(raw);
-  if (!session) return res.json({ success: true, balance: "0" });
-  res.json({
-    success: true,
-    balance: String(session.balance),
-    walletAddress: session.walletAddress,
-    sessionAddress: session.sessionAddress,
-  });
+app.get('/session/balance/:address', async (req, res) => {
+  try {
+    const raw = classicEngine.normalizeAddr(req.params.address);
+    let session = cache.sessions.get(raw);
+    
+    // 1. Deterministic Session Wallet Derivation (EOA Model)
+    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + raw);
+    const privateKey = ethers.keccak256(entropy);
+    const wallet = new ethers.Wallet(privateKey);
+    const walletAddress = wallet.address;
+
+    // 2. Fetch on-chain balance (USDC/Native)
+    const onChainBal = await provider.getBalance(walletAddress);
+
+    // 4. Update session cache (if exists) or create a temporary one
+    if (session) {
+      session.balance = Number(onChainBal);
+      session.sessionAddress = walletAddress;
+    } else {
+      session = {
+        identityKey: raw,
+        walletAddress: raw,
+        sessionAddress: walletAddress,
+        balance: Number(onChainBal)
+      };
+    }
+
+    res.json({
+      success: true,
+      balance: String(onChainBal),
+      walletAddress: raw,
+      sessionAddress: walletAddress,
+    });
+  } catch (err) {
+    console.error("Balance fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch on-chain balance" });
+  }
 });
 
 app.post('/session/execute', async (req, res) => {
@@ -113,12 +187,11 @@ app.get('/profiles/:address', async (req, res) => {
   const profile = profiles.get(addr);
   
   // Also provide the deterministic smart wallet address
-  let walletAddress = null;
-  try {
-    walletAddress = await factoryContract.playerToWallet(addr);
-  } catch (e) {
-    console.error("Failed to get wallet address:", e);
-  }
+  const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+  const entropy = ethers.toUtf8Bytes(MASTER_SECRET + addr);
+  const privateKey = ethers.keccak256(entropy);
+  const wallet = new ethers.Wallet(privateKey);
+  const walletAddress = wallet.address;
 
   if (!profile) {
     return res.json({ success: true, profile: null, walletAddress });
@@ -137,28 +210,12 @@ app.post('/profiles', async (req, res) => {
   const { address, username, xHandle, avatar } = req.body;
   if (!address) return res.status(400).json({ error: 'Address required' });
 
-  let walletAddress = null;
-  try {
-    // 1. Check if wallet already linked
-    walletAddress = await factoryContract.playerToWallet(address);
-    
-    // 2. If not linked, trigger deployment/linkage
-    if (!walletAddress || walletAddress === ethers.ZeroAddress) {
-      console.log(`🛠️ [FACTORY] Creating smart wallet for ${address}...`);
-      try {
-        const tx = await factoryContract.createWallet(address);
-        await tx.wait();
-        walletAddress = await factoryContract.playerToWallet(address);
-        console.log(`✅ [FACTORY] Wallet created: ${walletAddress}`);
-      } catch (deployErr) {
-        console.error("Factory createWallet failed, falling back to getWalletAddress:", deployErr.message);
-        // Fallback to deterministic address if transaction fails
-        walletAddress = await factoryContract.getWalletAddress(address);
-      }
-    }
-  } catch (e) {
-    console.error("Factory interaction failed:", e);
-  }
+  // 1. Resolve wallet address deterministically
+  const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+  const entropy = ethers.toUtf8Bytes(MASTER_SECRET + address.toLowerCase());
+  const privateKey = ethers.keccak256(entropy);
+  const wallet = new ethers.Wallet(privateKey);
+  const walletAddress = wallet.address;
 
   const profile = profiles.upsert(address, { username, xHandle, avatar, walletAddress });
   res.json({ success: true, profile, walletAddress });
@@ -172,18 +229,7 @@ app.patch('/profiles/:address', async (req, res) => {
 
 // --- API Routes (Global) ---
 
-app.get('/prices', (req, res) => {
-  res.json({ ...cache.prices, oracleReady: true, hasAnyPrice: true });
-});
 
-app.post('/prices', (req, res) => {
-  const next = req.body || {};
-  ['btc', 'eth', 'sol'].forEach((k) => {
-    if (Number.isFinite(Number(next[k]))) cache.prices[k] = Number(next[k]);
-  });
-  io.emit('price_update', cache.prices);
-  res.json({ success: true, prices: cache.prices });
-});
 
 app.get('/health', (req, res) => {
   res.json({

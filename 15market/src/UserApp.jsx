@@ -46,8 +46,8 @@ import { RoundsTerminal } from "./components/RoundsTerminal";
 // Rounds chart logic merged into LiveStreamingChart/CustomChart for performance
 import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
-// Vault decommissioned.
 import { socketService } from './utils/socket';
+import { priceSocketService } from './utils/priceSocket';
 
 // Robust Error Boundary to prevent platform-wide crashes
 class ErrorBoundary extends Component {
@@ -258,7 +258,7 @@ const DissolveTransition = ({ isAnimating, targetTheme }) => {
 };
 
 export default function UserApp() {
-  const { isConnected, address, chainId: connectedChainId } = useAccount();
+  const { isConnected, address, chainId: connectedChainId, status } = useAccount();
   const { switchChain } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
 
@@ -374,6 +374,8 @@ export default function UserApp() {
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
   const [isAppReady, setIsAppReady] = useState(false);
+  const isInitializing = status === 'reconnecting' || (status === 'connecting' && !isConnected);
+
   const [loadingProgress, setLoadingProgress] = useState(0);
 
   const activeTrade = activeTrades[0] || null; 
@@ -1666,7 +1668,7 @@ export default function UserApp() {
       // 0. Keeper Backend Source (authoritative + lightest CPU path)
       const keeperSource = {
         name: "keeper",
-        url: `${KEEPER_URL_ARC}/prices`,
+        url: `${PRICE_FEED_URL}/prices`,
         parse: d => {
           const key = activeMarket?.id?.toLowerCase();
           const val = key ? d?.[key] : null;
@@ -1808,12 +1810,37 @@ export default function UserApp() {
     let active = true;
     const loop = async () => {
       if (!active) return;
+      // We still keep the polling as a background fallback, but slower (every 2s)
       await fetchCurrentPrice();
-      if (active) setTimeout(loop, 300);
+      if (active) setTimeout(loop, 2000); 
     };
     loop();
     return () => { active = false; };
   }, [fetchCurrentPrice]);
+
+  // ─── STANDALONE FRONTEND PRICE FEED (No Ties to Backend) ───
+  useEffect(() => {
+    priceSocketService.connect();
+
+    const unbindPrices = priceSocketService.on('price_update', (allPrices) => {
+      const currentAssetId = activeMarket?.id?.toLowerCase();
+      if (currentAssetId && allPrices[currentAssetId]) {
+        const p = allPrices[currentAssetId];
+        const truncated = Math.floor(p * 100) / 100;
+        const pStr = truncated.toFixed(2);
+        
+        setPrice(pStr);
+        priceRef.current = pStr;
+        
+        // Update history for charts/expiry logic
+        const now = Date.now();
+        priceHistoryRef.current.push({ p: truncated, t: now });
+        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
+      }
+    });
+
+    return () => unbindPrices();
+  }, [activeMarket]);
 
   // ─── SOCKET.IO: Trade events + Backend-Authoritative Settlement ───
   useEffect(() => {
@@ -2657,7 +2684,7 @@ export default function UserApp() {
     }
   }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
-  if (!isAppReady && isGlobalLoading) return (
+  if (isInitializing || (!isAppReady && isGlobalLoading)) return (
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -2702,7 +2729,7 @@ export default function UserApp() {
     );
   }
 
-  if (!authenticated) return (
+  if (!isConnected) return (
     <div className={themeClass}>
       <LandingPage theme={theme} onToggle={toggleTheme} />
       <AnimatePresence>
@@ -2956,7 +2983,7 @@ export default function UserApp() {
                             transparent={true}
                             activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
                             sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                            setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={balance}
+                            setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
                             sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
                             theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
                             refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}

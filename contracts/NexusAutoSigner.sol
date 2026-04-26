@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title NexusAutoSignerWallet
  * @dev Personalized smart contract wallet for 15market players.
  * Supports internal balance tracking for ultra-fast trading with zero token transfers for stakes.
+ * This version uses the NATIVE token (which is USDC on the Arc network).
  */
 contract NexusAutoSignerWallet is ReentrancyGuard {
     address public immutable owner;
     address public immutable operator;
-    IERC20 public immutable usdc;
 
     uint256 public availableBalance;
     uint256 public lockedBalance;
@@ -35,27 +34,33 @@ contract NexusAutoSignerWallet is ReentrancyGuard {
         _;
     }
 
-    constructor(address _owner, address _operator, address _usdc) {
+    constructor(address _owner, address _operator) {
         owner = _owner;
         operator = _operator;
-        usdc = IERC20(_usdc);
     }
 
     /**
-     * @dev Invariant check: availableBalance + lockedBalance + pendingLoss == USDC.balanceOf(this)
+     * @dev Fallback to receive native USDC. 
+     * Automatically updates availableBalance so the backend/UI syncs immediately.
+     */
+    receive() external payable {
+        availableBalance += msg.value;
+        emit Deposit(owner, msg.value, availableBalance);
+    }
+
+    /**
+     * @dev Invariant check: availableBalance + lockedBalance + pendingLoss == address(this).balance
      */
     function checkInvariant() public view returns (bool) {
-        return (availableBalance + lockedBalance + pendingLoss) == usdc.balanceOf(address(this));
+        return (availableBalance + lockedBalance + pendingLoss) == address(this).balance;
     }
 
     /**
-     * @dev Deposit USDC into the wallet.
-     * Anyone can call, but funds come from msg.sender.
+     * @dev Explicit deposit function (native).
      */
-    function deposit(uint256 amount) external nonReentrant {
-        require(usdc.transferFrom(msg.sender, address(this), amount), "Transfer failed");
-        availableBalance += amount;
-        emit Deposit(owner, amount, availableBalance);
+    function deposit() external payable nonReentrant {
+        availableBalance += msg.value;
+        emit Deposit(owner, msg.value, availableBalance);
         require(checkInvariant(), "Invariant broken");
     }
 
@@ -71,7 +76,7 @@ contract NexusAutoSignerWallet is ReentrancyGuard {
 
     /**
      * @dev Settle a winning trade.
-     * Profit is transferred from Treasury to this contract externally, then this is called.
+     * Profit is transferred from Treasury to this contract as native USDC, then this is called.
      */
     function settleWin(bytes32 tradeId, uint256 stake, uint256 profit) external onlyOperator nonReentrant {
         require(lockedBalance >= stake, "Insufficient locked balance");
@@ -94,11 +99,12 @@ contract NexusAutoSignerWallet is ReentrancyGuard {
     /**
      * @dev Sweep pending losses to the treasury.
      */
-    function sweepLosses(address treasury) external onlyOperator nonReentrant {
+    function sweepLosses(address payable treasury) external onlyOperator nonReentrant {
         uint256 amount = pendingLoss;
         if (amount == 0) return;
         pendingLoss = 0;
-        require(usdc.transfer(treasury, amount), "Transfer failed");
+        (bool success, ) = treasury.call{value: amount}("");
+        require(success, "Transfer failed");
         emit BatchSwept(amount, treasury);
         require(checkInvariant(), "Invariant broken");
     }
@@ -109,7 +115,8 @@ contract NexusAutoSignerWallet is ReentrancyGuard {
     function withdraw(uint256 amount) external onlyOwner nonReentrant {
         require(availableBalance >= amount, "Insufficient available balance");
         availableBalance -= amount;
-        require(usdc.transfer(owner, amount), "Transfer failed");
+        (bool success, ) = payable(owner).call{value: amount}("");
+        require(success, "Transfer failed");
         emit Withdrawal(owner, amount, availableBalance);
         require(checkInvariant(), "Invariant broken");
     }
@@ -121,14 +128,12 @@ contract NexusAutoSignerWallet is ReentrancyGuard {
  */
 contract NexusAutoSignerFactory {
     address public immutable operator;
-    address public immutable usdc;
     mapping(address => address) public playerToWallet;
 
     event WalletDeployed(address indexed player, address wallet);
 
-    constructor(address _operator, address _usdc) {
+    constructor(address _operator) {
         operator = _operator;
-        usdc = _usdc;
     }
 
     function getWalletAddress(address player) public view returns (address) {
@@ -139,7 +144,7 @@ contract NexusAutoSignerFactory {
             salt,
             keccak256(abi.encodePacked(
                 type(NexusAutoSignerWallet).creationCode,
-                abi.encode(player, operator, usdc)
+                abi.encode(player, operator)
             ))
         )))));
     }
@@ -148,24 +153,23 @@ contract NexusAutoSignerFactory {
         require(msg.sender == operator || msg.sender == player, "Unauthorized");
         require(playerToWallet[player] == address(0), "Already exists");
         bytes32 salt = keccak256(abi.encodePacked(player));
-        address wallet = address(new NexusAutoSignerWallet{salt: salt}(player, operator, usdc));
+        address wallet = address(new NexusAutoSignerWallet{salt: salt}(player, operator));
         playerToWallet[player] = wallet;
         emit WalletDeployed(player, wallet);
     }
 
-    function deployAndDeposit(uint256 amount) external {
+    function deployAndDeposit() external payable {
         address wallet = playerToWallet[msg.sender];
         if (wallet == address(0)) {
             bytes32 salt = keccak256(abi.encodePacked(msg.sender));
-            wallet = address(new NexusAutoSignerWallet{salt: salt}(msg.sender, operator, usdc));
+            wallet = address(new NexusAutoSignerWallet{salt: salt}(msg.sender, operator));
             playerToWallet[msg.sender] = wallet;
             emit WalletDeployed(msg.sender, wallet);
         }
         
-        if (amount > 0) {
-            IERC20(usdc).transferFrom(msg.sender, address(this), amount);
-            IERC20(usdc).approve(wallet, amount);
-            NexusAutoSignerWallet(wallet).deposit(amount);
+        if (msg.value > 0) {
+            (bool success, ) = payable(wallet).call{value: msg.value}("");
+            require(success, "Transfer failed");
         }
     }
 }
