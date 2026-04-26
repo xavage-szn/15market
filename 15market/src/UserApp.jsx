@@ -1650,173 +1650,6 @@ export default function UserApp() {
 
 
 
-  const fetchCurrentPrice = useCallback(async () => {
-    try {
-      const sources = [];
-      const nowProbe = Date.now();
-      if ((nowProbe - (priceProbeRef.current.start || 0)) > 5000) {
-        priceProbeRef.current.start = nowProbe;
-        // #region agent log
-        postDebugLog({runId:'initial',hypothesisId:'H6',location:'UserApp.jsx:fetchCurrentPrice:start',message:'price fetch cycle started',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,binance:activeMarket?.binance || null,hasPyth:!!activeMarket?.pythId}});
-        // #endregion
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:start',message:'Starting price fetch for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,binance:activeMarket?.binance,hasPyth:!!activeMarket?.pythId,hasKraken:!!activeMarket?.kraken},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
-      // 0. Keeper Backend Source (authoritative + lightest CPU path)
-      const keeperSource = {
-        name: "keeper",
-        url: `${PRICE_FEED_URL}/prices`,
-        parse: d => {
-          const key = activeMarket?.id?.toLowerCase();
-          const val = key ? d?.[key] : null;
-          return val ? parseFloat(val) : null;
-        }
-      };
-
-      // 1. Pyth Sources (Multiple Hermes endpoints for redundancy)
-      if (activeMarket.pythId) {
-        const fullPythId = activeMarket.pythId.startsWith('0x') ? activeMarket.pythId : `0x${activeMarket.pythId}`;
-
-        // Hermes v2 expects ids[] array syntax and full 0x hex
-        // PRODUCTION FIX: Only use Hermes V2. Benchmark V1 returns 422 errors.
-        sources.push({
-          name: "pyth",
-          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${fullPythId}`,
-          parse: d => {
-            const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
-          }
-        });
-      }
-
-      // 2. MEXC/Binance-symbol source intentionally removed.
-      // Region restrictions can make this source flaky in some geographies.
-
-      // 3. Kraken Source (Direct API - no proxy needed, no geo-restrictions)
-      if (activeMarket.kraken) {
-        sources.push({
-          name: "kraken",
-          url: `https://api.kraken.com/0/public/Ticker?pair=${activeMarket.kraken}`,
-          parse: d => {
-            const k = Object.keys(d.result || {})[0];
-            return k ? parseFloat(d.result[k].c[0]) : null;
-          }
-        });
-      }
-
-      // If no secondary sources, we might need a DEX fallback or DexScreener
-      if (sources.length === 0 && activeMarket.mint) {
-        sources.push({
-          name: "jup",
-          url: `https://price.jup.ag/v4/price?ids=${activeMarket.mint}`,
-          parse: d => d.data[activeMarket.mint]?.price
-        });
-      }
-
-      // First try backend price only for stability and low client CPU/network usage.
-      let fastestPrice = null;
-      try {
-        const keeperRes = await fetch(keeperSource.url, {
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        const keeperData = await keeperRes.json();
-        const keeperVal = keeperSource.parse(keeperData);
-        if (keeperVal && !isNaN(keeperVal) && keeperVal > 0) {
-          fastestPrice = keeperVal;
-        }
-      } catch (e) {
-        // keeper miss falls through to external fallback
-      }
-
-      // Fallback path: external feeds only when backend cache misses.
-      if (!fastestPrice) {
-        if (sources.length === 0) {
-          // #region agent log
-          postDebugLog({runId:'initial',hypothesisId:'H7',location:'UserApp.jsx:fetchCurrentPrice:noSources',message:'no sources resolved for active market',data:{marketId:activeMarket?.id,symbol:activeMarket?.symbol,mint:activeMarket?.mint || null}});
-          // #endregion
-          return null;
-        }
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
-        const pricePromises = sources.map(async (src) => {
-          try {
-            const res = await fetch(src.url, {
-              signal: controller.signal,
-              headers: { 'Cache-Control': 'no-cache' }
-            });
-            const data = await res.json();
-            const val = src.parse(data);
-            if (!val || isNaN(val)) throw new Error("Invalid");
-            return val;
-          } catch (e) {
-            throw e;
-          }
-        });
-        fastestPrice = await Promise.any(pricePromises);
-        clearTimeout(timeoutId);
-      }
-
-      if (fastestPrice > 0) {
-        // Enforce 2 decimal model as requested (Truncation)
-        const truncated = Math.floor(fastestPrice * 100) / 100;
-        const pStr = truncated.toFixed(2);
-        setPrice(pStr);
-        priceRef.current = pStr;
-        const nowSuccess = Date.now();
-        if ((nowSuccess - (priceProbeRef.current.success || 0)) > 5000) {
-          priceProbeRef.current.success = nowSuccess;
-          // #region agent log
-          postDebugLog({runId:'initial',hypothesisId:'H6',location:'UserApp.jsx:fetchCurrentPrice:success',message:'price updated',data:{marketId:activeMarket?.id,price:pStr,sourcesCount:sources.length}});
-          // #endregion
-        }
-        // #region agent log
-        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:fetchCurrentPrice:success',message:'Price updated from fastest source',data:{marketId:activeMarket?.id,price:pStr},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        if (typeof setIsLoading === 'function') setIsLoading(false);
-        setIsGlobalLoading(false);
-
-        // Record history for precise expiry price retrieval (keep 200-item buffer for chart context)
-        const now = Date.now();
-        priceHistoryRef.current.push({ p: truncated, t: now });
-        if (priceHistoryRef.current.length > 200) priceHistoryRef.current.shift();
-
-        return fastestPrice;
-      }
-    } catch (err) {
-      const nowFail = Date.now();
-      if ((nowFail - (priceProbeRef.current.fail || 0)) > 3000) {
-        priceProbeRef.current.fail = nowFail;
-        // #region agent log
-        postDebugLog({runId:'initial',hypothesisId:'H8',location:'UserApp.jsx:fetchCurrentPrice:allFailed',message:'all price requests failed',data:{marketId:activeMarket?.id,error:err?.message || 'unknown'}});
-        // #endregion
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:fetchCurrentPrice:allFailed',message:'All price sources failed for market',data:{marketId:activeMarket?.id,error:err?.message || 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      // Don't let total API failure block the UI forever
-      staticPriceFails.current = (staticPriceFails.current || 0) + 1;
-      if (staticPriceFails.current > 3) {
-          if (typeof setIsLoading === 'function') setIsLoading(false);
-          setIsGlobalLoading(false);
-      }
-    }
-    return null;
-  }, [activeMarket]);
-
-  useEffect(() => {
-    let active = true;
-    const loop = async () => {
-      if (!active) return;
-      // We still keep the polling as a background fallback, but slower (every 2s)
-      await fetchCurrentPrice();
-      if (active) setTimeout(loop, 2000); 
-    };
-    loop();
-    return () => { active = false; };
-  }, [fetchCurrentPrice]);
-
   // ─── EMBEDDED FRONTEND PRICE SERVICE ───
   // This logic runs as a built-in background service for the frontend.
   const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, ts: {} });
@@ -1832,8 +1665,8 @@ export default function UserApp() {
 
     const poll = async () => {
       try {
-        const ids = Object.values(PYTH_IDS).map(id => `ids[]=${id.replace('0x', '')}`).join('&');
-        const url = `https://hermes.pyth.network/v2/updates/price/latest?${ids}`;
+        const ids = Object.values(PYTH_IDS).map(id => id.replace('0x', '')).join(',');
+        const url = `https://hermes.pyth.network/v2/updates/price/latest?ids=${ids}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error("Hermes fail");
         const data = await res.json();
@@ -1859,7 +1692,8 @@ export default function UserApp() {
     return () => { active = false; };
   }, []);
 
-  // 2. Metronome: 100ms Pulse loop to drive UI/Chart
+  // 2. Metronome: 200ms Pulse loop (5Hz) to drive UI/Chart
+  // This achieves the "standardized/consistent" flow we discussed
   useEffect(() => {
     const pulseLoop = setInterval(() => {
       const currentAssetId = activeMarket?.id?.toLowerCase();
@@ -1874,11 +1708,11 @@ export default function UserApp() {
         priceRef.current = pStr;
         
         priceHistoryRef.current.push({ p: truncated, t: sourceTs });
-        if (priceHistoryRef.current.length > 400) priceHistoryRef.current.shift();
+        if (priceHistoryRef.current.length > 500) priceHistoryRef.current.shift();
         
         lastPriceUpdateRef.current = Date.now();
       }
-    }, 100);
+    }, 200);
 
     return () => clearInterval(pulseLoop);
   }, [activeMarket]);

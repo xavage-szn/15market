@@ -61,37 +61,43 @@ const PYTH_IDS = {
   sol: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'
 };
 
+const https = require('https');
+
 async function pollPythPrices() {
-  try {
-    const ids = Object.values(PYTH_IDS).map(id => `ids[]=${id.replace('0x', '')}`).join('&');
-    const url = `https://hermes.pyth.network/v2/updates/price/latest?${ids}`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const data = await res.json();
+  const ids = Object.values(PYTH_IDS).map(id => id.replace('0x', '')).join(',');
+  const url = `https://hermes.pyth.network/v2/updates/price/latest?ids=${ids}`;
+  
+  https.get(url, (res) => {
+    let data = '';
+    res.on('data', (chunk) => { data += chunk; });
+    res.on('end', () => {
+      try {
+        if (res.statusCode !== 200) return;
+        const json = JSON.parse(data);
+        if (!json.parsed) return;
 
-    data.parsed.forEach(p => {
-      const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
-      const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
-      const publishTime = p.price.publish_time * 1000;
+        json.parsed.forEach(p => {
+          const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
+          const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+          const publishTime = p.price.publish_time * 1000;
 
-      for (const [key, pythId] of Object.entries(PYTH_IDS)) {
-        if (id === pythId.toLowerCase()) {
-          // 1. Update internal cache for immediate settlement
-          cache.prices[key] = price;
-          cache.priceMeta[key] = { updatedAt: publishTime };
-          
-          // 2. Mirror to Redis for system-wide visibility
-          priceRedis.set(`price:${key}`, price.toString());
-          priceRedis.set(`price:${key}:ts`, publishTime.toString());
-        }
-      }
+          for (const [key, pythId] of Object.entries(PYTH_IDS)) {
+            if (id === pythId.toLowerCase()) {
+              cache.prices[key] = price;
+              cache.priceMeta[key] = { updatedAt: publishTime };
+              priceRedis.set(`price:${key}`, price.toString());
+              priceRedis.set(`price:${key}:ts`, publishTime.toString());
+            }
+          }
+        });
+      } catch (e) { }
     });
-  } catch (err) {
+  }).on('error', (err) => {
     console.error('[Internal-Price-Feed] Error:', err.message);
-  }
+  });
 }
 
-// Start the internal price feed (300ms polling for oracle efficiency)
+// Poll Pyth every 300ms
 setInterval(pollPythPrices, 300);
 
 // Also keep a fast internal sync from cache (redundant but safe for high-frequency settlement)
