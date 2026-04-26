@@ -2684,67 +2684,7 @@ export default function UserApp() {
     }
   }, [evmSessionWallet, address, notify, sessionBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
 
-  if (isInitializing || (!isAppReady && isGlobalLoading)) return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
-      >
-        <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
-          <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
-          <MascotLoader 
-            progress={loadingProgress} 
-            status="running" 
-            theme="dark" 
-          />
-        </div>
-        
-        {/* Visual Flair (Nebula + Scan) */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden origin-center">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#3CB371]/5 rounded-full blur-[120px] animate-pulse" />
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#3CB371]/30 to-transparent animate-scanLine" />
-        </div>
-      </motion.div>
-    </AnimatePresence>
-  );
 
-  if (platformSettings.maintenanceMode) {
-    return (
-      <div className={`fixed inset-0 z-[1000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
-        <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
-          <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
-        </div>
-        <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-          Under Maintenance
-        </h1>
-        <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
-          We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
-        </p>
-        <div className="mt-12 py-2 px-6 rounded-full border border-[#3CB371]/10 text-[10px] font-black uppercase tracking-widest text-[#3CB371]">
-          Precision V2 Upgrade in Progress
-        </div>
-      </div>
-    );
-  }
-
-  if (!isConnected) return (
-    <div className={themeClass}>
-      <LandingPage theme={theme} onToggle={toggleTheme} />
-      <AnimatePresence>
-        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} theme={theme} />}
-      </AnimatePresence>
-    </div>
-  );
-
-  if (isSignerInitializing && !evmSessionWallet) {
-    return (
-       <div className={`${themeClass} fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center`}>
-          <MascotLoader theme={theme} label="Syncing Trading Wallet..." />
-       </div>
-    );
-  }
 
 
 
@@ -3240,6 +3180,70 @@ export default function UserApp() {
             performStealthChecks(address); // Final refresh
           }}
         />
+      )}
+
+      {/* OVERLAY: Landing Page (Not Connected) */}
+      <AnimatePresence>
+        {!isConnected && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1000]"
+          >
+            <LandingPage theme={theme} onToggle={toggleTheme} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OVERLAY: App Initialization Loader */}
+      <AnimatePresence>
+        {(isInitializing || (!isAppReady && isGlobalLoading)) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
+          >
+            <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
+              <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
+              <MascotLoader 
+                progress={loadingProgress} 
+                status="running" 
+                theme="dark" 
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OVERLAY: Signer Initialization */}
+      <AnimatePresence>
+        {isSignerInitializing && isConnected && !evmSessionWallet && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1500] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
+          >
+            <MascotLoader theme={theme} label="Syncing Trading Wallet..." />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OVERLAY: Maintenance Mode */}
+      {platformSettings.maintenanceMode && (
+        <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
+          <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
+            <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
+          </div>
+          <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+            Under Maintenance
+          </h1>
+          <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+            We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
+          </p>
+        </div>
       )}
     </motion.div >
     </ErrorBoundary>
