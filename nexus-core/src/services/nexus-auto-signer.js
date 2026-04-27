@@ -177,15 +177,20 @@ class SettlementService {
          throw new Error("User has no smart contract wallet. Deposit first.");
       }
       
-      const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
+      const balanceKey = `balance:${playerId.toLowerCase()}:available`;
+      const currentBalance = await redis.get(balanceKey) || "0";
+      const stakeNum = parseFloat(stake);
+      const balanceNum = parseFloat(currentBalance);
+
+      if (balanceNum < stakeNum) {
+        throw new Error("Insufficient session balance.");
+      }
+
+      // 1. DEDUCT IN STATE (High-Performance/Ultra-Low-Latency)
+      const newBalance = (balanceNum - stakeNum).toFixed(18);
+      await redis.set(balanceKey, newBalance);
+
       const tradeId = ethers.id(`${playerId}-${Date.now()}`);
-      const stakeWei = ethers.parseUnits(stake, 18); // Assuming 18 decimals for Arc native/USDC
-
-      // 1. Lock Stake on-chain in the SCW
-      const tx = await walletContract.lockStake(tradeId, stakeWei);
-      // We don't await tx.wait() here to keep the UI seamless and low-latency.
-      // The poller/indexing logic will pick up the confirmed state later.
-
       const trade = {
         tradeId,
         playerId,
@@ -194,16 +199,19 @@ class SettlementService {
         closeTime: Date.now() + (duration * 1000),
         symbol,
         direction,
-        txHash: tx.hash
+        status: 'open'
       };
 
       await redis.set(`trade:${tradeId}`, JSON.stringify(trade));
       await redis.sadd(`active_trades`, tradeId);
       
+      // Notify frontend immediately of state update
+      this.io.to(playerId.toLowerCase()).emit('balance_update', { available: newBalance });
       this.io.to(playerId.toLowerCase()).emit('trade_placed', trade);
-      return { tradeId, success: true, txHash: tx.hash };
+
+      return { tradeId, success: true, mode: 'state-execution' };
     } catch (err) {
-      console.error("submitTrade failed:", err);
+      console.error("submitTrade state-exec failed:", err);
       return { success: false, error: err.message };
     }
   }
@@ -214,65 +222,55 @@ class SettlementService {
     
     const trade = JSON.parse(tradeData);
     const exitPrice = await this.getLatestPrice(trade.symbol);
-    const won = trade.direction === 1 ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
+    const isCall = trade.direction === 1 || trade.direction === 'UP' || trade.direction === 'buy';
+    const won = isCall ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
 
-    const walletAddress = await this.factoryContract.playerToWallet(trade.playerId);
-    const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
+    const playerId = trade.playerId.toLowerCase();
+    const balanceKey = `balance:${playerId}:available`;
+    const pendingLossKey = `balance:${playerId}:pending_loss`;
 
     try {
-      let tx;
-      const stakeWei = ethers.parseUnits(trade.stakeAmount, 18);
-
       if (won) {
-        // WIN: Payout profit from treasury/pool to user SCW
-        // In this SCW model, settleWin usually releases stake + adds profit
-        const profit = (parseFloat(trade.stakeAmount) * 0.95).toFixed(6); // 95% profit
-        const profitWei = ethers.parseUnits(profit, 18);
+        // WIN: Update state by returning stake + profit
+        const currentBalance = await redis.get(balanceKey) || "0";
+        const profit = parseFloat(trade.stakeAmount) * 0.95;
+        const newBalance = (parseFloat(currentBalance) + parseFloat(trade.stakeAmount) + profit).toFixed(18);
+        await redis.set(balanceKey, newBalance);
         
-        console.log(`[Settlement] WIN for ${tradeId}. Paying out profit...`);
-        tx = await walletContract.settleWin(tradeId, stakeWei, profitWei);
+        console.log(`[State-Settlement] WIN for ${tradeId}. Profit added to state.`);
+        this.io.to(playerId).emit('balance_update', { available: newBalance });
       } else {
-        // LOSS: Finalize loss in SCW (moves to pendingLoss)
-        console.log(`[Settlement] LOSS for ${tradeId}. Finalizing loss...`);
-        tx = await walletContract.settleLoss(tradeId, stakeWei);
+        // LOSS: Add to pending_loss state for later on-chain sweep
+        const currentLoss = await redis.get(pendingLossKey) || "0";
+        const newLoss = (parseFloat(currentLoss) + parseFloat(trade.stakeAmount)).toFixed(18);
+        await redis.set(pendingLossKey, newLoss);
+        
+        console.log(`[State-Settlement] LOSS for ${tradeId}. Loss moved to pending state.`);
       }
 
-      await tx.wait();
-      
+      // Finalize Result
+      this.io.to(playerId).emit('trade_settled', { 
+        tradeId, 
+        won, 
+        exitPrice, 
+        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(6) : "0" 
+      });
+
       // Cleanup
       await redis.del(`trade:${tradeId}`);
       await redis.srem(`active_trades`, tradeId);
 
-      // Increment Global Trade Counter for Batch Sweep
-      const currentCount = await redis.incr(this.tradeCounterKey);
-      if (currentCount >= 5) {
-        console.log("📦 [SettlementService] Batch limit reached (5 trades). Triggering global sweep...");
-        await redis.set(this.tradeCounterKey, "0");
-        this.triggerBatchSweep();
-      }
-
-      const result = {
+      return {
         tradeId,
         success: true,
-        outcome: won ? 'WIN' : 'LOSS',
-        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(4) : '0',
-        txHash: tx.hash,
         won,
         entryPrice: trade.entryPrice,
         exitPrice,
-        direction: trade.direction,
-        amount: trade.stakeAmount,
-        symbol: trade.symbol.toUpperCase(),
-        timestamp: Date.now(),
-        userAddr: trade.playerId
+        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(4) : '0'
       };
-
-      cache.pushHistory(trade.playerId, result);
-      this.io.to(trade.playerId.toLowerCase()).emit('trade_settled', result);
-      return result;
     } catch (err) {
-      console.error(`Settlement failed for ${tradeId}:`, err);
-      return { tradeId, success: false, error: err.message };
+      console.error("settleTrade state-exec failed:", err);
+      return { success: false, error: err.message };
     }
   }
 
