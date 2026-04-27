@@ -250,32 +250,46 @@ app.post('/session/execute', async (req, res) => {
 
 app.post('/session/cashout', async (req, res) => {
   const { address } = req.body;
+  console.log(`[Cashout] Request for ${address}`);
   if (!address) return res.status(400).json({ error: "Missing address" });
 
   try {
     const scwAddress = await settlementService.factoryContract.playerToWallet(address);
-    if (scwAddress !== ethers.ZeroAddress) {
+    console.log(`[Cashout] SCW Address: ${scwAddress}`);
+
+    if (scwAddress && scwAddress !== ethers.ZeroAddress) {
         const walletContract = new ethers.Contract(scwAddress, WALLET_ABI, settlementService.operatorWallet);
         const balWei = await walletContract.availableBalance();
+        console.log(`[Cashout] SCW Balance: ${balWei.toString()}`);
+
         if (balWei === 0n) {
           return res.status(400).json({ error: "No funds in SCW" });
         }
+
         const tx = await walletContract.withdraw(balWei);
+        console.log(`[Cashout] SCW Withdrawal TX: ${tx.hash}`);
         return res.json({ success: true, txHash: tx.hash, type: 'scw-withdraw' });
     }
 
+    // Fallback for EOA (Session Wallet)
     const sessionWallet = rpc.getDerivedWallet(address);
     const balWei = await provider.getBalance(sessionWallet.address);
+    console.log(`[Cashout] EOA Balance: ${balWei.toString()}`);
     
     if (balWei === 0n) {
       return res.status(400).json({ error: "No funds in session wallet" });
     }
 
     const tx = await rpc.transferFunds(sessionWallet, address, balWei);
+    console.log(`[Cashout] EOA Cashout TX: ${tx.hash}`);
     res.json({ success: true, txHash: tx.hash, type: 'eoa-cashout' });
   } catch (err) {
-    console.error("Cashout failed:", err);
-    res.status(500).json({ error: err.message });
+    console.error("❌ Cashout Failed:", err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message || "Internal server error during cashout",
+      details: err.code || "UNKNOWN_ERROR"
+    });
   }
 });
 
