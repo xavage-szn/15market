@@ -1659,14 +1659,16 @@ export default function UserApp() {
   const [streamStatus, setStreamStatus] = useState('connecting');
 
   useEffect(() => {
-    // 1. Direct Pyth Feed (Chart Consistency)
+    // 1. Unified High-Speed Price Stream (Terminal + Chart Consistency)
+    // We use the direct Pyth feed here to ensure the terminal price is as fluid as the chart.
     const unbindDirect = priceSocketService.on('price', (data) => {
       const { key, price, ts } = data;
       if (oraclePricesRef.current[key] !== undefined) {
         oraclePricesRef.current[key] = price;
         oraclePricesRef.current.ts[key] = ts;
         setStreamStatus('active');
-        
+        lastPriceUpdateRef.current = Date.now();
+
         // Immediate UI update if we were stuck at 0.00
         if (priceRef.current === "0.00" || priceRef.current === "0") {
           const pStr = (Math.floor(price * 100) / 100).toFixed(2);
@@ -1676,17 +1678,10 @@ export default function UserApp() {
       }
     });
 
-    // 2. Authoritative Backend Feed (Trading Consistency)
-    // This ensures the terminal price matches exactly what the backend uses for entry/settle.
+    // 2. Backend Feed (Execution Reference)
+    // We still listen to the backend but it doesn't overwrite the high-speed UI stream.
     const unbindBackend = socketService.on('price', (data) => {
-      const { key, price, ts } = data;
-      if (oraclePricesRef.current[key] !== undefined) {
-        // We prioritize the backend price for the terminal
-        oraclePricesRef.current[key] = price;
-        oraclePricesRef.current.ts[key] = ts;
-        setStreamStatus('active');
-        lastPriceUpdateRef.current = Date.now();
-      }
+      // Just used for internal health/sync checks if needed
     });
 
     // Watchdog: If no price update for any asset in 5 seconds, mark as stalled
