@@ -1151,21 +1151,9 @@ export default function UserApp() {
       console.error("[Terminal Error]", data);
     });
 
-    // RESILIENT FALLBACK: Listen for prices on the main socket too
-    const unbindPriceFallback = socketService.on('price', (data) => {
-      const { key, price, ts } = data;
-      if (oraclePricesRef.current[key] !== undefined) {
-        oraclePricesRef.current[key] = price;
-        oraclePricesRef.current.ts[key] = ts;
-        setStreamStatus('active');
-        lastPriceUpdateRef.current = Date.now();
-      }
-    });
-
     return () => {
       unbindBal();
       unbindErr();
-      unbindPriceFallback();
     };
   }, [address, notify, triggerGlobalRefresh]);
 

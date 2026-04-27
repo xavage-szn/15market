@@ -43,12 +43,10 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             }
         };
 
-        const unbindPrimary = priceSocketService.on('price', handlePrice);
-        const unbindFallback = socketService.on('price', handlePrice);
+        const unbind = priceSocketService.on('price', handlePrice);
         
         return () => {
-            unbindPrimary();
-            unbindFallback();
+            unbind();
         };
     }, [symbol]);
 
