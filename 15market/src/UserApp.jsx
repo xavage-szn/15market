@@ -1677,6 +1677,13 @@ export default function UserApp() {
         oraclePricesRef.current[key] = price;
         oraclePricesRef.current.ts[key] = ts;
         setStreamStatus('active');
+        
+        // Immediate UI update if we were stuck at 0.00
+        if (priceRef.current === "0.00" || priceRef.current === "0") {
+          const pStr = (Math.floor(price * 100) / 100).toFixed(2);
+          setPrice(pStr);
+          priceRef.current = pStr;
+        }
       }
     });
 
@@ -3079,40 +3086,9 @@ export default function UserApp() {
         )}
       </AnimatePresence>
 
-      {/* OVERLAY: App Initialization Loader */}
-      <AnimatePresence>
-        {(isInitializing || (!isAppReady && isGlobalLoading)) && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/90 backdrop-blur-2xl"
-          >
-            <div className="flex flex-col items-center gap-10 max-w-sm w-full p-8 text-center">
-              <img src="/logo.png" alt="logo" className="h-[48px] md:h-[64px] w-auto drop-shadow-[0_0_40px_rgba(60,179,113,0.4)] transition-all" />
-              <MascotLoader 
-                progress={loadingProgress} 
-                status="running" 
-                theme="dark" 
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Removed Global Initial Loader with Lane as requested */}
 
-      {/* OVERLAY: Signer Initialization */}
-      <AnimatePresence>
-        {isSignerInitializing && isConnected && !evmSessionWallet && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[1500] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center"
-          >
-            <MascotLoader theme={theme} label="Syncing Trading Wallet..." />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Removed Signer Sync Loader with Lane as requested */}
 
       {/* OVERLAY: Maintenance Mode */}
       {platformSettings.maintenanceMode && (
