@@ -266,9 +266,21 @@ app.post('/session/cashout', async (req, res) => {
           return res.status(400).json({ error: "No funds in SCW" });
         }
 
-        const tx = await walletContract.withdraw(balWei);
+        // --- INSTANT UI REFLECTION ---
+        const formatted = ethers.formatUnits(balWei, 18);
+        const addr = address.toLowerCase();
+        
+        await priceRedis.set(`balance:${addr}:available`, "0");
+        io.to(addr).emit('balance_update', { 
+          balance: "0", 
+          available: "0", 
+          reason: 'WITHDRAW_INITIATED',
+          amount: formatted
+        });
+
+        const tx = await walletContract.withdraw(balWei, { gasLimit: 150000 });
         console.log(`[Cashout] SCW Withdrawal TX: ${tx.hash}`);
-        return res.json({ success: true, txHash: tx.hash, type: 'scw-withdraw' });
+        return res.json({ success: true, txHash: tx.hash, type: 'scw-withdraw', amount: formatted });
     }
 
     // Fallback for EOA (Session Wallet)
