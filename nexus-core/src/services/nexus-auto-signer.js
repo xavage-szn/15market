@@ -209,10 +209,13 @@ class SettlementService {
       const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
       const tradeId = ethers.id(`${playerId}-${Date.now()}`);
       const stakeWei = ethers.parseUnits(stake, 18); 
+      const addr = playerId.toLowerCase();
 
-      // 1. LOCK STAKE ON-CHAIN (SCW State Update)
-      // We initiate the transaction but DON'T await tx.wait() to keep UX seamless.
-      const tx = await walletContract.lockStake(tradeId, stakeWei);
+      // --- INSTANT UI FEEDBACK (OPTIMISTIC REDIS DEDUCTION) ---
+      const availKey = `balance:${addr}:available`;
+      const currentAvail = await redis.get(availKey) || "0";
+      const newAvail = Math.max(0, parseFloat(currentAvail) - parseFloat(stake)).toFixed(6);
+      await redis.set(availKey, newAvail);
 
       const trade = {
         tradeId,
@@ -220,16 +223,34 @@ class SettlementService {
         stakeAmount: stake,
         entryPrice: await this.getLatestPrice(symbol),
         closeTime: Date.now() + (duration * 1000),
+        startTime: Date.now(),
         symbol,
         direction,
-        txHash: tx.hash
+        txHash: null
       };
 
+      // 1. REGISTER TRADE INSTANTLY
       await redis.set(`trade:${tradeId}`, JSON.stringify(trade));
       await redis.sadd(`active_trades`, tradeId);
       
-      this.io.to(playerId.toLowerCase()).emit('trade_placed', trade);
-      return { tradeId, success: true, txHash: tx.hash, mode: 'onchain-state-locking' };
+      // 2. BROADCAST TO FRONTEND IMMEDIATELY
+      this.io.to(addr).emit('trade_placed', trade);
+      this.io.to(addr).emit('balance_update', { 
+        balance: newAvail, 
+        available: newAvail, 
+        reason: 'TRADE_PLACED',
+        amount: stake
+      });
+
+      // 3. BACKGROUND ON-CHAIN LOCKING
+      walletContract.lockStake(tradeId, stakeWei, { gasLimit: 150000 }).then(tx => {
+        trade.txHash = tx.hash;
+        redis.set(`trade:${tradeId}`, JSON.stringify(trade));
+      }).catch(err => {
+        console.error(`❌ [Settlement] Background LockStake FAILED for ${tradeId}:`, err.message);
+      });
+
+      return { tradeId, success: true, mode: 'instant-optimistic-locking' };
     } catch (err) {
       console.error("submitTrade failed:", err);
       return { success: false, error: err.message };
