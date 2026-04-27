@@ -2373,8 +2373,8 @@ export default function UserApp() {
         return;
       }
 
-      if (!address || !evmSessionWallet) {
-        notify("Connect Arc wallet for refill", "error");
+      if (!address) {
+        notify("Connect your wallet first", "error");
         return;
       }
 
@@ -2393,22 +2393,39 @@ export default function UserApp() {
       notify(`Confirm deposit of ${amtNum.toFixed(4)} USDC in your wallet...`, "pending");
 
       try {
+        // Step 1: Resolve SCW address from backend (cache-first, no lag)
+        const scwRes = await fetch(`${KEEPER_URL_ARC}/session/scw-address/${address}`);
+        if (!scwRes.ok) {
+          const errData = await scwRes.json();
+          throw new Error(errData.error || 'SCW not found. Please ensure your wallet is registered.');
+        }
+        const { scwAddress } = await scwRes.json();
+
+        // Step 2: Send native USDC directly to SCW deposit() function
+        // SCW has a payable receive() that accepts native coin on Arc Testnet
         const hash = await walletClient.sendTransaction({
-          to: evmSessionWallet.address,
+          to: scwAddress,
           value: parseEther(amtNum.toFixed(6)),
           account: address
         });
 
-        notify("Deposit Transaction Broadcasted!", "success");
-        setSessionBalance(prev => prev + amtNum); // Optimistic UI Update
-        lastOptimisticActionTime.current = Date.now(); // Guard against stale sync
+        notify("Deposit Broadcasted! Crediting balance...", "success");
 
+        // Step 3: Notify backend to credit Redis balance immediately
+        fetch(`${KEEPER_URL_ARC}/session/deposit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, amount: amtNum.toFixed(6), txHash: hash })
+        }).catch(() => {});
+
+        // Step 4: Optimistic local UI update
+        setSessionBalance(prev => prev + amtNum);
+        lastOptimisticActionTime.current = Date.now();
+
+        // Step 5: Wait for confirmation, then do a hard refresh
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");
-          setTimeout(() => {
-            updateEvmSessionBal(true);
-            refetchEvmBalance(true);
-          }, 2000);
+          setTimeout(() => updateEvmSessionBal(true), 2000);
         });
 
         const newTx = {
@@ -2421,29 +2438,14 @@ export default function UserApp() {
         };
         setTransactionHistory(prev => [newTx, ...prev]);
 
-        // Robust retry loop to guarantee Redis is credited
-        let retries = 3;
-        const pushDeposit = () => {
-          fetch(`${KEEPER_URL_ARC}/session/record`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address, transaction: newTx })
-          }).catch(e => {
-            if (retries > 0) {
-              retries--;
-              setTimeout(pushDeposit, 2000);
-            }
-          });
-        };
-        pushDeposit();
-
       } catch (evmErr) {
         notify(`Deposit failed: ${evmErr.shortMessage || evmErr.message}`, "error");
       }
     } finally {
       setIsExecuting(false);
     }
-  }, [evmSessionWallet, address, notify, evmBalance, updateEvmSessionBal, isExecuting, refetchEvmBalance, walletClient]);
+  }, [address, notify, evmBalance, updateEvmSessionBal, isExecuting, walletClient]);
+
 
   const handleWithdraw = useCallback(async (amt) => {
     if (isExecuting) return;

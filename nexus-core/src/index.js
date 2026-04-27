@@ -298,6 +298,8 @@ app.post('/session/cashout', async (req, res) => {
         const addr = address.toLowerCase();
         
         await priceRedis.set(`balance:${addr}:available`, "0");
+        await priceRedis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
+        
         io.to(addr).emit('balance_update', { 
           balance: "0", 
           available: "0", 
@@ -305,7 +307,12 @@ app.post('/session/cashout', async (req, res) => {
           amount: formatted
         });
 
-        const tx = await walletContract.withdraw(balWei, { gasLimit: 150000 });
+        const tx = await walletContract.withdraw(balWei, { 
+          gasLimit: 250000,
+          maxPriorityFeePerGas: ethers.parseUnits("2", "gwei"),
+          maxFeePerGas: ethers.parseUnits("10", "gwei")
+        });
+        
         console.log(`[Cashout] SCW Withdrawal TX: ${tx.hash}`);
         return res.json({ success: true, txHash: tx.hash, type: 'scw-withdraw', amount: formatted });
     }
@@ -329,6 +336,54 @@ app.post('/session/cashout', async (req, res) => {
       error: err.message || "Internal server error during cashout",
       details: err.code || "UNKNOWN_ERROR"
     });
+  }
+});
+
+// Get the SCW address for a player (used by frontend for direct deposit)
+app.get('/session/scw-address/:address', async (req, res) => {
+  try {
+    const addr = req.params.address.toLowerCase();
+    // Cache-first lookup
+    let scwAddress = await priceRedis.get(`scw:${addr}`);
+    if (!scwAddress) {
+      scwAddress = await settlementService.factoryContract.playerToWallet(req.params.address);
+      if (scwAddress && scwAddress !== ethers.ZeroAddress) {
+        await priceRedis.set(`scw:${addr}`, scwAddress);
+      }
+    }
+    if (!scwAddress || scwAddress === ethers.ZeroAddress) {
+      return res.status(404).json({ error: 'No SCW found for this address. Please deposit first.' });
+    }
+    res.json({ success: true, scwAddress });
+  } catch (err) {
+    console.error('[SCW Lookup] Failed:', err.message);
+    res.status(500).json({ error: 'Failed to resolve SCW address' });
+  }
+});
+
+// Notify backend of on-chain deposit so Redis balance is updated
+app.post('/session/deposit', async (req, res) => {
+  const { address, amount, txHash } = req.body;
+  if (!address || !amount) return res.status(400).json({ error: 'Missing address or amount' });
+  try {
+    const addr = address.toLowerCase();
+    const amtNum = parseFloat(amount);
+    // Credit the balance in Redis (optimistic, tx already broadcasted by frontend)
+    const currentBal = await priceRedis.get(`balance:${addr}:available`) || '0';
+    const newBal = (parseFloat(currentBal) + amtNum).toFixed(6);
+    await priceRedis.set(`balance:${addr}:available`, newBal);
+    await priceRedis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
+    io.to(addr).emit('balance_update', {
+      balance: newBal,
+      available: newBal,
+      reason: 'DEPOSIT_CREDITED',
+      amount: amount
+    });
+    console.log(`[Deposit] Credited ${amtNum} to ${addr} -> new balance: ${newBal}`);
+    res.json({ success: true, newBalance: newBal });
+  } catch (err) {
+    console.error('[Deposit] Failed:', err.message);
+    res.status(500).json({ error: 'Failed to credit deposit' });
   }
 });
 
