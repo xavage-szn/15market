@@ -230,45 +230,29 @@ app.post('/session/execute', async (req, res) => {
 });
 
 app.post('/session/cashout', async (req, res) => {
+  const { address } = req.body;
+  if (!address) return res.status(400).json({ error: "Missing address" });
+
   try {
-    const { address, amount } = req.body;
-    if (!address || !amount) return res.status(400).json({ error: 'Missing params' });
-
-    const addr = classicEngine.normalizeAddr(address);
-    
-    // Derive the same session wallet
-    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + addr);
-    const privateKey = ethers.keccak256(entropy);
-    const wallet = new ethers.Wallet(privateKey, provider);
-    
-    const amtWei = ethers.parseEther(amount.toString());
-    const bal = await provider.getBalance(wallet.address);
-    
-    if (bal < amtWei) {
-      return res.status(400).json({ error: `Insufficient balance. Available: ${ethers.formatEther(bal)}` });
+    const scwAddress = await settlementService.factoryContract.playerToWallet(address);
+    if (scwAddress !== ethers.ZeroAddress) {
+        const walletContract = new ethers.Contract(scwAddress, WALLET_ABI, settlementService.operatorWallet);
+        const tx = await walletContract.sweepLosses(process.env.TREASURY_ADDRESS);
+        return res.json({ success: true, txHash: tx.hash, type: 'scw-sweep' });
     }
 
-    // Send transaction
-    const tx = await wallet.sendTransaction({
-      to: address,
-      value: amtWei,
-    });
+    const sessionWallet = rpc.getDerivedWallet(address);
+    const balWei = await provider.getBalance(sessionWallet.address);
     
-    // Update local cache balance if session exists
-    const session = cache.sessions.get(addr);
-    if (session) {
-      session.balance = Math.max(0, session.balance - parseFloat(amount));
-      io.to(addr).emit('balance_update', {
-        balance: String(session.balance),
-        reason: 'WITHDRAW',
-      });
+    if (balWei === 0n) {
+      return res.status(400).json({ error: "No funds in session wallet" });
     }
 
-    res.json({ success: true, txHash: tx.hash });
+    const tx = await rpc.transferFunds(sessionWallet, address, balWei);
+    res.json({ success: true, txHash: tx.hash, type: 'eoa-cashout' });
   } catch (err) {
-    console.error("Cashout error:", err);
-    res.status(500).json({ error: err.message || "Cashout failed" });
+    console.error("Cashout failed:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
