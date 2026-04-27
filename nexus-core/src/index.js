@@ -36,7 +36,7 @@ const mirrorService = new RedisMirrorService(provider, io);
 
 settlementService.startSettlementPoller();
 classicEngine.start();
-roundsEngine.start();
+// roundsEngine.start(); // PAUSED: Not working on rounds now
 
 // --- INTERNAL PRICE FEED (Built-in Price Service) ---
 const Redis = require('ioredis');
@@ -310,55 +310,57 @@ app.get('/history/:address', (req, res) => {
   res.json(cache.userHistory.get(addr) || []);
 });
 
-// --- API Routes (Rounds) ---
+// --- API Routes (Rounds - WAITLIST ONLY) ---
+
+// Check if user has access (Waitlist state)
 app.get('/rounds/access/check/:address', (req, res) => {
-  res.json({ authorized: true });
+  const addr = req.params.address.toLowerCase();
+  const profile = profiles.get(addr);
+  // For now, if they have an 'accessCode' in their profile, they are authorized
+  res.json({ authorized: !!(profile && profile.accessCode) });
 });
 
-app.post('/rounds/session-enter', async (req, res) => {
-  try {
-    const { address, roundId, direction, amount } = req.body;
-    if (!address || !amount) return res.status(400).json({ error: 'Missing params' });
-
-    const addr = classicEngine.normalizeAddr(address);
-    let session = cache.sessions.get(addr);
-    
-    // Initialize session if missing (same as classic)
-    if (!session) {
-      const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-      const entropy = ethers.toUtf8Bytes(MASTER_SECRET + addr);
-      const privateKey = ethers.keccak256(entropy);
-      const wallet = new ethers.Wallet(privateKey);
-      const balStr = await rpc.getBalance(wallet.address);
-      session = cache.getOrCreateSession(addr, {
-        identityKey: addr,
-        walletAddress: addr,
-        sessionAddress: wallet.address,
-        balance: parseFloat(balStr)
-      });
-    }
-
-    const amtNum = parseFloat(amount);
-    if (session.balance < amtNum) {
-      return res.status(400).json({ error: 'Insufficient session balance' });
-    }
-
-    session.balance = Number((session.balance - amtNum).toFixed(4));
-    
-    // Simulate entry
-    const txHash = `round_sim_${Date.now()}`;
-    
-    io.to(addr).emit('balance_update', {
-      balance: String(session.balance),
-      reason: 'ROUND_ENTER',
-      amount: amtNum
-    });
-
-    res.json({ success: true, txHash });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+// Apply for Beta Access (Waitlist Submission)
+app.post('/rounds/access/apply', async (req, res) => {
+  const { address, xHandle, discord, email } = req.body;
+  if (!address || !xHandle || !email) {
+    return res.status(400).json({ error: 'Missing required fields' });
   }
+
+  // Update profile with waitlist info
+  profiles.upsert(address.toLowerCase(), { 
+    xHandle, 
+    discord, 
+    email,
+    waitlistStatus: 'pending',
+    appliedAt: Date.now()
+  });
+
+  console.log(`[Waitlist] New Application: ${address} (${xHandle})`);
+  res.json({ success: true });
 });
+
+// Redeem Access Code
+app.post('/rounds/access/redeem', async (req, res) => {
+  const { address, code } = req.body;
+  if (!address || !code) return res.status(400).json({ error: 'Missing params' });
+
+  // Simple hardcoded codes for now or check against a list
+  const VALID_CODES = ['ALPHA15', 'NEXUS2026', 'ARC_EARLY'];
+  
+  if (VALID_CODES.includes(code.toUpperCase())) {
+    profiles.upsert(address.toLowerCase(), { accessCode: code.toUpperCase() });
+    return res.json({ success: true });
+  }
+
+  res.status(400).json({ error: 'Invalid or expired access code' });
+});
+
+/* PAUSED: Rounds Session logic is disabled
+app.post('/rounds/session-enter', async (req, res) => {
+  ...
+});
+*/
 
 // --- API Routes (Profiles & Identity) ---
 
