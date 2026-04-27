@@ -14,7 +14,7 @@ const ClassicEngine = require('./classic');
 const RoundsEngine = require('./rounds');
 
 const { ethers } = require('ethers');
-const { RedisMirrorService, SettlementService, setupBatchSweepJob } = require('./services/nexus-auto-signer');
+const { RedisMirrorService, SettlementService, setupBatchSweepJob, WALLET_ABI } = require('./services/nexus-auto-signer');
 const profiles = require('./profiles');
 
 // --- Setup Server ---
@@ -256,8 +256,12 @@ app.post('/session/cashout', async (req, res) => {
     const scwAddress = await settlementService.factoryContract.playerToWallet(address);
     if (scwAddress !== ethers.ZeroAddress) {
         const walletContract = new ethers.Contract(scwAddress, WALLET_ABI, settlementService.operatorWallet);
-        const tx = await walletContract.sweepLosses(process.env.TREASURY_ADDRESS);
-        return res.json({ success: true, txHash: tx.hash, type: 'scw-sweep' });
+        const balWei = await walletContract.availableBalance();
+        if (balWei === 0n) {
+          return res.status(400).json({ error: "No funds in SCW" });
+        }
+        const tx = await walletContract.withdraw(balWei);
+        return res.json({ success: true, txHash: tx.hash, type: 'scw-withdraw' });
     }
 
     const sessionWallet = rpc.getDerivedWallet(address);
