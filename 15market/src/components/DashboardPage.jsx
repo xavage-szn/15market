@@ -345,33 +345,6 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                             )}
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            {isSyncing && <RotateCw size={12} className="animate-spin text-[#3CB371]" />}
-                                            <button 
-                                                onClick={async () => {
-                                                    if (!address) return;
-                                                    setIsSyncing(true);
-                                                    try {
-                                                        const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
-                                                            method: 'POST',
-                                                            headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify({ address: address.toLowerCase() })
-                                                        });
-                                                        if (res.ok) {
-                                                            const data = await res.json();
-                                                            setToast(`Synced: ${parseFloat(data.balance).toFixed(2)} USDC`);
-                                                            setTimeout(() => window.location.reload(), 1500);
-                                                        }
-                                                    } catch (e) {
-                                                        setToast("Sync Failed");
-                                                    } finally {
-                                                        setIsSyncing(false);
-                                                    }
-                                                }}
-                                                className={`p-1.5 rounded-lg border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all group`}
-                                                title="Hard Sync with Blockchain"
-                                            >
-                                                <RotateCw size={10} className={`${isSyncing ? 'opacity-0' : 'opacity-40 group-hover:opacity-100'}`} />
-                                            </button>
                                             <div className="text-xl font-black text-[#3CB371] tabular-nums">${(parseFloat(sessionBalance || 0)).toFixed(2)}</div>
                                         </div>
                                     </div>

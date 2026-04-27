@@ -51,23 +51,23 @@ const WALLET_ABI = [
 ];
 
 class RedisMirrorService {
-  constructor(contract) {
-    this.contract = contract;
-    this.setupListeners();
+  constructor(provider, io) {
+    this.provider = provider;
+    this.io = io;
+    this.lastBlock = 0;
+    this.setupGlobalMonitoring();
   }
 
-  setupListeners() {
+  setupGlobalMonitoring() {
     const iface = new ethers.Interface(WALLET_ABI);
-    const provider = this.contract.runner.provider;
-    let lastBlock = 0;
-
+    
     const pollLogs = async () => {
       try {
-        const currentBlock = await provider.getBlockNumber();
-        if (lastBlock === 0) {
-          lastBlock = currentBlock - 100; // Start from 100 blocks ago
+        const currentBlock = await this.provider.getBlockNumber();
+        if (this.lastBlock === 0) {
+          this.lastBlock = currentBlock - 50; 
         }
-        if (currentBlock <= lastBlock) return;
+        if (currentBlock <= this.lastBlock) return;
 
         const topics = [
           [
@@ -79,47 +79,64 @@ class RedisMirrorService {
           ]
         ];
 
-        const logs = await provider.getLogs({
-          fromBlock: lastBlock + 1,
+        const logs = await this.provider.getLogs({
+          fromBlock: this.lastBlock + 1,
           toBlock: currentBlock,
           topics
         });
 
         for (const log of logs) {
-          const parsed = iface.parseLog(log);
-          if (!parsed) continue;
+          try {
+            const parsed = iface.parseLog(log);
+            if (!parsed) continue;
 
-          const { name, args } = parsed;
-          if (name === "Deposit") {
-            console.log(`[EVENT] Deposit: ${args[0]}, ${args[1]}`);
-            await redis.set(`balance:${args[0].toLowerCase()}:available`, args[2].toString());
-          } else if (name === "StakeLocked") {
-            console.log(`[EVENT] StakeLocked: ${args[0]}, ${args[1]}`);
-            await redis.set(`balance:${args[1].toLowerCase()}:available`, args[3].toString());
-            await redis.incrby(`balance:${args[1].toLowerCase()}:locked`, args[2].toString());
-          } else if (name === "TradeSettledWin") {
-            console.log(`[EVENT] TradeSettledWin: ${args[0]}, ${args[1]}`);
-            await redis.decrby(`balance:${args[1].toLowerCase()}:locked`, args[2].toString());
-          } else if (name === "TradeSettledLoss") {
-            console.log(`[EVENT] TradeSettledLoss: ${args[0]}, ${args[1]}`);
-            await redis.decrby(`balance:${args[1].toLowerCase()}:locked`, args[2].toString());
-            await redis.set(`balance:${args[1].toLowerCase()}:pending_loss`, args[3].toString());
-          } else if (name === "Withdrawal") {
-            console.log(`[EVENT] Withdrawal: ${args[0]}, ${args[1]}`);
-            await redis.set(`balance:${args[0].toLowerCase()}:available`, args[2].toString());
+            const { name, args } = parsed;
+            let playerId = "";
+            let newAvailable = "0";
+
+            if (name === "Deposit") {
+              playerId = args[0].toLowerCase();
+              newAvailable = ethers.formatUnits(args[2], 18);
+              await redis.set(`balance:${playerId}:available`, newAvailable);
+            } else if (name === "StakeLocked") {
+              playerId = args[1].toLowerCase();
+              newAvailable = ethers.formatUnits(args[3], 18);
+              await redis.set(`balance:${playerId}:available`, newAvailable);
+              await redis.incrby(`balance:${playerId}:locked`, args[2].toString());
+            } else if (name === "TradeSettledWin") {
+              playerId = args[1].toLowerCase();
+              // Note: totalPayout logic here if needed, but usually we just sync available
+              // We'll trigger a full sync for accuracy on settlement
+              continue; 
+            } else if (name === "TradeSettledLoss") {
+              playerId = args[1].toLowerCase();
+              await redis.set(`balance:${playerId}:pending_loss`, ethers.formatUnits(args[3], 18));
+              continue;
+            } else if (name === "Withdrawal") {
+              playerId = args[0].toLowerCase();
+              newAvailable = ethers.formatUnits(args[2], 18);
+              await redis.set(`balance:${playerId}:available`, newAvailable);
+            }
+
+            if (playerId && this.io) {
+              console.log(`[REAL-TIME SYNC] ${name} for ${playerId} -> ${newAvailable}`);
+              this.io.to(playerId).emit('balance_update', { 
+                balance: newAvailable, 
+                available: newAvailable, 
+                reason: name 
+              });
+            }
+          } catch (e) {
+            console.error("Error parsing log:", e.message);
           }
         }
-        lastBlock = currentBlock;
+        this.lastBlock = currentBlock;
       } catch (err) {
-        if (err.message.includes("filter not found")) {
-          // Ignore transient filter errors if they still happen somehow
-        } else {
-          console.error("Log polling failed:", err.message);
-        }
+        console.error("Global log polling failed:", err.message);
       }
     };
 
-    setInterval(pollLogs, 5000); // Poll every 5 seconds
+    setInterval(pollLogs, 4000); // 4s poll for responsive state
   }
 
   async syncPlayer(player, walletContract) {
@@ -127,9 +144,20 @@ class RedisMirrorService {
     const locked = await walletContract.lockedBalance();
     const pending = await walletContract.pendingLoss();
     const addr = player.toLowerCase();
-    await redis.set(`balance:${addr}:available`, available.toString());
+    
+    const formattedAvail = ethers.formatUnits(available, 18);
+    await redis.set(`balance:${addr}:available`, formattedAvail);
     await redis.set(`balance:${addr}:locked`, locked.toString());
-    await redis.set(`balance:${addr}:pending_loss`, pending.toString());
+    await redis.set(`balance:${addr}:pending_loss`, ethers.formatUnits(pending, 18));
+
+    if (this.io) {
+      this.io.to(addr).emit('balance_update', { 
+        balance: formattedAvail, 
+        available: formattedAvail, 
+        reason: 'SYNC' 
+      });
+    }
+    return formattedAvail;
   }
 }
 

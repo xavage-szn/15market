@@ -1127,7 +1127,7 @@ export default function UserApp() {
   useEffect(() => {
     if (!address) return;
     // JOIN room once per address change
-    socketService.emit('join', address.toLowerCase());
+    socketService.emit('join_user', address.toLowerCase());
   }, [address]);
 
   useEffect(() => {
@@ -1135,8 +1135,10 @@ export default function UserApp() {
     
     // Bind Socket listeners
     const unbindBal = socketService.on('balance_update', (data) => {
-      if (data.balance) {
-        setSessionBalance(parseFloat(data.balance));
+      // Support both 'balance' and 'available' naming for cross-component compatibility
+      const val = data.balance || data.available;
+      if (val !== undefined) {
+        setSessionBalance(parseFloat(val));
       }
       if (data.reason === 'WIN') {
         notify(`Payout Received: +$${data.payout || ''}`, "success");

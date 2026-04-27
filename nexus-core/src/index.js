@@ -32,6 +32,7 @@ const operatorWallet = rpc.wallet;
 const classicEngine = new ClassicEngine(io);
 const roundsEngine = new RoundsEngine(io);
 const settlementService = new SettlementService(operatorWallet, io, config.FACTORY_ADDRESS);
+const mirrorService = new RedisMirrorService(provider, io);
 
 settlementService.startSettlementPoller();
 classicEngine.start();
