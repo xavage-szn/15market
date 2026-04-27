@@ -12,10 +12,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
     const [isInternalLoading, setIsInternalLoading] = useState(false);
+    const [hasReceivedPrice, setHasReceivedPrice] = useState(false);
+
+    // Track first price tick
+    if (!hasReceivedPrice && currentPrice && currentPrice !== "0" && currentPrice !== "0.00") {
+        setHasReceivedPrice(true);
+    }
 
     // Asset switch transition handler
     const onAssetSwitch = (t) => {
         setIsInternalLoading(true);
+        setHasReceivedPrice(false); // Reset for new asset
         setActiveMarket(t);
         setIsSelectorOpen(false);
         // Minimum loading time for smooth transition
@@ -75,7 +82,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
             {/* Asset Switch Loading Modal - Minimal Premium Transition */}
             <AnimatePresence>
-                {(isInternalLoading || !currentPrice || currentPrice === "0" || currentPrice === "0.00") && (
+                {(isInternalLoading || !hasReceivedPrice) && (
                     <motion.div 
                         initial={{ opacity: 0 }} 
                         animate={{ opacity: 1 }} 
@@ -84,7 +91,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     >
                         <div className="flex flex-col items-center gap-4">
                             <div className="relative">
-                                <Loader2 size={48} className="text-[#3CB371] animate-spin opacity-40" />
+                                <Loader2 size={48} className="text-[#3CB371] animate-spin opacity-60" />
                                 <div className="absolute inset-0 blur-2xl bg-[#3CB371]/10 animate-pulse" />
                             </div>
                         </div>
