@@ -1331,8 +1331,10 @@ export default function UserApp() {
     const now = Date.now();
     const amtNum = parseFloat(activeAmount);
 
+    // --- INSTANT UI START ---
     setIsExecuting(true);
-    notify("Processing Trade...", "pending");
+    // Short lockout to prevent accidental double-clicks, but released almost immediately
+    setTimeout(() => setIsExecuting(false), 800);
 
     try {
       if (!isConnected) {
@@ -1446,7 +1448,7 @@ export default function UserApp() {
         expiryMs: confirmedNow + (activeDuration * 1000),
         symbol: activeMarket?.symbol || 'ETH',
         isSessionTrade: true,
-        confirmed: false,
+        confirmed: true, // Mark as LIVE instantly for UX
         isOptimistic: true // Marker for local cleanup if failed
       };
 
@@ -1459,9 +1461,8 @@ export default function UserApp() {
       setSessionBalance(prev => Math.max(0, prev - amtNum));
       setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
-      setIsExecuting(false); // RELEASE BUTTON IMMEDIATELY FOR INSTANT FEEL
-      // Do NOT call triggerGlobalRefresh here — it would race against the optimistic deduction
-      notify("Submitting Trade...", "pending");
+      
+      // No 'Submitting Trade...' notification needed for instant feel
 
       // --- STEP 2: BACKGROUND EXECUTION ---
       const backgroundTrade = async () => {

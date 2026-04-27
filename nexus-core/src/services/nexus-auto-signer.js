@@ -208,15 +208,24 @@ class SettlementService {
 
   async submitTrade(playerId, symbol, direction, stake, duration) {
     try {
-      const walletAddress = await this.factoryContract.playerToWallet(playerId);
-      if (walletAddress === ethers.ZeroAddress) {
+      const addr = playerId.toLowerCase();
+      
+      // CACHE-FIRST WALLET LOOKUP (Eliminates RPC lag during trade start)
+      let walletAddress = await redis.get(`scw:${addr}`);
+      if (!walletAddress) {
+        walletAddress = await this.factoryContract.playerToWallet(playerId);
+        if (walletAddress && walletAddress !== ethers.ZeroAddress) {
+          await redis.set(`scw:${addr}`, walletAddress);
+        }
+      }
+
+      if (!walletAddress || walletAddress === ethers.ZeroAddress) {
          throw new Error("User has no smart contract wallet. Deposit first.");
       }
       
       const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
-      const tradeId = ethers.id(`${playerId}-${Date.now()}`);
+      const tradeId = ethers.id(`${addr}-${Date.now()}`);
       const stakeWei = ethers.parseUnits(stake, 18); 
-      const addr = playerId.toLowerCase();
 
       // --- INSTANT UI FEEDBACK (OPTIMISTIC REDIS DEDUCTION) ---
       const availKey = `balance:${addr}:available`;
