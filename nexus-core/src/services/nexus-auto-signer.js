@@ -177,20 +177,14 @@ class SettlementService {
          throw new Error("User has no smart contract wallet. Deposit first.");
       }
       
-      const balanceKey = `balance:${playerId.toLowerCase()}:available`;
-      const currentBalance = await redis.get(balanceKey) || "0";
-      const stakeNum = parseFloat(stake);
-      const balanceNum = parseFloat(currentBalance);
-
-      if (balanceNum < stakeNum) {
-        throw new Error("Insufficient session balance.");
-      }
-
-      // 1. DEDUCT IN STATE (High-Performance/Ultra-Low-Latency)
-      const newBalance = (balanceNum - stakeNum).toFixed(18);
-      await redis.set(balanceKey, newBalance);
-
+      const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
       const tradeId = ethers.id(`${playerId}-${Date.now()}`);
+      const stakeWei = ethers.parseUnits(stake, 18); 
+
+      // 1. LOCK STAKE ON-CHAIN (SCW State Update)
+      // We initiate the transaction but DON'T await tx.wait() to keep UX seamless.
+      const tx = await walletContract.lockStake(tradeId, stakeWei);
+
       const trade = {
         tradeId,
         playerId,
@@ -199,19 +193,16 @@ class SettlementService {
         closeTime: Date.now() + (duration * 1000),
         symbol,
         direction,
-        status: 'open'
+        txHash: tx.hash
       };
 
       await redis.set(`trade:${tradeId}`, JSON.stringify(trade));
       await redis.sadd(`active_trades`, tradeId);
       
-      // Notify frontend immediately of state update
-      this.io.to(playerId.toLowerCase()).emit('balance_update', { available: newBalance });
       this.io.to(playerId.toLowerCase()).emit('trade_placed', trade);
-
-      return { tradeId, success: true, mode: 'state-execution' };
+      return { tradeId, success: true, txHash: tx.hash, mode: 'onchain-state-locking' };
     } catch (err) {
-      console.error("submitTrade state-exec failed:", err);
+      console.error("submitTrade failed:", err);
       return { success: false, error: err.message };
     }
   }
@@ -225,51 +216,43 @@ class SettlementService {
     const isCall = trade.direction === 1 || trade.direction === 'UP' || trade.direction === 'buy';
     const won = isCall ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
 
-    const playerId = trade.playerId.toLowerCase();
-    const balanceKey = `balance:${playerId}:available`;
-    const pendingLossKey = `balance:${playerId}:pending_loss`;
+    const walletAddress = await this.factoryContract.playerToWallet(trade.playerId);
+    const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
 
     try {
+      const stakeWei = ethers.parseUnits(trade.stakeAmount, 18);
+      let tx;
+
       if (won) {
-        // WIN: Update state by returning stake + profit
-        const currentBalance = await redis.get(balanceKey) || "0";
-        const profit = parseFloat(trade.stakeAmount) * 0.95;
-        const newBalance = (parseFloat(currentBalance) + parseFloat(trade.stakeAmount) + profit).toFixed(18);
-        await redis.set(balanceKey, newBalance);
-        
-        console.log(`[State-Settlement] WIN for ${tradeId}. Profit added to state.`);
-        this.io.to(playerId).emit('balance_update', { available: newBalance });
+        // WIN: Update on-chain SCW state (release stake + add profit)
+        const profit = (parseFloat(trade.stakeAmount) * 0.95).toFixed(6);
+        const profitWei = ethers.parseUnits(profit, 18);
+        console.log(`[Settlement] WIN for ${tradeId}. Updating SCW state on-chain...`);
+        tx = await walletContract.settleWin(tradeId, stakeWei, profitWei);
       } else {
-        // LOSS: Add to pending_loss state for later on-chain sweep
-        const currentLoss = await redis.get(pendingLossKey) || "0";
-        const newLoss = (parseFloat(currentLoss) + parseFloat(trade.stakeAmount)).toFixed(18);
-        await redis.set(pendingLossKey, newLoss);
-        
-        console.log(`[State-Settlement] LOSS for ${tradeId}. Loss moved to pending state.`);
+        // LOSS: Update on-chain SCW state (mark as pendingLoss)
+        console.log(`[Settlement] LOSS for ${tradeId}. Updating SCW state on-chain...`);
+        tx = await walletContract.settleLoss(tradeId, stakeWei);
       }
 
-      // Finalize Result
-      this.io.to(playerId).emit('trade_settled', { 
-        tradeId, 
-        won, 
-        exitPrice, 
-        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(6) : "0" 
-      });
-
-      // Cleanup
+      // Cleanup Redis immediately
       await redis.del(`trade:${tradeId}`);
       await redis.srem(`active_trades`, tradeId);
 
-      return {
+      const result = {
         tradeId,
         success: true,
         won,
         entryPrice: trade.entryPrice,
         exitPrice,
-        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(4) : '0'
+        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(4) : '0',
+        txHash: tx.hash
       };
+
+      this.io.to(trade.playerId.toLowerCase()).emit('trade_settled', result);
+      return result;
     } catch (err) {
-      console.error("settleTrade state-exec failed:", err);
+      console.error("settleTrade failed:", err);
       return { success: false, error: err.message };
     }
   }
