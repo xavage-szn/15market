@@ -77,7 +77,7 @@ export const KEEPER_URL_ROUNDS = `${KEEPER_URL_ARC}/rounds`;
 const envPriceUrl = import.meta.env.VITE_PRICE_FEED_URL;
 export const PRICE_FEED_URL = envPriceUrl || (isLocal 
     ? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:3012` 
-    : "https://prices.15market.com");
+    : KEEPER_URL_ARC);
 
 
 

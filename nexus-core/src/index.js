@@ -74,7 +74,12 @@ async function pollPythPrices() {
               cache.priceMeta[key] = { updatedAt: publishTime };
               priceRedis.set(`price:${key}`, price.toString());
               priceRedis.set(`price:${key}:ts`, publishTime.toString());
-              priceRedis.publish('price_updates', JSON.stringify({ key, price, ts: publishTime }));
+              
+              const updateData = { key, price, ts: publishTime };
+              priceRedis.publish('price_updates', JSON.stringify(updateData));
+              
+              // NEW: Also emit directly via the main IO instance for fallback/integrated access
+              io.emit('price', updateData);
             }
           }
         });
@@ -96,6 +101,19 @@ async function syncBackendPrices() {
 
 // --- Socket.IO ---
 io.on('connection', (socket) => {
+  console.log(`[Socket] New connection: ${socket.id}`);
+  
+  // Push latest price cache immediately
+  Object.keys(cache.prices).forEach(key => {
+    if (cache.prices[key] > 0) {
+      socket.emit('price', { 
+        key, 
+        price: cache.prices[key], 
+        ts: cache.priceMeta[key]?.updatedAt || Date.now() 
+      });
+    }
+  });
+
   socket.on('join_user', (address) => {
     const room = String(address || '').toLowerCase();
     if (room) socket.join(room);
