@@ -204,6 +204,50 @@ class SettlementService {
         console.error("Poller tick failed:", err);
       }
     }, 1000);
+    this.cache = cache;
+    this.startBatchWorker();
+  }
+
+  startBatchWorker() {
+    console.log("🚀 [BatchSettler] Semi-parallel worker initiated (5s interval)");
+    setInterval(() => this.processBatchWinnings(), 5000);
+  }
+
+  async processBatchWinnings() {
+    const wins = [];
+    let count = 0;
+    
+    // 1. Pull all pending wins from Redis (Batch capture)
+    while (count < 50) {
+      const winData = await redis.rpop('winning_payouts_queue');
+      if (!winData) break;
+      wins.push(JSON.parse(winData));
+      count++;
+    }
+
+    if (wins.length === 0) return;
+
+    console.log(`📦 [BatchSettler] Processing ${wins.length} winning payouts in semi-parallel...`);
+
+    // 2. Semi-parallel processing (chunks of 5)
+    for (let i = 0; i < wins.length; i += 5) {
+      const chunk = wins.slice(i, i + 5);
+      await Promise.allSettled(chunk.map(async (win) => {
+        try {
+          const walletContract = new ethers.Contract(win.walletAddress, WALLET_ABI, this.operatorWallet);
+          const amountWei = ethers.parseUnits(win.amount, 18);
+          
+          // Using settleWin to both RELEASE state and CREDIT profit from treasury
+          // In the new model, settleWin should be called by the operator to move funds from treasury
+          const tx = await walletContract.settleWin(win.tradeId, 0, amountWei, { gasLimit: 200000 });
+          console.log(`✅ [BatchSettler] Payout SUCCESS for ${win.tradeId}: ${tx.hash}`);
+        } catch (err) {
+          console.error(`❌ [BatchSettler] Payout FAILED for ${win.tradeId}:`, err.message);
+          // Re-queue on failure for retry
+          await redis.lpush('winning_payouts_queue', JSON.stringify(win));
+        }
+      }));
+    }
   }
 
   async submitTrade(playerId, symbol, direction, stake, duration) {
@@ -259,15 +303,16 @@ class SettlementService {
         amount: stake
       });
 
-      // 3. BACKGROUND ON-CHAIN LOCKING
-      walletContract.lockStake(tradeId, stakeWei, { gasLimit: 150000 }).then(tx => {
+      // 3. BACKGROUND ON-CHAIN DEDUCTION (Move to Treasury at Start)
+      // This fulfills the "no need to call RPC on loss" requirement as it's already deducted.
+      walletContract.settleLoss(tradeId, stakeWei, { gasLimit: 150000 }).then(tx => {
         trade.txHash = tx.hash;
         redis.set(`trade:${tradeId}`, JSON.stringify(trade));
       }).catch(err => {
-        console.error(`❌ [Settlement] Background LockStake FAILED for ${tradeId}:`, err.message);
+        console.error(`❌ [Treasury] Background Stake Deduction FAILED for ${tradeId}:`, err.message);
       });
 
-      return { tradeId, success: true, mode: 'instant-optimistic-locking' };
+      return { tradeId, success: true, mode: 'treasury-first-deduction' };
     } catch (err) {
       console.error("submitTrade failed:", err);
       return { success: false, error: err.message };
@@ -290,30 +335,33 @@ class SettlementService {
     const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
 
     try {
-      const stakeWei = ethers.parseUnits(trade.stakeAmount, 18);
-      let tx;
-
       if (won) {
-        // WIN: Update on-chain SCW state (release stake + add profit)
-        // Correct multiplier logic from UserApp.jsx
+        // WIN: Queue for Batch Payout from Treasury
+        // We calculate the FULL WON AMOUNT (Stake + Profit) since stake is already in Treasury
         const multiplier = trade.duration <= 5 ? 1.90 : (trade.duration <= 10 ? 1.40 : 0.90);
         const profit = (parseFloat(trade.stakeAmount) * multiplier).toFixed(6);
-        const profitWei = ethers.parseUnits(profit, 18);
-        console.log(`[Settlement] WIN for ${tradeId}. Updating SCW state on-chain...`);
-        tx = await walletContract.settleWin(tradeId, stakeWei, profitWei);
+        const totalPayout = (parseFloat(trade.stakeAmount) + parseFloat(profit)).toFixed(6);
         
+        console.log(`[Settlement] WIN for ${tradeId}. Queuing Batch Payout of ${totalPayout} USDC...`);
+        
+        // Add to a winning queue for the batch worker
+        await redis.lpush('winning_payouts_queue', JSON.stringify({
+          tradeId,
+          playerId: trade.playerId,
+          walletAddress,
+          amount: totalPayout,
+          ts: Date.now()
+        }));
+
         // Optimistic balance update for WIN
         const addr = trade.playerId.toLowerCase();
         const currentAvail = await redis.get(`balance:${addr}:available`) || "0";
-        const totalPayout = parseFloat(trade.stakeAmount) + parseFloat(profit);
-        const newAvail = (parseFloat(currentAvail) + totalPayout).toFixed(6);
+        const newAvail = (parseFloat(currentAvail) + parseFloat(totalPayout)).toFixed(6);
         await redis.set(`balance:${addr}:available`, newAvail);
         await redis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
       } else {
-        // LOSS: Update on-chain SCW state (mark as pendingLoss)
-        console.log(`[Settlement] LOSS for ${tradeId}. Updating SCW state on-chain...`);
-        tx = await walletContract.settleLoss(tradeId, stakeWei);
-        // Balance already deducted at start, so no Redis update needed here
+        // LOSS: No RPC needed! The stake was already moved to treasury at start.
+        console.log(`[Settlement] LOSS for ${tradeId}. Already moved to treasury.`);
         await redis.set(`balance:${trade.playerId.toLowerCase()}:last_action_ts`, Date.now().toString());
       }
 
