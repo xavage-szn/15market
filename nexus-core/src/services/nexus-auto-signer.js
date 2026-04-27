@@ -140,10 +140,17 @@ class RedisMirrorService {
   }
 
   async syncPlayer(player, walletContract) {
+    const addr = player.toLowerCase();
+    
+    // BALANCE GUARD: If a trade was JUST placed/settled, ignore sync for 4 seconds
+    const lastAction = await redis.get(`balance:${addr}:last_action_ts`);
+    if (lastAction && (Date.now() - parseInt(lastAction)) < 4000) {
+      return null;
+    }
+
     const available = await walletContract.availableBalance();
     const locked = await walletContract.lockedBalance();
     const pending = await walletContract.pendingLoss();
-    const addr = player.toLowerCase();
     
     const formattedAvail = ethers.formatUnits(available, 18);
     await redis.set(`balance:${addr}:available`, formattedAvail);
@@ -216,6 +223,7 @@ class SettlementService {
       const currentAvail = await redis.get(availKey) || "0";
       const newAvail = Math.max(0, parseFloat(currentAvail) - parseFloat(stake)).toFixed(6);
       await redis.set(availKey, newAvail);
+      await redis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
 
       const trade = {
         tradeId,
@@ -278,14 +286,26 @@ class SettlementService {
 
       if (won) {
         // WIN: Update on-chain SCW state (release stake + add profit)
-        const profit = (parseFloat(trade.stakeAmount) * 0.95).toFixed(6);
+        // Correct multiplier logic from UserApp.jsx
+        const multiplier = trade.duration <= 5 ? 1.90 : (trade.duration <= 10 ? 1.40 : 0.90);
+        const profit = (parseFloat(trade.stakeAmount) * multiplier).toFixed(6);
         const profitWei = ethers.parseUnits(profit, 18);
         console.log(`[Settlement] WIN for ${tradeId}. Updating SCW state on-chain...`);
         tx = await walletContract.settleWin(tradeId, stakeWei, profitWei);
+        
+        // Optimistic balance update for WIN
+        const addr = trade.playerId.toLowerCase();
+        const currentAvail = await redis.get(`balance:${addr}:available`) || "0";
+        const totalPayout = parseFloat(trade.stakeAmount) + parseFloat(profit);
+        const newAvail = (parseFloat(currentAvail) + totalPayout).toFixed(6);
+        await redis.set(`balance:${addr}:available`, newAvail);
+        await redis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
       } else {
         // LOSS: Update on-chain SCW state (mark as pendingLoss)
         console.log(`[Settlement] LOSS for ${tradeId}. Updating SCW state on-chain...`);
         tx = await walletContract.settleLoss(tradeId, stakeWei);
+        // Balance already deducted at start, so no Redis update needed here
+        await redis.set(`balance:${trade.playerId.toLowerCase()}:last_action_ts`, Date.now().toString());
       }
 
       // Cleanup Redis immediately
