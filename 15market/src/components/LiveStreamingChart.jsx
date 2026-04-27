@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { priceSocketService } from '../utils/priceSocket';
+import { socketService } from '../utils/socket';
 
 /**
  * LiveStreamingChart — A specialized Canvas-based line chart for 1s timeframe.
@@ -25,9 +26,9 @@ function LiveStreamingChartComponent({ theme, symbol }) {
     const isLight = theme === 'light';
     const GREEN = '#3CB371';
 
-    // Listen for price updates directly from the socket to bypass React re-render lag
+    // Listen for price updates from both primary and fallback streams
     useEffect(() => {
-        const unbind = priceSocketService.on('price', (data) => {
+        const handlePrice = (data) => {
             if (data.key === symbol.replace('USDT', '').toLowerCase()) {
                 const price = parseFloat(data.price);
                 if (!isNaN(price)) {
@@ -40,8 +41,15 @@ function LiveStreamingChartComponent({ theme, symbol }) {
                     }
                 }
             }
-        });
-        return unbind;
+        };
+
+        const unbindPrimary = priceSocketService.on('price', handlePrice);
+        const unbindFallback = socketService.on('price', handlePrice);
+        
+        return () => {
+            unbindPrimary();
+            unbindFallback();
+        };
     }, [symbol]);
 
     // Reset state on symbol change

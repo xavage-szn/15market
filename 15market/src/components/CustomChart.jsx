@@ -73,23 +73,19 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 />
             </div>
 
-            {/* Asset Switch Loading Modal */}
+            {/* Asset Switch Loading Modal - Minimal Premium Transition */}
             <AnimatePresence>
                 {(isInternalLoading || !currentPrice || currentPrice === "0" || currentPrice === "0.00") && (
                     <motion.div 
                         initial={{ opacity: 0 }} 
                         animate={{ opacity: 1 }} 
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm transition-all"
+                        className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-black/40 backdrop-blur-md transition-all"
                     >
                         <div className="flex flex-col items-center gap-4">
                             <div className="relative">
-                                <Loader2 size={40} className="text-[#3CB371] animate-spin" />
-                                <div className="absolute inset-0 blur-xl bg-[#3CB371]/20 animate-pulse" />
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/90">Syncing Asset</span>
-                                <span className="text-[8px] font-bold text-[#3CB371] uppercase tracking-widest mt-1">{symbol.replace('USDT', '')} LIVE STREAM</span>
+                                <Loader2 size={48} className="text-[#3CB371] animate-spin opacity-40" />
+                                <div className="absolute inset-0 blur-2xl bg-[#3CB371]/10 animate-pulse" />
                             </div>
                         </div>
                     </motion.div>

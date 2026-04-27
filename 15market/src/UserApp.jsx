@@ -1151,9 +1151,21 @@ export default function UserApp() {
       console.error("[Terminal Error]", data);
     });
 
+    // RESILIENT FALLBACK: Listen for prices on the main socket too
+    const unbindPriceFallback = socketService.on('price', (data) => {
+      const { key, price, ts } = data;
+      if (oraclePricesRef.current[key] !== undefined) {
+        oraclePricesRef.current[key] = price;
+        oraclePricesRef.current.ts[key] = ts;
+        setStreamStatus('active');
+        lastPriceUpdateRef.current = Date.now();
+      }
+    });
+
     return () => {
       unbindBal();
       unbindErr();
+      unbindPriceFallback();
     };
   }, [address, notify, triggerGlobalRefresh]);
 
@@ -1674,6 +1686,8 @@ export default function UserApp() {
       const lastUpdate = lastPriceUpdateRef.current || 0;
       if (now - lastUpdate > 5000) {
         setStreamStatus('stalled');
+      } else if (streamStatus === 'stalled' || streamStatus === 'connecting') {
+        setStreamStatus('active');
       }
     }, 2000);
 
