@@ -162,13 +162,14 @@ class RedisMirrorService {
 }
 
 class SettlementService {
-  constructor(operatorWallet, io, factoryAddress) {
+  constructor(operatorWallet, io, factoryAddress, cacheInstance) {
     this.operatorWallet = operatorWallet;
     this.io = io;
     this.isPolling = false;
     this.factoryAddress = factoryAddress;
     this.factoryContract = new ethers.Contract(factoryAddress, FACTORY_ABI, operatorWallet);
     this.tradeCounterKey = 'global:trade_counter';
+    this.cache = cacheInstance;
   }
 
   async startSettlementPoller() {
@@ -240,7 +241,10 @@ class SettlementService {
     if (!tradeData) return;
     
     const trade = JSON.parse(tradeData);
-    const exitPrice = await this.getLatestPrice(trade.symbol);
+    
+    // Stable Settlement Logic from 95cd1b5: Use historical price at the exact close time
+    const key = trade.symbol.toLowerCase().replace('usdt', '');
+    const exitPrice = this.cache ? this.cache.getHistoricalPrice(key, trade.closeTime) : await this.getLatestPrice(trade.symbol);
     const isCall = trade.direction === 1 || trade.direction === 'UP' || trade.direction === 'buy';
     const won = isCall ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
 

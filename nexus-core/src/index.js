@@ -31,7 +31,7 @@ const operatorWallet = rpc.wallet;
 // --- Initialize Engines ---
 const classicEngine = new ClassicEngine(io);
 const roundsEngine = new RoundsEngine(io);
-const settlementService = new SettlementService(operatorWallet, io, config.FACTORY_ADDRESS);
+const settlementService = new SettlementService(operatorWallet, io, config.FACTORY_ADDRESS, cache);
 const mirrorService = new RedisMirrorService(provider, io);
 
 settlementService.startSettlementPoller();
@@ -50,53 +50,80 @@ const PYTH_IDS = {
 
 const https = require('https');
 
-async function pollPythPrices() {
-  const query = Object.values(PYTH_IDS).map(id => `ids[]=${id}`).join('&');
-  const url = `https://hermes.pyth.network/v2/updates/price/latest?${query}`;
-  
-  https.get(url, (res) => {
-    let data = '';
-    res.on('data', (chunk) => { data += chunk; });
-    res.on('end', () => {
-      try {
-        if (res.statusCode !== 200) return;
-        const json = JSON.parse(data);
-        if (!json.parsed) return;
+const BINANCE_IDS = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
+const MEXC_IDS = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
 
-        json.parsed.forEach(p => {
-          const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
-          const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
-          const publishTime = p.price.publish_time * 1000;
-
-          for (const [key, pythId] of Object.entries(PYTH_IDS)) {
-            if (id === pythId.toLowerCase()) {
-              cache.prices[key] = price;
-              cache.priceMeta[key] = { updatedAt: publishTime };
-              priceRedis.set(`price:${key}`, price.toString());
-              priceRedis.set(`price:${key}:ts`, publishTime.toString());
-              
-              const updateData = { key, price, ts: publishTime };
-              priceRedis.publish('price_updates', JSON.stringify(updateData));
-              
-              // NEW: Also emit directly via the main IO instance for fallback/integrated access
-              io.emit('price', updateData);
-            }
-          }
-        });
-      } catch (e) { }
+async function fetchFromSource(url, parser) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) throw new Error(`Status ${res.statusCode}`);
+          const p = parser(JSON.parse(data));
+          if (!p || isNaN(p)) throw new Error('Invalid price');
+          resolve(p);
+        } catch (e) { reject(e); }
+      });
     });
-  }).on('error', (err) => {
-    console.error('[Internal-Price-Feed] Error:', err.message);
+    req.on('error', reject);
+    req.setTimeout(800, () => {
+      req.destroy();
+      reject(new Error('Timeout'));
+    });
   });
 }
 
-// Poll Pyth every 300ms
-setInterval(pollPythPrices, 300);
+async function pollPrices() {
+  for (const key of Object.keys(PYTH_IDS)) {
+    try {
+      const sources = [
+        {
+          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${PYTH_IDS[key]}`,
+          parse: (d) => {
+            const p = d.parsed?.[0]?.price;
+            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+          }
+        },
+        {
+          url: `https://api.binance.com/api/v3/ticker/price?symbol=${BINANCE_IDS[key]}`,
+          parse: (d) => parseFloat(d.price)
+        },
+        {
+          url: `https://api.mexc.com/api/v3/ticker/price?symbol=${MEXC_IDS[key]}`,
+          parse: (d) => parseFloat(d.price)
+        }
+      ];
 
-// Also keep a fast internal sync from cache (redundant but safe for high-frequency settlement)
-async function syncBackendPrices() {
-  // Logic now handled by pollPythPrices directly updating cache
+      // Promise.any: Use the fastest source that returns a valid price
+      const price = await Promise.any(sources.map(s => fetchFromSource(s.url, s.parse)));
+      const now = Date.now();
+
+      // Update Cache
+      cache.prices[key] = price;
+      cache.priceMeta[key] = { updatedAt: now };
+
+      // Update History for Stable Settlement (20 min buffer)
+      if (!cache.priceHistory[key]) cache.priceHistory[key] = [];
+      cache.priceHistory[key].push({ price, time: now });
+      if (cache.priceHistory[key].length > 1200) cache.priceHistory[key].shift();
+
+      // Redis & Socket
+      const updateData = { key, price, ts: now };
+      priceRedis.set(`price:${key}`, price.toString());
+      priceRedis.set(`price:${key}:ts`, now.toString());
+      priceRedis.publish('price_updates', JSON.stringify(updateData));
+      io.emit('price', updateData);
+
+    } catch (e) {
+      // If all sources fail, it just skips this tick
+    }
+  }
 }
+
+// Poll every 300ms for high-frequency updates
+setInterval(pollPrices, 300);
 
 
 // --- Socket.IO ---

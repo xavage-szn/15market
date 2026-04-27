@@ -28,6 +28,28 @@ class Cache {
     
     // Rounds state
     this.roundsState = new Map();
+
+    // Price History (Stable settlement buffer)
+    this.priceHistory = {}; // key -> array of {price, time}
+  }
+
+  getHistoricalPrice(key, targetTime) {
+    const history = this.priceHistory[key];
+    if (!history || history.length === 0) return this.prices[key] || 0;
+
+    let closest = history[0];
+    let minDiff = Math.abs(targetTime - closest.time);
+
+    for (const entry of history) {
+      const diff = Math.abs(targetTime - entry.time);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = entry;
+      }
+    }
+
+    if (minDiff > 10000) return this.prices[key] || 0;
+    return closest.price;
   }
 
   // --- Classic Trade Helpers ---
