@@ -73,6 +73,7 @@ async function pollPythPrices() {
               cache.priceMeta[key] = { updatedAt: publishTime };
               priceRedis.set(`price:${key}`, price.toString());
               priceRedis.set(`price:${key}:ts`, publishTime.toString());
+              priceRedis.publish('price_updates', JSON.stringify({ key, price, ts: publishTime }));
             }
           }
         });
@@ -205,11 +206,27 @@ app.post('/session/execute', async (req, res) => {
   const { address, tradeParams } = req.body;
   if (!address || !tradeParams) return res.status(400).json({ error: 'Missing params' });
 
-  // Route all user trades through the low-latency classic engine path.
-  const result = await classicEngine.placeTrade(tradeParams, { address });
-
-  if (!result.success) return res.status(400).json({ error: result.error });
-  res.json(result);
+  // Use the SCW settlement service if available, otherwise fallback to classic simulation
+  try {
+    const result = await settlementService.submitTrade(
+      address, 
+      tradeParams.symbol || 'ETH',
+      Number(tradeParams.direction),
+      String(tradeParams.amount),
+      Number(tradeParams.duration || 5)
+    );
+    
+    if (!result.success) {
+      // Fallback to classic if SCW doesn't exist or fails
+      const classicResult = await classicEngine.placeTrade(tradeParams, { address });
+      return res.json(classicResult);
+    }
+    
+    res.json(result);
+  } catch (err) {
+    const classicResult = await classicEngine.placeTrade(tradeParams, { address });
+    res.json(classicResult);
+  }
 });
 
 app.post('/session/cashout', async (req, res) => {

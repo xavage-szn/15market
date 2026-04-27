@@ -183,7 +183,8 @@ class SettlementService {
 
       // 1. Lock Stake on-chain in the SCW
       const tx = await walletContract.lockStake(tradeId, stakeWei);
-      await tx.wait();
+      // We don't await tx.wait() here to keep the UI seamless and low-latency.
+      // The poller/indexing logic will pick up the confirmed state later.
 
       const trade = {
         tradeId,
@@ -192,14 +193,15 @@ class SettlementService {
         entryPrice: await this.getLatestPrice(symbol),
         closeTime: Date.now() + (duration * 1000),
         symbol,
-        direction
+        direction,
+        txHash: tx.hash
       };
 
       await redis.set(`trade:${tradeId}`, JSON.stringify(trade));
       await redis.sadd(`active_trades`, tradeId);
       
       this.io.to(playerId.toLowerCase()).emit('trade_placed', trade);
-      return { tradeId, success: true };
+      return { tradeId, success: true, txHash: tx.hash };
     } catch (err) {
       console.error("submitTrade failed:", err);
       return { success: false, error: err.message };

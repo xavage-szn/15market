@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
+import { priceSocketService } from '../utils/priceSocket';
 
 /**
  * LiveStreamingChart — A specialized Canvas-based line chart for 1s timeframe.
  * HIGH PERFORMANCE: Optimized drawing routines to avoid lags and redundant allocations.
  */
-function LiveStreamingChartComponent({ theme, currentPrice, symbol }) {
+function LiveStreamingChartComponent({ theme, symbol }) {
     const canvasRef = useRef(null);
     const priceHistoryRef = useRef([]);
     const rafRef = useRef(null);
@@ -24,27 +25,24 @@ function LiveStreamingChartComponent({ theme, currentPrice, symbol }) {
     const isLight = theme === 'light';
     const GREEN = '#3CB371';
 
-    // Update target price and session start time
+    // Listen for price updates directly from the socket to bypass React re-render lag
     useEffect(() => {
-        const price = parseFloat(currentPrice);
-        if (isNaN(price)) {
-            const now = Date.now();
-            if ((now - (debugProbeRef.current.badPriceTs || 0)) > 5000) {
-                debugProbeRef.current.badPriceTs = now;
-                // #region agent log
-                fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'488cf3'},body:JSON.stringify({sessionId:'488cf3',runId:'initial',hypothesisId:'H10',location:'LiveStreamingChart.jsx:priceEffect:invalid',message:'currentPrice is invalid for chart',data:{symbol,currentPrice},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
+        const unbind = priceSocketService.on('price', (data) => {
+            if (data.key === symbol.replace('USDT', '').toLowerCase()) {
+                const price = parseFloat(data.price);
+                if (!isNaN(price)) {
+                    targetPriceRef.current = price;
+                    if (interpolatedPriceRef.current === null) {
+                        interpolatedPriceRef.current = price;
+                    }
+                    if (startTimeRef.current === null) {
+                        startTimeRef.current = Date.now();
+                    }
+                }
             }
-            return;
-        }
-        targetPriceRef.current = price;
-        if (interpolatedPriceRef.current === null) {
-            interpolatedPriceRef.current = price;
-        }
-        if (startTimeRef.current === null) {
-            startTimeRef.current = Date.now();
-        }
-    }, [currentPrice]);
+        });
+        return unbind;
+    }, [symbol]);
 
     // Reset state on symbol change
     useEffect(() => {

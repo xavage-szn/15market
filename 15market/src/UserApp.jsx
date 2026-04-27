@@ -47,6 +47,7 @@ import { RoundsTerminal } from "./components/RoundsTerminal";
 import RoundsAccessGate from "./components/RoundsAccessGate";
 import { OnboardingFlow } from "./components/OnboardingFlow";
 import { socketService } from './utils/socket';
+import { priceSocketService } from './utils/priceSocket';
 
 // Robust Error Boundary to prevent platform-wide crashes
 class ErrorBoundary extends Component {
@@ -1650,46 +1651,34 @@ export default function UserApp() {
 
 
 
-  // ─── EMBEDDED FRONTEND PRICE SERVICE ───
-  // This logic runs as a built-in background service for the frontend.
+  // ─── UNIFIED PRICE CONSUMPTION ───
+  // Uses the dedicated price-frontend service for ultra-low-latency streaming.
   const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, ts: {} });
+  const [streamStatus, setStreamStatus] = useState('connecting');
 
-  // 1. Poller: Fetch from Pyth Hermes every 300ms
   useEffect(() => {
-    let active = true;
-    const PYTH_IDS = {
-      btc: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
-      eth: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
-      sol: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'
-    };
-
-    const poll = async () => {
-      try {
-        const query = Object.values(PYTH_IDS).map(id => `ids[]=${id}`).join('&');
-        const url = `https://hermes.pyth.network/v2/updates/price/latest?${query}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Hermes fail");
-        const data = await res.json();
-
-        data.parsed.forEach(p => {
-          const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
-          const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
-          const publishTime = p.price.publish_time * 1000;
-
-          for (const [key, pythId] of Object.entries(PYTH_IDS)) {
-            if (id === pythId.toLowerCase()) {
-              oraclePricesRef.current[key] = price;
-              oraclePricesRef.current.ts[key] = publishTime;
-            }
-          }
-        });
-      } catch (e) {
-        // Fallback or silent fail
+    const unbind = priceSocketService.on('price', (data) => {
+      const { key, price, ts } = data;
+      if (oraclePricesRef.current[key] !== undefined) {
+        oraclePricesRef.current[key] = price;
+        oraclePricesRef.current.ts[key] = ts;
+        setStreamStatus('active');
       }
-      if (active) setTimeout(poll, 300);
+    });
+
+    // Watchdog: If no price update for any asset in 5 seconds, mark as stalled
+    const watchdog = setInterval(() => {
+      const now = Date.now();
+      const lastUpdate = lastPriceUpdateRef.current || 0;
+      if (now - lastUpdate > 5000) {
+        setStreamStatus('stalled');
+      }
+    }, 2000);
+
+    return () => {
+      unbind();
+      clearInterval(watchdog);
     };
-    poll();
-    return () => { active = false; };
   }, []);
 
   // 2. Metronome: 200ms Pulse loop (5Hz) to drive UI/Chart
@@ -1908,9 +1897,13 @@ export default function UserApp() {
 
     localStorage.setItem('15market_active_token_id', newMarket.id);
     const resolvedMarket = mergeMarketWithDefault(newMarket);
+    
+    // Explicitly reset price to trigger loading modal in CustomChart
+    setPrice("0");
+    priceRef.current = "0";
+    priceHistoryRef.current = [];
+    
     setActiveMarket(resolvedMarket);
-    if (typeof setIsLoading === 'function') setIsLoading(true); // Show loader during asset transition
-    priceHistoryRef.current = []; // Clear history to avoid phantom lines when switching tokens
 
     // Sync with keeper
     try {
