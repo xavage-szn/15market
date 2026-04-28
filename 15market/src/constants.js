@@ -4,21 +4,16 @@ import { defineChain } from 'viem'
 // ARC TESTNET
 export const ARC_CHAIN_ID = 5042002;
 
-const TW_ID = import.meta.env.VITE_THIRDWEB_CLIENT_ID;
 export const ARC_RPCS = [
-    TW_ID ? `https://5042002.rpc.thirdweb.com/${TW_ID}` : "https://5042002.rpc.thirdweb.com", // Thirdweb (Primary)
     "https://rpc.testnet.arc.network", // Arc Official
 ];
-// --- RPC STRATEGY ---
-// Alchemy: Critical Jobs (Trades/Settlements)
-// Arc: Soft Jobs (Balances/Fallback)
-export const ALCHEMY_RPC = import.meta.env.VITE_ALCHEMY_RPC || "https://arc-testnet.g.alchemy.com/v2/7eF4g7VDugrZQdNDi_HMj"; 
+
 export const ARC_RPC = ARC_RPCS[0];
 export const ARC_EXPLORER = "https://testnet.arcscan.app";
 export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
 export const ARC_ROUNDS_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_ROUNDS_CONTRACT_ADDRESS || "0x02AE9D2a7CEca436E7B3A482772EfB74C4fE4721";
 export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
-export const ARC_RPC_BACKUP = ARC_RPCS[1];
+export const ARC_RPC_BACKUP = ARC_RPCS[0];
 // 2. Keeper Configuration
 const isNative = typeof window !== 'undefined' && !!window.Capacitor;
 const isLocal = typeof window !== 'undefined' &&
