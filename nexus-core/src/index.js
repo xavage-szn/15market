@@ -273,29 +273,42 @@ app.post('/session/cashout', async (req, res) => {
     const userAddr = address.toLowerCase();
     const sessionWallet = deriveSessionWallet(userAddr);
 
-    const balWei = await provider.getBalance(sessionWallet.address);
-    if (balWei === 0n) {
+    const balWei = await rpc.mainProvider.getBalance(sessionWallet.address);
+    if (balWei <= 0n) {
       return res.status(400).json({ error: "No funds in session wallet to withdraw" });
     }
 
-    // Reserve gas: 21000 * 2gwei
-    const gasPrice = ethers.parseUnits("2", "gwei");
-    const gasLimit = 21000n;
+    // Estimate gas for a simple transfer
+    let gasLimit = 21000n;
+    try {
+      gasLimit = await sessionWallet.estimateGas({
+        to: address,
+        value: balWei
+      });
+    } catch (e) {
+      // Fallback if estimate fails due to balance too low for even the estimation
+      gasLimit = 21000n;
+    }
+
+    const feeData = await rpc.mainProvider.getFeeData();
+    const gasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
     const gasCost = gasPrice * gasLimit;
     const sendAmount = balWei - gasCost;
 
     if (sendAmount <= 0n) {
-      return res.status(400).json({ error: "Balance too low to cover gas" });
+      return res.status(400).json({ error: `Balance (${ethers.formatEther(balWei)}) too low to cover gas fees (${ethers.formatEther(gasCost)}).` });
     }
 
+    console.log(`[Cashout] Initiating sweep: ${ethers.formatEther(sendAmount)} USDC from ${sessionWallet.address} to ${address}`);
+    
     const tx = await sessionWallet.sendTransaction({
-      to: address, // send back to main wallet
+      to: address,
       value: sendAmount,
       gasLimit,
-      gasPrice,
+      gasPrice
     });
 
-    // Instantly zero out in-process session balance
+    // Instantly sync balance in cache
     const session = cache.sessions.get(userAddr);
     if (session) session.balance = 0;
 
@@ -305,10 +318,10 @@ app.post('/session/cashout', async (req, res) => {
       txHash: tx.hash
     });
 
-    console.log(`[Cashout] ${userAddr} -> ${address}: ${ethers.formatEther(sendAmount)} ETH, tx: ${tx.hash}`);
+    console.log(`[Cashout] Success! TX: ${tx.hash}`);
     res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sendAmount) });
   } catch (err) {
-    console.error('[session/cashout] error:', err.message);
+    console.error('[session/cashout] critical error:', err);
     res.status(500).json({ error: err.message });
   }
 });

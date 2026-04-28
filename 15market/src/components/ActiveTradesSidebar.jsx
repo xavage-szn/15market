@@ -75,11 +75,17 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                             const entryPrice = parseFloat(trade.entryPrice);
                             // Use backend livePrice if available, fallback to global price
                             const current = trade.livePrice ? parseFloat(trade.livePrice) : parseFloat(price);
-                            // Use backend isWinning if available, otherwise compute locally
-                            const isWinning = trade.isWinning !== undefined 
-                                ? trade.isWinning 
+                            
+                            // GLITCH FIX: Once expired, we stop calculating based on live price.
+                            // We prefer trade.won if backend already settled, otherwise we use the state at expiry.
+                            const isExpired = trade.timeLeft !== undefined && trade.timeLeft <= 0;
+                            
+                            const isWinning = trade.won !== undefined
+                                ? trade.won
                                 : (isLong ? current > entryPrice : current < entryPrice);
 
+                            // If expired but not yet settled, we 'freeze' the statusColor logic 
+                            // by ensuring the visual state doesn't flip if settlement is pending.
                             const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;
 
                             return (

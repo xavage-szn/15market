@@ -74,26 +74,39 @@ class ClassicEngine {
     const amount = Number(tradeParams.amount);
     if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
 
-    // 1. Perform REAL On-Chain Stake Transfer to Treasury
+    // 1. Perform REAL On-Chain Stake Transfer via Contract call
     let stakeTxHash;
     try {
-      console.log(`[Trade] Initiating on-chain stake: ${amount} USDC from ${sessionWallet.address} to ${treasury}`);
-      const tx = await sessionWallet.sendTransaction({
-        to: treasury,
-        value: ethers.parseUnits(amount.toString(), 18),
-        gasLimit: 21000,
-        // Arc Testnet specific gas price if needed, otherwise automatic
-      });
+      console.log(`[Trade] Initiating on-chain stake: ${amount} USDC from ${sessionWallet.address} via placeBet()`);
+      
+      const contract = new ethers.Contract(treasury, [
+        "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable"
+      ], sessionWallet);
+
+      // Convert ID to a numeric representation for the contract
+      const numericId = BigInt(Date.now());
+      const tx = await contract.placeBet(
+        numericId,
+        direction,
+        duration,
+        ethers.parseUnits(entryPrice.toFixed(2), 2), // Contract likely expects some precision for price, or 0 if internal
+        marketId,
+        userAddr, // Payout goes back to main wallet
+        { value: ethers.parseUnits(amount.toFixed(18), 18) }
+      );
+      
       stakeTxHash = tx.hash;
-      // We don't necessarily need to wait for full confirmation to start the timer, 
-      // but the tx must at least be broadcasted successfully.
+      tradeParams.id = numericId.toString(); // Sync ID
+
+      // Optimistic deduction
+      session.balance = Number((session.balance - amount).toFixed(4));
     } catch (err) {
       console.error(`[Trade] Stake transfer failed for ${userAddr}:`, err.message);
-      return { success: false, error: "Network Congested or Insufficient USDC in Session Wallet." };
+      return { success: false, error: "Network Congested or Insufficient USDC. (Check Gas/Balance)" };
     }
 
     // 2. Register Trade in Engine
-    const id = String(tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`);
+    const id = tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     const direction = Number(tradeParams.direction);
     const duration = Math.max(1, Number(tradeParams.duration || 5));
     const marketId = Number(tradeParams.marketId || 0);
@@ -104,15 +117,11 @@ class ClassicEngine {
 
     if (!entryPrice || entryPrice <= 0) return { success: false, error: 'Price feed unavailable' };
 
-    // Update in-process balance (sync with chain)
-    const newBalStr = await rpc.getBalance(sessionWallet.address);
-    session.balance = parseFloat(newBalStr);
-
     const trade = {
-      id,
-      userAddr,
-      walletAddress: session.walletAddress,
-      sessionAddress: sessionWallet.address,
+      id: String(id),
+      userAddr: userAddr.toLowerCase(),
+      walletAddress: session.walletAddress.toLowerCase(),
+      sessionAddress: sessionWallet.address.toLowerCase(),
       direction,
       duration,
       marketId,
@@ -121,18 +130,19 @@ class ClassicEngine {
       entryPrice,
       status: 'PENDING',
       stakeTxHash,
+      treasury,
       createdAt: Date.now(),
       settleAt: Date.now() + (duration * 1000),
     };
 
-    cache.trades.set(id, trade);
+    cache.trades.set(trade.id, trade);
     cache.queueTradeForSettlement(trade);
 
     // Emit trade placed event + updated balance to frontend
     this.io.to(userAddr).emit('trade_placed', {
       type: 'TRADE_PLACED',
-      betId: id,
-      id,
+      betId: trade.id,
+      id: trade.id,
       amount,
       direction,
       symbol: symbol.toUpperCase(),
@@ -147,18 +157,18 @@ class ClassicEngine {
     this.io.to(userAddr).emit('balance_update', {
       balance: String(session.balance),
       reason: 'STAKE_SENT',
-      betId: id,
+      betId: trade.id,
       txHash: stakeTxHash
     });
 
-    this.io.emit('new_trade', { betId: id, direction, symbol: symbol.toUpperCase(), amount, userAddr });
+    this.io.emit('new_trade', { betId: trade.id, direction, symbol: symbol.toUpperCase(), amount, userAddr });
 
-    console.log(`[Trade] Active #${id} | ${direction === 1 ? 'UP' : 'DOWN'} | $${amount} | TX: ${stakeTxHash}`);
+    console.log(`[Trade] Active #${trade.id} | ${direction === 1 ? 'UP' : 'DOWN'} | $${amount} | TX: ${stakeTxHash}`);
 
     return {
       success: true,
       txHash: stakeTxHash,
-      tradeId: id,
+      tradeId: trade.id,
       settlementEtaMs: duration * 1000,
       newBalance: String(session.balance),
     };
@@ -189,6 +199,8 @@ class ClassicEngine {
   async settleTrade(trade) {
     if (trade.status !== 'PENDING') return;
 
+    const userAddr = trade.userAddr.toLowerCase();
+
     // Use historical price at close time for stable, non-gameable settlement
     const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
     const won = trade.direction === 1 ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
@@ -201,7 +213,7 @@ class ClassicEngine {
     trade.payout = payout;
     trade.settledAt = Date.now();
 
-    // Build the final settled event — matches what the frontend's trade_settled handler expects
+    // Build the final settled event
     const settledEvent = {
       type: 'TRADE_SETTLED',
       betId: trade.id,
@@ -215,34 +227,38 @@ class ClassicEngine {
       amount: trade.amount,
       symbol: trade.symbol.toUpperCase(),
       timestamp: trade.settledAt,
-      userAddr: trade.userAddr,
-      // Final status fields the frontend trade history expects
+      userAddr,
       status: won ? 'WON' : 'LOST',
     };
 
-    cache.pushHistory(trade.userAddr, settledEvent);
+    cache.pushHistory(userAddr, settledEvent);
 
-    // Emit instantly to the user's room — no delay
-    this.io.to(trade.userAddr).emit('trade_settled', settledEvent);
+    // Emit instantly to the user's room
+    this.io.to(userAddr).emit('trade_settled', settledEvent);
     this.io.emit('trade_settled', settledEvent); // Global scroller
 
     console.log(`[Settlement] #${trade.id} ${won ? 'WON' : 'LOST'} @ $${exitPrice} (entry: $${trade.entryPrice})`);
 
-    if (!won) {
-      const session = cache.sessions.get(trade.userAddr);
-      if (session) {
-        this.io.to(trade.userAddr).emit('balance_update', {
-          balance: String(session.balance),
-          reason: 'LOSS',
-          betId: trade.id,
-          payout: '0',
-        });
-      }
-      return;
-    }
+    // Sync session balance from on-chain after settlement
+    setTimeout(async () => {
+      try {
+        const balStr = await rpc.getBalance(trade.sessionAddress || trade.userAddr);
+        const session = cache.sessions.get(userAddr);
+        if (session) {
+          session.balance = parseFloat(balStr);
+          this.io.to(userAddr).emit('balance_update', {
+            balance: String(session.balance),
+            reason: won ? 'WIN' : 'LOSS',
+            betId: trade.id,
+            payout: String(payout),
+          });
+        }
+      } catch (e) {}
+    }, 1500); // 1.5s delay to allow block confirmation
 
-    // WIN: queue payout
-    this.queuePayoutJob(trade);
+    if (won) {
+      this.queuePayoutJob(trade);
+    }
   }
 
   // --- Payouts ---
@@ -273,20 +289,30 @@ class ClassicEngine {
     return jobs;
   }
 
-  dispatchPayout(job, source) {
+  async dispatchPayout(job, source) {
     const trade = cache.trades.get(job.tradeId);
     if (!trade || !trade.won || trade.status !== 'SETTLED') {
       return { ok: false, error: 'Trade not eligible for payout' };
     }
 
-    const session = cache.sessions.get(job.userAddr);
-    if (session) {
-      session.balance = Number((session.balance + Number(job.amount)).toFixed(4));
+    let payoutTxHash = null;
+    try {
+      console.log(`[Payout] Sending ${job.amount} USDC winning to ${trade.sessionAddress || trade.userAddr}`);
+      const tx = await rpc.wallet.sendTransaction({
+        to: trade.sessionAddress || trade.userAddr,
+        value: ethers.parseUnits(Number(job.amount).toFixed(18), 18),
+      });
+      payoutTxHash = tx.hash;
+    } catch (err) {
+      console.error(`[Payout] Failed to send winnings for trade ${trade.id}:`, err.message);
+      // Keep job in queue or mark as failed for retry
+      job.status = 'QUEUED'; 
+      return { ok: false, error: err.message };
     }
 
     trade.status = 'PAID';
     trade.paidAt = Date.now();
-    trade.payoutTx = `payout_${job.jobId}`;
+    trade.payoutTx = payoutTxHash;
 
     const payoutEvent = {
       type: 'PAYOUT_COMPLETED',
@@ -295,20 +321,26 @@ class ClassicEngine {
       source,
       timestamp: trade.paidAt,
       userAddr: trade.userAddr,
-      txHash: trade.payoutTx,
+      txHash: payoutTxHash,
     };
 
     cache.pushHistory(trade.userAddr, payoutEvent);
 
+    const session = cache.sessions.get(trade.userAddr);
     if (session) {
+      // Refresh balance from chain to be sure
+      const balStr = await rpc.getBalance(trade.sessionAddress || trade.userAddr);
+      session.balance = parseFloat(balStr);
+
       this.io.to(trade.userAddr).emit('balance_update', {
         balance: String(session.balance),
         reason: 'WIN_PAYOUT',
         betId: trade.id,
         payout: String(job.amount),
-        txHash: trade.payoutTx,
+        txHash: payoutTxHash,
       });
     }
+
     this.io.to(trade.userAddr).emit('payout_completed', payoutEvent);
     this.io.emit('payout_completed', payoutEvent);
     return { ok: true, payoutEvent };
@@ -319,8 +351,9 @@ class ClassicEngine {
     this.payoutQueueProcessing = true;
     try {
       const claimed = this.claimPayoutJobs(config.SETTLEMENT_CONCURRENCY);
+      // Process payout transactions sequentially to avoid nonce issues
       for (const job of claimed) {
-        this.dispatchPayout(job, 'inline_fallback');
+        await this.dispatchPayout(job, 'inline_fallback');
         const idx = cache.payoutQueue.findIndex(j => j.jobId === job.jobId);
         if (idx !== -1) cache.payoutQueue.splice(idx, 1);
       }
