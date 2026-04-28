@@ -222,11 +222,17 @@ class ClassicEngine {
 
     const userAddr = trade.userAddr.toLowerCase();
 
-    // Use historical price at close time for stable, non-gameable settlement
+    // Use historical price at close time for stable settlement
     const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
-    const won = trade.direction === 1 ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
-    const multiplier = Number(config.DEFAULT_MULTIPLIER) || 1.95;
-    const payout = won ? Number((trade.amount * multiplier).toFixed(4)) : 0;
+    
+    const isUp = trade.direction === 1 || String(trade.direction) === "1";
+    const won = isUp ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
+
+    // MATCH FRONTEND MULTIPLIERS: 5s=2.90, 10s=2.40, others=1.90
+    const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
+    const payout = won ? Number((trade.amount * multiplier).toFixed(6)) : 0;
+
+    console.log(`[Settle] Trade ${trade.id} (${trade.symbol} ${isUp ? 'UP' : 'DOWN'}): Entry=${trade.entryPrice}, Exit=${exitPrice} -> ${won ? 'WON' : 'LOST'} (Payout: ${payout})`);
 
     trade.status = 'SETTLED';
     trade.exitPrice = exitPrice;
@@ -234,7 +240,6 @@ class ClassicEngine {
     trade.payout = payout;
     trade.settledAt = Date.now();
 
-    // Build the final settled event
     const settledEvent = {
       type: 'TRADE_SETTLED',
       betId: trade.id,
@@ -254,11 +259,8 @@ class ClassicEngine {
 
     cache.pushHistory(userAddr, settledEvent);
 
-    // Emit instantly to the user's room
     this.io.to(userAddr).emit('trade_settled', settledEvent);
-    this.io.emit('trade_settled', settledEvent); // Global scroller
-
-    console.log(`[Settlement] #${trade.id} ${won ? 'WON' : 'LOST'} @ $${exitPrice} (entry: $${trade.entryPrice})`);
+    this.io.emit('trade_settled', settledEvent);
 
     // Sync session balance from on-chain after settlement
     setTimeout(async () => {
@@ -275,9 +277,9 @@ class ClassicEngine {
           });
         }
       } catch (e) {}
-    }, 1500); // 1.5s delay to allow block confirmation
+    }, 1500);
 
-    if (won) {
+    if (won && payout > 0) {
       this.queuePayoutJob(trade);
     }
   }
