@@ -1751,8 +1751,8 @@ export default function UserApp() {
         balanceApplied:  true,
       };
 
-      // Remove from activeTrades immediately — move to history
-      setActiveTrades(prev => prev.filter(t => String(t.id) !== betId && String(t.nonce) !== betId));
+      // Allow the reconciler to handle the removal after a grace period
+      // setActiveTrades(prev => prev.filter(t => String(t.id) !== betId && String(t.nonce) !== betId));
 
       // Upsert into tradeHistory with final WON/LOST status
       setTradeHistory(prev => {
@@ -2829,6 +2829,7 @@ export default function UserApp() {
                               activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                               setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
                               theme={theme} currentNetwork={network}
+                              lockedResults={lockedResults}
                             />
                           </div>
                         </div>

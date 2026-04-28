@@ -72,7 +72,8 @@ function LiveExecutionComponent({
     theme,
     isTruncated = false,
     isExpanded = false,
-    setIsExpanded
+    setIsExpanded,
+    lockedResults
 }) {
     const [tick, setTick] = useState(0);
     const isLight = theme === 'light';
@@ -98,6 +99,20 @@ function LiveExecutionComponent({
     const removeTrade = (id) => {
         setActiveTrades(prev => prev.filter(t => t.id !== id));
     };
+
+    // Synchronize global locks to local frozen state
+    useEffect(() => {
+        if (!lockedResults?.current) return;
+        lockedResults.current.forEach((val, key) => {
+            if (!frozenPnL.current[key]) {
+                frozenPnL.current[key] = {
+                    status: val.status,
+                    exitPrice: val.settlementPrice,
+                    fromGlobal: true
+                };
+            }
+        });
+    }, [activeTrades.length]);
 
     // Auto-collapse when only 0-1 trades remain
     useEffect(() => {
@@ -197,8 +212,31 @@ function LiveExecutionComponent({
                                             const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
-                                            const truncTo2dp = (p) => Math.floor(p * 100) / 100;
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+
+                                            // 🔒 RESULT LOCK: Capture and freeze result at exact moment of expiry
+                                            if (timerExpired && !isFinal && !frozenPnL.current[trade.id]) {
+                                                const finalWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                                    ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                                                    : false;
+                                                
+                                                const status = finalWinning ? "WON" : "LOST";
+                                                frozenPnL.current[trade.id] = {
+                                                    status: status,
+                                                    exitPrice: currentPriceVal,
+                                                    time: Date.now()
+                                                };
+
+                                                // Update Global Lock in Parent via Ref
+                                                if (lockedResults?.current) {
+                                                    lockedResults.current.set(String(trade.id), { 
+                                                        status: status, 
+                                                        settlementPrice: currentPriceVal 
+                                                    });
+                                                }
+
+                                                console.log(`[UI-Lock] Trade ${trade.id} frozen: ${status} @ ${currentPriceVal}`);
+                                            }
 
                                             const frozen = frozenPnL.current[trade.id];
                                             const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
@@ -208,12 +246,9 @@ function LiveExecutionComponent({
                                             const displayTimeLeft = (frozen || trade.status !== "PENDING") ? "0.0" : rawTimeLeft.toFixed(1);
                                             const showInstantResult = (timerExpired || !!frozen || trade.status !== "PENDING") && !isFinal;
 
-                                            // STABILITY FIX: Use locked price if available, otherwise frozen, otherwise live
-                                            const stableWinning = (trade.lockedExitPrice || (frozen?.exitPrice))
-                                                ? (isUpTrade ? parseFloat(trade.lockedExitPrice || frozen.exitPrice) > entryPriceVal : parseFloat(trade.lockedExitPrice || frozen.exitPrice) < entryPriceVal)
-                                                : liveWinning;
-
-                                            const instantStatus = showInstantResult ? (stableWinning ? "WON" : "LOST") : trade.status;
+                                            // STABILITY FIX: Use frozen result if available, otherwise live
+                                            const finalWinningState = frozen ? (frozen.status === "WON") : liveWinning;
+                                            const instantStatus = showInstantResult ? (finalWinningState ? "WON" : "LOST") : trade.status;
 
                                             const displayFinal = isFinal || showInstantResult;
 
