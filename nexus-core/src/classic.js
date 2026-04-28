@@ -320,15 +320,31 @@ class ClassicEngine {
 
     let payoutTxHash = null;
     try {
-      console.log(`[Payout] Sending ${job.amount} USDC winning to ${trade.sessionAddress || trade.userAddr}`);
+      const destination = ethers.getAddress(trade.sessionAddress || trade.userAddr);
+      console.log(`[Payout] Sending ${job.amount} USDC winning to ${destination}`);
+      
+      const feeData = await rpc.mainProvider.getFeeData();
+      const gasPrice = (feeData.gasPrice * 130n) / 100n; // 1.3x for payouts
+
+      // Manual nonce to prevent collisions in fast batch
+      if (!this.payoutNonce) {
+        this.payoutNonce = await rpc.wallet.getNonce();
+      }
+
       const tx = await rpc.wallet.sendTransaction({
-        to: ethers.getAddress(trade.sessionAddress || trade.userAddr),
+        to: destination,
         value: ethers.parseUnits(Number(job.amount).toFixed(18), 18),
+        gasPrice,
+        nonce: this.payoutNonce
       });
+      
+      this.payoutNonce++; // Increment for next job
       payoutTxHash = tx.hash;
+      console.log(`[Payout] TX Broadcasted: ${payoutTxHash}`);
     } catch (err) {
       console.error(`[Payout] Failed to send winnings for trade ${trade.id}:`, err.message);
-      // Keep job in queue or mark as failed for retry
+      // Reset nonce on error to sync with chain on next attempt
+      this.payoutNonce = null;
       job.status = 'QUEUED'; 
       return { ok: false, error: err.message };
     }

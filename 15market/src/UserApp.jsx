@@ -2351,18 +2351,23 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
-      notify(`Confirm deposit of ${amtNum.toFixed(4)} USDC in your wallet...`, "pending");
+      notify(`Confirm deposit of ${amtNum} USDC in your wallet...`, "pending");
 
       try {
         if (!evmSessionWallet?.address) {
           throw new Error('Session wallet not initialized. Please refresh.');
         }
 
+        // Fetch current gas price from Arc Testnet
+        const feeData = await publicClient.getFeeData();
+        const gasPrice = (feeData.gasPrice * 120n) / 100n; // 1.2x for faster inclusion
+
         // Step 1: Send native USDC directly to the Session EOA
         const hash = await walletClient.sendTransaction({
           to: evmSessionWallet.address,
-          value: parseEther(amtNum.toFixed(18)),
-          account: address
+          value: parseEther(amtNum.toString()),
+          account: address,
+          gasPrice
         });
 
         notify("Deposit Broadcasted! Waiting for confirmation...", "success");
