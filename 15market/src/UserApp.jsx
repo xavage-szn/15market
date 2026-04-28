@@ -2367,10 +2367,19 @@ export default function UserApp() {
           throw new Error('Session wallet not initialized. Please refresh.');
         }
 
+        // Ensure user is on the correct chain (Arc Testnet)
+        try {
+          await switchChainAsync({ chainId: 5042002 });
+        } catch (switchErr) {
+          console.warn("Chain switch failed or rejected:", switchErr.message);
+        }
+
         // Fetch current gas price from Arc Testnet (Viem syntax)
         const feeData = await publicClient.estimateFeesPerGas();
         const gasPrice = feeData.gasPrice || feeData.maxFeePerGas;
-        const boostedGasPrice = gasPrice ? (gasPrice * 120n) / 100n : undefined;
+        const boostedGasPrice = gasPrice ? (gasPrice * 125n) / 100n : undefined;
+
+        console.log(`[Deposit] Sending ${amtNum} USDC to ${evmSessionWallet.address}`);
 
         // Step 1: Send native USDC directly to the Session EOA
         const hash = await walletClient.sendTransaction({
