@@ -2373,19 +2373,30 @@ export default function UserApp() {
         }
 
         // Fetch current gas price from Arc Testnet (Viem syntax)
-        const feeData = await publicClient.estimateFeesPerGas();
-        const gasPrice = feeData.gasPrice || feeData.maxFeePerGas;
-        const boostedGasPrice = gasPrice ? (gasPrice * 125n) / 100n : undefined;
-
-        console.log(`[Deposit] Sending ${amtNum} USDC to ${evmSessionWallet.address}`);
-
-        // Step 1: Send native USDC directly to the Session EOA
-        const hash = await walletClient.sendTransaction({
+        let txParams = {
           to: evmSessionWallet.address,
           value: parseEther(amtNum.toString()),
           account: address,
-          gasPrice: boostedGasPrice
-        });
+        };
+
+        try {
+          const feeData = await publicClient.estimateFeesPerGas();
+          if (feeData.maxFeePerGas) {
+            // EIP-1559 (Modern)
+            txParams.maxFeePerGas = (feeData.maxFeePerGas * 125n) / 100n;
+            txParams.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 125n) / 100n;
+          } else if (feeData.gasPrice) {
+            // Legacy
+            txParams.gasPrice = (feeData.gasPrice * 125n) / 100n;
+          }
+        } catch (feeErr) {
+          console.warn("[Deposit] Fee estimation failed, using wallet defaults:", feeErr.message);
+        }
+
+        console.log(`[Deposit] Initiating tx to ${evmSessionWallet.address} for ${amtNum} USDC`);
+
+        // Step 1: Send native USDC directly to the Session EOA
+        const hash = await walletClient.sendTransaction(txParams);
 
         notify("Deposit Broadcasted! Waiting for confirmation...", "success");
 
