@@ -18,6 +18,37 @@ class ClassicEngine {
   start() {
     // Run settlement check every 25ms for near-instant settlement
     setInterval(() => this.processSettlementBatch(), config.BATCH_WINDOW_MS);
+    
+    // Trade Monitor: Periodic authoritative pulse to keep UI in sync
+    setInterval(() => {
+      const now = Date.now();
+      for (const trade of cache.trades.values()) {
+        if (trade.status === 'PENDING') {
+          const msLeft = (trade.settleAt || 0) - now;
+          const timeLeft = Math.max(0, msLeft / 1000);
+          const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
+          const isUp = trade.direction === 1 || String(trade.direction) === "1";
+          const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
+
+          this.io.to(trade.userAddr).emit('trade_tick', {
+            betId: trade.id,
+            timeLeft,
+            currentPrice,
+            isWinning
+          });
+
+          // Lock result pulse at the exact moment of expiry
+          if (timeLeft <= 0) {
+            this.io.to(trade.userAddr).emit('trade_expired', {
+              betId: trade.id,
+              exitPrice: currentPrice,
+              won: isWinning
+            });
+          }
+        }
+      }
+    }, 1000);
+
     if (config.PAYOUT_INLINE_FALLBACK) {
       setInterval(() => this.processInlinePayoutBatch(), Math.max(10, config.BATCH_WINDOW_MS));
     }

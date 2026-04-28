@@ -1790,17 +1790,6 @@ export default function UserApp() {
     if (!address) return;
 
     const unbindTick = socketService.on('trade_tick', (data) => {
-      if (!data?.betId) return;
-      const now = Date.now();
-      const tickKey = String(data.betId);
-      const prevTick = tickProbeRef.current[tickKey] || null;
-      const gapMs = prevTick ? (now - prevTick.ts) : 0;
-      tickProbeRef.current[tickKey] = { ts: now, sample: (prevTick?.sample || 0) + 1, timeLeft: data.timeLeft };
-      if (!prevTick || gapMs > 1500) {
-        // #region agent log
-        postDebugLog({runId:'initial',hypothesisId:'H5',location:'UserApp.jsx:socket:trade_tick',message:'trade tick cadence sample',data:{betId:tickKey,timeLeft:data.timeLeft,gapMs,isFirstTick:!prevTick,sample:tickProbeRef.current[tickKey].sample}});
-        // #endregion
-      }
       setActiveTrades(prev => prev.map(t =>
         String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId)
           ? { ...t, timeLeft: data.timeLeft, livePrice: data.currentPrice, isWinning: data.isWinning }
@@ -1808,10 +1797,19 @@ export default function UserApp() {
       ));
     });
 
-    // trade_settled: immediately move trade to history with full settlement data
-    const unbindSettledFull = socketService.on('trade_settled_full', () => {}); // placeholder
+    const unbindExpired = socketService.on('trade_expired', (data) => {
+      const bid = String(data.betId);
+      console.log(`[Trade] Authority Locked: #${bid} -> ${data.won ? 'WON' : 'LOST'} @ $${data.exitPrice}`);
+      lockedResults.current.set(bid, { status: data.won ? 'WON' : 'LOST', settlementPrice: data.exitPrice });
+      
+      setActiveTrades(prev => prev.map(t => 
+        String(t.id) === bid || String(t.nonce) === bid 
+          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0 } 
+          : t
+      ));
+    });
 
-    return () => { unbindTick(); unbindSettledFull(); };
+    return () => { unbindTick(); unbindExpired(); };
   }, [address, postDebugLog]);
 
   // Sync Market Changes (Across Ports via Keeper)
