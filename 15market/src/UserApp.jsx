@@ -816,36 +816,25 @@ export default function UserApp() {
     if (!address) return;
 
     try {
-      // Priority 1: Backend Proxy
+      // ALWAYS fetch the real on-chain balance from the backend
+      // The backend reads from the SCW's availableBalance() directly
       const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`);
       if (res.ok) {
         const data = await res.json();
         const bal = parseFloat(data.balance);
 
-        // --- CRITICAL BALANCE SYNC GUARD (V2) ---
-        // Use sessionBalanceRef.current (always live) instead of the stale
-        // sessionBalance closure value to accurately guard optimistic deductions.
+        // Only skip update if we are very close to a just-executed trade (300ms)
+        // to avoid a brief flicker from stale reads. We never block on a guard > 500ms.
         const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-        const currentBal = sessionBalanceRef.current;
-        if (!force && msSinceLastAction < 8000) {
-          if (bal >= currentBal) return; // Backend still shows pre-deduction value — protect optimistic UI
-        }
+        if (!force && msSinceLastAction < 300) return;
 
-        if (Math.abs(bal - currentBal) > 0.0001) {
+        const currentBal = sessionBalanceRef.current;
+        if (Math.abs(bal - currentBal) > 0.0001 || force) {
           setSessionBalance(bal);
         }
-
-        if (data.sessionAddress && (!evmSessionWallet || data.sessionAddress.toLowerCase() !== evmSessionWallet.address?.toLowerCase())) {
-          setEvmSessionWallet({ address: data.sessionAddress, isRemote: true });
-          localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
-        }
-      } else if (evmSessionWallet?.address) {
-        // Priority 2: Direct Blockchain Fallback for Session Balance
-        const balWei = await publicClient.getBalance({ address: evmSessionWallet.address });
-        setSessionBalance(parseFloat(formatUnits(balWei, 18)));
       }
     } catch (err) { }
-  }, [address, evmSessionWallet]);
+  }, [address]);
 
   const triggerGlobalRefresh = useCallback((force = false) => {
     refetchEvmBalance(force);
@@ -1423,12 +1412,14 @@ export default function UserApp() {
         return;
       }
 
-      // ─── CLASSIC TRADING (SESSION-ONLY) ───
+      // ─── CLASSIC TRADING (SESSION-ONLY via Embedded Wallet) ───
       if (!evmSessionWallet) {
         throw new Error("Trading wallet is still syncing. Please wait 1 second and try again.");
       }
 
-      // --- STEP 1: INSTANT UI FEEDBACK (OPTIMISTIC) ---
+      // --- STEP 1: INSTANT UI FEEDBACK (Optimistic Trade Entry Only) ---
+      // We show the trade as PENDING immediately, but we do NOT deduct the balance
+      // until the backend confirms the on-chain lockStake is mined.
       const confirmedNow = Date.now();
       const optimisticTrade = {
         id: tradeId,
@@ -1437,7 +1428,7 @@ export default function UserApp() {
         entryPrice: activePrice.toFixed(8),
         timestamp: confirmedNow,
         status: "PENDING",
-        tx: null, // Filled later
+        tx: null,
         nonce: tradeId,
         userPublicKey: activeUserAddr,
         owner: address,
@@ -1448,31 +1439,29 @@ export default function UserApp() {
         expiryMs: confirmedNow + (activeDuration * 1000),
         symbol: activeMarket?.symbol || 'ETH',
         isSessionTrade: true,
-        confirmed: true, // Mark as LIVE instantly for UX
-        isOptimistic: true // Marker for local cleanup if failed
+        confirmed: false,
+        isOptimistic: true
       };
 
       const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
 
-      // --- INSTANT BALANCE DEDUCTION (optimistic) ---
-      // Stamp the time BEFORE setSessionBalance so the guard in updateEvmSessionBal
-      // uses the correct reference point when it runs on the next tick.
-      lastOptimisticActionTime.current = Date.now();
-      setSessionBalance(prev => Math.max(0, prev - amtNum));
+      // Show trade in UI immediately (no balance deduction yet)
       setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
       
-      // No 'Submitting Trade...' notification needed for instant feel
+      // Short guard to prevent the periodic poller from overwriting during execution
+      lastOptimisticActionTime.current = Date.now();
 
-      // --- STEP 2: BACKGROUND EXECUTION ---
+      // --- STEP 2: EXECUTE ON-CHAIN STAKE LOCK (via backend) ---
+      // The backend calls lockStake() on the SCW and awaits tx confirmation.
+      // It returns the REAL on-chain availableBalance after deduction.
       const backgroundTrade = async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for stability
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for tx confirm
         
         try {
-          // #region agent log
-          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:request',message:'classic backend request started',data:{probeId,tradeId,activeDuration,assetId,entryPriceParams}});
-          // #endregion
+          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:request',message:'SCW lockStake request started',data:{probeId,tradeId,activeDuration,assetId,entryPriceParams}});
+
           const res = await fetch(`${KEEPER_URL_ARC}/session/execute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1493,41 +1482,39 @@ export default function UserApp() {
           clearTimeout(timeoutId);
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Session trade failed");
-          // #region agent log
-          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:success',message:'classic backend request success',data:{probeId,tradeId,txHash:data?.txHash || null}});
-          // #endregion
+          
+          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:success',message:'SCW lockStake confirmed',data:{probeId,tradeId,txHash:data?.txHash || null,newBalance:data?.newBalance}});
           
           txHash = data.txHash;
 
-          // Update optimistic trade with real TX hash
-          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING" } : t));
-          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING" } : t));
+          // Update trade with real TX hash and confirm it
+          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING", confirmed: true } : t));
+          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING", confirmed: true } : t));
 
-          // The backend already waits for transaction confirmation before returning success.
-          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, confirmed: true } : t));
+          // ✅ SET REAL ON-CHAIN BALANCE (from backend's post-lockStake read)
+          if (data.newBalance !== undefined) {
+            setSessionBalance(parseFloat(data.newBalance));
+          }
+          
+          // Extend the guard so periodic poller doesn't race
+          lastOptimisticActionTime.current = Date.now();
           notify("Trade Submitted ✓", "success");
 
-          // Extend the guard window so the next periodic poll doesn't overwrite
-          // the optimistic balance before the chain confirms.
-          lastOptimisticActionTime.current = Date.now();
-
-          // Force-refresh the real on-chain session balance ~1.5s after submission.
-          // By then the tx should be broadcast and the mempool balance updated.
-          setTimeout(() => updateEvmSessionBal(false), 1500);
+          // Verify balance again after 3s to catch any discrepancy
+          setTimeout(() => updateEvmSessionBal(true), 3000);
 
         } catch (err) {
           clearTimeout(timeoutId);
           console.error("[Trade] Execution failed:", err.message);
-          // #region agent log
-          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:error',message:'classic backend request failed',data:{probeId,tradeId,error:err?.message || 'unknown',name:err?.name || 'Error'}});
-          // #endregion
-          // ROLLBACK OPTIMISTIC STATE — restore the deducted balance
-          lastOptimisticActionTime.current = 0; // clear guard so refresh can correct immediately
-          setSessionBalance(prev => prev + amtNum);
+          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:error',message:'SCW lockStake failed',data:{probeId,tradeId,error:err?.message || 'unknown',name:err?.name || 'Error'}});
+          
+          // Remove the optimistic trade entry since execution failed
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(`Trade Failed: ${err.name === 'AbortError' ? 'RPC Timeout' : err.message}`, "error");
-          // Immediately sync real balance to confirm rollback
+          notify(`Trade Failed: ${err.name === 'AbortError' ? 'Request Timeout' : err.message}`, "error");
+          
+          // Sync real balance immediately on failure
+          lastOptimisticActionTime.current = 0;
           setTimeout(() => updateEvmSessionBal(true), 500);
         }
       };

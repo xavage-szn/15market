@@ -209,42 +209,40 @@ app.post('/session/init', async (req, res) => {
 
 app.get('/session/balance/:address', async (req, res) => {
   try {
-    const raw = classicEngine.normalizeAddr(req.params.address);
-    let session = cache.sessions.get(raw);
-    
-    // 1. Deterministic Session Wallet Derivation (EOA Model)
-    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + raw);
-    const privateKey = ethers.keccak256(entropy);
-    const wallet = new ethers.Wallet(privateKey);
-    const walletAddress = wallet.address;
+    const addr = req.params.address.toLowerCase();
 
-    // 2. Fetch on-chain balance (USDC/Native)
-    const onChainBal = await provider.getBalance(walletAddress);
-
-    // 4. Update session cache (if exists) or create a temporary one
-    const formattedBal = ethers.formatEther(onChainBal);
-    if (session) {
-      session.balance = parseFloat(formattedBal);
-      session.sessionAddress = walletAddress;
-    } else {
-      session = {
-        identityKey: raw,
-        walletAddress: raw,
-        sessionAddress: walletAddress,
-        balance: parseFloat(formattedBal)
-      };
+    // Always try to resolve the SCW first — this gives us the most accurate balance
+    let scwAddress = await priceRedis.get(`scw:${addr}`);
+    if (!scwAddress) {
+      try {
+        scwAddress = await settlementService.factoryContract.playerToWallet(req.params.address);
+        if (scwAddress && scwAddress !== ethers.ZeroAddress) {
+          await priceRedis.set(`scw:${addr}`, scwAddress);
+        }
+      } catch (_) {}
     }
 
-    res.json({
-      success: true,
-      balance: formattedBal,
-      walletAddress: raw,
-      sessionAddress: walletAddress,
-    });
+    if (scwAddress && scwAddress !== ethers.ZeroAddress) {
+      // Read REAL on-chain balance directly from the embedded wallet contract
+      const walletContract = new ethers.Contract(scwAddress, WALLET_ABI, provider);
+      const balWei = await walletContract.availableBalance();
+      const formattedBal = ethers.formatUnits(balWei, 18);
+      // Keep Redis in sync as write-through cache
+      await priceRedis.set(`balance:${addr}:available`, formattedBal);
+      return res.json({ success: true, balance: formattedBal, walletAddress: addr, source: 'scw-onchain' });
+    }
+
+    // No wallet deployed yet — return 0
+    res.json({ success: true, balance: '0', walletAddress: addr, source: 'no-scw' });
   } catch (err) {
-    console.error("Balance fetch error:", err);
-    res.status(500).json({ error: "Failed to fetch on-chain balance" });
+    console.error("Balance fetch error:", err.message);
+    // Fallback to Redis cache if on-chain read fails
+    const addr = req.params.address.toLowerCase();
+    const redisBal = await priceRedis.get(`balance:${addr}:available`);
+    if (redisBal !== null) {
+      return res.json({ success: true, balance: redisBal, walletAddress: addr, source: 'redis-fallback' });
+    }
+    res.status(500).json({ error: "Failed to fetch balance" });
   }
 });
 

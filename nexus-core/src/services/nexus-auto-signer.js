@@ -254,7 +254,7 @@ class SettlementService {
     try {
       const addr = playerId.toLowerCase();
       
-      // CACHE-FIRST WALLET LOOKUP (Eliminates RPC lag during trade start)
+      // CACHE-FIRST WALLET LOOKUP
       let walletAddress = await redis.get(`scw:${addr}`);
       if (!walletAddress) {
         walletAddress = await this.factoryContract.playerToWallet(playerId);
@@ -264,55 +264,58 @@ class SettlementService {
       }
 
       if (!walletAddress || walletAddress === ethers.ZeroAddress) {
-         throw new Error("User has no smart contract wallet. Deposit first.");
+        throw new Error("User has no smart contract wallet. Deposit first.");
       }
       
       const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
       const tradeId = ethers.id(`${addr}-${Date.now()}`);
-      const stakeWei = ethers.parseUnits(stake, 18); 
+      const stakeWei = ethers.parseUnits(String(stake), 18);
 
-      // --- INSTANT UI FEEDBACK (OPTIMISTIC REDIS DEDUCTION) ---
+      // --- ON-CHAIN STAKE LOCK (treasury-first deduction via lockStake) ---
+      // This deducts from availableBalance and moves to lockedBalance IN the SCW.
+      // No USDC moves between wallets here — it's just an internal state update.
+      const lockTx = await walletContract.lockStake(tradeId, stakeWei, { gasLimit: 200000 });
+      await lockTx.wait(); // Wait for the lock to be confirmed on-chain
+      
+      // --- READ THE REAL ON-CHAIN BALANCE AFTER LOCK ---
+      const realAvailWei = await walletContract.availableBalance();
+      const realAvail = ethers.formatUnits(realAvailWei, 18);
+      
+      // --- SEED REDIS WITH REAL ON-CHAIN VALUE (write-through cache) ---
       const availKey = `balance:${addr}:available`;
-      const currentAvail = await redis.get(availKey) || "0";
-      const newAvail = Math.max(0, parseFloat(currentAvail) - parseFloat(stake)).toFixed(6);
-      await redis.set(availKey, newAvail);
+      await redis.set(availKey, realAvail);
       await redis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
 
+      const entryPrice = await this.getLatestPrice(symbol);
       const trade = {
         tradeId,
         playerId,
-        stakeAmount: stake,
-        entryPrice: await this.getLatestPrice(symbol),
+        walletAddress,
+        stakeAmount: String(stake),
+        entryPrice,
         closeTime: Date.now() + (duration * 1000),
         startTime: Date.now(),
         symbol,
         direction,
-        txHash: null
+        txHash: lockTx.hash
       };
 
-      // 1. REGISTER TRADE INSTANTLY
+      // REGISTER TRADE
       await redis.set(`trade:${tradeId}`, JSON.stringify(trade));
       await redis.sadd(`active_trades`, tradeId);
       
-      // 2. BROADCAST TO FRONTEND IMMEDIATELY
+      // BROADCAST REAL BALANCE TO FRONTEND IMMEDIATELY
       this.io.to(addr).emit('trade_placed', trade);
       this.io.to(addr).emit('balance_update', { 
-        balance: newAvail, 
-        available: newAvail, 
-        reason: 'TRADE_PLACED',
-        amount: stake
+        balance: realAvail, 
+        available: realAvail, 
+        reason: 'STAKE_LOCKED',
+        amount: String(stake),
+        txHash: lockTx.hash
       });
 
-      // 3. BACKGROUND ON-CHAIN DEDUCTION (Move to Treasury at Start)
-      // This fulfills the "no need to call RPC on loss" requirement as it's already deducted.
-      walletContract.settleLoss(tradeId, stakeWei, { gasLimit: 150000 }).then(tx => {
-        trade.txHash = tx.hash;
-        redis.set(`trade:${tradeId}`, JSON.stringify(trade));
-      }).catch(err => {
-        console.error(`❌ [Treasury] Background Stake Deduction FAILED for ${tradeId}:`, err.message);
-      });
-
-      return { tradeId, success: true, mode: 'treasury-first-deduction' };
+      console.log(`✅ [Trade] ${tradeId} staked. Real on-chain available: ${realAvail} USDC`);
+      return { tradeId, success: true, newBalance: realAvail, txHash: lockTx.hash, mode: 'scw-lockstake' };
     } catch (err) {
       console.error("submitTrade failed:", err);
       return { success: false, error: err.message };
@@ -324,62 +327,78 @@ class SettlementService {
     if (!tradeData) return;
     
     const trade = JSON.parse(tradeData);
+    const addr = trade.playerId.toLowerCase();
     
-    // Stable Settlement Logic from 95cd1b5: Use historical price at the exact close time
+    // Use historical price at the exact close time for stable settlement
     const key = trade.symbol.toLowerCase().replace('usdt', '');
     const exitPrice = this.cache ? this.cache.getHistoricalPrice(key, trade.closeTime) : await this.getLatestPrice(trade.symbol);
     const isCall = trade.direction === 1 || trade.direction === 'UP' || trade.direction === 'buy';
     const won = isCall ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
 
-    const walletAddress = await this.factoryContract.playerToWallet(trade.playerId);
+    // Use cached wallet address from trade record first, then fallback to RPC
+    const walletAddress = trade.walletAddress || await this.factoryContract.playerToWallet(trade.playerId);
     const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
+    const stakeWei = ethers.parseUnits(String(trade.stakeAmount), 18);
 
+    let settleTxHash = null;
     try {
       if (won) {
-        // WIN: Queue for Batch Payout from Treasury
-        // We calculate the FULL WON AMOUNT (Stake + Profit) since stake is already in Treasury
-        const multiplier = trade.duration <= 5 ? 1.90 : (trade.duration <= 10 ? 1.40 : 0.90);
-        const profit = (parseFloat(trade.stakeAmount) * multiplier).toFixed(6);
-        const totalPayout = (parseFloat(trade.stakeAmount) + parseFloat(profit)).toFixed(6);
-        
-        console.log(`[Settlement] WIN for ${tradeId}. Queuing Batch Payout of ${totalPayout} USDC...`);
-        
-        // Add to a winning queue for the batch worker
-        await redis.lpush('winning_payouts_queue', JSON.stringify({
-          tradeId,
-          playerId: trade.playerId,
-          walletAddress,
-          amount: totalPayout,
-          ts: Date.now()
-        }));
+        // WIN: The stake is locked in the SCW. Call settleWin to:
+        // 1) release the locked stake back to available
+        // 2) credit the profit from the treasury to the SCW
+        const multiplier = 1.90; // 90% profit on wins
+        const profitWei = BigInt(Math.floor(Number(stakeWei) * 0.90));
 
-        // Optimistic balance update for WIN
-        const addr = trade.playerId.toLowerCase();
-        const currentAvail = await redis.get(`balance:${addr}:available`) || "0";
-        const newAvail = (parseFloat(currentAvail) + parseFloat(totalPayout)).toFixed(6);
-        await redis.set(`balance:${addr}:available`, newAvail);
-        await redis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
+        console.log(`[Settlement] WIN for ${tradeId}. Calling settleWin...`);
+        const winTx = await walletContract.settleWin(tradeId, stakeWei, profitWei, { gasLimit: 250000 });
+        await winTx.wait();
+        settleTxHash = winTx.hash;
+        console.log(`✅ [Settlement] settleWin confirmed: ${winTx.hash}`);
       } else {
-        // LOSS: No RPC needed! The stake was already moved to treasury at start.
-        console.log(`[Settlement] LOSS for ${tradeId}. Already moved to treasury.`);
-        await redis.set(`balance:${trade.playerId.toLowerCase()}:last_action_ts`, Date.now().toString());
+        // LOSS: Stake is locked in SCW. Call settleLoss to:
+        // 1) move the locked stake to pendingLoss (ready for batch sweep to treasury)
+        console.log(`[Settlement] LOSS for ${tradeId}. Calling settleLoss...`);
+        const lossTx = await walletContract.settleLoss(tradeId, stakeWei, { gasLimit: 200000 });
+        await lossTx.wait();
+        settleTxHash = lossTx.hash;
+        console.log(`✅ [Settlement] settleLoss confirmed: ${lossTx.hash}`);
       }
 
-      // Cleanup Redis immediately
+      // --- READ REAL ON-CHAIN BALANCE AFTER SETTLEMENT ---
+      const realAvailWei = await walletContract.availableBalance();
+      const realAvail = ethers.formatUnits(realAvailWei, 18);
+      await redis.set(`balance:${addr}:available`, realAvail);
+      await redis.set(`balance:${addr}:last_action_ts`, Date.now().toString());
+
+      // Cleanup Redis
       await redis.del(`trade:${tradeId}`);
       await redis.srem(`active_trades`, tradeId);
 
+      const payout = won ? (parseFloat(trade.stakeAmount) * 1.90).toFixed(4) : '0';
       const result = {
         tradeId,
         success: true,
         won,
         entryPrice: trade.entryPrice,
         exitPrice,
-        payout: won ? (parseFloat(trade.stakeAmount) * 1.95).toFixed(4) : '0',
-        txHash: tx.hash
+        payout,
+        newBalance: realAvail,
+        txHash: settleTxHash
       };
 
-      this.io.to(trade.playerId.toLowerCase()).emit('trade_settled', result);
+      // Push final result + real balance to frontend
+      this.io.to(addr).emit('trade_settled', result);
+      this.io.to(addr).emit('balance_update', {
+        balance: realAvail,
+        available: realAvail,
+        reason: won ? 'WIN' : 'LOSS',
+        payout,
+        txHash: settleTxHash
+      });
+
+      // Trigger batch sweep for accumulated losses
+      if (!won) this.triggerBatchSweep();
+
       return result;
     } catch (err) {
       console.error("settleTrade failed:", err);
@@ -388,25 +407,29 @@ class SettlementService {
   }
 
   async triggerBatchSweep() {
+    if (!process.env.TREASURY_ADDRESS) {
+      console.warn("[SWEEP] TREASURY_ADDRESS not configured, skipping sweep.");
+      return;
+    }
     try {
-      const keys = await redis.keys('balance:*:pending_loss');
-      const treasury = process.env.TREASURY_ADDRESS;
-      
-      for (const key of keys) {
-        const val = await redis.get(key);
-        if (val && BigInt(val) > 0n) {
-          const player = key.split(':')[1];
-          const walletAddress = await this.factoryContract.playerToWallet(player);
-          const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
-          
-          console.log(`[SWEEP] Sweeping losses for ${player} to treasury...`);
-          const tx = await walletContract.sweepLosses(treasury);
+      const players = await redis.keys('scw:*');
+      for (const key of players) {
+        const player = key.replace('scw:', '');
+        const walletAddress = await redis.get(key);
+        if (!walletAddress || walletAddress === ethers.ZeroAddress) continue;
+
+        const walletContract = new ethers.Contract(walletAddress, WALLET_ABI, this.operatorWallet);
+        const pendingLossWei = await walletContract.pendingLoss();
+        
+        if (pendingLossWei > 0n) {
+          console.log(`[SWEEP] Sweeping ${ethers.formatUnits(pendingLossWei, 18)} USDC from ${player} to treasury...`);
+          const tx = await walletContract.sweepLosses(process.env.TREASURY_ADDRESS);
           await tx.wait();
-          await redis.set(key, "0");
+          console.log(`\u2705 [SWEEP] Swept for ${player}: ${tx.hash}`);
         }
       }
     } catch (err) {
-      console.error("Batch sweep execution failed:", err);
+      console.error("Batch sweep execution failed:", err.message);
     }
   }
 
