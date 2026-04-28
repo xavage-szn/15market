@@ -105,6 +105,30 @@ class ClassicEngine {
     const amount = Number(tradeParams.amount);
     if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
 
+    // Define trade parameters early so they are available for the contract call
+    const id = tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const direction = Number(tradeParams.direction);
+    const duration = Math.max(1, Number(tradeParams.duration || 5));
+    const marketId = Number(tradeParams.marketId || 0);
+
+    const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp'];
+    const symbol = SYMBOL_MAP[marketId] || 'eth';
+    
+    // Authoritative Price Selection
+    let entryPrice = Number(cache.prices[symbol] || 0);
+    if (!entryPrice || entryPrice <= 0) {
+      // Fallback to frontend price but unscale it if it looks scaled
+      let fePrice = Number(tradeParams.entryPrice || 0);
+      if (fePrice > 1000000) fePrice /= 1000000; // SOL scaling (8 decimals in frontend usually, but here checking 1M)
+      else if (fePrice > 100000) fePrice /= 100; // ETH/BTC scaling
+      entryPrice = fePrice;
+    }
+
+    if (!entryPrice || entryPrice <= 0) {
+      console.error(`[Trade] Price unavailable for ${symbol}. Rejected.`);
+      return { success: false, error: 'Price feed unavailable' };
+    }
+
     // 1. Perform REAL On-Chain Stake Transfer
     let stakeTxHash;
     try {
@@ -158,16 +182,6 @@ class ClassicEngine {
     }
 
     // 2. Register Trade in Engine
-    const id = tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-    const direction = Number(tradeParams.direction);
-    const duration = Math.max(1, Number(tradeParams.duration || 5));
-    const marketId = Number(tradeParams.marketId || 0);
-
-    const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp'];
-    const symbol = SYMBOL_MAP[marketId] || 'eth';
-    const entryPrice = Number(cache.prices[symbol] || tradeParams.entryPrice || 0);
-
-    if (!entryPrice || entryPrice <= 0) return { success: false, error: 'Price feed unavailable' };
 
     const trade = {
       id: String(id),
@@ -270,6 +284,21 @@ class ClassicEngine {
     trade.won = won;
     trade.payout = payout;
     trade.settledAt = Date.now();
+
+    // INSTANT BALANCE SYNC: Deduct/Credit immediately for instant feel
+    const session = cache.sessions.get(userAddr);
+    if (session) {
+      if (won) {
+        // We'll sync from chain after payout, but let's update optimistically now
+        session.balance = Number((session.balance + payout).toFixed(4));
+      }
+      this.io.to(userAddr).emit('balance_update', {
+        balance: String(session.balance),
+        reason: won ? 'WIN' : 'LOSS',
+        betId: trade.id,
+        payout: String(payout),
+      });
+    }
 
     const settledEvent = {
       type: 'TRADE_SETTLED',

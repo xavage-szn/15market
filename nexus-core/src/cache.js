@@ -14,12 +14,8 @@ class Cache {
     this.payoutQueue = [];
     
     // Market data
-    this.prices = { btc: 65000, eth: 3200, sol: 145 };
-    this.priceMeta = {
-      btc: { updatedAt: 0 },
-      eth: { updatedAt: 0 },
-      sol: { updatedAt: 0 },
-    };
+    // Market data
+    this.prices = { btc: 0, eth: 0, sol: 0 };
     this.priceMeta = {
       btc: { updatedAt: 0 },
       eth: { updatedAt: 0 },
@@ -48,7 +44,10 @@ class Cache {
       }
     }
 
-    if (minDiff > 10000) return this.prices[key] || 0;
+    if (minDiff > 10000) {
+      console.warn(`[Cache] Historical price for ${key} at ${targetTime} too old (diff=${minDiff}ms). Falling back to current.`);
+      return this.prices[key] || 0;
+    }
     return closest.price;
   }
 

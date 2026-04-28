@@ -13,6 +13,9 @@ const rpc = require('./rpc');
 const ClassicEngine = require('./classic');
 const profiles = require('./profiles');
 const { ethers } = require('ethers');
+const Redis = require('ioredis');
+
+const redis = new Redis(config.REDIS_URL || 'redis://localhost:6379');
 
 // --- Setup Server ---
 const app = express();
@@ -93,7 +96,11 @@ async function pollPrices() {
       if (!cache.priceHistory[key]) cache.priceHistory[key] = [];
       cache.priceHistory[key].push({ price, time: now });
       if (cache.priceHistory[key].length > 1200) cache.priceHistory[key].shift();
-      io.emit('price', { key, price, ts: now });
+      
+      const payload = { key, price, ts: now };
+      io.emit('price', payload);
+      // Publish to Redis for price-frontend service
+      redis.publish('price_updates', JSON.stringify(payload)).catch(() => {});
     } catch (_) {}
   }
 }
@@ -346,9 +353,15 @@ app.post('/session/deposit', async (req, res) => {
     const userAddr = address.toLowerCase();
     let session = cache.sessions.get(userAddr);
     
+    console.log(`[Deposit] Request: ${amount} USDC for ${userAddr} | TX: ${txHash}`);
+
     // Update balance optimistically in the backend cache
     if (session) {
       session.balance = Number((session.balance + parseFloat(amount)).toFixed(4));
+      console.log(`[Deposit] Session updated: ${userAddr} new balance ${session.balance}`);
+    } else {
+      console.warn(`[Deposit] No active session found for ${userAddr}. Syncing on next init.`);
+      cache.getOrCreateSession(userAddr, { balance: parseFloat(amount) });
     }
 
     // Push to history
