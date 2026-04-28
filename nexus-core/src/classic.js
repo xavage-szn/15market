@@ -1,6 +1,6 @@
 // ============================================================
 // nexus-core/src/classic.js
-// Classic Trading Execution & Settlement Engine
+// Classic Trading Engine — Treasury-First, Instant Settlement
 // ============================================================
 const cache = require('./cache');
 const config = require('./config');
@@ -16,13 +16,12 @@ class ClassicEngine {
   }
 
   start() {
+    // Run settlement check every 25ms for near-instant settlement
     setInterval(() => this.processSettlementBatch(), config.BATCH_WINDOW_MS);
     if (config.PAYOUT_INLINE_FALLBACK) {
       setInterval(() => this.processInlinePayoutBatch(), Math.max(10, config.BATCH_WINDOW_MS));
     }
   }
-
-  // --- Core Execution ---
 
   normalizeAddr(addr) {
     return String(addr || '').toLowerCase();
@@ -30,52 +29,67 @@ class ClassicEngine {
 
   resolveSessionIdentity(payload = {}) {
     const walletAddress = this.normalizeAddr(payload.address);
-
     if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
       return { ok: false, error: 'Valid EVM wallet address required.' };
     }
-
-    // Identity key is the wallet address (Reown / WalletConnect)
     return { ok: true, identityKey: walletAddress, walletAddress };
   }
 
+  /**
+   * placeTrade — Treasury-First Model
+   *
+   * The stake is assumed to have ALREADY been sent to the treasury by the
+   * frontend using walletClient.sendTransaction. This function registers the
+   * trade and starts the countdown. If the stake tx is provided, it is stored
+   * for audit. Balance is managed in-process and synced from chain on demand.
+   */
   async placeTrade(tradeParams, identityPayload) {
     const identity = this.resolveSessionIdentity(identityPayload);
     if (!identity.ok) return { success: false, error: identity.error };
 
     const userAddr = identity.identityKey;
-    
-    // Deterministic Session Wallet Derivation (EOA Model) - MUST MATCH index.js
-    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
-    const privateKey = ethers.keccak256(entropy);
-    const sessionWallet = new ethers.Wallet(privateKey);
-    const sessionAddress = sessionWallet.address;
 
+    // Get or create in-process session
     let session = cache.sessions.get(userAddr);
     if (!session) {
-      // Initialize with real on-chain balance
-      const balanceStr = await rpc.getBalance(sessionAddress);
+      // First trade: fetch on-chain balance to initialize
+      let onChainBal = 0;
+      try {
+        const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+        const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
+        const privateKey = ethers.keccak256(entropy);
+        const wallet = new ethers.Wallet(privateKey);
+        const balStr = await rpc.getBalance(wallet.address);
+        onChainBal = parseFloat(balStr) || 0;
+      } catch (_) {}
+
       session = cache.getOrCreateSession(userAddr, {
         identityKey: userAddr,
         walletAddress: identity.walletAddress,
-        sessionAddress: sessionAddress,
-        balance: parseFloat(balanceStr),
+        balance: onChainBal,
       });
     }
 
     const amount = Number(tradeParams.amount);
     if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
-    if (session.balance < amount) return { success: false, error: 'Insufficient session balance' };
+
+    // Balance check — stake must have been pre-sent to treasury so balance reflects it
+    if (session.balance < amount) {
+      return { success: false, error: `Insufficient balance. Have ${session.balance.toFixed(4)}, need ${amount}` };
+    }
 
     const id = String(tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`);
     const direction = Number(tradeParams.direction);
     const duration = Math.max(1, Number(tradeParams.duration || 5));
     const marketId = Number(tradeParams.marketId || 0);
-    
-    const symbol = ['eth', 'btc', 'sol'][marketId] || 'eth';
+
+    const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp'];
+    const symbol = SYMBOL_MAP[marketId] || 'eth';
     const entryPrice = Number(cache.prices[symbol] || tradeParams.entryPrice || 0);
 
+    if (!entryPrice || entryPrice <= 0) return { success: false, error: 'Price feed unavailable' };
+
+    // Deduct stake from in-process session balance immediately
     session.balance = Number((session.balance - amount).toFixed(4));
 
     const trade = {
@@ -96,30 +110,38 @@ class ClassicEngine {
     cache.trades.set(id, trade);
     cache.queueTradeForSettlement(trade);
 
-    const placedEvent = {
+    // Emit trade placed event + updated balance to frontend
+    this.io.to(userAddr).emit('trade_placed', {
       type: 'TRADE_PLACED',
+      betId: id,
       id,
       amount,
       direction,
       symbol: symbol.toUpperCase(),
+      entryPrice,
+      duration,
       timestamp: trade.createdAt,
+      settleAt: trade.settleAt,
       userAddr,
-    };
-    cache.pushHistory(userAddr, placedEvent);
+    });
 
-    this.io.to(userAddr).emit('trade_placed', placedEvent);
     this.io.to(userAddr).emit('balance_update', {
       balance: String(session.balance),
-      reason: 'STAKE_LOCKED',
+      reason: 'STAKE_SENT',
       betId: id,
-      payout: '0',
     });
-    this.io.emit('new_trade', placedEvent);
+
+    // Also emit to global scroller
+    this.io.emit('new_trade', { betId: id, direction, symbol: symbol.toUpperCase(), amount, userAddr });
+
+    console.log(`[Trade] Placed #${id} | ${direction === 1 ? 'UP' : 'DOWN'} ${symbol.toUpperCase()} | $${amount} | ${duration}s | by ${userAddr}`);
 
     return {
       success: true,
-      txHash: `sim_${id}`,
+      txHash: `embedded_${id}`,
+      tradeId: id,
       settlementEtaMs: duration * 1000,
+      newBalance: String(session.balance),
     };
   }
 
@@ -148,34 +170,44 @@ class ClassicEngine {
   async settleTrade(trade) {
     if (trade.status !== 'PENDING') return;
 
-    const latest = cache.prices[trade.symbol] ?? trade.entryPrice;
-    const won = trade.direction === 1 ? latest > trade.entryPrice : latest < trade.entryPrice;
-    const payout = won ? Number((trade.amount * config.DEFAULT_MULTIPLIER).toFixed(4)) : 0;
+    // Use historical price at close time for stable, non-gameable settlement
+    const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
+    const won = trade.direction === 1 ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
+    const multiplier = Number(config.DEFAULT_MULTIPLIER) || 1.95;
+    const payout = won ? Number((trade.amount * multiplier).toFixed(4)) : 0;
 
     trade.status = 'SETTLED';
-    trade.exitPrice = latest;
+    trade.exitPrice = exitPrice;
     trade.won = won;
     trade.payout = payout;
     trade.settledAt = Date.now();
 
-    const event = {
+    // Build the final settled event — matches what the frontend's trade_settled handler expects
+    const settledEvent = {
       type: 'TRADE_SETTLED',
       betId: trade.id,
+      id: trade.id,
       won,
       payout: String(payout),
       entryPrice: trade.entryPrice,
-      exitPrice: latest,
+      exitPrice,
       direction: trade.direction,
       duration: trade.duration,
       amount: trade.amount,
       symbol: trade.symbol.toUpperCase(),
       timestamp: trade.settledAt,
       userAddr: trade.userAddr,
+      // Final status fields the frontend trade history expects
+      status: won ? 'WON' : 'LOST',
     };
 
-    cache.pushHistory(trade.userAddr, event);
-    this.io.to(trade.userAddr).emit('trade_settled', event);
-    this.io.emit('trade_settled', event);
+    cache.pushHistory(trade.userAddr, settledEvent);
+
+    // Emit instantly to the user's room — no delay
+    this.io.to(trade.userAddr).emit('trade_settled', settledEvent);
+    this.io.emit('trade_settled', settledEvent); // Global scroller
+
+    console.log(`[Settlement] #${trade.id} ${won ? 'WON' : 'LOST'} @ $${exitPrice} (entry: $${trade.entryPrice})`);
 
     if (!won) {
       const session = cache.sessions.get(trade.userAddr);
@@ -190,6 +222,7 @@ class ClassicEngine {
       return;
     }
 
+    // WIN: queue payout
     this.queuePayoutJob(trade);
   }
 
@@ -247,7 +280,7 @@ class ClassicEngine {
     };
 
     cache.pushHistory(trade.userAddr, payoutEvent);
-    
+
     if (session) {
       this.io.to(trade.userAddr).emit('balance_update', {
         balance: String(session.balance),
@@ -269,7 +302,6 @@ class ClassicEngine {
       const claimed = this.claimPayoutJobs(config.SETTLEMENT_CONCURRENCY);
       for (const job of claimed) {
         this.dispatchPayout(job, 'inline_fallback');
-        // complete job
         const idx = cache.payoutQueue.findIndex(j => j.jobId === job.jobId);
         if (idx !== -1) cache.payoutQueue.splice(idx, 1);
       }

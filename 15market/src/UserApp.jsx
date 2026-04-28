@@ -814,20 +814,12 @@ export default function UserApp() {
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
-
     try {
-      // ALWAYS fetch the real on-chain balance from the backend
-      // The backend reads from the SCW's availableBalance() directly
+      // Read the real on-chain EOA session wallet balance from backend
       const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`);
       if (res.ok) {
         const data = await res.json();
         const bal = parseFloat(data.balance);
-
-        // Only skip update if we are very close to a just-executed trade (300ms)
-        // to avoid a brief flicker from stale reads. We never block on a guard > 500ms.
-        const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-        if (!force && msSinceLastAction < 300) return;
-
         const currentBal = sessionBalanceRef.current;
         if (Math.abs(bal - currentBal) > 0.0001 || force) {
           setSessionBalance(bal);
@@ -1286,15 +1278,17 @@ export default function UserApp() {
     if (!activeDirection) return notify("Select UP or DOWN first", "error");
     if (!activeAmount || parseFloat(activeAmount) <= 0) return notify("Enter a valid amount", "error");
 
-    const currentBal = sessionMode ? sessionBalance : balance;
+    // For the treasury-first model, the user sends stake from their MAIN wallet.
+    // We check the main wallet balance here (not the session balance).
+    const currentBal = parseFloat(evmBalance || '0');
     const sanitizedAmount = (activeAmount || "0").toString().replace(',', '.');
     const stakeAmt = parseFloat(sanitizedAmount);
 
-    // For session trades, require a small margin (0.02 USDC) for gas to avoid "Insufficient funds for gas" errors
-    const gasMargin = sessionMode ? 0.02 : 0;
+    // Reserve gas for the treasury send tx
+    const gasMargin = 0.001; // ~0.001 ETH for gas on Arc
 
     if (stakeAmt + gasMargin > currentBal) {
-      return notify(`Insufficient ${network === 'arc' ? 'USDC' : 'SOL'}. ${sessionMode ? `Session wallet needs at least ${stakeAmt + gasMargin} USDC (Stake + Gas room)` : `Balance: ${currentBal.toFixed(3)}`}`, "error");
+      return notify(`Insufficient balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC (stake + gas).`, "error");
     }
     // #region agent log
     postDebugLog({runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:executeTrade:validated',message:'trade validated pre-submit',data:{probeId,activeType,stakeAmt,currentBal,gasMargin,activeDirection,activeDuration}});
@@ -1412,110 +1406,148 @@ export default function UserApp() {
         return;
       }
 
-      // ─── CLASSIC TRADING (SESSION-ONLY via Embedded Wallet) ───
-      if (!evmSessionWallet) {
-        throw new Error("Trading wallet is still syncing. Please wait 1 second and try again.");
+      // ─── CLASSIC TRADING — TREASURY-FIRST ───────────────────────────────
+      // Step 1: Send stake from main wallet to treasury (on-chain)
+      // Step 2: Register trade with backend using the txHash
+      // Step 3: Backend settles on timer expiry and emits trade_settled
+
+      if (!walletClient) {
+        throw new Error("Wallet not connected. Please reconnect.");
       }
 
-      // --- STEP 1: INSTANT UI FEEDBACK (Optimistic Trade Entry Only) ---
-      // We show the trade as PENDING immediately, but we do NOT deduct the balance
-      // until the backend confirms the on-chain lockStake is mined.
+      const TREASURY = import.meta.env.VITE_TREASURY_ADDRESS || config?.TREASURY_ADDRESS;
+      if (!TREASURY || TREASURY === '0x0000000000000000000000000000000000000000') {
+        // Testnet / no treasury configured — skip on-chain send, go straight to backend
+        console.warn('[Trade] No treasury address configured — using simulation mode');
+      }
+
+      // --- Show trade card as PENDING immediately ---
       const confirmedNow = Date.now();
+      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => String(t.id) !== String(item.id))];
       const optimisticTrade = {
         id: tradeId,
-        direction: (dirVal === 1 ? "UP" : "DOWN"),
-        amount: Number(amount).toFixed(3),
-        entryPrice: activePrice.toFixed(8),
+        direction: dirVal === 1 ? 'UP' : 'DOWN',
+        amount: Number(activeAmount).toFixed(3),
+        entryPrice: activePrice.toFixed(2),
         timestamp: confirmedNow,
-        status: "PENDING",
+        status: 'PENDING',
         tx: null,
         nonce: tradeId,
-        userPublicKey: activeUserAddr,
+        userPublicKey: address,
         owner: address,
-        sessionOwner: activeUserAddr,
         duration: activeDuration,
-        network: "arc",
+        network: 'arc',
         startTime: confirmedNow,
         expiryMs: confirmedNow + (activeDuration * 1000),
         symbol: activeMarket?.symbol || 'ETH',
-        isSessionTrade: true,
         confirmed: false,
-        isOptimistic: true
+        isOptimistic: true,
       };
-
-      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (String(t.id) !== String(item.id)))];
-
-      // Show trade in UI immediately (no balance deduction yet)
       setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
-      
-      // Short guard to prevent the periodic poller from overwriting during execution
-      lastOptimisticActionTime.current = Date.now();
 
-      // --- STEP 2: EXECUTE ON-CHAIN STAKE LOCK (via backend) ---
-      // The backend calls lockStake() on the SCW and awaits tx confirmation.
-      // It returns the REAL on-chain availableBalance after deduction.
+      // --- Step 1: Send stake to treasury ---
+      let stakeTxHash = null;
+      const treasuryAddr = import.meta.env.VITE_TREASURY_ADDRESS;
+
+      if (treasuryAddr && treasuryAddr !== '0x0000000000000000000000000000000000000000') {
+        try {
+          const stakeWei = parseEther(parseFloat(sanitizedAmount).toFixed(18));
+          const txResult = await walletClient.sendTransaction({
+            to: treasuryAddr,
+            value: stakeWei,
+            chain: walletClient.chain,
+            account: walletClient.account,
+          });
+          stakeTxHash = typeof txResult === 'string' ? txResult : txResult?.hash || txResult;
+          // Optimistic balance deduction from main wallet
+          lastOptimisticActionTime.current = Date.now();
+          setEvmBalance(prev => String(Math.max(0, parseFloat(prev || '0') - amtNum)));
+        } catch (sendErr) {
+          // STAKE SEND FAILED — remove optimistic trade card and notify
+          setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+          setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+          const msg = sendErr?.message?.includes('rejected') || sendErr?.code === 4001
+            ? 'Transaction rejected'
+            : '⚡ Network Congested — Trade Cancelled';
+          notify(msg, 'error');
+          // Auto-dismiss after 2.5s
+          setTimeout(() => setToast(null), 2500);
+          setIsExecuting(false);
+          return;
+        }
+      } else {
+        // Simulation mode: just optimistically deduct from sessionBalance
+        lastOptimisticActionTime.current = Date.now();
+        setSessionBalance(prev => Math.max(0, prev - amtNum));
+      }
+
+      // --- Step 2: Register trade with backend ---
       const backgroundTrade = async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for tx confirm
-        
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:request',message:'SCW lockStake request started',data:{probeId,tradeId,activeDuration,assetId,entryPriceParams}});
-
           const res = await fetch(`${KEEPER_URL_ARC}/session/execute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: controller.signal,
             body: JSON.stringify({
               address,
+              txHash: stakeTxHash,
               tradeParams: {
                 id: tradeId.toString(),
                 direction: dirVal,
                 duration: Number(activeDuration),
                 entryPrice: entryPriceParams.toString(),
                 marketId: assetId,
-                amount: sanitizedAmount
+                amount: sanitizedAmount,
               }
             })
           });
-
           clearTimeout(timeoutId);
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Session trade failed");
-          
-          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:success',message:'SCW lockStake confirmed',data:{probeId,tradeId,txHash:data?.txHash || null,newBalance:data?.newBalance}});
-          
-          txHash = data.txHash;
 
-          // Update trade with real TX hash and confirm it
-          setActiveTrades(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING", confirmed: true } : t));
-          setTradeHistory(prev => prev.map(t => t.id === tradeId ? { ...t, tx: txHash, status: "PENDING", confirmed: true } : t));
+          if (!res.ok) {
+            // Backend rejected — rollback
+            setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+            setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+            notify(data.error || 'Trade registration failed', 'error');
+            // Restore balance if no treasury tx occurred
+            if (!stakeTxHash) setSessionBalance(prev => prev + amtNum);
+            return;
+          }
 
-          // ✅ SET REAL ON-CHAIN BALANCE (from backend's post-lockStake read)
+          // ✅ Trade registered — update from backend
+          const confirmedTradeId = data.tradeId || tradeId;
+          setActiveTrades(prev => prev.map(t =>
+            t.id === tradeId
+              ? { ...t, id: confirmedTradeId, tx: stakeTxHash, confirmed: true, status: 'PENDING' }
+              : t
+          ));
+          setTradeHistory(prev => prev.map(t =>
+            t.id === tradeId
+              ? { ...t, id: confirmedTradeId, tx: stakeTxHash, confirmed: true, status: 'PENDING' }
+              : t
+          ));
+
+          // Sync session balance from backend response
           if (data.newBalance !== undefined) {
             setSessionBalance(parseFloat(data.newBalance));
           }
-          
-          // Extend the guard so periodic poller doesn't race
-          lastOptimisticActionTime.current = Date.now();
-          notify("Trade Submitted ✓", "success");
 
-          // Verify balance again after 3s to catch any discrepancy
-          setTimeout(() => updateEvmSessionBal(true), 3000);
+          notify('Trade Active ✓', 'success');
+          // Refresh main wallet balance after 2s
+          setTimeout(() => refetchEvmBalance(true), 2000);
 
         } catch (err) {
           clearTimeout(timeoutId);
-          console.error("[Trade] Execution failed:", err.message);
-          postDebugLog({runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:backgroundTrade:error',message:'SCW lockStake failed',data:{probeId,tradeId,error:err?.message || 'unknown',name:err?.name || 'Error'}});
-          
-          // Remove the optimistic trade entry since execution failed
+          console.error('[Trade] Backend registration failed:', err.message);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(`Trade Failed: ${err.name === 'AbortError' ? 'Request Timeout' : err.message}`, "error");
-          
-          // Sync real balance immediately on failure
-          lastOptimisticActionTime.current = 0;
-          setTimeout(() => updateEvmSessionBal(true), 500);
+          const msg = err.name === 'AbortError' ? '⚡ Network Congested — Trade Cancelled' : err.message;
+          notify(msg, 'error');
+          setTimeout(() => setToast(null), 2500);
+          if (!stakeTxHash) setSessionBalance(prev => prev + amtNum);
         }
       };
 
@@ -1726,26 +1758,23 @@ export default function UserApp() {
 
     // ── BACKEND-AUTHORITATIVE SETTLEMENT ──
     // The backend is the ONLY source of truth for trade results.
-    // It monitors price via high-speed feed during the trade, locks the
-    // exit price at expiry, settles on-chain, and emits this event.
     const unbindSettled = socketService.on('trade_settled', (data) => {
-      if (!data?.betId) return;
+      if (!data?.betId && !data?.id) return;
 
-      const isMine = data.userAddr && (
-        (address && data.userAddr.toLowerCase() === address.toLowerCase()) ||
-        (evmSessionWallet && data.userAddr.toLowerCase() === evmSessionWallet.address.toLowerCase())
-      );
+      const isMine = data.userAddr &&
+        address && data.userAddr.toLowerCase() === address.toLowerCase();
       if (!isMine) return;
 
-      const betId       = data.betId.toString();
+      const betId       = String(data.betId || data.id);
       const finalStatus = data.won ? 'WON' : 'LOST';
       const exitPrice   = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
       const payout      = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
 
       console.log(`[Settlement] Backend settled #${betId}: ${finalStatus} @ $${exitPrice}`);
       lockedResults.current.set(betId, { status: finalStatus, settlementPrice: exitPrice });
+      removedTradeIds.current.add(betId);
 
-      // Build the fully-settled trade record from the backend report
+      // Build the fully-settled trade record
       const settledRecord = {
         id:              betId,
         nonce:           betId,
@@ -1755,38 +1784,36 @@ export default function UserApp() {
         exitPrice,
         payout,
         won:             data.won,
-        direction:       data.direction === 1 ? 'UP' : 'DOWN',
+        direction:       data.direction === 1 || data.direction === 'UP' ? 'UP' : 'DOWN',
         amount:          data.amount,
         symbol:          data.symbol || 'ETH',
         duration:        data.duration,
-        multiplier:      data.multiplier,
         timestamp:       data.timestamp || Date.now(),
-        txHash:          data.txHash,
-        tx:              data.txHash,
+        txHash:          data.txHash || null,
+        tx:              data.txHash || null,
         backendSettled:  true,
-        chainConfirmed:  true,
         balanceApplied:  true,
       };
 
-      // Immediately update both active trades and history
-      setActiveTrades(prev => prev.map(t => {
-        const isMatch = String(t.id) === betId || String(t.nonce) === betId;
-        return isMatch ? { ...t, ...settledRecord } : t;
-      }));
+      // Remove from activeTrades immediately — move to history
+      setActiveTrades(prev => prev.filter(t => String(t.id) !== betId && String(t.nonce) !== betId));
 
+      // Upsert into tradeHistory with final WON/LOST status
       setTradeHistory(prev => {
-        const exists = prev.find(t => String(t.id || t.tx || t.nonce) === betId);
+        const exists = prev.find(t => String(t.id || t.nonce) === betId);
         if (exists) {
-          return prev.map(t => String(t.id || t.tx || t.nonce) === betId ? { ...t, ...settledRecord } : t);
+          return prev.map(t => String(t.id || t.nonce) === betId ? { ...t, ...settledRecord } : t);
         }
-        // If not found locally (e.g., page refreshed mid-trade), prepend the settled record
         return [settledRecord, ...prev];
       });
 
-      if (data.won) notify(`Trade WON! +$${payout}`, 'success');
-      else notify('Trade LOST.', 'error');
+      if (data.won) {
+        notify(`🏆 Trade WON! +$${payout}`, 'success');
+      } else {
+        notify('Trade LOST.', 'error');
+      }
 
-      // Refresh balance after settlement
+      // Refresh main wallet balance (winnings may have been sent back)
       lastOptimisticActionTime.current = 0;
       setTimeout(() => {
         updateEvmSessionBal(true);
