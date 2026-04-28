@@ -48,36 +48,51 @@ class ClassicEngine {
     if (!identity.ok) return { success: false, error: identity.error };
 
     const userAddr = identity.identityKey;
+    const treasury = config.TREASURY_ADDRESS;
+    if (!treasury || treasury === ethers.ZeroAddress) {
+      return { success: false, error: "Treasury address not configured on backend." };
+    }
+
+    // Derive Session Wallet (EOA)
+    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
+    const privateKey = ethers.keccak256(entropy);
+    const sessionWallet = new ethers.Wallet(privateKey, rpc.mainProvider);
 
     // Get or create in-process session
     let session = cache.sessions.get(userAddr);
     if (!session) {
-      // First trade: fetch on-chain balance to initialize
-      let onChainBal = 0;
-      try {
-        const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-        const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
-        const privateKey = ethers.keccak256(entropy);
-        const wallet = new ethers.Wallet(privateKey);
-        const balStr = await rpc.getBalance(wallet.address);
-        onChainBal = parseFloat(balStr) || 0;
-      } catch (_) {}
-
+      const balStr = await rpc.getBalance(sessionWallet.address);
       session = cache.getOrCreateSession(userAddr, {
         identityKey: userAddr,
         walletAddress: identity.walletAddress,
-        balance: onChainBal,
+        sessionAddress: sessionWallet.address,
+        balance: parseFloat(balStr) || 0,
       });
     }
 
     const amount = Number(tradeParams.amount);
     if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
 
-    // Balance check — stake must have been pre-sent to treasury so balance reflects it
-    if (session.balance < amount) {
-      return { success: false, error: `Insufficient balance. Have ${session.balance.toFixed(4)}, need ${amount}` };
+    // 1. Perform REAL On-Chain Stake Transfer to Treasury
+    let stakeTxHash;
+    try {
+      console.log(`[Trade] Initiating on-chain stake: ${amount} USDC from ${sessionWallet.address} to ${treasury}`);
+      const tx = await sessionWallet.sendTransaction({
+        to: treasury,
+        value: ethers.parseUnits(amount.toString(), 18),
+        gasLimit: 21000,
+        // Arc Testnet specific gas price if needed, otherwise automatic
+      });
+      stakeTxHash = tx.hash;
+      // We don't necessarily need to wait for full confirmation to start the timer, 
+      // but the tx must at least be broadcasted successfully.
+    } catch (err) {
+      console.error(`[Trade] Stake transfer failed for ${userAddr}:`, err.message);
+      return { success: false, error: "Network Congested or Insufficient USDC in Session Wallet." };
     }
 
+    // 2. Register Trade in Engine
     const id = String(tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`);
     const direction = Number(tradeParams.direction);
     const duration = Math.max(1, Number(tradeParams.duration || 5));
@@ -89,13 +104,15 @@ class ClassicEngine {
 
     if (!entryPrice || entryPrice <= 0) return { success: false, error: 'Price feed unavailable' };
 
-    // Deduct stake from in-process session balance immediately
-    session.balance = Number((session.balance - amount).toFixed(4));
+    // Update in-process balance (sync with chain)
+    const newBalStr = await rpc.getBalance(sessionWallet.address);
+    session.balance = parseFloat(newBalStr);
 
     const trade = {
       id,
       userAddr,
       walletAddress: session.walletAddress,
+      sessionAddress: sessionWallet.address,
       direction,
       duration,
       marketId,
@@ -103,6 +120,7 @@ class ClassicEngine {
       symbol,
       entryPrice,
       status: 'PENDING',
+      stakeTxHash,
       createdAt: Date.now(),
       settleAt: Date.now() + (duration * 1000),
     };
@@ -123,22 +141,23 @@ class ClassicEngine {
       timestamp: trade.createdAt,
       settleAt: trade.settleAt,
       userAddr,
+      txHash: stakeTxHash
     });
 
     this.io.to(userAddr).emit('balance_update', {
       balance: String(session.balance),
       reason: 'STAKE_SENT',
       betId: id,
+      txHash: stakeTxHash
     });
 
-    // Also emit to global scroller
     this.io.emit('new_trade', { betId: id, direction, symbol: symbol.toUpperCase(), amount, userAddr });
 
-    console.log(`[Trade] Placed #${id} | ${direction === 1 ? 'UP' : 'DOWN'} ${symbol.toUpperCase()} | $${amount} | ${duration}s | by ${userAddr}`);
+    console.log(`[Trade] Active #${id} | ${direction === 1 ? 'UP' : 'DOWN'} | $${amount} | TX: ${stakeTxHash}`);
 
     return {
       success: true,
-      txHash: `embedded_${id}`,
+      txHash: stakeTxHash,
       tradeId: id,
       settlementEtaMs: duration * 1000,
       newBalance: String(session.balance),

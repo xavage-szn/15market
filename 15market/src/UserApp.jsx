@@ -1278,17 +1278,16 @@ export default function UserApp() {
     if (!activeDirection) return notify("Select UP or DOWN first", "error");
     if (!activeAmount || parseFloat(activeAmount) <= 0) return notify("Enter a valid amount", "error");
 
-    // For the treasury-first model, the user sends stake from their MAIN wallet.
-    // We check the main wallet balance here (not the session balance).
-    const currentBal = parseFloat(evmBalance || '0');
+    // For the embedded session model, the stake comes from the session wallet balance.
+    const currentBal = sessionBalance;
     const sanitizedAmount = (activeAmount || "0").toString().replace(',', '.');
     const stakeAmt = parseFloat(sanitizedAmount);
 
-    // Reserve gas for the treasury send tx
-    const gasMargin = 0.001; // ~0.001 ETH for gas on Arc
+    // Reserve a tiny margin for gas (USDC is gas on Arc)
+    const gasMargin = 0.001; 
 
     if (stakeAmt + gasMargin > currentBal) {
-      return notify(`Insufficient balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC (stake + gas).`, "error");
+      return notify(`Insufficient Session Balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC. Please Refill.`, "error");
     }
     // #region agent log
     postDebugLog({runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:executeTrade:validated',message:'trade validated pre-submit',data:{probeId,activeType,stakeAmt,currentBal,gasMargin,activeDirection,activeDuration}});
@@ -1406,22 +1405,12 @@ export default function UserApp() {
         return;
       }
 
-      // ─── CLASSIC TRADING — TREASURY-FIRST ───────────────────────────────
-      // Step 1: Send stake from main wallet to treasury (on-chain)
-      // Step 2: Register trade with backend using the txHash
-      // Step 3: Backend settles on timer expiry and emits trade_settled
+      // ─── CLASSIC TRADING — EMBEDDED WALLET MODEL ───────────────────────────────
+      // Step 1: Frontend calls /session/execute
+      // Step 2: Backend derivations session wallet and sends stake to treasury on-chain
+      // Step 3: Backend returns the txHash and registers the trade
 
-      if (!walletClient) {
-        throw new Error("Wallet not connected. Please reconnect.");
-      }
-
-      const TREASURY = import.meta.env.VITE_TREASURY_ADDRESS || config?.TREASURY_ADDRESS;
-      if (!TREASURY || TREASURY === '0x0000000000000000000000000000000000000000') {
-        // Testnet / no treasury configured — skip on-chain send, go straight to backend
-        console.warn('[Trade] No treasury address configured — using simulation mode');
-      }
-
-      // --- Show trade card as PENDING immediately ---
+      // --- Show trade card as PENDING immediately (Optimistic) ---
       const confirmedNow = Date.now();
       const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => String(t.id) !== String(item.id))];
       const optimisticTrade = {
@@ -1446,46 +1435,14 @@ export default function UserApp() {
       setActiveTrades(prev => dedupeAndAdd(prev, optimisticTrade));
       setTradeHistory(prev => dedupeAndAdd(prev, optimisticTrade));
 
-      // --- Step 1: Send stake to treasury ---
-      let stakeTxHash = null;
-      const treasuryAddr = import.meta.env.VITE_TREASURY_ADDRESS;
+      // Optimistic deduction for instant UI feel
+      setSessionBalance(prev => Math.max(0, prev - amtNum));
+      lastOptimisticActionTime.current = Date.now();
 
-      if (treasuryAddr && treasuryAddr !== '0x0000000000000000000000000000000000000000') {
-        try {
-          const stakeWei = parseEther(parseFloat(sanitizedAmount).toFixed(18));
-          const txResult = await walletClient.sendTransaction({
-            to: treasuryAddr,
-            value: stakeWei,
-            chain: walletClient.chain,
-            account: walletClient.account,
-          });
-          stakeTxHash = typeof txResult === 'string' ? txResult : txResult?.hash || txResult;
-          // Optimistic balance deduction from main wallet
-          lastOptimisticActionTime.current = Date.now();
-          setEvmBalance(prev => String(Math.max(0, parseFloat(prev || '0') - amtNum)));
-        } catch (sendErr) {
-          // STAKE SEND FAILED — remove optimistic trade card and notify
-          setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-          setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          const msg = sendErr?.message?.includes('rejected') || sendErr?.code === 4001
-            ? 'Transaction rejected'
-            : '⚡ Network Congested — Trade Cancelled';
-          notify(msg, 'error');
-          // Auto-dismiss after 2.5s
-          setTimeout(() => setToast(null), 2500);
-          setIsExecuting(false);
-          return;
-        }
-      } else {
-        // Simulation mode: just optimistically deduct from sessionBalance
-        lastOptimisticActionTime.current = Date.now();
-        setSessionBalance(prev => Math.max(0, prev - amtNum));
-      }
-
-      // --- Step 2: Register trade with backend ---
+      // --- Execute Trade via Backend ---
       const backgroundTrade = async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s for on-chain stake move
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/execute`, {
             method: 'POST',
@@ -1493,7 +1450,6 @@ export default function UserApp() {
             signal: controller.signal,
             body: JSON.stringify({
               address,
-              txHash: stakeTxHash,
               tradeParams: {
                 id: tradeId.toString(),
                 direction: dirVal,
@@ -1508,61 +1464,52 @@ export default function UserApp() {
           const data = await res.json();
 
           if (!res.ok) {
-            // Backend rejected — rollback
+            // Restore balance on failure
+            notify(data.error || 'Trade failed', 'error');
+            setSessionBalance(prev => prev + amtNum);
             setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
             setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-            notify(data.error || 'Trade registration failed', 'error');
-            // Restore balance if no treasury tx occurred
-            if (!stakeTxHash) setSessionBalance(prev => prev + amtNum);
             return;
           }
 
-          // ✅ Trade registered — update from backend
+          // ✅ Trade Active (On-chain stake moved)
           const confirmedTradeId = data.tradeId || tradeId;
+          const txHash = data.txHash;
+          
           setActiveTrades(prev => prev.map(t =>
             t.id === tradeId
-              ? { ...t, id: confirmedTradeId, tx: stakeTxHash, confirmed: true, status: 'PENDING' }
+              ? { ...t, id: confirmedTradeId, tx: txHash, confirmed: true, status: 'PENDING' }
               : t
           ));
           setTradeHistory(prev => prev.map(t =>
             t.id === tradeId
-              ? { ...t, id: confirmedTradeId, tx: stakeTxHash, confirmed: true, status: 'PENDING' }
+              ? { ...t, id: confirmedTradeId, tx: txHash, confirmed: true, status: 'PENDING' }
               : t
           ));
 
-          // Sync session balance from backend response
           if (data.newBalance !== undefined) {
             setSessionBalance(parseFloat(data.newBalance));
           }
 
           notify('Trade Active ✓', 'success');
-          // Refresh main wallet balance after 2s
-          setTimeout(() => refetchEvmBalance(true), 2000);
-
         } catch (err) {
           clearTimeout(timeoutId);
-          console.error('[Trade] Backend registration failed:', err.message);
+          console.error('[Trade] Execution error:', err.message);
+          setSessionBalance(prev => prev + amtNum);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          const msg = err.name === 'AbortError' ? '⚡ Network Congested — Trade Cancelled' : err.message;
-          notify(msg, 'error');
-          setTimeout(() => setToast(null), 2500);
-          if (!stakeTxHash) setSessionBalance(prev => prev + amtNum);
+          notify(err.name === 'AbortError' ? '⚡ Network Congested — Trade Cancelled' : err.message, 'error');
         }
       };
 
       backgroundTrade();
       
       // Safety: If backend hangs forever, we still want to let the user trade again
-      // The toast will auto-close after 20s, but we'll ensure we aren't "blocking" anything
       setTimeout(() => {
         setIsExecuting(false);
       }, 5000);
 
     } catch (err) {
-      // #region agent log
-      postDebugLog({runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:executeTrade:outerCatch',message:'executeTrade failed before background completion',data:{probeId,error:err?.message || 'unknown',name:err?.name || 'Error'}});
-      // #endregion
       notify(err.message, "error");
       setIsExecuting(false);
     }

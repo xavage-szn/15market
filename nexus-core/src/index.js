@@ -124,7 +124,8 @@ app.get('/settings', (req, res) => {
     maintenanceMode: false,
     tradingHalted: false,
     systemBanner: "",
-    bannerLevel: "info"
+    bannerLevel: "info",
+    treasuryAddress: config.TREASURY_ADDRESS
   });
 });
 
