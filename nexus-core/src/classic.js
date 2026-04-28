@@ -19,7 +19,7 @@ class ClassicEngine {
     // Run settlement check every 25ms for near-instant settlement
     setInterval(() => this.processSettlementBatch(), config.BATCH_WINDOW_MS);
     
-    // Trade Monitor: Periodic authoritative pulse to keep UI in sync
+    // Trade Monitor: High-frequency authoritative pulse to drive the UI
     setInterval(() => {
       const now = Date.now();
       for (const trade of cache.trades.values()) {
@@ -30,6 +30,7 @@ class ClassicEngine {
           const isUp = trade.direction === 1 || String(trade.direction) === "1";
           const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
 
+          // Push authoritative state to frontend
           this.io.to(trade.userAddr).emit('trade_tick', {
             betId: trade.id,
             timeLeft,
@@ -37,17 +38,19 @@ class ClassicEngine {
             isWinning
           });
 
-          // Lock result pulse at the exact moment of expiry
-          if (timeLeft <= 0) {
+          // LOCK RESULT: At the exact moment of backend expiration, freeze and notify
+          if (timeLeft <= 0 && !trade.expiryEmitted) {
+            trade.expiryEmitted = true;
             this.io.to(trade.userAddr).emit('trade_expired', {
               betId: trade.id,
               exitPrice: currentPrice,
               won: isWinning
             });
+            console.log(`[Trade-Monitor] Authority Locked #${trade.id} @ ${currentPrice}`);
           }
         }
       }
-    }, 1000);
+    }, 200);
 
     if (config.PAYOUT_INLINE_FALLBACK) {
       setInterval(() => this.processInlinePayoutBatch(), Math.max(10, config.BATCH_WINDOW_MS));

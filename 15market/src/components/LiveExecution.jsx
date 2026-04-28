@@ -202,23 +202,27 @@ function LiveExecutionComponent({
 
 
 
-                                            const timerExpired = rawTimeLeft <= 0;
+                                            const timerExpired = (trade.timeLeft !== undefined ? trade.timeLeft <= 0 : rawTimeLeft <= 0);
                                             const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
 
                                             const entryPriceVal = parseFloat(trade.entryPrice);
                                             const amountVal = parseFloat(trade.amount);
-                                            const currentPriceVal = parseFloat(price);
+                                            
+                                            // AUTHORITY: Use backend livePrice if available, otherwise frontend price
+                                            const currentPriceVal = trade.livePrice !== undefined ? parseFloat(trade.livePrice) : parseFloat(price);
 
                                             const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
-                                            // 🔒 RESULT LOCK: Capture and freeze result at exact moment of expiry
+                                            // 🔒 RESULT LOCK: Use backend authoritative result if provided, otherwise freeze locally
                                             if (timerExpired && !isFinal && !frozenPnL.current[trade.id]) {
-                                                const finalWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                    ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                    : false;
+                                                const finalWinning = trade.isWinning !== undefined 
+                                                    ? trade.isWinning 
+                                                    : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                                        ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                                                        : false);
                                                 
                                                 const status = finalWinning ? "WON" : "LOST";
                                                 frozenPnL.current[trade.id] = {
@@ -234,19 +238,24 @@ function LiveExecutionComponent({
                                                         settlementPrice: currentPriceVal 
                                                     });
                                                 }
-
-                                                console.log(`[UI-Lock] Trade ${trade.id} frozen: ${status} @ ${currentPriceVal}`);
+                                                console.log(`[UI-Lock] Authority Handover for ${trade.id}: ${status} @ ${currentPriceVal}`);
                                             }
 
                                             const frozen = frozenPnL.current[trade.id];
-                                            const liveWinning = !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                            
+                                            // AUTHORITY: Prefer backend isWinning state
+                                            const liveWinning = trade.isWinning !== undefined ? trade.isWinning : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
                                                 ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                : false;
+                                                : false);
 
-                                            const displayTimeLeft = (frozen || trade.status !== "PENDING") ? "0.0" : rawTimeLeft.toFixed(1);
+                                            // AUTHORITY: Prefer backend timeLeft
+                                            const displayTimeLeft = (frozen || trade.status !== "PENDING") 
+                                                ? "0.0" 
+                                                : (trade.timeLeft !== undefined ? trade.timeLeft.toFixed(1) : rawTimeLeft.toFixed(1));
+                                            
                                             const showInstantResult = (timerExpired || !!frozen || trade.status !== "PENDING") && !isFinal;
 
-                                            // STABILITY FIX: Use frozen result if available, otherwise live
+                                            // STABILITY FIX: Use frozen result if available, otherwise backend winning state, otherwise live
                                             const finalWinningState = frozen ? (frozen.status === "WON") : liveWinning;
                                             const instantStatus = showInstantResult ? (finalWinningState ? "WON" : "LOST") : trade.status;
 
