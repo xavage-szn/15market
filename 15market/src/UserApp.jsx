@@ -790,9 +790,9 @@ export default function UserApp() {
 
       const newBalNum = parseFloat(formatted);
 
-      // Guard period for optimistic updates
+      // Guard period for optimistic updates: 20s to cover on-chain confirmation + backend indexing
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 5000) return;
+      if (!force && msSinceLastAction < 20000) return;
 
       if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001 || (newBalNum > 0 && evmBalance === "0")) {
         setEvmBalance(formatted);
@@ -818,7 +818,7 @@ export default function UserApp() {
     // GUARD: If user just performed an optimistic action (Trade/Deposit), 
     // ignore backend syncs for 15s to allow chain confirmation.
     const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-    if (msSinceAction < 15000 && !force) return;
+    if (msSinceAction < 20000 && !force) return;
 
     try {
       // Read the real on-chain EOA session wallet balance from backend
