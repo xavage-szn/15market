@@ -2382,7 +2382,14 @@ export default function UserApp() {
 
         notify("Deposit Broadcasted! Waiting for confirmation...", "success");
 
-        // Step 2: Optimistic local UI update
+        // Step 2: Notify backend to credit balance immediately (Optimistic)
+        fetch(`${KEEPER_URL_ARC}/session/deposit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, amount: amtNum, txHash: hash })
+        }).catch(() => {});
+
+        // Step 3: Optimistic local UI update
         setSessionBalance(prev => prev + amtNum);
         lastOptimisticActionTime.current = Date.now();
 

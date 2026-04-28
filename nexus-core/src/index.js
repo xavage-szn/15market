@@ -338,7 +338,43 @@ app.post('/session/cashout', async (req, res) => {
   }
 });
 
-// ─── HISTORY ──────────────────────────────────────────────────────────────────
+app.post('/session/deposit', async (req, res) => {
+  const { address, amount, txHash } = req.body;
+  if (!address || !amount) return res.status(400).json({ error: "Missing data" });
+
+  try {
+    const userAddr = address.toLowerCase();
+    let session = cache.sessions.get(userAddr);
+    
+    // Update balance optimistically in the backend cache
+    if (session) {
+      session.balance = Number((session.balance + parseFloat(amount)).toFixed(4));
+    }
+
+    // Push to history
+    const depRecord = {
+      type: 'DEPOSIT',
+      amount: parseFloat(amount),
+      timestamp: Date.now(),
+      txHash,
+      status: 'PENDING'
+    };
+    cache.pushHistory(userAddr, depRecord);
+
+    // Broadcast instant update
+    io.to(userAddr).emit('balance_update', {
+      balance: String(session?.balance || amount),
+      reason: 'DEPOSIT_OPTIMISTIC',
+      amount,
+      txHash
+    });
+
+    console.log(`[Deposit] Optimistic credit: ${amount} USDC to ${userAddr} | TX: ${txHash}`);
+    res.json({ success: true, balance: session?.balance });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/history/:address', (req, res) => {
   const addr = classicEngine.normalizeAddr(req.params.address);
