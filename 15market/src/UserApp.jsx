@@ -2354,36 +2354,24 @@ export default function UserApp() {
       notify(`Confirm deposit of ${amtNum.toFixed(4)} USDC in your wallet...`, "pending");
 
       try {
-        // Step 1: Resolve SCW address from backend (cache-first, no lag)
-        const scwRes = await fetch(`${KEEPER_URL_ARC}/session/scw-address/${address}`);
-        if (!scwRes.ok) {
-          const errData = await scwRes.json();
-          throw new Error(errData.error || 'SCW not found. Please ensure your wallet is registered.');
+        if (!evmSessionWallet?.address) {
+          throw new Error('Session wallet not initialized. Please refresh.');
         }
-        const { scwAddress } = await scwRes.json();
 
-        // Step 2: Send native USDC directly to SCW deposit() function
-        // SCW has a payable receive() that accepts native coin on Arc Testnet
+        // Step 1: Send native USDC directly to the Session EOA
         const hash = await walletClient.sendTransaction({
-          to: scwAddress,
-          value: parseEther(amtNum.toFixed(6)),
+          to: evmSessionWallet.address,
+          value: parseEther(amtNum.toFixed(18)),
           account: address
         });
 
-        notify("Deposit Broadcasted! Crediting balance...", "success");
+        notify("Deposit Broadcasted! Waiting for confirmation...", "success");
 
-        // Step 3: Notify backend to credit Redis balance immediately
-        fetch(`${KEEPER_URL_ARC}/session/deposit`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address, amount: amtNum.toFixed(6), txHash: hash })
-        }).catch(() => {});
-
-        // Step 4: Optimistic local UI update
+        // Step 2: Optimistic local UI update
         setSessionBalance(prev => prev + amtNum);
         lastOptimisticActionTime.current = Date.now();
 
-        // Step 5: Wait for confirmation, then do a hard refresh
+        // Step 3: Wait for confirmation, then do a hard refresh
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");
           setTimeout(() => updateEvmSessionBal(true), 2000);

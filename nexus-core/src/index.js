@@ -266,7 +266,7 @@ app.post('/session/execute', async (req, res) => {
  * Sends accumulated winnings from the session EOA back to the user's main wallet.
  */
 app.post('/session/cashout', async (req, res) => {
-  const { address } = req.body;
+  const { address, amount } = req.body;
   if (!address) return res.status(400).json({ error: "Missing address" });
   
   try {
@@ -278,28 +278,38 @@ app.post('/session/cashout', async (req, res) => {
       return res.status(400).json({ error: "No funds in session wallet to withdraw" });
     }
 
-    // Estimate gas for a simple transfer
+    // Estimate gas
     let gasLimit = 21000n;
     try {
       gasLimit = await sessionWallet.estimateGas({
-        to: address,
-        value: balWei
+        to: ethers.getAddress(address),
+        value: balWei // Estimate using full balance just in case
       });
     } catch (e) {
-      // Fallback if estimate fails due to balance too low for even the estimation
       gasLimit = 21000n;
     }
 
     const feeData = await rpc.mainProvider.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
     const gasCost = gasPrice * gasLimit;
-    const sendAmount = balWei - gasCost;
 
-    if (sendAmount <= 0n) {
-      return res.status(400).json({ error: `Balance (${ethers.formatEther(balWei)}) too low to cover gas fees (${ethers.formatEther(gasCost)}).` });
+    let sendAmount;
+    if (amount && Number(amount) > 0) {
+      // User requested a specific amount
+      sendAmount = ethers.parseUnits(Number(amount).toFixed(18), 18);
+      if (sendAmount + gasCost > balWei) {
+        return res.status(400).json({ error: `Insufficient balance for this withdrawal. Need ${ethers.formatEther(sendAmount + gasCost)} USDC (Amount + Gas).` });
+      }
+    } else {
+      // SWEEP EVERYTHING (legacy behavior if no amount provided)
+      sendAmount = balWei - gasCost;
     }
 
-    console.log(`[Cashout] Initiating sweep: ${ethers.formatEther(sendAmount)} USDC from ${sessionWallet.address} to ${address}`);
+    if (sendAmount <= 0n) {
+      return res.status(400).json({ error: `Balance too low to cover gas fees.` });
+    }
+
+    console.log(`[Cashout] Sending ${ethers.formatEther(sendAmount)} USDC from ${sessionWallet.address} to ${address}`);
     
     const tx = await sessionWallet.sendTransaction({
       to: ethers.getAddress(address),
@@ -308,17 +318,19 @@ app.post('/session/cashout', async (req, res) => {
       gasPrice
     });
 
-    // Instantly sync balance in cache
+    // Update in-process balance
     const session = cache.sessions.get(userAddr);
-    if (session) session.balance = 0;
+    if (session) {
+      const newBal = await rpc.getBalance(sessionWallet.address);
+      session.balance = parseFloat(newBal);
+    }
 
     io.to(userAddr).emit('balance_update', {
-      balance: '0',
+      balance: String(session?.balance || '0'),
       reason: 'CASHOUT',
       txHash: tx.hash
     });
 
-    console.log(`[Cashout] Success! TX: ${tx.hash}`);
     res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sendAmount) });
   } catch (err) {
     console.error('[session/cashout] critical error:', err);
