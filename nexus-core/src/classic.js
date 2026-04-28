@@ -276,9 +276,17 @@ class ClassicEngine {
       }
       if (due.length === 0) return;
 
-      for (let i = 0; i < due.length; i += config.SETTLEMENT_CONCURRENCY) {
-        const chunk = due.slice(i, i + config.SETTLEMENT_CONCURRENCY);
-        await Promise.allSettled(chunk.map((trade) => this.settleTrade(trade)));
+      // PRIORITY SETTLEMENT: Identify winners vs losers to prioritize payout tasks
+      const prioritizedDue = due.map(trade => {
+        const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
+        const direction = this.resolveDirection(trade.direction);
+        const won = (direction === 1) ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
+        return { trade, won };
+      }).sort((a, b) => (b.won ? 1 : 0) - (a.won ? 1 : 0));
+
+      for (let i = 0; i < prioritizedDue.length; i += config.SETTLEMENT_CONCURRENCY) {
+        const chunk = prioritizedDue.slice(i, i + config.SETTLEMENT_CONCURRENCY);
+        await Promise.allSettled(chunk.map((item) => this.settleTrade(item.trade)));
       }
     } finally {
       this.queueProcessing = false;
