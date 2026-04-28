@@ -302,7 +302,7 @@ app.post('/session/cashout', async (req, res) => {
     console.log(`[Cashout] Initiating sweep: ${ethers.formatEther(sendAmount)} USDC from ${sessionWallet.address} to ${address}`);
     
     const tx = await sessionWallet.sendTransaction({
-      to: address,
+      to: ethers.getAddress(address),
       value: sendAmount,
       gasLimit,
       gasPrice

@@ -77,21 +77,30 @@ class ClassicEngine {
     // 1. Perform REAL On-Chain Stake Transfer via Contract call
     let stakeTxHash;
     try {
-      console.log(`[Trade] Initiating on-chain stake: ${amount} USDC from ${sessionWallet.address} via placeBet()`);
+      // Ensure addresses are checksummed for ethers contract interaction
+      const checksummedUserAddr = ethers.getAddress(userAddr);
+      const checksummedTreasury = ethers.getAddress(treasury);
+
+      console.log(`[Trade] Initiating on-chain stake: ${amount} USDC from ${sessionWallet.address} via ${checksummedTreasury}.placeBet()`);
       
-      const contract = new ethers.Contract(treasury, [
+      const contract = new ethers.Contract(checksummedTreasury, [
         "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable"
       ], sessionWallet);
 
-      // Convert ID to a numeric representation for the contract
+      // Check balance + gas margin (approx 0.002 USDC for a contract call)
+      const gasMargin = 0.002;
+      if (session.balance < (amount + gasMargin)) {
+        return { success: false, error: `Insufficient Balance. You need at least ${amount + gasMargin} USDC (Stake + Gas).` };
+      }
+
       const numericId = BigInt(Date.now());
       const tx = await contract.placeBet(
         numericId,
         direction,
         duration,
-        ethers.parseUnits(entryPrice.toFixed(2), 2), // Contract likely expects some precision for price, or 0 if internal
+        ethers.parseUnits(entryPrice.toFixed(2), 2), 
         marketId,
-        userAddr, // Payout goes back to main wallet
+        checksummedUserAddr, 
         { value: ethers.parseUnits(amount.toFixed(18), 18) }
       );
       
@@ -101,8 +110,11 @@ class ClassicEngine {
       // Optimistic deduction
       session.balance = Number((session.balance - amount).toFixed(4));
     } catch (err) {
-      console.error(`[Trade] Stake transfer failed for ${userAddr}:`, err.message);
-      return { success: false, error: "Network Congested or Insufficient USDC. (Check Gas/Balance)" };
+      console.error(`[Trade] Stake transfer CRITICAL FAILURE for ${userAddr}:`, err.message);
+      // If it's a specific RPC error, show it
+      const cleanMsg = err.message.includes("insufficient funds") ? "Insufficient USDC for Stake + Gas." : 
+                      (err.message.includes("user rejected") ? "Transaction Rejected." : "Network Congested or RPC Error.");
+      return { success: false, error: cleanMsg };
     }
 
     // 2. Register Trade in Engine
@@ -299,7 +311,7 @@ class ClassicEngine {
     try {
       console.log(`[Payout] Sending ${job.amount} USDC winning to ${trade.sessionAddress || trade.userAddr}`);
       const tx = await rpc.wallet.sendTransaction({
-        to: trade.sessionAddress || trade.userAddr,
+        to: ethers.getAddress(trade.sessionAddress || trade.userAddr),
         value: ethers.parseUnits(Number(job.amount).toFixed(18), 18),
       });
       payoutTxHash = tx.hash;
