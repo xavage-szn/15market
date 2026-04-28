@@ -259,7 +259,7 @@ const DissolveTransition = ({ isAnimating, targetTheme }) => {
 
 export default function UserApp() {
   const { isConnected, address, chainId: connectedChainId, status } = useAccount();
-  const { switchChain } = useSwitchChain();
+  const { switchChain, switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
 
   const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
@@ -1127,17 +1127,66 @@ export default function UserApp() {
     // Bind Socket listeners
     const unbindBal = socketService.on('balance_update', (data) => {
       // GUARD: If user just performed an optimistic action, ignore socket updates for 15s
+      // EXCEPT for winnings, which we always want to see instantly.
       const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-      if (msSinceAction < 15000 && data.reason !== 'WIN_PAYOUT') return;
+      const isWinningEvent = data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED';
+      
+      if (msSinceAction < 15000 && !isWinningEvent) return;
 
       const val = data.balance || data.available;
       if (val !== undefined) {
         setSessionBalance(parseFloat(val));
       }
-      if (data.reason === 'WIN') {
-        notify(`Payout Received: +$${data.payout || ''}`, "success");
+      if (data.reason === 'WIN' || data.reason === 'WIN_PAYOUT') {
+        notify(`Payout Received: +$${parseFloat(data.payout || 0).toFixed(2)}`, "success");
         triggerGlobalRefresh(true);
       }
+    });
+
+    const unbindSettled = socketService.on('trade_settled', (data) => {
+      console.log("[Socket] Trade Settled authoritative update:", data);
+      const tid = String(data.id || data.betId);
+      
+      const updateFn = (t) => {
+        if (String(t.id || t.tx || t.nonce) === tid) {
+          return { 
+            ...t, 
+            status: data.status || (data.won ? 'WON' : 'LOST'),
+            exitPrice: data.exitPrice,
+            payout: data.payout,
+            confirmed: true
+          };
+        }
+        return t;
+      };
+
+      setActiveTrades(prev => prev.map(updateFn));
+      setTradeHistory(prev => prev.map(updateFn));
+
+      if (data.won) {
+         // The Optimistic Payout Creditor effect will catch this status change
+         // and apply the balance if not already applied.
+      }
+    });
+
+    const unbindTick = socketService.on('trade_tick', (data) => {
+      const tid = String(data.betId);
+      setActiveTrades(prev => prev.map(t => {
+        if (String(t.id || t.nonce) === tid) {
+          return { ...t, currentPrice: data.currentPrice, isWinning: data.isWinning };
+        }
+        return t;
+      }));
+    });
+
+    const unbindExpired = socketService.on('trade_expired', (data) => {
+       const tid = String(data.betId);
+       setActiveTrades(prev => prev.map(t => {
+         if (String(t.id || t.nonce) === tid) {
+           return { ...t, status: 'RESOLVING', exitPrice: data.exitPrice };
+         }
+         return t;
+       }));
     });
 
     const unbindErr = socketService.on('terminal_error', (data) => {
@@ -1147,6 +1196,9 @@ export default function UserApp() {
 
     return () => {
       unbindBal();
+      unbindSettled();
+      unbindTick();
+      unbindExpired();
       unbindErr();
     };
   }, [address, notify, triggerGlobalRefresh]);
@@ -2362,13 +2414,37 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
+
+      // --- AUTO-INITIALIZE SESSION WALLET IF MISSING ---
+      let activeSessionWallet = evmSessionWallet;
+      if (!activeSessionWallet?.address) {
+        notify("Initializing trading wallet...", "pending");
+        try {
+          // Trigger the init call directly
+          const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            activeSessionWallet = { address: data.sessionAddress, isRemote: true };
+            setEvmSessionWallet(activeSessionWallet);
+            setSessionBalance(parseFloat(data.balance));
+            localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+          } else {
+            throw new Error("Backend failed to initialize session");
+          }
+        } catch (initErr) {
+          notify("Failed to initialize trading wallet. Please refresh.", "error");
+          setIsExecuting(false);
+          return;
+        }
+      }
+
       notify(`Confirm deposit of ${amtNum} USDC in your wallet...`, "pending");
 
       try {
-        if (!evmSessionWallet?.address) {
-          throw new Error('Session wallet not initialized. Please refresh.');
-        }
-
         // Ensure user is on the correct chain (Arc Testnet)
         try {
           await switchChainAsync({ chainId: 5042002 });
@@ -2378,7 +2454,7 @@ export default function UserApp() {
 
         // Fetch current gas price from Arc Testnet (Viem syntax)
         let txParams = {
-          to: evmSessionWallet.address,
+          to: activeSessionWallet.address,
           value: parseEther(amtNum.toString()),
           account: address,
         };
@@ -2397,7 +2473,7 @@ export default function UserApp() {
           console.warn("[Deposit] Fee estimation failed, using wallet defaults:", feeErr.message);
         }
 
-        console.log(`[Deposit] Initiating tx to ${evmSessionWallet.address} for ${amtNum} USDC`);
+        console.log(`[Deposit] Initiating tx to ${activeSessionWallet.address} for ${amtNum} USDC`);
 
         // Step 1: Send native USDC directly to the Session EOA
         const hash = await walletClient.sendTransaction(txParams);
@@ -2411,14 +2487,19 @@ export default function UserApp() {
           body: JSON.stringify({ address, amount: amtNum, txHash: hash })
         }).catch(() => {});
 
-        // Step 3: Optimistic local UI update
+        // Step 3: Optimistic local UI update (Both wallets)
         setSessionBalance(prev => prev + amtNum);
+        setEvmBalance(prev => {
+          const current = parseFloat(prev || '0');
+          return (current - amtNum).toFixed(6);
+        });
         lastOptimisticActionTime.current = Date.now();
 
         // Step 3: Wait for confirmation, then do a hard refresh
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");
           setTimeout(() => updateEvmSessionBal(true), 2000);
+          setTimeout(() => refetchEvmBalance(true), 2000);
         });
 
         const newTx = {
@@ -2437,7 +2518,7 @@ export default function UserApp() {
     } finally {
       setIsExecuting(false);
     }
-  }, [address, notify, evmBalance, updateEvmSessionBal, isExecuting, walletClient]);
+  }, [address, notify, evmBalance, evmSessionWallet, updateEvmSessionBal, refetchEvmBalance, isExecuting, walletClient]);
 
 
   const handleWithdraw = useCallback(async (amt) => {
@@ -2450,14 +2531,34 @@ export default function UserApp() {
         return;
       }
 
-      if (!evmSessionWallet) {
-        notify("Session wallet not ready", "error");
-        return;
-      }
-
       if (!address) {
         notify("Connect your wallet", "error");
         return;
+      }
+
+      // --- AUTO-INITIALIZE SESSION WALLET IF MISSING ---
+      let activeSessionWallet = evmSessionWallet;
+      if (!activeSessionWallet) {
+        notify("Initializing trading wallet...", "pending");
+        try {
+          const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            activeSessionWallet = { address: data.sessionAddress, isRemote: true };
+            setEvmSessionWallet(activeSessionWallet);
+            setSessionBalance(parseFloat(data.balance));
+            localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
+          } else {
+            throw new Error("Backend failed to initialize session");
+          }
+        } catch (initErr) {
+          notify("Trading wallet not ready. Please refresh.", "error");
+          return;
+        }
       }
 
       if (sessionBalance < amtNum) {
@@ -2477,14 +2578,11 @@ export default function UserApp() {
       notify("Sign to authorize withdrawal...", "pending");
 
       // Require user to sign an authorization message.
-      // Use walletClient (wagmi) first, fall back to window.ethereum for robustness
-      // (wagmi walletClient can go stale after prior transactions)
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
       try {
         if (walletClient) {
           await walletClient.signMessage({ message: authMsg, account: address });
         } else if (window.ethereum) {
-          // Fallback: direct ethereum provider sign (works even when wagmi client is stale)
           const msgHex = '0x' + Array.from(new TextEncoder().encode(authMsg)).map(b => b.toString(16).padStart(2, '0')).join('');
           await window.ethereum.request({ method: 'personal_sign', params: [msgHex, address] });
         } else {
@@ -2503,11 +2601,11 @@ export default function UserApp() {
 
       notify("Processing sweep...", "pending");
 
-      // Fix floating-point precision before sending (e.g. 0.49500000000000004 → "0.495000")
+      // Fix floating-point precision before sending
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 60000); // Increased to 60s for mainnet stability
+      const fetchTimeout = setTimeout(() => controller.abort(), 60000); 
 
       let res;
       try {
@@ -2539,6 +2637,14 @@ export default function UserApp() {
       const sweepHash = data.txHash;
 
       notify("Arc Withdrawal Successful!", "success");
+
+      // --- OPTIMISTIC UI UPDATE ---
+      setSessionBalance(prev => Math.max(0, prev - amtNum));
+      setEvmBalance(prev => {
+        const current = parseFloat(prev || '0');
+        return (current + cleanNetAmt).toFixed(6);
+      });
+      lastOptimisticActionTime.current = Date.now();
 
       const newTx = {
         id: `withdraw-${Date.now()}`,

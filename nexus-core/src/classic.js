@@ -412,7 +412,7 @@ class ClassicEngine {
 
   async dispatchPayout(job, source) {
     const trade = cache.trades.get(job.tradeId);
-    if (!trade || !trade.won || trade.status !== 'SETTLED') {
+    if (!trade || !trade.won || !['WON', 'SETTLED'].includes(trade.status)) {
       return { ok: false, error: 'Trade not eligible for payout' };
     }
 
