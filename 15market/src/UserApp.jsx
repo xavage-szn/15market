@@ -2358,16 +2358,17 @@ export default function UserApp() {
           throw new Error('Session wallet not initialized. Please refresh.');
         }
 
-        // Fetch current gas price from Arc Testnet
-        const feeData = await publicClient.getFeeData();
-        const gasPrice = (feeData.gasPrice * 120n) / 100n; // 1.2x for faster inclusion
+        // Fetch current gas price from Arc Testnet (Viem syntax)
+        const feeData = await publicClient.estimateFeesPerGas();
+        const gasPrice = feeData.gasPrice || feeData.maxFeePerGas;
+        const boostedGasPrice = gasPrice ? (gasPrice * 120n) / 100n : undefined;
 
         // Step 1: Send native USDC directly to the Session EOA
         const hash = await walletClient.sendTransaction({
           to: evmSessionWallet.address,
           value: parseEther(amtNum.toString()),
           account: address,
-          gasPrice
+          gasPrice: boostedGasPrice
         });
 
         notify("Deposit Broadcasted! Waiting for confirmation...", "success");
