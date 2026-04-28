@@ -70,41 +70,66 @@ function fetchFromSource(url, parser) {
 }
 
 async function pollPrices() {
-  for (const key of Object.keys(PYTH_IDS)) {
+  const keys = Object.keys(PYTH_IDS);
+  
+  await Promise.all(keys.map(async (key) => {
     try {
       const sources = [
         {
+          name: 'pyth',
           url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${PYTH_IDS[key]}`,
           parse: (d) => {
             const p = d.parsed?.[0]?.price;
-            return p ? parseFloat(p.price) * Math.pow(10, p.expo) : null;
+            if (!p) return null;
+            return parseFloat(p.price) * Math.pow(10, p.expo);
           }
         },
         {
+          name: 'binance',
           url: `https://api.binance.com/api/v3/ticker/price?symbol=${BINANCE_IDS[key]}`,
           parse: (d) => parseFloat(d.price)
         },
         {
+          name: 'mexc',
           url: `https://api.mexc.com/api/v3/ticker/price?symbol=${MEXC_IDS[key]}`,
           parse: (d) => parseFloat(d.price)
         }
       ];
-      const price = await Promise.any(sources.map(s => fetchFromSource(s.url, s.parse)));
-      const now = Date.now();
-      cache.prices[key] = price;
-      cache.priceMeta[key] = { updatedAt: now };
-      if (!cache.priceHistory[key]) cache.priceHistory[key] = [];
-      cache.priceHistory[key].push({ price, time: now });
-      if (cache.priceHistory[key].length > 1200) cache.priceHistory[key].shift();
+
+      // Run all sources but prioritize them in order: Pyth > Binance > MEXC
+      const results = await Promise.allSettled(sources.map(s => fetchFromSource(s.url, s.parse)));
       
-      const payload = { key, price, ts: now };
-      io.emit('price', payload);
-      // Publish to Redis for price-frontend service
-      redis.publish('price_updates', JSON.stringify(payload)).catch(() => {});
-    } catch (_) {}
-  }
+      let bestPrice = null;
+      let sourceUsed = 'none';
+
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].status === 'fulfilled' && results[i].value) {
+          bestPrice = results[i].value;
+          sourceUsed = sources[i].name;
+          break; // Found the highest priority working source
+        }
+      }
+
+      if (bestPrice && bestPrice > 0) {
+        const now = Date.now();
+        cache.prices[key] = bestPrice;
+        cache.priceMeta[key] = { updatedAt: now, source: sourceUsed };
+        
+        if (!cache.priceHistory[key]) cache.priceHistory[key] = [];
+        cache.priceHistory[key].push({ price: bestPrice, time: now });
+        if (cache.priceHistory[key].length > 1200) cache.priceHistory[key].shift();
+        
+        const payload = { key, price: bestPrice, ts: now };
+        io.emit('price', payload);
+        redis.publish('price_updates', JSON.stringify(payload)).catch(() => {});
+      }
+    } catch (err) {
+      // Per-asset failure logging
+      // console.warn(`[Poll] Failed for ${key}:`, err.message);
+    }
+  }));
 }
-setInterval(pollPrices, 300);
+setInterval(pollPrices, 350);
 
 // --- Socket.IO ---
 io.on('connection', (socket) => {
@@ -391,7 +416,7 @@ app.post('/session/deposit', async (req, res) => {
 
 app.get('/history/:address', (req, res) => {
   const addr = classicEngine.normalizeAddr(req.params.address);
-  res.json(cache.userHistory.get(addr) || []);
+  res.json(cache.getHistory(addr));
 });
 
 // ─── ROUNDS ACCESS (WAITLIST) ─────────────────────────────────────────────────
@@ -426,13 +451,13 @@ app.post('/rounds/access/redeem', async (req, res) => {
 app.get('/profiles/:address', (req, res) => {
   const addr = req.params.address.toLowerCase();
   const profile = profiles.get(addr);
-  const sessionWallet = deriveSessionWallet(addr);
-  const stats = profile?.stats || {
-    totalTrades: cache.userHistory.get(addr)?.length || 0,
-    totalWins: cache.userHistory.get(addr)?.filter(h => h.won).length || 0
-  };
-  if (!profile) return res.json({ success: true, profile: null, walletAddress: sessionWallet.address });
-  res.json({ success: true, profile, stats, walletAddress: sessionWallet.address });
+  if (!profile) return res.status(404).json({ error: 'Profile not found' });
+  
+  // Include trades in the profile response for unified sync
+  res.json({
+    ...profile,
+    trades: profiles.getHistory(addr)
+  });
 });
 
 app.post('/profiles', (req, res) => {

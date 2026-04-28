@@ -60,10 +60,14 @@ class Cache {
     return this.sessions.get(identityKey);
   }
 
-  pushHistory(address, record) {
-    const list = this.userHistory.get(address) || [];
-    list.unshift(record);
-    this.userHistory.set(address, list.slice(0, 100));
+  pushHistory(userAddr, trade) {
+    const profiles = require('./profiles');
+    return profiles.pushTrade(userAddr, trade);
+  }
+
+  getHistory(userAddr) {
+    const profiles = require('./profiles');
+    return profiles.getHistory(userAddr);
   }
 
   queueTradeForSettlement(trade) {

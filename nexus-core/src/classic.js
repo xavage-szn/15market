@@ -27,7 +27,8 @@ class ClassicEngine {
           const msLeft = (trade.settleAt || 0) - now;
           const timeLeft = Math.max(0, msLeft / 1000);
           const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
-          const isUp = trade.direction === 1 || String(trade.direction) === "1";
+          const direction = this.resolveDirection(trade.direction);
+          const isUp = direction === 1;
           const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
 
           // Push authoritative state to frontend
@@ -35,7 +36,8 @@ class ClassicEngine {
             betId: trade.id,
             timeLeft,
             currentPrice,
-            isWinning
+            isWinning,
+            direction: direction // Ensure frontend knows resolved direction
           });
 
           // LOCK RESULT: At the exact moment of backend expiration, freeze and notify
@@ -44,9 +46,10 @@ class ClassicEngine {
             this.io.to(trade.userAddr).emit('trade_expired', {
               betId: trade.id,
               exitPrice: currentPrice,
-              won: isWinning
+              won: isWinning,
+              direction: direction
             });
-            console.log(`[Trade-Monitor] Authority Locked #${trade.id} @ ${currentPrice}`);
+            console.log(`[Trade-Monitor] Authority Locked #${trade.id} | ${isUp ? 'UP' : 'DOWN'} | Entry: ${trade.entryPrice} | Exit: ${currentPrice} | Won: ${isWinning}`);
           }
         }
       }
@@ -67,6 +70,12 @@ class ClassicEngine {
       return { ok: false, error: 'Valid EVM wallet address required.' };
     }
     return { ok: true, identityKey: walletAddress, walletAddress };
+  }
+
+  resolveDirection(dir) {
+    if (dir === 1 || dir === '1' || String(dir).toUpperCase() === 'UP' || String(dir).toLowerCase() === 'buy') return 1;
+    if (dir === 0 || dir === '0' || String(dir).toUpperCase() === 'DOWN' || String(dir).toLowerCase() === 'sell') return 0;
+    return null;
   }
 
   /**
@@ -110,7 +119,11 @@ class ClassicEngine {
 
     // Define trade parameters early so they are available for the contract call
     const id = tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-    const direction = Number(tradeParams.direction);
+    const direction = this.resolveDirection(tradeParams.direction);
+    if (direction === null) {
+       console.error(`[Trade] Invalid direction received:`, tradeParams.direction);
+       return { success: false, error: "Invalid trade direction." };
+    }
     const duration = Math.max(1, Number(tradeParams.duration || 5));
     const marketId = Number(tradeParams.marketId || 0);
 
@@ -120,11 +133,18 @@ class ClassicEngine {
     // Authoritative Price Selection
     let entryPrice = Number(cache.prices[symbol] || 0);
     if (!entryPrice || entryPrice <= 0) {
-      // Fallback to frontend price but unscale it if it looks scaled
+      // Fallback to frontend price but unscale it based on asset type
       let fePrice = Number(tradeParams.entryPrice || 0);
-      if (fePrice > 1000000) fePrice /= 1000000; // SOL scaling (8 decimals in frontend usually, but here checking 1M)
-      else if (fePrice > 100000) fePrice /= 100; // ETH/BTC scaling
-      entryPrice = fePrice;
+      const isSol = Number(tradeParams.marketId) === 2;
+      
+      if (isSol) {
+        // SOL scaling is 1,000,000 on frontend
+        entryPrice = fePrice / 1000000;
+      } else {
+        // Others (ETH, BTC) are 100x scaled
+        entryPrice = fePrice / 100;
+      }
+      console.log(`[Trade] Using fallback entryPrice: ${entryPrice} (Raw: ${fePrice}, isSol: ${isSol})`);
     }
 
     if (!entryPrice || entryPrice <= 0) {
@@ -273,8 +293,15 @@ class ClassicEngine {
     // Use historical price at close time for stable settlement
     const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
     
-    const isUp = trade.direction === 1 || String(trade.direction) === "1";
-    const won = isUp ? exitPrice > trade.entryPrice : exitPrice < trade.entryPrice;
+    const direction = this.resolveDirection(trade.direction);
+    const isUp = direction === 1;
+    
+    // Won if price moved in direction. Tie is currently a loss as per platform rules.
+    const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
+    
+    if (exitPrice === trade.entryPrice) {
+      console.log(`[Settle] Trade ${trade.id} is a TIE at ${exitPrice}. Resulting in LOSS.`);
+    }
 
     // MATCH FRONTEND MULTIPLIERS: 5s=2.90, 10s=2.40, others=1.90
     const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
@@ -282,7 +309,7 @@ class ClassicEngine {
 
     console.log(`[Settle] Trade ${trade.id} (${trade.symbol} ${isUp ? 'UP' : 'DOWN'}): Entry=${trade.entryPrice}, Exit=${exitPrice} -> ${won ? 'WON' : 'LOST'} (Payout: ${payout})`);
 
-    trade.status = 'SETTLED';
+    trade.status = won ? 'WON' : 'LOST';
     trade.exitPrice = exitPrice;
     trade.won = won;
     trade.payout = payout;

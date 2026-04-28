@@ -907,7 +907,7 @@ export default function UserApp() {
         }
       });
 
-      return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 1000);
+      return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 100);
     });
 
     // 4. Update Active Trades (Monotonic Status)
@@ -1043,6 +1043,10 @@ export default function UserApp() {
           setShowOnboarding(false);
           localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
           
+          // Persistent History Sync: Merge backend profile trades into UI history
+          if (Array.isArray(data.trades)) {
+            reconcileTrades(data.trades);
+          }
           // AUTO-INIT session wallet for returning users
           if (!evmSessionWallet && !isSignerInitializing) {
              initializeSessionWallet();

@@ -44,6 +44,39 @@ class ProfileService {
         this.save();
         return this.profiles[addr];
     }
+
+    pushTrade(address, trade) {
+        const addr = address.toLowerCase();
+        if (!this.profiles[addr]) {
+            this.profiles[addr] = { address: addr, trades: [], createdAt: Date.now() };
+        }
+        if (!this.profiles[addr].trades) {
+            this.profiles[addr].trades = [];
+        }
+        
+        // Ensure trade has correct status and winning flag
+        const record = {
+            ...trade,
+            status: trade.status || (trade.won ? 'WON' : 'LOST'),
+            timestamp: trade.timestamp || Date.now()
+        };
+
+        this.profiles[addr].trades.unshift(record);
+        
+        // Limit to 100 trades
+        if (this.profiles[addr].trades.length > 100) {
+            this.profiles[addr].trades = this.profiles[addr].trades.slice(0, 100);
+        }
+        
+        this.profiles[addr].updatedAt = Date.now();
+        this.save();
+        return record;
+    }
+
+    getHistory(address) {
+        const profile = this.get(address);
+        return profile ? (profile.trades || []) : [];
+    }
 }
 
 module.exports = new ProfileService();
