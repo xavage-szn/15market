@@ -814,6 +814,12 @@ export default function UserApp() {
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
+    
+    // GUARD: If user just performed an optimistic action (Trade/Deposit), 
+    // ignore backend syncs for 15s to allow chain confirmation.
+    const msSinceAction = Date.now() - lastOptimisticActionTime.current;
+    if (msSinceAction < 15000 && !force) return;
+
     try {
       // Read the real on-chain EOA session wallet balance from backend
       const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`);
@@ -1116,7 +1122,10 @@ export default function UserApp() {
     
     // Bind Socket listeners
     const unbindBal = socketService.on('balance_update', (data) => {
-      // Support both 'balance' and 'available' naming for cross-component compatibility
+      // GUARD: If user just performed an optimistic action, ignore socket updates for 15s
+      const msSinceAction = Date.now() - lastOptimisticActionTime.current;
+      if (msSinceAction < 15000 && data.reason !== 'WIN_PAYOUT') return;
+
       const val = data.balance || data.available;
       if (val !== undefined) {
         setSessionBalance(parseFloat(val));
