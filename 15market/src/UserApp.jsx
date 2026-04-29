@@ -518,17 +518,18 @@ export default function UserApp() {
         if (profileRes && profileRes.ok) {
           const pData = await profileRes.json();
           setUserProfile(pData);
-          setShowOnboarding(false);
-          localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
-        } else if (profileRes && profileRes.status === 404) {
-          // New User - check local storage to prevent flash if they JUST onboarded
-          const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
-          if (!localOnboarded) {
-            setUserProfile({ address: addr, isInitial: true });
-            setShowOnboarding(true);
+          if (!pData.xConnected && !pData.xHandle) {
+             setShowOnboarding(true);
+             localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
           } else {
-            setShowOnboarding(false);
+             setShowOnboarding(false);
+             localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
           }
+        } else {
+          // Force onboarding if profile missing or 404
+          setUserProfile({ address: addr, isInitial: true });
+          setShowOnboarding(true);
+          localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
         }
 
         // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
@@ -1040,8 +1041,14 @@ export default function UserApp() {
         const data = await res.json();
         if (data && !data.error) {
           setUserProfile(data);
-          setShowOnboarding(false);
-          localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+          
+          if (!data.xConnected && !data.xHandle) {
+             setShowOnboarding(true);
+             localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+          } else {
+             setShowOnboarding(false);
+             localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+          }
           
           // Persistent History Sync: Merge backend profile trades into UI history
           if (Array.isArray(data.trades)) {
@@ -1051,14 +1058,15 @@ export default function UserApp() {
           if (!evmSessionWallet && !isSignerInitializing) {
              initializeSessionWallet();
           }
-        } else if (hint === "true") {
-           // Fallback for returning users if backend transient error
-           setShowOnboarding(false);
         }
-      } else if (hint === "true") {
-         setShowOnboarding(false);
+      } else if (res.status === 404) {
+         // Profile wiped or never existed
+         setShowOnboarding(true);
+         localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
       }
     } catch (e) {
+      console.error("Profile fetch error:", e);
+      // In case of network failure, only bypass if they were previously verified
       if (localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`) === "true") {
         setShowOnboarding(false);
       }
