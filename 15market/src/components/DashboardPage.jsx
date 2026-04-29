@@ -62,42 +62,10 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
 
     // Fetch Data
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const xHandle = params.get('x_handle');
-        const xImage = params.get('x_image');
-        if (xHandle && address) {
-            handleSyncX(xHandle, xImage);
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
         fetchMetrics();
         const interval = setInterval(fetchMetrics, 20000); // Poll every 20s — analytics data is not real-time
         return () => clearInterval(interval);
     }, [address]);
-
-    const handleSyncX = async (handle, image) => {
-        if (!address) return;
-        setIsSyncing(true);
-        try {
-            // Sync to Keeper (Handle + Image)
-            await fetch(`${KEEPER_URL_ARC}/profiles`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    address: address.toLowerCase(),
-                    username: userProfile?.username || `Trader_${address.slice(0, 4)}`,
-                    avatar: image || "",
-                })
-            });
-
-            console.log("✅ X handle & image synced successfully!");
-            fetchMetrics();
-        } catch (e) {
-            console.error("Sync failed:", e);
-        } finally {
-            setIsSyncing(false);
-        }
-    };
 
     const fetchMetrics = async () => {
         try {

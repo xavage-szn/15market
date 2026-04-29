@@ -518,7 +518,7 @@ export default function UserApp() {
         if (profileRes && profileRes.ok) {
           const pData = await profileRes.json();
           setUserProfile(pData);
-          if (!pData.xConnected && !pData.xHandle) {
+          if (!pData.username) {
              setShowOnboarding(true);
              localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
           } else {
@@ -1042,7 +1042,7 @@ export default function UserApp() {
         if (data && !data.error) {
           setUserProfile(data);
           
-          if (!data.xConnected && !data.xHandle) {
+          if (!data.username) {
              setShowOnboarding(true);
              localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
           } else {

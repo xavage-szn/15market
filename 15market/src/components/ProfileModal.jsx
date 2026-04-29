@@ -121,40 +121,6 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
         }
     };
 
-    const handleLinkTwitter = async () => {
-        setIsVerifyingX(true);
-        try {
-            const CLIENT_ID = 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
-            const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL_ARC}/auth/twitter/callback`);
-            const SCOPE = encodeURIComponent('users.read tweet.read offline.access');
-
-            // Securely prepare state on backend
-            // Note: onboarding is TRUE because we want the backend to auto-update the profile
-            // The backend handles both new and existing profiles nicely now.
-            const prepareRes = await fetch(`${KEEPER_URL_ARC}/auth/twitter/prepare`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    address: address,
-                    username: username || "User", // Fallback if empty
-                    network: 'arc',
-                    onboarding: true, // Keep true to trigger the auto-save logic in backend
-                    origin: window.location.origin
-                })
-            });
-            const { state: stateId } = await prepareRes.json();
-
-            if (!stateId) throw new Error("Failed to prepare secure state");
-
-            const url = `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&state=${stateId}&code_challenge=challenge&code_challenge_method=plain`;
-
-            console.log('🔗 [X_AUTH] Initiating OAuth flow from Profile...');
-            window.location.href = url;
-        } catch (e) {
-            console.error("X Auth Failed:", e);
-            notify("Could not initiate X login.", "error");
-            setIsVerifyingX(false);
-        }
     };
 
     if (!isOpen) return null;
@@ -354,29 +320,6 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                 />
                             </div>
                         </div>
-
-                        <div>
-                            <label className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-2 block`}>X Handle</label>
-                            <div className="flex gap-2">
-                                <input
-                                    value={xHandle}
-                                    placeholder="@username"
-                                    disabled={true}
-                                    className={`flex-1 ${isLight ? 'bg-white text-black border-black/10' : 'bg-black text-white border-white/10'} border rounded-2xl px-5 py-3.5 text-xs font-bold opacity-70 outline-none cursor-not-allowed`}
-                                />
-                                {!xHandle && (
-                                    <button
-                                        onClick={handleLinkTwitter}
-                                        className={`px-4 rounded-full ${isLight ? 'bg-[#3CB371] text-black' : 'bg-white text-black'} text-[10px] font-black transition-transform active:scale-95 hover:bg-[#3CB371]`}
-                                    >
-                                        LINK X
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-
-                    </div>
 
                     <div className="mt-6 flex flex-col gap-3">
                         <button
