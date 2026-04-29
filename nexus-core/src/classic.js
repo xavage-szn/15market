@@ -370,22 +370,8 @@ class ClassicEngine {
     this.io.to(userAddr).emit('trade_settled', settledEvent);
     this.io.emit('trade_settled', settledEvent);
 
-    // Sync session balance from on-chain after settlement
-    setTimeout(async () => {
-      try {
-        const balStr = await rpc.getBalance(trade.sessionAddress || trade.userAddr);
-        const session = cache.sessions.get(userAddr);
-        if (session) {
-          session.balance = parseFloat(balStr);
-          this.io.to(userAddr).emit('balance_update', {
-            balance: String(session.balance),
-            reason: won ? 'WIN' : 'LOSS',
-            betId: trade.id,
-            payout: String(payout),
-          });
-        }
-      } catch (e) {}
-    }, 1500);
+    // On-chain sync is now handled gracefully after the payout transaction actually confirms.
+    // The optimistic update above is sufficient for the UI.
 
     if (won && payout > 0) {
       this.queuePayoutJob(trade);
@@ -449,6 +435,20 @@ class ClassicEngine {
       
       this.payoutNonce++; // Increment for next job
       payoutTxHash = tx.hash;
+      
+      // Detached promise to sync true on-chain balance only AFTER confirmation
+      tx.wait().then(async () => {
+        const balStr = await rpc.getBalance(destination);
+        const session = cache.sessions.get(trade.userAddr);
+        if (session) {
+          session.balance = parseFloat(balStr);
+          this.io.to(trade.userAddr).emit('balance_update', {
+            balance: String(session.balance),
+            reason: 'CHAIN_SYNC_CONFIRMED'
+          });
+        }
+      }).catch(() => {});
+      
       console.log(`[Payout] TX Broadcasted: ${payoutTxHash}`);
     } catch (err) {
       console.error(`[Payout] Failed to send winnings for trade ${trade.id}:`, err.message);
@@ -476,16 +476,13 @@ class ClassicEngine {
 
     const session = cache.sessions.get(trade.userAddr);
     if (session) {
-      // Refresh balance from chain to be sure
-      const balStr = await rpc.getBalance(trade.sessionAddress || trade.userAddr);
-      session.balance = parseFloat(balStr);
-
+      // Balance was already optimistically credited in settleTrade.
+      // We just emit the payout confirmation event here.
       this.io.to(trade.userAddr).emit('balance_update', {
         balance: String(session.balance),
-        reason: 'WIN_PAYOUT',
+        reason: 'WIN_PAYOUT_SENT',
         betId: trade.id,
-        payout: String(job.amount),
-        txHash: payoutTxHash,
+        txHash: payoutTxHash
       });
     }
 
