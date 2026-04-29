@@ -3,59 +3,51 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, Check, ChevronRight, Zap, Shield, Sparkles, Twitter, Camera } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-const AVATARS = [
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Midnight",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Oliver",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Luna",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Shadow"
-];
-
-export const OnboardingFlow = ({ address, onComplete, theme }) => {
+export const OnboardingFlow = ({ address, onComplete, theme, userProfile }) => {
     const [step, setStep] = useState(1);
-    const [username, setUsername] = useState('');
-    const [xHandle, setXHandle] = useState('');
-    const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
+    const [username, setUsername] = useState(userProfile?.username || '');
     const [saveError, setSaveError] = useState('');
     const isLight = theme === 'light';
 
-    const [isSaving, setIsSaving] = useState(false);
+    const [isLinking, setIsLinking] = useState(false);
 
-    const handleSave = async () => {
-        if (!username.trim()) return;
-        setSaveError('');
-        setIsSaving(true);
+    const handleLinkX = async () => {
+        if (!username.trim()) {
+            setSaveError('Please enter a display name first.');
+            return;
+        }
+        setIsLinking(true);
         try {
-            const res = await fetch(`${KEEPER_URL_ARC}/profiles`, {
+            const CLIENT_ID = 'cDdEeHQwYnp4Y2lJRVMzdk5CRlg6MTpjaQ';
+            const REDIRECT_URI = encodeURIComponent(`${KEEPER_URL_ARC}/auth/twitter/callback`);
+            const SCOPE = encodeURIComponent('users.read tweet.read offline.access');
+
+            const prepareRes = await fetch(`${KEEPER_URL_ARC}/auth/twitter/prepare`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    address: address.toLowerCase(),
+                    address: address,
                     username: username.trim(),
-                    xHandle: xHandle.trim(),
-                    avatar: selectedAvatar,
-                    onboardedAt: Date.now()
+                    network: 'arc',
+                    onboarding: true,
+                    origin: window.location.origin
                 })
             });
-            const data = await res.json();
-            if (res.ok && data.success) {
-                localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, 'true');
-                onComplete(data.profile || { 
-                    username: username.trim(), 
-                    xHandle: xHandle.trim(), 
-                    avatar: selectedAvatar 
-                });
-            } else {
-                setSaveError(data.error || 'Failed to save profile. Please try again.');
-            }
+            const { state: stateId } = await prepareRes.json();
+
+            if (!stateId) throw new Error("Failed to prepare secure state");
+
+            const url = `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${SCOPE}&state=${stateId}&code_challenge=challenge&code_challenge_method=plain`;
+
+            window.location.href = url;
         } catch (e) {
-            console.error("Save profile failed:", e);
-            setSaveError('Network error — is the backend running? Check localhost:3010.');
-        } finally {
-            setIsSaving(false);
+            console.error("X Auth Failed:", e);
+            setSaveError("Could not initiate X login. Check connection.");
+            setIsLinking(false);
         }
     };
+
+
 
     return (
         <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
@@ -112,30 +104,13 @@ export const OnboardingFlow = ({ address, onComplete, theme }) => {
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="flex flex-col gap-4">
-                                        <div className="flex justify-center gap-3 overflow-x-auto no-scrollbar py-2">
-                                            {AVATARS.map((url, i) => (
-                                                <button 
-                                                    key={i}
-                                                    onClick={() => setSelectedAvatar(url)}
-                                                    className={`shrink-0 w-12 h-12 rounded-full border-2 transition-all ${selectedAvatar === url ? 'border-[#3CB371] scale-110' : 'border-transparent opacity-40 hover:opacity-100'}`}
-                                                >
-                                                    <img src={url} alt="Avatar" className="w-full h-full rounded-full" />
-                                                </button>
-                                            ))}
-                                        </div>
-                                        
-                                        <div className="relative">
-                                            <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20">
-                                                <Camera size={16} />
-                                            </div>
-                                            <input 
-                                                type="text" 
-                                                value={selectedAvatar.startsWith('http') && !AVATARS.includes(selectedAvatar) ? selectedAvatar : ''}
-                                                onChange={(e) => setSelectedAvatar(e.target.value)}
-                                                placeholder="Custom Avatar URL (Optional)"
-                                                className={`w-full py-4 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-white/5 border-white/10'} border focus:border-[#3CB371] outline-none text-xs font-bold transition-all placeholder:text-white/10`}
-                                            />
+                                    <div className="flex justify-center mb-6">
+                                        <div className={`w-20 h-20 rounded-full border-2 ${isLight ? 'border-black/10 bg-black/5' : 'border-white/10 bg-white/5'} flex items-center justify-center overflow-hidden`}>
+                                            {userProfile?.avatar ? (
+                                                <img src={userProfile.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <User size={32} className="opacity-20" />
+                                            )}
                                         </div>
                                     </div>
 
@@ -147,22 +122,12 @@ export const OnboardingFlow = ({ address, onComplete, theme }) => {
                                             type="text" 
                                             maxLength={20}
                                             value={username}
-                                            onChange={(e) => setUsername(e.target.value)}
+                                            onChange={(e) => {
+                                                setUsername(e.target.value);
+                                                setSaveError('');
+                                            }}
                                             placeholder="Display Name"
-                                            className={`w-full py-5 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-white/5 border-white/10'} border focus:border-[#3CB371] outline-none text-lg font-black transition-all placeholder:text-white/10`}
-                                        />
-                                    </div>
-
-                                    <div className="relative">
-                                        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20">
-                                            <Twitter size={18} />
-                                        </div>
-                                        <input 
-                                            type="text" 
-                                            value={xHandle}
-                                            onChange={(e) => setXHandle(e.target.value)}
-                                            placeholder="X (Twitter) Handle"
-                                            className={`w-full py-5 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-white/5 border-white/10'} border focus:border-[#3CB371] outline-none text-lg font-black transition-all placeholder:text-white/10`}
+                                            className={`w-full py-5 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200 text-black' : 'bg-white/5 border-white/10 text-white'} border focus:border-[#3CB371] outline-none text-lg font-black transition-all placeholder:opacity-30`}
                                         />
                                     </div>
                                 </div>
@@ -174,12 +139,12 @@ export const OnboardingFlow = ({ address, onComplete, theme }) => {
                                 )}
 
                                 <button 
-                                    disabled={!username.trim() || isSaving}
-                                    onClick={handleSave}
-                                    className={`w-full py-5 ${!username.trim() ? 'bg-white/5 text-white/20' : 'bg-[#3CB371] text-white'} rounded-2xl font-black uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-2`}
+                                    disabled={!username.trim() || isLinking}
+                                    onClick={handleLinkX}
+                                    className={`w-full py-5 ${!username.trim() ? 'bg-white/5 text-white/20' : 'bg-[#1DA1F2] text-white shadow-[0_0_20px_rgba(29,161,242,0.3)]'} rounded-2xl font-black uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-3`}
                                 >
-                                    {isSaving ? "Finalizing..." : "Complete Setup"}
-                                    {!isSaving && <Zap size={18} />}
+                                    {isLinking ? "Redirecting..." : "LINK X ACCOUNT"}
+                                    {!isLinking && <Twitter size={18} />}
                                 </button>
                             </motion.div>
                         )}

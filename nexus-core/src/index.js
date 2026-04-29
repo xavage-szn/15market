@@ -478,12 +478,12 @@ const crypto = require('crypto');
 const oauthStates = new Map();
 
 app.post('/auth/twitter/prepare', (req, res) => {
-  const { address, origin } = req.body;
+  const { address, origin, username } = req.body;
   if (!address) return res.status(400).json({ error: 'Wallet address required' });
 
   const stateId = crypto.randomBytes(16).toString('hex');
   
-  oauthStates.set(stateId, { address: address.toLowerCase(), origin });
+  oauthStates.set(stateId, { address: address.toLowerCase(), origin, username });
   
   res.json({ state: stateId });
 });
@@ -530,12 +530,13 @@ app.get('/auth/twitter/callback', async (req, res) => {
     const userData = await userRes.json();
     const xUser = userData.data;
     
-    // Link to persistent profile!
+    // Auto-onboard or link X securely
     profiles.upsert(session.address, {
       xHandle: xUser.username,
       xId: xUser.id,
       avatar: xUser.profile_image_url,
-      xConnected: true
+      xConnected: true,
+      username: session.username || xUser.username // Store display name passed from frontend
     });
     
     // Redirect back to frontend with success params
