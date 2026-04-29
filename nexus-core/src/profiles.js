@@ -85,6 +85,67 @@ class ProfileService {
         const profile = this.get(address);
         return profile ? (profile.trades || []) : [];
     }
+
+    getProfileStats(address) {
+        const trades = this.getHistory(address);
+        let totalWins = 0;
+        let totalVolume = 0;
+        
+        trades.forEach(t => {
+            if (t.won || t.status === 'WON') totalWins++;
+            totalVolume += parseFloat(t.amount || 0);
+        });
+
+        return {
+            totalTrades: trades.length,
+            totalWins,
+            totalVolume
+        };
+    }
+
+    getGlobalStats() {
+        let bulls = 0;
+        let bears = 0;
+        let totalStake = 0;
+        let vol = 0;
+        let totalWins = 0;
+        let totalTrades = 0;
+        let allTrades = [];
+
+        for (const addr in this.profiles) {
+            const history = this.profiles[addr].trades || [];
+            totalTrades += history.length;
+            
+            for (const trade of history) {
+                const amt = parseFloat(trade.amount || 0);
+                if (String(trade.direction).toUpperCase().includes("UP") || trade.direction === 1) bulls++;
+                else bears++;
+                
+                totalStake += amt;
+                vol += amt;
+                if (trade.won || trade.status === 'WON') totalWins++;
+                
+                allTrades.push(trade);
+            }
+        }
+
+        const total = bulls + bears;
+        
+        allTrades.sort((a, b) => (b.timestamp || b.settledAt || 0) - (a.timestamp || a.settledAt || 0));
+
+        return {
+            bullBearRatio: total > 0 ? Math.round((bulls / total) * 100) : 50,
+            sentiment: total > 0 ? (bulls > bears ? 'BULLISH' : bulls < bears ? 'BEARISH' : 'NEUTRAL') : 'NEUTRAL',
+            avgStake: total > 0 ? (totalStake / total).toFixed(2) : '0.00',
+            totalVolume: vol.toFixed(2),
+            activeTraders: Object.keys(this.profiles).length,
+            globalWinRate: totalTrades > 0 ? ((totalWins / totalTrades) * 100).toFixed(1) : '0.0',
+            totalTrades,
+            recentTrades: allTrades.slice(0, 50),
+            bullsInfo: bulls,
+            bearsInfo: bears
+        };
+    }
 }
 
 module.exports = new ProfileService();

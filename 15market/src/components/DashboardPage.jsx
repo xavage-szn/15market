@@ -117,34 +117,22 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                 }
             }
 
-            // Global Market Data... (keep existing logic for market pulse)
-            const savedHistory = localStorage.getItem("15market_global_history_v2");
-            let history = savedHistory ? JSON.parse(savedHistory) : [];
-
-            let bulls = 0;
-            let bears = 0;
-            let totalStake = 0;
-            let vol = 0;
-
-            history.forEach(trade => {
-                const amt = parseFloat(trade.amount || 0);
-                if (String(trade.direction).toUpperCase().includes("UP")) bulls++;
-                else bears++;
-                totalStake += amt;
-                vol += amt;
-            });
-
-            const total = bulls + bears;
-
-            setStats(prev => ({
-                ...prev,
-                marketSentiment: total > 0 ? ((bulls / total) * 100).toFixed(0) : 50,
-                marketAvgStake: total > 0 ? (totalStake / total).toFixed(3) : "0.000",
-                marketTotalVol: vol.toFixed(3),
-                bullsInfo: bulls,
-                bearsInfo: bears,
-                recentTrades: history.slice(0, 50)
-            }));
+            // AUTHORITATIVE GLOBAL METRICS
+            const globalRes = await fetch(`${KEEPER_URL_ARC}/stats/global`);
+            if (globalRes.ok) {
+                const globalData = await globalRes.json();
+                setStats(prev => ({
+                    ...prev,
+                    marketSentiment: globalData.bullBearRatio || 50,
+                    sentiment: globalData.sentiment || 'NEUTRAL',
+                    marketAvgStake: globalData.avgStake || "0.000",
+                    marketTotalVol: globalData.totalVolume || "0.000",
+                    activeTraders: globalData.activeTraders || 0,
+                    bullsInfo: globalData.bullsInfo || 0,
+                    bearsInfo: globalData.bearsInfo || 0,
+                    recentTrades: globalData.recentTrades || []
+                }));
+            }
 
             setIsLoading(false);
         } catch (e) {

@@ -446,11 +446,16 @@ app.get('/profiles/:address', (req, res) => {
   const profile = profiles.get(addr);
   if (!profile) return res.status(404).json({ error: 'Profile not found' });
   
-  // Include trades in the profile response for unified sync
+  // Include trades and computed stats in the profile response for unified sync
   res.json({
     ...profile,
+    stats: profiles.getProfileStats(addr),
     trades: profiles.getHistory(addr)
   });
+});
+
+app.get('/stats/global', (req, res) => {
+  res.json(profiles.getGlobalStats());
 });
 
 app.post('/profiles', (req, res) => {
