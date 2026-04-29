@@ -74,40 +74,33 @@ async function pollPrices() {
   
   await Promise.all(keys.map(async (key) => {
     try {
-      const sources = [
-        {
-          name: 'pyth',
-          url: `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${PYTH_IDS[key]}`,
-          parse: (d) => {
-            const p = d.parsed?.[0]?.price;
-            if (!p) return null;
-            return parseFloat(p.price) * Math.pow(10, p.expo);
-          }
-        },
-        {
-          name: 'binance',
-          url: `https://api.binance.com/api/v3/ticker/price?symbol=${BINANCE_IDS[key]}`,
-          parse: (d) => parseFloat(d.price)
-        },
-        {
-          name: 'mexc',
-          url: `https://api.mexc.com/api/v3/ticker/price?symbol=${MEXC_IDS[key]}`,
-          parse: (d) => parseFloat(d.price)
-        }
-      ];
-
-      // Run all sources but prioritize them in order: Pyth > Binance > MEXC
-      const results = await Promise.allSettled(sources.map(s => fetchFromSource(s.url, s.parse)));
-      
       let bestPrice = null;
       let sourceUsed = 'none';
 
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].status === 'fulfilled' && results[i].value) {
-          bestPrice = results[i].value;
-          sourceUsed = sources[i].name;
-          break; // Found the highest priority working source
-        }
+      // 1. Pyth (Primary)
+      try {
+        bestPrice = await fetchFromSource(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${PYTH_IDS[key]}`, (d) => {
+          const p = d.parsed?.[0]?.price;
+          if (!p) return null;
+          return parseFloat(p.price) * Math.pow(10, p.expo);
+        });
+        sourceUsed = 'pyth';
+      } catch (e) {}
+
+      // 2. Binance (Fallback)
+      if (!bestPrice || bestPrice <= 0) {
+        try {
+          bestPrice = await fetchFromSource(`https://api.binance.com/api/v3/ticker/price?symbol=${BINANCE_IDS[key]}`, d => parseFloat(d.price));
+          sourceUsed = 'binance';
+        } catch (e) {}
+      }
+
+      // 3. MEXC (Last Resort)
+      if (!bestPrice || bestPrice <= 0) {
+        try {
+          bestPrice = await fetchFromSource(`https://api.mexc.com/api/v3/ticker/price?symbol=${MEXC_IDS[key]}`, d => parseFloat(d.price));
+          sourceUsed = 'mexc';
+        } catch (e) {}
       }
 
       if (bestPrice && bestPrice > 0) {
@@ -129,7 +122,7 @@ async function pollPrices() {
     }
   }));
 }
-setInterval(pollPrices, 350);
+setInterval(pollPrices, 1000);
 
 // --- Socket.IO ---
 io.on('connection', (socket) => {

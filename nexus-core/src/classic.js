@@ -26,10 +26,17 @@ class ClassicEngine {
         if (trade.status === 'PENDING') {
           const msLeft = (trade.settleAt || 0) - now;
           const timeLeft = Math.max(0, msLeft / 1000);
-          const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
           const direction = this.resolveDirection(trade.direction);
           const isUp = direction === 1;
-          const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
+          
+          let currentPrice, isWinning;
+          if (trade.expiryEmitted && trade.lockedExitPrice !== undefined) {
+            currentPrice = trade.lockedExitPrice;
+            isWinning = trade.lockedWon;
+          } else {
+            currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
+            isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
+          }
 
           // Push authoritative state to frontend
           this.io.to(trade.userAddr).emit('trade_tick', {
@@ -43,6 +50,8 @@ class ClassicEngine {
           // LOCK RESULT: At the exact moment of backend expiration, freeze and notify
           if (timeLeft <= 0 && !trade.expiryEmitted) {
             trade.expiryEmitted = true;
+            trade.lockedExitPrice = currentPrice;
+            trade.lockedWon = isWinning;
             this.io.to(trade.userAddr).emit('trade_expired', {
               betId: trade.id,
               exitPrice: currentPrice,
@@ -278,9 +287,10 @@ class ClassicEngine {
 
       // PRIORITY SETTLEMENT: Identify winners vs losers to prioritize payout tasks
       const prioritizedDue = due.map(trade => {
-        const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
+        const exitPrice = trade.lockedExitPrice !== undefined ? trade.lockedExitPrice : (cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice);
         const direction = this.resolveDirection(trade.direction);
-        const won = (direction === 1) ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
+        const isUp = direction === 1;
+        const won = trade.lockedWon !== undefined ? trade.lockedWon : (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice));
         return { trade, won };
       }).sort((a, b) => (b.won ? 1 : 0) - (a.won ? 1 : 0));
 
@@ -298,14 +308,14 @@ class ClassicEngine {
 
     const userAddr = trade.userAddr.toLowerCase();
 
-    // Use historical price at close time for stable settlement
-    const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
+    // Use the locked result from Trade Monitor to ensure WYSIWYG
+    const exitPrice = trade.lockedExitPrice !== undefined ? trade.lockedExitPrice : (cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice);
     
     const direction = this.resolveDirection(trade.direction);
     const isUp = direction === 1;
     
     // Won if price moved in direction. Tie is currently a loss as per platform rules.
-    const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
+    const won = trade.lockedWon !== undefined ? trade.lockedWon : (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice));
     
     if (exitPrice === trade.entryPrice) {
       console.log(`[Settle] Trade ${trade.id} is a TIE at ${exitPrice}. Resulting in LOSS.`);
