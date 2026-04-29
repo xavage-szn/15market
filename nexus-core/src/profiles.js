@@ -1,31 +1,39 @@
-const fs = require('fs');
-const path = require('path');
+const Redis = require('ioredis');
 
-const DB_PATH = path.join(__dirname, '..', 'profiles_db.json');
+// Ensure we don't block startup but sync as soon as possible
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 class ProfileService {
     constructor() {
         this.profiles = {};
         this.load();
+        
+        // Sync to Redis periodically instead of blocking
+        setInterval(() => this.save(), 5000);
     }
 
-    load() {
+    async load() {
         try {
-            if (fs.existsSync(DB_PATH)) {
-                const data = fs.readFileSync(DB_PATH, 'utf8');
+            const data = await redis.get('15market_profiles_db');
+            if (data) {
                 this.profiles = JSON.parse(data);
+                console.log(`[Profiles] Loaded ${Object.keys(this.profiles).length} profiles from Redis.`);
+            } else {
+                console.log(`[Profiles] No existing profiles found in Redis. Starting fresh.`);
             }
         } catch (e) {
-            console.error("Failed to load profiles:", e);
-            this.profiles = {};
+            console.error("Failed to load profiles from Redis:", e);
         }
     }
 
-    save() {
+    async save() {
         try {
-            fs.writeFileSync(DB_PATH, JSON.stringify(this.profiles, null, 2));
+            // Only save if there are profiles to prevent overwriting with empty
+            if (Object.keys(this.profiles).length > 0) {
+                await redis.set('15market_profiles_db', JSON.stringify(this.profiles));
+            }
         } catch (e) {
-            console.error("Failed to save profiles:", e);
+            console.error("Failed to save profiles to Redis:", e);
         }
     }
 

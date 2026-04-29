@@ -467,6 +467,81 @@ app.patch('/profiles/:address', (req, res) => {
   res.json({ success: true, profile });
 });
 
+// ─── X (TWITTER) OAUTH INTEGRATION ──────────────────────────────────────────────
+
+const crypto = require('crypto');
+const oauthStates = new Map();
+
+app.post('/auth/twitter/prepare', (req, res) => {
+  const { address, origin } = req.body;
+  if (!address) return res.status(400).json({ error: 'Wallet address required' });
+
+  const stateId = crypto.randomBytes(16).toString('hex');
+  
+  oauthStates.set(stateId, { address: address.toLowerCase(), origin });
+  
+  res.json({ state: stateId });
+});
+
+app.get('/auth/twitter/callback', async (req, res) => {
+  const { state, code } = req.query;
+  const session = oauthStates.get(state);
+  
+  if (!session) return res.status(400).send('Invalid or expired authentication session');
+  oauthStates.delete(state);
+  
+  try {
+    const authHeader = 'Basic ' + Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString('base64');
+    
+    // Polyfill for fetch if needed, but Node 18+ has native fetch
+    const tokenRes = await fetch('https://api.twitter.com/2/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': authHeader
+      },
+      body: new URLSearchParams({
+        code,
+        grant_type: 'authorization_code',
+        client_id: process.env.TWITTER_CLIENT_ID,
+        redirect_uri: process.env.TWITTER_CALLBACK_URL,
+        code_verifier: 'challenge'
+      })
+    });
+    
+    if (!tokenRes.ok) {
+      console.error('Twitter token error:', await tokenRes.text());
+      return res.status(400).send('Failed to authenticate with X');
+    }
+    
+    const tokenData = await tokenRes.json();
+    
+    const userRes = await fetch('https://api.twitter.com/2/users/me?user.fields=profile_image_url', {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+    });
+    
+    if (!userRes.ok) return res.status(400).send('Failed to retrieve X profile info');
+    
+    const userData = await userRes.json();
+    const xUser = userData.data;
+    
+    // Link to persistent profile!
+    profiles.upsert(session.address, {
+      xHandle: xUser.username,
+      xId: xUser.id,
+      avatar: xUser.profile_image_url,
+      xConnected: true
+    });
+    
+    // Redirect back to frontend with success params
+    const frontendOrigin = session.origin || 'http://localhost:5173';
+    res.redirect(`${frontendOrigin}/?x_connected=true&x_handle=${xUser.username}`);
+  } catch (err) {
+    console.error('Twitter callback error:', err);
+    res.status(500).send('Internal Server Error during X authentication');
+  }
+});
+
 // ─── MISC ─────────────────────────────────────────────────────────────────────
 
 app.get('/listings', (req, res) => {
