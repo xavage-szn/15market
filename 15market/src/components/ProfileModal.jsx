@@ -120,9 +120,6 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
             setIsSaving(false);
         }
     };
-
-    };
-
     if (!isOpen) return null;
 
     return (
@@ -320,6 +317,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                 />
                             </div>
                         </div>
+                    </div>
 
                     <div className="mt-6 flex flex-col gap-3">
                         <button
