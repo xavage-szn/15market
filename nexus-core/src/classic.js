@@ -432,7 +432,8 @@ class ClassicEngine {
       console.log(`[Payout] Sending ${job.amount} USDC winning to ${destination}`);
       
       const feeData = await rpc.mainProvider.getFeeData();
-      const gasPrice = (feeData.gasPrice * 130n) / 100n; // 1.3x for payouts
+      const baseGasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("50", "gwei");
+      const gasPrice = (baseGasPrice * 130n) / 100n; // 1.3x for payouts
 
       // Manual nonce to prevent collisions in fast batch
       if (!this.payoutNonce) {
@@ -500,9 +501,14 @@ class ClassicEngine {
       const claimed = this.claimPayoutJobs(config.SETTLEMENT_CONCURRENCY);
       // Process payout transactions sequentially to avoid nonce issues
       for (const job of claimed) {
-        await this.dispatchPayout(job, 'inline_fallback');
-        const idx = cache.payoutQueue.findIndex(j => j.jobId === job.jobId);
-        if (idx !== -1) cache.payoutQueue.splice(idx, 1);
+        const result = await this.dispatchPayout(job, 'inline_fallback');
+        if (result.ok) {
+          const idx = cache.payoutQueue.findIndex(j => j.jobId === job.jobId);
+          if (idx !== -1) cache.payoutQueue.splice(idx, 1);
+        } else {
+          // Keep in queue for retry if it failed (e.g. out of gas or network error)
+          console.warn(`[Payout] Job ${job.jobId} failed, will retry next batch.`);
+        }
       }
     } finally {
       this.payoutQueueProcessing = false;
