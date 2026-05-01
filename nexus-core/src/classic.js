@@ -278,7 +278,10 @@ class ClassicEngine {
 
     const session = cache.sessions.get(userAddr);
     if (session) {
-      if (won) session.balance = Number((session.balance + payout).toFixed(4));
+      if (won) {
+        session.balance = Number((session.balance + payout).toFixed(4));
+        session.lastWinAt = Date.now();
+      }
       this.io.to(userAddr).emit('balance_update', {
         balance: String(session.balance),
         reason: won ? 'WIN' : 'LOSS',
@@ -315,6 +318,7 @@ class ClassicEngine {
       jobId: `payout_${trade.id}_${this.payoutJobCounter}`,
       tradeId: trade.id,
       userAddr: trade.userAddr,
+      sessionAddress: trade.sessionAddress, // Ensure we pay to the session wallet
       amount: trade.payout,
       queuedAt: Date.now(),
       status: 'QUEUED',
@@ -333,9 +337,11 @@ class ClassicEngine {
       for (const job of cache.payoutQueue) {
         if (job.status !== 'QUEUED') continue;
         const addr = job.userAddr.toLowerCase();
-        if (!userBatches[addr]) userBatches[addr] = { total: 0, jobs: [] };
-        userBatches[addr].total += Number(job.amount);
-        userBatches[addr].jobs.push(job);
+        const dest = job.sessionAddress ? job.sessionAddress.toLowerCase() : addr;
+        
+        if (!userBatches[dest]) userBatches[dest] = { total: 0, jobs: [], userAddr: addr };
+        userBatches[dest].total += Number(job.amount);
+        userBatches[dest].jobs.push(job);
         job.status = 'CLAIMED';
       }
 
@@ -349,10 +355,10 @@ class ClassicEngine {
       }
 
       // 3. Dispatch Batch Payouts
-      for (const addr of users) {
-        const batch = userBatches[addr];
+      for (const dest of users) {
+        const batch = userBatches[dest];
         try {
-          const txHash = await this.dispatchBatchPayout(addr, batch.total, batch.jobs);
+          const txHash = await this.dispatchBatchPayout(dest, batch.total, batch.jobs, batch.userAddr);
           if (txHash) {
              // Successfully sent
              batch.jobs.forEach(j => processedJobIds.add(j.jobId));
@@ -360,7 +366,7 @@ class ClassicEngine {
              batch.jobs.forEach(j => { j.status = 'QUEUED'; });
           }
         } catch (err) {
-          console.error(`[Payout] Batch failed for ${addr}:`, err.message);
+          console.error(`[Payout] Batch failed for ${dest}:`, err.message);
           batch.jobs.forEach(j => { j.status = 'QUEUED'; });
           this.payoutNonce = null; // Forces re-sync on next loop
         }
@@ -374,9 +380,9 @@ class ClassicEngine {
     }
   }
 
-  async dispatchBatchPayout(userAddr, totalAmount, jobs) {
-    const destination = ethers.getAddress(userAddr);
-    console.log(`[Payout] Dispatching BATCH win (${totalAmount} USDC) for ${userAddr} (${jobs.length} trades)`);
+  async dispatchBatchPayout(destinationAddr, totalAmount, jobs, userAddr) {
+    const destination = ethers.getAddress(destinationAddr);
+    console.log(`[Payout] Dispatching BATCH win (${totalAmount.toFixed(4)} USDC) to ${destination} (${jobs.length} trades)`);
 
     try {
       const feeData = await rpc.mainProvider.getFeeData();
@@ -387,13 +393,13 @@ class ClassicEngine {
         value: ethers.parseUnits(totalAmount.toFixed(18), 18),
         gasPrice,
         nonce: this.payoutNonce,
-        gasLimit: 100000
+        gasLimit: 120000
       });
 
       const txHash = tx.hash;
       this.payoutNonce++;
       
-      // Update job states
+      // Update job states and broadcast
       jobs.forEach(job => {
         const trade = cache.trades.get(job.tradeId);
         if (trade) {
@@ -402,6 +408,7 @@ class ClassicEngine {
           trade.paidAt = Date.now();
         }
         
+        // Update history persistence
         const profiles = require('./profiles');
         profiles.updateTrade(userAddr, job.tradeId, { payoutTx: txHash, status: 'PAID' });
 
@@ -413,18 +420,30 @@ class ClassicEngine {
         });
       });
 
-      // Chain confirmation sync
+      // Chain confirmation sync: Ensure balance is updated both in memory and on UI after confirmation
       tx.wait().then(async () => {
-        const balStr = await rpc.getBalance(destination);
-        const session = cache.sessions.get(userAddr);
-        if (session) {
-          session.balance = parseFloat(balStr);
-          this.io.to(userAddr).emit('balance_update', { balance: String(session.balance), reason: 'CHAIN_SYNC' });
+        try {
+          const balStr = await rpc.getBalance(destination);
+          const session = cache.sessions.get(userAddr);
+          if (session) {
+            session.balance = parseFloat(balStr);
+            this.io.to(userAddr).emit('balance_update', { 
+              balance: String(session.balance), 
+              reason: 'WIN_PAYOUT_SETTLED',
+              txHash: txHash 
+            });
+            console.log(`[Payout] Sync complete for ${userAddr}. New balance: ${session.balance}`);
+          }
+        } catch (syncErr) {
+          console.error(`[Payout] Sync error for ${userAddr}:`, syncErr.message);
         }
-      }).catch(() => {});
+      }).catch((e) => {
+        console.error(`[Payout] Tx confirmation failed for ${userAddr}:`, e.message);
+      });
 
       return txHash;
     } catch (err) {
+      console.error(`[Payout] Transaction failed:`, err.message);
       throw err;
     }
   }

@@ -187,13 +187,23 @@ app.post('/session/init', async (req, res) => {
       balance = ethers.formatEther(balWei);
     } catch (_) {}
 
-    // Sync in-process session
-    const session = cache.getOrCreateSession(userAddr, {
-      identityKey: userAddr,
-      walletAddress: identity.walletAddress,
-      sessionAddress,
-      balance: parseFloat(balance),
-    });
+    // Sync in-process session with protection against recent win reversion
+    let session = cache.sessions.get(userAddr);
+    const onChainBal = parseFloat(balance);
+    if (session) {
+      const timeSinceWin = Date.now() - (session.lastWinAt || 0);
+      // Only downgrade if it's been a while since a win (45s)
+      if (onChainBal > session.balance || timeSinceWin > 45000) {
+        session.balance = onChainBal;
+      }
+    } else {
+      session = cache.getOrCreateSession(userAddr, {
+        identityKey: userAddr,
+        walletAddress: identity.walletAddress,
+        sessionAddress,
+        balance: onChainBal,
+      });
+    }
 
     res.json({
       success: true,
@@ -218,11 +228,22 @@ app.get('/session/balance/:address', async (req, res) => {
     const balWei = await provider.getBalance(sessionWallet.address);
     const balance = ethers.formatEther(balWei);
 
-    // Also sync in-process session balance
+    // Also sync in-process session balance with protection
     const session = cache.sessions.get(userAddr);
-    if (session) session.balance = parseFloat(balance);
+    const onChainBal = parseFloat(balance);
+    if (session) {
+      const timeSinceWin = Date.now() - (session.lastWinAt || 0);
+      if (onChainBal > session.balance || timeSinceWin > 45000) {
+        session.balance = onChainBal;
+      }
+    }
 
-    res.json({ success: true, balance, sessionAddress: sessionWallet.address, source: 'eoa-onchain' });
+    res.json({ 
+      success: true, 
+      balance: String(session ? session.balance : onChainBal), 
+      sessionAddress: sessionWallet.address, 
+      source: 'eoa-onchain-synced' 
+    });
   } catch (err) {
     console.error('[session/balance] error:', err.message);
     // If RPC fails, return the cached in-memory balance as fallback
