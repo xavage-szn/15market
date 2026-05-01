@@ -315,7 +315,7 @@ app.post('/session/cashout', async (req, res) => {
     }
 
     const feeData = await rpc.mainProvider.getFeeData();
-    const gasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
+    const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
     const gasCost = gasPrice * gasLimit;
 
     let sendAmount;

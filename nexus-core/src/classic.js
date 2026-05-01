@@ -16,8 +16,12 @@ class ClassicEngine {
   }
 
   start() {
-    // Run settlement check every 25ms for near-instant settlement
-    setInterval(() => this.processSettlementBatch(), config.BATCH_WINDOW_MS);
+    // Run settlement check every 100ms
+    setInterval(() => this.processSettlementBatch(), Math.max(100, config.BATCH_WINDOW_MS));
+    
+    // Auto-refill operator wallet if low (every 30s)
+    setInterval(() => this.ensureOperatorFunded(), 30000);
+
     
     // Trade Monitor: High-frequency authoritative pulse to drive the UI
     setInterval(() => {
@@ -173,7 +177,7 @@ class ClassicEngine {
         return { success: false, error: `Insufficient Balance. You need at least ${amount + gasMargin} USDC.` };
       }
 
-      const numericId = BigInt(Date.now());
+      const numericId = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
       
       try {
         console.log(`[Trade] Attempting contract stake via placeBet() for ${userAddr}`);
@@ -185,6 +189,10 @@ class ClassicEngine {
         const contractDir = direction === 1 ? 0 : 1; 
         const contractPrice = ethers.parseUnits(entryPrice.toFixed(8), 8);
 
+        // Gas tuning for Arc Testnet
+        const feeData = await rpc.mainProvider.getFeeData();
+        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
+
         const tx = await contract.placeBet(
           numericId,
           contractDir,
@@ -192,18 +200,28 @@ class ClassicEngine {
           contractPrice,
           marketId,
           checksummedUserAddr,
-          { value: ethers.parseUnits(amount.toFixed(18), 18) }
+          { 
+            value: ethers.parseUnits(amount.toFixed(18), 18),
+            gasPrice,
+            gasLimit: 300000 
+          }
         );
         stakeTxHash = tx.hash;
+        console.log(`[Trade] TX Broadcasted (placeBet): ${stakeTxHash}`);
       } catch (contractErr) {
         console.warn(`[Trade] placeBet() failed, falling back to raw transfer:`, contractErr.message);
-        // FALLBACK: If the contract reverts (e.g. ABI mismatch or internal error), 
-        // perform a direct USDC transfer so the trade can still proceed.
+        
+        const feeData = await rpc.mainProvider.getFeeData();
+        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
+
         const tx = await sessionWallet.sendTransaction({
           to: checksummedTreasury,
           value: ethers.parseUnits(amount.toFixed(18), 18),
+          gasPrice,
+          gasLimit: 100000
         });
         stakeTxHash = tx.hash;
+        console.log(`[Trade] TX Broadcasted (fallback): ${stakeTxHash}`);
       }
       
       tradeParams.id = numericId.toString(); 
@@ -419,19 +437,23 @@ class ClassicEngine {
       
       const feeData = await rpc.mainProvider.getFeeData();
       const baseGasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("50", "gwei");
-      const gasPrice = (baseGasPrice * 130n) / 100n; // 1.3x for payouts
+      const gasPrice = (baseGasPrice * 200n) / 100n; // 2x for payouts
 
       // Manual nonce to prevent collisions in fast batch
-      if (!this.payoutNonce) {
-        this.payoutNonce = await rpc.wallet.getNonce();
+      if (this.payoutNonce === undefined || this.payoutNonce === null) {
+        this.payoutNonce = await rpc.mainProvider.getTransactionCount(rpc.wallet.address, 'pending');
       }
+
+      console.log(`[Payout] Dispatching TX with nonce ${this.payoutNonce} and gasPrice ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
 
       const tx = await rpc.wallet.sendTransaction({
         to: destination,
         value: ethers.parseUnits(Number(job.amount).toFixed(18), 18),
         gasPrice,
-        nonce: this.payoutNonce
+        nonce: this.payoutNonce,
+        gasLimit: 100000
       });
+
       
       this.payoutNonce++; // Increment for next job
       payoutTxHash = tx.hash;
@@ -498,19 +520,60 @@ class ClassicEngine {
       const claimed = this.claimPayoutJobs(config.SETTLEMENT_CONCURRENCY);
       // Process payout transactions sequentially to avoid nonce issues
       for (const job of claimed) {
-        const result = await this.dispatchPayout(job, 'inline_fallback');
-        if (result.ok) {
-          const idx = cache.payoutQueue.findIndex(j => j.jobId === job.jobId);
-          if (idx !== -1) cache.payoutQueue.splice(idx, 1);
-        } else {
-          // Keep in queue for retry if it failed (e.g. out of gas or network error)
-          console.warn(`[Payout] Job ${job.jobId} failed, will retry next batch.`);
+        try {
+          const result = await this.dispatchPayout(job, 'inline_fallback');
+          if (result.ok) {
+            const idx = cache.payoutQueue.findIndex(j => j.jobId === job.jobId);
+            if (idx !== -1) cache.payoutQueue.splice(idx, 1);
+          } else {
+            console.warn(`[Payout] Job ${job.jobId} failed, will retry next batch: ${result.error}`);
+            job.status = 'QUEUED'; // Reset status for retry
+          }
+        } catch (jobErr) {
+          console.error(`[Payout] Critical job error for ${job.jobId}:`, jobErr.message);
+          job.status = 'QUEUED';
         }
       }
     } finally {
       this.payoutQueueProcessing = false;
     }
   }
+
+  async ensureOperatorFunded() {
+    try {
+      const operatorAddr = rpc.wallet.address;
+      const balWei = await rpc.mainProvider.getBalance(operatorAddr);
+      const bal = parseFloat(ethers.formatEther(balWei));
+
+      if (bal < 0.5) {
+        console.log(`⚠️ [Refill] Operator balance low (${bal} USDC). Attempting refill from treasury...`);
+        const treasuryAddr = config.TREASURY_ADDRESS;
+        const contract = new ethers.Contract(treasuryAddr, [
+          "function withdraw(uint256 _amount) external",
+          "function owner() view returns (address)"
+        ], rpc.wallet);
+
+        const owner = await contract.owner();
+        if (owner.toLowerCase() !== operatorAddr.toLowerCase()) {
+          console.warn(`[Refill] Refill failed: Operator is not owner of Treasury. Owner: ${owner}`);
+          return;
+        }
+
+        const refillAmount = ethers.parseUnits("500", 18);
+        const feeData = await rpc.mainProvider.getFeeData();
+        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
+
+        const tx = await contract.withdraw(refillAmount, { gasPrice, gasLimit: 100000 });
+        console.log(`🚀 [Refill] Withdrawal TX Sent: ${tx.hash}`);
+        await tx.wait();
+        console.log("✅ [Refill] Operator wallet refilled with 500 USDC.");
+        this.payoutNonce = null; // Reset nonce after refill tx
+      }
+    } catch (err) {
+      console.error("[Refill] Failed to ensure operator funding:", err.message);
+    }
+  }
 }
+
 
 module.exports = ClassicEngine;
