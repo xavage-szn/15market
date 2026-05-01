@@ -1210,6 +1210,42 @@ export default function UserApp() {
       unbindErr();
     };
   }, [address, notify, triggerGlobalRefresh]);
+  
+  // 🔒 Result Lock Synchronizer: Propagation of local locks to state
+  useEffect(() => {
+    const lockSyncInterval = setInterval(() => {
+      if (lockedResults.current.size === 0) return;
+      
+      let changed = false;
+      const historyCopy = [...tradeHistoryRef.current];
+      const activeCopy = [...activeTradesRef.current];
+      
+      lockedResults.current.forEach((val, id) => {
+        const tid = String(id);
+        
+        // 1. Update History
+        const hIdx = historyCopy.findIndex(t => String(t.id || t.tx || t.nonce) === tid);
+        if (hIdx !== -1 && historyCopy[hIdx].status === 'PENDING') {
+          historyCopy[hIdx] = { ...historyCopy[hIdx], status: val.status, settlementPrice: val.settlementPrice };
+          changed = true;
+        }
+        
+        // 2. Update Active
+        const aIdx = activeCopy.findIndex(t => String(t.id || t.tx || t.nonce) === tid);
+        if (aIdx !== -1 && activeCopy[aIdx].status === 'PENDING') {
+          activeCopy[aIdx] = { ...activeCopy[aIdx], status: val.status, settlementPrice: val.settlementPrice };
+          changed = true;
+        }
+      });
+      
+      if (changed) {
+        setTradeHistory(historyCopy);
+        setActiveTrades(activeCopy);
+      }
+    }, 500);
+    
+    return () => clearInterval(lockSyncInterval);
+  }, []);
 
 
   // Periodic Universal Sync (Optimized for Instant Pulse Mode)

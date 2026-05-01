@@ -260,6 +260,9 @@ function LiveExecutionComponent({
                                             const instantStatus = showInstantResult ? (finalWinningState ? "WON" : "LOST") : trade.status;
 
                                             const displayFinal = isFinal || showInstantResult;
+                                            
+                                            // Payout pending state: Trade is won but on-chain confirmation hasn't arrived
+                                            const isPayoutPending = (instantStatus === "WON" || trade.status === "WON") && !trade.chainConfirmed && !trade.payout;
 
                                             return (
                                                 <div
@@ -314,6 +317,12 @@ function LiveExecutionComponent({
                                                                 <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
                                                                     {(instantStatus === "WON" || trade.status === "WON") ? `+$${Number(trade.payout || potentialProfit).toFixed(2)}` : "0.00"}
                                                                 </span>
+                                                                {isPayoutPending && (
+                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-ping" />
+                                                                        <span className="text-[6px] font-black uppercase tracking-widest text-[#3CB371]/60">Payout Pending</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     )}

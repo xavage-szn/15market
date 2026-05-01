@@ -37,20 +37,82 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         ];
     }, [activeMarket?.id]);
 
-    const tradeResults = useMemo(() => {
-        const now = Date.now();
-        return activeTrades.map(trade => {
-            const entryPrice = parseFloat(trade.entryPrice);
-            const referencePrice = (trade.lockedExitPrice || trade.settlementPrice)
-                ? parseFloat(trade.lockedExitPrice || trade.settlementPrice)
-                : parseFloat(currentPrice);
+    // --- Result Locking & Persistence ---
+    const [visibleResults, setVisibleResults] = useState([]);
+    const cleanupTimers = useRef({});
 
+    useEffect(() => {
+        const now = Date.now();
+        const newVisible = [];
+
+        activeTrades.forEach(trade => {
+            const tid = String(trade.id);
+            const entryPrice = parseFloat(trade.entryPrice);
             const isCall = trade.direction === "UP" || trade.direction === "buy" || trade.direction === 1;
+            
+            // Check if trade is expired (locally or via backend)
+            const start = trade.startTime || (tid.length > 12 ? parseInt(tid) : now);
+            const duration = trade.duration || 15;
+            const expiry = trade.expiryMs || (start + (duration * 1000));
+            const isExpired = now >= expiry || ["WON", "LOST", "TIMEOUT"].includes(trade.status);
+
+            // Calculate Result
+            let referencePrice;
+            if (isExpired) {
+                // If expired, prioritize backend exitPrice, then cached locked price, then currentPrice (once)
+                referencePrice = parseFloat(trade.settlementPrice || trade.exitPrice || trade.lockedExitPrice || currentPrice);
+                
+                // If it's a fresh expiry, lock it so it doesn't flicker
+                if (!trade.lockedExitPrice && !trade.settlementPrice) {
+                    trade.lockedExitPrice = currentPrice;
+                }
+            } else {
+                referencePrice = parseFloat(currentPrice);
+            }
+
             const won = isCall ? referencePrice > entryPrice : referencePrice < entryPrice;
             const diff = Math.abs(referencePrice - entryPrice).toFixed(4);
-            return { id: trade.id, won, diff, amount: trade.amount };
+
+            if (!isExpired) {
+                newVisible.push({ id: tid, won, diff, amount: trade.amount, expired: false });
+                // Clear any cleanup timer if trade is somehow re-activated
+                if (cleanupTimers.current[tid]) {
+                    clearTimeout(cleanupTimers.current[tid]);
+                    delete cleanupTimers.current[tid];
+                }
+            } else {
+                // It's expired. If it's already in visibleResults and not yet scheduled for removal, schedule it.
+                if (!cleanupTimers.current[tid]) {
+                    cleanupTimers.current[tid] = setTimeout(() => {
+                        setVisibleResults(prev => prev.filter(r => r.id !== tid));
+                        delete cleanupTimers.current[tid];
+                    }, 5000); // Stay for 5 seconds
+                    
+                    // Add it as an expired result
+                    newVisible.push({ id: tid, won, diff, amount: trade.amount, expired: true });
+                } else {
+                    // Already scheduled for removal, keep it in the list for now
+                    const existing = visibleResults.find(r => r.id === tid);
+                    if (existing) newVisible.push(existing);
+                }
+            }
+        });
+
+        // Merge and dedupe
+        setVisibleResults(prev => {
+            const merged = [...newVisible];
+            prev.forEach(p => {
+                if (p.expired && !merged.find(m => m.id === p.id)) {
+                    // Keep expired ones until the timer removes them
+                    if (cleanupTimers.current[p.id]) merged.push(p);
+                }
+            });
+            return merged.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
         });
     }, [activeTrades, currentPrice]);
+
+    const tradeResults = visibleResults;
+
 
     return (
         <div
@@ -113,7 +175,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                     : 'bg-[#FF4444]/20 border-[#FF4444]/30'
                                 }`}
                         >
-                            <div className={`w-2 h-2 rounded-full animate-pulse ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
+                            <div className={`w-2 h-2 rounded-full ${!result.expired ? 'animate-pulse' : ''} ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
                             <span className={`text-[10px] font-black uppercase ${isDark ? 'text-white' : 'text-[#0a261a]'} tracking-widest`}>
                                 {result.won ? `+$${(result.amount * 1.95).toFixed(2)}` : `-$${result.amount}`}
                             </span>

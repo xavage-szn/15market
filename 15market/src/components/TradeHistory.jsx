@@ -98,7 +98,13 @@ function TradeHistoryComponent({
                                                     (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                                 }`}
                                         >
-                                            {t.status}
+                                            {t.status === "WON" && !t.chainConfirmed && !t.payout ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span className="animate-pulse">WON</span>
+                                                    <span className="text-[6px] opacity-60">PAYOUT PENDING</span>
+                                                </div>
+                                            ) : t.status}
+
                                             {t.tx && (
                                                 <a href={`https://testnet.arcscan.app/tx/${t.tx}`} target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 transition-opacity">
                                                     ↗
