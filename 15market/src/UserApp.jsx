@@ -1172,9 +1172,33 @@ export default function UserApp() {
       setTradeHistory(prev => prev.map(updateFn));
 
       if (data.won) {
-         // The Optimistic Payout Creditor effect will catch this status change
-         // and apply the balance if not already applied.
+         // Mark as payout pending
+         setActiveTrades(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutPending: true } : t));
+         setTradeHistory(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutPending: true } : t));
       }
+    });
+
+    const unbindPayout = socketService.on('payout_completed', (data) => {
+      console.log("[Socket] Payout Completed:", data);
+      const tid = String(data.betId);
+      
+      const updateFn = (t) => {
+        if (String(t.id || t.tx || t.nonce) === tid) {
+          return { 
+            ...t, 
+            status: 'PAID',
+            payoutTx: data.txHash,
+            payoutPending: false,
+            confirmed: true
+          };
+        }
+        return t;
+      };
+
+      setActiveTrades(prev => prev.map(updateFn));
+      setTradeHistory(prev => prev.map(updateFn));
+      notify(`Payout Confirmed: +$${parseFloat(data.payout || 0).toFixed(2)}`, "success");
+      triggerGlobalRefresh(true);
     });
 
     const unbindTick = socketService.on('trade_tick', (data) => {
@@ -1205,6 +1229,7 @@ export default function UserApp() {
     return () => {
       unbindBal();
       unbindSettled();
+      unbindPayout();
       unbindTick();
       unbindExpired();
       unbindErr();

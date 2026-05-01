@@ -81,6 +81,24 @@ class ProfileService {
         return record;
     }
 
+    updateTrade(address, betId, updates) {
+        const addr = address.toLowerCase();
+        const profile = this.profiles[addr];
+        if (!profile || !profile.trades) return false;
+
+        const tradeIdx = profile.trades.findIndex(t => String(t.betId || t.id) === String(betId));
+        if (tradeIdx === -1) return false;
+
+        profile.trades[tradeIdx] = {
+            ...profile.trades[tradeIdx],
+            ...updates
+        };
+        
+        profile.updatedAt = Date.now();
+        this.save();
+        return true;
+    }
+
     getHistory(address) {
         const profile = this.get(address);
         return profile ? (profile.trades || []) : [];

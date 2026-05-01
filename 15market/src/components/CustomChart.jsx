@@ -50,60 +50,62 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             const entryPrice = parseFloat(trade.entryPrice);
             const isCall = trade.direction === "UP" || trade.direction === "buy" || trade.direction === 1;
             
-            // Check if trade is expired (locally or via backend)
             const start = trade.startTime || (tid.length > 12 ? parseInt(tid) : now);
             const duration = trade.duration || 15;
             const expiry = trade.expiryMs || (start + (duration * 1000));
-            const isExpired = now >= expiry || ["WON", "LOST", "TIMEOUT"].includes(trade.status);
+            
+            // AUTHORITATIVE LOCK: Use backend status if available
+            const isSettled = ["WON", "LOST", "PAID"].includes(trade.status);
+            const isExpired = now >= expiry || isSettled;
 
-            // Calculate Result
             let referencePrice;
-            if (isExpired) {
-                // If expired, prioritize backend exitPrice, then cached locked price, then currentPrice (once)
-                referencePrice = parseFloat(trade.settlementPrice || trade.exitPrice || trade.lockedExitPrice || currentPrice);
-                
-                // If it's a fresh expiry, lock it so it doesn't flicker
-                if (!trade.lockedExitPrice && !trade.settlementPrice) {
-                    trade.lockedExitPrice = currentPrice;
+            let resultWon;
+
+            if (isSettled) {
+                resultWon = trade.status === "WON" || trade.status === "PAID";
+                referencePrice = parseFloat(trade.settlementPrice || trade.exitPrice || entryPrice);
+            } else if (isExpired) {
+                // LOCK at boundary: If we don't have a locked price yet, capture current.
+                if (!trade._lockedResult) {
+                    trade._lockedResult = {
+                        price: parseFloat(currentPrice),
+                        won: isCall ? parseFloat(currentPrice) > entryPrice : parseFloat(currentPrice) < entryPrice
+                    };
                 }
+                referencePrice = trade._lockedResult.price;
+                resultWon = trade._lockedResult.won;
             } else {
                 referencePrice = parseFloat(currentPrice);
+                resultWon = isCall ? referencePrice > entryPrice : referencePrice < entryPrice;
             }
 
-            const won = isCall ? referencePrice > entryPrice : referencePrice < entryPrice;
             const diff = Math.abs(referencePrice - entryPrice).toFixed(4);
 
             if (!isExpired) {
-                newVisible.push({ id: tid, won, diff, amount: trade.amount, expired: false });
-                // Clear any cleanup timer if trade is somehow re-activated
+                newVisible.push({ id: tid, won: resultWon, diff, amount: trade.amount, expired: false });
                 if (cleanupTimers.current[tid]) {
                     clearTimeout(cleanupTimers.current[tid]);
                     delete cleanupTimers.current[tid];
                 }
             } else {
-                // It's expired. If it's already in visibleResults and not yet scheduled for removal, schedule it.
                 if (!cleanupTimers.current[tid]) {
                     cleanupTimers.current[tid] = setTimeout(() => {
                         setVisibleResults(prev => prev.filter(r => r.id !== tid));
                         delete cleanupTimers.current[tid];
-                    }, 5000); // Stay for 5 seconds
-                    
-                    // Add it as an expired result
-                    newVisible.push({ id: tid, won, diff, amount: trade.amount, expired: true });
+                    }, 5000);
+                    newVisible.push({ id: tid, won: resultWon, diff, amount: trade.amount, expired: true });
                 } else {
-                    // Already scheduled for removal, keep it in the list for now
                     const existing = visibleResults.find(r => r.id === tid);
                     if (existing) newVisible.push(existing);
+                    else newVisible.push({ id: tid, won: resultWon, diff, amount: trade.amount, expired: true });
                 }
             }
         });
 
-        // Merge and dedupe
         setVisibleResults(prev => {
             const merged = [...newVisible];
             prev.forEach(p => {
                 if (p.expired && !merged.find(m => m.id === p.id)) {
-                    // Keep expired ones until the timer removes them
                     if (cleanupTimers.current[p.id]) merged.push(p);
                 }
             });
@@ -215,22 +217,22 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
-                                className={`absolute top-16 left-4 z-[100] w-48 md:w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto overflow-hidden`}
+                                className={`absolute top-16 left-4 z-[100] w-44 md:w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-1 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-0.5 pointer-events-auto overflow-hidden`}
                             >
-                                <div className="px-3 py-2 border-b border-white/5 mb-1">
-                                    <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Select Asset</span>
+                                <div className="px-3 py-1.5 border-b border-white/5 mb-0.5">
+                                    <span className="text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Select Asset</span>
                                 </div>
                                 {tokens.map(t => (
                                     <button 
                                         key={t.id} 
                                         onClick={() => onAssetSwitch(t)} 
-                                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}
+                                        className={`flex items-center justify-between px-2.5 py-2 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}
                                     >
-                                        <div className="flex flex-col items-start">
-                                            <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">{t.symbol}</span>
-                                            <span className="text-[7px] md:text-[8px] opacity-60 font-bold uppercase tracking-tight">{t.name || 'Crypto'}</span>
+                                        <div className="flex flex-col items-start leading-tight">
+                                            <span className="text-[9px] md:text-xs font-black uppercase tracking-widest">{t.symbol}</span>
+                                            <span className="text-[6px] md:text-[8px] opacity-60 font-bold uppercase tracking-tight">{t.name || 'Crypto'}</span>
                                         </div>
-                                        {activeMarket?.id === t.id && <Zap size={10} className="fill-current text-white animate-pulse" />}
+                                        {activeMarket?.id === t.id && <Zap size={8} className="fill-current text-white animate-pulse" />}
                                     </button>
                                 ))}
                             </motion.div>

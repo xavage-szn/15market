@@ -13,17 +13,18 @@ class ClassicEngine {
     this.queueProcessing = false;
     this.payoutQueueProcessing = false;
     this.payoutJobCounter = 0;
+    this.payoutNonce = null;
+    this.lastNonceSync = 0;
   }
 
   start() {
-    // Run settlement check every 100ms
-    setInterval(() => this.processSettlementBatch(), Math.max(100, config.BATCH_WINDOW_MS));
+    // High-precision settlement check (50ms)
+    setInterval(() => this.processSettlementBatch(), 50);
     
-    // Auto-refill operator wallet if low (every 30s)
-    setInterval(() => this.ensureOperatorFunded(), 30000);
+    // Auto-refill operator wallet (Threshold: 10 USDC, Refill: 100 USDC)
+    setInterval(() => this.ensureOperatorFunded(), 15000);
 
-    
-    // Trade Monitor: High-frequency authoritative pulse to drive the UI
+    // Trade Monitor: Ultra-high frequency authoritative pulse (50ms)
     setInterval(() => {
       const now = Date.now();
       for (const trade of cache.trades.values()) {
@@ -48,28 +49,30 @@ class ClassicEngine {
             timeLeft,
             currentPrice,
             isWinning,
-            direction: direction // Ensure frontend knows resolved direction
+            direction: direction
           });
 
-          // LOCK RESULT: At the exact moment of backend expiration, freeze and notify
+          // LOCK RESULT: Precise boundary capture
           if (timeLeft <= 0 && !trade.expiryEmitted) {
             trade.expiryEmitted = true;
             trade.lockedExitPrice = currentPrice;
             trade.lockedWon = isWinning;
+            
             this.io.to(trade.userAddr).emit('trade_expired', {
               betId: trade.id,
               exitPrice: currentPrice,
               won: isWinning,
               direction: direction
             });
-            console.log(`[Trade-Monitor] Authority Locked #${trade.id} | ${isUp ? 'UP' : 'DOWN'} | Entry: ${trade.entryPrice} | Exit: ${currentPrice} | Won: ${isWinning}`);
+            console.log(`[Trade-Monitor] Result Locked #${trade.id} | Won: ${isWinning} | Price: ${currentPrice}`);
           }
         }
       }
-    }, 200);
+    }, 50);
 
     if (config.PAYOUT_INLINE_FALLBACK) {
-      setInterval(() => this.processInlinePayoutBatch(), Math.max(10, config.BATCH_WINDOW_MS));
+      // Process payouts with batching for efficiency
+      setInterval(() => this.processInlinePayoutBatch(), 1000);
     }
   }
 
@@ -91,14 +94,6 @@ class ClassicEngine {
     return null;
   }
 
-  /**
-   * placeTrade — Treasury-First Model
-   *
-   * The stake is assumed to have ALREADY been sent to the treasury by the
-   * frontend using walletClient.sendTransaction. This function registers the
-   * trade and starts the countdown. If the stake tx is provided, it is stored
-   * for audit. Balance is managed in-process and synced from chain on demand.
-   */
   async placeTrade(tradeParams, identityPayload) {
     const identity = this.resolveSessionIdentity(identityPayload);
     if (!identity.ok) return { success: false, error: identity.error };
@@ -109,13 +104,11 @@ class ClassicEngine {
       return { success: false, error: "Treasury address not configured on backend." };
     }
 
-    // Derive Session Wallet (EOA)
     const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
     const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
     const privateKey = ethers.keccak256(entropy);
     const sessionWallet = new ethers.Wallet(privateKey, rpc.mainProvider);
 
-    // Get or create in-process session
     let session = cache.sessions.get(userAddr);
     if (!session) {
       const balStr = await rpc.getBalance(sessionWallet.address);
@@ -130,49 +123,30 @@ class ClassicEngine {
     const amount = Number(tradeParams.amount);
     if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Invalid amount' };
 
-    // Define trade parameters early so they are available for the contract call
     const id = tradeParams.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     const direction = this.resolveDirection(tradeParams.direction);
-    if (direction === null) {
-       console.error(`[Trade] Invalid direction received:`, tradeParams.direction);
-       return { success: false, error: "Invalid trade direction." };
-    }
+    if (direction === null) return { success: false, error: "Invalid trade direction." };
+    
     const duration = Math.max(1, Number(tradeParams.duration || 5));
     const marketId = Number(tradeParams.marketId || 0);
 
     const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp'];
     const symbol = SYMBOL_MAP[marketId] || 'eth';
     
-    // Authoritative Price Selection
     let entryPrice = Number(cache.prices[symbol] || 0);
     if (!entryPrice || entryPrice <= 0) {
-      // Fallback to frontend price but unscale it based on asset type
       let fePrice = Number(tradeParams.entryPrice || 0);
-      const isSol = Number(tradeParams.marketId) === 2;
-      
-      if (isSol) {
-        // SOL scaling is 1,000,000 on frontend
-        entryPrice = fePrice / 1000000;
-      } else {
-        // Others (ETH, BTC) are 100x scaled
-        entryPrice = fePrice / 100;
-      }
-      console.log(`[Trade] Using fallback entryPrice: ${entryPrice} (Raw: ${fePrice}, isSol: ${isSol})`);
+      entryPrice = Number(tradeParams.marketId) === 2 ? fePrice / 1000000 : fePrice / 100;
     }
 
-    if (!entryPrice || entryPrice <= 0) {
-      console.error(`[Trade] Price unavailable for ${symbol}. Rejected.`);
-      return { success: false, error: 'Price feed unavailable' };
-    }
+    if (!entryPrice || entryPrice <= 0) return { success: false, error: 'Price feed unavailable' };
 
-    // 1. Perform REAL On-Chain Stake Transfer
     let stakeTxHash;
     try {
       const checksummedUserAddr = ethers.getAddress(userAddr);
       const checksummedTreasury = ethers.getAddress(treasury);
-
-      // Check balance + gas margin (approx 0.002 USDC)
       const gasMargin = 0.002;
+
       if (session.balance < (amount + gasMargin)) {
         return { success: false, error: `Insufficient Balance. You need at least ${amount + gasMargin} USDC.` };
       }
@@ -180,40 +154,25 @@ class ClassicEngine {
       const numericId = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
       
       try {
-        console.log(`[Trade] Attempting contract stake via placeBet() for ${userAddr}`);
         const contract = new ethers.Contract(checksummedTreasury, [
           "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable"
         ], sessionWallet);
 
-        // Standard scaling: direction (0=UP, 1=DOWN), price (8 decimals)
         const contractDir = direction === 1 ? 0 : 1; 
         const contractPrice = ethers.parseUnits(entryPrice.toFixed(8), 8);
-
-        // Gas tuning for Arc Testnet
         const feeData = await rpc.mainProvider.getFeeData();
         const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
 
-        const tx = await contract.placeBet(
-          numericId,
-          contractDir,
-          duration,
-          contractPrice,
-          marketId,
-          checksummedUserAddr,
-          { 
-            value: ethers.parseUnits(amount.toFixed(18), 18),
-            gasPrice,
-            gasLimit: 300000 
-          }
-        );
+        const tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, checksummedUserAddr, { 
+          value: ethers.parseUnits(amount.toFixed(18), 18),
+          gasPrice,
+          gasLimit: 300000 
+        });
         stakeTxHash = tx.hash;
-        console.log(`[Trade] TX Broadcasted (placeBet): ${stakeTxHash}`);
       } catch (contractErr) {
-        console.warn(`[Trade] placeBet() failed, falling back to raw transfer:`, contractErr.message);
-        
+        console.warn(`[Trade] Falling back to raw transfer:`, contractErr.message);
         const feeData = await rpc.mainProvider.getFeeData();
         const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
-
         const tx = await sessionWallet.sendTransaction({
           to: checksummedTreasury,
           value: ethers.parseUnits(amount.toFixed(18), 18),
@@ -221,20 +180,17 @@ class ClassicEngine {
           gasLimit: 100000
         });
         stakeTxHash = tx.hash;
-        console.log(`[Trade] TX Broadcasted (fallback): ${stakeTxHash}`);
       }
       
       tradeParams.id = numericId.toString(); 
       session.balance = Number((session.balance - amount).toFixed(4));
     } catch (err) {
-      console.error(`[Trade] Stake transfer CRITICAL FAILURE for ${userAddr}:`, err.message);
+      console.error(`[Trade] Stake transfer CRITICAL FAILURE:`, err.message);
       return { success: false, error: "Network Congested or RPC Error. (Check Session Balance)" };
     }
 
-    // 2. Register Trade in Engine
-
     const trade = {
-      id: String(id),
+      id: String(tradeParams.id || id),
       userAddr: userAddr.toLowerCase(),
       walletAddress: session.walletAddress.toLowerCase(),
       sessionAddress: sessionWallet.address.toLowerCase(),
@@ -254,11 +210,9 @@ class ClassicEngine {
     cache.trades.set(trade.id, trade);
     cache.queueTradeForSettlement(trade);
 
-    // Emit trade placed event + updated balance to frontend
     this.io.to(userAddr).emit('trade_placed', {
       type: 'TRADE_PLACED',
       betId: trade.id,
-      id: trade.id,
       amount,
       direction,
       symbol: symbol.toUpperCase(),
@@ -266,7 +220,6 @@ class ClassicEngine {
       duration,
       timestamp: trade.createdAt,
       settleAt: trade.settleAt,
-      userAddr,
       txHash: stakeTxHash
     });
 
@@ -274,23 +227,16 @@ class ClassicEngine {
       balance: String(session.balance),
       reason: 'STAKE_SENT',
       betId: trade.id,
-      txHash: stakeTxHash
     });
 
     this.io.emit('new_trade', { betId: trade.id, direction, symbol: symbol.toUpperCase(), amount, userAddr });
-
-    console.log(`[Trade] Active #${trade.id} | ${direction === 1 ? 'UP' : 'DOWN'} | $${amount} | TX: ${stakeTxHash}`);
-
     return {
       success: true,
       txHash: stakeTxHash,
       tradeId: trade.id,
-      settlementEtaMs: duration * 1000,
       newBalance: String(session.balance),
     };
   }
-
-  // --- Settlement ---
 
   async processSettlementBatch() {
     if (this.queueProcessing) return;
@@ -303,18 +249,9 @@ class ClassicEngine {
       }
       if (due.length === 0) return;
 
-      // PRIORITY SETTLEMENT: Identify winners vs losers to prioritize payout tasks
-      const prioritizedDue = due.map(trade => {
-        const exitPrice = trade.lockedExitPrice !== undefined ? trade.lockedExitPrice : (cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice);
-        const direction = this.resolveDirection(trade.direction);
-        const isUp = direction === 1;
-        const won = trade.lockedWon !== undefined ? trade.lockedWon : (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice));
-        return { trade, won };
-      }).sort((a, b) => (b.won ? 1 : 0) - (a.won ? 1 : 0));
-
-      for (let i = 0; i < prioritizedDue.length; i += config.SETTLEMENT_CONCURRENCY) {
-        const chunk = prioritizedDue.slice(i, i + config.SETTLEMENT_CONCURRENCY);
-        await Promise.allSettled(chunk.map((item) => this.settleTrade(item.trade)));
+      for (let i = 0; i < due.length; i += config.SETTLEMENT_CONCURRENCY) {
+        const chunk = due.slice(i, i + config.SETTLEMENT_CONCURRENCY);
+        await Promise.allSettled(chunk.map((trade) => this.settleTrade(trade)));
       }
     } finally {
       this.queueProcessing = false;
@@ -325,25 +262,13 @@ class ClassicEngine {
     if (trade.status !== 'PENDING') return;
 
     const userAddr = trade.userAddr.toLowerCase();
-
-    // Use the locked result from Trade Monitor to ensure WYSIWYG
     const exitPrice = trade.lockedExitPrice !== undefined ? trade.lockedExitPrice : (cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice);
-    
     const direction = this.resolveDirection(trade.direction);
     const isUp = direction === 1;
-    
-    // Won if price moved in direction. Tie is currently a loss as per platform rules.
     const won = trade.lockedWon !== undefined ? trade.lockedWon : (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice));
-    
-    if (exitPrice === trade.entryPrice) {
-      console.log(`[Settle] Trade ${trade.id} is a TIE at ${exitPrice}. Resulting in LOSS.`);
-    }
 
-    // MATCH FRONTEND MULTIPLIERS: 5s=2.90, 10s=2.40, others=1.90
     const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
     const payout = won ? Number((trade.amount * multiplier).toFixed(6)) : 0;
-
-    console.log(`[Settle] Trade ${trade.id} (${trade.symbol} ${isUp ? 'UP' : 'DOWN'}): Entry=${trade.entryPrice}, Exit=${exitPrice} -> ${won ? 'WON' : 'LOST'} (Payout: ${payout})`);
 
     trade.status = won ? 'WON' : 'LOST';
     trade.exitPrice = exitPrice;
@@ -351,13 +276,9 @@ class ClassicEngine {
     trade.payout = payout;
     trade.settledAt = Date.now();
 
-    // INSTANT BALANCE SYNC: Deduct/Credit immediately for instant feel
     const session = cache.sessions.get(userAddr);
     if (session) {
-      if (won) {
-        // We'll sync from chain after payout, but let's update optimistically now
-        session.balance = Number((session.balance + payout).toFixed(4));
-      }
+      if (won) session.balance = Number((session.balance + payout).toFixed(4));
       this.io.to(userAddr).emit('balance_update', {
         balance: String(session.balance),
         reason: won ? 'WIN' : 'LOSS',
@@ -369,34 +290,24 @@ class ClassicEngine {
     const settledEvent = {
       type: 'TRADE_SETTLED',
       betId: trade.id,
-      id: trade.id,
       won,
       payout: String(payout),
       entryPrice: trade.entryPrice,
       exitPrice,
-      direction: trade.direction,
-      duration: trade.duration,
-      amount: trade.amount,
       symbol: trade.symbol.toUpperCase(),
       timestamp: trade.settledAt,
-      userAddr,
-      status: won ? 'WON' : 'LOST',
+      status: trade.status,
+      tx: trade.stakeTxHash, // Persist the stake transaction hash
     };
 
     cache.pushHistory(userAddr, settledEvent);
-
     this.io.to(userAddr).emit('trade_settled', settledEvent);
     this.io.emit('trade_settled', settledEvent);
-
-    // On-chain sync is now handled gracefully after the payout transaction actually confirms.
-    // The optimistic update above is sufficient for the UI.
 
     if (won && payout > 0) {
       this.queuePayoutJob(trade);
     }
   }
-
-  // --- Payouts ---
 
   queuePayoutJob(trade) {
     this.payoutJobCounter += 1;
@@ -404,138 +315,117 @@ class ClassicEngine {
       jobId: `payout_${trade.id}_${this.payoutJobCounter}`,
       tradeId: trade.id,
       userAddr: trade.userAddr,
-      walletAddress: trade.walletAddress || trade.userAddr,
       amount: trade.payout,
       queuedAt: Date.now(),
       status: 'QUEUED',
     });
   }
 
-  claimPayoutJobs(limit) {
-    const jobs = [];
-    const max = Math.max(1, Number(limit) || 1);
-    for (let i = 0; i < cache.payoutQueue.length && jobs.length < max; i++) {
-      const job = cache.payoutQueue[i];
-      if (job.status !== 'QUEUED') continue;
-      job.status = 'CLAIMED';
-      job.claimedAt = Date.now();
-      jobs.push(job);
-    }
-    return jobs;
-  }
+  async processInlinePayoutBatch() {
+    if (this.payoutQueueProcessing) return;
+    this.payoutQueueProcessing = true;
 
-  async dispatchPayout(job, source) {
-    const trade = cache.trades.get(job.tradeId);
-    if (!trade || !trade.won || !['WON', 'SETTLED'].includes(trade.status)) {
-      return { ok: false, error: 'Trade not eligible for payout' };
-    }
-
-    let payoutTxHash = null;
     try {
-      const destination = ethers.getAddress(trade.sessionAddress || trade.userAddr);
-      console.log(`[Payout] Sending ${job.amount} USDC winning to ${destination}`);
-      
-      const feeData = await rpc.mainProvider.getFeeData();
-      const baseGasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits("50", "gwei");
-      const gasPrice = (baseGasPrice * 200n) / 100n; // 2x for payouts
+      // 1. Group payouts by user to batch multiple wins into a single transaction
+      const userBatches = {};
+      const processedJobIds = new Set();
 
-      // Manual nonce to prevent collisions in fast batch
-      if (this.payoutNonce === undefined || this.payoutNonce === null) {
-        this.payoutNonce = await rpc.mainProvider.getTransactionCount(rpc.wallet.address, 'pending');
+      for (const job of cache.payoutQueue) {
+        if (job.status !== 'QUEUED') continue;
+        const addr = job.userAddr.toLowerCase();
+        if (!userBatches[addr]) userBatches[addr] = { total: 0, jobs: [] };
+        userBatches[addr].total += Number(job.amount);
+        userBatches[addr].jobs.push(job);
+        job.status = 'CLAIMED';
       }
 
-      console.log(`[Payout] Dispatching TX with nonce ${this.payoutNonce} and gasPrice ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
+      const users = Object.keys(userBatches);
+      if (users.length === 0) return;
+
+      // 2. Proactive Nonce Synchronization
+      if (this.payoutNonce === null || (Date.now() - this.lastNonceSync > 30000)) {
+        this.payoutNonce = await rpc.mainProvider.getTransactionCount(rpc.wallet.address, 'pending');
+        this.lastNonceSync = Date.now();
+      }
+
+      // 3. Dispatch Batch Payouts
+      for (const addr of users) {
+        const batch = userBatches[addr];
+        try {
+          const txHash = await this.dispatchBatchPayout(addr, batch.total, batch.jobs);
+          if (txHash) {
+             // Successfully sent
+             batch.jobs.forEach(j => processedJobIds.add(j.jobId));
+          } else {
+             batch.jobs.forEach(j => { j.status = 'QUEUED'; });
+          }
+        } catch (err) {
+          console.error(`[Payout] Batch failed for ${addr}:`, err.message);
+          batch.jobs.forEach(j => { j.status = 'QUEUED'; });
+          this.payoutNonce = null; // Forces re-sync on next loop
+        }
+      }
+
+      // Cleanup processed jobs from queue
+      cache.payoutQueue = cache.payoutQueue.filter(j => !processedJobIds.has(j.jobId));
+
+    } finally {
+      this.payoutQueueProcessing = false;
+    }
+  }
+
+  async dispatchBatchPayout(userAddr, totalAmount, jobs) {
+    const destination = ethers.getAddress(userAddr);
+    console.log(`[Payout] Dispatching BATCH win (${totalAmount} USDC) for ${userAddr} (${jobs.length} trades)`);
+
+    try {
+      const feeData = await rpc.mainProvider.getFeeData();
+      const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
 
       const tx = await rpc.wallet.sendTransaction({
         to: destination,
-        value: ethers.parseUnits(Number(job.amount).toFixed(18), 18),
+        value: ethers.parseUnits(totalAmount.toFixed(18), 18),
         gasPrice,
         nonce: this.payoutNonce,
         gasLimit: 100000
       });
 
+      const txHash = tx.hash;
+      this.payoutNonce++;
       
-      this.payoutNonce++; // Increment for next job
-      payoutTxHash = tx.hash;
-      
-      // Detached promise to sync true on-chain balance only AFTER confirmation
+      // Update job states
+      jobs.forEach(job => {
+        const trade = cache.trades.get(job.tradeId);
+        if (trade) {
+          trade.status = 'PAID';
+          trade.payoutTx = txHash;
+          trade.paidAt = Date.now();
+        }
+        
+        const profiles = require('./profiles');
+        profiles.updateTrade(userAddr, job.tradeId, { payoutTx: txHash, status: 'PAID' });
+
+        this.io.to(userAddr).emit('payout_completed', {
+          type: 'PAYOUT_COMPLETED',
+          betId: job.tradeId,
+          payout: String(job.amount),
+          txHash: txHash,
+        });
+      });
+
+      // Chain confirmation sync
       tx.wait().then(async () => {
         const balStr = await rpc.getBalance(destination);
-        const session = cache.sessions.get(trade.userAddr);
+        const session = cache.sessions.get(userAddr);
         if (session) {
           session.balance = parseFloat(balStr);
-          this.io.to(trade.userAddr).emit('balance_update', {
-            balance: String(session.balance),
-            reason: 'CHAIN_SYNC_CONFIRMED'
-          });
+          this.io.to(userAddr).emit('balance_update', { balance: String(session.balance), reason: 'CHAIN_SYNC' });
         }
       }).catch(() => {});
-      
-      console.log(`[Payout] TX Broadcasted: ${payoutTxHash}`);
+
+      return txHash;
     } catch (err) {
-      console.error(`[Payout] Failed to send winnings for trade ${trade.id}:`, err.message);
-      // Reset nonce on error to sync with chain on next attempt
-      this.payoutNonce = null;
-      job.status = 'QUEUED'; 
-      return { ok: false, error: err.message };
-    }
-
-    trade.status = 'PAID';
-    trade.paidAt = Date.now();
-    trade.payoutTx = payoutTxHash;
-
-    const payoutEvent = {
-      type: 'PAYOUT_COMPLETED',
-      betId: trade.id,
-      payout: String(job.amount),
-      source,
-      timestamp: trade.paidAt,
-      userAddr: trade.userAddr,
-      txHash: payoutTxHash,
-    };
-
-    cache.pushHistory(trade.userAddr, payoutEvent);
-
-    const session = cache.sessions.get(trade.userAddr);
-    if (session) {
-      // Balance was already optimistically credited in settleTrade.
-      // We just emit the payout confirmation event here.
-      this.io.to(trade.userAddr).emit('balance_update', {
-        balance: String(session.balance),
-        reason: 'WIN_PAYOUT_SENT',
-        betId: trade.id,
-        txHash: payoutTxHash
-      });
-    }
-
-    this.io.to(trade.userAddr).emit('payout_completed', payoutEvent);
-    this.io.emit('payout_completed', payoutEvent);
-    return { ok: true, payoutEvent };
-  }
-
-  async processInlinePayoutBatch() {
-    if (this.payoutQueueProcessing) return;
-    this.payoutQueueProcessing = true;
-    try {
-      const claimed = this.claimPayoutJobs(config.SETTLEMENT_CONCURRENCY);
-      // Process payout transactions sequentially to avoid nonce issues
-      for (const job of claimed) {
-        try {
-          const result = await this.dispatchPayout(job, 'inline_fallback');
-          if (result.ok) {
-            const idx = cache.payoutQueue.findIndex(j => j.jobId === job.jobId);
-            if (idx !== -1) cache.payoutQueue.splice(idx, 1);
-          } else {
-            console.warn(`[Payout] Job ${job.jobId} failed, will retry next batch: ${result.error}`);
-            job.status = 'QUEUED'; // Reset status for retry
-          }
-        } catch (jobErr) {
-          console.error(`[Payout] Critical job error for ${job.jobId}:`, jobErr.message);
-          job.status = 'QUEUED';
-        }
-      }
-    } finally {
-      this.payoutQueueProcessing = false;
+      throw err;
     }
   }
 
@@ -545,35 +435,25 @@ class ClassicEngine {
       const balWei = await rpc.mainProvider.getBalance(operatorAddr);
       const bal = parseFloat(ethers.formatEther(balWei));
 
-      if (bal < 0.5) {
-        console.log(`⚠️ [Refill] Operator balance low (${bal} USDC). Attempting refill from treasury...`);
+      // Threshold: 10 USDC (as requested)
+      if (bal < 10) {
+        console.log(`⚠️ [Refill] Operator balance low (${bal} USDC). Refilling 100 USDC...`);
         const treasuryAddr = config.TREASURY_ADDRESS;
-        const contract = new ethers.Contract(treasuryAddr, [
-          "function withdraw(uint256 _amount) external",
-          "function owner() view returns (address)"
-        ], rpc.wallet);
+        const contract = new ethers.Contract(treasuryAddr, ["function withdraw(uint256 _amount) external"], rpc.wallet);
 
-        const owner = await contract.owner();
-        if (owner.toLowerCase() !== operatorAddr.toLowerCase()) {
-          console.warn(`[Refill] Refill failed: Operator is not owner of Treasury. Owner: ${owner}`);
-          return;
-        }
-
-        const refillAmount = ethers.parseUnits("500", 18);
+        const refillAmount = ethers.parseUnits("100", 18);
         const feeData = await rpc.mainProvider.getFeeData();
         const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
 
         const tx = await contract.withdraw(refillAmount, { gasPrice, gasLimit: 100000 });
-        console.log(`🚀 [Refill] Withdrawal TX Sent: ${tx.hash}`);
         await tx.wait();
-        console.log("✅ [Refill] Operator wallet refilled with 500 USDC.");
-        this.payoutNonce = null; // Reset nonce after refill tx
+        console.log("✅ [Refill] Operator wallet refilled with 100 USDC.");
+        this.payoutNonce = null; 
       }
     } catch (err) {
-      console.error("[Refill] Failed to ensure operator funding:", err.message);
+      console.error("[Refill] Failed:", err.message);
     }
   }
 }
-
 
 module.exports = ClassicEngine;

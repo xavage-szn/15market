@@ -98,10 +98,15 @@ function TradeHistoryComponent({
                                                     (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                                 }`}
                                         >
-                                            {t.status === "WON" && !t.chainConfirmed && !t.payout ? (
+                                            {(t.status === "WON" || t.status === "PAID") ? (
                                                 <div className="flex flex-col items-end">
-                                                    <span className="animate-pulse">WON</span>
-                                                    <span className="text-[6px] opacity-60">PAYOUT PENDING</span>
+                                                    <span>WON</span>
+                                                    {(t.payoutPending || t.status === "WON") && t.status !== "PAID" && (
+                                                        <span className="text-[6px] opacity-60 animate-pulse">PAYOUT PENDING</span>
+                                                    )}
+                                                    {t.status === "PAID" && (
+                                                        <span className="text-[6px] opacity-80">PAID</span>
+                                                    )}
                                                 </div>
                                             ) : t.status}
 

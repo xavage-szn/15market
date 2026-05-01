@@ -167,9 +167,20 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
 
                                     <TradeCountdown timeLeft={trade.timeLeft} isDark={isDark} />
 
-                                    {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST') && (
+                                    {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST' || trade.status === 'PAID') && (
                                         <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#3CB371]/10'} flex flex-col items-center justify-center rounded-xl border`}>
-                                            {trade.status === 'WON' && <div className="flex flex-col items-center text-[#3CB371] scale-90"><Trophy size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span></div>}
+                                            {(trade.status === 'WON' || trade.status === 'PAID') && (
+                                                <div className="flex flex-col items-center text-[#3CB371] scale-90">
+                                                    <Trophy size={20} />
+                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span>
+                                                    {trade.status === 'WON' && (
+                                                        <span className="text-[7px] font-bold uppercase opacity-60 animate-pulse mt-0.5">Payout Pending</span>
+                                                    )}
+                                                    {trade.status === 'PAID' && (
+                                                        <span className="text-[7px] font-bold uppercase opacity-80 mt-0.5">Paid</span>
+                                                    )}
+                                                </div>
+                                            )}
                                             {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#FF7F50] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
                                             {trade.status === 'RESOLVING' && (
                                                 <div className="flex flex-col items-center gap-2">
