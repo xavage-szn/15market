@@ -52,6 +52,20 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
     
     const [recentActivity, setRecentActivity] = useState([]);
     const [liveUsers, setLiveUsers] = useState([]); // { lat, lng, id } for map
+    const [userProfiles, setUserProfiles] = useState({});
+
+    const fetchProfile = async (addr) => {
+        if (!addr) return;
+        const lowAddr = addr.toLowerCase();
+        if (userProfiles[lowAddr]) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/profile?address=${lowAddr}`);
+            if (res.ok) {
+                const data = await res.json();
+                setUserProfiles(prev => ({ ...prev, [lowAddr]: data }));
+            }
+        } catch (e) {}
+    };
 
     // Real-time Event Subscriptions
     useEffect(() => {
@@ -72,7 +86,7 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
         // 2. New Trade (Sub-second Indexing)
         const unbindTrades = socketService.on('new_trade', (trade) => {
             setRecentActivity(prev => [trade, ...prev].slice(0, 50));
-            // Trigger a mini-pulse on the stats if needed, or wait for next heartbeat
+            if (trade.userAddr) fetchProfile(trade.userAddr);
         });
 
         // 3. User Onboarding (Geo Pin)
@@ -83,6 +97,7 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                 y: Math.random() * 60 + 20
             };
             setLiveUsers(prev => [...prev, newPin]);
+            if (user.address) fetchProfile(user.address);
             setTimeout(() => {
                 setLiveUsers(prev => prev.filter(p => p.id !== newPin.id));
             }, 5000);
@@ -95,6 +110,18 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                 if (res.ok) {
                     const data = await res.json();
                     setStats(data);
+                }
+                
+                // Also fetch recent activity history
+                const histRes = await fetch(`${KEEPER_URL_ARC}/history`);
+                if (histRes.ok) {
+                    const histData = await histRes.json();
+                    setRecentActivity(histData.slice(0, 50));
+                    // Prefetch profiles for history
+                    histData.slice(0, 20).forEach(h => {
+                        if (h.owner) fetchProfile(h.owner);
+                        if (h.userAddr) fetchProfile(h.userAddr);
+                    });
                 }
             } catch (e) {}
         };
@@ -469,11 +496,22 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                                             className={`p-3 rounded-2xl border flex items-center justify-between ${isLight ? 'bg-white border-black/5' : 'bg-white/5 border-white/5'}`}
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${act.direction === 'UP' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-red-500/10 text-red-500'}`}>
-                                                    {act.direction === 'UP' ? <TrendingUp size={14} /> : <TrendingUp size={14} className="rotate-180" />}
+                                                <div className={`w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center ${act.direction === 'UP' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-red-500/10 text-red-500'}`}>
+                                                    {userProfiles[(act.userAddr || act.owner || "").toLowerCase()]?.avatar ? (
+                                                        <img 
+                                                            src={userProfiles[(act.userAddr || act.owner || "").toLowerCase()].avatar} 
+                                                            className="w-full h-full object-cover"
+                                                            alt=""
+                                                        />
+                                                    ) : (
+                                                        act.direction === 'UP' ? <TrendingUp size={14} /> : <TrendingUp size={14} className="rotate-180" />
+                                                    )}
                                                 </div>
                                                 <div>
-                                                    <div className="text-[10px] font-black uppercase">{act.userAddr?.slice(0, 6)}...{act.userAddr?.slice(-4)}</div>
+                                                    <div className="text-[10px] font-black uppercase flex items-center gap-2">
+                                                        {userProfiles[(act.userAddr || act.owner || "").toLowerCase()]?.username || `${(act.userAddr || act.owner || "0x").slice(0, 6)}...`}
+                                                        {act.type === 'TRADE_PLACED' && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+                                                    </div>
                                                     <div className="text-[8px] opacity-40 font-bold uppercase">{act.symbol} • ${act.amount}</div>
                                                 </div>
                                             </div>

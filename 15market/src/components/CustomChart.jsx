@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Zap, Loader2 } from 'lucide-react';
+import { ChevronDown, Zap, Loader2, Globe } from 'lucide-react';
 import LiveStreamingChart from './LiveStreamingChart';
 
 export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [] }) {
@@ -187,32 +187,55 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             {/* Top Controls */}
             <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
                 <div className="flex items-center justify-between gap-2 pointer-events-auto">
-                    <div className="flex items-center gap-2">
-                        <div
-                            className={`flex items-center gap-2 cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg transition-all border border-transparent hover:${controlBorder} pointer-events-auto group`}
-                            onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                        >
-                            <h2 className={`text-[14px] lg:text-lg font-black ${controlText} tracking-widest uppercase flex items-center gap-2`}>
-                                {symbol.replace('USDT', '')}
-                            </h2>
-                            <ChevronDown size={14} className="text-[#3CB371] transition-transform duration-300 group-hover:scale-110" />
+                            {/* Asset Trigger - Cleaned up (No background square) */}
+                            <div
+                                onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                                className={`flex items-center gap-1.5 cursor-pointer px-1 py-1 transition-all pointer-events-auto group`}
+                            >
+                                <div className={`p-1.5 rounded-xl ${controlBgAlt} border ${controlBorder} group-hover:scale-110 transition-transform`}>
+                                    <Globe size={14} className="text-[#3CB371]" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className={`text-[10px] md:text-xs font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
+                                        {activeMarket?.symbol || 'ETH'}
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-1 h-1 rounded-full bg-[#3CB371] animate-pulse" />
+                                        <span className="text-[7px] font-bold opacity-30 uppercase tracking-widest">Live</span>
+                                    </div>
+                                </div>
+                                <ChevronDown size={12} className={`opacity-20 group-hover:opacity-100 transition-all ${isSelectorOpen ? 'rotate-180' : ''}`} />
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <AnimatePresence>
-                {isSelectorOpen && (
-                    <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className={`absolute top-16 left-4 z-[100] w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto`}>
-                        {tokens.map(t => (
-                            <button key={t.id} onClick={() => onAssetSwitch(t)} className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}>
-                                <div className="flex flex-col items-start"><span className="text-xs font-black uppercase tracking-widest">{t.symbol}</span><span className="text-[8px] opacity-60 font-medium">{t.name || 'Crypto'}</span></div>
-                                {activeMarket?.id === t.id && <Zap size={10} className="fill-current text-white animate-pulse" />}
-                            </button>
-                        ))}
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                    <AnimatePresence>
+                        {isSelectorOpen && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className={`absolute top-16 left-4 z-[100] w-48 md:w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-2 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-1 pointer-events-auto overflow-hidden`}
+                            >
+                                <div className="px-3 py-2 border-b border-white/5 mb-1">
+                                    <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Select Asset</span>
+                                </div>
+                                {tokens.map(t => (
+                                    <button 
+                                        key={t.id} 
+                                        onClick={() => onAssetSwitch(t)} 
+                                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}
+                                    >
+                                        <div className="flex flex-col items-start">
+                                            <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">{t.symbol}</span>
+                                            <span className="text-[7px] md:text-[8px] opacity-60 font-bold uppercase tracking-tight">{t.name || 'Crypto'}</span>
+                                        </div>
+                                        {activeMarket?.id === t.id && <Zap size={10} className="fill-current text-white animate-pulse" />}
+                                    </button>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
         </div>
     );
 }

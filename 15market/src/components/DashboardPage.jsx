@@ -52,6 +52,47 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
+    const fileInputRef = React.useRef(null);
+
+    const handleAvatarUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validate type (JPEG, JPG, PNG, GIF)
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!validTypes.includes(file.type)) {
+            setToast("Only JPEG, JPG, PNG, and GIF allowed");
+            return;
+        }
+
+        // Limit size to 1MB to prevent large Redis payloads
+        if (file.size > 1024 * 1024) {
+            setToast("Image too large (Max 1MB)");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64String = reader.result;
+            try {
+                const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ avatar: base64String })
+                });
+                if (res.ok) {
+                    setToast("Avatar Updated!");
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    const data = await res.json();
+                    setToast(data.error || "Upload Failed");
+                }
+            } catch (e) {
+                setToast("Upload Failed");
+            }
+        };
+        reader.readAsDataURL(file);
+    };
 
     const paginatedHistory = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -247,36 +288,59 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                         </div>
                                     </div>
                                     
-                                    <button 
-                                        onClick={() => setPromptConfig({
-                                            title: "Edit Profile",
-                                            placeholder: "New Username",
-                                            onConfirm: (newName) => {
-                                                setPromptConfig({
-                                                    title: "Profile Avatar",
-                                                    placeholder: "Avatar URL",
-                                                    onConfirm: async (newAvatar) => {
-                                                        try {
-                                                            const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
-                                                                method: 'PATCH',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ username: newName, avatar: newAvatar })
-                                                            });
-                                                            if (res.ok) {
-                                                                setToast("Profile Updated!");
-                                                                setTimeout(() => window.location.reload(), 1000);
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            className="hidden"
+                                            accept="image/jpeg,image/jpg,image/png,image/gif"
+                                            onChange={handleAvatarUpload}
+                                        />
+                                        <button 
+                                            onClick={() => setModalConfig({
+                                                title: "Profile Settings",
+                                                message: "Choose an action to update your profile identity.",
+                                                type: "confirm",
+                                                confirmText: "Change Name",
+                                                onConfirm: () => {
+                                                    setPromptConfig({
+                                                        title: "Edit Username",
+                                                        placeholder: "New Username",
+                                                        onConfirm: async (newName) => {
+                                                            try {
+                                                                const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                                                                    method: 'PATCH',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ username: newName })
+                                                                });
+                                                                if (res.ok) {
+                                                                    setToast("Username Updated!");
+                                                                    setTimeout(() => window.location.reload(), 1000);
+                                                                }
+                                                            } catch (e) {
+                                                                setToast("Update Failed");
                                                             }
-                                                        } catch (e) {
-                                                            setToast("Update Failed");
                                                         }
-                                                    }
-                                                });
-                                            }
-                                        })}
-                                        className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all`}
-                                    >
-                                        <Settings size={14} className="opacity-40" />
-                                    </button>
+                                                    });
+                                                },
+                                                // Added a secondary button for Avatar
+                                                footer: (
+                                                    <button 
+                                                        onClick={() => {
+                                                            setModalConfig(null);
+                                                            fileInputRef.current.click();
+                                                        }}
+                                                        className="w-full mt-2 py-4 bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest rounded-full hover:bg-white/10 transition-all"
+                                                    >
+                                                        Upload Avatar
+                                                    </button>
+                                                )
+                                            })}
+                                            className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all`}
+                                        >
+                                            <Settings size={14} className="opacity-40" />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="h-px bg-white/5 w-full" />
@@ -610,13 +674,15 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                             </h3>
                             <div className="mb-8 relative">
                                 <input
-                                    type="number"
+                                    type={promptConfig.inputType || "text"}
                                     autoFocus
                                     placeholder={promptConfig.placeholder}
+                                    value={promptValue}
+                                    onChange={(e) => setPromptValue(e.target.value)}
                                     className={`w-full ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20 text-[#0a261a] placeholder:text-[#0a261a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/10'} border rounded-2xl py-4 px-6 font-black text-center focus:border-[#3CB371]/50 outline-none transition-all`}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
-                                            promptConfig.onConfirm(e.target.value);
+                                            promptConfig.onConfirm(promptValue);
                                             setPromptConfig(null);
                                         }
                                     }}

@@ -175,7 +175,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                 exit={{ height: 0, opacity: 0 }}
                                 className={`mb-6 p-4 rounded-[24px] ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-[#3CB371]/20 overflow-hidden`}
                             >
-                                <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${isLight ? 'text-black/40' : 'text-white/40'}`}>Select Avatar Or Provide URL</p>
+                                <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${isLight ? 'text-black/40' : 'text-white/40'}`}>Select Avatar Or Upload Custom</p>
                                 <div className="grid grid-cols-4 gap-3 mb-4">
                                     {PRESET_AVATARS.map((url, i) => (
                                         <button
@@ -191,6 +191,30 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                             )}
                                         </button>
                                     ))}
+                                    {/* Upload Button */}
+                                    <button 
+                                        onClick={() => {
+                                            const input = document.createElement('input');
+                                            input.type = 'file';
+                                            input.accept = 'image/jpeg,image/jpg,image/png,image/gif';
+                                            input.onchange = (e) => {
+                                                const file = e.target.files[0];
+                                                if (!file) return;
+                                                if (file.size > 1024 * 1024) return notify("Image too large (Max 1MB)", "error");
+                                                const reader = new FileReader();
+                                                reader.onloadend = () => {
+                                                    setAvatar(reader.result);
+                                                    setCustomAvatarUrl("");
+                                                };
+                                                reader.readAsDataURL(file);
+                                            };
+                                            input.click();
+                                        }}
+                                        className={`relative w-12 h-12 rounded-full border-2 border-dashed border-[#3CB371]/40 flex flex-col items-center justify-center gap-1 hover:border-[#3CB371] transition-all bg-[#3CB371]/5`}
+                                    >
+                                        <Camera size={14} className="text-[#3CB371]" />
+                                        <span className="text-[6px] font-black uppercase text-[#3CB371]">UP</span>
+                                    </button>
                                 </div>
                                 <div className="relative">
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3CB371]">
