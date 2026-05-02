@@ -40,6 +40,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
     const [localWithdrawAmount, setLocalWithdrawAmount] = useState("");
     const [modalConfig, setModalConfig] = useState(null); // { title: string, message: string, onConfirm: function }
     const [promptConfig, setPromptConfig] = useState(null); // { title: string, placeholder: string, onConfirm: function }
+    const [promptValue, setPromptValue] = useState("");
 
     const [isSyncing, setIsSyncing] = useState(false);
     const [campaigns, setCampaigns] = useState([]);
@@ -303,6 +304,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                 type: "confirm",
                                                 confirmText: "Change Name",
                                                 onConfirm: () => {
+                                                    setPromptValue("");
                                                     setPromptConfig({
                                                         title: "Edit Username",
                                                         placeholder: "New Username",
@@ -383,10 +385,12 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2.5">
-                                        <button onClick={() => setPromptConfig({
-                                            title: "Refill Trading Wallet",
-                                            placeholder: "USDC Amount from Main",
-                                            onConfirm: (val) => onRefill(parseFloat(val)),
+                                        <button onClick={() => {
+                                            setPromptValue("");
+                                            setPromptConfig({
+                                                title: "Refill Trading Wallet",
+                                                placeholder: "USDC Amount from Main",
+                                                onConfirm: (val) => onRefill(parseFloat(val)),
                                             footer: (
                                                 <div className="text-center">
                                                     <a href="/docs" target="_blank" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Guide: How to get USDC from Circle Faucet</a>
@@ -395,11 +399,14 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                         })} className="py-3 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
                                             Refill
                                         </button>
-                                        <button onClick={() => setPromptConfig({
-                                            title: "Sweep to Main Wallet",
-                                            placeholder: "Withdraw Amount",
-                                            onConfirm: (val) => onWithdraw(val)
-                                        })} className={`py-3 ${isLight ? 'bg-white/40 border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 active:scale-95 transition-all`}>
+                                        <button onClick={() => {
+                                            setPromptValue("");
+                                            setPromptConfig({
+                                                title: "Sweep to Main Wallet",
+                                                placeholder: "Withdraw Amount",
+                                                onConfirm: (val) => onWithdraw(val)
+                                            });
+                                        }} className={`py-3 ${isLight ? 'bg-white/40 border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 active:scale-95 transition-all`}>
                                             Sweep
                                         </button>
                                     </div>
@@ -690,16 +697,19 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                             </div>
                             <div className="grid grid-cols-2 gap-4 w-full">
                                 <button
-                                    onClick={() => setPromptConfig(null)}
+                                    onClick={() => {
+                                        setPromptConfig(null);
+                                        setPromptValue("");
+                                    }}
                                     className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-full transition-all font-sans`}
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={() => {
-                                        const val = document.querySelector('input[type="number"]').value;
-                                        promptConfig.onConfirm(val);
+                                        promptConfig.onConfirm(promptValue);
                                         setPromptConfig(null);
+                                        setPromptValue("");
                                     }}
                                     className="py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all font-sans"
                                 >
