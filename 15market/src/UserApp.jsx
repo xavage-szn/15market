@@ -776,30 +776,39 @@ export default function UserApp() {
     if (!address) return;
 
     try {
-      // Priority 1: Backend Proxy (Faster, handles indexing)
-      const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`);
       let formatted;
-      
+
+      // Priority 1: Backend proxy — faster and avoids direct RPC CORS issues
+      const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`);
       if (res.ok) {
         const data = await res.json();
         formatted = data.balance;
       } else {
-        // Priority 2: Direct Blockchain Core Fallback (If backend is down/slow)
+        // Priority 2: Direct on-chain fallback if backend is down
         const balWei = await publicClient.getBalance({ address });
         formatted = formatUnits(balWei, 18);
       }
 
       const newBalNum = parseFloat(formatted);
 
-      // Guard period for optimistic updates: 20s to cover on-chain confirmation + backend indexing
-      const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (!force && msSinceLastAction < 20000) return;
-
-      if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001 || (newBalNum > 0 && evmBalance === "0")) {
+      // If forced (e.g. after a withdrawal), ALWAYS write the new balance — no stale comparisons.
+      // This prevents the bug where the main wallet shows 60 instead of 90 after a 30 USDC withdrawal.
+      if (force) {
         setEvmBalance(formatted);
+        return;
       }
+
+      // During passive polling, apply a guard window to avoid overwriting optimistic state
+      const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+      if (msSinceLastAction < 20000) return;
+
+      // Only update if the value has meaningfully changed
+      setEvmBalance(prev => {
+        const current = parseFloat(prev || '0');
+        return Math.abs(newBalNum - current) > 0.000001 ? formatted : prev;
+      });
     } catch (e) { 
-      // Last resort: standard blockchain fetch
+      // Last resort: direct on-chain fetch (no comparison, just set it)
       try {
         const balWei = await publicClient.getBalance({ address });
         setEvmBalance(formatUnits(balWei, 18));
@@ -2760,11 +2769,15 @@ export default function UserApp() {
         body: JSON.stringify({ address, transaction: newTx })
       }).catch(e => console.warn("Failed to sync withdrawal to cloud:", e));
 
-      // Re-sync all balances after 2 seconds to match on-chain finality
-      setTimeout(() => {
-        updateEvmSessionBal(true);
-        refetchEvmBalance(true);
-      }, 2000);
+      // Multi-wave balance refresh after withdrawal.
+      // Arc RPC nodes can take a few seconds to index the transaction, so we
+      // poll at 2s, 5s, and 10s to guarantee the updated main wallet balance is shown.
+      [2000, 5000, 10000].forEach(delay => {
+        setTimeout(() => {
+          updateEvmSessionBal(true);
+          refetchEvmBalance(true);
+        }, delay);
+      });
     } catch (e) {
       notify("Withdrawal failed: " + (e.shortMessage || e.message), "error");
     } finally {
