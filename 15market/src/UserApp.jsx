@@ -899,7 +899,7 @@ export default function UserApp() {
         );
 
         if (local) {
-          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+          const statusOrder = { "PAID": 4, "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           if (statusOrder[local.status] > statusOrder[bt.status]) {
             merged.push({ ...bt, status: local.status, payout: local.payout, balanceApplied: local.balanceApplied });
           } else {
@@ -1474,8 +1474,8 @@ export default function UserApp() {
 
     // --- INSTANT UI START ---
     setIsExecuting(true);
-    // Short lockout to prevent accidental double-clicks, but released almost immediately
-    setTimeout(() => setIsExecuting(false), 800);
+    // Harder lockout to prevent accidental double-clicks on slow connections
+    setTimeout(() => setIsExecuting(false), 2000);
 
     try {
       if (!isConnected) {

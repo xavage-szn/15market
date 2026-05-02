@@ -140,15 +140,17 @@ class ClassicEngine {
     if (!identity.ok) return { success: false, error: identity.error };
 
     const userAddr = identity.identityKey;
+    const existing = cache.trades.get(String(tradeParams.id));
+    if (existing) {
+      console.warn(`[Trade] Blocked duplicate trade request for ID: ${tradeParams.id}`);
+      return { success: true, trade: existing, alreadyExists: true };
+    }
     const treasury = config.TREASURY_ADDRESS;
     if (!treasury || treasury === ethers.ZeroAddress) {
       return { success: false, error: "Treasury address not configured on backend." };
     }
 
-    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr);
-    const privateKey = ethers.keccak256(entropy);
-    const sessionWallet = new ethers.Wallet(privateKey, rpc.mainProvider);
+    const sessionWallet = rpc.deriveSessionWallet(userAddr);
 
     let session = cache.sessions.get(userAddr);
     if (!session) {
@@ -370,11 +372,15 @@ class ClassicEngine {
 
   queuePayoutJob(trade) {
     this.payoutJobCounter += 1;
+    // CRITICAL: Winnings MUST go to the session wallet (EOA), not the main wallet.
+    const derivedSession = rpc.deriveSessionWallet(trade.userAddr);
+    const destination = derivedSession ? derivedSession.address : trade.sessionAddress;
+
     cache.payoutQueue.push({
       jobId: `payout_${trade.id}_${this.payoutJobCounter}`,
       tradeId: trade.id,
       userAddr: trade.userAddr,
-      sessionAddress: trade.sessionAddress, // Ensure we pay to the session wallet
+      sessionAddress: destination, 
       amount: trade.payout,
       queuedAt: Date.now(),
       status: 'QUEUED',
@@ -393,7 +399,14 @@ class ClassicEngine {
       for (const job of cache.payoutQueue) {
         if (job.status !== 'QUEUED') continue;
         const addr = job.userAddr.toLowerCase();
-        const dest = job.sessionAddress ? job.sessionAddress.toLowerCase() : addr;
+        
+        // PRIORITY: Always send to the session address if available.
+        let dest = job.sessionAddress;
+        if (!dest) {
+          const derived = rpc.deriveSessionWallet(addr);
+          dest = derived ? derived.address : addr;
+        }
+        dest = dest.toLowerCase();
         
         if (!userBatches[dest]) userBatches[dest] = { total: 0, jobs: [], userAddr: addr };
         userBatches[dest].total += Number(job.amount);

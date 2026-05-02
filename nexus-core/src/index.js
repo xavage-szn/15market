@@ -49,13 +49,7 @@ const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secur
  * @returns {ethers.Wallet} - The derived wallet connected to the provider.
  */
 function deriveSessionWallet(userAddr) {
-  // We use the user address and a master secret to create a unique hash (entropy)
-  const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr.toLowerCase());
-  // This entropy is converted into a standard 32-byte private key
-  const privateKey = ethers.keccak256(entropy);
-  // Returns a fully functional ethers.Wallet instance for on-chain interactions
-  const wallet = new ethers.Wallet(privateKey, provider);
-  return wallet;
+  return rpc.deriveSessionWallet(userAddr);
 }
 
 // --- Initialize Engines ---

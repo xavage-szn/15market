@@ -59,6 +59,14 @@ class RPCManager {
     }
     return "0";
   }
+
+  deriveSessionWallet(userAddr) {
+    if (!userAddr) return null;
+    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+    const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr.toLowerCase());
+    const privateKey = ethers.keccak256(entropy);
+    return new ethers.Wallet(privateKey, this.mainProvider);
+  }
 }
 
 module.exports = new RPCManager();
