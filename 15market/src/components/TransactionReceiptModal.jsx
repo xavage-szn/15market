@@ -123,15 +123,21 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     </div>
                                 </div>
 
-                                {transaction.type === 'rounds' && (
+                                {transaction.type !== 'DEPOSIT' && transaction.type !== 'CASHOUT' && (
                                     <div className="flex justify-between px-1 py-1 border-b border-black/5">
                                         <div className="flex flex-col">
-                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">LOCKED_ENTRY</span>
-                                            <span className="text-xs font-black">${Number(transaction.entryPrice).toFixed(2)}</span>
+                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">STAKE_PRICE</span>
+                                            <span className="text-xs font-black">${Number(transaction.entryPrice || 0).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">EXIT_PRICE</span>
+                                            <span className="text-xs font-black">${Number(transaction.exitPrice || 0).toFixed(2)}</span>
                                         </div>
                                         <div className="flex flex-col items-end">
-                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">POOL_DIRECTION</span>
-                                            <span className={`text-xs font-black ${transaction.direction === 'UP' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>{transaction.direction === 'UP' ? 'LONG' : 'SHORT'}</span>
+                                            <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">DIRECTION</span>
+                                            <span className={`text-xs font-black ${transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                                {transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'CALL' : 'PUT'}
+                                            </span>
                                         </div>
                                     </div>
                                 )}

@@ -349,7 +349,15 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                                     <div className={`text-[11px] font-black ${isWon ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
                                                         {isWon ? `+${Number(t.payout || 0).toFixed(2)}` : `-${Number(t.amount || 0).toFixed(2)}`}
                                                     </div>
-                                                    <span className={`text-[7px] font-black uppercase ${isWon ? 'text-[#3CB371]/60' : 'text-[#FF7F50]/60'}`}>{t.status}</span>
+                                                    <div className="flex gap-2 items-center">
+                                                        <span className={`text-[7px] font-black uppercase ${isWon ? 'text-[#3CB371]/60' : 'text-[#FF7F50]/60'}`}>{t.status}</span>
+                                                        <button
+                                                            onClick={() => onViewReceipt && onViewReceipt(t)}
+                                                            className="text-[7px] font-black text-[#3CB371] uppercase underline"
+                                                        >
+                                                            Receipt
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
