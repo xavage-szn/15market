@@ -69,11 +69,19 @@ class ProfileService {
             timestamp: trade.timestamp || Date.now()
         };
 
-        this.profiles[addr].trades.unshift(record);
+        // Limit to 100 trades and prevent duplicates
+        const tradeId = String(record.betId || record.id);
+        const exists = this.profiles[addr].trades.some(t => String(t.betId || t.id) === tradeId);
         
-        // Limit to 100 trades
-        if (this.profiles[addr].trades.length > 100) {
-            this.profiles[addr].trades = this.profiles[addr].trades.slice(0, 100);
+        if (!exists) {
+            this.profiles[addr].trades.unshift(record);
+            if (this.profiles[addr].trades.length > 100) {
+                this.profiles[addr].trades = this.profiles[addr].trades.slice(0, 100);
+            }
+        } else {
+            // Update existing trade record if it's already there (to capture status updates)
+            const idx = this.profiles[addr].trades.findIndex(t => String(t.betId || t.id) === tradeId);
+            this.profiles[addr].trades[idx] = { ...this.profiles[addr].trades[idx], ...record };
         }
         
         this.profiles[addr].updatedAt = Date.now();

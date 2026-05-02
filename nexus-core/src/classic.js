@@ -321,7 +321,7 @@ class ClassicEngine {
 
     cache.pushHistory(userAddr, settledEvent);
     this.io.to(userAddr).emit('trade_settled', settledEvent);
-    this.io.emit('trade_settled', settledEvent);
+    // Removed global emit to prevent 'random' trades showing up in other users' history
 
     if (won && payout > 0) {
       this.queuePayoutJob(trade);

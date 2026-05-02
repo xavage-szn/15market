@@ -1172,32 +1172,7 @@ export default function UserApp() {
       }
     });
 
-    const unbindSettled = socketService.on('trade_settled', (data) => {
-      console.log("[Socket] Trade Settled authoritative update:", data);
-      const tid = String(data.id || data.betId);
-      
-      const updateFn = (t) => {
-        if (String(t.id || t.tx || t.nonce) === tid) {
-          return { 
-            ...t, 
-            status: data.status || (data.won ? 'WON' : 'LOST'),
-            exitPrice: data.exitPrice,
-            payout: data.payout,
-            confirmed: true
-          };
-        }
-        return t;
-      };
-
-      setActiveTrades(prev => prev.map(updateFn));
-      setTradeHistory(prev => prev.map(updateFn));
-
-      if (data.won) {
-         // Mark as payout pending for visual indicators
-         setActiveTrades(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutSettled: false } : t));
-         setTradeHistory(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutSettled: false } : t));
-      }
-    });
+    // Redundant trade_settled listener removed. Consolidation into the main listener below.
 
     const unbindPayout = socketService.on('payout_completed', (data) => {
       console.log("[Socket] Payout Completed:", data);
@@ -1249,7 +1224,6 @@ export default function UserApp() {
 
     return () => {
       unbindBal();
-      unbindSettled();
       unbindPayout();
       unbindTick();
       unbindExpired();

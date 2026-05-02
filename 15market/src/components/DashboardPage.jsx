@@ -274,7 +274,10 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                             <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px]">
+                                        <button 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="group relative w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px] hover:scale-105 active:scale-95 transition-all overflow-hidden"
+                                        >
                                             <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#c8ddd2]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                                 {(userProfile?.avatar || userProfile?.xProfileImage) ? (
                                                     <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
@@ -282,7 +285,10 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                     <User size={20} className={isLight ? 'text-[#3CB371]/40' : 'text-white/50'} />
                                                 )}
                                             </div>
-                                        </div>
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <span className="text-white text-xs font-black">+</span>
+                                            </div>
+                                        </button>
                                         <div>
                                             <h2 className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} leading-tight`}>{userProfile?.username || "Trader"}</h2>
                                             <div className={`text-[8px] font-mono uppercase tracking-widest opacity-40`}>{truncate(address)}</div>

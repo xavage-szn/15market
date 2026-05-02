@@ -116,7 +116,7 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile }) => {
                                                     <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Upload</span>
                                                 </div>
                                             )}
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className={`absolute inset-0 bg-black/20 flex items-center justify-center transition-opacity ${selectedAvatar ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}>
                                                 <div className="w-8 h-8 rounded-full bg-[#3CB371] flex items-center justify-center text-white shadow-lg">
                                                     <span className="text-xl font-black">+</span>
                                                 </div>
