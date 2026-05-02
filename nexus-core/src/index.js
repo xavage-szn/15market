@@ -16,6 +16,7 @@ const { Server } = require('socket.io');
 const config = require('./config');
 const cache = require('./cache');
 const rpc = require('./rpc');
+const provider = rpc.provider;
 const ClassicEngine = require('./classic');
 const profiles = require('./profiles');
 const { ethers } = require('ethers');
@@ -31,7 +32,8 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(cors());
 app.use(express.json());
 
-const provider = rpc.mainProvider;
+// --- Deterministic Session Wallet Derivation ---
+const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
 
 /**
  * DETERMINISTIC SESSION WALLET DERIVATION

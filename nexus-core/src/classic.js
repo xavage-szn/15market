@@ -192,7 +192,15 @@ class ClassicEngine {
         return { success: false, error: `Insufficient Balance. You need at least ${amount + gasMargin} USDC.` };
       }
 
-      const numericId = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+      // AUTHORITY: Respect the trade ID from the frontend if it's a valid numeric string.
+      // This ensures that the frontend's optimistic trade ID matches the backend's authoritative ID,
+      // preventing duplication during the reconciliation phase.
+      let numericId;
+      if (tradeParams.id && /^\d+$/.test(tradeParams.id)) {
+        numericId = BigInt(tradeParams.id);
+      } else {
+        numericId = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
+      }
       
       try {
         const contract = new ethers.Contract(checksummedTreasury, [

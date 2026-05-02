@@ -887,10 +887,17 @@ export default function UserApp() {
 
       backendAll.forEach(bt => {
         const btId = String(bt.id);
+        const btTx = String(bt.tx || bt.txHash || "");
         backendGate.add(btId);
+        if (btTx) backendGate.add(btTx);
 
-        // Find local copy
-        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
+        // Find local copy using both ID and TX to prevent duplication
+        const local = prev.find(p => 
+          String(p.id) === btId || 
+          (btTx && String(p.tx || p.txHash) === btTx) ||
+          String(p.nonce) === btId
+        );
+
         if (local) {
           const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           if (statusOrder[local.status] > statusOrder[bt.status]) {
@@ -905,8 +912,10 @@ export default function UserApp() {
       });
 
       prev.forEach(local => {
-        const lid = String(local.id || local.tx || local.nonce);
-        if (!backendGate.has(lid)) {
+        const lid = String(local.id);
+        const ltx = String(local.tx || local.txHash || "");
+        
+        if (!backendGate.has(lid) && (!ltx || !backendGate.has(ltx))) {
           // Keep local trade if it has a final status or if it's very fresh
           const isFinal = ["WON", "LOST"].includes(local.status);
           const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
@@ -945,12 +954,18 @@ export default function UserApp() {
       const updatedActive = [];
 
       backendActive.forEach(bt => {
-        const btId = String(bt.id || bt.tx || bt.nonce);
-        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
+        const btId = String(bt.id);
+        const btTx = String(bt.tx || bt.txHash || "");
+        
+        const local = prev.find(p => 
+          String(p.id) === btId || 
+          (btTx && String(p.tx || p.txHash) === btTx) ||
+          String(p.nonce) === btId
+        );
 
         // 🔒 CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
         // the backend revert it to PENDING/RESOLVING. The local lock is ground truth.
-        const locked = lockedResults.current.get(btId);
+        const locked = lockedResults.current.get(btId) || (btTx && lockedResults.current.get(btTx));
         if (locked) {
           return;
         }
@@ -1161,8 +1176,12 @@ export default function UserApp() {
         
         notify(`$${payoutAmt.toFixed(2)} has been added to your balance`, "success", () => {
           // Find the trade in history or active to show receipt
-          const tid = String(data.betId || data.txHash);
-          const trade = [...activeTrades, ...tradeHistory].find(t => String(t.id || t.tx || t.nonce) === tid);
+          const tid = String(data.betId || "");
+          const tx = String(data.txHash || "");
+          const trade = [...activeTrades, ...tradeHistory].find(t => 
+            (tid && String(t.id || t.nonce) === tid) || 
+            (tx && String(t.tx || t.txHash) === tx)
+          );
           if (trade) {
              setSelectedTransaction({
                 ...trade,
@@ -1173,9 +1192,11 @@ export default function UserApp() {
         });
 
         if (data.reason === 'WIN_PAYOUT_SETTLED') {
-           const tid = String(data.betId || data.txHash);
-           setActiveTrades(prev => prev.map(t => String(t.id || t.tx || t.nonce) === tid ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
-           setTradeHistory(prev => prev.map(t => String(t.id || t.tx || t.nonce) === tid ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+           const tid = String(data.betId || "");
+           const tx = String(data.txHash || "");
+           const matchFn = t => (tid && String(t.id || t.nonce) === tid) || (tx && String(t.tx || t.txHash) === tx);
+           setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+           setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
         }
         triggerGlobalRefresh(true);
       }
@@ -1550,7 +1571,11 @@ export default function UserApp() {
 
       // --- Show trade card as PENDING immediately (Optimistic) ---
       const confirmedNow = Date.now();
-      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => String(t.id) !== String(item.id))];
+      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (
+        String(t.id) !== String(item.id) && 
+        (!item.tx || String(t.tx) !== String(item.tx)) &&
+        (!item.nonce || String(t.nonce) !== String(item.nonce))
+      ))];
       const optimisticTrade = {
         id: tradeId,
         direction: dirVal === 1 ? 'UP' : 'DOWN',
@@ -1885,9 +1910,17 @@ export default function UserApp() {
 
       // Upsert into tradeHistory with final WON/LOST status
       setTradeHistory(prev => {
-        const exists = prev.find(t => String(t.id || t.nonce) === betId);
+        const btId = String(data.betId || data.id || "");
+        const btTx = String(data.txHash || data.tx || "");
+        const exists = prev.find(t => 
+          (btId && String(t.id || t.nonce) === btId) || 
+          (btTx && String(t.tx || t.txHash) === btTx)
+        );
         if (exists) {
-          return prev.map(t => String(t.id || t.nonce) === betId ? { ...t, ...settledRecord } : t);
+          return prev.map(t => (
+            (btId && String(t.id || t.nonce) === btId) || 
+            (btTx && String(t.tx || t.txHash) === btTx)
+          ) ? { ...t, ...settledRecord } : t);
         }
         return [settledRecord, ...prev];
       });
@@ -2905,6 +2938,32 @@ export default function UserApp() {
               </div>
             </div>
           </header>
+
+          {/* Winner/Campaign Banner (Authoritative UX) */}
+          <AnimatePresence>
+            {winnerBanner && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#3CB371]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#3CB371]/5 to-yellow-500/10 border-white/5'}`}
+              >
+                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
+                    <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#3CB371]'}`}>
+                      {winnerBanner.text || "New Winner Leaderboard is Live!"}
+                    </span>
+                  </div>
+                  {winnerBanner.cta && (
+                    <button className="px-3 py-0.5 md:py-1 bg-[#3CB371] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
+                      {winnerBanner.cta}
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
           <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[2px] mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
