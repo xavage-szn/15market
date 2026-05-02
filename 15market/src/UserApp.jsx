@@ -143,9 +143,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         w-full h-full pointer-events-auto
         backdrop-blur-xl border-t border-x rounded-t-[32px]
         flex flex-col overflow-hidden
-        ${isDark
-          ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-10px_40px_rgba(27,94,60,0.4)] border-white/10'
-          : 'bg-gradient-to-br from-[#E2EFEA]/98 to-[#D9E9E2]/98 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-[#3CB371]/30'}
+        bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-10px_40px_rgba(27,94,60,0.4)] border-white/10
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -153,27 +151,25 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
           className={`
             w-full h-8 flex items-center justify-center cursor-pointer 
             transition-all duration-300 relative shrink-0
-            ${isDark 
-              ? 'bg-white/5 border-b border-white/5' 
-              : 'bg-black/5 border-b border-black/5'}
+            bg-white/5 border-b border-white/5
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
           <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />
           
           <div className="flex items-center justify-center gap-3 w-full">
-            <History size={14} className={isDark ? "text-white" : "text-[#0a261a]"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
-            <span className={`text-[11px] font-black uppercase tracking-[0.25em] ${isDark ? "text-white" : "text-[#0a261a]"}`}>
+            <History size={14} className="text-white" style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' }} />
+            <span className="text-[11px] font-black uppercase tracking-[0.25em] text-white">
               TRADE HISTORY ({userProfile?.stats?.totalTrades || tradeHistory.length})
             </span>
-            {isOpen ? <ChevronDown size={12} className={isDark ? "text-white/80" : "text-black/60"} /> : <ChevronUp size={12} className={isDark ? "text-white/80" : "text-black/60"} />}
+            {isOpen ? <ChevronDown size={12} className="text-white/80" /> : <ChevronUp size={12} className="text-white/80" />}
           </div>
         </div>
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
           {tradeHistory.length === 0 ? (
-            <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
+            <div className="h-full flex flex-col items-center justify-center opacity-20 text-center p-8 text-white">
               <History size={48} className="mb-4" />
               <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
             </div>
@@ -185,10 +181,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
               return (
                 <div
                   key={trade.id}
-                  className={`
-                    p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#cce3d7] border-[#3CB371]/20 shadow-sm'}
-                  `}
+                  className="p-4 rounded-2xl border transition-all active:scale-[0.98] bg-white/5 border-white/5"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -198,9 +191,9 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                       `}>
                         {trade.direction}
                       </div>
-                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
+                      <span className="text-xs font-bold text-white">{trade.symbol || 'BTC'}</span>
                     </div>
-                    <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                    <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : 'text-white/40'}`}>
                       {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                     </span>
                   </div>
@@ -212,7 +205,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
-                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                        className="p-1.5 rounded-lg bg-white/5 text-white/40"
                       >
                         <Share2 size={12} />
                       </button>
@@ -220,7 +213,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                         href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                        className="p-1.5 rounded-lg bg-white/5 text-white/40"
                       >
                         <ExternalLink size={12} />
                       </a>
