@@ -34,14 +34,11 @@ class ClassicEngine {
           const direction = this.resolveDirection(trade.direction);
           const isUp = direction === 1;
           
+          if (trade.expiryEmitted) continue;
+
           let currentPrice, isWinning;
-          if (trade.expiryEmitted && trade.lockedExitPrice !== undefined) {
-            currentPrice = trade.lockedExitPrice;
-            isWinning = trade.lockedWon;
-          } else {
-            currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
-            isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
-          }
+          currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
+          isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
 
           // Push authoritative state to frontend
           this.io.to(trade.userAddr).emit('trade_tick', {
@@ -53,18 +50,8 @@ class ClassicEngine {
           });
 
           // LOCK RESULT: Precise boundary capture
-          if (timeLeft <= 0 && !trade.expiryEmitted) {
-            trade.expiryEmitted = true;
-            trade.lockedExitPrice = currentPrice;
-            trade.lockedWon = isWinning;
-            
-            this.io.to(trade.userAddr).emit('trade_expired', {
-              betId: trade.id,
-              exitPrice: currentPrice,
-              won: isWinning,
-              direction: direction
-            });
-            console.log(`[Trade-Monitor] Result Locked #${trade.id} | Won: ${isWinning} | Price: ${currentPrice}`);
+          if (timeLeft <= 0) {
+            this.lockResult(trade);
           }
         }
       }
@@ -92,6 +79,28 @@ class ClassicEngine {
     if (dir === 1 || dir === '1' || String(dir).toUpperCase() === 'UP' || String(dir).toLowerCase() === 'buy') return 1;
     if (dir === 0 || dir === '0' || String(dir).toUpperCase() === 'DOWN' || String(dir).toLowerCase() === 'sell') return 0;
     return null;
+  }
+
+  lockResult(trade) {
+    if (trade.expiryEmitted) return;
+    
+    // Official Settlement Price: Historical lookup at exact settleAt timestamp
+    const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
+    const direction = this.resolveDirection(trade.direction);
+    const isUp = direction === 1;
+    const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
+
+    trade.expiryEmitted = true;
+    trade.lockedExitPrice = exitPrice;
+    trade.lockedWon = won;
+
+    this.io.to(trade.userAddr).emit('trade_expired', {
+      betId: trade.id,
+      exitPrice,
+      won,
+      direction: direction
+    });
+    console.log(`[Trade-Monitor] Result Locked #${trade.id} | Won: ${won} | Price: ${exitPrice}`);
   }
 
   async placeTrade(tradeParams, identityPayload) {
@@ -261,11 +270,14 @@ class ClassicEngine {
   async settleTrade(trade) {
     if (trade.status !== 'PENDING') return;
 
+    // Safety: Force lock if not already done by monitor
+    if (!trade.expiryEmitted) {
+      this.lockResult(trade);
+    }
+
     const userAddr = trade.userAddr.toLowerCase();
-    const exitPrice = trade.lockedExitPrice !== undefined ? trade.lockedExitPrice : (cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice);
-    const direction = this.resolveDirection(trade.direction);
-    const isUp = direction === 1;
-    const won = trade.lockedWon !== undefined ? trade.lockedWon : (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice));
+    const exitPrice = trade.lockedExitPrice;
+    const won = trade.lockedWon;
 
     const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
     const payout = won ? Number((trade.amount * multiplier).toFixed(6)) : 0;
