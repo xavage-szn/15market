@@ -170,7 +170,7 @@ class ClassicEngine {
         const contractDir = direction === 1 ? 0 : 1; 
         const contractPrice = ethers.parseUnits(entryPrice.toFixed(8), 8);
         const feeData = await rpc.mainProvider.getFeeData();
-        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
+        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n;
 
         const tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, checksummedUserAddr, { 
           value: ethers.parseUnits(amount.toFixed(18), 18),
@@ -181,7 +181,7 @@ class ClassicEngine {
       } catch (contractErr) {
         console.warn(`[Trade] Falling back to raw transfer:`, contractErr.message);
         const feeData = await rpc.mainProvider.getFeeData();
-        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
+        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n;
         const tx = await sessionWallet.sendTransaction({
           to: checksummedTreasury,
           value: ethers.parseUnits(amount.toFixed(18), 18),
@@ -402,7 +402,7 @@ class ClassicEngine {
 
     try {
       const feeData = await rpc.mainProvider.getFeeData();
-      const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
+      const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n;
 
       const tx = await rpc.wallet.sendTransaction({
         to: destination,

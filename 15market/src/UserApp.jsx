@@ -2516,43 +2516,38 @@ export default function UserApp() {
           console.warn("Chain switch failed or rejected:", switchErr.message);
         }
 
-        // Fetch current gas price from Arc Testnet (Viem syntax)
-        let txParams = {
-          to: activeSessionWallet.address,
-          value: parseEther(amtNum.toString()),
+        // --- 1% Platform Fee SPLIT ---
+        const platformFeeRate = 0.01;
+        const feeAmt = amtNum * platformFeeRate;
+        const depositAmt = amtNum - feeAmt;
+
+        console.log(`[Deposit] Splitting: ${depositAmt.toFixed(4)} to Session, ${feeAmt.toFixed(4)} to Treasury`);
+
+        // Step 1: Send 1% Fee to Treasury
+        const feeTx = await walletClient.sendTransaction({
+          to: ARC_CONTRACT_ADDRESS,
+          value: parseEther(feeAmt.toFixed(18)),
           account: address,
-        };
+        });
 
-        try {
-          const feeData = await publicClient.estimateFeesPerGas();
-          if (feeData.maxFeePerGas) {
-            // EIP-1559 (Modern)
-            txParams.maxFeePerGas = (feeData.maxFeePerGas * 125n) / 100n;
-            txParams.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 125n) / 100n;
-          } else if (feeData.gasPrice) {
-            // Legacy
-            txParams.gasPrice = (feeData.gasPrice * 125n) / 100n;
-          }
-        } catch (feeErr) {
-          console.warn("[Deposit] Fee estimation failed, using wallet defaults:", feeErr.message);
-        }
+        // Step 2: Send Remaining to Session EOA
+        const hash = await walletClient.sendTransaction({
+          to: activeSessionWallet.address,
+          value: parseEther(depositAmt.toFixed(18)),
+          account: address,
+        });
 
-        console.log(`[Deposit] Initiating tx to ${activeSessionWallet.address} for ${amtNum} USDC`);
+        notify("Deposit Split! Waiting for confirmations...", "success");
 
-        // Step 1: Send native USDC directly to the Session EOA
-        const hash = await walletClient.sendTransaction(txParams);
-
-        notify("Deposit Broadcasted! Waiting for confirmation...", "success");
-
-        // Step 2: Notify backend to credit balance immediately (Optimistic)
+        // Step 3: Notify backend to credit 99% (Optimistic)
         fetch(`${KEEPER_URL_ARC}/session/deposit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address, amount: amtNum, txHash: hash })
+          body: JSON.stringify({ address, amount: depositAmt, txHash: hash })
         }).catch(() => {});
 
-        // Step 3: Optimistic local UI update (Both wallets)
-        setSessionBalance(prev => prev + amtNum);
+        // Step 4: Optimistic local UI update (99% amount)
+        setSessionBalance(prev => prev + depositAmt);
         setEvmBalance(prev => {
           const current = parseFloat(prev || '0');
           return (current - amtNum).toFixed(6);
@@ -2809,12 +2804,16 @@ export default function UserApp() {
                 {/* Desktop: Only show session balance per user request */}
                 <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} label="SESSION" />
               </div>
-              <button onClick={() => setView("dashboard")} className="p-2 rounded-full border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="w-9 h-9 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                  <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                )}
               </button>
               <UnifiedWalletButton theme={theme} />
             </div>
@@ -2838,12 +2837,16 @@ export default function UserApp() {
               <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
                 <ThemeToggle theme={theme} onToggle={toggleTheme} />
               </div>
-              <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95"
+              <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden p-[1px]"
                 style={{
                   backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
                   borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                 }}>
-                <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                  <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                )}
               </button>
               <div className="scale-[0.9] origin-right ml-[-2px]">
                 <UnifiedWalletButton theme={theme} />

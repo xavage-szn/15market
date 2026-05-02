@@ -336,27 +336,55 @@ app.post('/session/cashout', async (req, res) => {
     }
 
     const feeData = await rpc.mainProvider.getFeeData();
-    const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 2n;
+    const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n; // Reduced from 2x to 1.1x
     const gasCost = gasPrice * gasLimit;
 
+    // --- 1% Platform Fee Calculation ---
+    const platformFeeRate = 0.01; // 1%
+    
     let sendAmount;
+    let feeAmount = 0n;
+
     if (amount && Number(amount) > 0) {
       // User requested a specific amount
-      sendAmount = ethers.parseUnits(Number(amount).toFixed(18), 18);
-      if (sendAmount + gasCost > balWei) {
-        return res.status(400).json({ error: `Insufficient balance for this withdrawal. Need ${ethers.formatEther(sendAmount + gasCost)} USDC (Amount + Gas).` });
+      const requestedWei = ethers.parseUnits(Number(amount).toFixed(18), 18);
+      feeAmount = (requestedWei * 1n) / 100n; // 1% fee
+      sendAmount = requestedWei - feeAmount;
+
+      if (requestedWei + gasCost > balWei) {
+        return res.status(400).json({ error: `Insufficient balance for this withdrawal. Need ${ethers.formatEther(requestedWei + gasCost)} USDC.` });
       }
     } else {
-      // SWEEP EVERYTHING (legacy behavior if no amount provided)
-      sendAmount = balWei - gasCost;
+      // SWEEP EVERYTHING
+      const totalAvailable = balWei - gasCost;
+      if (totalAvailable <= 0n) {
+        return res.status(400).json({ error: "Balance too low to cover gas." });
+      }
+      feeAmount = (totalAvailable * 1n) / 100n;
+      sendAmount = totalAvailable - feeAmount;
     }
 
     if (sendAmount <= 0n) {
-      return res.status(400).json({ error: `Balance too low to cover gas fees.` });
+      return res.status(400).json({ error: `Balance too low to cover gas and fees.` });
     }
 
-    console.log(`[Cashout] Sending ${ethers.formatEther(sendAmount)} USDC from ${sessionWallet.address} to ${address}`);
+    console.log(`[Cashout] Sending ${ethers.formatEther(sendAmount)} USDC to user and ${ethers.formatEther(feeAmount)} USDC fee to treasury.`);
     
+    // 1. Send Fee to Treasury
+    if (feeAmount > 0n && config.TREASURY_ADDRESS) {
+      try {
+        await sessionWallet.sendTransaction({
+          to: ethers.getAddress(config.TREASURY_ADDRESS),
+          value: feeAmount,
+          gasLimit: 21000n,
+          gasPrice
+        });
+      } catch (feeErr) {
+        console.warn("[Cashout] Fee transfer failed, proceeding with user transfer:", feeErr.message);
+      }
+    }
+
+    // 2. Send Remaining to User
     const tx = await sessionWallet.sendTransaction({
       to: ethers.getAddress(address),
       value: sendAmount,
