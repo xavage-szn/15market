@@ -15,7 +15,7 @@ const PRESET_AVATARS = [
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Peanut"
 ];
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme, onUpdate }) {
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme, onUpdate, sessionBalance, evmBalance, onRefill, onWithdraw }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -26,6 +26,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
     const [tradeHistory, setTradeHistory] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isVerifyingX, setIsVerifyingX] = useState(false);
+    const [actionAmount, setActionAmount] = useState("");
 
     const isLight = theme === 'light';
 
@@ -257,6 +258,66 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                             </div>
                         </div>
                     )}
+
+                    <div className="mb-6">
+                        <div className={`p-4 rounded-[24px] ${isLight ? 'bg-white border-black/5' : 'bg-[#151515] border-white/5'} border shadow-xl`}>
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Session Wallet</p>
+                                    <h4 className={`text-lg font-black ${isLight ? 'text-black' : 'text-white'}`}>{Number(sessionBalance || 0).toFixed(2)} <span className="text-[10px] opacity-40">USDC</span></h4>
+                                </div>
+                                <div className="text-right">
+                                    <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Main Wallet</p>
+                                    <p className={`text-xs font-bold ${isLight ? 'text-black/60' : 'text-white/60'}`}>{Number(evmBalance || 0).toFixed(2)} USDC</p>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                                <div className="relative">
+                                    <input 
+                                        type="number"
+                                        placeholder="0.00"
+                                        className={`w-full py-3 px-4 rounded-xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-transparent focus:border-[#3CB371]/50 outline-none text-xs font-black transition-all`}
+                                        id="wallet-amount-input"
+                                        onChange={(e) => setActionAmount(e.target.value)}
+                                        value={actionAmount}
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2">
+                                        <button 
+                                            onClick={() => setActionAmount(evmBalance)}
+                                            className="text-[9px] font-black text-[#3CB371] uppercase hover:underline"
+                                        >
+                                            Max
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={() => {
+                                            if (!actionAmount || parseFloat(actionAmount) <= 0) return notify("Enter a valid amount", "error");
+                                            onRefill(parseFloat(actionAmount));
+                                            setActionAmount("");
+                                        }}
+                                        className="flex items-center justify-center gap-2 bg-[#3CB371] text-black font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                    >
+                                        <Zap size={14} />
+                                        Deposit
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            if (!actionAmount || parseFloat(actionAmount) <= 0) return notify("Enter a valid amount", "error");
+                                            onWithdraw(parseFloat(actionAmount));
+                                            setActionAmount("");
+                                        }}
+                                        className={`flex items-center justify-center gap-2 ${isLight ? 'bg-black/10' : 'bg-white/10'} font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all`}
+                                    >
+                                        <Shield size={14} />
+                                        Withdraw
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="mb-6">
                         <h4 className={`text-[10px] font-black ${isLight ? 'text-black/40' : 'text-white/40'} uppercase tracking-[0.3em] ml-1 mb-3 block`}>Trade Activity</h4>

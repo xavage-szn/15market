@@ -3154,6 +3154,10 @@ export default function UserApp() {
         onClose={() => setIsProfileOpen(false)}
         wallet={wallet}
         userProfile={userProfile}
+        sessionBalance={sessionBalance}
+        evmBalance={evmBalance}
+        onRefill={handleRefill}
+        onWithdraw={handleWithdraw}
         transactionHistory={transactionHistory}
         onViewReceipt={(tx) => {
           setSelectedTransaction(tx);
