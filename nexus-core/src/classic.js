@@ -439,12 +439,16 @@ class ClassicEngine {
           const session = cache.sessions.get(userAddr);
           if (session) {
             session.balance = parseFloat(balStr);
+            const totalPayout = jobs.reduce((sum, j) => sum + parseFloat(j.amount), 0);
+            
             this.io.to(userAddr).emit('balance_update', { 
               balance: String(session.balance), 
               reason: 'WIN_PAYOUT_SETTLED',
-              txHash: txHash 
+              txHash: txHash,
+              payout: String(totalPayout),
+              betId: jobs[0].tradeId // Reference at least one trade for the receipt link
             });
-            console.log(`[Payout] Sync complete for ${userAddr}. New balance: ${session.balance}`);
+            console.log(`[Payout] Sync complete for ${userAddr}. New balance: ${session.balance}, Total Payout: ${totalPayout}`);
           }
         } catch (syncErr) {
           console.error(`[Payout] Sync error for ${userAddr}:`, syncErr.message);

@@ -1150,7 +1150,7 @@ export default function UserApp() {
         const payoutAmt = parseFloat(data.payout || 0);
         const reasonLabel = data.reason === 'WIN_PAYOUT_SETTLED' ? 'Confirmed' : 'Received';
         
-        notify(`Payout ${reasonLabel}: +$${payoutAmt.toFixed(2)}`, "success", () => {
+        notify(`$${payoutAmt.toFixed(2)} has been added to your balance`, "success", () => {
           // Find the trade in history or active to show receipt
           const tid = String(data.betId || data.txHash);
           const trade = [...activeTrades, ...tradeHistory].find(t => String(t.id || t.tx || t.nonce) === tid);
