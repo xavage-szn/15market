@@ -105,7 +105,7 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="opacity-40 uppercase">TIMESTAMP:</span>
-                                    <span>{new Date().toLocaleString()}</span>
+                                    <span>{new Date(trade.timestamp || Date.now()).toLocaleString()}</span>
                                 </div>
                                 {trade.type === 'rounds' && (
                                     <div className="flex justify-between">
@@ -136,18 +136,18 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col">
                                         <span className="text-[8px] opacity-40 font-black">ENTRY</span>
-                                        <span className="text-sm font-black italic">${Number(trade.entryPrice).toFixed(2)}</span>
+                                        <span className="text-sm font-black italic">${Number(trade.entryPrice || 0).toFixed(2)}</span>
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <span className="text-[8px] opacity-40 font-black">STAKE</span>
-                                        <span className="text-sm font-black italic">{Number(trade.amount).toFixed(2)} {currency}</span>
+                                        <span className="text-sm font-black italic">{Number(trade.amount || 0).toFixed(2)} {currency}</span>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-dashed border-black/10">
                                     <div className="flex flex-col">
                                         <span className="text-[8px] opacity-40 font-black">SETTLED</span>
-                                        <span className="text-sm font-black italic">{trade.status !== "PENDING" && trade.settlementPrice !== null ? `$${Number(trade.settlementPrice).toFixed(2)}` : 'PENDING'}</span>
+                                        <span className="text-sm font-black italic">{trade.status !== "PENDING" && (trade.settlementPrice || trade.exitPrice) ? `$${Number(trade.settlementPrice || trade.exitPrice || 0).toFixed(2)}` : 'PENDING'}</span>
                                     </div>
                                     <div className="flex flex-col items-end">
                                         <span className="text-[8px] opacity-40 font-black">PNL_OUTCOME</span>

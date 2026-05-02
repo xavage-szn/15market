@@ -307,10 +307,14 @@ class ClassicEngine {
       betId: trade.id,
       won,
       payout: String(payout),
+      amount: trade.amount, // Stake amount
+      direction: trade.direction,
+      duration: trade.duration,
       entryPrice: trade.entryPrice,
       exitPrice,
+      settlementPrice: exitPrice, // Alias for receipt components
       symbol: trade.symbol.toUpperCase(),
-      timestamp: trade.settledAt,
+      timestamp: trade.settledAt || Date.now(),
       status: trade.status,
       tx: trade.stakeTxHash, // Persist the stake transaction hash
     };

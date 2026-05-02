@@ -118,7 +118,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     <div className="flex flex-col items-end">
                                         <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">AMOUNT</span>
                                         <span className="font-black text-lg">
-                                            {isDeposit ? '+' : '-'}{Number(transaction.amount).toFixed(2)} {transaction.currency || 'USDC'}
+                                            {isDeposit ? '+' : '-'}{Number(transaction.amount || 0).toFixed(2)} {transaction.currency || 'USDC'}
                                         </span>
                                     </div>
                                 </div>
