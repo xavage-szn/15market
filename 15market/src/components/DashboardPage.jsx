@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
@@ -254,7 +254,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
             </div>
 
             <div className="flex-1 overflow-hidden">
-                <div className="max-w-[1700px] mx-auto h-full p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+                <div className="w-full h-full p-4 md:p-6 lg:p-8 flex flex-col gap-6">
                     {/* Unified Grid Layout - 3 Column: Controls | Transactions | Analytics+Chat */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0">
 
@@ -469,9 +469,9 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <div className={`p-1 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/20 text-[#3CB371]" : "bg-[#FF7F50]/20 text-[#FF7F50]"}`}>
-                                                        {tx.type === "DEPOSIT" ? <Zap size={10} /> : <Shield size={10} />}
+                                                        {tx.type === "DEPOSIT" ? <ArrowDown size={10} /> : <ArrowUp size={10} />}
                                                     </div>
-                                                    <div className="text-[9px] font-black uppercase">{tx.type === "DEPOSIT" ? "In" : "Out"}</div>
+                                                    <div className="text-[9px] font-black uppercase">{tx.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}</div>
                                                 </div>
                                                 <div className={`text-[10px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
                                                     {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount}
@@ -479,7 +479,6 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div className={`text-[7px] opacity-30 font-bold uppercase`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
-                                                <button onClick={() => onViewReceipt?.(tx)} className="text-[7px] font-black text-[#3CB371]/50 underline uppercase hover:text-[#3CB371]">Receipt</button>
                                             </div>
                                         </div>
                                     ))}

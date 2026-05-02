@@ -19,7 +19,7 @@ const SideHistoryPane = ({
                 width: isOpen ? 230 : 48,
             }}
             transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-            className={`absolute left-[-16px] lg:left-[-24px] top-0 bottom-0 z-[60] flex flex-row items-center pointer-events-none group`}
+            className={`absolute left-[-8px] md:left-[-24px] lg:left-[-32px] top-0 bottom-0 z-[60] flex flex-row items-center pointer-events-none group`}
         >
             {/* The Actual Pane */}
             <div className={`
