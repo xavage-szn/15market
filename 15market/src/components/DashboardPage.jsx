@@ -389,7 +389,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                 onConfirm: (val) => onRefill(parseFloat(val)),
                                                 footer: (
                                                     <div className="text-center">
-                                                        <a href="/docs" target="_blank" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Guide: How to get USDC from Circle Faucet</a>
+                                                        <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Faucet ↗</a>
                                                     </div>
                                                 )
                                             });

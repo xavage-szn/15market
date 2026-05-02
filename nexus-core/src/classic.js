@@ -233,8 +233,8 @@ class ClassicEngine {
     const trade = {
       id: String(tradeParams.id || id),
       userAddr: userAddr.toLowerCase(),
-      walletAddress: session.walletAddress.toLowerCase(),
-      sessionAddress: sessionWallet.address.toLowerCase(),
+      walletAddress: session.walletAddress ? session.walletAddress.toLowerCase() : userAddr.toLowerCase(),
+      sessionAddress: session.sessionAddress ? session.sessionAddress.toLowerCase() : sessionWallet.address.toLowerCase(),
       direction,
       duration,
       marketId,

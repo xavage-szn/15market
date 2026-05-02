@@ -298,11 +298,14 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                             onWithdraw(parseFloat(actionAmount));
                                             setActionAmount("");
                                         }}
-                                        className={`flex items-center justify-center gap-2 ${isLight ? 'bg-black/10' : 'bg-white/10'} font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all`}
+                                        className={`flex items-center justify-center gap-2 ${isLight ? 'bg-black/5 text-black hover:bg-black/10' : 'bg-white/5 text-white hover:bg-white/10'} font-black py-3 rounded-xl text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all`}
                                     >
                                         <Shield size={14} />
                                         Withdraw
                                     </button>
+                                </div>
+                                <div className="text-center mt-2">
+                                    <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Faucet ↗</a>
                                 </div>
                             </div>
                         </div>

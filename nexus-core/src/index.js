@@ -482,8 +482,14 @@ app.post('/session/deposit', async (req, res) => {
       session.balance = Number((session.balance + parseFloat(amount)).toFixed(4));
       console.log(`[Deposit] Session updated: ${userAddr} new balance ${session.balance}`);
     } else {
-      console.warn(`[Deposit] No active session found for ${userAddr}. Syncing on next init.`);
-      cache.getOrCreateSession(userAddr, { balance: parseFloat(amount) });
+      console.warn(`[Deposit] No active session found for ${userAddr}. Creating with derived addresses.`);
+      const sessionWallet = deriveSessionWallet(userAddr);
+      cache.getOrCreateSession(userAddr, { 
+        balance: parseFloat(amount),
+        identityKey: userAddr,
+        walletAddress: userAddr, // Assuming the deposit came from their main wallet
+        sessionAddress: sessionWallet.address
+      });
     }
 
     // Push to history

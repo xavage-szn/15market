@@ -2334,7 +2334,7 @@ export default function UserApp() {
             const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(2);
 
             const updateTrade = (t) => {
-              const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+              const isMatch = (t.tx && log.transactionHash && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
                 (t.nonce && t.nonce.toString() === betId) ||
                 (t.id && t.id.toString() === betId);
               if (isMatch) {
@@ -2388,7 +2388,7 @@ export default function UserApp() {
               // Finalize status across trade lists
               const finalizeWin = () => {
                 const matchFn = (t) => {
-                  const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+                  const isMatch = (t.tx && log.transactionHash && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
                     (t.id && t.id.toString() === betId);
                   return isMatch ? { ...t, status: "WON", payout: formattedPayout, chainConfirmed: true, balanceApplied: true } : t;
                 };
