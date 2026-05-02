@@ -2210,21 +2210,21 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                         <div className="overflow-x-auto">
                                             <table className="w-full">
                                                 <thead>
-                                                    <tr className="bg-white/5 text-left">
-                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Trade ID / User</th>
-                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest hidden md:table-cell">Network</th>
-                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest hidden sm:table-cell">Direction / Entry</th>
-                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-center">Stake</th>
-                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Result</th>
-                                                        <th className="px-8 py-4 text-right text-[9px] font-black text-white/20 uppercase tracking-widest hidden lg:table-cell">Timestamp</th>
+                                                    <tr className="bg-[#3CB371]/10 text-left border-b border-[#3CB371]/20">
+                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-[#3CB371] uppercase tracking-widest">Trade ID / User</th>
+                                                        <th className="px-8 py-4 text-[9px] font-black text-[#3CB371] uppercase tracking-widest hidden md:table-cell">Network</th>
+                                                        <th className="px-8 py-4 text-[9px] font-black text-[#3CB371] uppercase tracking-widest hidden sm:table-cell">Direction / Entry</th>
+                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-[#3CB371] uppercase tracking-widest text-center">Stake</th>
+                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-[#3CB371] uppercase tracking-widest">Result</th>
+                                                        <th className="px-8 py-4 text-right text-[9px] font-black text-[#3CB371] uppercase tracking-widest hidden lg:table-cell">Timestamp</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-white/[0.02]">
+                                                <tbody className="divide-y divide-[#3CB371]/5">
                                                     {filteredHistory.map((trade, idx) => (
                                                         <tr 
                                                             key={idx} 
                                                             onClick={() => setSelectedTrade(trade)}
-                                                            className="hover:bg-white/[0.01] transition-all group cursor-pointer"
+                                                            className="hover:bg-[#3CB371]/5 transition-all group cursor-pointer border-l-2 border-transparent hover:border-l-[#3CB371]"
                                                         >
                                                             <td className="px-6 sm:px-8 py-5">
                                                                 <div className="flex flex-col">
@@ -2800,8 +2800,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                         key="settings"
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className="space-y-8"
+                                        className="bg-[#0D0D0D] border border-[#3CB371]/10 rounded-[32px] sm:rounded-[48px] overflow-hidden shadow-2xl"
                                     >
+                                        <div className="p-8 lg:p-12">
                                         <div className="flex flex-col mb-4 lg:mb-8">
                                             <h3 className="text-xl font-black text-white uppercase tracking-tighter">System Configuration</h3>
                                             <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Fine-tune protocol parameters and platform governance.</p>
@@ -3801,9 +3802,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     >
                         <motion.div
                             initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
-                            className="w-full max-w-2xl bg-[#0D0D0D] border border-white/10 rounded-[48px] overflow-hidden flex flex-col shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
+                            className="w-full max-w-2xl bg-[#0D0D0D] border border-[#3CB371]/20 rounded-[48px] overflow-hidden flex flex-col shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
                         >
-                            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                            <div className="p-8 border-b border-[#3CB371]/10 flex items-center justify-between bg-[#3CB371]/5">
                                 <div className="flex items-center gap-4">
                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${selectedTrade.direction === 'UP' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-red-500/10 text-red-500'}`}>
                                         <Zap size={24} />
@@ -3823,25 +3824,25 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
                                 <div className="grid grid-cols-2 gap-4 sm:gap-6">
-                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                    <div className="p-6 bg-black/40 border border-[#3CB371]/10 rounded-3xl">
                                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">User Address</p>
                                         <p className="text-xs font-mono text-white break-all">{selectedTrade.owner || selectedTrade.user || 'N/A'}</p>
                                     </div>
-                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                    <div className="p-6 bg-black/40 border border-[#3CB371]/10 rounded-3xl">
                                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Asset</p>
                                         <p className="text-xs font-black text-white uppercase">{selectedTrade.symbol || 'ETH'} / USDC</p>
                                     </div>
-                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                    <div className="p-6 bg-black/40 border border-[#3CB371]/10 rounded-3xl">
                                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Stake Amount</p>
                                         <p className="text-xl font-black text-white">{Number(selectedTrade.amount).toFixed(2)} USDC</p>
                                     </div>
-                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                    <div className="p-6 bg-black/40 border border-[#3CB371]/10 rounded-3xl">
                                         <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Potential Payout</p>
                                         <p className="text-xl font-black text-[#3CB371]">${(Number(selectedTrade.amount) * 1.8).toFixed(2)}</p>
                                     </div>
                                 </div>
 
-                                <div className="p-8 bg-black/60 border border-white/5 rounded-3xl space-y-6">
+                                <div className="p-8 bg-black/60 border border-[#3CB371]/10 rounded-3xl space-y-6">
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Entry Price</p>
@@ -3870,7 +3871,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
                                 <div className="space-y-4">
                                     <p className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">Blockchain Metadata</p>
-                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
+                                    <div className="p-6 bg-black/40 border border-[#3CB371]/10 rounded-3xl space-y-4">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[9px] text-white/20 uppercase font-bold">Transaction Hash</span>
                                             <span className="text-[9px] font-mono text-white/40 truncate ml-4 w-48">{selectedTrade.tx || 'Pending...'}</span>
