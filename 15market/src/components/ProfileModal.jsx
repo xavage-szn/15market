@@ -137,22 +137,24 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-4">
                             <div className="relative group cursor-pointer" onClick={() => setShowAvatarSelector(!showAvatarSelector)}>
-                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1.5px] overflow-hidden transition-transform group-hover:scale-105">
+                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[2px] overflow-hidden transition-all group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(60,179,113,0.3)]">
                                     <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#e6f4ed]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden relative`}>
                                         {userProfile?.xProfileImage || avatar ? (
                                             <img src={userProfile?.xProfileImage || avatar} alt="Profile" className="w-full h-full object-cover" />
                                         ) : (
-                                            <span className="text-[#3CB371] font-black text-xl">
+                                            <span className="text-[#3CB371] font-black text-2xl">
                                                 {(username || "A").charAt(0).toUpperCase()}
                                             </span>
                                         )}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                            <Camera size={16} className="text-white" />
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                                            <div className="w-8 h-8 rounded-full bg-[#3CB371] flex items-center justify-center text-white shadow-lg scale-75 group-hover:scale-100 transition-transform">
+                                                <span className="text-xl font-black">+</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#3CB371] border-2 border-[#0D0D0D] flex items-center justify-center shadow-lg">
-                                    <Edit3 size={10} className="text-black font-bold" />
+                                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#3CB371] border-4 border-[#0D0D0D] flex items-center justify-center shadow-lg">
+                                    <Camera size={12} className="text-black font-black" />
                                 </div>
                             </div>
                             <div className="flex flex-col">
@@ -176,61 +178,48 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                 exit={{ height: 0, opacity: 0 }}
                                 className={`mb-6 p-4 rounded-[24px] ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-[#3CB371]/20 overflow-hidden`}
                             >
-                                <p className={`text-[9px] font-black uppercase tracking-widest mb-3 ${isLight ? 'text-black/40' : 'text-white/40'}`}>Select Avatar Or Upload Custom</p>
-                                <div className="grid grid-cols-4 gap-3 mb-4">
-                                    {PRESET_AVATARS.map((url, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => { setAvatar(url); setCustomAvatarUrl(""); }}
-                                            className={`relative w-12 h-12 rounded-full border-2 transition-all overflow-hidden ${avatar === url ? 'border-[#3CB371] scale-110 shadow-lg z-10' : 'border-transparent opacity-40 hover:opacity-100'}`}
-                                        >
-                                            <img src={url} alt="Avatar" className="w-full h-full" />
-                                            {avatar === url && (
-                                                <div className="absolute inset-0 bg-[#3CB371]/20 flex items-center justify-center">
-                                                    <Check size={16} className="text-white" />
-                                                </div>
-                                            )}
-                                        </button>
-                                    ))}
-                                    {/* Upload Button */}
-                                    <button 
-                                        onClick={() => {
-                                            const input = document.createElement('input');
-                                            input.type = 'file';
-                                            input.accept = 'image/jpeg,image/jpg,image/png,image/gif';
-                                            input.onchange = (e) => {
-                                                const file = e.target.files[0];
-                                                if (!file) return;
-                                                if (file.size > 1024 * 1024) return notify("Image too large (Max 1MB)", "error");
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => {
-                                                    setAvatar(reader.result);
-                                                    setCustomAvatarUrl("");
+                                <div className="flex flex-col gap-3">
+                                    <p className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Select Avatar Or Upload Custom</p>
+                                    <div className="grid grid-cols-4 gap-3">
+                                        {PRESET_AVATARS.map((url, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => { setAvatar(url); setCustomAvatarUrl(""); }}
+                                                className={`relative w-12 h-12 rounded-full border-2 transition-all overflow-hidden ${avatar === url ? 'border-[#3CB371] scale-110 shadow-lg z-10' : 'border-transparent opacity-40 hover:opacity-100'}`}
+                                            >
+                                                <img src={url} alt="Avatar" className="w-full h-full" />
+                                                {avatar === url && (
+                                                    <div className="absolute inset-0 bg-[#3CB371]/20 flex items-center justify-center">
+                                                        <Check size={16} className="text-white" />
+                                                    </div>
+                                                )}
+                                            </button>
+                                        ))}
+                                        {/* Upload Button */}
+                                        <button 
+                                            onClick={() => {
+                                                const input = document.createElement('input');
+                                                input.type = 'file';
+                                                input.accept = 'image/jpeg,image/jpg,image/png,image/gif';
+                                                input.onchange = (e) => {
+                                                    const file = e.target.files[0];
+                                                    if (!file) return;
+                                                    if (file.size > 1024 * 1024) return notify("Image too large (Max 1MB)", "error");
+                                                    const reader = new FileReader();
+                                                    reader.onloadend = () => {
+                                                        setAvatar(reader.result);
+                                                        setCustomAvatarUrl("");
+                                                    };
+                                                    reader.readAsDataURL(file);
                                                 };
-                                                reader.readAsDataURL(file);
-                                            };
-                                            input.click();
-                                        }}
-                                        className={`relative w-12 h-12 rounded-full border-2 border-dashed border-[#3CB371]/40 flex flex-col items-center justify-center gap-1 hover:border-[#3CB371] transition-all bg-[#3CB371]/5`}
-                                    >
-                                        <Camera size={14} className="text-[#3CB371]" />
-                                        <span className="text-[6px] font-black uppercase text-[#3CB371]">UP</span>
-                                    </button>
-                                </div>
-                                <div className="relative">
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3CB371]">
-                                        <LinkIcon size={14} />
+                                                input.click();
+                                            }}
+                                            className={`relative w-12 h-12 rounded-full border-2 border-dashed border-[#3CB371]/40 flex flex-col items-center justify-center gap-1 hover:border-[#3CB371] transition-all bg-[#3CB371]/5`}
+                                        >
+                                            <Camera size={14} className="text-[#3CB371]" />
+                                            <span className="text-[6px] font-black uppercase text-[#3CB371]">UP</span>
+                                        </button>
                                     </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Paste Custom Image URL"
-                                        value={customAvatarUrl}
-                                        onChange={(e) => {
-                                            setCustomAvatarUrl(e.target.value);
-                                            if (e.target.value.trim().startsWith('http')) setAvatar(e.target.value.trim());
-                                        }}
-                                        className={`w-full py-3 pl-10 pr-4 rounded-xl ${isLight ? 'bg-white border-black/10' : 'bg-black border-white/10'} border text-[10px] font-bold focus:border-[#3CB371] outline-none transition-all placeholder:text-white/10`}
-                                    />
                                 </div>
                             </motion.div>
                         )}

@@ -102,29 +102,42 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile }) => {
                                         Step 2 of 2: Create your on-chain profile
                                     </p>
                                 </div>
-
                                 <div className="space-y-4">
                                     <div className="flex justify-center mb-6">
-                                        <div className={`w-20 h-20 rounded-full border-2 ${isLight ? 'border-black/10 bg-black/5' : 'border-white/10 bg-white/5'} flex items-center justify-center overflow-hidden`}>
+                                        <div 
+                                            onClick={() => document.getElementById('avatar-upload').click()}
+                                            className={`relative w-28 h-28 rounded-full border-2 ${isLight ? 'border-[#3CB371]/30 bg-black/5 hover:border-[#3CB371]' : 'border-white/10 bg-white/5 hover:border-[#3CB371]'} flex items-center justify-center overflow-hidden cursor-pointer transition-all group shadow-xl`}
+                                        >
                                             {selectedAvatar ? (
                                                 <img src={selectedAvatar} alt="Avatar" className="w-full h-full object-cover" />
                                             ) : (
-                                                <User size={32} className="opacity-20" />
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <User size={32} className="opacity-20" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Upload</span>
+                                                </div>
                                             )}
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="w-8 h-8 rounded-full bg-[#3CB371] flex items-center justify-center text-white shadow-lg">
+                                                    <span className="text-xl font-black">+</span>
+                                                </div>
+                                            </div>
+                                            <input 
+                                                id="avatar-upload"
+                                                type="file" 
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const file = e.target.files[0];
+                                                    if (file) {
+                                                        const reader = new FileReader();
+                                                        reader.onloadend = () => {
+                                                            setSelectedAvatar(reader.result);
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    }
+                                                }}
+                                            />
                                         </div>
-                                    </div>
-
-                                    <div className="relative">
-                                        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20">
-                                            <Camera size={18} />
-                                        </div>
-                                        <input 
-                                            type="text" 
-                                            value={selectedAvatar}
-                                            onChange={(e) => setSelectedAvatar(e.target.value)}
-                                            placeholder="Import Avatar URL (Optional)"
-                                            className={`w-full py-5 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200 text-black' : 'bg-white/5 border-white/10 text-white'} border focus:border-[#3CB371] outline-none text-sm font-bold transition-all placeholder:opacity-30`}
-                                        />
                                     </div>
 
                                     <div className="relative">
@@ -139,11 +152,12 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile }) => {
                                                 setUsername(e.target.value);
                                                 setSaveError('');
                                             }}
-                                            placeholder="Display Name"
-                                            className={`w-full py-5 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200 text-black' : 'bg-white/5 border-white/10 text-white'} border focus:border-[#3CB371] outline-none text-lg font-black transition-all placeholder:opacity-30`}
+                                            placeholder="Choose a Display Name"
+                                            className={`w-full py-5 pl-14 pr-8 rounded-2xl ${isLight ? 'bg-gray-50 border-gray-200 text-black' : 'bg-white/5 border-white/10 text-white'} border focus:border-[#3CB371] outline-none text-lg font-black transition-all placeholder:opacity-30 shadow-inner`}
                                         />
                                     </div>
                                 </div>
+
 
                                 {saveError && (
                                     <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold text-center">
