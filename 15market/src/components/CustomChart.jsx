@@ -189,14 +189,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             {/* Top Controls */}
             <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
                 <div className="flex items-center justify-between gap-2 pointer-events-auto">
-                            {/* Asset Trigger - Cleaned up (No background square) */}
+                            {/* Asset Trigger - Cleaned up */}
                             <div
                                 onClick={() => setIsSelectorOpen(!isSelectorOpen)}
                                 className={`flex items-center gap-1.5 cursor-pointer px-1 py-1 transition-all pointer-events-auto group`}
                             >
-                                <div className={`p-1.5 rounded-xl ${controlBgAlt} border ${controlBorder} group-hover:scale-110 transition-transform`}>
-                                    <Globe size={14} className="text-[#3CB371]" />
-                                </div>
                                 <div className="flex flex-col">
                                     <span className={`text-[10px] md:text-xs font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
                                         {activeMarket?.symbol || 'ETH'}
