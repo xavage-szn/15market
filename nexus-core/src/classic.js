@@ -1,7 +1,12 @@
-// ============================================================
-// nexus-core/src/classic.js
-// Classic Trading Engine — Treasury-First, Instant Settlement
-// ============================================================
+// ==================================================================================
+// CLASSIC TRADING ENGINE (CORE SETTLEMENT LAYER)
+// ==================================================================================
+// This engine is responsible for the entire lifecycle of a "Classic" trade:
+// 1. MONITORING: Ultra-high frequency polling to track trade progress and lock results.
+// 2. EXECUTION: Direct interaction with the Treasury contract for stake placement.
+// 3. SETTLEMENT: Calculating wins/losses and managing the payout queue.
+// 4. BATCH PAYOUTS: Optimizing gas by batching winning payouts into unified transactions.
+// ==================================================================================
 const cache = require('./cache');
 const config = require('./config');
 const rpc = require('./rpc');
@@ -18,13 +23,31 @@ class ClassicEngine {
   }
 
   start() {
-    // High-precision settlement check (50ms)
+    /**
+     * SETTLEMENT BATCH PROCESSOR (50ms Pulse)
+     * ----------------------------------------
+     * Periodically checks the settlement queue and executes winning payouts.
+     * High frequency ensures users receive their funds as soon as the trade expires.
+     */
     setInterval(() => this.processSettlementBatch(), 50);
     
-    // Auto-refill operator wallet (Threshold: 10 USDC, Refill: 100 USDC)
+    /**
+     * OPERATOR LIQUIDITY MONITOR
+     * --------------------------
+     * Ensures the backend "Operator" wallet always has enough gas to pay out winners.
+     * Threshold: 10 USDC | Refill: 100 USDC (from Treasury)
+     */
     setInterval(() => this.ensureOperatorFunded(), 15000);
 
-    // Trade Monitor: Ultra-high frequency authoritative pulse (50ms)
+    /**
+     * ULTRA-HIGH FREQUENCY TRADE MONITOR (50ms Pulse)
+     * ------------------------------------------------
+     * This is the "Heartbeat" of the trading engine.
+     * - Broadcasts 'trade_tick' to the specific user's socket (timeLeft, currentPrice, isWinning).
+     * - LOCKS the result at the exact millisecond of expiry (timeLeft <= 0).
+     * 
+     * IMPACT IF BUGGED: If this stops, trades will never expire and users will never get paid.
+     */
     setInterval(() => {
       const now = Date.now();
       for (const trade of cache.trades.values()) {
@@ -37,10 +60,11 @@ class ClassicEngine {
           if (trade.expiryEmitted) continue;
 
           let currentPrice, isWinning;
+          // Authority: Internal cache price is used for the tick
           currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
           isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
-
-          // Push authoritative state to frontend
+          
+          // Real-time UI updates
           this.io.to(trade.userAddr).emit('trade_tick', {
             betId: trade.id,
             timeLeft,
@@ -49,7 +73,8 @@ class ClassicEngine {
             direction: direction
           });
 
-          // LOCK RESULT: Precise boundary capture
+          // PRECISE BOUNDARY CAPTURE
+          // When time runs out, we handover the trade to the lockResult logic.
           if (timeLeft <= 0) {
             this.lockResult(trade);
           }
@@ -57,8 +82,8 @@ class ClassicEngine {
       }
     }, 50);
 
+    // Fallback payout mechanism if batching is disabled/fails
     if (config.PAYOUT_INLINE_FALLBACK) {
-      // Process payouts with batching for efficiency
       setInterval(() => this.processInlinePayoutBatch(), 1000);
     }
   }
@@ -81,10 +106,16 @@ class ClassicEngine {
     return null;
   }
 
+  /**
+   * DETERMINISTIC RESULT LOCKING
+   * ----------------------------
+   * Freezes the trade outcome based on historical price data at the exact moment of expiry.
+   * Rationale: Prevents UI flicker or result manipulation if the price moves immediately after expiry.
+   */
   lockResult(trade) {
     if (trade.expiryEmitted) return;
     
-    // Official Settlement Price: Historical lookup at exact settleAt timestamp
+    // Official Settlement Price: We lookup the price at the exact settleAt timestamp from our cache
     const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
     const direction = this.resolveDirection(trade.direction);
     const isUp = direction === 1;
@@ -94,13 +125,14 @@ class ClassicEngine {
     trade.lockedExitPrice = exitPrice;
     trade.lockedWon = won;
 
+    // Immediate notification to the specific user's device
     this.io.to(trade.userAddr).emit('trade_expired', {
       betId: trade.id,
       exitPrice,
       won,
       direction: direction
     });
-    console.log(`[Trade-Monitor] Result Locked #${trade.id} | Won: ${won} | Price: ${exitPrice}`);
+    console.log(`[Trade-Monitor] Authority Result Locked #${trade.id} | Won: ${won} | Price: ${exitPrice}`);
   }
 
   async placeTrade(tradeParams, identityPayload) {

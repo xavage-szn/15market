@@ -1,16 +1,31 @@
-# React + Vite
+# 15MARKET - Trading Terminal (v2.0)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the flagship frontend implementation for the 15MARKET protocol—a high-fidelity, reactive trading interface designed for the professional trader.
 
-Currently, two official plugins are available:
+## ✨ Experience Highlights
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 🚄 Zero-Latency UX
+- **Optimistic State Management**: Balance updates and trade confirmations are reflected in the UI instantly, even before on-chain finality.
+- **Micro-Animations**: Built with **Framer Motion** to provide tactile feedback on every user interaction.
+- **Dynamic Theming**: Support for sleek "Dark" and curated "Light" modes with glassmorphism effects.
 
-## React Compiler
+### 🔐 Secure-First Wallet Integration
+- **Wagmi/Viem Stack**: Industry-standard connectivity for all EVM wallets.
+- **Embedded Session Support**: Seamlessly manages the transition between primary and session wallets.
+- **Signature Authorization**: High-value actions (like withdrawals) require explicit user signatures to prevent unauthorized execution.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🛠️ Architecture
+- **Framework**: React 18+
+- **Styling**: TailwindCSS & Custom Vanilla CSS (Design System)
+- **Visualization**: Recharts & High-precision LCD Digital Displays
+- **Build Tool**: Vite (Lightning-fast HMR)
 
-## Expanding the ESLint configuration
+## 📦 Deployment
+The frontend is optimized for deployment on Vercel or Render.
+```bash
+npm run build
+npm run preview
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+© 2026 Xavage SZN. Built for the Arc Network.

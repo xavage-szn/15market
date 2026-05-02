@@ -2451,8 +2451,23 @@ export default function UserApp() {
     });
   }, [activeTrades, evmSessionWallet, notify]);
 
+  /**
+   * REFILL (DEPOSIT) HANDLER
+   * ------------------------
+   * Manages the flow of moving funds from the user's primary wallet (MetaMask/Base)
+   * into the server-side Trading Session Wallet (EOA).
+   * 
+   * CRITICAL LOGIC:
+   * 1. 1% PLATFORM FEE: We split the user's deposit on-chain. 99% goes to the session wallet, 
+   *    and 1% goes to the Platform Treasury immediately.
+   * 2. OPTIMISTIC CREDITING: We notify the backend to credit the 99% amount immediately 
+   *    to provide a zero-latency trading experience.
+   * 3. MULTI-TRANSACTION FLOW: This involves two separate on-chain transactions.
+   * 
+   * @param {string|number} amt - The amount of USDC to deposit.
+   */
   const handleRefill = useCallback(async (amt) => {
-    if (isExecuting) return;
+    if (isExecuting) return; // Prevent double-submission
 
     try {
       const amtNum = parseFloat(amt);
@@ -2480,11 +2495,11 @@ export default function UserApp() {
       setIsExecuting(true);
 
       // --- AUTO-INITIALIZE SESSION WALLET IF MISSING ---
+      // This ensures that new users have a trading wallet derived before their first deposit
       let activeSessionWallet = evmSessionWallet;
       if (!activeSessionWallet?.address) {
         notify("Initializing trading wallet...", "pending");
         try {
-          // Trigger the init call directly
           const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2509,28 +2524,29 @@ export default function UserApp() {
       notify(`Confirm deposit of ${amtNum} USDC in your wallet...`, "pending");
 
       try {
-        // Ensure user is on the correct chain (Arc Testnet)
+        // Enforce correct network (Arc Testnet) before proceeding with transfers
         try {
           await switchChainAsync({ chainId: 5042002 });
         } catch (switchErr) {
           console.warn("Chain switch failed or rejected:", switchErr.message);
         }
 
-        // --- 1% Platform Fee SPLIT ---
+        // --- 1% PLATFORM FEE SPLIT CALCULATION ---
+        // This is done client-side to ensure full transparency on Etherscan
         const platformFeeRate = 0.01;
         const feeAmt = amtNum * platformFeeRate;
         const depositAmt = amtNum - feeAmt;
 
         console.log(`[Deposit] Splitting: ${depositAmt.toFixed(4)} to Session, ${feeAmt.toFixed(4)} to Treasury`);
 
-        // Step 1: Send 1% Fee to Treasury
+        // STEP 1: Send 1% Fee directly to Treasury
         const feeTx = await walletClient.sendTransaction({
           to: ARC_CONTRACT_ADDRESS,
           value: parseEther(feeAmt.toFixed(18)),
           account: address,
         });
 
-        // Step 2: Send Remaining to Session EOA
+        // STEP 2: Send remaining 99% to the user's Session Trading Wallet
         const hash = await walletClient.sendTransaction({
           to: activeSessionWallet.address,
           value: parseEther(depositAmt.toFixed(18)),
@@ -2539,14 +2555,16 @@ export default function UserApp() {
 
         notify("Deposit Split! Waiting for confirmations...", "success");
 
-        // Step 3: Notify backend to credit 99% (Optimistic)
+        // STEP 3: Backend Synchronization
+        // Inform the backend of the successful deposit so it can credit the user history
         fetch(`${KEEPER_URL_ARC}/session/deposit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address, amount: depositAmt, txHash: hash })
         }).catch(() => {});
 
-        // Step 4: Optimistic local UI update (99% amount)
+        // STEP 4: Optimistic Local State Update
+        // Provides immediate visual feedback to the user before block confirmation
         setSessionBalance(prev => prev + depositAmt);
         setEvmBalance(prev => {
           const current = parseFloat(prev || '0');
@@ -2554,7 +2572,8 @@ export default function UserApp() {
         });
         lastOptimisticActionTime.current = Date.now();
 
-        // Step 3: Wait for confirmation, then do a hard refresh
+        // STEP 5: Hard Confirmation Refresh
+        // Re-syncs with on-chain state once the transaction is actually mined
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");
           setTimeout(() => updateEvmSessionBal(true), 2000);
@@ -2580,6 +2599,21 @@ export default function UserApp() {
   }, [address, notify, evmBalance, evmSessionWallet, updateEvmSessionBal, refetchEvmBalance, isExecuting, walletClient]);
 
 
+  /**
+   * WITHDRAW (CASHOUT) HANDLER
+   * --------------------------
+   * Sweeps winnings from the Session Trading Wallet back to the user's primary wallet.
+   * 
+   * CRITICAL LOGIC:
+   * 1. SIGNATURE AUTHORIZATION: User must sign a "Withdrawal Authorization" message 
+   *    locally. This proves that the session wallet owner (derived from user address)
+   *    is the one initiating the sweep.
+   * 2. BACKEND SWEEP: The backend receives the authorization and signs an on-chain 
+   *    transfer from the EOA to the user.
+   * 3. GAS BUFFER: A small amount (0.01 USDC) is reserved to cover network gas fees.
+   * 
+   * IMPACT IF BUGGED: Funds would stay stuck in the session wallet.
+   */
   const handleWithdraw = useCallback(async (amt) => {
     if (isExecuting) return;
 
@@ -2595,7 +2629,7 @@ export default function UserApp() {
         return;
       }
 
-      // --- AUTO-INITIALIZE SESSION WALLET IF MISSING ---
+      // Ensure session wallet is ready
       let activeSessionWallet = evmSessionWallet;
       if (!activeSessionWallet) {
         notify("Initializing trading wallet...", "pending");
@@ -2625,6 +2659,7 @@ export default function UserApp() {
         return;
       }
 
+      // Reserving a small amount for gas to ensure the transaction doesn't fail on-chain
       const gasBuffer = 0.01;
       const netAmt = amtNum - gasBuffer;
 
@@ -2636,7 +2671,8 @@ export default function UserApp() {
       setIsExecuting(true);
       notify("Sign to authorize withdrawal...", "pending");
 
-      // Require user to sign an authorization message.
+      // --- SECURITY SIGNATURE ---
+      // This prevents unauthorized API calls from draining session wallets.
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
       try {
         if (walletClient) {
@@ -2660,9 +2696,9 @@ export default function UserApp() {
 
       notify("Processing withdrawal...", "pending");
 
-      // Fix floating-point precision before sending
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 
+      // Network Timeout Protection
       const controller = new AbortController();
       const fetchTimeout = setTimeout(() => controller.abort(), 60000); 
 
@@ -2698,6 +2734,7 @@ export default function UserApp() {
       notify("Arc Withdrawal Successful!", "success");
 
       // --- OPTIMISTIC UI UPDATE ---
+      // Update local state instantly so the user doesn't think the action failed
       setSessionBalance(prev => Math.max(0, prev - amtNum));
       setEvmBalance(prev => {
         const current = parseFloat(prev || '0');
@@ -2716,12 +2753,14 @@ export default function UserApp() {
 
       setTransactionHistory(prev => [newTx, ...prev]);
 
+      // Sync with cloud for persistent history tracking
       fetch(`${KEEPER_URL_ARC}/push-tx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address, transaction: newTx })
       }).catch(e => console.warn("Failed to sync withdrawal to cloud:", e));
 
+      // Re-sync all balances after 2 seconds to match on-chain finality
       setTimeout(() => {
         updateEvmSessionBal(true);
         refetchEvmBalance(true);
@@ -2802,7 +2841,7 @@ export default function UserApp() {
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <div className="flex items-center gap-2">
                 {/* Desktop: Only show session balance per user request */}
-                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} label="SESSION" />
+                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
               </div>
               <button onClick={() => setView("dashboard")} className="w-9 h-9 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
                 style={{
