@@ -150,20 +150,8 @@ function LiveExecutionComponent({
                 </div>
                 {/* ── LCD Digital Active Counter ── */}
                 {activeTrades.length > 0 && (
-                    <div className={`lcd-digit flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] tracking-widest ${isLight ? 'lcd-counter-light' : 'lcd-counter-dark'}`}>
-                        <span style={{
-                            display: 'inline-block',
-                            minWidth: '1ch',
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums'
-                        }}>
-                            {!isExpanded && activeTrades.length > 1
-                                ? `+${activeTrades.length - 1}`
-                                : activeTrades.length}
-                        </span>
-                        <span className="opacity-60" style={{ fontSize: '7px' }}>
-                            {!isExpanded && activeTrades.length > 1 ? 'MORE' : 'ACTIVE'}
-                        </span>
+                    <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black ${isLight ? 'bg-[#3CB371] text-white shadow-sm' : 'bg-[#3CB371] text-black shadow-[0_0_10px_rgba(61,255,143,0.3)]'}`}>
+                        {activeTrades.length}
                     </div>
                 )}
             </div>

@@ -2658,7 +2658,7 @@ export default function UserApp() {
         return;
       }
 
-      notify("Processing sweep...", "pending");
+      notify("Processing withdrawal...", "pending");
 
       // Fix floating-point precision before sending
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
@@ -2689,11 +2689,11 @@ export default function UserApp() {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Sweep failed");
+        throw new Error(errData.error || "Withdrawal failed");
       }
 
       const data = await res.json();
-      const sweepHash = data.txHash;
+      const withdrawalHash = data.txHash;
 
       notify("Arc Withdrawal Successful!", "success");
 
@@ -2710,7 +2710,7 @@ export default function UserApp() {
         type: "WITHDRAW",
         amount: amtNum.toFixed(4),
         timestamp: Date.now(),
-        tx: sweepHash,
+        tx: withdrawalHash,
         network: 'arc'
       };
 

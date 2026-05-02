@@ -336,27 +336,26 @@ app.post('/session/cashout', async (req, res) => {
     }
 
     const feeData = await rpc.mainProvider.getFeeData();
-    const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n; // Reduced from 2x to 1.1x
+    const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 13n / 10n; // Increased to 1.3x to avoid "replacement fee too low"
     const gasCost = gasPrice * gasLimit;
 
     // --- 1% Platform Fee Calculation ---
-    const platformFeeRate = 0.01; // 1%
+    const platformFeeRate = 0.01; 
     
     let sendAmount;
     let feeAmount = 0n;
 
     if (amount && Number(amount) > 0) {
-      // User requested a specific amount
       const requestedWei = ethers.parseUnits(Number(amount).toFixed(18), 18);
-      feeAmount = (requestedWei * 1n) / 100n; // 1% fee
+      feeAmount = (requestedWei * 1n) / 100n; 
       sendAmount = requestedWei - feeAmount;
 
       if (requestedWei + gasCost > balWei) {
         return res.status(400).json({ error: `Insufficient balance for this withdrawal. Need ${ethers.formatEther(requestedWei + gasCost)} USDC.` });
       }
     } else {
-      // SWEEP EVERYTHING
-      const totalAvailable = balWei - gasCost;
+      // WITHDRAW EVERYTHING
+      const totalAvailable = balWei - (gasCost * 2n); // Reserve gas for two transactions
       if (totalAvailable <= 0n) {
         return res.status(400).json({ error: "Balance too low to cover gas." });
       }
@@ -368,8 +367,11 @@ app.post('/session/cashout', async (req, res) => {
       return res.status(400).json({ error: `Balance too low to cover gas and fees.` });
     }
 
-    console.log(`[Cashout] Sending ${ethers.formatEther(sendAmount)} USDC to user and ${ethers.formatEther(feeAmount)} USDC fee to treasury.`);
+    console.log(`[Withdrawal] Sending ${ethers.formatEther(sendAmount)} USDC to user and ${ethers.formatEther(feeAmount)} USDC fee to treasury.`);
     
+    // Explicitly fetch the latest nonce to prevent "replacement fee too low" or "nonce too low"
+    let currentNonce = await rpc.mainProvider.getTransactionCount(sessionWallet.address, 'pending');
+
     // 1. Send Fee to Treasury
     if (feeAmount > 0n && config.TREASURY_ADDRESS) {
       try {
@@ -377,10 +379,13 @@ app.post('/session/cashout', async (req, res) => {
           to: ethers.getAddress(config.TREASURY_ADDRESS),
           value: feeAmount,
           gasLimit: 21000n,
-          gasPrice
+          gasPrice,
+          nonce: currentNonce++
         });
       } catch (feeErr) {
-        console.warn("[Cashout] Fee transfer failed, proceeding with user transfer:", feeErr.message);
+        console.warn("[Withdrawal] Fee transfer failed:", feeErr.message);
+        // If fee fails, we still try the main transfer but re-fetch nonce just in case
+        currentNonce = await rpc.mainProvider.getTransactionCount(sessionWallet.address, 'pending');
       }
     }
 
@@ -389,7 +394,8 @@ app.post('/session/cashout', async (req, res) => {
       to: ethers.getAddress(address),
       value: sendAmount,
       gasLimit,
-      gasPrice
+      gasPrice,
+      nonce: currentNonce
     });
 
     // Update in-process balance
