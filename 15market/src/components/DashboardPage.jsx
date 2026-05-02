@@ -391,12 +391,13 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                 title: "Refill Trading Wallet",
                                                 placeholder: "USDC Amount from Main",
                                                 onConfirm: (val) => onRefill(parseFloat(val)),
-                                            footer: (
-                                                <div className="text-center">
-                                                    <a href="/docs" target="_blank" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Guide: How to get USDC from Circle Faucet</a>
-                                                </div>
-                                            )
-                                        })} className="py-3 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
+                                                footer: (
+                                                    <div className="text-center">
+                                                        <a href="/docs" target="_blank" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Guide: How to get USDC from Circle Faucet</a>
+                                                    </div>
+                                                )
+                                            });
+                                        }} className="py-3 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
                                             Refill
                                         </button>
                                         <button onClick={() => {
