@@ -710,10 +710,10 @@ export default function UserApp() {
   // Security Handshake Purged
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
-  const [toast, setToast] = useState(null); // { message, type }
+  const [toast, setToast] = useState(null); // { message, type, onClick }
 
-  const notify = useCallback((message, type = 'success') => {
-    setToast({ message, type });
+  const notify = useCallback((message, type = 'success', onClick = null) => {
+    setToast({ message, type, onClick });
   }, []);
 
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
@@ -1145,8 +1145,29 @@ export default function UserApp() {
       if (val !== undefined) {
         setSessionBalance(parseFloat(val));
       }
-      if (data.reason === 'WIN' || data.reason === 'WIN_PAYOUT') {
-        notify(`Payout Received: +$${parseFloat(data.payout || 0).toFixed(2)}`, "success");
+
+      if (data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED') {
+        const payoutAmt = parseFloat(data.payout || 0);
+        const reasonLabel = data.reason === 'WIN_PAYOUT_SETTLED' ? 'Confirmed' : 'Received';
+        
+        notify(`Payout ${reasonLabel}: +$${payoutAmt.toFixed(2)}`, "success", () => {
+          // Find the trade in history or active to show receipt
+          const tid = String(data.betId || data.txHash);
+          const trade = [...activeTrades, ...tradeHistory].find(t => String(t.id || t.tx || t.nonce) === tid);
+          if (trade) {
+             setSelectedTransaction({
+                ...trade,
+                tx: data.txHash || trade.tx
+             });
+             setIsTransactionReceiptOpen(true);
+          }
+        });
+
+        if (data.reason === 'WIN_PAYOUT_SETTLED') {
+           const tid = String(data.betId || data.txHash);
+           setActiveTrades(prev => prev.map(t => String(t.id || t.tx || t.nonce) === tid ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+           setTradeHistory(prev => prev.map(t => String(t.id || t.tx || t.nonce) === tid ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+        }
         triggerGlobalRefresh(true);
       }
     });
@@ -1172,9 +1193,9 @@ export default function UserApp() {
       setTradeHistory(prev => prev.map(updateFn));
 
       if (data.won) {
-         // Mark as payout pending
-         setActiveTrades(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutPending: true } : t));
-         setTradeHistory(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutPending: true } : t));
+         // Mark as payout pending for visual indicators
+         setActiveTrades(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutSettled: false } : t));
+         setTradeHistory(prev => prev.map(t => String(t.id || t.nonce) === tid ? { ...t, payoutSettled: false } : t));
       }
     });
 
@@ -3172,7 +3193,14 @@ export default function UserApp() {
 
 
       <AnimatePresence>
-        {toast && <Toast message={toast.message} type={toast.type} onClose={closeToast} />}
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={closeToast} 
+            onClick={toast.onClick}
+          />
+        )}
       </AnimatePresence>
 
       {/* Network Status Overlay */}

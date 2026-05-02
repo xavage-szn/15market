@@ -98,9 +98,14 @@ const SideHistoryPane = ({
                                                         </div>
                                                         <span className={`text-[11px] font-bold ${isDark ? 'text-white/90' : 'text-[#0f2618]/90'}`}>{trade.symbol || 'BTC'}</span>
                                                     </div>
-                                                    <span className={`text-[11px] font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
-                                                        {isWin ? `+${Number(trade.payout || 0).toFixed(2)}` : trade.status}
-                                                    </span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {isWin && !trade.payoutSettled && (
+                                                            <div className="w-2 h-2 rounded-full border border-[#3CB371] border-t-transparent animate-spin" />
+                                                        )}
+                                                        <span className={`text-[11px] font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
+                                                            {isWin ? `+${Number(trade.payout || 0).toFixed(2)}` : trade.status}
+                                                        </span>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex items-center justify-between">

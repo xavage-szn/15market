@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, X, Loader2, Info } from 'lucide-react';
 
-function Toast({ message, type = 'success', onClose }) {
+function Toast({ message, type = 'success', onClose, onClick }) {
     useEffect(() => {
         // Auto-close all toasts (pending after 4s — just indicates submission, not full confirmation)
         const duration = type === 'pending' ? 4000 : 5000;
@@ -27,7 +27,11 @@ function Toast({ message, type = 'success', onClose }) {
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className={`fixed bottom-6 right-6 z-[100] flex items-center gap-4 p-4 rounded-xl border ${config.border} ${config.bg} backdrop-blur-md shadow-2xl max-w-sm`}
+            onClick={() => {
+                if (onClick) onClick();
+                // We don't auto-close on click here to allow the callback to handle it
+            }}
+            className={`fixed bottom-6 right-6 z-[100] flex items-center gap-4 p-4 rounded-xl border ${config.border} ${config.bg} backdrop-blur-md shadow-2xl max-w-sm ${onClick ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
         >
             <div className={type === 'pending' ? 'animate-spin' : ''}>
                 <Icon className={config.icon} size={24} />

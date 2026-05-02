@@ -174,7 +174,10 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                                     <Trophy size={20} />
                                                     <span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span>
                                                     {trade.status === 'WON' && (
-                                                        <span className="text-[7px] font-bold uppercase opacity-60 animate-pulse mt-0.5">Payout Pending</span>
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <div className="w-2 h-2 rounded-full border border-[#3CB371] border-t-transparent animate-spin" />
+                                                            <span className="text-[7px] font-bold uppercase opacity-60 animate-pulse">Payout Pending</span>
+                                                        </div>
                                                     )}
                                                     {trade.status === 'PAID' && (
                                                         <span className="text-[7px] font-bold uppercase opacity-80 mt-0.5">Paid</span>
