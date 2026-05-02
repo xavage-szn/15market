@@ -280,7 +280,22 @@ class ClassicEngine {
       betId: trade.id,
     });
 
+    // Global emit for Admin Portal & Public Scrollers
+    const publicTrade = {
+      id: trade.id,
+      betId: trade.id,
+      userAddr: trade.userAddr,
+      direction: trade.direction,
+      symbol: symbol.toUpperCase(),
+      amount: trade.amount,
+      entryPrice: trade.entryPrice,
+      status: trade.status,
+      timestamp: trade.createdAt,
+      settleAt: trade.settleAt
+    };
+    this.io.emit('trade_detected', publicTrade);
     this.io.emit('new_trade', { betId: trade.id, direction, symbol: symbol.toUpperCase(), amount, userAddr });
+    
     return {
       success: true,
       txHash: stakeTxHash,
@@ -363,7 +378,9 @@ class ClassicEngine {
 
     cache.pushHistory(userAddr, settledEvent);
     this.io.to(userAddr).emit('trade_settled', settledEvent);
-    // Removed global emit to prevent 'random' trades showing up in other users' history
+    
+    // Global emit for Admin Portal & Public Scrollers
+    this.io.emit('trade_settled', settledEvent);
 
     if (won && payout > 0) {
       this.queuePayoutJob(trade);

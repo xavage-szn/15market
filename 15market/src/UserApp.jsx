@@ -1252,12 +1252,18 @@ export default function UserApp() {
       console.error("[Terminal Error]", data);
     });
 
+    const unbindBroadcast = socketService.on('broadcast', (data) => {
+      console.log("[Socket] System Broadcast Received:", data);
+      notify(data.message, data.type === 'EMERGENCY' ? 'error' : 'info');
+    });
+
     return () => {
       unbindBal();
       unbindPayout();
       unbindTick();
       unbindExpired();
       unbindErr();
+      unbindBroadcast();
     };
   }, [address, notify, triggerGlobalRefresh]);
   

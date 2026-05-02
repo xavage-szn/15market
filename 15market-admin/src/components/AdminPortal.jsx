@@ -101,18 +101,17 @@ const NavItem = React.memo(({ icon: Icon, label, id, active, onClick }) => (
 const StatCard = React.memo(({ icon: Icon, label, value, trend, positive, onClick }) => (
     <div
         onClick={onClick}
-        className={`bg-black/40 border border-white/5 p-6 rounded-[24px] relative overflow-hidden group transition-all ${onClick ? 'cursor-pointer hover:border-[#3CB371]/30 hover:bg-black/60' : ''}`}
+        className={`bg-black/40 border border-white/5 p-4 sm:p-6 rounded-[24px] relative overflow-hidden group transition-all ${onClick ? 'cursor-pointer hover:border-[#3CB371]/30 hover:bg-black/60' : ''}`}
     >
-        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity hidden sm:block">
             <Icon size={48} />
         </div>
         <div className="relative z-10">
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em] mb-1">{String(label || '')}</p>
-            <h4 className="text-2xl font-black text-white mb-2">{String(value || '0')}</h4>
-            <div className={`flex items-center gap-1 text-[10px] font-bold ${positive ? 'text-[#3CB371]' : 'text-[#FF4444]'}`}>
+            <p className="text-[8px] sm:text-[10px] font-bold text-white/40 uppercase tracking-[0.2em] mb-1">{String(label || '')}</p>
+            <h4 className="text-lg sm:text-2xl font-black text-white mb-2 truncate">{String(value || '0')}</h4>
+            <div className={`flex items-center gap-1 text-[8px] sm:text-[10px] font-bold ${positive ? 'text-[#3CB371]' : 'text-[#FF4444]'}`}>
                 {positive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                 {String(trend || '0%')}
-                <span className="text-white/20 ml-1">since yesterday</span>
             </div>
         </div>
     </div>
@@ -154,6 +153,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [isLoading, setIsLoading] = useState(false); // Track loading state
     const [messages, setMessages] = useState({}); // { disputeId: [msgs] }
     const [newMessage, setNewMessage] = useState('');
+    const [selectedTrade, setSelectedTrade] = useState(null); // Detailed trade view
     const [tick, setTick] = useState(0);
     const nowRef = useRef(Date.now() / 1000);
     const [keeperHealth, setKeeperHealth] = useState({ connected: true, failCount: 0, lastCheck: Date.now() });
@@ -1253,9 +1253,12 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     // Trade History Filtering (Settled Trades Only)
     const filteredHistory = useMemo(() => {
         return tradeHistory.filter(trade => {
+            const searchTerm = historyFilter.search.toLowerCase();
             const matchesSearch = !historyFilter.search ||
-                trade.owner?.toLowerCase().includes(historyFilter.search.toLowerCase()) ||
-                trade.publicKey?.toLowerCase().includes(historyFilter.search.toLowerCase());
+                String(trade.id).toLowerCase().includes(searchTerm) ||
+                (trade.owner && trade.owner.toLowerCase().includes(searchTerm)) ||
+                (trade.publicKey && trade.publicKey.toLowerCase().includes(searchTerm)) ||
+                (trade.tx && trade.tx.toLowerCase().includes(searchTerm));
             return matchesSearch;
         });
     }, [tradeHistory, historyFilter.search]);
@@ -2208,38 +2211,42 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                             <table className="w-full">
                                                 <thead>
                                                     <tr className="bg-white/5 text-left">
-                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Trade ID / User</th>
-                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Network</th>
-                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Direction / Entry</th>
-                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-center">Stake</th>
-                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Result</th>
-                                                        <th className="px-8 py-4 text-right text-[9px] font-black text-white/20 uppercase tracking-widest">Timestamp</th>
+                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Trade ID / User</th>
+                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest hidden md:table-cell">Network</th>
+                                                        <th className="px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest hidden sm:table-cell">Direction / Entry</th>
+                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-center">Stake</th>
+                                                        <th className="px-6 sm:px-8 py-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Result</th>
+                                                        <th className="px-8 py-4 text-right text-[9px] font-black text-white/20 uppercase tracking-widest hidden lg:table-cell">Timestamp</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-white/[0.02]">
                                                     {filteredHistory.map((trade, idx) => (
-                                                        <tr key={idx} className="hover:bg-white/[0.01] transition-all group">
-                                                            <td className="px-8 py-5">
+                                                        <tr 
+                                                            key={idx} 
+                                                            onClick={() => setSelectedTrade(trade)}
+                                                            className="hover:bg-white/[0.01] transition-all group cursor-pointer"
+                                                        >
+                                                            <td className="px-6 sm:px-8 py-5">
                                                                 <div className="flex flex-col">
-                                                                    <span className="text-[10px] font-mono text-white">ID: {trade.publicKey?.slice(0, 8) || trade.id}...</span>
+                                                                    <span className="text-[10px] font-mono text-white">ID: {String(trade.id).slice(0, 8)}...</span>
                                                                     <span className="text-[8px] text-white/20 font-black uppercase mt-0.5">{trade.owner?.slice(0, 6)}...{trade.owner?.slice(-4)}</span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-8 py-5">
+                                                            <td className="px-8 py-5 hidden md:table-cell">
                                                                 <span className="px-2 py-1 rounded text-[8px] font-black uppercase tracking-tighter bg-blue-500/10 text-blue-500">
                                                                     ARC
                                                                 </span>
                                                             </td>
-                                                            <td className="px-8 py-5">
+                                                            <td className="px-8 py-5 hidden sm:table-cell">
                                                                 <div className="flex flex-col">
                                                                     <span className={`text-[10px] font-black ${trade.direction === 'UP' ? 'text-[#3CB371]' : 'text-red-500'} uppercase tracking-tighter`}>{trade.direction} @ ${Number(trade.entryPrice || 0).toFixed(4)}</span>
                                                                     <span className="text-[8px] text-white/20 font-bold uppercase tracking-widest mt-0.5">Duration: {trade.duration}s</span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-8 py-5 text-center">
+                                                            <td className="px-6 sm:px-8 py-5 text-center">
                                                                 <span className="text-[11px] font-black text-white">{Number(trade.amount || 0).toFixed(4)} USDC</span>
                                                             </td>
-                                                            <td className="px-8 py-5">
+                                                            <td className="px-6 sm:px-8 py-5">
                                                                 <div className="flex items-center gap-2">
                                                                     <div className={`w-1.5 h-1.5 rounded-full ${trade.status === 'ACTIVE' ? 'bg-blue-400' : (trade.won || trade.status === 'WON' ? 'bg-[#3CB371]' : 'bg-red-500')}`} />
                                                                     <span className={`text-[9px] font-black uppercase tracking-widest ${trade.status === 'ACTIVE' ? 'text-blue-400' : (trade.won || trade.status === 'WON' ? 'text-[#3CB371]' : 'text-red-500')}`}>
@@ -2247,7 +2254,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                     </span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-8 py-5 text-right">
+                                                            <td className="px-8 py-5 text-right hidden lg:table-cell">
                                                                 <span className="text-[9px] font-mono text-white/40">
                                                                     {new Date(trade.timestamp).toLocaleString()}
                                                                 </span>
@@ -3784,6 +3791,120 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             >
                 <MessageSquare size={24} />
             </motion.button>
+
+            {/* Detailed Trade Modal */}
+            <AnimatePresence>
+                {selectedTrade && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[600] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 sm:p-10"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+                            className="w-full max-w-2xl bg-[#0D0D0D] border border-white/10 rounded-[48px] overflow-hidden flex flex-col shadow-[0_40px_100px_rgba(0,0,0,0.8)]"
+                        >
+                            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${selectedTrade.direction === 'UP' ? 'bg-[#3CB371]/10 text-[#3CB371]' : 'bg-red-500/10 text-red-500'}`}>
+                                        <Zap size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-black text-white uppercase tracking-tight">Trade Details</h3>
+                                        <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Record: {selectedTrade.id}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedTrade(null)}
+                                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                                >
+                                    <X size={20} className="text-white/60" />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                                <div className="grid grid-cols-2 gap-4 sm:gap-6">
+                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                        <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">User Address</p>
+                                        <p className="text-xs font-mono text-white break-all">{selectedTrade.owner || selectedTrade.user || 'N/A'}</p>
+                                    </div>
+                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                        <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Asset</p>
+                                        <p className="text-xs font-black text-white uppercase">{selectedTrade.symbol || 'ETH'} / USDC</p>
+                                    </div>
+                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                        <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Stake Amount</p>
+                                        <p className="text-xl font-black text-white">{Number(selectedTrade.amount).toFixed(2)} USDC</p>
+                                    </div>
+                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl">
+                                        <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Potential Payout</p>
+                                        <p className="text-xl font-black text-[#3CB371]">${(Number(selectedTrade.amount) * 1.8).toFixed(2)}</p>
+                                    </div>
+                                </div>
+
+                                <div className="p-8 bg-black/60 border border-white/5 rounded-3xl space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Entry Price</p>
+                                            <p className="text-lg font-black text-white">${Number(selectedTrade.entryPrice).toFixed(4)}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[9px] font-black text-white/20 uppercase tracking-widest mb-1">Exit Price</p>
+                                            <p className="text-lg font-black text-white">${Number(selectedTrade.exitPrice || 0).toFixed(4)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full ${selectedTrade.direction === 'UP' ? 'bg-[#3CB371]' : 'bg-red-500'}`} 
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-[10px] font-black uppercase tracking-widest ${selectedTrade.direction === 'UP' ? 'text-[#3CB371]' : 'text-red-500'}`}>
+                                            Position: {selectedTrade.direction}
+                                        </span>
+                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">
+                                            Status: {selectedTrade.status}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">Blockchain Metadata</p>
+                                    <div className="p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] text-white/20 uppercase font-bold">Transaction Hash</span>
+                                            <span className="text-[9px] font-mono text-white/40 truncate ml-4 w-48">{selectedTrade.tx || 'Pending...'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] text-white/20 uppercase font-bold">Settlement Time</span>
+                                            <span className="text-[9px] font-mono text-white/40">{new Date(selectedTrade.timestamp).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] text-white/20 uppercase font-bold">Network Fees</span>
+                                            <span className="text-[9px] font-mono text-white/40">0.0012 USDC</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 flex gap-4">
+                                    <button 
+                                        className="flex-1 py-5 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
+                                        onClick={() => window.open(`https://arcscan.io/tx/${selectedTrade.tx}`, '_blank')}
+                                    >
+                                        View On Explorer
+                                    </button>
+                                    <button 
+                                        className="flex-1 py-5 bg-[#3CB371] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-[0_20px_40px_rgba(60,179,113,0.3)]"
+                                        onClick={() => setSelectedTrade(null)}
+                                    >
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 });

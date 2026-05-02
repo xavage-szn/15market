@@ -654,6 +654,60 @@ app.get('/auth/twitter/callback', async (req, res) => {
   }
 });
 
+// ─── ADMIN ENDPOINTS ──────────────────────────────────────────────────────────
+
+app.get('/admin/stats', (req, res) => {
+  // Use the global stats from profiles which aggregates data across all users
+  const stats = profiles.getGlobalStats();
+  
+  // Augment with real-time metrics
+  res.json({
+    ...stats,
+    activeCount: cache.sessions.size,
+    activeStakesTotal: Array.from(cache.trades.values())
+      .filter(t => t.status === 'PENDING')
+      .reduce((sum, t) => sum + t.amount, 0),
+    treasuryBalance: cache.prices.eth > 0 ? 'LIVE' : '0.00', // Mock or fetch actual
+    pendingDisputes: 0,
+    totalWallets: Object.keys(profiles.profiles).length
+  });
+});
+
+app.get('/admin/trades', (req, res) => {
+  const stats = profiles.getGlobalStats();
+  res.json(stats.recentTrades || []);
+});
+
+app.get('/admin/trade/:id', (req, res) => {
+  const trade = cache.trades.get(req.params.id);
+  if (trade) return res.json(trade);
+  
+  // Search in profiles if not in active cache
+  for (const addr in profiles.profiles) {
+    const t = (profiles.profiles[addr].trades || []).find(t => String(t.id || t.betId) === req.params.id);
+    if (t) return res.json(t);
+  }
+  
+  res.status(404).json({ error: 'Trade not found' });
+});
+
+app.post('/admin/broadcast', (req, res) => {
+  const { message, type, expiry } = req.body;
+  if (!message) return res.status(400).json({ error: 'Message required' });
+  
+  const broadcast = {
+    id: Date.now(),
+    message,
+    type: type || 'ANNOUNCEMENT',
+    expiry: expiry || (Date.now() + 60000),
+    timestamp: Date.now()
+  };
+  
+  io.emit('broadcast', broadcast);
+  console.log(`[Admin] Broadcast Sent: ${message}`);
+  res.json({ success: true, broadcast });
+});
+
 // ─── MISC ─────────────────────────────────────────────────────────────────────
 
 app.get('/listings', (req, res) => {
