@@ -141,11 +141,11 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     >
       <div className={`
         w-full h-full pointer-events-auto
-        backdrop-blur-xl border-t border-x rounded-t-[32px]
+        backdrop-blur-xl border-t rounded-t-[32px]
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-10px_40px_rgba(27,94,60,0.4)] border-white/10'
-          : 'bg-gradient-to-br from-[#E2F5ED]/98 to-[#D9ECE4]/98 shadow-[0_-10px_40px_rgba(60,179,113,0.1)] border-[#3CB371]/30'}
+          : 'bg-gradient-to-br from-[#76C49A]/98 to-[#5BA37D]/98 shadow-[0_-10px_40px_rgba(60,179,113,0.2)] border-[#3CB371]/40'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -168,8 +168,8 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
+        {/* Content Area - Wide to touch ends on mobile */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-0 py-4 pb-12 flex flex-col gap-[1.5px]">
           {tradeHistory.length === 0 ? (
             <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
               <History size={48} className="mb-4" />
@@ -184,8 +184,10 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                 <div
                   key={trade.id}
                   className={`
-                    p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#3CB371]/15 border-[#3CB371]/25 shadow-sm'}
+                    p-4 px-5 transition-all active:scale-[0.99] border-y
+                    ${isDark 
+                      ? 'bg-white/5 border-white/5' 
+                      : 'bg-[#3CB371]/40 border-[#3CB371]/45 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -518,16 +520,25 @@ export default function UserApp() {
           setUserProfile(pData);
           if (!pData.username) {
              setShowOnboarding(true);
-             localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
+             localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'false');
           } else {
              setShowOnboarding(false);
              localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
           }
         } else {
-          // Force onboarding if profile missing or 404
-          setUserProfile({ address: addr, isInitial: true });
-          setShowOnboarding(true);
-          localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
+          // If network is slow or fetch failed, check local storage before forcing onboarding.
+          // This prevents the 'Onboarding Loop' when users have slow connections.
+          const wasOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
+          
+          if (wasOnboarded) {
+            console.log("[StealthChecks] Slow network detected, trusting local onboarding status");
+            setShowOnboarding(false);
+            // Provide a minimal fallback profile to prevent UI crashes if data is missing
+            setUserProfile(prev => prev || { address: addr, username: "Trader", isInitial: false });
+          } else {
+            setUserProfile({ address: addr, isInitial: true });
+            setShowOnboarding(true);
+          }
         }
 
         // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
