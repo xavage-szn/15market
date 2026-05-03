@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo, Component } from "react";
+﻿import { useEffect, useState, useCallback, useRef, useMemo, Component } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
@@ -207,7 +207,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
 
                   <div className="flex items-center justify-between">
                     <div className="text-[10px] opacity-40">
-                      ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      ${Number(trade.entryPrice).toFixed(2)} ΓÇó {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -456,7 +456,7 @@ export default function UserApp() {
   const [roundsTradeHistory, setRoundsTradeHistory] = useState(() => loadLocalTrades(address, true, 'rounds'));
   const [activeRounds, setActiveRounds] = useState(() => loadLocalTrades(address, false, 'rounds'));
 
-  // Rounds chart state — populated by RoundsTerminal via onRoundPhaseChange
+  // Rounds chart state ΓÇö populated by RoundsTerminal via onRoundPhaseChange
   const [roundsChartState, setRoundsChartState] = useState(null);
   const [platformSettings, setPlatformSettings] = useState(() => {
     try {
@@ -699,7 +699,7 @@ export default function UserApp() {
   const [sessionMode, setSessionMode] = useState(true);
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
   const [sessionBalance, setSessionBalance] = useState(0);
-  // Ref that always mirrors sessionBalance — used by async callbacks to avoid stale closures
+  // Ref that always mirrors sessionBalance ΓÇö used by async callbacks to avoid stale closures
   const sessionBalanceRef = useRef(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
   const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
@@ -723,10 +723,10 @@ export default function UserApp() {
   const lastPriceUpdateRef = useRef(Date.now());
   const priceHistoryRef = useRef([]);
   const lastOptimisticActionTime = useRef(0);
-  // 🔒 RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
+  // ≡ƒöÆ RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
   // The reconciler will NEVER downgrade a locked result, preventing glitches.
-  const lockedResults = useRef(new Map()); // tradeId → { status, settlementPrice }
-  // 🗑️ REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
+  const lockedResults = useRef(new Map()); // tradeId ΓåÆ { status, settlementPrice }
+  // ≡ƒùæ∩╕Å REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
   // Prevents the reconciler from re-inserting them from backend data.
   const removedTradeIds = useRef(new Set());
   const cleanupTimers = useRef({});
@@ -776,39 +776,30 @@ export default function UserApp() {
     if (!address) return;
 
     try {
-      let formatted;
-
-      // Priority 1: Backend proxy — faster and avoids direct RPC CORS issues
+      // Priority 1: Backend Proxy (Faster, handles indexing)
       const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`);
+      let formatted;
+      
       if (res.ok) {
         const data = await res.json();
         formatted = data.balance;
       } else {
-        // Priority 2: Direct on-chain fallback if backend is down
+        // Priority 2: Direct Blockchain Core Fallback (If backend is down/slow)
         const balWei = await publicClient.getBalance({ address });
         formatted = formatUnits(balWei, 18);
       }
 
       const newBalNum = parseFloat(formatted);
 
-      // If forced (e.g. after a withdrawal), ALWAYS write the new balance — no stale comparisons.
-      // This prevents the bug where the main wallet shows 60 instead of 90 after a 30 USDC withdrawal.
-      if (force) {
-        setEvmBalance(formatted);
-        return;
-      }
-
-      // During passive polling, apply a guard window to avoid overwriting optimistic state
+      // Guard period for optimistic updates: 20s to cover on-chain confirmation + backend indexing
       const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (msSinceLastAction < 20000) return;
+      if (!force && msSinceLastAction < 20000) return;
 
-      // Only update if the value has meaningfully changed
-      setEvmBalance(prev => {
-        const current = parseFloat(prev || '0');
-        return Math.abs(newBalNum - current) > 0.000001 ? formatted : prev;
-      });
+      if (Math.abs(newBalNum - parseFloat(evmBalance || '0')) > 0.000001 || (newBalNum > 0 && evmBalance === "0")) {
+        setEvmBalance(formatted);
+      }
     } catch (e) { 
-      // Last resort: direct on-chain fetch (no comparison, just set it)
+      // Last resort: standard blockchain fetch
       try {
         const balWei = await publicClient.getBalance({ address });
         setEvmBalance(formatUnits(balWei, 18));
@@ -887,19 +878,12 @@ export default function UserApp() {
 
       backendAll.forEach(bt => {
         const btId = String(bt.id);
-        const btTx = String(bt.tx || bt.txHash || "");
         backendGate.add(btId);
-        if (btTx) backendGate.add(btTx);
 
-        // Find local copy using both ID and TX to prevent duplication
-        const local = prev.find(p => 
-          String(p.id) === btId || 
-          (btTx && String(p.tx || p.txHash) === btTx) ||
-          String(p.nonce) === btId
-        );
-
+        // Find local copy
+        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
         if (local) {
-          const statusOrder = { "PAID": 4, "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           if (statusOrder[local.status] > statusOrder[bt.status]) {
             merged.push({ ...bt, status: local.status, payout: local.payout, balanceApplied: local.balanceApplied });
           } else {
@@ -912,10 +896,8 @@ export default function UserApp() {
       });
 
       prev.forEach(local => {
-        const lid = String(local.id);
-        const ltx = String(local.tx || local.txHash || "");
-        
-        if (!backendGate.has(lid) && (!ltx || !backendGate.has(ltx))) {
+        const lid = String(local.id || local.tx || local.nonce);
+        if (!backendGate.has(lid)) {
           // Keep local trade if it has a final status or if it's very fresh
           const isFinal = ["WON", "LOST"].includes(local.status);
           const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
@@ -936,7 +918,7 @@ export default function UserApp() {
 
       const backendActive = backendAll.filter(t => {
         const tid = String(t.id || t.tx || t.nonce);
-        // 🗑️ Never re-insert trades that have been fully removed from active view
+        // ≡ƒùæ∩╕Å Never re-insert trades that have been fully removed from active view
         if (removedTradeIds.current.has(tid)) return false;
         return ["PENDING", "RESOLVING"].includes(t.status);
       }).map(t => {
@@ -954,18 +936,12 @@ export default function UserApp() {
       const updatedActive = [];
 
       backendActive.forEach(bt => {
-        const btId = String(bt.id);
-        const btTx = String(bt.tx || bt.txHash || "");
-        
-        const local = prev.find(p => 
-          String(p.id) === btId || 
-          (btTx && String(p.tx || p.txHash) === btTx) ||
-          String(p.nonce) === btId
-        );
+        const btId = String(bt.id || bt.tx || bt.nonce);
+        const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
 
-        // 🔒 CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
+        // ≡ƒöÆ CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
         // the backend revert it to PENDING/RESOLVING. The local lock is ground truth.
-        const locked = lockedResults.current.get(btId) || (btTx && lockedResults.current.get(btTx));
+        const locked = lockedResults.current.get(btId);
         if (locked) {
           return;
         }
@@ -1132,7 +1108,7 @@ export default function UserApp() {
     if (address) triggerGlobalRefresh(true);
   }, [address, triggerGlobalRefresh]);
 
-  // Periodic session balance refresh (every 12s) — catches cases where
+  // Periodic session balance refresh (every 12s) ΓÇö catches cases where
   // socket balance_update events are missed and no other trigger fires.
   useEffect(() => {
     if (!address) return;
@@ -1176,12 +1152,8 @@ export default function UserApp() {
         
         notify(`$${payoutAmt.toFixed(2)} has been added to your balance`, "success", () => {
           // Find the trade in history or active to show receipt
-          const tid = String(data.betId || "");
-          const tx = String(data.txHash || "");
-          const trade = [...activeTrades, ...tradeHistory].find(t => 
-            (tid && String(t.id || t.nonce) === tid) || 
-            (tx && String(t.tx || t.txHash) === tx)
-          );
+          const tid = String(data.betId || data.txHash);
+          const trade = [...activeTrades, ...tradeHistory].find(t => String(t.id || t.tx || t.nonce) === tid);
           if (trade) {
              setSelectedTransaction({
                 ...trade,
@@ -1192,11 +1164,9 @@ export default function UserApp() {
         });
 
         if (data.reason === 'WIN_PAYOUT_SETTLED') {
-           const tid = String(data.betId || "");
-           const tx = String(data.txHash || "");
-           const matchFn = t => (tid && String(t.id || t.nonce) === tid) || (tx && String(t.tx || t.txHash) === tx);
-           setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
-           setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+           const tid = String(data.betId || data.txHash);
+           setActiveTrades(prev => prev.map(t => String(t.id || t.tx || t.nonce) === tid ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+           setTradeHistory(prev => prev.map(t => String(t.id || t.tx || t.nonce) === tid ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
         }
         triggerGlobalRefresh(true);
       }
@@ -1261,7 +1231,7 @@ export default function UserApp() {
     };
   }, [address, notify, triggerGlobalRefresh]);
   
-  // 🔒 Result Lock Synchronizer: Propagation of local locks to state
+  // ≡ƒöÆ Result Lock Synchronizer: Propagation of local locks to state
   useEffect(() => {
     const lockSyncInterval = setInterval(() => {
       if (lockedResults.current.size === 0) return;
@@ -1474,8 +1444,8 @@ export default function UserApp() {
 
     // --- INSTANT UI START ---
     setIsExecuting(true);
-    // Harder lockout to prevent accidental double-clicks on slow connections
-    setTimeout(() => setIsExecuting(false), 2000);
+    // Short lockout to prevent accidental double-clicks, but released almost immediately
+    setTimeout(() => setIsExecuting(false), 800);
 
     try {
       if (!isConnected) {
@@ -1484,7 +1454,7 @@ export default function UserApp() {
       
       let txHash;
 
-      // ─── ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ───
+      // ΓöÇΓöÇΓöÇ ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ΓöÇΓöÇΓöÇ
       if (activeType === 'rounds') {
         const roundId = params.roundId || params.poolId;
         const dirVal = (activeDirection === "UP" ? 1 : 0);
@@ -1564,18 +1534,14 @@ export default function UserApp() {
         return;
       }
 
-      // ─── CLASSIC TRADING — EMBEDDED WALLET MODEL ───────────────────────────────
+      // ΓöÇΓöÇΓöÇ CLASSIC TRADING ΓÇö EMBEDDED WALLET MODEL ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       // Step 1: Frontend calls /session/execute
       // Step 2: Backend derivations session wallet and sends stake to treasury on-chain
       // Step 3: Backend returns the txHash and registers the trade
 
       // --- Show trade card as PENDING immediately (Optimistic) ---
       const confirmedNow = Date.now();
-      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (
-        String(t.id) !== String(item.id) && 
-        (!item.tx || String(t.tx) !== String(item.tx)) &&
-        (!item.nonce || String(t.nonce) !== String(item.nonce))
-      ))];
+      const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => String(t.id) !== String(item.id))];
       const optimisticTrade = {
         id: tradeId,
         direction: dirVal === 1 ? 'UP' : 'DOWN',
@@ -1635,7 +1601,7 @@ export default function UserApp() {
             return;
           }
 
-          // ✅ Trade Active (On-chain stake moved)
+          // Γ£à Trade Active (On-chain stake moved)
           const confirmedTradeId = data.tradeId || tradeId;
           const txHash = data.txHash;
           
@@ -1654,14 +1620,14 @@ export default function UserApp() {
             setSessionBalance(parseFloat(data.newBalance));
           }
 
-          notify('Trade Active ✓', 'success');
+          notify('Trade Active Γ£ô', 'success');
         } catch (err) {
           clearTimeout(timeoutId);
           console.error('[Trade] Execution error:', err.message);
           setSessionBalance(prev => prev + amtNum);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(err.name === 'AbortError' ? '⚡ Network Congested — Trade Cancelled' : err.message, 'error');
+          notify(err.name === 'AbortError' ? 'ΓÜí Network Congested ΓÇö Trade Cancelled' : err.message, 'error');
         }
       };
 
@@ -1699,7 +1665,7 @@ export default function UserApp() {
     };
 
     fetchTradeHistory();
-    // 30s fallback poll — socket events handle instant updates now
+    // 30s fallback poll ΓÇö socket events handle instant updates now
     const interval = setInterval(fetchTradeHistory, 30000);
     return () => clearInterval(interval);
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
@@ -1783,7 +1749,7 @@ export default function UserApp() {
 
 
 
-  // ─── UNIFIED PRICE CONSUMPTION ───
+  // ΓöÇΓöÇΓöÇ UNIFIED PRICE CONSUMPTION ΓöÇΓöÇΓöÇ
   // Uses the dedicated price-frontend service for ultra-low-latency streaming.
   const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, ts: {} });
   const [streamStatus, setStreamStatus] = useState('connecting');
@@ -1857,7 +1823,7 @@ export default function UserApp() {
     return () => clearInterval(pulseLoop);
   }, [activeMarket]);
 
-  // ─── SOCKET.IO: Trade events + Backend-Authoritative Settlement ───
+  // ΓöÇΓöÇΓöÇ SOCKET.IO: Trade events + Backend-Authoritative Settlement ΓöÇΓöÇΓöÇ
   useEffect(() => {
     socketService.connect();
 
@@ -1866,7 +1832,7 @@ export default function UserApp() {
       localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
     });
 
-    // ── BACKEND-AUTHORITATIVE SETTLEMENT ──
+    // ΓöÇΓöÇ BACKEND-AUTHORITATIVE SETTLEMENT ΓöÇΓöÇ
     // The backend is the ONLY source of truth for trade results.
     const unbindSettled = socketService.on('trade_settled', (data) => {
       if (!data?.betId && !data?.id) return;
@@ -1910,23 +1876,15 @@ export default function UserApp() {
 
       // Upsert into tradeHistory with final WON/LOST status
       setTradeHistory(prev => {
-        const btId = String(data.betId || data.id || "");
-        const btTx = String(data.txHash || data.tx || "");
-        const exists = prev.find(t => 
-          (btId && String(t.id || t.nonce) === btId) || 
-          (btTx && String(t.tx || t.txHash) === btTx)
-        );
+        const exists = prev.find(t => String(t.id || t.nonce) === betId);
         if (exists) {
-          return prev.map(t => (
-            (btId && String(t.id || t.nonce) === btId) || 
-            (btTx && String(t.tx || t.txHash) === btTx)
-          ) ? { ...t, ...settledRecord } : t);
+          return prev.map(t => String(t.id || t.nonce) === betId ? { ...t, ...settledRecord } : t);
         }
         return [settledRecord, ...prev];
       });
 
       if (data.won) {
-        notify(`🏆 Trade WON! +$${payout}`, 'success');
+        notify(`≡ƒÅå Trade WON! +$${payout}`, 'success');
       } else {
         notify('Trade LOST.', 'error');
       }
@@ -1945,7 +1903,7 @@ export default function UserApp() {
     };
   }, [notify, updateEvmSessionBal, refetchEvmBalance, address, evmSessionWallet]);
 
-  // ── Backend-Authoritative Trade Ticks ────────────────────────────────────────
+  // ΓöÇΓöÇ Backend-Authoritative Trade Ticks ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   // The backend TradeMonitor emits trade_tick every second per active trade.
   // We use these to drive the countdown and live price in ActiveTradesSidebar.
   useEffect(() => {
@@ -2308,7 +2266,7 @@ export default function UserApp() {
       if (tid && !cleanupTimers.current[tid]) {
         // Start a removal timer ONLY if one doesn't exist for this specific trade
         cleanupTimers.current[tid] = setTimeout(() => {
-          // 🗑️ Mark as permanently removed so the reconciler never re-adds it
+          // ≡ƒùæ∩╕Å Mark as permanently removed so the reconciler never re-adds it
           removedTradeIds.current.add(String(tid));
           setActiveTrades(prev => prev.filter(t => (t.id || t.tx || t.nonce) !== tid));
           delete cleanupTimers.current[tid];
@@ -2333,7 +2291,7 @@ export default function UserApp() {
 
 
 
-  // Arc Settlement Listener — with dedup to prevent double-crediting
+  // Arc Settlement Listener ΓÇö with dedup to prevent double-crediting
   const processedSettlements = useRef(new Set());
   const creditedPayouts = useRef(new Set()); // Track which betIds have had balance credited
 
@@ -2352,7 +2310,7 @@ export default function UserApp() {
           if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
             const betId = id.toString();
 
-            // 🛑 DEDUP: Skip if we already processed this exact settlement event
+            // ≡ƒ¢æ DEDUP: Skip if we already processed this exact settlement event
             const eventKey = `${betId}_${log.transactionHash}`;
             if (processedSettlements.current.has(eventKey)) {
               return;
@@ -2367,7 +2325,7 @@ export default function UserApp() {
             const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(2);
 
             const updateTrade = (t) => {
-              const isMatch = (t.tx && log.transactionHash && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+              const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
                 (t.nonce && t.nonce.toString() === betId) ||
                 (t.id && t.id.toString() === betId);
               if (isMatch) {
@@ -2389,7 +2347,7 @@ export default function UserApp() {
             if (won) {
               const payoutNum = parseFloat(formattedPayout);
 
-              // 🔥 DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
+              // ≡ƒöÑ DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
               // Check activeTradesRef to see if the trade already has balanceApplied
               const existingTrade = activeTradesRef.current.find(t =>
                 (t.id && t.id.toString() === betId) || (t.nonce && t.nonce.toString() === betId)
@@ -2421,7 +2379,7 @@ export default function UserApp() {
               // Finalize status across trade lists
               const finalizeWin = () => {
                 const matchFn = (t) => {
-                  const isMatch = (t.tx && log.transactionHash && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
+                  const isMatch = (t.tx && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
                     (t.id && t.id.toString() === betId);
                   return isMatch ? { ...t, status: "WON", payout: formattedPayout, chainConfirmed: true, balanceApplied: true } : t;
                 };
@@ -2493,23 +2451,8 @@ export default function UserApp() {
     });
   }, [activeTrades, evmSessionWallet, notify]);
 
-  /**
-   * REFILL (DEPOSIT) HANDLER
-   * ------------------------
-   * Manages the flow of moving funds from the user's primary wallet (MetaMask/Base)
-   * into the server-side Trading Session Wallet (EOA).
-   * 
-   * CRITICAL LOGIC:
-   * 1. 1% PLATFORM FEE: We split the user's deposit on-chain. 99% goes to the session wallet, 
-   *    and 1% goes to the Platform Treasury immediately.
-   * 2. OPTIMISTIC CREDITING: We notify the backend to credit the 99% amount immediately 
-   *    to provide a zero-latency trading experience.
-   * 3. MULTI-TRANSACTION FLOW: This involves two separate on-chain transactions.
-   * 
-   * @param {string|number} amt - The amount of USDC to deposit.
-   */
   const handleRefill = useCallback(async (amt) => {
-    if (isExecuting) return; // Prevent double-submission
+    if (isExecuting) return;
 
     try {
       const amtNum = parseFloat(amt);
@@ -2524,7 +2467,7 @@ export default function UserApp() {
       }
 
       if (!walletClient) {
-        notify("Wallet client not ready — please reconnect your wallet", "error");
+        notify("Wallet client not ready ΓÇö please reconnect your wallet", "error");
         return;
       }
 
@@ -2537,11 +2480,11 @@ export default function UserApp() {
       setIsExecuting(true);
 
       // --- AUTO-INITIALIZE SESSION WALLET IF MISSING ---
-      // This ensures that new users have a trading wallet derived before their first deposit
       let activeSessionWallet = evmSessionWallet;
       if (!activeSessionWallet?.address) {
         notify("Initializing trading wallet...", "pending");
         try {
+          // Trigger the init call directly
           const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2566,29 +2509,28 @@ export default function UserApp() {
       notify(`Confirm deposit of ${amtNum} USDC in your wallet...`, "pending");
 
       try {
-        // Enforce correct network (Arc Testnet) before proceeding with transfers
+        // Ensure user is on the correct chain (Arc Testnet)
         try {
           await switchChainAsync({ chainId: 5042002 });
         } catch (switchErr) {
           console.warn("Chain switch failed or rejected:", switchErr.message);
         }
 
-        // --- 1% PLATFORM FEE SPLIT CALCULATION ---
-        // This is done client-side to ensure full transparency on Etherscan
+        // --- 1% Platform Fee SPLIT ---
         const platformFeeRate = 0.01;
         const feeAmt = amtNum * platformFeeRate;
         const depositAmt = amtNum - feeAmt;
 
         console.log(`[Deposit] Splitting: ${depositAmt.toFixed(4)} to Session, ${feeAmt.toFixed(4)} to Treasury`);
 
-        // STEP 1: Send 1% Fee directly to Treasury
+        // Step 1: Send 1% Fee to Treasury
         const feeTx = await walletClient.sendTransaction({
           to: ARC_CONTRACT_ADDRESS,
           value: parseEther(feeAmt.toFixed(18)),
           account: address,
         });
 
-        // STEP 2: Send remaining 99% to the user's Session Trading Wallet
+        // Step 2: Send Remaining to Session EOA
         const hash = await walletClient.sendTransaction({
           to: activeSessionWallet.address,
           value: parseEther(depositAmt.toFixed(18)),
@@ -2597,16 +2539,14 @@ export default function UserApp() {
 
         notify("Deposit Split! Waiting for confirmations...", "success");
 
-        // STEP 3: Backend Synchronization
-        // Inform the backend of the successful deposit so it can credit the user history
+        // Step 3: Notify backend to credit 99% (Optimistic)
         fetch(`${KEEPER_URL_ARC}/session/deposit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address, amount: depositAmt, txHash: hash })
         }).catch(() => {});
 
-        // STEP 4: Optimistic Local State Update
-        // Provides immediate visual feedback to the user before block confirmation
+        // Step 4: Optimistic local UI update (99% amount)
         setSessionBalance(prev => prev + depositAmt);
         setEvmBalance(prev => {
           const current = parseFloat(prev || '0');
@@ -2614,8 +2554,7 @@ export default function UserApp() {
         });
         lastOptimisticActionTime.current = Date.now();
 
-        // STEP 5: Hard Confirmation Refresh
-        // Re-syncs with on-chain state once the transaction is actually mined
+        // Step 3: Wait for confirmation, then do a hard refresh
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           notify("Deposit Confirmed!", "success");
           setTimeout(() => updateEvmSessionBal(true), 2000);
@@ -2641,21 +2580,6 @@ export default function UserApp() {
   }, [address, notify, evmBalance, evmSessionWallet, updateEvmSessionBal, refetchEvmBalance, isExecuting, walletClient]);
 
 
-  /**
-   * WITHDRAW (CASHOUT) HANDLER
-   * --------------------------
-   * Sweeps winnings from the Session Trading Wallet back to the user's primary wallet.
-   * 
-   * CRITICAL LOGIC:
-   * 1. SIGNATURE AUTHORIZATION: User must sign a "Withdrawal Authorization" message 
-   *    locally. This proves that the session wallet owner (derived from user address)
-   *    is the one initiating the sweep.
-   * 2. BACKEND SWEEP: The backend receives the authorization and signs an on-chain 
-   *    transfer from the EOA to the user.
-   * 3. GAS BUFFER: A small amount (0.01 USDC) is reserved to cover network gas fees.
-   * 
-   * IMPACT IF BUGGED: Funds would stay stuck in the session wallet.
-   */
   const handleWithdraw = useCallback(async (amt) => {
     if (isExecuting) return;
 
@@ -2671,7 +2595,7 @@ export default function UserApp() {
         return;
       }
 
-      // Ensure session wallet is ready
+      // --- AUTO-INITIALIZE SESSION WALLET IF MISSING ---
       let activeSessionWallet = evmSessionWallet;
       if (!activeSessionWallet) {
         notify("Initializing trading wallet...", "pending");
@@ -2701,7 +2625,6 @@ export default function UserApp() {
         return;
       }
 
-      // Reserving a small amount for gas to ensure the transaction doesn't fail on-chain
       const gasBuffer = 0.01;
       const netAmt = amtNum - gasBuffer;
 
@@ -2713,8 +2636,7 @@ export default function UserApp() {
       setIsExecuting(true);
       notify("Sign to authorize withdrawal...", "pending");
 
-      // --- SECURITY SIGNATURE ---
-      // This prevents unauthorized API calls from draining session wallets.
+      // Require user to sign an authorization message.
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
       try {
         if (walletClient) {
@@ -2725,7 +2647,7 @@ export default function UserApp() {
         } else {
           throw new Error("No wallet available to sign");
         }
-        console.log("✅ [WITHDRAW] User authorized");
+        console.log("Γ£à [WITHDRAW] User authorized");
       } catch (sigErr) {
         if (sigErr.code === 4001 || sigErr.message?.includes('rejected') || sigErr.message?.includes('denied')) {
           notify("Withdrawal cancelled by user", "error");
@@ -2738,9 +2660,9 @@ export default function UserApp() {
 
       notify("Processing withdrawal...", "pending");
 
+      // Fix floating-point precision before sending
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 
-      // Network Timeout Protection
       const controller = new AbortController();
       const fetchTimeout = setTimeout(() => controller.abort(), 60000); 
 
@@ -2758,7 +2680,7 @@ export default function UserApp() {
         });
       } catch (fetchErr) {
         if (fetchErr.name === 'AbortError') {
-          throw new Error("Network timeout — Arc RPC may be congested. Try again in a moment.");
+          throw new Error("Network timeout ΓÇö Arc RPC may be congested. Try again in a moment.");
         }
         throw fetchErr;
       } finally {
@@ -2776,7 +2698,6 @@ export default function UserApp() {
       notify("Arc Withdrawal Successful!", "success");
 
       // --- OPTIMISTIC UI UPDATE ---
-      // Update local state instantly so the user doesn't think the action failed
       setSessionBalance(prev => Math.max(0, prev - amtNum));
       setEvmBalance(prev => {
         const current = parseFloat(prev || '0');
@@ -2795,22 +2716,16 @@ export default function UserApp() {
 
       setTransactionHistory(prev => [newTx, ...prev]);
 
-      // Sync with cloud for persistent history tracking
       fetch(`${KEEPER_URL_ARC}/push-tx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address, transaction: newTx })
       }).catch(e => console.warn("Failed to sync withdrawal to cloud:", e));
 
-      // Multi-wave balance refresh after withdrawal.
-      // Arc RPC nodes can take a few seconds to index the transaction, so we
-      // poll at 2s, 5s, and 10s to guarantee the updated main wallet balance is shown.
-      [2000, 5000, 10000].forEach(delay => {
-        setTimeout(() => {
-          updateEvmSessionBal(true);
-          refetchEvmBalance(true);
-        }, delay);
-      });
+      setTimeout(() => {
+        updateEvmSessionBal(true);
+        refetchEvmBalance(true);
+      }, 2000);
     } catch (e) {
       notify("Withdrawal failed: " + (e.shortMessage || e.message), "error");
     } finally {
@@ -2887,7 +2802,7 @@ export default function UserApp() {
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <div className="flex items-center gap-2">
                 {/* Desktop: Only show session balance per user request */}
-                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
+                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} label="SESSION" />
               </div>
               <button onClick={() => setView("dashboard")} className="w-9 h-9 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
                 style={{
@@ -2938,32 +2853,6 @@ export default function UserApp() {
               </div>
             </div>
           </header>
-
-          {/* Winner/Campaign Banner (Authoritative UX) */}
-          <AnimatePresence>
-            {winnerBanner && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#3CB371]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#3CB371]/5 to-yellow-500/10 border-white/5'}`}
-              >
-                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
-                    <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#3CB371]'}`}>
-                      {winnerBanner.text || "New Winner Leaderboard is Live!"}
-                    </span>
-                  </div>
-                  {winnerBanner.cta && (
-                    <button className="px-3 py-0.5 md:py-1 bg-[#3CB371] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
-                      {winnerBanner.cta}
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
           <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[2px] mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
@@ -3218,7 +3107,7 @@ export default function UserApp() {
                           </div>
                         </div>
 
-                        {/* Active Trade / Controls Box — hidden in Rounds */}
+                        {/* Active Trade / Controls Box ΓÇö hidden in Rounds */}
                         {gameMode !== 'rounds' && (
                           <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                             style={{
@@ -3304,7 +3193,7 @@ export default function UserApp() {
               <div className="flex items-center gap-2">
                 <Activity size={10} className="text-white animate-pulse" />
                 <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
-                  Disconnected • Internet Connection Lost
+                  Disconnected ΓÇó Internet Connection Lost
                 </span>
               </div>
             </div>
@@ -3324,7 +3213,7 @@ export default function UserApp() {
             <div className="flex items-center justify-center gap-3 py-1.5 px-4">
               <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
                 <CheckCircle size={10} />
-                Network Reconnected • System Online
+                Network Reconnected ΓÇó System Online
               </span>
             </div>
           </motion.div>
@@ -3336,7 +3225,7 @@ export default function UserApp() {
         <div className="flex items-center gap-4 pointer-events-auto">
           <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
           <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-            © 2026 15market
+            ┬⌐ 2026 15market
           </span>
         </div>
         <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
