@@ -80,14 +80,14 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                             // We prefer trade.won if backend already settled, otherwise we use the state at expiry.
                             const isExpired = trade.timeLeft !== undefined && trade.timeLeft <= 0;
                             
-                            // AUTHORITY LOCK: Purely trust backend provided status
+                            // Real-time calculation: Trust backend if provided, fallback to live price comparison
                             const isWinning = trade.won !== undefined 
                                 ? trade.won 
-                                : trade.isWinning;
+                                : (trade.isWinning !== undefined 
+                                    ? trade.isWinning 
+                                    : (isLong ? current > entryPrice : current < entryPrice));
 
-                            // If expired but not yet settled, we 'freeze' the statusColor logic 
-                            // by ensuring the visual state doesn't flip if settlement is pending.
-                            const statusColor = isWinning === true ? GREEN_COLOR : (isWinning === false ? RED_COLOR : "#808080");
+                            const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;
 
                             return (
                                 <motion.div

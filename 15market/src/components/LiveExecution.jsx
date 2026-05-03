@@ -190,12 +190,22 @@ function LiveExecutionComponent({
 
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
-                                            // AUTHORITY: Purely trust backend winning state. If backend hasn't sent it, we show neutral/pending.
-                                            const liveWinning = trade.isWinning;
+                                            // Real-time calculation: Trust backend isWinning if provided, fallback to live price comparison
+                                            const liveWinning = trade.isWinning !== undefined 
+                                                ? trade.isWinning 
+                                                : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                                    ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                                                    : false);
 
-                                            const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
-                                            const instantStatus = trade.status;
-                                            const displayFinal = isFinal;
+                                            // Seamless UI Transition: Flip to result card instantly when timer expires
+                                            const showInstantResult = timerExpired && !isFinal;
+                                            
+                                            // Real-time Display Status
+                                            const instantStatus = showInstantResult 
+                                                ? (liveWinning ? "WON" : "LOST") 
+                                                : trade.status;
+
+                                            const displayFinal = isFinal || showInstantResult;
                                             
                                             // Payout pending state: Trade is won but on-chain confirmation hasn't arrived
                                             const isPayoutPending = (instantStatus === "WON" || trade.status === "WON") && !trade.chainConfirmed && !trade.payout;
@@ -206,8 +216,8 @@ function LiveExecutionComponent({
                                                         ? 'bg-[#cce3d7] backdrop-blur-xl border-[#3CB371]/35 shadow-sm hover:shadow-md'
                                                         : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
                                                     style={displayFinal ? {
-                                                        borderColor: (instantStatus === "WON" || trade.status === "WON") ? 'rgba(60, 179, 113, 0.5)' : 'rgba(255, 127, 80, 0.5)',
-                                                        boxShadow: (instantStatus === "WON" || trade.status === "WON")
+                                                        borderColor: (instantStatus === "WON") ? 'rgba(60, 179, 113, 0.5)' : 'rgba(255, 127, 80, 0.5)',
+                                                        boxShadow: (instantStatus === "WON")
                                                             ? `inset 0 0 30px rgba(60, 179, 113, 0.05), 0 5px 30px ${isLight ? 'rgba(60, 179, 113, 0.04)' : 'rgba(60, 179, 113, 0.1)'}`
                                                             : `inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px ${isLight ? 'rgba(255, 127, 80, 0.04)' : 'rgba(255, 127, 80, 0.1)'}`
                                                     } : {}}
@@ -216,11 +226,10 @@ function LiveExecutionComponent({
                                                     <div className="flex items-center justify-between mb-0 px-0.5">
                                                         <div className="flex items-center gap-1.5">
                                                             <div className={`w-1 h-1 rounded-full ${displayFinal
-                                                                ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
-                                                                : (liveWinning === true ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 
-                                                                   (liveWinning === false ? 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]' : 'bg-gray-500 animate-pulse'))}`} />
+                                                                ? ((instantStatus === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
+                                                                : (liveWinning ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
                                                             <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
-                                                                {displayFinal ? (trade.status === "PENDING" || trade.status === "RESOLVING" ? instantStatus : trade.status) : (trade.confirmed === false ? "Verifying" : "Live")}
+                                                                {displayFinal ? instantStatus : (trade.confirmed === false ? "Verifying" : "Live")}
                                                             </span>
                                                         </div>
                                                         {isFinal && (
@@ -240,8 +249,8 @@ function LiveExecutionComponent({
                                                                 {displayTimeLeft}<span className="text-[10px] md:text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
                                                             <div className="mt-0 px-1 py-0.5 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-75 md:scale-90">
-                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning === true ? "text-[#3CB371]" : (liveWinning === false ? "text-[#FF7F50]" : "text-gray-500")}`}>
-                                                                    {liveWinning === true ? "WINNING" : (liveWinning === false ? "LOSING" : "CALCULATING")}
+                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                                                    {liveWinning ? "WINNING" : "LOSING"}
                                                                 </span>
                                                             </div>
                                                         </div>
