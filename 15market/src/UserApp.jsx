@@ -1912,16 +1912,19 @@ export default function UserApp() {
       setTradeHistory(prev => {
         const btId = String(data.betId || data.id || "");
         const btTx = String(data.txHash || data.tx || "");
-        const exists = prev.find(t => 
-          (btId && String(t.id || t.nonce) === btId) || 
-          (btTx && String(t.tx || t.txHash) === btTx)
+        
+        // DEDUPLICATION: Search for any local trade that matches ID, Nonce, or TX
+        const existingIdx = prev.findIndex(t => 
+          (btId && (String(t.id) === btId || String(t.nonce) === btId)) || 
+          (btTx && (String(t.tx) === btTx || String(t.txHash) === btTx))
         );
-        if (exists) {
-          return prev.map(t => (
-            (btId && String(t.id || t.nonce) === btId) || 
-            (btTx && String(t.tx || t.txHash) === btTx)
-          ) ? { ...t, ...settledRecord } : t);
+        
+        if (existingIdx !== -1) {
+          const updated = [...prev];
+          updated[existingIdx] = { ...updated[existingIdx], ...settledRecord };
+          return updated;
         }
+        
         return [settledRecord, ...prev];
       });
 

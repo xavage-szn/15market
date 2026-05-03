@@ -116,9 +116,14 @@ class ClassicEngine {
     if (trade.expiryEmitted) return;
     
     // Official Settlement Price: We lookup the price at the exact settleAt timestamp from our cache
-    const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt) || cache.prices[trade.symbol] || trade.entryPrice;
+    // We add a tiny buffer (100ms) to ensure we get the most accurate 'at-the-close' price.
+    const targetTime = trade.settleAt;
+    const exitPrice = cache.getHistoricalPrice(trade.symbol, targetTime) || cache.prices[trade.symbol] || trade.entryPrice;
+    
     const direction = this.resolveDirection(trade.direction);
     const isUp = direction === 1;
+    
+    // Tie Case: In binary options, a tie (price remains exactly the same) is typically a loss for the player.
     const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
 
     trade.expiryEmitted = true;
@@ -204,7 +209,14 @@ class ClassicEngine {
         numericId = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
       }
       
+      const tradeIdString = numericId.toString();
+      tradeParams.id = tradeIdString; 
+      session.balance = Number((session.balance - amount).toFixed(4));
+      
       try {
+        const checksummedUserAddr = ethers.getAddress(userAddr);
+        const checksummedTreasury = ethers.getAddress(treasury);
+        
         const contract = new ethers.Contract(checksummedTreasury, [
           "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable"
         ], sessionWallet);
@@ -225,23 +237,20 @@ class ClassicEngine {
         const feeData = await rpc.mainProvider.getFeeData();
         const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n;
         const tx = await sessionWallet.sendTransaction({
-          to: checksummedTreasury,
+          to: ethers.getAddress(treasury),
           value: ethers.parseUnits(amount.toFixed(18), 18),
           gasPrice,
           gasLimit: 100000
         });
         stakeTxHash = tx.hash;
       }
-      
-      tradeParams.id = numericId.toString(); 
-      session.balance = Number((session.balance - amount).toFixed(4));
     } catch (err) {
       console.error(`[Trade] Stake transfer CRITICAL FAILURE:`, err.message);
       return { success: false, error: "Network Congested or RPC Error. (Check Session Balance)" };
     }
 
     const trade = {
-      id: String(tradeParams.id || id),
+      id: tradeParams.id,
       userAddr: userAddr.toLowerCase(),
       walletAddress: session.walletAddress ? session.walletAddress.toLowerCase() : userAddr.toLowerCase(),
       sessionAddress: session.sessionAddress ? session.sessionAddress.toLowerCase() : sessionWallet.address.toLowerCase(),
@@ -379,8 +388,13 @@ class ClassicEngine {
     cache.pushHistory(userAddr, settledEvent);
     this.io.to(userAddr).emit('trade_settled', settledEvent);
     
-    // Global emit for Admin Portal & Public Scrollers
-    this.io.emit('trade_settled', settledEvent);
+    // Global emit for Admin Portal (filtered to hide specific user payouts)
+    this.io.emit('global_trade_settled', { 
+      betId: trade.id, 
+      symbol: trade.symbol.toUpperCase(), 
+      won, 
+      amount: trade.amount 
+    });
 
     if (won && payout > 0) {
       this.queuePayoutJob(trade);

@@ -399,8 +399,12 @@ app.post('/session/cashout', async (req, res) => {
       if (totalAvailable <= 0n) {
         return res.status(400).json({ error: "Balance too low to cover network gas." });
       }
+      
+      // Calculate 1% platform fee on the amount being swept
       feeAmount = (totalAvailable * 1n) / 100n;
       sendAmount = totalAvailable - feeAmount;
+      
+      console.log(`[Full Sweep] Total: ${ethers.formatEther(balWei)} | Reserved Gas: ${ethers.formatEther(gasCost * 2n)} | Fee: ${ethers.formatEther(feeAmount)} | Payout: ${ethers.formatEther(sendAmount)}`);
     }
 
     if (sendAmount <= 0n) {
