@@ -141,7 +141,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     >
       <div className={`
         w-full h-full pointer-events-auto
-        backdrop-blur-2xl border-t
+        backdrop-blur-2xl border-t rounded-t-[32px]
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
