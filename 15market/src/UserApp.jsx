@@ -133,14 +133,13 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     <motion.div
       initial={false}
       animate={{
-        y: isOpen ? 0 : 'calc(100% - 44px)',
+        height: isOpen ? '55vh' : '44px',
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-      className="fixed left-0 right-0 bottom-0 w-screen z-[2000] flex flex-col pointer-events-none"
-      style={{ height: '80vh' }}
+      className="w-full flex-none overflow-hidden rounded-t-[32px]"
     >
       <div className={`
-        w-full h-full pointer-events-auto
+        w-full h-full
         backdrop-blur-2xl border-t rounded-t-[32px]
         flex flex-col overflow-hidden
         ${isDark
@@ -3126,6 +3125,19 @@ export default function UserApp() {
                       )}
                     </div>
 
+                    {/* Mobile History Drawer - inline below terminal */}
+                    {isSmallScreen && (
+                      <MobileBottomHistoryPane
+                        isOpen={showMobileHistory}
+                        onToggle={() => setShowMobileHistory(!showMobileHistory)}
+                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                        theme={theme}
+                        setSelectedPnLTrade={setSelectedPnLTrade}
+                        setIsPnLOpen={setIsPnLOpen}
+                        userProfile={userProfile}
+                      />
+                    )}
+
                     {/* Compact spacer */}
 
                     {!isSmallScreen && (
@@ -3384,19 +3396,6 @@ export default function UserApp() {
             We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
           </p>
         </div>
-      )}
-
-      {/* V2 Mobile History Drawer - Globally positioned as bottom overlay */}
-      {isSmallScreen && (
-        <MobileBottomHistoryPane
-          isOpen={showMobileHistory}
-          onToggle={() => setShowMobileHistory(!showMobileHistory)}
-          tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-          theme={theme}
-          setSelectedPnLTrade={setSelectedPnLTrade}
-          setIsPnLOpen={setIsPnLOpen}
-          userProfile={userProfile}
-        />
       )}
     </motion.div >
     </ErrorBoundary>
