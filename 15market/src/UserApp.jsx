@@ -133,13 +133,14 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     <motion.div
       initial={false}
       animate={{
-        height: isOpen ? '55vh' : '44px',
+        height: isOpen ? '400px' : '44px',
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-      className="w-full flex-none overflow-hidden rounded-t-[32px]"
+      className="relative z-[110] flex flex-col overflow-hidden -mx-2"
+      style={{ width: 'calc(100% + 16px)' }}
     >
       <div className={`
-        w-full h-full
+        w-full h-full pointer-events-auto
         backdrop-blur-2xl border-t rounded-t-[32px]
         flex flex-col overflow-hidden
         ${isDark
@@ -3125,19 +3126,6 @@ export default function UserApp() {
                       )}
                     </div>
 
-                    {/* Mobile History Drawer - inline below terminal */}
-                    {isSmallScreen && (
-                      <MobileBottomHistoryPane
-                        isOpen={showMobileHistory}
-                        onToggle={() => setShowMobileHistory(!showMobileHistory)}
-                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-                        theme={theme}
-                        setSelectedPnLTrade={setSelectedPnLTrade}
-                        setIsPnLOpen={setIsPnLOpen}
-                        userProfile={userProfile}
-                      />
-                    )}
-
                     {/* Compact spacer */}
 
                     {!isSmallScreen && (
@@ -3243,6 +3231,18 @@ export default function UserApp() {
                       </>
                     )}
                   </motion.div>
+                  
+                  {isSmallScreen && (
+                    <MobileBottomHistoryPane
+                      isOpen={showMobileHistory}
+                      onToggle={() => setShowMobileHistory(!showMobileHistory)}
+                      tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                      theme={theme}
+                      setSelectedPnLTrade={setSelectedPnLTrade}
+                      setIsPnLOpen={setIsPnLOpen}
+                      userProfile={userProfile}
+                    />
+                  )}
                 </div>
 
 
@@ -3397,6 +3397,8 @@ export default function UserApp() {
           </p>
         </div>
       )}
+
+
     </motion.div >
     </ErrorBoundary>
   );
