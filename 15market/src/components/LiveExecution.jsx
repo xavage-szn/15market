@@ -193,13 +193,9 @@ function LiveExecutionComponent({
                                             // AUTHORITY: Purely trust backend winning state. If backend hasn't sent it, we show neutral/pending.
                                             const liveWinning = trade.isWinning;
 
-                                            const showInstantResult = (timerExpired || trade.status === "RESOLVING") && !isFinal;
-
-                                            // STABILITY: Only show WON/LOST if we have definitive backend status or if it's final.
-                                            // If in RESOLVING phase, we show SYNCING instead of guessing.
-                                            const instantStatus = isFinal ? trade.status : (showInstantResult ? "RESOLVING" : trade.status);
-
-                                            const displayFinal = isFinal || showInstantResult;
+                                            const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
+                                            const instantStatus = trade.status;
+                                            const displayFinal = isFinal;
                                             
                                             // Payout pending state: Trade is won but on-chain confirmation hasn't arrived
                                             const isPayoutPending = (instantStatus === "WON" || trade.status === "WON") && !trade.chainConfirmed && !trade.payout;
@@ -252,11 +248,9 @@ function LiveExecutionComponent({
                                                     ) : (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-1">
                                                             <div className={`text-[10px] font-black uppercase tracking-widest ${
-                                                                (instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 
-                                                                (instantStatus === "RESOLVING" ? 'text-yellow-500 animate-pulse' : 'text-[#FF7F50]')
+                                                                (instantStatus === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'
                                                             }`}>
-                                                                { (instantStatus === "WON" || trade.status === "WON") ? "Trade Won" : 
-                                                                  (instantStatus === "RESOLVING" ? "Syncing..." : "Trade Lost") }
+                                                                { (instantStatus === "WON") ? "Trade Won" : "Trade Lost" }
                                                             </div>
                                                             <div className="flex items-center gap-1.5 mt-0.5">
                                                                 <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
