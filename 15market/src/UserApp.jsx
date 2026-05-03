@@ -133,19 +133,18 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     <motion.div
       initial={false}
       animate={{
-        y: isOpen ? 0 : 'calc(100% - 32px)',
+        height: isOpen ? '380px' : '44px',
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-      className="fixed left-0 right-0 bottom-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '100%' }}
+      className="w-full z-[110] flex flex-col relative overflow-hidden"
     >
       <div className={`
         w-full h-full pointer-events-auto
-        backdrop-blur-xl border-t rounded-t-[32px]
+        backdrop-blur-xl border rounded-[32px]
         flex flex-col overflow-hidden
         ${isDark
-          ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-10px_40px_rgba(27,94,60,0.4)] border-white/10'
-          : 'bg-gradient-to-br from-[#76C49A]/98 to-[#5BA37D]/98 shadow-[0_-10px_40px_rgba(60,179,113,0.2)] border-[#3CB371]/40'}
+          ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-xl border-white/10'
+          : 'bg-gradient-to-br from-[#76C49A]/98 to-[#5BA37D]/98 shadow-xl border-[#3CB371]/40'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -3066,6 +3065,18 @@ export default function UserApp() {
                       </div>
                     </div>
                   </motion.div>
+                  
+                  {isSmallScreen && (
+                    <MobileBottomHistoryPane
+                      isOpen={showMobileHistory}
+                      onToggle={() => setShowMobileHistory(!showMobileHistory)}
+                      tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                      theme={theme}
+                      setSelectedPnLTrade={setSelectedPnLTrade}
+                      setIsPnLOpen={setIsPnLOpen}
+                      userProfile={userProfile}
+                    />
+                  )}
 
                   <motion.div
                     layout
@@ -3133,18 +3144,7 @@ export default function UserApp() {
                         </div>
                       )}
                     </div>
-                    {/* V2 Mobile History Drawer - Integrated into the terminal section */}
-                    {isSmallScreen && (
-                      <MobileBottomHistoryPane
-                        isOpen={showMobileHistory}
-                        onToggle={() => setShowMobileHistory(!showMobileHistory)}
-                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-                        theme={theme}
-                        setSelectedPnLTrade={setSelectedPnLTrade}
-                        setIsPnLOpen={setIsPnLOpen}
-                        userProfile={userProfile}
-                      />
-                    )}
+
                     {/* Compact spacer */}
 
                     {!isSmallScreen && (
