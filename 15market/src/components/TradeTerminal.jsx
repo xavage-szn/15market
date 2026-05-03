@@ -23,7 +23,7 @@ function TradeTerminalComponent({
     theme,
     maintenanceMode = false,
     tradingHalted = false,
-    onRefill,
+    onDeposit,
     onWithdraw,
     transparent = false,
     uiVersion = 'v1',
@@ -55,7 +55,7 @@ function TradeTerminalComponent({
         </div>
     );
 
-    const renderCallPut = () => (
+    const renderLongShort = () => (
         <div className={`relative flex items-center p-1 rounded-full border border-[#3CB371]/10 bg-white/5 backdrop-blur-3xl overflow-hidden pointer-events-auto`}>
             {/* Sliding Pill Background - Synchronized with Time Scroller geometry */}
             <motion.div
@@ -74,7 +74,7 @@ function TradeTerminalComponent({
                 disabled={maintenanceMode}
                 className={`flex-1 relative z-10 py-2.5 lg:py-3 flex items-center justify-center transition-all duration-300 rounded-full ${direction === "UP" ? "text-white" : "text-white/20 hover:text-white/40"}`}
             >
-                <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">CALL</span>
+                <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">LONG</span>
             </button>
 
             <button
@@ -82,7 +82,7 @@ function TradeTerminalComponent({
                 disabled={maintenanceMode}
                 className={`flex-1 relative z-10 py-2.5 lg:py-3 flex items-center justify-center transition-all duration-300 rounded-full ${direction === "DOWN" ? "text-white" : "text-white/20 hover:text-white/40"}`}
             >
-                <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">PUT</span>
+                <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">SHORT</span>
             </button>
         </div>
     );
@@ -182,7 +182,7 @@ function TradeTerminalComponent({
     return (
         <div className={containerClass}>
             {renderHeader()}
-            {renderCallPut()}
+            {renderLongShort()}
             {renderTime()}
             {renderAmountBox()}
             {renderAmountSlider()}

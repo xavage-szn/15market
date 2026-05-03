@@ -73,9 +73,9 @@ export function DocsPage({ theme }) {
             
             <div className="grid md:grid-cols-2 gap-4">
               <div className={`p-4 rounded-xl ${isLight ? 'bg-[#3CB371]/10' : 'bg-[#3CB371]/5'} border border-[#3CB371]/30`}>
-                <h3 className="font-black uppercase mb-2">Option 1: Direct Refill</h3>
+                <h3 className="font-black uppercase mb-2">Option 1: Direct Deposit</h3>
                 <p className={`text-sm ${isLight ? 'text-black/70' : 'text-white/70'}`}>
-                  Use the "Refill" button in the Dashboard or Wallet drawer. This will prompt your main wallet to send USDC directly to your Session Wallet.
+                  Use the "Deposit" button in the Dashboard or Wallet drawer. This will prompt your main wallet to send USDC directly to your Session Wallet.
                 </p>
               </div>
               
@@ -108,7 +108,7 @@ export function DocsPage({ theme }) {
               <li>Select your network (ensure it corresponds to Arc or its base layer if applicable).</li>
               <li>Enter your Main Wallet address (or Session Wallet address).</li>
               <li>Click "Send USDC" and wait for the confirmation.</li>
-              <li>Once received, you can use the Refill feature to move it to your Session Wallet.</li>
+              <li>Once received, you can use the Deposit feature to move it to your Session Wallet.</li>
             </ol>
 
             <a 

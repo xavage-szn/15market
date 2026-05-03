@@ -196,7 +196,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                         text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter
                         ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
                       `}>
-                        {trade.direction}
+                        {trade.direction === 'UP' ? 'LONG' : (trade.direction === 'DOWN' ? 'SHORT' : trade.direction)}
                       </div>
                       <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
                     </div>
@@ -701,7 +701,7 @@ export default function UserApp() {
   const [sessionBalance, setSessionBalance] = useState(0);
   // Ref that always mirrors sessionBalance — used by async callbacks to avoid stale closures
   const sessionBalanceRef = useRef(0);
-  const [refillAmount, setRefillAmount] = useState("0.1");
+  const [depositAmount, setDepositAmount] = useState("0.1");
   const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
   const [isSignerInitializing, setIsSignerInitializing] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -1446,7 +1446,7 @@ export default function UserApp() {
     const gasMargin = 0.001; 
 
     if (stakeAmt + gasMargin > currentBal) {
-      return notify(`Insufficient Session Balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC. Please Refill.`, "error");
+      return notify(`Insufficient Session Balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC. Please Deposit.`, "error");
     }
     // #region agent log
     postDebugLog({runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:executeTrade:validated',message:'trade validated pre-submit',data:{probeId,activeType,stakeAmt,currentBal,gasMargin,activeDirection,activeDuration}});
@@ -2497,8 +2497,8 @@ export default function UserApp() {
   }, [activeTrades, evmSessionWallet, notify]);
 
   /**
-   * REFILL (DEPOSIT) HANDLER
-   * ------------------------
+   * DEPOSIT HANDLER
+   * ---------------
    * Manages the flow of moving funds from the user's primary wallet (MetaMask/Base)
    * into the server-side Trading Session Wallet (EOA).
    * 
@@ -2511,7 +2511,7 @@ export default function UserApp() {
    * 
    * @param {string|number} amt - The amount of USDC to deposit.
    */
-  const handleRefill = useCallback(async (amt) => {
+  const handleDeposit = useCallback(async (amt) => {
     if (isExecuting) return; // Prevent double-submission
 
     try {
@@ -2647,13 +2647,13 @@ export default function UserApp() {
   /**
    * WITHDRAW (CASHOUT) HANDLER
    * --------------------------
-   * Sweeps winnings from the Session Trading Wallet back to the user's primary wallet.
+   * Withdraws winnings from the Session Trading Wallet back to the user's primary wallet.
    * 
    * CRITICAL LOGIC:
    * 1. SIGNATURE AUTHORIZATION: User must sign a "Withdrawal Authorization" message 
    *    locally. This proves that the session wallet owner (derived from user address)
-   *    is the one initiating the sweep.
-   * 2. BACKEND SWEEP: The backend receives the authorization and signs an on-chain 
+   *    is the one initiating the withdrawal.
+   * 2. BACKEND WITHDRAW: The backend receives the authorization and signs an on-chain 
    *    transfer from the EOA to the user.
    * 3. GAS BUFFER: A small amount (0.01 USDC) is reserved to cover network gas fees.
    * 
@@ -2844,7 +2844,7 @@ export default function UserApp() {
           wallet={wallet}
           sessionBalance={sessionBalance}
           evmBalance={parseFloat(evmBalance || "0")}
-          onRefill={handleRefill}
+          onDeposit={handleDeposit}
           onWithdraw={handleWithdraw}
           treasuryBalance={treasuryBalance}
           autoSignerFees={autoSignerFees}
@@ -3095,7 +3095,7 @@ export default function UserApp() {
                             setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
                             sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
                             theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                            refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                            depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
                             CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
                             evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                             activeMarket={activeMarket}
@@ -3207,7 +3207,7 @@ export default function UserApp() {
                                 setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
                                 sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
                                 theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                                refillAmount={refillAmount} setRefillAmount={setRefillAmount} onRefill={handleRefill} onWithdraw={handleWithdraw}
+                                depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
                                 CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
                                 evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
                                 activeMarket={activeMarket}
@@ -3266,7 +3266,7 @@ export default function UserApp() {
         userProfile={userProfile}
         sessionBalance={sessionBalance}
         evmBalance={evmBalance}
-        onRefill={handleRefill}
+        onDeposit={handleDeposit}
         onWithdraw={handleWithdraw}
         transactionHistory={transactionHistory}
         onViewReceipt={(tx) => {

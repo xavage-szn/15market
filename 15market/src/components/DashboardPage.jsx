@@ -10,7 +10,7 @@ import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
 import { parseEther } from "viem";
 
-export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onRefill, onWithdraw, treasuryBalance,
+export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onDeposit, onWithdraw, treasuryBalance,
     autoSignerFees,
     userProfile,
     theme,
@@ -384,9 +384,9 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                         <button onClick={() => {
                                             setPromptValue("");
                                             setPromptConfig({
-                                                title: "Refill Trading Wallet",
+                                                title: "Deposit to Trading Wallet",
                                                 placeholder: "USDC Amount from Main",
-                                                onConfirm: (val) => onRefill(parseFloat(val)),
+                                                onConfirm: (val) => onDeposit(parseFloat(val)),
                                                 footer: (
                                                     <div className="text-center">
                                                         <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Faucet ↗</a>
@@ -394,17 +394,17 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onR
                                                 )
                                             });
                                         }} className="py-3 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
-                                            Refill
+                                            Deposit
                                         </button>
                                         <button onClick={() => {
                                             setPromptValue("");
                                             setPromptConfig({
-                                                title: "Sweep to Main Wallet",
+                                                title: "Withdraw to Main Wallet",
                                                 placeholder: "Withdraw Amount",
                                                 onConfirm: (val) => onWithdraw(val)
                                             });
                                         }} className={`py-3 ${isLight ? 'bg-white/40 border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 active:scale-95 transition-all`}>
-                                            Sweep
+                                            Withdraw
                                         </button>
                                     </div>
                                 </div>

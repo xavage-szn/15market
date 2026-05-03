@@ -110,15 +110,15 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                 >
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2">
-                                            <div className={`p-1.5 rounded-lg ${isLong ? 'bg-[#FF7F50]/10' : 'bg-[#3CB371]/10'}`}>
+                                            <div className={`p-1.5 rounded-lg ${isLong ? 'bg-[#3CB371]/10' : 'bg-[#FF7F50]/10'}`}>
                                                 {isLong
-                                                    ? <ArrowUp size={12} color="#FF7F50" strokeWidth={3} />
-                                                    : <ArrowDown size={12} color="#3CB371" strokeWidth={3} />
+                                                    ? <ArrowUp size={12} color="#3CB371" strokeWidth={3} />
+                                                    : <ArrowDown size={12} color="#FF7F50" strokeWidth={3} />
                                                 }
                                             </div>
                                             <div>
                                                 <div className={`text-[10px] font-black uppercase tracking-tight ${isDark ? 'text-white' : 'text-[#05140b]'}`}>
-                                                    {isLong ? "CALL" : "PUT"}
+                                                    {isLong ? "LONG" : "SHORT"}
                                                 </div>
                                                 <div className={`text-[7px] font-bold tracking-widest uppercase ${isDark ? 'opacity-30 text-white' : 'text-[#05140b]/30'}`}>
                                                     ARC

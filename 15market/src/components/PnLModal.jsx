@@ -128,7 +128,7 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                     <div className="flex flex-col items-end">
                                         <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">{trade.type === 'rounds' ? 'P2P_DIRECTION' : 'EXECUTION'}</span>
                                         <span className={`font-black uppercase text-sm ${isUp ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                            {trade.type === 'rounds' ? (isUp ? 'LONG_POOL' : 'SHORT_POOL') : (isUp ? 'CALL' : 'PUT')}
+                                            {trade.type === 'rounds' ? (isUp ? 'LONG_POOL' : 'SHORT_POOL') : (isUp ? 'LONG' : 'SHORT')}
                                         </span>
                                     </div>
                                 </div>

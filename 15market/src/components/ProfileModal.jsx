@@ -15,7 +15,7 @@ const PRESET_AVATARS = [
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Peanut"
 ];
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme, onUpdate, sessionBalance, evmBalance, onRefill, onWithdraw }) {
+export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme, onUpdate, sessionBalance, evmBalance, onDeposit, onWithdraw }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -284,7 +284,7 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
                                     <button 
                                         onClick={() => {
                                             if (!actionAmount || parseFloat(actionAmount) <= 0) return notify("Enter a valid amount", "error");
-                                            onRefill(parseFloat(actionAmount));
+                                            onDeposit(parseFloat(actionAmount));
                                             setActionAmount("");
                                         }}
                                         className="flex items-center justify-center gap-2 bg-[#3CB371] text-black font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all"

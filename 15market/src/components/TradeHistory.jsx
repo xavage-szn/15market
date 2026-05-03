@@ -57,8 +57,8 @@ function TradeHistoryComponent({
                     <div className="space-y-2">
                         {paginatedTrades.map((t) => {
                             const isRounds = t.type === 'rounds';
-                            const side = (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "UP" : "DOWN";
-                            const sideColor = side === "UP" ? '#3CB371' : '#FF7F50';
+                            const side = (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "LONG" : "SHORT";
+                            const sideColor = side === "LONG" ? '#3CB371' : '#FF7F50';
 
                             return (
                                 <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border transition-all group ${isLight

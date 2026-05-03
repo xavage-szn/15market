@@ -136,7 +136,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                         <div className="flex flex-col items-end">
                                             <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">DIRECTION</span>
                                             <span className={`text-xs font-black ${transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                                {transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'CALL' : 'PUT'}
+                                                {transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'LONG' : 'SHORT'}
                                             </span>
                                         </div>
                                     </div>

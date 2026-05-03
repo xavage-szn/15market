@@ -300,7 +300,7 @@ function RoundsTerminalComponent({
                         className={`flex-1 relative z-10 py-1.5 flex flex-col items-center gap-0.5 transition-all duration-300 rounded-full ${selectedDirection === 'UP' ? 'bg-[#3CB371] text-white' : (isLight ? 'text-[#0a261a]/60 hover:text-[#0a261a]/80' : 'text-white/50 hover:text-white/70')}`}>
                         <TrendingUp size={16} className={selectedDirection === 'UP' ? 'text-white' : 'text-[#3CB371]/60'} />
                         <div className="flex flex-col items-center leading-none">
-                            <span className="text-[7px] font-black uppercase opacity-60">CALL</span>
+                            <span className="text-[7px] font-black uppercase opacity-60">LONG</span>
                             <span className="text-[11px] font-black">{odds.long}x</span>
                         </div>
                     </button>
@@ -310,7 +310,7 @@ function RoundsTerminalComponent({
                         className={`flex-1 relative z-10 py-1.5 flex flex-col items-center gap-1 transition-all duration-300 rounded-full ${selectedDirection === 'DOWN' ? 'bg-[#FF4D4D] text-white' : (isLight ? 'text-[#0a261a]/60 hover:text-[#0a261a]/80' : 'text-white/50 hover:text-white/70')}`}>
                         <TrendingDown size={16} className={selectedDirection === 'DOWN' ? 'text-white' : 'text-[#FF4D4D]/60'} />
                         <div className="flex flex-col items-center leading-none">
-                            <span className="text-[7px] font-black uppercase opacity-60">PUT</span>
+                            <span className="text-[7px] font-black uppercase opacity-60">SHORT</span>
                             <span className="text-[11px] font-black">{odds.short}x</span>
                         </div>
                     </button>
