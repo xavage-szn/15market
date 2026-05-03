@@ -93,26 +93,13 @@ function LiveExecutionComponent({
     const priceRefInternal = useRef(price);
     useEffect(() => { priceRefInternal.current = price; }, [price]);
 
-    const frozenPnL = useRef({}); // tradeId -> { status, exitPrice }
     const lastTimeRef = useRef({}); // tradeId -> lastTime
 
     const removeTrade = (id) => {
         setActiveTrades(prev => prev.filter(t => t.id !== id));
     };
 
-    // Synchronize global locks to local frozen state
-    useEffect(() => {
-        if (!lockedResults?.current) return;
-        lockedResults.current.forEach((val, key) => {
-            if (!frozenPnL.current[key]) {
-                frozenPnL.current[key] = {
-                    status: val.status,
-                    exitPrice: val.settlementPrice,
-                    fromGlobal: true
-                };
-            }
-        });
-    }, [activeTrades.length]);
+
 
     // Auto-collapse when only 0-1 trades remain
     useEffect(() => {
@@ -187,8 +174,7 @@ function LiveExecutionComponent({
                                                 lastTimeRef.current[trade.id] = stableRawTime;
                                             }
                                             const rawTimeLeft = lastTimeRef.current[trade.id];
-
-
+                                            const displayTimeLeft = (trade.status !== "PENDING") ? "0.0" : (trade.timeLeft !== undefined ? trade.timeLeft.toFixed(1) : rawTimeLeft.toFixed(1));
 
                                             const timerExpired = (trade.timeLeft !== undefined ? trade.timeLeft <= 0 : rawTimeLeft <= 0);
                                             const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
@@ -204,48 +190,14 @@ function LiveExecutionComponent({
 
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
-                                            // 🔒 RESULT LOCK: Use backend authoritative result if provided, otherwise freeze locally
-                                            if (timerExpired && !isFinal && !frozenPnL.current[trade.id]) {
-                                                const finalWinning = trade.isWinning !== undefined 
-                                                    ? trade.isWinning 
-                                                    : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                        ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                        : false);
-                                                
-                                                const status = finalWinning ? "WON" : "LOST";
-                                                frozenPnL.current[trade.id] = {
-                                                    status: status,
-                                                    exitPrice: currentPriceVal,
-                                                    time: Date.now()
-                                                };
+                                            // AUTHORITY: Purely trust backend winning state. If backend hasn't sent it, we show neutral/pending.
+                                            const liveWinning = trade.isWinning;
 
-                                                // Update Global Lock in Parent via Ref
-                                                if (lockedResults?.current) {
-                                                    lockedResults.current.set(String(trade.id), { 
-                                                        status: status, 
-                                                        settlementPrice: currentPriceVal 
-                                                    });
-                                                }
-                                                console.log(`[UI-Lock] Authority Handover for ${trade.id}: ${status} @ ${currentPriceVal}`);
-                                            }
+                                            const showInstantResult = (timerExpired || trade.status === "RESOLVING") && !isFinal;
 
-                                            const frozen = frozenPnL.current[trade.id];
-                                            
-                                            // AUTHORITY: Prefer backend isWinning state
-                                            const liveWinning = trade.isWinning !== undefined ? trade.isWinning : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                : false);
-
-                                            // AUTHORITY: Prefer backend timeLeft
-                                            const displayTimeLeft = (frozen || trade.status !== "PENDING") 
-                                                ? "0.0" 
-                                                : (trade.timeLeft !== undefined ? trade.timeLeft.toFixed(1) : rawTimeLeft.toFixed(1));
-                                            
-                                            const showInstantResult = (timerExpired || !!frozen || trade.status !== "PENDING") && !isFinal;
-
-                                            // STABILITY FIX: Use frozen result if available, otherwise backend winning state, otherwise live
-                                            const finalWinningState = frozen ? (frozen.status === "WON") : liveWinning;
-                                            const instantStatus = showInstantResult ? (finalWinningState ? "WON" : "LOST") : trade.status;
+                                            // STABILITY: Only show WON/LOST if we have definitive backend status or if it's final.
+                                            // If in RESOLVING phase, we show SYNCING instead of guessing.
+                                            const instantStatus = isFinal ? trade.status : (showInstantResult ? "RESOLVING" : trade.status);
 
                                             const displayFinal = isFinal || showInstantResult;
                                             
@@ -269,7 +221,8 @@ function LiveExecutionComponent({
                                                         <div className="flex items-center gap-1.5">
                                                             <div className={`w-1 h-1 rounded-full ${displayFinal
                                                                 ? ((instantStatus === "WON" || trade.status === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
-                                                                : (liveWinning ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
+                                                                : (liveWinning === true ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 
+                                                                   (liveWinning === false ? 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]' : 'bg-gray-500 animate-pulse'))}`} />
                                                             <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
                                                                 {displayFinal ? (trade.status === "PENDING" || trade.status === "RESOLVING" ? instantStatus : trade.status) : (trade.confirmed === false ? "Verifying" : "Live")}
                                                             </span>
@@ -291,15 +244,19 @@ function LiveExecutionComponent({
                                                                 {displayTimeLeft}<span className="text-[10px] md:text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
                                                             <div className="mt-0 px-1 py-0.5 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-75 md:scale-90">
-                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
-                                                                    {liveWinning ? "WINNING" : "LOSING"}
+                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning === true ? "text-[#3CB371]" : (liveWinning === false ? "text-[#FF7F50]" : "text-gray-500")}`}>
+                                                                    {liveWinning === true ? "WINNING" : (liveWinning === false ? "LOSING" : "CALCULATING")}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     ) : (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-1">
-                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                                                {(instantStatus === "WON" || trade.status === "WON") ? "Trade Won" : "Trade Lost"}
+                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${
+                                                                (instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 
+                                                                (instantStatus === "RESOLVING" ? 'text-yellow-500 animate-pulse' : 'text-[#FF7F50]')
+                                                            }`}>
+                                                                { (instantStatus === "WON" || trade.status === "WON") ? "Trade Won" : 
+                                                                  (instantStatus === "RESOLVING" ? "Syncing..." : "Trade Lost") }
                                                             </div>
                                                             <div className="flex items-center gap-1.5 mt-0.5">
                                                                 <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>

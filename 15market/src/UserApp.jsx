@@ -723,9 +723,6 @@ export default function UserApp() {
   const lastPriceUpdateRef = useRef(Date.now());
   const priceHistoryRef = useRef([]);
   const lastOptimisticActionTime = useRef(0);
-  // 🔒 RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
-  // The reconciler will NEVER downgrade a locked result, preventing glitches.
-  const lockedResults = useRef(new Map()); // tradeId → { status, settlementPrice }
   // 🗑️ REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
   // Prevents the reconciler from re-inserting them from backend data.
   const removedTradeIds = useRef(new Set());
@@ -962,13 +959,6 @@ export default function UserApp() {
           (btTx && String(p.tx || p.txHash) === btTx) ||
           String(p.nonce) === btId
         );
-
-        // 🔒 CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
-        // the backend revert it to PENDING/RESOLVING. The local lock is ground truth.
-        const locked = lockedResults.current.get(btId) || (btTx && lockedResults.current.get(btTx));
-        if (locked) {
-          return;
-        }
 
         let finalStatus = bt.status;
 
@@ -1231,7 +1221,13 @@ export default function UserApp() {
       const tid = String(data.betId);
       setActiveTrades(prev => prev.map(t => {
         if (String(t.id || t.nonce) === tid) {
-          return { ...t, currentPrice: data.currentPrice, isWinning: data.isWinning };
+          return { 
+            ...t, 
+            currentPrice: data.currentPrice, 
+            isWinning: data.isWinning,
+            timeLeft: data.timeLeft, // Backend-driven countdown
+            livePrice: data.currentPrice // Consistent naming
+          };
         }
         return t;
       }));
@@ -1241,7 +1237,13 @@ export default function UserApp() {
        const tid = String(data.betId);
        setActiveTrades(prev => prev.map(t => {
          if (String(t.id || t.nonce) === tid) {
-           return { ...t, status: 'RESOLVING', exitPrice: data.exitPrice };
+           return { 
+             ...t, 
+             status: data.status || 'RESOLVING', 
+             exitPrice: data.exitPrice,
+             won: data.won,
+             isWinning: data.won
+           };
          }
          return t;
        }));
@@ -1261,41 +1263,7 @@ export default function UserApp() {
     };
   }, [address, notify, triggerGlobalRefresh]);
   
-  // 🔒 Result Lock Synchronizer: Propagation of local locks to state
-  useEffect(() => {
-    const lockSyncInterval = setInterval(() => {
-      if (lockedResults.current.size === 0) return;
-      
-      let changed = false;
-      const historyCopy = [...tradeHistoryRef.current];
-      const activeCopy = [...activeTradesRef.current];
-      
-      lockedResults.current.forEach((val, id) => {
-        const tid = String(id);
-        
-        // 1. Update History
-        const hIdx = historyCopy.findIndex(t => String(t.id || t.tx || t.nonce) === tid);
-        if (hIdx !== -1 && historyCopy[hIdx].status === 'PENDING') {
-          historyCopy[hIdx] = { ...historyCopy[hIdx], status: val.status, settlementPrice: val.settlementPrice };
-          changed = true;
-        }
-        
-        // 2. Update Active
-        const aIdx = activeCopy.findIndex(t => String(t.id || t.tx || t.nonce) === tid);
-        if (aIdx !== -1 && activeCopy[aIdx].status === 'PENDING') {
-          activeCopy[aIdx] = { ...activeCopy[aIdx], status: val.status, settlementPrice: val.settlementPrice };
-          changed = true;
-        }
-      });
-      
-      if (changed) {
-        setTradeHistory(historyCopy);
-        setActiveTrades(activeCopy);
-      }
-    }, 500);
-    
-    return () => clearInterval(lockSyncInterval);
-  }, []);
+
 
 
   // Periodic Universal Sync (Optimized for Instant Pulse Mode)
@@ -3118,7 +3086,6 @@ export default function UserApp() {
                               activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
                               setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
                               theme={theme} currentNetwork={network}
-                              lockedResults={lockedResults}
                             />
                           </div>
                         </div>
