@@ -153,25 +153,27 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
           className={`
             w-full h-8 flex items-center justify-center cursor-pointer 
             transition-all duration-300 relative shrink-0
-            ${isDark ? 'bg-white/5 border-b border-white/5' : 'bg-[#3CB371]/10 border-b border-[#3CB371]/10'}
+            ${isDark 
+              ? 'bg-white/5 border-b border-white/5' 
+              : 'bg-black/5 border-b border-black/5'}
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
           <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />
-
+          
           <div className="flex items-center justify-center gap-3 w-full">
             <History size={14} className={isDark ? "text-white" : "text-[#0a261a]"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
             <span className={`text-[11px] font-black uppercase tracking-[0.25em] ${isDark ? "text-white" : "text-[#0a261a]"}`}>
               TRADE HISTORY ({userProfile?.stats?.totalTrades || tradeHistory.length})
             </span>
-            {isOpen ? <ChevronDown size={12} className={isDark ? "text-white/80" : "text-[#0a261a]/60"} /> : <ChevronUp size={12} className={isDark ? "text-white/80" : "text-[#0a261a]/60"} />}
+            {isOpen ? <ChevronDown size={12} className={isDark ? "text-white/80" : "text-black/60"} /> : <ChevronUp size={12} className={isDark ? "text-white/80" : "text-black/60"} />}
           </div>
         </div>
 
         {/* Content Area - Wide to touch ends on mobile */}
         <div className="flex-1 overflow-y-auto custom-scrollbar px-0 py-4 pb-12 flex flex-col gap-[1.5px]">
           {tradeHistory.length === 0 ? (
-            <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
+            <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
               <History size={48} className="mb-4" />
               <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
             </div>
@@ -212,7 +214,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
-                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-[#0a261a]/5 text-[#0a261a]/40'}`}
+                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
                       >
                         <Share2 size={12} />
                       </button>
@@ -220,7 +222,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                         href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-[#0a261a]/5 text-[#0a261a]/40'}`}
+                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
                       >
                         <ExternalLink size={12} />
                       </a>
@@ -378,13 +380,13 @@ export default function UserApp() {
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
-  const activeTrade = activeTrades[0] || null;
+  const activeTrade = activeTrades[0] || null; 
 
   // Safety Timeout: Reset and trigger whenever a GLOBAL load starts
   useEffect(() => {
     if (isGlobalLoading) {
       const timer = setTimeout(() => {
-        setIsAppReady(true);
+        setIsAppReady(true); 
         setIsGlobalLoading(false);
       }, 4000); // 4s absolute maximum wait for any sequence
       return () => clearTimeout(timer);
@@ -428,7 +430,7 @@ export default function UserApp() {
   const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
-
+  
   // LOCK SCROLL for Mobile History Drawer
   useEffect(() => {
     if (showMobileHistory) {
@@ -478,7 +480,7 @@ export default function UserApp() {
 
   const performStealthChecks = useCallback(async (addr) => {
     if (!addr) return;
-
+    
     setIsGlobalLoading(true);
     setGlobalLoadingProgress(0);
     setIsOffline(!navigator.onLine);
@@ -514,31 +516,22 @@ export default function UserApp() {
 
         // 1. Database User Verification (SILENT)
         const profileRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
-
+        
         if (profileRes && profileRes.ok) {
           const pData = await profileRes.json();
           setUserProfile(pData);
           if (!pData.username) {
-            setShowOnboarding(true);
-            localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'false');
+             setShowOnboarding(true);
+             localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
           } else {
-            setShowOnboarding(false);
-            localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+             setShowOnboarding(false);
+             localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
           }
         } else {
-          // If network is slow or fetch failed, check local storage before forcing onboarding.
-          // This prevents the 'Onboarding Loop' when users have slow connections.
-          const wasOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
-
-          if (wasOnboarded) {
-            console.log("[StealthChecks] Slow network detected, trusting local onboarding status");
-            setShowOnboarding(false);
-            // Provide a minimal fallback profile to prevent UI crashes if data is missing
-            setUserProfile(prev => prev || { address: addr, username: "Trader", isInitial: false });
-          } else {
-            setUserProfile({ address: addr, isInitial: true });
-            setShowOnboarding(true);
-          }
+          // Force onboarding if profile missing or 404
+          setUserProfile({ address: addr, isInitial: true });
+          setShowOnboarding(true);
+          localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
         }
 
         // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
@@ -547,7 +540,7 @@ export default function UserApp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: addr.toLowerCase() })
         }).catch(() => null);
-
+        
         if (sessionRes && sessionRes.ok) {
           const sData = await sessionRes.json();
           setSessionBalance(parseFloat(sData.balance || 0));
@@ -580,7 +573,7 @@ export default function UserApp() {
           setIsOffline(true);
         }
       }, 3000);
-
+      
       // We don't block the UI forever if it's already cached
       if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
         setTimeout(() => { if (!success) setIsGlobalLoading(false); }, 10000);
@@ -715,7 +708,7 @@ export default function UserApp() {
   const [isSignerInitializing, setIsSignerInitializing] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
-
+  
   // Security Handshake Purged
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
@@ -755,7 +748,7 @@ export default function UserApp() {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
       setIsPortrait(window.innerHeight > window.innerWidth);
-      setIsSmallScreen(window.innerWidth < 1024);
+      setIsSmallScreen(window.innerWidth < 1024); 
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -766,10 +759,10 @@ export default function UserApp() {
     };
   }, []);
 
-  const showPortraitLock = false;
+  const showPortraitLock = false; 
 
   const postDebugLog = useCallback((payload) => {
-    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '488cf3' }, body: JSON.stringify({ sessionId: '488cf3', ...payload, timestamp: Date.now() }) }).catch(() => { });
+    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'488cf3'},body:JSON.stringify({sessionId:'488cf3',...payload,timestamp:Date.now()})}).catch(()=>{});
   }, []);
 
   const handleRoundsUnlock = useCallback(() => {
@@ -816,12 +809,12 @@ export default function UserApp() {
         const current = parseFloat(prev || '0');
         return Math.abs(newBalNum - current) > 0.000001 ? formatted : prev;
       });
-    } catch (e) {
+    } catch (e) { 
       // Last resort: direct on-chain fetch (no comparison, just set it)
       try {
         const balWei = await publicClient.getBalance({ address });
         setEvmBalance(formatUnits(balWei, 18));
-      } catch (err) { }
+      } catch (err) {}
     }
   }, [address]);
 
@@ -833,7 +826,7 @@ export default function UserApp() {
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
-
+    
     // GUARD: If user just performed an optimistic action (Trade/Deposit), 
     // ignore backend syncs for 15s to allow chain confirmation.
     const msSinceAction = Date.now() - lastOptimisticActionTime.current;
@@ -901,8 +894,8 @@ export default function UserApp() {
         if (btTx) backendGate.add(btTx);
 
         // Find local copy using both ID and TX to prevent duplication
-        const local = prev.find(p =>
-          String(p.id) === btId ||
+        const local = prev.find(p => 
+          String(p.id) === btId || 
           (btTx && String(p.tx || p.txHash) === btTx) ||
           String(p.nonce) === btId
         );
@@ -923,7 +916,7 @@ export default function UserApp() {
       prev.forEach(local => {
         const lid = String(local.id);
         const ltx = String(local.tx || local.txHash || "");
-
+        
         if (!backendGate.has(lid) && (!ltx || !backendGate.has(ltx))) {
           // Keep local trade if it has a final status or if it's very fresh
           const isFinal = ["WON", "LOST"].includes(local.status);
@@ -965,9 +958,9 @@ export default function UserApp() {
       backendActive.forEach(bt => {
         const btId = String(bt.id);
         const btTx = String(bt.tx || bt.txHash || "");
-
-        const local = prev.find(p =>
-          String(p.id) === btId ||
+        
+        const local = prev.find(p => 
+          String(p.id) === btId || 
           (btTx && String(p.tx || p.txHash) === btTx) ||
           String(p.nonce) === btId
         );
@@ -1034,7 +1027,7 @@ export default function UserApp() {
 
     try {
       setIsSignerInitializing(true);
-
+      
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1047,7 +1040,7 @@ export default function UserApp() {
 
       const data = await res.json();
       const sessionObj = { address: data.sessionAddress, isRemote: true };
-
+      
       setEvmSessionWallet(sessionObj);
       setSessionBalance(parseFloat(data.balance));
       setIsSessionSynced(true);
@@ -1074,28 +1067,28 @@ export default function UserApp() {
         const data = await res.json();
         if (data && !data.error) {
           setUserProfile(data);
-
+          
           if (!data.username) {
-            setShowOnboarding(true);
-            localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+             setShowOnboarding(true);
+             localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
           } else {
-            setShowOnboarding(false);
-            localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+             setShowOnboarding(false);
+             localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
           }
-
+          
           // Persistent History Sync: Merge backend profile trades into UI history
           if (Array.isArray(data.trades)) {
             reconcileTrades(data.trades);
           }
           // AUTO-INIT session wallet for returning users
           if (!evmSessionWallet && !isSignerInitializing) {
-            initializeSessionWallet();
+             initializeSessionWallet();
           }
         }
       } else if (res.status === 404) {
-        // Profile wiped or never existed
-        setShowOnboarding(true);
-        localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+         // Profile wiped or never existed
+         setShowOnboarding(true);
+         localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
       }
     } catch (e) {
       console.error("Profile fetch error:", e);
@@ -1114,8 +1107,8 @@ export default function UserApp() {
   // AUTO-INITIALIZE Session Wallet as soon as any address is available
   useEffect(() => {
     if (address && !evmSessionWallet && !isSignerInitializing && !hasInitAttempted.current) {
-      hasInitAttempted.current = true;
-      initializeSessionWallet();
+        hasInitAttempted.current = true;
+        initializeSessionWallet();
     }
   }, [address, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
 
@@ -1164,14 +1157,14 @@ export default function UserApp() {
 
   useEffect(() => {
     if (!address) return;
-
+    
     // Bind Socket listeners
     const unbindBal = socketService.on('balance_update', (data) => {
       // GUARD: If user just performed an optimistic action, ignore socket updates for 15s
       // EXCEPT for winnings, which we always want to see instantly.
       const msSinceAction = Date.now() - lastOptimisticActionTime.current;
       const isWinningEvent = data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED';
-
+      
       if (msSinceAction < 15000 && !isWinningEvent) return;
 
       const val = data.balance || data.available;
@@ -1182,30 +1175,30 @@ export default function UserApp() {
       if (data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED') {
         const payoutAmt = parseFloat(data.payout || 0);
         const reasonLabel = data.reason === 'WIN_PAYOUT_SETTLED' ? 'Confirmed' : 'Received';
-
+        
         notify(`$${payoutAmt.toFixed(2)} has been added to your balance`, "success", () => {
           // Find the trade in history or active to show receipt
           const tid = String(data.betId || "");
           const tx = String(data.txHash || "");
-          const trade = [...activeTrades, ...tradeHistory].find(t =>
-            (tid && String(t.id || t.nonce) === tid) ||
+          const trade = [...activeTrades, ...tradeHistory].find(t => 
+            (tid && String(t.id || t.nonce) === tid) || 
             (tx && String(t.tx || t.txHash) === tx)
           );
           if (trade) {
-            setSelectedTransaction({
-              ...trade,
-              tx: data.txHash || trade.tx
-            });
-            setIsTransactionReceiptOpen(true);
+             setSelectedTransaction({
+                ...trade,
+                tx: data.txHash || trade.tx
+             });
+             setIsTransactionReceiptOpen(true);
           }
         });
 
         if (data.reason === 'WIN_PAYOUT_SETTLED') {
-          const tid = String(data.betId || "");
-          const tx = String(data.txHash || "");
-          const matchFn = t => (tid && String(t.id || t.nonce) === tid) || (tx && String(t.tx || t.txHash) === tx);
-          setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
-          setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+           const tid = String(data.betId || "");
+           const tx = String(data.txHash || "");
+           const matchFn = t => (tid && String(t.id || t.nonce) === tid) || (tx && String(t.tx || t.txHash) === tx);
+           setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+           setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
         }
         triggerGlobalRefresh(true);
       }
@@ -1216,11 +1209,11 @@ export default function UserApp() {
     const unbindPayout = socketService.on('payout_completed', (data) => {
       console.log("[Socket] Payout Completed:", data);
       const tid = String(data.betId);
-
+      
       const updateFn = (t) => {
         if (String(t.id || t.tx || t.nonce) === tid) {
-          return {
-            ...t,
+          return { 
+            ...t, 
             status: 'PAID',
             payoutTx: data.txHash,
             payoutPending: false,
@@ -1247,23 +1240,18 @@ export default function UserApp() {
     });
 
     const unbindExpired = socketService.on('trade_expired', (data) => {
-      const tid = String(data.betId);
-      setActiveTrades(prev => prev.map(t => {
-        if (String(t.id || t.nonce) === tid) {
-          return { ...t, status: 'RESOLVING', exitPrice: data.exitPrice };
-        }
-        return t;
-      }));
+       const tid = String(data.betId);
+       setActiveTrades(prev => prev.map(t => {
+         if (String(t.id || t.nonce) === tid) {
+           return { ...t, status: 'RESOLVING', exitPrice: data.exitPrice };
+         }
+         return t;
+       }));
     });
 
     const unbindErr = socketService.on('terminal_error', (data) => {
       notify(data.message, "error");
       console.error("[Terminal Error]", data);
-    });
-
-    const unbindBroadcast = socketService.on('broadcast', (data) => {
-      console.log("[Socket] System Broadcast Received:", data);
-      notify(data.message, data.type === 'EMERGENCY' ? 'error' : 'info');
     });
 
     return () => {
@@ -1272,29 +1260,28 @@ export default function UserApp() {
       unbindTick();
       unbindExpired();
       unbindErr();
-      unbindBroadcast();
     };
   }, [address, notify, triggerGlobalRefresh]);
-
+  
   // 🔒 Result Lock Synchronizer: Propagation of local locks to state
   useEffect(() => {
     const lockSyncInterval = setInterval(() => {
       if (lockedResults.current.size === 0) return;
-
+      
       let changed = false;
       const historyCopy = [...tradeHistoryRef.current];
       const activeCopy = [...activeTradesRef.current];
-
+      
       lockedResults.current.forEach((val, id) => {
         const tid = String(id);
-
+        
         // 1. Update History
         const hIdx = historyCopy.findIndex(t => String(t.id || t.tx || t.nonce) === tid);
         if (hIdx !== -1 && historyCopy[hIdx].status === 'PENDING') {
           historyCopy[hIdx] = { ...historyCopy[hIdx], status: val.status, settlementPrice: val.settlementPrice };
           changed = true;
         }
-
+        
         // 2. Update Active
         const aIdx = activeCopy.findIndex(t => String(t.id || t.tx || t.nonce) === tid);
         if (aIdx !== -1 && activeCopy[aIdx].status === 'PENDING') {
@@ -1302,13 +1289,13 @@ export default function UserApp() {
           changed = true;
         }
       });
-
+      
       if (changed) {
         setTradeHistory(historyCopy);
         setActiveTrades(activeCopy);
       }
     }, 500);
-
+    
     return () => clearInterval(lockSyncInterval);
   }, []);
 
@@ -1401,7 +1388,7 @@ export default function UserApp() {
   const toggleSessionMode = () => {
     // Session mode is now the only mode. This just ensures we are synced.
     if (!evmSessionWallet) {
-      initializeSessionWallet();
+       initializeSessionWallet();
     }
   };
 
@@ -1423,13 +1410,13 @@ export default function UserApp() {
       }
     };
     fetchTreasury();
-  }, []);
+  }, []); 
 
   // Execute trade
   const executeTrade = async (params = null) => {
     const probeId = `exec-${Date.now()}-${++execProbeSeqRef.current}`;
     // #region agent log
-    postDebugLog({ runId: 'initial', hypothesisId: 'H1', location: 'UserApp.jsx:executeTrade:entry', message: 'executeTrade entry', data: { probeId, isExecuting, gameMode, paramsType: params?.type || null, sessionMode, sessionBalance: sessionBalanceRef.current, amount, duration, direction } });
+    postDebugLog({runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:executeTrade:entry',message:'executeTrade entry',data:{probeId,isExecuting,gameMode,paramsType:params?.type || null,sessionMode,sessionBalance:sessionBalanceRef.current,amount,duration,direction}});
     // #endregion
     if (isExecuting) return;
 
@@ -1458,13 +1445,13 @@ export default function UserApp() {
     const stakeAmt = parseFloat(sanitizedAmount);
 
     // Reserve a tiny margin for gas (USDC is gas on Arc)
-    const gasMargin = 0.001;
+    const gasMargin = 0.001; 
 
     if (stakeAmt + gasMargin > currentBal) {
       return notify(`Insufficient Session Balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC. Please Refill.`, "error");
     }
     // #region agent log
-    postDebugLog({ runId: 'initial', hypothesisId: 'H2', location: 'UserApp.jsx:executeTrade:validated', message: 'trade validated pre-submit', data: { probeId, activeType, stakeAmt, currentBal, gasMargin, activeDirection, activeDuration } });
+    postDebugLog({runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:executeTrade:validated',message:'trade validated pre-submit',data:{probeId,activeType,stakeAmt,currentBal,gasMargin,activeDirection,activeDuration}});
     // #endregion
 
     if (Number(activeAmount) < parseFloat(platformSettings.minBet) && activeType !== 'rounds') {
@@ -1496,7 +1483,7 @@ export default function UserApp() {
       if (!isConnected) {
         throw new Error("Please connect wallet first");
       }
-
+      
       let txHash;
 
       // ─── ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ───
@@ -1509,7 +1496,7 @@ export default function UserApp() {
         setSessionBalance(prev => Math.max(0, prev - amtNum));
         lastOptimisticActionTime.current = Date.now();
         // #region agent log
-        postDebugLog({ runId: 'initial', hypothesisId: 'H3', location: 'UserApp.jsx:executeTrade:rounds:deduct1', message: 'rounds first optimistic deduction applied', data: { probeId, amtNum, balanceBefore: sessionBalanceRef.current } });
+        postDebugLog({runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:executeTrade:rounds:deduct1',message:'rounds first optimistic deduction applied',data:{probeId,amtNum,balanceBefore:sessionBalanceRef.current}});
         // #endregion
 
         if (evmSessionWallet) {
@@ -1537,7 +1524,7 @@ export default function UserApp() {
         lastOptimisticActionTime.current = Date.now();
         setSessionBalance(prev => Math.max(0, prev - amtNum));
         // #region agent log
-        postDebugLog({ runId: 'initial', hypothesisId: 'H3', location: 'UserApp.jsx:executeTrade:rounds:deduct2', message: 'rounds second optimistic deduction applied', data: { probeId, amtNum, balanceBefore: sessionBalanceRef.current } });
+        postDebugLog({runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:executeTrade:rounds:deduct2',message:'rounds second optimistic deduction applied',data:{probeId,amtNum,balanceBefore:sessionBalanceRef.current}});
         // #endregion
 
         const roundTrade = {
@@ -1587,7 +1574,7 @@ export default function UserApp() {
       // --- Show trade card as PENDING immediately (Optimistic) ---
       const confirmedNow = Date.now();
       const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (
-        String(t.id) !== String(item.id) &&
+        String(t.id) !== String(item.id) && 
         (!item.tx || String(t.tx) !== String(item.tx)) &&
         (!item.nonce || String(t.nonce) !== String(item.nonce))
       ))];
@@ -1653,7 +1640,7 @@ export default function UserApp() {
           // ✅ Trade Active (On-chain stake moved)
           const confirmedTradeId = data.tradeId || tradeId;
           const txHash = data.txHash;
-
+          
           setActiveTrades(prev => prev.map(t =>
             t.id === tradeId
               ? { ...t, id: confirmedTradeId, tx: txHash, confirmed: true, status: 'PENDING' }
@@ -1681,7 +1668,7 @@ export default function UserApp() {
       };
 
       backgroundTrade();
-
+      
       // Safety: If backend hangs forever, we still want to let the user trade again
       setTimeout(() => {
         setIsExecuting(false);
@@ -1858,13 +1845,13 @@ export default function UserApp() {
       if (typeof p === 'number' && p > 0) {
         const truncated = Math.floor(p * 100) / 100;
         const pStr = truncated.toFixed(2);
-
+        
         setPrice(pStr);
         priceRef.current = pStr;
-
+        
         priceHistoryRef.current.push({ p: truncated, t: sourceTs });
         if (priceHistoryRef.current.length > 500) priceHistoryRef.current.shift();
-
+        
         lastPriceUpdateRef.current = Date.now();
       }
     }, 200);
@@ -1890,10 +1877,10 @@ export default function UserApp() {
         address && data.userAddr.toLowerCase() === address.toLowerCase();
       if (!isMine) return;
 
-      const betId = String(data.betId || data.id);
+      const betId       = String(data.betId || data.id);
       const finalStatus = data.won ? 'WON' : 'LOST';
-      const exitPrice = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
-      const payout = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
+      const exitPrice   = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
+      const payout      = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
 
       console.log(`[Settlement] Backend settled #${betId}: ${finalStatus} @ $${exitPrice}`);
       lockedResults.current.set(betId, { status: finalStatus, settlementPrice: exitPrice });
@@ -1901,23 +1888,23 @@ export default function UserApp() {
 
       // Build the fully-settled trade record
       const settledRecord = {
-        id: betId,
-        nonce: betId,
-        status: finalStatus,
+        id:              betId,
+        nonce:           betId,
+        status:          finalStatus,
         settlementPrice: exitPrice,
-        entryPrice: data.entryPrice ? parseFloat(data.entryPrice).toFixed(2) : '0.00',
+        entryPrice:      data.entryPrice ? parseFloat(data.entryPrice).toFixed(2) : '0.00',
         exitPrice,
         payout,
-        won: data.won,
-        direction: data.direction === 1 || data.direction === 'UP' ? 'UP' : 'DOWN',
-        amount: data.amount,
-        symbol: data.symbol || 'ETH',
-        duration: data.duration,
-        timestamp: data.timestamp || Date.now(),
-        txHash: data.txHash || null,
-        tx: data.txHash || null,
-        backendSettled: true,
-        balanceApplied: true,
+        won:             data.won,
+        direction:       data.direction === 1 || data.direction === 'UP' ? 'UP' : 'DOWN',
+        amount:          data.amount,
+        symbol:          data.symbol || 'ETH',
+        duration:        data.duration,
+        timestamp:       data.timestamp || Date.now(),
+        txHash:          data.txHash || null,
+        tx:              data.txHash || null,
+        backendSettled:  true,
+        balanceApplied:  true,
       };
 
       // Allow the reconciler to handle the removal after a grace period
@@ -1927,13 +1914,13 @@ export default function UserApp() {
       setTradeHistory(prev => {
         const btId = String(data.betId || data.id || "");
         const btTx = String(data.txHash || data.tx || "");
-        const exists = prev.find(t =>
-          (btId && String(t.id || t.nonce) === btId) ||
+        const exists = prev.find(t => 
+          (btId && String(t.id || t.nonce) === btId) || 
           (btTx && String(t.tx || t.txHash) === btTx)
         );
         if (exists) {
           return prev.map(t => (
-            (btId && String(t.id || t.nonce) === btId) ||
+            (btId && String(t.id || t.nonce) === btId) || 
             (btTx && String(t.tx || t.txHash) === btTx)
           ) ? { ...t, ...settledRecord } : t);
         }
@@ -1978,10 +1965,10 @@ export default function UserApp() {
       const bid = String(data.betId);
       console.log(`[Trade] Authority Locked: #${bid} -> ${data.won ? 'WON' : 'LOST'} @ $${data.exitPrice}`);
       lockedResults.current.set(bid, { status: data.won ? 'WON' : 'LOST', settlementPrice: data.exitPrice });
-
-      setActiveTrades(prev => prev.map(t =>
-        String(t.id) === bid || String(t.nonce) === bid
-          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0 }
+      
+      setActiveTrades(prev => prev.map(t => 
+        String(t.id) === bid || String(t.nonce) === bid 
+          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0 } 
           : t
       ));
     });
@@ -2029,10 +2016,10 @@ export default function UserApp() {
 
       if (resolvedMarket && resolvedMarket.id !== activeMarket.id) {
         // #region agent log
-        postDebugLog({ runId: 'initial', hypothesisId: 'H9', location: 'UserApp.jsx:syncMarket:override', message: 'syncMarket changed active market and reset price', data: { from: activeMarket?.id, to: resolvedMarket?.id } });
+        postDebugLog({runId:'initial',hypothesisId:'H9',location:'UserApp.jsx:syncMarket:override',message:'syncMarket changed active market and reset price',data:{from:activeMarket?.id,to:resolvedMarket?.id}});
         // #endregion
         // #region agent log
-        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'de7e69' }, body: JSON.stringify({ sessionId: 'de7e69', runId: 'initial', hypothesisId: 'H3', location: 'UserApp.jsx:syncMarket:override', message: 'syncMarket overriding active market from localStorage/listings', data: { from: activeMarket?.id, to: resolvedMarket?.id, listingHasBinance: !!resolvedMarket?.binance, listingHasPyth: !!resolvedMarket?.pythId }, timestamp: Date.now() }) }).catch(() => { });
+        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:syncMarket:override',message:'syncMarket overriding active market from localStorage/listings',data:{from:activeMarket?.id,to:resolvedMarket?.id,listingHasBinance:!!resolvedMarket?.binance,listingHasPyth:!!resolvedMarket?.pythId},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
         // Re-sync with current local authority
         setActiveMarket(resolvedMarket);
@@ -2058,18 +2045,18 @@ export default function UserApp() {
   // Handle market changes from UI (persist to localStorage and sync with keeper)
   const handleMarketChange = useCallback(async (newMarket) => {
     // #region agent log
-    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'de7e69' }, body: JSON.stringify({ sessionId: 'de7e69', runId: 'initial', hypothesisId: 'H4', location: 'UserApp.jsx:handleMarketChange:entry', message: 'User requested market switch', data: { current: activeMarket?.id, next: newMarket?.id, nextHasBinance: !!newMarket?.binance, nextHasPyth: !!newMarket?.pythId }, timestamp: Date.now() }) }).catch(() => { });
+    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:handleMarketChange:entry',message:'User requested market switch',data:{current:activeMarket?.id,next:newMarket?.id,nextHasBinance:!!newMarket?.binance,nextHasPyth:!!newMarket?.pythId},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
     if (!newMarket || newMarket.id === activeMarket.id) return;
 
     localStorage.setItem('15market_active_token_id', newMarket.id);
     const resolvedMarket = mergeMarketWithDefault(newMarket);
-
+    
     // Explicitly reset price to trigger loading modal in CustomChart
     setPrice("0");
     priceRef.current = "0";
     priceHistoryRef.current = [];
-
+    
     setActiveMarket(resolvedMarket);
 
     // Sync with keeper
@@ -2092,7 +2079,7 @@ export default function UserApp() {
       if (!res.ok) return;
       const data = await res.json();
       setCampaigns(data);
-
+      
       const wbRes = await fetch(`${targetUrl}/winner-banner`);
       if (wbRes.ok) {
         const wbData = await wbRes.json();
@@ -2276,13 +2263,13 @@ export default function UserApp() {
         }
         return t;
       });
-
+      
       if (changed) {
         setTradeHistory(h => {
           const hMap = new Map();
           h.forEach(x => hMap.set(x.id, x));
           cleaned.forEach(c => hMap.set(c.id, c));
-          return Array.from(hMap.values()).sort((a, b) => b.id - a.id);
+          return Array.from(hMap.values()).sort((a,b) => b.id - a.id);
         });
       }
       return changed ? cleaned : prev;
@@ -2618,7 +2605,7 @@ export default function UserApp() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address, amount: depositAmt, txHash: hash })
-        }).catch(() => { });
+        }).catch(() => {});
 
         // STEP 4: Optimistic Local State Update
         // Provides immediate visual feedback to the user before block confirmation
@@ -2757,7 +2744,7 @@ export default function UserApp() {
 
       // Network Timeout Protection
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 60000);
+      const fetchTimeout = setTimeout(() => controller.abort(), 60000); 
 
       let res;
       try {
@@ -2839,166 +2826,168 @@ export default function UserApp() {
 
   return (
     <ErrorBoundary>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
-        style={{
-          color: theme === 'light' ? '#1f2937' : '#ffffff',
-          transition: "color 0.3s ease"
-        }}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
+      style={{
+        color: theme === 'light' ? '#1f2937' : '#ffffff',
+        transition: "color 0.3s ease"
+      }}>
 
 
 
-        <DissolveTransition isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
+      <DissolveTransition isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
 
-        {view === "dashboard" ? (
-          <DashboardPage
-            onBack={() => setView("trading")}
-            wallet={wallet}
-            sessionBalance={sessionBalance}
-            evmBalance={parseFloat(evmBalance || "0")}
-            onRefill={handleRefill}
-            onWithdraw={handleWithdraw}
-            treasuryBalance={treasuryBalance}
-            autoSignerFees={autoSignerFees}
-            userProfile={userProfile}
-            theme={theme}
-            isSmallScreen={isSmallScreen}
-            evmSessionWallet={evmSessionWallet}
-            transactionHistory={transactionHistory}
-            uiVersion={uiVersion}
-            onViewReceipt={(tx) => {
-              setSelectedTransaction(tx);
-              setIsTransactionReceiptOpen(true);
-            }}
-          />
-        ) : (
-          <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
+      {view === "dashboard" ? (
+        <DashboardPage
+          onBack={() => setView("trading")}
+          wallet={wallet}
+          sessionBalance={sessionBalance}
+          evmBalance={parseFloat(evmBalance || "0")}
+          onRefill={handleRefill}
+          onWithdraw={handleWithdraw}
+          treasuryBalance={treasuryBalance}
+          autoSignerFees={autoSignerFees}
+          userProfile={userProfile}
+          theme={theme}
+          isSmallScreen={isSmallScreen}
+          evmSessionWallet={evmSessionWallet}
+          transactionHistory={transactionHistory}
+          uiVersion={uiVersion}
+          onViewReceipt={(tx) => {
+            setSelectedTransaction(tx);
+            setIsTransactionReceiptOpen(true);
+          }}
+        />
+      ) : (
+        <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
-            <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 ${isSmallScreen ? 'py-0 h-[48px]' : 'py-1 lg:py-0'}`}>
-              <div className="flex items-center transition-all duration-500 h-full"
-                style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-                <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
-              </div>
-
-
-
-              <div className="hidden lg:flex items-center gap-3 px-2 py-1">
-                {/* Branded Game Mode Switcher - Large Screens */}
-                <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
-                  <motion.div
-                    className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
-                    initial={false}
-                    animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                  {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
-                    <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                      className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
-                      <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
-                      <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
-                    </button>
-                  ))}
-                </div>
-                <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                <div className="flex items-center gap-2">
-                  {/* Desktop: Only show session balance per user request */}
-                  <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
-                </div>
-                <button onClick={() => setView("dashboard")} className="w-9 h-9 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
-                  style={{
-                    backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                    borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                  }}>
-                  {(userProfile?.avatar || userProfile?.xProfileImage) ? (
-                    <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
-                  ) : (
-                    <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-                  )}
-                </button>
-                <UnifiedWalletButton theme={theme} />
-              </div>
-
-              <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
-                {/* Branded Game Mode Switcher - Mobile */}
-                <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
-                  <motion.div
-                    className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
-                    initial={false}
-                    animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                  {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
-                    <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                      className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
-                      <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
-                    </button>
-                  ))}
-                </div>
-                <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
-                  <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                </div>
-                <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden p-[1px]"
-                  style={{
-                    backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                    borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                  }}>
-                  {(userProfile?.avatar || userProfile?.xProfileImage) ? (
-                    <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
-                  ) : (
-                    <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-                  )}
-                </button>
-                <div className="scale-[0.9] origin-right ml-[-2px]">
-                  <UnifiedWalletButton theme={theme} />
-                </div>
-              </div>
-            </header>
-
-            {/* Winner/Campaign Banner (Authoritative UX) */}
-            <AnimatePresence>
-              {winnerBanner && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#3CB371]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#3CB371]/5 to-yellow-500/10 border-white/5'}`}
-                >
-                  <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
-                      <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#3CB371]'}`}>
-                        {winnerBanner.text || "New Winner Leaderboard is Live!"}
-                      </span>
-                    </div>
-                    {winnerBanner.cta && (
-                      <button className="px-3 py-0.5 md:py-1 bg-[#3CB371] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
-                        {winnerBanner.cta}
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Global V2 Architectural Separator (Runs across the screen) */}
-            <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[2px] mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
-              <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
-              <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />
-              <div className="w-full mt-[2px]">
-                <GlobalTradeScroller theme={theme} />
-              </div>
+          <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 ${isSmallScreen ? 'py-0 h-[48px]' : 'py-1 lg:py-0'}`}>
+            <div className="flex items-center transition-all duration-500 h-full"
+              style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
+              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
 
 
+            <div className="hidden lg:flex items-center gap-3 px-2 py-1">
+              {/* Branded Game Mode Switcher - Large Screens */}
+              <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
+                <motion.div
+                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
+                  initial={false}
+                  animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+                {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
+                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                    className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
+                    <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                    <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              <div className="flex items-center gap-2">
+                {/* Desktop: Only show session balance per user request */}
+                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
+              </div>
+              <button onClick={() => setView("dashboard")} className="w-9 h-9 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
+                style={{
+                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                }}>
+                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                  <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                )}
+              </button>
+              <UnifiedWalletButton theme={theme} />
+            </div>
 
-            <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
-              <RoundsAccessGate
-                theme={theme}
-                active={gameMode === 'rounds'}
-                verified={hasRoundsAccess}
-                onUnlock={handleRoundsUnlock}
+            <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
+              {/* Branded Game Mode Switcher - Mobile */}
+              <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
+                <motion.div
+                  className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
+                  initial={false}
+                  animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+                {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
+                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                    className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
+                    <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                  </button>
+                ))}
+              </div>
+              <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              </div>
+              <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden p-[1px]"
+                style={{
+                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                }}>
+                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                  <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                )}
+              </button>
+              <div className="scale-[0.9] origin-right ml-[-2px]">
+                <UnifiedWalletButton theme={theme} />
+              </div>
+            </div>
+          </header>
+
+          {/* Winner/Campaign Banner (Authoritative UX) */}
+          <AnimatePresence>
+            {winnerBanner && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#3CB371]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#3CB371]/5 to-yellow-500/10 border-white/5'}`}
               >
+                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
+                    <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#3CB371]'}`}>
+                      {winnerBanner.text || "New Winner Leaderboard is Live!"}
+                    </span>
+                  </div>
+                  {winnerBanner.cta && (
+                    <button className="px-3 py-0.5 md:py-1 bg-[#3CB371] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
+                      {winnerBanner.cta}
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Global V2 Architectural Separator (Runs across the screen) */}
+          <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[2px] mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
+            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
+            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />
+            {isSmallScreen && (
+              <div className="w-full mt-[2px]">
+                <GlobalTradeScroller theme={theme} />
+              </div>
+            )}
+          </div>
+
+
+
+
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
+            <RoundsAccessGate 
+              theme={theme} 
+              active={gameMode === 'rounds'} 
+              verified={hasRoundsAccess} 
+              onUnlock={handleRoundsUnlock}
+            >
                 <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden' : 'h-auto lg:h-[calc(100vh-105px)] landscape:h-[calc(100vh-105px)]'} min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
@@ -3017,19 +3006,22 @@ export default function UserApp() {
                       />
                     )}
 
-                    {/* Side History Pane is now handled via fixed positioning if needed, 
-                        but we keep it here for layout flow if appropriate */}
+                    {!isSmallScreen && (
+                      <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
+                        <GlobalTradeScroller theme={theme} />
+                      </div>
+                    )}
 
 
                     {/* Chart Container - flex-1 fills all remaining vertical space on mobile */}
                     <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
                       style={{
-                        background: isSmallScreen
-                          ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)')
+                        background: isSmallScreen 
+                          ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
                           : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen
-                          ? (theme === 'light'
-                            ? '0 15px 45px -10px rgba(60,179,113,0.08), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.1)'
+                          ? (theme === 'light' 
+                            ? '0 15px 45px -10px rgba(60,179,113,0.08), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.1)' 
                             : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)')
                           : (theme === 'light'
                             ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
@@ -3147,22 +3139,22 @@ export default function UserApp() {
                               animate={{ height: 'auto', opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
                               className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
-                                platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
-                                  platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
-                                    'bg-blue-500/10 border-blue-500/20'
+                                  platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
+                                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
+                                      'bg-blue-500/10 border-blue-500/20'
                                 }`}
                             >
                               <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-3">
                                   <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
-                                    platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
-                                      platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
-                                        'bg-blue-500'
+                                      platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
+                                          'bg-blue-500'
                                     }`} />
                                   <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
-                                    platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
-                                      platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
-                                        'text-blue-500'
+                                      platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
+                                          'text-blue-500'
                                     }`}>
                                     {platformSettings.systemBanner}
                                   </span>
@@ -3242,171 +3234,171 @@ export default function UserApp() {
                 </div>
 
 
-                {/* Forced Orientation Overlay for V2 Mobile */}
-                {showPortraitLock && <PortraitPrompt theme={theme} />}
+              {/* Forced Orientation Overlay for V2 Mobile */}
+              {showPortraitLock && <PortraitPrompt theme={theme} />}
 
 
-              </RoundsAccessGate>
+            </RoundsAccessGate>
 
 
 
-            </div>
           </div>
-        )
-        }
+        </div>
+      )
+      }
 
 
 
-        <ProfileModal
-          isOpen={isProfileOpen}
-          onClose={() => setIsProfileOpen(false)}
-          wallet={wallet}
-          userProfile={userProfile}
-          sessionBalance={sessionBalance}
-          evmBalance={evmBalance}
-          onRefill={handleRefill}
-          onWithdraw={handleWithdraw}
-          transactionHistory={transactionHistory}
-          onViewReceipt={(tx) => {
-            setSelectedTransaction(tx);
-            setIsTransactionReceiptOpen(true);
-          }}
-          notify={notify}
-          theme={theme}
-          onUpdate={() => performStealthChecks(address)}
-        />
-        <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        wallet={wallet}
+        userProfile={userProfile}
+        sessionBalance={sessionBalance}
+        evmBalance={evmBalance}
+        onRefill={handleRefill}
+        onWithdraw={handleWithdraw}
+        transactionHistory={transactionHistory}
+        onViewReceipt={(tx) => {
+          setSelectedTransaction(tx);
+          setIsTransactionReceiptOpen(true);
+        }}
+        notify={notify}
+        theme={theme}
+        onUpdate={() => performStealthChecks(address)}
+      />
+      <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
 
 
 
-        <AnimatePresence>
-          {toast && (
-            <Toast
-              message={toast.message}
-              type={toast.type}
-              onClose={closeToast}
-              onClick={toast.onClick}
-            />
-          )}
-        </AnimatePresence>
+      <AnimatePresence>
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={closeToast} 
+            onClick={toast.onClick}
+          />
+        )}
+      </AnimatePresence>
 
-        {/* Network Status Overlay */}
-        <AnimatePresence>
-          {!isOnline && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="fixed top-0 left-0 w-full z-[200000] bg-red-600/90 backdrop-blur-xl border-b border-white/10"
-            >
-              <div className="flex items-center justify-center gap-3 py-1.5 px-4 overflow-hidden">
-                <div className="flex items-center gap-2">
-                  <Activity size={10} className="text-white animate-pulse" />
-                  <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
-                    Disconnected • Internet Connection Lost
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {isOnline && navigator.onLine && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{
-                opacity: [0, 1, 1, 0],
-                height: ['auto', 'auto', 'auto', 0]
-              }}
-              transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
-              className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
-            >
-              <div className="flex items-center justify-center gap-3 py-1.5 px-4">
-                <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
-                  <CheckCircle size={10} />
-                  Network Reconnected • System Online
+      {/* Network Status Overlay */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="fixed top-0 left-0 w-full z-[200000] bg-red-600/90 backdrop-blur-xl border-b border-white/10"
+          >
+            <div className="flex items-center justify-center gap-3 py-1.5 px-4 overflow-hidden">
+              <div className="flex items-center gap-2">
+                <Activity size={10} className="text-white animate-pulse" />
+                <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
+                  Disconnected • Internet Connection Lost
                 </span>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
-          style={{ fontFamily: 'Arial, sans-serif' }}>
-          <div className="flex items-center gap-4 pointer-events-auto">
-            <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
-            <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-              © 2026 15market
-            </span>
-          </div>
-          <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-            Built by 15labs
-          </span>
-        </footer>
-        <TransactionReceiptModal
-          isOpen={isTransactionReceiptOpen}
-          onClose={() => setIsTransactionReceiptOpen(false)}
-          transaction={selectedTransaction}
-        />
-
-
-        {/* Onboarding Flow for new users */}
-        {showOnboarding && address && !isGlobalLoading && (
-          <OnboardingFlow
-            address={address}
-            theme={theme}
-            onComplete={(profile) => {
-              setShowOnboarding(false);
-              performStealthChecks(address); // Final refresh
-            }}
-          />
-        )}
-
-        {/* OVERLAY: Landing Page (Not Connected) */}
-        <AnimatePresence>
-          {!isConnected && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[1000]"
-            >
-              <LandingPage theme={theme} onToggle={toggleTheme} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Removed Global Initial Loader with Lane as requested */}
-
-        {/* Removed Signer Sync Loader with Lane as requested */}
-
-        {/* OVERLAY: Maintenance Mode */}
-        {platformSettings.maintenanceMode && (
-          <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
-            <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
-              <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
             </div>
-            <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-              Under Maintenance
-            </h1>
-            <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
-              We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
-            </p>
-          </div>
+          </motion.div>
         )}
+        
+        {isOnline && navigator.onLine && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ 
+              opacity: [0, 1, 1, 0],
+              height: ['auto', 'auto', 'auto', 0]
+            }}
+            transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
+            className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
+          >
+            <div className="flex items-center justify-center gap-3 py-1.5 px-4">
+              <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
+                <CheckCircle size={10} />
+                Network Reconnected • System Online
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* V2 Mobile History Drawer - Globally positioned as bottom overlay */}
-        {isSmallScreen && (
-          <MobileBottomHistoryPane
-            isOpen={showMobileHistory}
-            onToggle={() => setShowMobileHistory(!showMobileHistory)}
-            tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-            theme={theme}
-            setSelectedPnLTrade={setSelectedPnLTrade}
-            setIsPnLOpen={setIsPnLOpen}
-            userProfile={userProfile}
-          />
+      <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
+        style={{ fontFamily: 'Arial, sans-serif' }}>
+        <div className="flex items-center gap-4 pointer-events-auto">
+          <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
+          <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+            © 2026 15market
+          </span>
+        </div>
+        <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+          Built by 15labs
+        </span>
+      </footer>
+      <TransactionReceiptModal
+        isOpen={isTransactionReceiptOpen}
+        onClose={() => setIsTransactionReceiptOpen(false)}
+        transaction={selectedTransaction}
+      />
+
+
+      {/* Onboarding Flow for new users */}
+      {showOnboarding && address && !isGlobalLoading && (
+        <OnboardingFlow
+          address={address}
+          theme={theme}
+          onComplete={(profile) => {
+            setShowOnboarding(false);
+            performStealthChecks(address); // Final refresh
+          }}
+        />
+      )}
+
+      {/* OVERLAY: Landing Page (Not Connected) */}
+      <AnimatePresence>
+        {!isConnected && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1000]"
+          >
+            <LandingPage theme={theme} onToggle={toggleTheme} />
+          </motion.div>
         )}
-      </motion.div >
+      </AnimatePresence>
+
+      {/* Removed Global Initial Loader with Lane as requested */}
+
+      {/* Removed Signer Sync Loader with Lane as requested */}
+
+      {/* OVERLAY: Maintenance Mode */}
+      {platformSettings.maintenanceMode && (
+        <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
+          <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
+            <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
+          </div>
+          <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+            Under Maintenance
+          </h1>
+          <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+            We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
+          </p>
+        </div>
+      )}
+
+      {/* V2 Mobile History Drawer - Globally positioned as bottom overlay */}
+      {isSmallScreen && (
+        <MobileBottomHistoryPane
+          isOpen={showMobileHistory}
+          onToggle={() => setShowMobileHistory(!showMobileHistory)}
+          tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+          theme={theme}
+          setSelectedPnLTrade={setSelectedPnLTrade}
+          setIsPnLOpen={setIsPnLOpen}
+          userProfile={userProfile}
+        />
+      )}
+    </motion.div >
     </ErrorBoundary>
   );
 }

@@ -19,7 +19,7 @@ const SideHistoryPane = ({
                 width: isOpen ? 230 : 48,
             }}
             transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-            className="fixed left-0 top-0 bottom-0 z-[60] flex flex-row items-center pointer-events-none group"
+            className={`absolute left-[-8px] md:left-[-24px] lg:left-[-32px] top-0 bottom-0 z-[60] flex flex-row items-center pointer-events-none group`}
         >
             {/* The Actual Pane */}
             <div className={`
@@ -36,7 +36,7 @@ const SideHistoryPane = ({
                     className={`
                         w-12 h-full flex flex-col items-center justify-center cursor-pointer 
                         hover:bg-white/5 transition-colors relative shrink-0
-                        ${!isOpen && (isDark ? 'group-hover:bg-[#3CB371]/10' : 'group-hover:bg-[#3CB371]/5')}
+                        ${!isOpen && 'group-hover:bg-[#3CB371]/10'}
                     `}
                 >
                     <div className="flex flex-col items-center gap-8">
@@ -64,7 +64,7 @@ const SideHistoryPane = ({
                         >
                             <div className="flex items-center justify-between mb-6 px-2">
                                 <h2 className={`text-lg font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>Trade History</h2>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3CB371]/20 text-[#3CB371] border border-[#3CB371]/20 uppercase tracking-widest">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 uppercase tracking-widest">
                                     {tradeHistory.length} Trades
                                 </span>
                             </div>
@@ -85,7 +85,7 @@ const SideHistoryPane = ({
                                                 key={trade.id}
                                                 className={`
                                                     p-3 rounded-[22px] border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
-                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#3CB371]/15 border-[#3CB371]/30 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
+                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#3CB371]/4 border-[#3CB371]/35 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
                                                 `}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
