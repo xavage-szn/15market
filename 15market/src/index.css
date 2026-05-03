@@ -140,7 +140,7 @@ body {
 }
 
 .bg-radial-vignette {
-  background: radial-gradient(circle at center, transparent 0%, rgba(5, 5, 5, 0.8) 100%);
+  background: transparent;
 }
 
 /* Subtle inner shine for glass effects */
@@ -151,10 +151,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg,
-      rgba(255, 255, 255, 0.08) 0%,
-      transparent 50%,
-      transparent 100%);
+  background: transparent;
   pointer-events: none;
 }
 
@@ -237,16 +234,11 @@ body.light {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1.5px solid rgba(60, 179, 113, 0.3) !important;
-  box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.08),
-    0 1px 0 rgba(255, 255, 255, 0.4) inset !important;
+  box-shadow: none !important;
 }
 
 .light .glass-panel::before {
-  background: linear-gradient(135deg,
-      rgba(255, 255, 255, 0.12) 0%,
-      transparent 50%,
-      transparent 100%) !important;
+  background: transparent !important;
 }
 
 /* Light Mode Static Panels */
@@ -393,11 +385,8 @@ body.light {
 
 /* Chart Widget Glow - Light Mode */
 .light .chart-glow {
-  box-shadow:
-    0 0 30px rgba(42, 157, 92, 0.35),
-    0 0 15px rgba(42, 157, 92, 0.25),
-    inset 0 0 20px rgba(42, 157, 92, 0.08) !important;
-  border-color: rgba(42, 157, 92, 0.6) !important;
+  box-shadow: none !important;
+  border-color: rgba(42, 157, 92, 0.4) !important;
 }
 
 /* Light Mode — Force darker tones on opacity text helpers for readability */

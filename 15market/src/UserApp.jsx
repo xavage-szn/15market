@@ -3017,12 +3017,10 @@ export default function UserApp() {
                         background: isSmallScreen 
                           ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
                           : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
-                        boxShadow: isSmallScreen
-                          ? (theme === 'light' 
-                            ? '0 15px 45px -10px rgba(60,179,113,0.08), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.1)' 
-                            : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)')
-                          : (theme === 'light'
-                            ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                        boxShadow: theme === 'light'
+                          ? 'none'
+                          : (isSmallScreen
+                            ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
                             : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
                         borderColor: isSmallScreen
                           ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
@@ -3064,7 +3062,7 @@ export default function UserApp() {
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
                     <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex flex-1 min-h-0 pb-[34px] px-1' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
-                      <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'}`}`}
+                      <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
                         style={{
                           background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
                           borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)')
