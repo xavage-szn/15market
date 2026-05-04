@@ -1242,7 +1242,9 @@ export default function UserApp() {
              status: data.status || 'RESOLVING', 
              exitPrice: data.exitPrice,
              won: data.won,
-             isWinning: data.won
+             isWinning: data.won !== undefined ? data.won : t.isWinning, // Keep old if missing
+             livePrice: data.exitPrice || t.livePrice, // CRITICAL: Update visual price to match backend's exit snapshot
+             currentPrice: data.exitPrice || t.currentPrice
            };
          }
          return t;
@@ -1544,11 +1546,12 @@ export default function UserApp() {
         (!item.tx || String(t.tx) !== String(item.tx)) &&
         (!item.nonce || String(t.nonce) !== String(item.nonce))
       ))];
+      const exactEntryPrice = (assetId === 2) ? (entryPriceParams / 1000000) : (entryPriceParams / 100);
       const optimisticTrade = {
         id: tradeId,
         direction: dirVal === 1 ? 'UP' : 'DOWN',
         amount: Number(activeAmount).toFixed(3),
-        entryPrice: activePrice.toFixed(2),
+        entryPrice: exactEntryPrice.toString(),
         timestamp: confirmedNow,
         status: 'PENDING',
         tx: null,
