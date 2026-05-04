@@ -60,8 +60,11 @@ class ClassicEngine {
           if (trade.expiryEmitted) continue;
 
           let currentPrice, isWinning;
-          // Authority: Internal cache price is used for the tick
+          // Authority: Internal cache price is used for the tick.
+          // We also snapshot it here to maximise history resolution
+          // (especially critical in the final seconds before expiry).
           currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
+          if (currentPrice > 0) cache.snapshotPrice(trade.symbol);
           isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
           
           // Real-time UI updates
@@ -115,10 +118,17 @@ class ClassicEngine {
   lockResult(trade) {
     if (trade.expiryEmitted) return;
     
-    // Official Settlement Price: We lookup the price at the exact settleAt timestamp from our cache
-    // We add a tiny buffer (100ms) to ensure we get the most accurate 'at-the-close' price.
+    // Official Settlement Price:
+    // 1. Try to find the price in our dense history buffer closest to trade.settleAt.
+    // 2. If the gap is too large (> 3s), getHistoricalPrice falls back to the latest
+    //    snapshot — which is at most 250ms old and represents the last known price.
+    // 3. Final fallback: cache.prices (1s resolution REST poll).
     const targetTime = trade.settleAt;
-    const exitPrice = cache.getHistoricalPrice(trade.symbol, targetTime) || cache.prices[trade.symbol] || trade.entryPrice;
+    const exitPrice =
+      cache.getHistoricalPrice(trade.symbol, targetTime) ||
+      cache.getLatestPrice(trade.symbol) ||
+      cache.prices[trade.symbol] ||
+      trade.entryPrice;
     
     const direction = this.resolveDirection(trade.direction);
     const isUp = direction === 1;

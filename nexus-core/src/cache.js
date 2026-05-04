@@ -29,6 +29,36 @@ class Cache {
     this.priceHistory = {}; // key -> array of {price, time}
   }
 
+  /**
+   * Snapshot the current price into the high-resolution history buffer.
+   * Called every 250ms so we get ~4 captures per second around expiry.
+   */
+  snapshotPrice(key) {
+    const price = this.prices[key];
+    if (!price || price <= 0) return;
+    if (!this.priceHistory[key]) this.priceHistory[key] = [];
+    const now = Date.now();
+    this.priceHistory[key].push({ price, time: now });
+    // Keep 20 minutes of 250ms snapshots ≈ 4800 entries per asset
+    if (this.priceHistory[key].length > 4800) this.priceHistory[key].shift();
+  }
+
+  /**
+   * Return the most recently captured price from the history buffer.
+   * Used as a zero-latency fallback when no historical match is found.
+   */
+  getLatestPrice(key) {
+    const history = this.priceHistory[key];
+    if (!history || history.length === 0) return this.prices[key] || 0;
+    return history[history.length - 1].price;
+  }
+
+  /**
+   * Find the historical price closest to `targetTime`.
+   * Stale threshold tightened to 3 s — any miss beyond that falls back
+   * to the most recently snapshotted price (not just cache.prices which
+   * could be a stale 1-second-old REST poll result).
+   */
   getHistoricalPrice(key, targetTime) {
     const history = this.priceHistory[key];
     if (!history || history.length === 0) return this.prices[key] || 0;
@@ -44,9 +74,10 @@ class Cache {
       }
     }
 
-    if (minDiff > 10000) {
-      console.warn(`[Cache] Historical price for ${key} at ${targetTime} too old (diff=${minDiff}ms). Falling back to current.`);
-      return this.prices[key] || 0;
+    if (minDiff > 3000) {
+      // History gap is too wide — use the most recent snapshot as the best proxy
+      console.warn(`[Cache] Historical price for ${key} at ${targetTime} gap=${minDiff}ms — using latest snapshot.`);
+      return this.getLatestPrice(key);
     }
     return closest.price;
   }

@@ -154,6 +154,19 @@ async function pollPrices() {
 }
 setInterval(pollPrices, 1000);
 
+// HIGH-FREQUENCY PRICE SNAPSHOT (250ms)
+// Stamps the currently known price into the history buffer 4x per second.
+// This gives lockResult a dense set of timestamps to find the precise
+// exit price even when a price reversal happens in the final second of a trade.
+setInterval(() => {
+  const keys = Object.keys(cache.prices);
+  for (const key of keys) {
+    if (cache.prices[key] > 0) {
+      cache.snapshotPrice(key);
+    }
+  }
+}, 250);
+
 // --- Socket.IO ---
 io.on('connection', (socket) => {
   console.log(`[Socket] New connection: ${socket.id}`);
