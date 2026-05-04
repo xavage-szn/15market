@@ -879,147 +879,97 @@ export default function UserApp() {
 
     // 3. Absolute Sync: Use backend as source of truth for settled trades
     setTradeHistory(prev => {
-      const merged = [];
-      const backendGate = new Set();
+      const mergedMap = new Map();
 
+      // Helper to get a canonical ID for a trade
+      const getTradeKey = (t) => String(t.id || t.nonce || t.tx || t.txHash || "");
+
+      // First, populate with backend trades (Source of Truth)
       backendAll.forEach(bt => {
-        const btId = String(bt.id);
-        const btTx = String(bt.tx || bt.txHash || "");
-        backendGate.add(btId);
-        if (btTx) backendGate.add(btTx);
-
-        // Find local copy using both ID and TX to prevent duplication
-        const local = prev.find(p => 
-          String(p.id) === btId || 
-          (btTx && String(p.tx || p.txHash) === btTx) ||
-          String(p.nonce) === btId
-        );
-
-        if (local) {
-          const statusOrder = { "PAID": 4, "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
-          if (statusOrder[local.status] > statusOrder[bt.status]) {
-            merged.push({ ...bt, status: local.status, payout: local.payout, balanceApplied: local.balanceApplied,
-              // Preserve authoritative result fields from local (set by trade_settled/trade_expired)
-              won: local.won !== undefined ? local.won : bt.won,
-              isWinning: local.isWinning !== undefined ? local.isWinning : bt.isWinning,
-              exitPrice: local.exitPrice || bt.exitPrice,
-            });
-          } else {
-            merged.push({ ...bt, balanceApplied: local.balanceApplied,
-              // Always preserve result fields from local — backend cache trade won't have them
-              won: local.won !== undefined ? local.won : bt.won,
-              isWinning: local.isWinning !== undefined ? local.isWinning : bt.isWinning,
-              exitPrice: local.exitPrice || bt.exitPrice,
-              payout: local.payout || bt.payout,
-            });
-          }
-        } else {
-          merged.push(bt);
-        }
+        const key = getTradeKey(bt);
+        if (key) mergedMap.set(key, bt);
       });
 
+      // Then, merge with local trades, preserving authoritative fields
       prev.forEach(local => {
-        const lid = String(local.id);
-        const ltx = String(local.tx || local.txHash || "");
-        
-        if (!backendGate.has(lid) && (!ltx || !backendGate.has(ltx))) {
-          // Keep local trade if it has a final status or if it's very fresh
-          const isFinal = ["WON", "LOST"].includes(local.status);
-          const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
+        const key = getTradeKey(local);
+        if (!key) return;
 
+        const bt = mergedMap.get(key);
+        if (bt) {
+          // If in both, merge them with a status hierarchy
+          const statusOrder = { "PAID": 4, "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
+          const finalStatus = (statusOrder[local.status] || 0) > (statusOrder[bt.status] || 0) ? local.status : bt.status;
+          
+          mergedMap.set(key, {
+            ...bt,
+            ...local, // Prefer local fields for UI state (optimistic, etc)
+            status: finalStatus,
+            // But prefer backend for finalized result fields
+            won: bt.won !== undefined ? bt.won : local.won,
+            isWinning: bt.isWinning !== undefined ? bt.isWinning : local.isWinning,
+            exitPrice: bt.exitPrice || local.exitPrice,
+            payout: bt.payout || local.payout,
+          });
+        } else {
+          // If only local, keep it if it's recent or final
+          const isFinal = ["WON", "LOST", "PAID"].includes(local.status);
+          const isRecent = (Date.now() - (local.timestamp || Date.now())) < 600000;
           if (isFinal || isRecent) {
-            merged.push(local);
+            mergedMap.set(key, local);
           }
         }
       });
 
-      return merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 100);
+      return Array.from(mergedMap.values())
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        .slice(0, 100);
     });
 
     // 4. Update Active Trades (Monotonic Status)
     setActiveTrades(prev => {
       const now = Date.now();
       const GHOST_GRACE = 5000;
+      const mergedMap = new Map();
+      const getTradeKey = (t) => String(t.id || t.nonce || t.tx || t.txHash || "");
 
-      const backendActive = backendAll.filter(t => {
-        const tid = String(t.id || t.tx || t.nonce);
-        // 🗑️ Never re-insert trades that have been fully removed from active view
+      // 1. Process Backend Active Trades
+      backendAll.filter(t => {
+        const tid = getTradeKey(t);
         if (removedTradeIds.current.has(tid)) return false;
-        return ["PENDING", "RESOLVING"].includes(t.status);
-      }).map(t => {
-        // Find existing local copy to preserve its STABLE startTime
-        const local = prev.find(p => String(p.id) === String(t.id));
+        return ["PENDING", "RESOLVING", "WON", "LOST"].includes(t.status);
+      }).forEach(t => {
+        const key = getTradeKey(t);
+        const local = prev.find(p => getTradeKey(p) === key);
+        
         const startTime = (t.timestamp || t.startTime || local?.startTime || now);
         const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
-
-        // CRITICAL: Prefer current local expiryMs if it exists to prevent countdown jumping
         const expiryMs = local?.expiryMs || t.expiryMs || (normStart + (t.duration * 1000));
 
-        return { ...t, startTime: normStart, expiryMs, confirmed: true };
-      });
-
-      const updatedActive = [];
-
-      backendActive.forEach(bt => {
-        const btId = String(bt.id);
-        const btTx = String(bt.tx || bt.txHash || "");
-        
-        const local = prev.find(p => 
-          String(p.id) === btId || 
-          (btTx && String(p.tx || p.txHash) === btTx) ||
-          String(p.nonce) === btId
-        );
-
-        let finalStatus = bt.status;
-
-        // Monotonic Status Hierarchy: WON/LOST > RESOLVING > PENDING
-        if (local) {
-          const statusOrder = { "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1 };
-          if ((statusOrder[local.status] || 0) > (statusOrder[bt.status] || 0)) {
-            finalStatus = local.status;
-          }
-        }
-
-        if (now <= (bt.expiryMs + GHOST_GRACE)) {
-          updatedActive.push({
-            ...bt,
-            status: finalStatus,
-            optimistic: (local?.optimistic || false),
-            // Preserve all local fields that the backend doesn't track
-            balanceApplied: local?.balanceApplied,
-            sessionOwner: local?.sessionOwner || bt.sessionOwner,
-            isSessionTrade: local?.isSessionTrade || bt.isSessionTrade,
-            entryPrice: local?.entryPrice || bt.entryPrice, // prefer local high-precision price
-            settlementPrice: local?.settlementPrice || bt.settlementPrice,
-            // CRITICAL: Never let backend cache data (which lacks result fields) overwrite
-            // won/isWinning/exitPrice/payout that were already set by trade_settled/trade_expired.
-            won: local?.won !== undefined ? local.won : bt.won,
-            isWinning: local?.isWinning !== undefined ? local.isWinning : bt.isWinning,
-            exitPrice: local?.exitPrice || bt.exitPrice,
-            payout: local?.payout || bt.payout,
-          });
+        // Only keep in active view if not too old
+        if (now <= (expiryMs + GHOST_GRACE)) {
+           mergedMap.set(key, { 
+             ...local, 
+             ...t, 
+             startTime: normStart, 
+             expiryMs, 
+             confirmed: true 
+           });
         }
       });
 
+      // 2. Process Local Active Trades (might be optimistic)
       prev.forEach(local => {
-        const localId = String(local.id || local.tx || local.nonce);
-        if (!updatedActive.find(u => String(u.id || u.tx || u.nonce) === localId)) {
-          const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
+        const key = getTradeKey(local);
+        if (!key || mergedMap.has(key)) return;
 
-          // Ensure we drop trades from active view after grace period, even if they were WON/LOST
-          if (now <= (normExp + GHOST_GRACE)) {
-            updatedActive.push({ ...local, expiryMs: normExp });
-          }
+        const normExp = local.expiryMs || ((local.timestamp || local.startTime || now) + (local.duration * 1000));
+        if (now <= (normExp + GHOST_GRACE)) {
+          mergedMap.set(key, { ...local, expiryMs: normExp });
         }
       });
 
-      const seen = new Set();
-      return updatedActive.filter(t => {
-        const mid = String(t.id || t.tx || t.nonce);
-        if (seen.has(mid)) return false;
-        seen.add(mid);
-        return true;
-      });
+      return Array.from(mergedMap.values());
     });
   }, [triggerGlobalRefresh]);
 
@@ -1233,63 +1183,11 @@ export default function UserApp() {
       triggerGlobalRefresh(true);
     });
 
-    const unbindTick = socketService.on('trade_tick', (data) => {
-      const tid = String(data.betId);
-      setActiveTrades(prev => prev.map(t => {
-        if (String(t.id || t.nonce) === tid) {
-          return { 
-            ...t, 
-            currentPrice: data.currentPrice, 
-            isWinning: data.isWinning,
-            timeLeft: data.timeLeft, // Backend-driven countdown
-            livePrice: data.currentPrice // Consistent naming
-          };
-        }
-        return t;
-      }));
-    });
+    // Consolidated trade_tick and trade_expired listeners moved to authoritative block below.
 
-    const unbindExpired = socketService.on('trade_expired', (data) => {
-       const tid = String(data.betId);
-       setActiveTrades(prev => prev.map(t => {
-         if (String(t.id || t.nonce) === tid) {
-           return { 
-             ...t, 
-             status: data.status || 'RESOLVING', 
-             exitPrice: data.exitPrice,
-             won: data.won,
-             isWinning: data.won !== undefined ? data.won : t.isWinning, // Keep old if missing
-             livePrice: data.exitPrice || t.livePrice, // CRITICAL: Update visual price to match backend's exit snapshot
-             currentPrice: data.exitPrice || t.currentPrice
-           };
-         }
-         return t;
-       }));
-    });
 
-    // CRITICAL: Handle authoritative settlement result from backend.
-    // trade_settled sets status to 'WON' or 'LOST' (isFinal=true in LiveExecution),
-    // which bypasses all the liveWinning guesswork entirely and shows the correct result.
-    const unbindSettled = socketService.on('trade_settled', (data) => {
-      const tid = String(data.betId);
-      const updateFn = (t) => {
-        if (String(t.id || t.nonce) === tid) {
-          return {
-            ...t,
-            status: data.won ? 'WON' : 'LOST',
-            won: data.won,
-            isWinning: data.won,
-            payout: data.won ? parseFloat(data.payout || 0) : 0,
-            exitPrice: data.exitPrice || t.exitPrice,
-            livePrice: data.exitPrice || t.livePrice,
-            settlementPrice: data.settlementPrice || data.exitPrice || t.exitPrice,
-          };
-        }
-        return t;
-      };
-      setActiveTrades(prev => prev.map(updateFn));
-      setTradeHistory(prev => prev.map(updateFn));
-    });
+    // Redundant trade_settled listener removed. Consolidation into the main listener below.
+
 
     const unbindErr = socketService.on('terminal_error', (data) => {
       notify(data.message, "error");
@@ -1920,23 +1818,21 @@ export default function UserApp() {
       // Allow the reconciler to handle the removal after a grace period
       // setActiveTrades(prev => prev.filter(t => String(t.id) !== betId && String(t.nonce) !== betId));
 
-      // Upsert into tradeHistory with final WON/LOST status
+      // Upsert into tradeHistory and setActiveTrades with final WON/LOST status
+      const updateFn = (t) => {
+        if (btId && (String(t.id) === btId || String(t.nonce) === btId) || (btTx && (String(t.tx) === btTx || String(t.txHash) === btTx))) {
+          return { ...t, ...settledRecord };
+        }
+        return t;
+      };
+
+      setActiveTrades(prev => prev.map(updateFn));
       setTradeHistory(prev => {
-        const btId = String(data.betId || data.id || "");
-        const btTx = String(data.txHash || data.tx || "");
-        
-        // DEDUPLICATION: Search for any local trade that matches ID, Nonce, or TX
-        const existingIdx = prev.findIndex(t => 
+        const existing = prev.find(t => 
           (btId && (String(t.id) === btId || String(t.nonce) === btId)) || 
           (btTx && (String(t.tx) === btTx || String(t.txHash) === btTx))
         );
-        
-        if (existingIdx !== -1) {
-          const updated = [...prev];
-          updated[existingIdx] = { ...updated[existingIdx], ...settledRecord };
-          return updated;
-        }
-        
+        if (existing) return prev.map(updateFn);
         return [settledRecord, ...prev];
       });
 

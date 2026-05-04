@@ -79,11 +79,14 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                             const isExpired = trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.expiryMs && now >= trade.expiryMs);
                             const current = (isExpired && trade.livePrice) ? parseFloat(trade.livePrice) : parseFloat(price);
                             
-                            // Real-time calculation: Trust backend result (trade.won) if it exists.
-                            // Otherwise, ALWAYS calculate locally using the most recent price to ensure the UI feels alive.
+                            // Real-time calculation: Trust backend authoritative result (trade.won) if final.
+                            // If active, prefer backend's live winning flag (from trade_tick) to prevent mismatches.
+                            // Fallback to local calculation for zero-latency visual feedback if tick hasn't arrived.
                             const isWinning = trade.won !== undefined 
                                 ? trade.won 
-                                : (isLong ? current > entryPrice : current < entryPrice);
+                                : (trade.isWinning !== undefined 
+                                    ? trade.isWinning 
+                                    : (isLong ? current > entryPrice : current < entryPrice));
 
                             const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;
 

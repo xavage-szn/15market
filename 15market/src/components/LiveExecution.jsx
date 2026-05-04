@@ -194,12 +194,15 @@ function LiveExecutionComponent({
 
                                             // AUTHORITY CHAIN for live winning indicator:
                                             // 1. trade.won: set by trade_settled (final).
-                                            // 2. Local price comparison: ALWAYS use for active trades to ensure zero-latency.
+                                            // 2. trade.isWinning: set by backend trade_tick (authoritative live).
+                                            // 3. Local price comparison: fallback for active trades if tick is missing.
                                             const liveWinning = trade.won !== undefined
                                                 ? trade.won
-                                                : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                    ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                    : false);
+                                                : (trade.isWinning !== undefined 
+                                                    ? trade.isWinning 
+                                                    : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                                        ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                                                        : false));
 
                                             // Seamless UI Transition: Flip to result card instantly when timer expires
                                             const showInstantResult = timerExpired && !isFinal;
