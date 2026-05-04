@@ -61,23 +61,43 @@ const classicEngine = new ClassicEngine(io);
  * Collects live statistics from profiles and cache, then pushes to all clients.
  * Used by Admin Portal for real-time dashboard updates.
  */
-function emitAdminStats() {
-  const stats = profiles.getGlobalStats();
-  const payload = {
-    ...stats,
-    activeCount: cache.sessions.size,
-    activeStakesTotal: Array.from(cache.trades.values())
-      .filter(t => t.status === 'PENDING')
-      .reduce((sum, t) => sum + t.amount, 0),
-    treasuryBalance: cache.prices.eth > 0 ? (stats.totalVolume * 0.01).toFixed(2) : '0.00', // Example fee-based treasury mock
-    pendingDisputes: 0,
-    totalWallets: Object.keys(profiles.profiles).length,
-    timestamp: Date.now()
-  };
-  
-  io.emit('admin_stats_update', payload);
-  // Also emit as 'dashboard_stats' for backward compatibility with existing frontend
-  io.emit('dashboard_stats', payload);
+async function emitAdminStats() {
+  try {
+    const stats = profiles.getGlobalStats();
+    
+    // Fetch real treasury balance from the blockchain
+    let realTreasuryBal = "0.00";
+    if (config.TREASURY_ADDRESS && config.TREASURY_ADDRESS !== ethers.ZeroAddress) {
+      try {
+        realTreasuryBal = await rpc.getBalance(config.TREASURY_ADDRESS);
+      } catch (e) {
+        console.warn("[Admin-Stats] Failed to fetch real treasury balance:", e.message);
+      }
+    }
+
+    // Calculate Platform Revenue (Accumulated Fees)
+    // For now, we derive it from volume (e.g. 1% platform cut).
+    const platformRevenue = stats.platformRevenue || (parseFloat(stats.totalVolume) * 0.01).toFixed(6);
+
+    const payload = {
+      totalWallets: stats.activeTraders || 0,
+      totalVolume: stats.totalVolume || "0.00",
+      activeCount: cache.sessions.size || 0,
+      activeStakesTotal: Array.from(cache.trades.values())
+        .filter(t => t.status === 'PENDING')
+        .reduce((sum, t) => sum + t.amount, 0).toFixed(2),
+      treasuryBalance: realTreasuryBal,
+      pendingDisputes: 0,
+      platformRevenue: platformRevenue,
+      timestamp: Date.now()
+    };
+
+    io.emit('admin_stats_update', payload);
+    // Also emit as 'dashboard_stats' for backward compatibility with existing frontend
+    io.emit('dashboard_stats', payload);
+  } catch (err) {
+    console.error("[Admin-Stats] Broadcast Error:", err);
+  }
 }
 
 // Attach emitter to engine for trade-triggered updates
@@ -209,6 +229,26 @@ io.on('connection', (socket) => {
   socket.on('join_user', (address) => {
     const room = String(address || '').toLowerCase();
     if (room) socket.join(room);
+  });
+
+  // Admin Event: Global Broadcast
+  socket.on('send_broadcast', (msg) => {
+    const broadcast = {
+      id: Date.now(),
+      message: msg.text || msg.message,
+      type: msg.type || 'ANNOUNCEMENT',
+      expiry: msg.expiry || (Date.now() + (msg.duration * 1000)),
+      timestamp: Date.now(),
+      sender: msg.sender || 'SYSTEM'
+    };
+
+    io.emit('broadcast', broadcast);
+    console.log(`[Socket-Admin] Broadcast Sent: ${broadcast.message}`);
+
+    // Maintenance logic
+    if (broadcast.type === 'MAINTENANCE') {
+      io.emit('settings_update', { maintenanceMode: true, systemBanner: broadcast.message });
+    }
   });
 
   // Push latest stats on connection

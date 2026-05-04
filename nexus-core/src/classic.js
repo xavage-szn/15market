@@ -387,12 +387,15 @@ class ClassicEngine {
       });
     }
 
+    const fee = (parseFloat(trade.amount) * 0.01).toFixed(6); // 1% Platform Fee
+
     const settledEvent = {
       type: 'TRADE_SETTLED',
       betId: trade.id,
       won,
       payout: String(payout),
       amount: trade.amount, // Stake amount
+      fee: fee,
       direction: trade.direction,
       duration: trade.duration,
       entryPrice: trade.entryPrice,

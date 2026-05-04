@@ -138,17 +138,20 @@ class ProfileService {
         let totalTrades = 0;
         let allTrades = [];
 
+        let totalRevenue = 0;
         for (const addr in this.profiles) {
             const history = this.profiles[addr].trades || [];
             totalTrades += history.length;
             
             for (const trade of history) {
                 const amt = parseFloat(trade.amount || 0);
+                const fee = parseFloat(trade.fee || 0);
                 if (String(trade.direction).toUpperCase().includes("UP") || trade.direction === 1) bulls++;
                 else bears++;
                 
                 totalStake += amt;
                 vol += amt;
+                totalRevenue += fee;
                 if (trade.won || trade.status === 'WON') totalWins++;
                 
                 allTrades.push(trade);
@@ -164,6 +167,7 @@ class ProfileService {
             sentiment: total > 0 ? (bulls > bears ? 'BULLISH' : bulls < bears ? 'BEARISH' : 'NEUTRAL') : 'NEUTRAL',
             avgStake: total > 0 ? (totalStake / total).toFixed(2) : '0.00',
             totalVolume: vol.toFixed(2),
+            platformRevenue: totalRevenue.toFixed(6),
             activeTraders: Object.keys(this.profiles).length,
             globalWinRate: totalTrades > 0 ? ((totalWins / totalTrades) * 100).toFixed(1) : '0.0',
             totalTrades,

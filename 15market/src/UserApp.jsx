@@ -1852,9 +1852,25 @@ export default function UserApp() {
       }, 1500);
     });
 
+    const unbindBroadcast = socketService.on('broadcast', (data) => {
+      console.log(`[Broadcast] New announcement: ${data.message}`);
+      // Show notification instantly
+      notify(`📢 ${data.message}`, 'info');
+      
+      // Update system banner if it's maintenance or emergency
+      if (data.type === 'MAINTENANCE' || data.type === 'EMERGENCY') {
+        setPlatformSettings(prev => ({
+          ...prev,
+          systemBanner: data.message,
+          bannerLevel: data.type === 'EMERGENCY' ? 'error' : 'info'
+        }));
+      }
+    });
+
     return () => {
       unbindSettings();
       unbindSettled();
+      unbindBroadcast();
     };
   }, [notify, updateEvmSessionBal, refetchEvmBalance, address, evmSessionWallet]);
 
