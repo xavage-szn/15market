@@ -519,7 +519,13 @@ app.post('/session/deposit', async (req, res) => {
 
 app.get('/history/:address', (req, res) => {
   const addr = classicEngine.normalizeAddr(req.params.address);
-  res.json(cache.getHistory(addr));
+  
+  // Extract active trades for the user from in-memory cache
+  const activeUserTrades = Array.from(cache.trades.values())
+    .filter(t => String(t.userAddr).toLowerCase() === addr && ['PENDING', 'RESOLVING'].includes(t.status));
+    
+  const historyTrades = cache.getHistory(addr) || [];
+  res.json([...activeUserTrades, ...historyTrades]);
 });
 
 // ─── ROUNDS ACCESS (WAITLIST) ─────────────────────────────────────────────────
@@ -556,11 +562,18 @@ app.get('/profiles/:address', (req, res) => {
   const profile = profiles.get(addr);
   if (!profile) return res.status(404).json({ error: 'Profile not found' });
   
+  // Extract active trades for the user from in-memory cache
+  const activeUserTrades = Array.from(cache.trades.values())
+    .filter(t => String(t.userAddr).toLowerCase() === addr && ['PENDING', 'RESOLVING'].includes(t.status));
+
+  const historyTrades = profiles.getHistory(addr) || [];
+  const allTrades = [...activeUserTrades, ...historyTrades];
+  
   // Include trades and computed stats in the profile response for unified sync
   res.json({
     ...profile,
     stats: profiles.getProfileStats(addr),
-    trades: profiles.getHistory(addr)
+    trades: allTrades
   });
 });
 
