@@ -898,10 +898,20 @@ export default function UserApp() {
         if (local) {
           const statusOrder = { "PAID": 4, "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           if (statusOrder[local.status] > statusOrder[bt.status]) {
-            merged.push({ ...bt, status: local.status, payout: local.payout, balanceApplied: local.balanceApplied });
+            merged.push({ ...bt, status: local.status, payout: local.payout, balanceApplied: local.balanceApplied,
+              // Preserve authoritative result fields from local (set by trade_settled/trade_expired)
+              won: local.won !== undefined ? local.won : bt.won,
+              isWinning: local.isWinning !== undefined ? local.isWinning : bt.isWinning,
+              exitPrice: local.exitPrice || bt.exitPrice,
+            });
           } else {
-            // If backend caught up, still preserve the local balanceApplied flag to prevent double-crediting
-            merged.push({ ...bt, balanceApplied: local.balanceApplied });
+            merged.push({ ...bt, balanceApplied: local.balanceApplied,
+              // Always preserve result fields from local — backend cache trade won't have them
+              won: local.won !== undefined ? local.won : bt.won,
+              isWinning: local.isWinning !== undefined ? local.isWinning : bt.isWinning,
+              exitPrice: local.exitPrice || bt.exitPrice,
+              payout: local.payout || bt.payout,
+            });
           }
         } else {
           merged.push(bt);
@@ -981,6 +991,12 @@ export default function UserApp() {
             isSessionTrade: local?.isSessionTrade || bt.isSessionTrade,
             entryPrice: local?.entryPrice || bt.entryPrice, // prefer local high-precision price
             settlementPrice: local?.settlementPrice || bt.settlementPrice,
+            // CRITICAL: Never let backend cache data (which lacks result fields) overwrite
+            // won/isWinning/exitPrice/payout that were already set by trade_settled/trade_expired.
+            won: local?.won !== undefined ? local.won : bt.won,
+            isWinning: local?.isWinning !== undefined ? local.isWinning : bt.isWinning,
+            exitPrice: local?.exitPrice || bt.exitPrice,
+            payout: local?.payout || bt.payout,
           });
         }
       });
@@ -1251,6 +1267,30 @@ export default function UserApp() {
        }));
     });
 
+    // CRITICAL: Handle authoritative settlement result from backend.
+    // trade_settled sets status to 'WON' or 'LOST' (isFinal=true in LiveExecution),
+    // which bypasses all the liveWinning guesswork entirely and shows the correct result.
+    const unbindSettled = socketService.on('trade_settled', (data) => {
+      const tid = String(data.betId);
+      const updateFn = (t) => {
+        if (String(t.id || t.nonce) === tid) {
+          return {
+            ...t,
+            status: data.won ? 'WON' : 'LOST',
+            won: data.won,
+            isWinning: data.won,
+            payout: data.won ? parseFloat(data.payout || 0) : 0,
+            exitPrice: data.exitPrice || t.exitPrice,
+            livePrice: data.exitPrice || t.livePrice,
+            settlementPrice: data.settlementPrice || data.exitPrice || t.exitPrice,
+          };
+        }
+        return t;
+      };
+      setActiveTrades(prev => prev.map(updateFn));
+      setTradeHistory(prev => prev.map(updateFn));
+    });
+
     const unbindErr = socketService.on('terminal_error', (data) => {
       notify(data.message, "error");
       console.error("[Terminal Error]", data);
@@ -1261,6 +1301,7 @@ export default function UserApp() {
       unbindPayout();
       unbindTick();
       unbindExpired();
+      unbindSettled();
       unbindErr();
     };
   }, [address, notify, triggerGlobalRefresh]);
