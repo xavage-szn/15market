@@ -182,20 +182,32 @@ function LiveExecutionComponent({
                                             const entryPriceVal = parseFloat(trade.entryPrice);
                                             const amountVal = parseFloat(trade.amount);
                                             
-                                            // AUTHORITY: Use backend livePrice if available, otherwise frontend price
-                                            const currentPriceVal = trade.livePrice !== undefined ? parseFloat(trade.livePrice) : parseFloat(price);
+                                            // PRICE AUTHORITY:
+                                            // After expiry, freeze to trade.exitPrice (the locked backend snapshot).
+                                            // During live trading, use the backend-provided livePrice or the live feed.
+                                            const currentPriceVal = timerExpired && trade.exitPrice !== undefined
+                                                ? parseFloat(trade.exitPrice)
+                                                : (trade.livePrice !== undefined ? parseFloat(trade.livePrice) : parseFloat(price));
 
                                             const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
-                                            // Real-time calculation: Trust backend isWinning if provided, fallback to live price comparison
-                                            const liveWinning = trade.isWinning !== undefined 
-                                                ? trade.isWinning 
-                                                : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                    ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                    : false);
+                                            // AUTHORITY CHAIN:
+                                            // 1. After expiry: use trade.won (sent by backend in trade_expired — locked result).
+                                            // 2. During live: use trade.isWinning from trade_tick (backend-driven real-time).
+                                            // 3. Final fallback: local price comparison.
+                                            const liveWinning = timerExpired
+                                                ? (trade.won !== undefined ? trade.won : (
+                                                    !isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                                        ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                                                        : false))
+                                                : (trade.isWinning !== undefined
+                                                    ? trade.isWinning
+                                                    : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                                        ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                                                        : false));
 
                                             // Seamless UI Transition: Flip to result card instantly when timer expires
                                             const showInstantResult = timerExpired && !isFinal;
