@@ -138,6 +138,12 @@ class ClassicEngine {
       direction: direction
     });
     console.log(`[Trade-Monitor] Authority Result Locked #${trade.id} | Won: ${won} | Price: ${exitPrice}`);
+    
+    // Instantly settle lost trades to bypass the settlement queue delay, 
+    // since they don't require any on-chain payout processing.
+    if (!won) {
+      this.settleTrade(trade);
+    }
   }
 
   async placeTrade(tradeParams, identityPayload) {
