@@ -182,19 +182,21 @@ function LiveExecutionComponent({
                                             const entryPriceVal = parseFloat(trade.entryPrice);
                                             const amountVal = parseFloat(trade.amount);
                                             
-                                            // PRICE AUTHORITY: Use the backend-provided livePrice, or the live feed.
-                                            const currentPriceVal = trade.livePrice !== undefined ? parseFloat(trade.livePrice) : parseFloat(price);
+                                            // Real-time status: Once expired or settled, we freeze the price at the backend's provided livePrice.
+                                            // While active, we ALWAYS use the global live price for zero-latency feedback.
+                                            const isExpired = trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.timeLeft !== undefined && trade.timeLeft <= 0);
+                                            const currentPriceVal = (isExpired && trade.livePrice !== undefined) ? parseFloat(trade.livePrice) : parseFloat(price);
 
-                                            const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
+                                            const multiplier = trade.duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
 
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
                                             // AUTHORITY CHAIN for live winning indicator:
-                                            // 1. trade.isWinning: set by trade_tick (live) and trade_settled (final).
-                                            // 2. Local price comparison: fallback if socket hasn't updated yet.
-                                            const liveWinning = trade.isWinning !== undefined
-                                                ? trade.isWinning
+                                            // 1. trade.won: set by trade_settled (final).
+                                            // 2. Local price comparison: ALWAYS use for active trades to ensure zero-latency.
+                                            const liveWinning = trade.won !== undefined
+                                                ? trade.won
                                                 : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
                                                     ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
                                                     : false);

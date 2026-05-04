@@ -73,19 +73,17 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                         activeTrades.map((trade) => {
                             const isLong = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
                             const entryPrice = parseFloat(trade.entryPrice);
-                            // Use backend livePrice if available, fallback to global price
-                            const current = trade.livePrice ? parseFloat(trade.livePrice) : parseFloat(price);
+                            // Real-time status: Once expired or settled, we freeze the price at the backend's provided livePrice.
+                            // While active, we ALWAYS use the global live price for zero-latency feedback.
+                            const now = Date.now();
+                            const isExpired = trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.expiryMs && now >= trade.expiryMs);
+                            const current = (isExpired && trade.livePrice) ? parseFloat(trade.livePrice) : parseFloat(price);
                             
-                            // GLITCH FIX: Once expired, we stop calculating based on live price.
-                            // We prefer trade.won if backend already settled, otherwise we use the state at expiry.
-                            const isExpired = trade.timeLeft !== undefined && trade.timeLeft <= 0;
-                            
-                            // Real-time calculation: Trust backend if provided, fallback to live price comparison
+                            // Real-time calculation: Trust backend result (trade.won) if it exists.
+                            // Otherwise, ALWAYS calculate locally using the most recent price to ensure the UI feels alive.
                             const isWinning = trade.won !== undefined 
                                 ? trade.won 
-                                : (trade.isWinning !== undefined 
-                                    ? trade.isWinning 
-                                    : (isLong ? current > entryPrice : current < entryPrice));
+                                : (isLong ? current > entryPrice : current < entryPrice);
 
                             const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;
 
