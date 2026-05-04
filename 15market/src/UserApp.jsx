@@ -626,7 +626,6 @@ export default function UserApp() {
 
   useEffect(() => {
     fetchGlobalSettings();
-    const interval = setInterval(fetchGlobalSettings, 30000); // 30s sync for maintenance (optimized)
 
     const syncLocal = () => {
       try {
@@ -637,7 +636,7 @@ export default function UserApp() {
     window.addEventListener('storage', syncLocal);
 
     return () => {
-      clearInterval(interval);
+      unbindSettings();
       window.removeEventListener('storage', syncLocal);
     };
   }, [fetchGlobalSettings]);
@@ -1771,9 +1770,12 @@ export default function UserApp() {
   useEffect(() => {
     socketService.connect();
 
-    const unbindSettings = socketService.on('settings_updated', (newSettings) => {
-      setPlatformSettings(prev => ({ ...prev, ...newSettings }));
-      localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
+    const unbindSettings = socketService.on('settings_update', (newSettings) => {
+      setPlatformSettings(prev => {
+        const updated = { ...prev, ...newSettings };
+        localStorage.setItem('15market_citadel_settings', JSON.stringify(updated));
+        return updated;
+      });
     });
 
     // ── BACKEND-AUTHORITATIVE SETTLEMENT ──

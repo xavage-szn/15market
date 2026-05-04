@@ -54,7 +54,38 @@ function deriveSessionWallet(userAddr) {
 
 // --- Initialize Engines ---
 const classicEngine = new ClassicEngine(io);
+
+/**
+ * AGGREGATED ADMIN METRICS BROADCAST
+ * ---------------------------------
+ * Collects live statistics from profiles and cache, then pushes to all clients.
+ * Used by Admin Portal for real-time dashboard updates.
+ */
+function emitAdminStats() {
+  const stats = profiles.getGlobalStats();
+  const payload = {
+    ...stats,
+    activeCount: cache.sessions.size,
+    activeStakesTotal: Array.from(cache.trades.values())
+      .filter(t => t.status === 'PENDING')
+      .reduce((sum, t) => sum + t.amount, 0),
+    treasuryBalance: cache.prices.eth > 0 ? (stats.totalVolume * 0.01).toFixed(2) : '0.00', // Example fee-based treasury mock
+    pendingDisputes: 0,
+    totalWallets: Object.keys(profiles.profiles).length,
+    timestamp: Date.now()
+  };
+  
+  io.emit('admin_stats_update', payload);
+  // Also emit as 'dashboard_stats' for backward compatibility with existing frontend
+  io.emit('dashboard_stats', payload);
+}
+
+// Attach emitter to engine for trade-triggered updates
+classicEngine.onUpdate = emitAdminStats;
+
 classicEngine.start();
+emitAdminStats(); // Initial broadcast
+setInterval(emitAdminStats, 10000); // Periodic 10s sync
 
 // --- INTERNAL PRICE FEED ---
 const PYTH_IDS = {
@@ -178,6 +209,17 @@ io.on('connection', (socket) => {
   socket.on('join_user', (address) => {
     const room = String(address || '').toLowerCase();
     if (room) socket.join(room);
+  });
+
+  // Push latest stats on connection
+  const stats = profiles.getGlobalStats();
+  socket.emit('dashboard_stats', {
+    ...stats,
+    activeCount: cache.sessions.size,
+    activeStakesTotal: Array.from(cache.trades.values())
+      .filter(t => t.status === 'PENDING')
+      .reduce((sum, t) => sum + t.amount, 0),
+    totalWallets: Object.keys(profiles.profiles).length
   });
 });
 
@@ -523,6 +565,7 @@ app.post('/session/deposit', async (req, res) => {
       txHash
     });
 
+    emitAdminStats(); // Notify admin of new deposit
     console.log(`[Deposit] Optimistic credit: ${amount} USDC to ${userAddr} | TX: ${txHash}`);
     res.json({ success: true, balance: session?.balance });
   } catch (err) {
@@ -599,6 +642,7 @@ app.post('/profiles', (req, res) => {
   if (!address) return res.status(400).json({ error: 'Address required' });
   const sessionWallet = deriveSessionWallet(address.toLowerCase());
   const profile = profiles.upsert(address, { username, xHandle, avatar, walletAddress: sessionWallet.address });
+  emitAdminStats(); // Notify admin of new user/profile update
   res.json({ success: true, profile, walletAddress: sessionWallet.address });
 });
 
@@ -735,7 +779,21 @@ app.post('/admin/broadcast', (req, res) => {
   
   io.emit('broadcast', broadcast);
   console.log(`[Admin] Broadcast Sent: ${message}`);
+  
+  // If this is a maintenance broadcast, also trigger the maintenance flag
+  if (type === 'MAINTENANCE') {
+    io.emit('settings_update', { maintenanceMode: true, systemBanner: message });
+  }
+  
   res.json({ success: true, broadcast });
+});
+
+app.post('/admin/settings/update', (req, res) => {
+  const settings = req.body;
+  // In a real app, you'd save this to a database/config file
+  // For now, we broadcast it instantly to all clients
+  io.emit('settings_update', settings);
+  res.json({ success: true, settings });
 });
 
 // ─── MISC ─────────────────────────────────────────────────────────────────────

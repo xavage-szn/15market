@@ -292,44 +292,54 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             fetchProfiles();
 
 
-            // Listen for dashboard aggregated stats
-            const unbindStats = socketService.on('dashboard_stats', (data) => {
+            // Listen for dashboard aggregated stats (Universal)
+            const unbindStats = socketService.on('admin_stats_update', (data) => {
                 setMetrics(prev => ({
                     ...prev,
                     totalWallets: data.totalWallets,
                     totalVolume: `${data.totalVolume} USDC`,
                     activeUsers: data.activeCount,
-                    activeStakesTotal: `${data.activeStakesTotal} ARC`,
-                        treasuryBalance: `${data.treasuryBalance} ARC`,
-                        pendingDisputes: data.pendingDisputes || 0,
-                        networkHealth: 'Operational (Live)'
-                    }));
-                    setArcTreasuryBalance(parseFloat(data.treasuryBalance) || 0);
-
+                    activeStakesTotal: `${data.activeStakesTotal} USDC`,
+                    treasuryBalance: `${data.treasuryBalance} USDC`,
+                    pendingDisputes: data.pendingDisputes || 0,
+                    networkHealth: 'Operational (Live)'
+                }));
+                setArcTreasuryBalance(parseFloat(data.treasuryBalance) || 0);
 
                 setLastSync(new Date().toLocaleTimeString());
                 setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
             });
 
+            // Backward compatibility listener
+            const unbindDashboard = socketService.on('dashboard_stats', (data) => {
+                setMetrics(prev => ({
+                    ...prev,
+                    totalWallets: data.totalWallets,
+                    totalVolume: `${data.totalVolume} USDC`,
+                    activeUsers: data.activeCount,
+                    activeStakesTotal: `${data.activeStakesTotal} USDC`,
+                    treasuryBalance: `${data.treasuryBalance} USDC`,
+                }));
+            });
+
             // Listen for specific trade events
             const unbindTrade = socketService.on('trade_detected', (trade) => {
-                 setTradeHistory(prev => [trade, ...prev].slice(0, 50));
+                 setTradeHistory(prev => [trade, ...prev].slice(0, 100));
             });
 
-            const unbindSettled = socketService.on('trade_settled', (res) => {
-                 setTradeHistory(prev => prev.map(t => t.id === res.id ? { ...t, status: res.status, payout: res.payout } : t));
+            const unbindSettled = socketService.on('global_trade_settled', (res) => {
+                 setTradeHistory(prev => prev.map(t => String(t.id) === String(res.betId) ? { ...t, status: res.won ? 'WON' : 'LOST', payout: res.payout } : t));
             });
 
-            // Listen for settings confirmed (Instant UI feedback)
-            const unbindSettings = socketService.on('settings_confirmed', (res) => {
-                 if (res.success) {
-                     notify('success', 'SYNCED', 'Platform configuration updated instantly.');
-                     if (res.settings) setPlatformSettings(res.settings);
-                 }
+            // Listen for settings updates (Instant UI feedback from backend)
+            const unbindSettings = socketService.on('settings_update', (data) => {
+                 setPlatformSettings(prev => ({ ...prev, ...data }));
+                 notify('info', 'SYNCED', 'Platform configuration updated in real-time.');
             });
 
             return () => {
                 unbindStats();
+                unbindDashboard();
                 unbindTrade();
                 unbindSettled();
                 unbindSettings();
@@ -417,8 +427,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             fetchCampaigns();
-            const interval = setInterval(fetchCampaigns, 5000);
-            return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchCampaigns]);
 
@@ -454,11 +462,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         if (isLoggedIn && activeTab === 'beta') {
             fetchBetaApplications();
             fetchAuthorizedWallets();
-            const interval = setInterval(() => {
-                fetchBetaApplications();
-                fetchAuthorizedWallets();
-            }, 10000);
-            return () => clearInterval(interval);
         }
     }, [isLoggedIn, activeTab, fetchBetaApplications, fetchAuthorizedWallets]);
 
@@ -887,7 +890,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
             const body = { ...currentData, ...((dataToSave && !dataToSave.nativeEvent) ? dataToSave : platformSettings) };
             
-            const res = await fetch(`${KEEPER_URL_ARC}/admin/settings`, {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/settings/update`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -897,7 +900,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             });
             if (res.ok) {
                 if (dataToSave) setPlatformSettings(dataToSave);
-                notify('success', 'SETTINGS SAVED', 'Platform configuration has been synchronized to the cloud.');
+                notify('success', 'SETTINGS SAVED', 'Platform configuration synchronized and broadcasted.');
             } else {
                 notify('error', 'SAVE FAILED', 'Could not persist settings to backend.');
             }
@@ -1169,8 +1172,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             triggerAnalysis();
-            const interval = setInterval(triggerAnalysis, 1000); // 1s Sync
-            return () => clearInterval(interval);
         }
     }, [isLoggedIn, triggerAnalysis]);
 
@@ -1197,8 +1198,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     useEffect(() => {
         if (isLoggedIn) {
             fetchTradeHistory();
-            const interval = setInterval(fetchTradeHistory, 3000); // 3s History Refresh
-            return () => clearInterval(interval);
         }
     }, [isLoggedIn, fetchTradeHistory]);
 
@@ -1330,8 +1329,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         };
 
         fetchLogs();
-        const interval = setInterval(fetchLogs, 5000); // 5s Log Sync
-        return () => clearInterval(interval);
     }, [isLoggedIn, activeTab]);
 
     const nodeStats = [

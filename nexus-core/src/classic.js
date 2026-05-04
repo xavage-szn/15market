@@ -286,6 +286,9 @@ class ClassicEngine {
     cache.trades.set(trade.id, trade);
     cache.queueTradeForSettlement(trade);
 
+    // Real-time notification to the engine's observer (Admin Portal)
+    if (this.onUpdate) this.onUpdate();
+
     this.io.to(userAddr).emit('trade_placed', {
       type: 'TRADE_PLACED',
       betId: trade.id,
@@ -404,12 +407,18 @@ class ClassicEngine {
     cache.pushHistory(userAddr, settledEvent);
     this.io.to(userAddr).emit('trade_settled', settledEvent);
     
+    // Real-time notification to the engine's observer (Admin Portal)
+    if (this.onUpdate) this.onUpdate();
+
     // Global emit for Admin Portal (filtered to hide specific user payouts)
     this.io.emit('global_trade_settled', { 
       betId: trade.id, 
       symbol: trade.symbol.toUpperCase(), 
       won, 
-      amount: trade.amount 
+      amount: trade.amount,
+      payout: String(payout),
+      exitPrice: exitPrice,
+      status: trade.status
     });
 
     if (won && payout > 0) {
