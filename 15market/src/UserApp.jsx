@@ -1822,7 +1822,7 @@ export default function UserApp() {
 
       // Upsert into tradeHistory and setActiveTrades with final WON/LOST status
       const updateFn = (t) => {
-        if (btId && (String(t.id) === btId || String(t.nonce) === btId) || (btTx && (String(t.tx) === btTx || String(t.txHash) === btTx))) {
+        if (String(t.id) === betId || String(t.nonce) === betId || (data.tx && (String(t.tx) === String(data.tx) || String(t.txHash) === String(data.tx)))) {
           return { ...t, ...settledRecord };
         }
         return t;
@@ -1831,8 +1831,8 @@ export default function UserApp() {
       setActiveTrades(prev => prev.map(updateFn));
       setTradeHistory(prev => {
         const existing = prev.find(t => 
-          (btId && (String(t.id) === btId || String(t.nonce) === btId)) || 
-          (btTx && (String(t.tx) === btTx || String(t.txHash) === btTx))
+          String(t.id) === betId || String(t.nonce) === betId || 
+          (data.tx && (String(t.tx) === String(data.tx) || String(t.txHash) === String(data.tx)))
         );
         if (existing) return prev.map(updateFn);
         return [settledRecord, ...prev];
@@ -1882,7 +1882,7 @@ export default function UserApp() {
 
     const unbindTick = socketService.on('trade_tick', (data) => {
       setActiveTrades(prev => prev.map(t =>
-        String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId)
+        (String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId)) && t.won === undefined
           ? { ...t, timeLeft: data.timeLeft, livePrice: data.currentPrice, isWinning: data.isWinning }
           : t
       ));
@@ -1895,7 +1895,7 @@ export default function UserApp() {
       
       setActiveTrades(prev => prev.map(t => 
         String(t.id) === bid || String(t.nonce) === bid 
-          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0 } 
+          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0, status: 'RESOLVING' } 
           : t
       ));
     });

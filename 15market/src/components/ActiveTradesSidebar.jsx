@@ -73,11 +73,18 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                         activeTrades.map((trade) => {
                             const isLong = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
                             const entryPrice = parseFloat(trade.entryPrice);
+                            
                             // Real-time status: Once expired or settled, we freeze the price at the backend's provided livePrice.
                             // While active, we ALWAYS use the global live price for zero-latency feedback.
                             const now = Date.now();
-                            const isExpired = trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.expiryMs && now >= trade.expiryMs);
-                            const current = (isExpired && trade.livePrice) ? parseFloat(trade.livePrice) : parseFloat(price);
+                            const isLocked = trade.won !== undefined;
+                            const isExpired = isLocked || trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.expiryMs && now >= trade.expiryMs);
+                            
+                            // Authority: If locked by backend, use backend's exit price (trade.livePrice).
+                            // If expired but no backend price yet, we freeze at the last known price to prevent further movement.
+                            const current = (isLocked && trade.livePrice) 
+                                ? parseFloat(trade.livePrice) 
+                                : (isExpired ? parseFloat(trade.livePrice || price) : parseFloat(price));
                             
                             // Real-time calculation: Trust backend authoritative result (trade.won) if final.
                             // If active, prefer backend's live winning flag (from trade_tick) to prevent mismatches.

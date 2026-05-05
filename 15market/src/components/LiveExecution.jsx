@@ -184,8 +184,14 @@ function LiveExecutionComponent({
                                             
                                             // Real-time status: Once expired or settled, we freeze the price at the backend's provided livePrice.
                                             // While active, we ALWAYS use the global live price for zero-latency feedback.
-                                            const isExpired = trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.timeLeft !== undefined && trade.timeLeft <= 0);
-                                            const currentPriceVal = (isExpired && trade.livePrice !== undefined) ? parseFloat(trade.livePrice) : parseFloat(price);
+                                            const isLocked = trade.won !== undefined;
+                                            const isExpired = isLocked || trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.timeLeft !== undefined && trade.timeLeft <= 0);
+                                            
+                                            // Authority: If locked by backend, use backend's exit price (trade.livePrice).
+                                            // If expired but no backend price yet, we freeze at the last known price to prevent further movement.
+                                            const currentPriceVal = (isLocked && trade.livePrice !== undefined) 
+                                                ? parseFloat(trade.livePrice) 
+                                                : (isExpired ? parseFloat(trade.livePrice || price) : parseFloat(price));
 
                                             const multiplier = trade.duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";

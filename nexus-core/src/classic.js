@@ -20,6 +20,19 @@ class ClassicEngine {
     this.payoutJobCounter = 0;
     this.payoutNonce = null;
     this.lastNonceSync = 0;
+
+    // AUTHORITATIVE TREASURY ABI (Arc Native)
+    this.TREASURY_ABI = [
+      "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
+      "function settleBet(uint256 _betId, uint256 _exitPrice) external",
+      "function withdraw(uint256 _amount) external",
+      "function bets(uint256) view returns (uint256 id, address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 timestamp, uint256 duration, uint8 marketId, uint256 settlementPrice, bool settled, bool won)"
+    ];
+
+    // Initialize operator instance of the contract for settlements
+    if (rpc.wallet) {
+      this.treasuryContract = new ethers.Contract(config.TREASURY_ADDRESS, this.TREASURY_ABI, rpc.wallet);
+    }
   }
 
   start() {
@@ -31,13 +44,9 @@ class ClassicEngine {
      */
     setInterval(() => this.processSettlementBatch(), 50);
     
-    /**
-     * OPERATOR LIQUIDITY MONITOR
-     * --------------------------
-     * Ensures the backend "Operator" wallet always has enough gas to pay out winners.
-     * Threshold: 10 USDC | Refill: 100 USDC (from Treasury)
-     */
-    setInterval(() => this.ensureOperatorFunded(), 15000);
+    // OPERATOR LIQUIDITY MONITOR (Decommissioned - No longer using buffer wallet)
+    // Payouts now come directly from the Treasury Contract via settleBet.
+    // setInterval(() => this.ensureOperatorFunded(), 15000);
 
     /**
      * ULTRA-HIGH FREQUENCY TRADE MONITOR (50ms Pulse)
@@ -67,28 +76,29 @@ class ClassicEngine {
           if (currentPrice > 0) cache.snapshotPrice(trade.symbol);
           isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
           
-          // Real-time UI updates
-          this.io.to(trade.userAddr).emit('trade_tick', {
-            betId: trade.id,
-            timeLeft,
-            currentPrice,
-            isWinning,
-            direction: direction
-          });
-
           // PRECISE BOUNDARY CAPTURE
           // When time runs out, we handover the trade to the lockResult logic.
           if (timeLeft <= 0) {
             this.lockResult(trade);
+          } else {
+            // Real-time UI updates (Only while active)
+            this.io.to(trade.userAddr).emit('trade_tick', {
+              betId: trade.id,
+              timeLeft,
+              currentPrice,
+              isWinning,
+              direction: direction
+            });
           }
         }
       }
     }, 50);
 
     // Fallback payout mechanism if batching is disabled/fails
-    if (config.PAYOUT_INLINE_FALLBACK) {
-      setInterval(() => this.processInlinePayoutBatch(), 1000);
-    }
+    // Fallback payout mechanism (Decommissioned - Using on-chain settlement)
+    // if (config.PAYOUT_INLINE_FALLBACK) {
+    //   setInterval(() => this.processInlinePayoutBatch(), 1000);
+    // }
   }
 
   normalizeAddr(addr) {
@@ -136,6 +146,7 @@ class ClassicEngine {
     // Tie Case: In binary options, a tie (price remains exactly the same) is typically a loss for the player.
     const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
 
+    trade.status = 'RESOLVING'; // AUTHORITY: Take it out of the PENDING monitor loop instantly
     trade.expiryEmitted = true;
     trade.lockedExitPrice = exitPrice;
     trade.lockedWon = won;
@@ -145,7 +156,8 @@ class ClassicEngine {
       betId: trade.id,
       exitPrice,
       won,
-      direction: direction
+      direction: direction,
+      status: 'RESOLVING'
     });
     console.log(`[Trade-Monitor] Authority Result Locked #${trade.id} | Won: ${won} | Price: ${exitPrice}`);
     
@@ -229,24 +241,24 @@ class ClassicEngine {
       tradeParams.id = tradeIdString; 
       session.balance = Number((session.balance - amount).toFixed(4));
       
-      try {
-        const checksummedUserAddr = ethers.getAddress(userAddr);
-        const checksummedTreasury = ethers.getAddress(treasury);
-        
-        const contract = new ethers.Contract(checksummedTreasury, [
-          "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable"
-        ], sessionWallet);
-
-        const contractDir = direction === 1 ? 0 : 1; 
-        const contractPrice = ethers.parseUnits(entryPrice.toFixed(8), 8);
-        const feeData = await rpc.mainProvider.getFeeData();
-        const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n;
-
-        const tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, checksummedUserAddr, { 
-          value: ethers.parseUnits(amount.toFixed(18), 18),
-          gasPrice,
-          gasLimit: 300000 
-        });
+        try {
+          const checksummedUserAddr = ethers.getAddress(userAddr);
+          const checksummedTreasury = ethers.getAddress(treasury);
+          
+          const contract = new ethers.Contract(checksummedTreasury, this.TREASURY_ABI, sessionWallet);
+  
+          const contractDir = direction === 1 ? 0 : 1; 
+          const contractPrice = ethers.parseUnits(entryPrice.toFixed(8), 8);
+          const feeData = await rpc.mainProvider.getFeeData();
+          const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n;
+  
+          // AUTHORITY: Pass sessionWallet.address as the _payoutAddress.
+          // This ensures the Treasury contract pays winnings directly back to the active session.
+          const tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, sessionWallet.address, { 
+            value: ethers.parseUnits(amount.toFixed(18), 18),
+            gasPrice,
+            gasLimit: 300000 
+          });
         stakeTxHash = tx.hash;
       } catch (contractErr) {
         console.warn(`[Trade] Falling back to raw transfer:`, contractErr.message);
@@ -424,161 +436,96 @@ class ClassicEngine {
       status: trade.status
     });
 
+    // AUTHORITY: Trigger On-Chain Settlement (Arc Native)
+    // If the trade is won, the Treasury contract will authoritatively release funds to the payoutAddress (session wallet).
     if (won && payout > 0) {
-      this.queuePayoutJob(trade);
+      this.settleTradeOnChain(trade);
     }
   }
 
-  queuePayoutJob(trade) {
-    this.payoutJobCounter += 1;
-    // CRITICAL: Winnings MUST go to the session wallet (EOA), not the main wallet.
-    const derivedSession = rpc.deriveSessionWallet(trade.userAddr);
-    const destination = derivedSession ? derivedSession.address : trade.sessionAddress;
-
-    cache.payoutQueue.push({
-      jobId: `payout_${trade.id}_${this.payoutJobCounter}`,
-      tradeId: trade.id,
-      userAddr: trade.userAddr,
-      sessionAddress: destination, 
-      amount: trade.payout,
-      queuedAt: Date.now(),
-      status: 'QUEUED',
-    });
-  }
-
-  async processInlinePayoutBatch() {
-    if (this.payoutQueueProcessing) return;
-    this.payoutQueueProcessing = true;
+  /**
+   * ON-CHAIN SETTLEMENT HANDLER
+   * ---------------------------
+   * Calls settleBet on the Treasury contract to authoritatively release funds.
+   * This eliminates the need for a buffer wallet and ensures the Treasury balance
+   * accurately reflects all wins and payouts.
+   */
+  async settleTradeOnChain(trade) {
+    if (!this.treasuryContract) {
+      console.error("[On-Chain] Payout failed: Treasury contract not initialized");
+      return;
+    }
 
     try {
-      // 1. Group payouts by user to batch multiple wins into a single transaction
-      const userBatches = {};
-      const processedJobIds = new Set();
-
-      for (const job of cache.payoutQueue) {
-        if (job.status !== 'QUEUED') continue;
-        const addr = job.userAddr.toLowerCase();
-        
-        // PRIORITY: Always send to the session address if available.
-        let dest = job.sessionAddress;
-        if (!dest) {
-          const derived = rpc.deriveSessionWallet(addr);
-          dest = derived ? derived.address : addr;
-        }
-        dest = dest.toLowerCase();
-        
-        if (!userBatches[dest]) userBatches[dest] = { total: 0, jobs: [], userAddr: addr };
-        userBatches[dest].total += Number(job.amount);
-        userBatches[dest].jobs.push(job);
-        job.status = 'CLAIMED';
-      }
-
-      const users = Object.keys(userBatches);
-      if (users.length === 0) return;
-
-      // 2. Proactive Nonce Synchronization
+      // Sync Nonce for the Operator
       if (this.payoutNonce === null || (Date.now() - this.lastNonceSync > 30000)) {
         this.payoutNonce = await rpc.mainProvider.getTransactionCount(rpc.wallet.address, 'pending');
         this.lastNonceSync = Date.now();
       }
 
-      // 3. Dispatch Batch Payouts
-      for (const dest of users) {
-        const batch = userBatches[dest];
-        try {
-          const txHash = await this.dispatchBatchPayout(dest, batch.total, batch.jobs, batch.userAddr);
-          if (txHash) {
-             // Successfully sent
-             batch.jobs.forEach(j => processedJobIds.add(j.jobId));
-          } else {
-             batch.jobs.forEach(j => { j.status = 'QUEUED'; });
-          }
-        } catch (err) {
-          console.error(`[Payout] Batch failed for ${dest}:`, err.message);
-          batch.jobs.forEach(j => { j.status = 'QUEUED'; });
-          this.payoutNonce = null; // Forces re-sync on next loop
-        }
-      }
+      const betId = BigInt(trade.id);
+      const exitPriceBigInt = ethers.parseUnits(trade.exitPrice.toFixed(8), 8);
+      
+      console.log(`[On-Chain] Settling Bet #${betId} | Exit Price: ${trade.exitPrice}`);
 
-      // Cleanup processed jobs from queue
-      cache.payoutQueue = cache.payoutQueue.filter(j => !processedJobIds.has(j.jobId));
-
-    } finally {
-      this.payoutQueueProcessing = false;
-    }
-  }
-
-  async dispatchBatchPayout(destinationAddr, totalAmount, jobs, userAddr) {
-    const destination = ethers.getAddress(destinationAddr);
-    console.log(`[Payout] Dispatching BATCH win (${totalAmount.toFixed(4)} USDC) to ${destination} (${jobs.length} trades)`);
-
-    try {
       const feeData = await rpc.mainProvider.getFeeData();
       const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 11n / 10n;
 
-      const tx = await rpc.wallet.sendTransaction({
-        to: destination,
-        value: ethers.parseUnits(totalAmount.toFixed(18), 18),
+      const tx = await this.treasuryContract.settleBet(betId, exitPriceBigInt, {
+        gasLimit: 400000,
         gasPrice,
-        nonce: this.payoutNonce,
-        gasLimit: 120000
+        nonce: this.payoutNonce++
       });
 
-      const txHash = tx.hash;
-      this.payoutNonce++;
+      console.log(`[On-Chain] Settlement TX Sent: ${tx.hash}`);
       
-      // Update job states and broadcast
-      jobs.forEach(job => {
-        const trade = cache.trades.get(job.tradeId);
-        if (trade) {
-          trade.status = 'PAID';
-          trade.payoutTx = txHash;
-          trade.paidAt = Date.now();
-        }
-        
-        // Update history persistence
-        const profiles = require('./profiles');
-        profiles.updateTrade(userAddr, job.tradeId, { payoutTx: txHash, status: 'PAID' });
+      // Update local state optimistically
+      trade.status = 'SETTLED';
+      trade.payoutTx = tx.hash;
 
-        this.io.to(userAddr).emit('payout_completed', {
-          type: 'PAYOUT_COMPLETED',
-          betId: job.tradeId,
-          payout: String(job.amount),
-          txHash: txHash,
-        });
-      });
-
-      // Chain confirmation sync: Ensure balance is updated both in memory and on UI after confirmation
       tx.wait().then(async () => {
+        console.log(`✅ [On-Chain] Bet #${betId} CONFIRMED.`);
+        trade.chainConfirmed = true;
+        
+        // Sync user balance from the session wallet on-chain
         try {
-          const balStr = await rpc.getBalance(destination);
-          const session = cache.sessions.get(userAddr);
+          const balWei = await rpc.mainProvider.getBalance(trade.sessionAddress);
+          const session = cache.sessions.get(trade.userAddr);
           if (session) {
-            session.balance = parseFloat(balStr);
-            const totalPayout = jobs.reduce((sum, j) => sum + parseFloat(j.amount), 0);
-            
-            this.io.to(userAddr).emit('balance_update', { 
-              balance: String(session.balance), 
-              reason: 'WIN_PAYOUT_SETTLED',
-              txHash: txHash,
-              payout: String(totalPayout),
-              betId: jobs[0].tradeId // Reference at least one trade for the receipt link
+            session.balance = parseFloat(ethers.formatEther(balWei));
+            this.io.to(trade.userAddr).emit('balance_update', {
+              balance: String(session.balance),
+              reason: 'ON_CHAIN_WIN_SETTLED',
+              betId: trade.id,
+              txHash: tx.hash
             });
-            console.log(`[Payout] Sync complete for ${userAddr}. New balance: ${session.balance}, Total Payout: ${totalPayout}`);
           }
-        } catch (syncErr) {
-          console.error(`[Payout] Sync error for ${userAddr}:`, syncErr.message);
+        } catch (e) {
+          console.warn(`[On-Chain] Balance sync failed for ${trade.userAddr}:`, e.message);
         }
-      }).catch((e) => {
-        console.error(`[Payout] Tx confirmation failed for ${userAddr}:`, e.message);
+
+        this.io.to(trade.userAddr).emit('payout_completed', {
+          tradeId: trade.id,
+          payout: String(trade.payout),
+          tx: tx.hash
+        });
+      }).catch(err => {
+        console.error(`❌ [On-Chain] Bet #${betId} Confirmation failed:`, err.message);
       });
 
-      return txHash;
-    } catch (err) {
-      console.error(`[Payout] Transaction failed:`, err.message);
-      throw err;
+    } catch (e) {
+      console.error(`❌ [On-Chain] Failed to settle bet #${trade.id}:`, e.message);
+      this.payoutNonce = null; // Force sync on next attempt
     }
   }
+
+  // DECOMMISSIONED: Manual Payout Buffer Handlers
+  // Payouts are now handled on-chain via settleTradeOnChain above.
+  /*
+  queuePayoutJob(trade) { ... }
+  processInlinePayoutBatch() { ... }
+  dispatchBatchPayout(destinationAddr, totalAmount, jobs, userAddr) { ... }
+  */
 
   async ensureOperatorFunded() {
     try {
