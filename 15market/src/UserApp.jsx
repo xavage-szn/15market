@@ -1881,11 +1881,23 @@ export default function UserApp() {
     if (!address) return;
 
     const unbindTick = socketService.on('trade_tick', (data) => {
-      setActiveTrades(prev => prev.map(t =>
-        (String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId)) && t.won === undefined
-          ? { ...t, timeLeft: data.timeLeft, livePrice: data.currentPrice, lastTickPrice: data.currentPrice, isWinning: data.isWinning }
-          : t
-      ));
+      setActiveTrades(prev => prev.map(t => {
+        const isTarget = (String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId));
+        if (!isTarget) return t;
+
+        // CRITICAL: If the trade is already 'Locked' (has a final result or hit 0 time), 
+        // we IGNORE future ticks to prevent the result from flipping back and forth.
+        const isFrontendExpired = t.timeLeft <= 0 || t.won !== undefined || t.status === 'RESOLVING';
+        if (isFrontendExpired) return t;
+
+        return { 
+          ...t, 
+          timeLeft: data.timeLeft, 
+          livePrice: data.currentPrice, 
+          lastTickPrice: data.currentPrice, 
+          isWinning: data.isWinning 
+        };
+      }));
     });
 
     const unbindExpired = socketService.on('trade_expired', (data) => {
