@@ -365,7 +365,7 @@ class ClassicEngine {
   }
 
   async settleTrade(trade) {
-    if (trade.status !== 'PENDING') return;
+    if (trade.status !== 'PENDING' && trade.status !== 'RESOLVING') return;
 
     // Safety: Force lock if not already done by monitor
     if (!trade.expiryEmitted) {

@@ -81,10 +81,10 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                             const isExpired = isLocked || trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.expiryMs && now >= trade.expiryMs);
                             
                             // Authority: If locked by backend, use backend's exit price (trade.livePrice).
-                            // If expired but no backend price yet, we freeze at the last known price to prevent further movement.
+                            // If expired but no backend price yet, we freeze at the last known backend tick price to prevent further movement.
                             const current = (isLocked && trade.livePrice) 
                                 ? parseFloat(trade.livePrice) 
-                                : (isExpired ? parseFloat(trade.livePrice || price) : parseFloat(price));
+                                : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || price) : parseFloat(price));
                             
                             // Real-time calculation: Trust backend authoritative result (trade.won) if final.
                             // If active, prefer backend's live winning flag (from trade_tick) to prevent mismatches.

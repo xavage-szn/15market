@@ -1883,7 +1883,7 @@ export default function UserApp() {
     const unbindTick = socketService.on('trade_tick', (data) => {
       setActiveTrades(prev => prev.map(t =>
         (String(t.id) === String(data.betId) || String(t.nonce) === String(data.betId)) && t.won === undefined
-          ? { ...t, timeLeft: data.timeLeft, livePrice: data.currentPrice, isWinning: data.isWinning }
+          ? { ...t, timeLeft: data.timeLeft, livePrice: data.currentPrice, lastTickPrice: data.currentPrice, isWinning: data.isWinning }
           : t
       ));
     });
