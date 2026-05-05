@@ -11,6 +11,8 @@ dist/
 build/
 out/
 
+#solidity
+.sol
 # Environments
 .env*
 !.env.example

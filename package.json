@@ -19,5 +19,9 @@
     },
     "devDependencies": {
         "concurrently": "^9.1.2"
+    },
+    "dependencies": {
+        "ethers": "^6.16.0",
+        "solc": "^0.8.20"
     }
 }

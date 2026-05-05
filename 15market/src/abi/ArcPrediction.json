@@ -1,40 +1,5 @@
 {
-  "_format": "hh-sol-artifact-1",
-  "contractName": "ArcPrediction",
-  "sourceName": "contracts/ArcPrediction.sol",
   "abi": [
-    {
-      "inputs": [],
-      "stateMutability": "nonpayable",
-      "type": "constructor"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "owner",
-          "type": "address"
-        }
-      ],
-      "name": "OwnableInvalidOwner",
-      "type": "error"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "account",
-          "type": "address"
-        }
-      ],
-      "name": "OwnableUnauthorizedAccount",
-      "type": "error"
-    },
-    {
-      "inputs": [],
-      "name": "ReentrancyGuardReentrantCall",
-      "type": "error"
-    },
     {
       "anonymous": false,
       "inputs": [
@@ -128,50 +93,6 @@
       "type": "event"
     },
     {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "previousOwner",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "newOwner",
-          "type": "address"
-        }
-      ],
-      "name": "OwnershipTransferred",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "user",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "string",
-          "name": "username",
-          "type": "string"
-        },
-        {
-          "indexed": false,
-          "internalType": "string",
-          "name": "xHandle",
-          "type": "string"
-        }
-      ],
-      "name": "ProfileUpdated",
-      "type": "event"
-    },
-    {
       "inputs": [
         {
           "internalType": "uint256",
@@ -208,18 +129,23 @@
         },
         {
           "internalType": "uint256",
-          "name": "timestamp",
+          "name": "duration",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "duration",
+          "name": "timestamp",
           "type": "uint256"
         },
         {
           "internalType": "uint8",
           "name": "marketId",
           "type": "uint8"
+        },
+        {
+          "internalType": "address",
+          "name": "payoutAddress",
+          "type": "address"
         },
         {
           "internalType": "uint256",
@@ -241,35 +167,21 @@
       "type": "function"
     },
     {
-      "inputs": [],
-      "name": "getUserCount",
-      "outputs": [
+      "inputs": [
+        {
+          "internalType": "address payable",
+          "name": "_to",
+          "type": "address"
+        },
         {
           "internalType": "uint256",
-          "name": "",
+          "name": "_amount",
           "type": "uint256"
         }
       ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "name": "hasProfile",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
+      "name": "manualPayout",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -326,57 +238,6 @@
     {
       "inputs": [
         {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "name": "profiles",
-      "outputs": [
-        {
-          "internalType": "string",
-          "name": "username",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "xHandle",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "discordHandle",
-          "type": "string"
-        },
-        {
-          "internalType": "uint256",
-          "name": "totalWins",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "totalTrades",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "totalVolume",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "renounceOwnership",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
           "internalType": "uint256",
           "name": "_betId",
           "type": "uint256"
@@ -393,26 +254,16 @@
       "type": "function"
     },
     {
-      "inputs": [
+      "inputs": [],
+      "name": "totalVolume",
+      "outputs": [
         {
-          "internalType": "string",
-          "name": "_username",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "_xHandle",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "_discordHandle",
-          "type": "string"
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
         }
       ],
-      "name": "syncProfile",
-      "outputs": [],
-      "stateMutability": "nonpayable",
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -432,25 +283,6 @@
       "inputs": [
         {
           "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "name": "userAddresses",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
           "name": "_amount",
           "type": "uint256"
         }
@@ -464,9 +296,5 @@
       "stateMutability": "payable",
       "type": "receive"
     }
-  ],
-  "bytecode": "0x",
-  "deployedBytecode": "0x",
-  "linkReferences": {},
-  "deployedLinkReferences": {}
+  ]
 }
