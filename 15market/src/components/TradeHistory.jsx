@@ -78,7 +78,7 @@ function TradeHistoryComponent({
                                         </div>
                                         <div className="flex flex-col">
                                             <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>
-                                                {(t.status === 'WON' || t.status === 'PAID') ? `+${Number(t.payout || (t.amount * (t.duration <= 5 ? 2.90 : t.duration <= 10 ? 2.40 : 1.90))).toFixed(2)}` : `${Number(t.amount).toFixed(2)}`} USDC
+                                                {(t.status === 'WON' || t.status === 'PAID') ? `+${Number(t.payout || (t.amount * (t.duration <= 5 ? 2.90 : t.duration <= 10 ? 2.40 : 1.90) * 0.99)).toFixed(2)}` : `${Number(t.amount).toFixed(2)}`} USDC
                                             </div>
                                             <div className="text-[7px] lg:text-[9px] uppercase font-black opacity-30">{t.symbol || 'ETH'} // {isRounds ? 'P2P Pool' : 'Binary'}</div>
                                         </div>

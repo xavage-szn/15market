@@ -1157,6 +1157,70 @@ export default function UserApp() {
       }
     });
 
+    const unbindTick = socketService.on('trade_tick', (data) => {
+      const tid = String(data.betId || data.tradeId);
+      setActiveTrades(prev => prev.map(t => {
+        if (String(t.id || t.nonce) === tid) {
+          return { 
+            ...t, 
+            timeLeft: data.timeLeft, 
+            currentPrice: data.currentPrice, 
+            isWinning: data.isWinning 
+          };
+        }
+        return t;
+      }));
+    });
+
+    const unbindExpired = socketService.on('trade_expired', (data) => {
+      console.log("[Socket] Trade Expired:", data);
+      const tid = String(data.betId || data.tradeId);
+      const updateFn = (t) => {
+        if (String(t.id || t.nonce) === tid) {
+          return { 
+            ...t, 
+            status: data.won ? 'WON' : 'LOST',
+            won: data.won,
+            settlementPrice: data.exitPrice,
+            payoutPending: data.won, // Only pending if won
+            confirmed: true
+          };
+        }
+        return t;
+      };
+      setActiveTrades(prev => prev.map(updateFn));
+      setTradeHistory(prev => {
+        const exists = prev.some(t => String(t.id || t.nonce) === tid);
+        if (exists) return prev.map(updateFn);
+        // If not in history yet (rare for active), we'll let reconcile handle it or wait for settled
+        return prev;
+      });
+      if (data.won) {
+        notify("Trade Won! Processing Payout...", "success");
+      } else {
+        notify("Trade Lost", "error");
+      }
+    });
+
+    const unbindSettled = socketService.on('trade_settled', (data) => {
+      console.log("[Socket] Trade Settled:", data);
+      const tid = String(data.betId || data.tradeId);
+      const updateFn = (t) => {
+        if (String(t.id || t.nonce) === tid) {
+          return { 
+            ...t, 
+            status: data.won ? 'WON' : 'LOST',
+            won: data.won,
+            confirmed: true,
+            payoutPending: data.won && t.status !== 'PAID'
+          };
+        }
+        return t;
+      };
+      setActiveTrades(prev => prev.map(updateFn));
+      setTradeHistory(prev => prev.map(updateFn));
+    });
+
     // Redundant trade_settled listener removed. Consolidation into the main listener below.
 
     const unbindPayout = socketService.on('payout_completed', (data) => {

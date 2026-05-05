@@ -208,7 +208,7 @@ function LiveExecutionComponent({
                                                     : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || trade.entryPrice) : parseFloat(price)));
 
                                             const multiplier = trade.duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
-                                            const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
+                                            const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier * 0.99).toFixed(2) : "0.00";
 
                                             const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 

@@ -155,7 +155,7 @@ class ClassicEngine {
     try {
       const pending = Array.from(cache.trades.values())
         .filter(t => t.status === 'RESOLVING' && t.lockedWon === true && !t.onChainSettleStarted)
-        .slice(0, 10);
+        .slice(0, 50);
 
       for (const trade of pending) {
         await this.settleTradeOnChain(trade);
@@ -175,37 +175,66 @@ class ClassicEngine {
 
       const betId = BigInt(trade.id);
       const exitPriceBigInt = ethers.parseUnits(trade.lockedExitPrice.toFixed(8), 8);
-      const gasPrice = (await rpc.mainProvider.getFeeData()).gasPrice || ethers.parseUnits("50", "gwei");
+      
+      // Aggressive Settlement: 20% gas bump for instant confirmation
+      const feeData = await rpc.mainProvider.getFeeData();
+      const baseGasPrice = feeData.gasPrice || ethers.parseUnits("50", "gwei");
+      const gasPrice = (baseGasPrice * 120n) / 100n;
 
-      console.log(`[On-Chain] Settling Bet #${betId} directly from Treasury...`);
+      console.log(`[On-Chain] Payout #${betId} | Nonce: ${this.payoutNonce} | Gas: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
 
       // AUTHORITY: Call settleBet to trigger the Treasury's direct payout to the user
       const tx = await this.treasuryContract.settleBet(betId, exitPriceBigInt, {
         gasPrice,
         nonce: this.payoutNonce++,
-        gasLimit: 500000
+        gasLimit: 600000 // Increased limit for safety
       });
+
+      console.log(`[On-Chain] Broadcasted #${betId} | Tx: ${tx.hash}`);
 
       trade.payoutTx = tx.hash;
       trade.status = 'SETTLED';
       
-      tx.wait().then(async () => {
-        console.log(`✅ [On-Chain] Bet #${betId} Confirmed. Winnings sent from Treasury.`);
-        this.io.to(trade.userAddr).emit('payout_completed', { tradeId: trade.id, tx: tx.hash });
-        
-        // Final balance sync
-        const balWei = await rpc.mainProvider.getBalance(trade.sessionAddress);
-        this.io.to(trade.userAddr).emit('balance_update', { balance: ethers.formatEther(balWei), reason: 'ON_CHAIN_WIN' });
+      tx.wait().then(async (receipt) => {
+        if (receipt.status === 1) {
+          console.log(`✅ [On-Chain] Bet #${betId} Confirmed. Winnings sent.`);
+          const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
+          const payout = trade.amount * multiplier * 0.99;
+          this.io.to(trade.userAddr).emit('payout_completed', { 
+            tradeId: trade.id, 
+            betId: trade.id, 
+            tx: tx.hash,
+            payout: payout
+          });
+          
+          // Final balance sync
+          const balWei = await rpc.mainProvider.getBalance(trade.sessionAddress);
+          this.io.to(trade.userAddr).emit('balance_update', { 
+            balance: ethers.formatEther(balWei), 
+            reason: 'WIN_PAYOUT_SETTLED',
+            betId: trade.id,
+            txHash: tx.hash
+          });
+        } else {
+          throw new Error("Transaction reverted on-chain");
+        }
+      }).catch(err => {
+        console.error(`❌ [On-Chain] Confirmation failed for #${trade.id}:`, err.message);
+        this.io.to(trade.userAddr).emit('payout_failed', { 
+          betId: trade.id, 
+          message: "Payout transaction failed on-chain"
+        });
+        trade.onChainSettleStarted = false;
       });
 
     } catch (err) {
-      console.error(`❌ [On-Chain] Settlement failed for #${trade.id}:`, err.message);
+      console.error(`❌ [On-Chain] Broadcast failed for #${trade.id}:`, err.message);
       this.io.to(trade.userAddr).emit('payout_failed', { 
         betId: trade.id, 
         message: err.message 
       });
       trade.onChainSettleStarted = false;
-      this.payoutNonce = null;
+      this.payoutNonce = null; // Force resync on failure
     }
   }
 
