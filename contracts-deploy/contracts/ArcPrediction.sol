@@ -90,8 +90,18 @@ contract ArcPrediction is Ownable {
 
         uint256 payout = 0;
         if (bet.won) {
-            // Standard 1.95x payout (adjust multiplier here if needed)
-            payout = (bet.amount * 195) / 100;
+            uint256 multiplier;
+            if (bet.duration <= 5) {
+                multiplier = 290;
+            } else if (bet.duration <= 10) {
+                multiplier = 240;
+            } else {
+                multiplier = 190;
+            }
+
+            // Calculation: (Stake * Multiplier / 100) * 0.99 (subtracting 1% fee)
+            // Multiplied out: (Stake * Multiplier * 99) / 10000
+            payout = (bet.amount * multiplier * 99) / 10000;
             
             require(address(this).balance >= payout, "Insufficient Treasury funds");
             

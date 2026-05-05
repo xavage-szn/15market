@@ -26,9 +26,13 @@ module.exports = {
   // Classic Trades
   BATCH_WINDOW_MS: Number(process.env.SETTLEMENT_BATCH_WINDOW_MS || 25),
   SETTLEMENT_CONCURRENCY: Number(process.env.SETTLEMENT_CONCURRENCY || 16),
-  DEFAULT_MULTIPLIER: Number(process.env.DEFAULT_MULTIPLIER || 1.95),
   DEFAULT_SESSION_BALANCE: Number(process.env.DEFAULT_SESSION_BALANCE || 1000),
   PAYOUT_INLINE_FALLBACK: String(process.env.PAYOUT_INLINE_FALLBACK || 'true') === 'true',
+
+  // Payout Multipliers (hardcoded — do NOT source from env)
+  // Duration tiers: 5s = 2.90x, 10s = 2.40x, 15s = 1.90x
+  // Applied as: stake * multiplier * 0.99 (1% platform fee)
+  MULTIPLIERS: { 5: 2.90, 10: 2.40, 15: 1.90 },
   
   // Auth: wallet address-based identity (Reown / WalletConnect)
 

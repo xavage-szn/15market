@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title ArcPrediction Treasury
+ * @title 15market Treasury
  * @dev Optimized prediction market contract with direct Treasury payouts.
  */
 abstract contract Ownable {

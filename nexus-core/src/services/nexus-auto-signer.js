@@ -346,10 +346,15 @@ class SettlementService {
         // WIN: The stake is locked in the SCW. Call settleWin to:
         // 1) release the locked stake back to available
         // 2) credit the profit from the treasury to the SCW
-        const multiplier = 1.90; // 90% profit on wins
-        const profitWei = BigInt(Math.floor(Number(stakeWei) * 0.90));
+        // Duration-based multiplier (hardcoded — do NOT use env)
+        // 5s = 2.90x, 10s = 2.40x, 15s = 1.90x | minus 1% platform fee
+        const duration = trade.duration || 15;
+        const grossMultiplier = duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
+        const netMultiplier = grossMultiplier * 0.99;
+        const totalPayoutWei = BigInt(Math.floor(Number(stakeWei) * netMultiplier));
+        const profitWei = totalPayoutWei - stakeWei; // Net profit = total payout - returned stake
 
-        console.log(`[Settlement] WIN for ${tradeId}. Calling settleWin...`);
+        console.log(`[Settlement] WIN for ${tradeId} | Duration: ${duration}s | Multiplier: ${grossMultiplier}x | Net: ${netMultiplier.toFixed(4)}x`);
         const winTx = await walletContract.settleWin(tradeId, stakeWei, profitWei, { gasLimit: 250000 });
         await winTx.wait();
         settleTxHash = winTx.hash;
@@ -374,7 +379,7 @@ class SettlementService {
       await redis.del(`trade:${tradeId}`);
       await redis.srem(`active_trades`, tradeId);
 
-      const payout = won ? (parseFloat(trade.stakeAmount) * 1.90).toFixed(4) : '0';
+      const payout = won ? (parseFloat(trade.stakeAmount) * netMultiplier).toFixed(4) : '0';
       const result = {
         tradeId,
         success: true,
