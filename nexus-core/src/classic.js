@@ -1,5 +1,5 @@
 // ==================================================================================
-// CLASSIC TRADING ENGINE (CORE SETTLEMENT LAYER)
+// CLASSIC TRADING ENGINE (DIRECT ON-CHAIN SETTLEMENT)
 // ==================================================================================
 const cache = require('./cache');
 const config = require('./config');
@@ -9,16 +9,16 @@ const { ethers } = require('ethers');
 class ClassicEngine {
   constructor(io) {
     this.io = io;
-    this.queueProcessing = false;
-    this.payoutQueueProcessing = false;
-    this.payoutJobCounter = 0;
+    this.settlementProcessing = false;
     this.payoutNonce = null;
     this.lastNonceSync = 0;
 
-    // Treasury ABI for Refills and Sync
+    // AUTHORITATIVE ARC-NATIVE ABI
     this.TREASURY_ABI = [
+      "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
+      "function settleBet(uint256 _betId, uint256 _exitPrice) external",
       "function withdraw(uint256 _amount) external",
-      "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable"
+      "function bets(uint256) view returns (uint256 id, address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 timestamp, uint256 duration, uint8 marketId, uint256 settlementPrice, bool settled, bool won)"
     ];
 
     if (rpc.wallet) {
@@ -27,61 +27,48 @@ class ClassicEngine {
   }
 
   start() {
-    // 1. Batch Settlement Pulse
+    // 1. Authoritative Settlement Pulse
     setInterval(() => this.processSettlementBatch(), 50);
     
-    // 2. Gas Tank Monitor (Refills Root Wallet from Treasury)
+    // 2. Gas Monitor (Ensures Root Wallet can pay for settleBet gas)
     setInterval(() => this.ensureOperatorFunded(), 15000);
 
-    // 3. Trade Heartbeat (Monitors and Locks Results)
+    // 3. Trade Monitor & Result Locking
     setInterval(() => {
       const now = Date.now();
       for (const trade of cache.trades.values()) {
         if (trade.status === 'PENDING') {
           const msLeft = (trade.settleAt || 0) - now;
           const timeLeft = Math.max(0, msLeft / 1000);
-          const direction = this.resolveDirection(trade.direction);
-          const isUp = direction === 1;
           
           if (trade.expiryEmitted) continue;
 
           const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
           if (currentPrice > 0) cache.snapshotPrice(trade.symbol);
-          const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
           
           if (timeLeft <= 0) {
             this.lockResult(trade);
           } else {
+            const isUp = this.resolveDirection(trade.direction) === 1;
+            const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
             this.io.to(trade.userAddr).emit('trade_tick', {
               betId: trade.id,
               timeLeft,
               currentPrice,
               isWinning,
-              direction
+              direction: trade.direction
             });
           }
         }
       }
     }, 50);
-
-    if (config.PAYOUT_INLINE_FALLBACK) {
-      setInterval(() => this.processInlinePayoutBatch(), 1000);
-    }
   }
 
   normalizeAddr(addr) { return String(addr || '').toLowerCase(); }
 
-  resolveSessionIdentity(payload = {}) {
-    const walletAddress = this.normalizeAddr(payload.address);
-    if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-      return { ok: false, error: 'Valid EVM wallet address required.' };
-    }
-    return { ok: true, identityKey: walletAddress, walletAddress };
-  }
-
   resolveDirection(dir) {
-    if (dir === 1 || dir === '1' || String(dir).toUpperCase() === 'UP' || String(dir).toLowerCase() === 'buy') return 1;
-    if (dir === 0 || dir === '0' || String(dir).toUpperCase() === 'DOWN' || String(dir).toLowerCase() === 'sell') return 0;
+    if (dir === 1 || dir === '1' || String(dir).toUpperCase() === 'UP') return 1;
+    if (dir === 0 || dir === '0' || String(dir).toUpperCase() === 'DOWN') return 0;
     return null;
   }
 
@@ -89,8 +76,8 @@ class ClassicEngine {
     if (trade.expiryEmitted) return;
     const targetTime = trade.settleAt;
     const exitPrice = cache.getHistoricalPrice(trade.symbol, targetTime) || cache.prices[trade.symbol] || trade.entryPrice;
-    const direction = this.resolveDirection(trade.direction);
-    const won = direction === 1 ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
+    const isUp = this.resolveDirection(trade.direction) === 1;
+    const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
 
     trade.status = 'RESOLVING';
     trade.expiryEmitted = true;
@@ -101,58 +88,44 @@ class ClassicEngine {
       betId: trade.id,
       exitPrice,
       won,
-      direction,
       status: 'RESOLVING'
     });
     
-    // Instantly transition to settlement
+    console.log(`[Engine] Result Locked #${trade.id} | Won: ${won} | Price: ${exitPrice}`);
+    
+    // Lost trades are settled immediately locally
     if (!won) {
-      this.settleTrade(trade);
+      this.settleTradeLocally(trade);
     }
   }
 
   async placeTrade(tradeParams, identityPayload) {
-    const identity = this.resolveSessionIdentity(identityPayload);
-    if (!identity.ok) return { success: false, error: identity.error };
-
-    const userAddr = identity.identityKey;
-    const treasury = config.TREASURY_ADDRESS;
+    const userAddr = this.normalizeAddr(identityPayload.address);
     const sessionWallet = rpc.deriveSessionWallet(userAddr);
-
-    let session = cache.sessions.get(userAddr);
-    if (!session) {
-      const balStr = await rpc.getBalance(sessionWallet.address);
-      session = cache.getOrCreateSession(userAddr, {
-        identityKey: userAddr,
-        walletAddress: identity.walletAddress,
-        sessionAddress: sessionWallet.address,
-        balance: parseFloat(balStr) || 0,
-      });
-    }
-
     const amount = Number(tradeParams.amount);
     const numericId = BigInt(tradeParams.id && /^\d+$/.test(tradeParams.id) ? tradeParams.id : Date.now());
+    
     const direction = this.resolveDirection(tradeParams.direction);
     const duration = Math.max(1, Number(tradeParams.duration || 5));
     const marketId = Number(tradeParams.marketId || 0);
-
     const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp'];
     const symbol = SYMBOL_MAP[marketId] || 'eth';
     const entryPrice = Number(cache.prices[symbol] || tradeParams.entryPrice || 0);
 
     try {
-      const contract = new ethers.Contract(treasury, this.TREASURY_ABI, sessionWallet);
+      const contract = new ethers.Contract(config.TREASURY_ADDRESS, this.TREASURY_ABI, sessionWallet);
       const contractDir = direction === 1 ? 0 : 1; 
       const contractPrice = ethers.parseUnits(entryPrice.toFixed(8), 8);
       
-      const tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, ethers.getAddress(userAddr), { 
+      // AUTHORITY: Set sessionWallet.address as the direct payout destination on-chain
+      const tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, sessionWallet.address, { 
         value: ethers.parseUnits(amount.toFixed(18), 18),
-        gasLimit: 300000 
+        gasLimit: 400000 
       });
 
       const trade = {
         id: numericId.toString(),
-        userAddr: userAddr.toLowerCase(),
+        userAddr,
         sessionAddress: sessionWallet.address.toLowerCase(),
         direction,
         duration,
@@ -169,139 +142,85 @@ class ClassicEngine {
       cache.trades.set(trade.id, trade);
       cache.queueTradeForSettlement(trade);
       
-      session.balance = Number((session.balance - amount).toFixed(4));
-      this.io.to(userAddr).emit('balance_update', { balance: String(session.balance), reason: 'STAKE_SENT', betId: trade.id });
-
-      return { success: true, txHash: tx.hash, tradeId: trade.id, newBalance: String(session.balance) };
+      return { success: true, txHash: tx.hash, tradeId: trade.id };
     } catch (err) {
-      console.error("[Trade] Critical Failure:", err.message);
-      return { success: false, error: "Contract Error or RPC Timeout" };
-    }
-  }
-
-  async settleTrade(trade) {
-    if (trade.status !== 'PENDING' && trade.status !== 'RESOLVING') return;
-
-    if (!trade.expiryEmitted) this.lockResult(trade);
-
-    const won = trade.lockedWon;
-    const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
-    const payout = won ? Number((trade.amount * multiplier).toFixed(6)) : 0;
-
-    trade.status = won ? 'WON' : 'LOST';
-    trade.exitPrice = trade.lockedExitPrice;
-    trade.won = won;
-    trade.payout = payout;
-    trade.settledAt = Date.now();
-
-    const session = cache.sessions.get(trade.userAddr);
-    if (session && won) {
-      session.balance = Number((session.balance + payout).toFixed(4));
-      this.io.to(trade.userAddr).emit('balance_update', { balance: String(session.balance), reason: 'WIN', betId: trade.id, payout: String(payout) });
-    }
-
-    this.io.to(trade.userAddr).emit('trade_settled', { betId: trade.id, won, payout: String(payout), status: trade.status });
-
-    if (won && payout > 0) {
-      this.queuePayoutJob(trade);
-    }
-  }
-
-  queuePayoutJob(trade) {
-    const derivedSession = rpc.deriveSessionWallet(trade.userAddr);
-    const destination = derivedSession ? derivedSession.address : trade.sessionAddress;
-
-    cache.payoutQueue.push({
-      tradeId: trade.id,
-      userAddr: trade.userAddr,
-      sessionAddress: destination, 
-      amount: trade.payout,
-      status: 'QUEUED',
-    });
-  }
-
-  async processInlinePayoutBatch() {
-    if (this.payoutQueueProcessing) return;
-    this.payoutQueueProcessing = true;
-    try {
-      const jobs = cache.payoutQueue.filter(j => j.status === 'QUEUED').slice(0, 50);
-      for (const job of jobs) {
-        job.status = 'PROCESSING';
-        await this.dispatchBatchPayout(job.sessionAddress, job.amount, [job], job.userAddr);
-        job.status = 'COMPLETED';
-      }
-      cache.payoutQueue = cache.payoutQueue.filter(j => j.status !== 'COMPLETED');
-    } finally {
-      this.payoutQueueProcessing = false;
+      console.error("[Engine] Placement Failed:", err.message);
+      return { success: false, error: err.message };
     }
   }
 
   async processSettlementBatch() {
-    if (this.queueProcessing) return;
-    this.queueProcessing = true;
+    if (this.settlementProcessing) return;
+    this.settlementProcessing = true;
     try {
-      const ts = Date.now();
-      const due = [];
-      while (cache.settlementQueue.length > 0 && cache.settlementQueue[0].settleAt <= ts) {
-        due.push(cache.settlementQueue.shift());
-      }
-      for (const trade of due) {
-        await this.settleTrade(trade);
+      const pending = Array.from(cache.trades.values())
+        .filter(t => t.status === 'RESOLVING' && t.lockedWon === true && !t.onChainSettleStarted)
+        .slice(0, 10);
+
+      for (const trade of pending) {
+        await this.settleTradeOnChain(trade);
       }
     } finally {
-      this.queueProcessing = false;
+      this.settlementProcessing = false;
     }
   }
 
-  async dispatchBatchPayout(destinationAddr, totalAmount, jobs, userAddr) {
+  async settleTradeOnChain(trade) {
+    trade.onChainSettleStarted = true;
     try {
       if (!this.payoutNonce || (Date.now() - this.lastNonceSync > 30000)) {
         this.payoutNonce = await rpc.wallet.getNonce('pending');
         this.lastNonceSync = Date.now();
       }
 
-      const withdrawAmount = ethers.parseUnits(totalAmount.toFixed(18), 18);
+      const betId = BigInt(trade.id);
+      const exitPriceBigInt = ethers.parseUnits(trade.lockedExitPrice.toFixed(8), 8);
       const gasPrice = (await rpc.mainProvider.getFeeData()).gasPrice || ethers.parseUnits("50", "gwei");
 
-      // 1. NON-BLOCKING SYNC: Try to withdraw, but don't stop the payout if it fails
-      try {
-        const withdrawTx = await this.treasuryContract.withdraw(withdrawAmount, { gasPrice, nonce: this.payoutNonce++, gasLimit: 150000 });
-        withdrawTx.wait().then(() => console.log(`✅ [Sync] Withdrawn ${totalAmount} from Treasury`));
-      } catch (e) {
-        console.warn("[Sync] Withdrawal failed (will retry via Gas Monitor):", e.message);
-        this.payoutNonce = null; // Sync again
-        if (!this.payoutNonce) this.payoutNonce = await rpc.wallet.getNonce('pending');
-      }
+      console.log(`[On-Chain] Settling Bet #${betId} directly from Treasury...`);
 
-      // 2. ACTUAL PAYOUT (From Gas Wallet / Root Wallet)
-      const tx = await rpc.wallet.sendTransaction({
-        to: ethers.getAddress(destinationAddr),
-        value: withdrawAmount,
+      // AUTHORITY: Call settleBet to trigger the Treasury's direct payout to the user
+      const tx = await this.treasuryContract.settleBet(betId, exitPriceBigInt, {
         gasPrice,
         nonce: this.payoutNonce++,
-        gasLimit: 120000
+        gasLimit: 500000
       });
 
-      console.log(`[Payout] Confirmed: ${tx.hash}`);
-      this.io.to(userAddr).emit('payout_completed', { tradeId: jobs[0].tradeId, amount: totalAmount, tx: tx.hash });
+      trade.payoutTx = tx.hash;
+      trade.status = 'SETTLED';
+      
+      tx.wait().then(async () => {
+        console.log(`✅ [On-Chain] Bet #${betId} Confirmed. Winnings sent from Treasury.`);
+        this.io.to(trade.userAddr).emit('payout_completed', { tradeId: trade.id, tx: tx.hash });
+        
+        // Final balance sync
+        const balWei = await rpc.mainProvider.getBalance(trade.sessionAddress);
+        this.io.to(trade.userAddr).emit('balance_update', { balance: ethers.formatEther(balWei), reason: 'ON_CHAIN_WIN' });
+      });
 
-    } catch (e) {
-      console.error("[Payout] Critical Failure:", e.message);
+    } catch (err) {
+      console.error(`❌ [On-Chain] Settlement failed for #${trade.id}:`, err.message);
+      trade.onChainSettleStarted = false;
       this.payoutNonce = null;
     }
+  }
+
+  settleTradeLocally(trade) {
+    trade.status = 'LOST';
+    trade.settledAt = Date.now();
+    this.io.to(trade.userAddr).emit('trade_settled', { betId: trade.id, won: false, status: 'LOST' });
   }
 
   async ensureOperatorFunded() {
     try {
       const bal = parseFloat(await rpc.getBalance(rpc.wallet.address));
-      if (bal < 10) {
-        console.log(`⚠️ [Refill] Operator low (${bal} USDC). Refilling 100...`);
-        const tx = await this.treasuryContract.withdraw(ethers.parseUnits("100", 18), { gasLimit: 150000 });
+      if (bal < 5) { // Minimum gas threshold
+        console.log(`⚠️ [GasTank] Low (${bal} ARC). Refilling 20 ARC...`);
+        const tx = await this.treasuryContract.withdraw(ethers.parseUnits("20", 18), { gasLimit: 150000 });
         await tx.wait();
-        console.log("✅ [Refill] Success.");
       }
     } catch (e) {
-      console.error("[Refill] Failed:", e.message);
+      console.error("[GasTank] Refill failed:", e.message);
     }
   }
 }
