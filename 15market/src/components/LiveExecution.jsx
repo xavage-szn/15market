@@ -188,10 +188,11 @@ function LiveExecutionComponent({
                                             const isExpired = isLocked || trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.timeLeft !== undefined && trade.timeLeft <= 0);
                                             
                                             // Authority: If locked by backend, use backend's exit price (trade.livePrice).
-                                            // If expired but no backend price yet, we freeze at the last known backend tick price to prevent further movement.
+                                            // If expired but no backend price yet, we freeze at the last known backend tick price.
+                                            // CRITICAL: We NO LONGER fall back to the global 'price' once expired to prevent market watching.
                                             const currentPriceVal = (isLocked && trade.livePrice !== undefined) 
                                                 ? parseFloat(trade.livePrice) 
-                                                : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || price) : parseFloat(price));
+                                                : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || trade.entryPrice) : parseFloat(price));
 
                                             const multiplier = trade.duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
