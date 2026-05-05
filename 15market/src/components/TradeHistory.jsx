@@ -1,5 +1,5 @@
 import React, { memo, useState, useMemo } from 'react';
-import { Lock, Share2 } from 'lucide-react';
+import { Lock, Share2, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 function TradeHistoryComponent({
     tradeHistory,
@@ -78,7 +78,7 @@ function TradeHistoryComponent({
                                         </div>
                                         <div className="flex flex-col">
                                             <div className={`text-[10px] lg:text-sm font-bold ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>
-                                                {t.status === 'WON' ? `+${Number(t.payout || (t.amount * (t.duration <= 5 ? 2.90 : t.duration <= 10 ? 2.40 : 1.90))).toFixed(2)}` : `${Number(t.amount).toFixed(2)}`} USDC
+                                                {(t.status === 'WON' || t.status === 'PAID') ? `+${Number(t.payout || (t.amount * (t.duration <= 5 ? 2.90 : t.duration <= 10 ? 2.40 : 1.90))).toFixed(2)}` : `${Number(t.amount).toFixed(2)}`} USDC
                                             </div>
                                             <div className="text-[7px] lg:text-[9px] uppercase font-black opacity-30">{t.symbol || 'ETH'} // {isRounds ? 'P2P Pool' : 'Binary'}</div>
                                         </div>
@@ -93,22 +93,36 @@ function TradeHistoryComponent({
                                         <div className={`text-[8px] font-mono hidden lg:block ${isLight ? 'text-[#0a261a]/30' : 'text-white/20'}`}>{t.timestamp}</div>
 
                                         <div
-                                            className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all flex items-center gap-1 lg:gap-2 ${t.status === "WON" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
+                                            className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all flex items-center gap-1 lg:gap-2 ${t.status === "WON" || t.status === "PAID" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
                                                 t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
                                                     (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                                 }`}
                                         >
-                                            {(t.status === "WON" || t.status === "PAID") ? (
-                                                <div className="flex flex-col items-end">
+                                            {(t.status === "WON" || t.status === "PAID" || t.status === "PAYOUT_FAILED") ? (
+                                                <div className="flex items-center gap-2">
                                                     <span>WON</span>
-                                                    {(t.payoutPending || t.status === "WON") && t.status !== "PAID" && (
-                                                        <span className="text-[6px] opacity-60 animate-pulse">PAYOUT PENDING</span>
+                                                    {(t.payoutPending || t.status === "WON") && t.status !== "PAID" && t.status !== "PAYOUT_FAILED" && (
+                                                        <div className="flex items-center gap-1">
+                                                            <Loader2 size={10} className="animate-spin opacity-60" />
+                                                            <span className="text-[6px] opacity-60 uppercase">Pending Payout</span>
+                                                        </div>
                                                     )}
                                                     {t.status === "PAID" && (
-                                                        <span className="text-[6px] opacity-80">PAID</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <CheckCircle2 size={10} className="text-[#3CB371]" />
+                                                            <span className="text-[6px] opacity-80 uppercase">Paid</span>
+                                                        </div>
+                                                    )}
+                                                    {t.status === "PAYOUT_FAILED" && (
+                                                        <div className="flex items-center gap-1">
+                                                            <XCircle size={10} className="text-[#FF7F50]" />
+                                                            <span className="text-[6px] opacity-80 uppercase">Payout Failed</span>
+                                                        </div>
                                                     )}
                                                 </div>
-                                            ) : t.status}
+                                            ) : (
+                                                <span>{t.status}</span>
+                                            )}
 
                                             {t.tx && (
                                                 <a href={`https://testnet.arcscan.app/tx/${t.tx}`} target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 transition-opacity">

@@ -200,6 +200,10 @@ class ClassicEngine {
 
     } catch (err) {
       console.error(`❌ [On-Chain] Settlement failed for #${trade.id}:`, err.message);
+      this.io.to(trade.userAddr).emit('payout_failed', { 
+        betId: trade.id, 
+        message: err.message 
+      });
       trade.onChainSettleStarted = false;
       this.payoutNonce = null;
     }

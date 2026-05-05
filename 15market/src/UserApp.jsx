@@ -1161,14 +1161,15 @@ export default function UserApp() {
 
     const unbindPayout = socketService.on('payout_completed', (data) => {
       console.log("[Socket] Payout Completed:", data);
-      const tid = String(data.betId);
+      const tid = String(data.betId || data.tradeId);
       
       const updateFn = (t) => {
         if (String(t.id || t.tx || t.nonce) === tid) {
           return { 
             ...t, 
             status: 'PAID',
-            payoutTx: data.txHash,
+            payoutTx: data.txHash || data.tx,
+            tx: data.txHash || data.tx,
             payoutPending: false,
             confirmed: true
           };
@@ -1180,6 +1181,27 @@ export default function UserApp() {
       setTradeHistory(prev => prev.map(updateFn));
       notify(`Payout Confirmed: +$${parseFloat(data.payout || 0).toFixed(2)}`, "success");
       triggerGlobalRefresh(true);
+    });
+
+    const unbindPayoutFailed = socketService.on('payout_failed', (data) => {
+      console.warn("[Socket] Payout Failed:", data);
+      const tid = String(data.betId || data.tradeId);
+      
+      const updateFn = (t) => {
+        if (String(t.id || t.tx || t.nonce) === tid) {
+          return { 
+            ...t, 
+            status: 'PAYOUT_FAILED',
+            payoutPending: false,
+            error: data.message || "On-chain payout failed"
+          };
+        }
+        return t;
+      };
+
+      setActiveTrades(prev => prev.map(updateFn));
+      setTradeHistory(prev => prev.map(updateFn));
+      notify(`Payout Failed: ${data.message || "Network Error"}`, "error");
     });
 
     // Consolidated trade_tick and trade_expired listeners moved to authoritative block below.
@@ -1196,6 +1218,7 @@ export default function UserApp() {
     return () => {
       unbindBal();
       unbindPayout();
+      unbindPayoutFailed();
       unbindTick();
       unbindExpired();
       unbindSettled();
@@ -1426,13 +1449,6 @@ export default function UserApp() {
 
         notify("Broadcasting Entry...", "pending");
 
-        // --- INSTANT UI START FOR ROUNDS ---
-        lastOptimisticActionTime.current = Date.now();
-        setSessionBalance(prev => Math.max(0, prev - amtNum));
-        // #region agent log
-        postDebugLog({runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:executeTrade:rounds:deduct2',message:'rounds second optimistic deduction applied',data:{probeId,amtNum,balanceBefore:sessionBalanceRef.current}});
-        // #endregion
-
         const roundTrade = {
           id: `round-${roundId}-${Date.now()}`,
           type: 'rounds',
@@ -1558,10 +1574,6 @@ export default function UserApp() {
               ? { ...t, id: confirmedTradeId, tx: txHash, confirmed: true, status: 'PENDING' }
               : t
           ));
-
-          if (data.newBalance !== undefined) {
-            setSessionBalance(parseFloat(data.newBalance));
-          }
 
           notify('Trade Active ✓', 'success');
         } catch (err) {
@@ -3200,6 +3212,7 @@ export default function UserApp() {
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
         wallet={wallet}
+        evmSessionWallet={evmSessionWallet}
         userProfile={userProfile}
         sessionBalance={sessionBalance}
         evmBalance={evmBalance}

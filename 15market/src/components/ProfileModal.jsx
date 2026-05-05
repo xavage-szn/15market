@@ -15,7 +15,22 @@ const PRESET_AVATARS = [
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Peanut"
 ];
 
-export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, transactionHistory = [], onViewReceipt, notify, theme, onUpdate, sessionBalance, evmBalance, onDeposit, onWithdraw }) {
+export function ProfileModal({ 
+    isOpen, 
+    onClose, 
+    wallet, 
+    evmSessionWallet,
+    userProfile = null, 
+    transactionHistory = [], 
+    onViewReceipt, 
+    notify, 
+    theme, 
+    onUpdate, 
+    sessionBalance, 
+    evmBalance, 
+    onDeposit, 
+    onWithdraw 
+}) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
     const [discordHandle, setDiscordHandle] = useState("");
@@ -122,6 +137,8 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
         }
     };
     if (!isOpen) return null;
+
+    const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
         <AnimatePresence>
@@ -250,14 +267,47 @@ export function ProfileModal({ isOpen, onClose, wallet, userProfile = null, tran
 
                     <div className="mb-6">
                         <div className={`p-4 rounded-[24px] ${isLight ? 'bg-white border-black/5' : 'bg-[#151515] border-white/5'} border shadow-xl`}>
-                            <div className="flex items-center justify-between mb-4">
-                                <div>
-                                    <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Session Wallet</p>
-                                    <h4 className={`text-lg font-black ${isLight ? 'text-black' : 'text-white'}`}>{Number(sessionBalance || 0).toFixed(2)} <span className="text-[10px] opacity-40">USDC</span></h4>
-                                </div>
-                                <div className="text-right">
-                                    <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Main Wallet</p>
-                                    <p className={`text-xs font-bold ${isLight ? 'text-black/60' : 'text-white/60'}`}>{Number(evmBalance || 0).toFixed(2)} USDC</p>
+                            <div className="flex flex-col gap-4 mb-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                        <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Trading Wallet (On-Chain)</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <h4 className={`text-sm font-black font-mono ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>
+                                                {truncate(evmSessionWallet?.address)}
+                                            </h4>
+                                            <div className="flex items-center gap-1.5">
+                                                <button 
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(evmSessionWallet?.address);
+                                                        notify("Copied to clipboard!", "success");
+                                                    }}
+                                                    className={`p-1 rounded-md ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'} transition-all`}
+                                                    title="Copy Address"
+                                                >
+                                                    <LinkIcon size={10} className="opacity-40" />
+                                                </button>
+                                                {evmSessionWallet?.address && (
+                                                    <a 
+                                                        href={`https://testnet.arcscan.app/address/${evmSessionWallet.address}`} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className={`p-1 rounded-md ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'} transition-all`}
+                                                        title="View on ArcScan"
+                                                    >
+                                                        <Shield size={10} className="text-[#3CB371] opacity-60" />
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="mt-1">
+                                            <span className={`text-[12px] font-black ${isLight ? 'text-black' : 'text-white'}`}>{Number(sessionBalance || 0).toFixed(2)} <span className="text-[8px] opacity-40">USDC</span></span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Main Source</p>
+                                        <p className={`text-[10px] font-bold font-mono ${isLight ? 'text-black/60' : 'text-white/60'}`}>{truncate(address)}</p>
+                                        <p className={`text-[10px] font-black ${isLight ? 'text-black/60' : 'text-white/60'}`}>{Number(evmBalance || 0).toFixed(2)} USDC</p>
+                                    </div>
                                 </div>
                             </div>
 

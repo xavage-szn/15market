@@ -94,12 +94,23 @@ function LiveExecutionComponent({
     useEffect(() => { priceRefInternal.current = price; }, [price]);
 
     const lastTimeRef = useRef({}); // tradeId -> lastTime
+    const capturedResultsRef = useRef({}); // tradeId -> { won, exitPrice }
 
     const removeTrade = (id) => {
         setActiveTrades(prev => prev.filter(t => t.id !== id));
+        delete capturedResultsRef.current[id];
     };
 
-
+    // --- CLEANUP ---
+    useEffect(() => {
+        // Remove captured results for trades no longer in activeTrades
+        const activeIds = new Set(activeTrades.map(t => t.id));
+        Object.keys(capturedResultsRef.current).forEach(id => {
+            if (!activeIds.has(id) && !activeIds.has(Number(id))) {
+                delete capturedResultsRef.current[id];
+            }
+        });
+    }, [activeTrades]);
 
     // Auto-collapse when only 0-1 trades remain
     useEffect(() => {
@@ -192,7 +203,9 @@ function LiveExecutionComponent({
                                             // CRITICAL: We NO LONGER fall back to the global 'price' once expired to prevent market watching.
                                             const currentPriceVal = (isLocked && trade.livePrice !== undefined) 
                                                 ? parseFloat(trade.livePrice) 
-                                                : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || trade.entryPrice) : parseFloat(price));
+                                                : (capturedResultsRef.current[trade.id] !== undefined
+                                                    ? parseFloat(capturedResultsRef.current[trade.id].exitPrice)
+                                                    : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || trade.entryPrice) : parseFloat(price)));
 
                                             const multiplier = trade.duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
                                             const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier).toFixed(2) : "0.00";
@@ -203,13 +216,27 @@ function LiveExecutionComponent({
                                             // 1. trade.won: set by trade_settled (final).
                                             // 2. trade.isWinning: set by backend trade_tick (authoritative live).
                                             // 3. Local price comparison: fallback for active trades if tick is missing.
+                                            const localWinCalc = (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                                                                    ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                                                                    : false);
+
+                                            // ── RESULT CAPTURE (GHOST LOCK) ──
+                                            // If the timer has expired but the backend hasn't sent the final 'won' status yet,
+                                            // we capture the current win state and freeze it to prevent flickering.
+                                            if (timerExpired && !isLocked && capturedResultsRef.current[trade.id] === undefined) {
+                                                capturedResultsRef.current[trade.id] = {
+                                                    won: (trade.isWinning !== undefined ? trade.isWinning : localWinCalc),
+                                                    exitPrice: currentPriceVal
+                                                };
+                                            }
+
                                             const liveWinning = trade.won !== undefined
                                                 ? trade.won
-                                                : (trade.isWinning !== undefined 
-                                                    ? trade.isWinning 
-                                                    : (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                        ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                        : false));
+                                                : (capturedResultsRef.current[trade.id] !== undefined
+                                                    ? capturedResultsRef.current[trade.id].won
+                                                    : (trade.isWinning !== undefined 
+                                                        ? trade.isWinning 
+                                                        : localWinCalc));
 
                                             // Seamless UI Transition: Flip to result card instantly when timer expires
                                             const showInstantResult = timerExpired && !isFinal;
