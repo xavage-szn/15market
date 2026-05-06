@@ -845,9 +845,7 @@ app.get('/listings', (req, res) => {
     { id: 'sol', symbol: 'SOL', name: 'Solana' },
   ]);
 });
-let activeCampaigns = [
-  { id: 'genesis-1', title: 'Genesis Trading Pool', prize: '$1,000 USDC', startTime: Date.now() - 86400000, endTime: Date.now() + 86400000 * 7 }
-];
+let activeCampaigns = [];
 let campaignEnrollments = {};
 
 app.get('/campaigns', (req, res) => res.json(activeCampaigns));

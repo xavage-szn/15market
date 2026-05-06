@@ -1,69 +1,8 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig, random, Img, staticFile } from "remotion";
+import { interpolate, useCurrentFrame, useVideoConfig, Img, staticFile } from "remotion";
 import { COLORS, FONTS } from "../constants";
 
-export const BackgroundGrid: React.FC = () => {
-  const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 30], [0, 0.08], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  
-  return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        backgroundImage: `
-          linear-gradient(#0D1F0D 1px, transparent 1px),
-          linear-gradient(90deg, #0D1F0D 1px, transparent 1px)
-        `,
-        backgroundSize: "60px 60px",
-        opacity,
-      }}
-    />
-  );
-};
-
-export const GreenParticles: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { height } = useVideoConfig();
-  const count = 100;
-  
-  return (
-    <AbsoluteFill style={{ overflow: "hidden" }}>
-      {new Array(count).fill(0).map((_, i) => {
-        const startX = random(`px-${i}`) * 100;
-        const startY = height + random(`py-${i}`) * height;
-        const speed = 0.5 + random(`ps-${i}`) * 2;
-        const y = startY - frame * speed;
-        const op = 0.2 + random(`po-${i}`) * 0.2;
-        
-        return (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: `${startX}%`,
-              top: y,
-              width: 3,
-              height: 3,
-              borderRadius: "50%",
-              backgroundColor: COLORS.green,
-              opacity: op,
-              boxShadow: `0 0 4px ${COLORS.green}`,
-            }}
-          />
-        );
-      })}
-    </AbsoluteFill>
-  );
-};
-
 export const GlowPulse: React.FC<{ color?: string }> = ({ color = COLORS.green }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  
-  const cycle = (frame % (fps * 2)) / (fps * 2);
-  const pulse = Math.sin(cycle * Math.PI);
-  
   return (
     <div
       style={{
@@ -71,11 +10,10 @@ export const GlowPulse: React.FC<{ color?: string }> = ({ color = COLORS.green }
         width: 600,
         height: 600,
         borderRadius: "50%",
-        background: `radial-gradient(circle, ${color}33 0%, transparent 70%)`,
-        opacity: 0.5 + pulse * 0.5,
-        transform: `translate(-50%, -50%) scale(${1 + pulse * 0.2})`,
+        background: `radial-gradient(circle, ${color}15 0%, transparent 70%)`,
         left: "50%",
         top: "50%",
+        transform: "translate(-50%, -50%)",
         pointerEvents: "none",
       }}
     />
@@ -85,19 +23,15 @@ export const GlowPulse: React.FC<{ color?: string }> = ({ color = COLORS.green }
 export const TerminalText: React.FC<{ text: string; style?: React.CSSProperties; delay?: number }> = ({ text, style, delay = 0 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const framesPerChar = (40 / 1000) * fps; // 40ms per char
+  const framesPerChar = (40 / 1000) * fps;
   
   const localFrame = Math.max(0, frame - delay);
   const charsToShow = Math.floor(localFrame / framesPerChar);
   const displayedText = text.substring(0, charsToShow);
-  
-  const cursorBlink = Math.floor(frame / 15) % 2 === 0;
-  const isDone = charsToShow >= text.length;
 
   return (
     <span style={{ fontFamily: FONTS.terminal, color: COLORS.green, ...style }}>
       {displayedText}
-      <span style={{ opacity: isDone && !cursorBlink ? 0 : 1 }}>█</span>
     </span>
   );
 };
@@ -111,9 +45,86 @@ export const Logo3D: React.FC<{ style?: React.CSSProperties }> = ({ style }) => 
           width: "100%", 
           height: "100%", 
           objectFit: "contain",
-          filter: `drop-shadow(0 0 40px ${COLORS.green}) drop-shadow(0 0 80px ${COLORS.green}) drop-shadow(0 0 120px #00A850)`,
         }} 
       />
+    </div>
+  );
+};
+
+// ─── JITTER SCROLL COMPONENT ──────────────────────────────────────────────────
+export interface JitterScrollProps {
+  items: string[];
+  delay?: number;
+  itemHeight?: number;
+  speed?: number; // pixels per frame
+  style?: React.CSSProperties;
+}
+
+export const JitterScroll: React.FC<JitterScrollProps> = ({ 
+  items, 
+  delay = 0, 
+  itemHeight = 80,
+  speed = 15,
+  style
+}) => {
+  const frame = useCurrentFrame();
+  const { height } = useVideoConfig();
+  
+  const localFrame = Math.max(0, frame - delay);
+  
+  // Total distance scrolled
+  const scrolledY = localFrame * speed;
+  
+  // We offset by half the screen so the first item starts in the middle
+  const startY = height / 2;
+
+  return (
+    <div style={{ position: "absolute", width: "100%", height: "100%", overflow: "hidden", display: "flex", justifyContent: "center", ...style }}>
+      <div style={{ position: "absolute", top: startY, width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        {items.map((item, i) => {
+          // Position of this item relative to the container
+          const itemY = i * itemHeight;
+          // Current absolute Y position on screen (from center = 0)
+          const currentY = itemY - scrolledY;
+          
+          // Calculate distance from center
+          const distFromCenter = Math.abs(currentY);
+          
+          // Blur and opacity based on distance from center
+          const blur = interpolate(distFromCenter, [0, itemHeight, itemHeight * 3], [0, 2, 8], { extrapolateRight: "clamp" });
+          const opacity = interpolate(distFromCenter, [0, itemHeight, itemHeight * 4], [1, 0.5, 0], { extrapolateRight: "clamp" });
+          const scale = interpolate(distFromCenter, [0, itemHeight], [1, 0.9], { extrapolateRight: "clamp" });
+
+          const isCenter = distFromCenter < itemHeight / 2;
+
+          return (
+            <div 
+              key={i}
+              style={{
+                position: "absolute",
+                top: itemY - scrolledY - itemHeight/2, // Center the item vertically
+                height: itemHeight,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity,
+                filter: `blur(${blur}px)`,
+                transform: `scale(${scale})`,
+                fontFamily: FONTS.headline,
+                fontSize: 64,
+                fontWeight: isCenter ? 800 : 600,
+                color: isCenter ? COLORS.white : COLORS.gray,
+                whiteSpace: "nowrap"
+              }}
+            >
+              {isCenter && (
+                <span style={{ position: "absolute", left: -60, color: COLORS.white }}>→</span>
+              )}
+              {item}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
