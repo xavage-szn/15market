@@ -18,6 +18,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     theme,
     isSmallScreen,
     evmSessionWallet,
+    isSignerInitializing,
     transactionHistory,
     onViewReceipt,
     uiVersion,
@@ -104,6 +105,20 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     }, [userHistory, currentPage]);
 
     const totalPages = Math.ceil(userHistory.length / ITEMS_PER_PAGE);
+
+    const hasActiveCampaign = useMemo(() => {
+        return campaigns.some(c => enrollments[c.id] && Date.now() >= c.startTime);
+    }, [campaigns, enrollments]);
+
+    // Auto-select active enrolled campaign
+    useEffect(() => {
+        if (!selectedCampaignId && campaigns.length > 0) {
+            const activeEnrolled = campaigns.find(c => enrollments[c.id] && Date.now() >= c.startTime);
+            if (activeEnrolled) {
+                setSelectedCampaignId(activeEnrolled.id);
+            }
+        }
+    }, [campaigns, enrollments, selectedCampaignId]);
 
     // Fetch Data
     useEffect(() => {
@@ -239,7 +254,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
     return (
         <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
-            {!isSmallScreen && (
+            {!isSmallScreen && hasActiveCampaign && (
                 <CampaignLeaderboardPane 
                     isOpen={isLeaderboardOpen} 
                     onToggle={() => setIsLeaderboardOpen(!isLeaderboardOpen)} 
@@ -276,7 +291,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
                 <div 
                     className="w-full h-full p-4 md:p-6 lg:p-8 flex flex-col gap-6 transition-all duration-500"
-                    style={!isSmallScreen ? { paddingRight: isLeaderboardOpen ? '234px' : '52px' } : {}}
+                    style={!isSmallScreen && hasActiveCampaign ? { paddingRight: isLeaderboardOpen ? '234px' : '52px' } : {}}
                 >
                     {/* Unified Grid Layout - 3 Column: Controls | Transactions | Analytics+Chat */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0">
@@ -381,7 +396,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                                 }}
                                                 className={`text-[8px] font-mono opacity-40 hover:opacity-100 cursor-pointer transition-all mt-1 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
                                             >
-                                                {evmSessionWallet?.address ? truncate(evmSessionWallet.address) : (address ? "Ready" : "Connect Wallet")}
+                                                {evmSessionWallet?.address ? truncate(evmSessionWallet.address) : (isSignerInitializing ? "Syncing..." : (address ? "Not Ready (Retry)" : "Connect Wallet"))}
                                                 {evmSessionWallet?.address && <Copy size={8} />}
                                             </div>
                                         </div>
@@ -512,7 +527,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
                         {/* COL 3: Analytics Stats + Community Chat (lg:col-span-5) */}
                         <div className={`lg:col-span-5 flex flex-col gap-5 min-h-0 ${isSmallScreen ? 'relative' : ''}`}>
-                            {isSmallScreen && (
+                            {isSmallScreen && hasActiveCampaign && (
                                 <CampaignLeaderboardPane 
                                     isOpen={isLeaderboardOpen} 
                                     onToggle={() => setIsLeaderboardOpen(!isLeaderboardOpen)} 

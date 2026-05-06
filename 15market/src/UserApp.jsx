@@ -984,7 +984,7 @@ export default function UserApp() {
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address })
+        body: JSON.stringify({ address: address.toLowerCase() })
       }).catch(err => {
         throw new Error(`Connection to Backend Failed`);
       });
@@ -1301,11 +1301,9 @@ export default function UserApp() {
       fetchMyProfile();
       
       // 2. Ensure session wallet is initialized immediately if missing
-      if (!evmSessionWallet && !isSignerInitializing) {
-          initializeSessionWallet();
-      }
+      // (Consolidated with the auto-init logic above to prevent loops)
     }
-  }, [address, triggerGlobalRefresh, fetchMyProfile, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
+  }, [address, triggerGlobalRefresh, fetchMyProfile]);
 
   const closeToast = useCallback(() => {
     setToast(null);
@@ -2859,6 +2857,7 @@ export default function UserApp() {
           theme={theme}
           isSmallScreen={isSmallScreen}
           evmSessionWallet={evmSessionWallet}
+          isSignerInitializing={isSignerInitializing}
           transactionHistory={transactionHistory}
           uiVersion={uiVersion}
           onViewReceipt={(tx) => {
@@ -3271,6 +3270,7 @@ export default function UserApp() {
         wallet={wallet}
         evmSessionWallet={evmSessionWallet}
         userProfile={userProfile}
+        isSignerInitializing={isSignerInitializing}
         sessionBalance={sessionBalance}
         evmBalance={evmBalance}
         onDeposit={handleDeposit}
