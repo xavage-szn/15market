@@ -272,10 +272,9 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                 </div>
             </div>
 
-            <div className="flex-1 overflow-hidden">
                 <div 
-                    className="w-full h-full p-4 md:p-6 lg:p-8 flex flex-col gap-6 transition-all duration-500"
-                    style={{ paddingRight: !isSmallScreen && isLeaderboardOpen ? '260px' : (!isSmallScreen ? '36px' : '16px') }}
+                    className="w-full h-full p-4 md:p-6 lg:p-8 flex flex-col gap-6"
+                    style={!isSmallScreen && isLeaderboardOpen ? { paddingRight: '260px' } : {}}
                 >
                     {/* Unified Grid Layout - 3 Column: Controls | Transactions | Analytics+Chat */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0">

@@ -2,19 +2,27 @@ import React from "react";
 import { interpolate, useCurrentFrame, useVideoConfig, Img, staticFile } from "remotion";
 import { COLORS, FONTS } from "../constants";
 
-export const GlowPulse: React.FC<{ color?: string }> = ({ color = COLORS.green }) => {
+export const AmbientGlow: React.FC<{ color?: string; xOffset?: number; yOffset?: number; delay?: number }> = ({ color = COLORS.green, xOffset = 0, yOffset = 0, delay = 0 }) => {
+  const frame = useCurrentFrame();
+  
+  // Slow floating motion
+  const x = Math.sin((frame - delay) * 0.01) * 200 + xOffset;
+  const y = Math.cos((frame - delay) * 0.015) * 200 + yOffset;
+  const scale = 1 + Math.sin((frame - delay) * 0.02) * 0.2;
+
   return (
     <div
       style={{
         position: "absolute",
-        width: 600,
-        height: 600,
+        width: 800,
+        height: 800,
         borderRadius: "50%",
-        background: `radial-gradient(circle, ${color}15 0%, transparent 70%)`,
+        background: `radial-gradient(circle, ${color}22 0%, transparent 60%)`,
         left: "50%",
         top: "50%",
-        transform: "translate(-50%, -50%)",
+        transform: `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${scale})`,
         pointerEvents: "none",
+        filter: "blur(40px)",
       }}
     />
   );
@@ -57,6 +65,7 @@ export interface JitterScrollProps {
   delay?: number;
   itemHeight?: number;
   speed?: number; // pixels per frame
+  align?: "flex-start" | "center" | "flex-end";
   style?: React.CSSProperties;
 }
 
@@ -65,6 +74,7 @@ export const JitterScroll: React.FC<JitterScrollProps> = ({
   delay = 0, 
   itemHeight = 80,
   speed = 15,
+  align = "center",
   style
 }) => {
   const frame = useCurrentFrame();
@@ -79,8 +89,8 @@ export const JitterScroll: React.FC<JitterScrollProps> = ({
   const startY = height / 2;
 
   return (
-    <div style={{ position: "absolute", width: "100%", height: "100%", overflow: "hidden", display: "flex", justifyContent: "center", ...style }}>
-      <div style={{ position: "absolute", top: startY, width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div style={{ position: "absolute", width: "100%", height: "100%", overflow: "hidden", display: "flex", justifyContent: align, ...style }}>
+      <div style={{ position: "absolute", top: startY, width: "100%", display: "flex", flexDirection: "column", alignItems: align }}>
         {items.map((item, i) => {
           // Position of this item relative to the container
           const itemY = i * itemHeight;

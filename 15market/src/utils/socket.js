@@ -37,10 +37,13 @@ class SocketService {
         if (!this.socket) this.connect();
         this.listeners.set(event, callback);
         this.socket.on(event, callback);
-        return () => {
-            this.listeners.delete(event);
-            this.socket.off(event, callback);
-        };
+        return () => this.off(event, callback);
+    }
+
+    off(event, callback) {
+        if (!this.socket) return;
+        this.listeners.delete(event);
+        this.socket.off(event, callback);
     }
 
     emit(event, data) {
