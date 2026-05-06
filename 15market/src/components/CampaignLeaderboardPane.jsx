@@ -14,46 +14,54 @@ const CampaignLeaderboardPane = ({
     const isDark = theme !== 'light';
 
     if (isSmallScreen) {
-        // Mobile layout (slides up from bottom)
+        // Mobile layout (slides up from bottom) - Exactly matching MobileBottomHistoryPane
         return (
             <motion.div
                 initial={false}
-                animate={{ y: isOpen ? 0 : "calc(100% - 48px)" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className={`fixed bottom-[60px] md:bottom-0 left-0 right-0 h-[70vh] z-[100] rounded-t-[32px] overflow-hidden flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.3)]
-                    ${isDark ? 'bg-[#0a0a0a]/95 border-t border-white/10 backdrop-blur-xl' : 'bg-[#d4e6dc]/95 border-t border-[#3CB371]/20 backdrop-blur-xl'}
-                `}
+                animate={{
+                    y: isOpen ? 0 : 'calc(100% - 32px)',
+                }}
+                transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+                className="absolute inset-0 z-[110] flex flex-col pointer-events-none"
+                style={{ height: '100%' }}
             >
-                {/* Persistent Handle / Toggle Bar */}
-                <div 
-                    onClick={onToggle}
-                    className={`w-full h-12 flex items-center justify-between px-6 cursor-pointer ${isDark ? 'hover:bg-white/5' : 'hover:bg-[#3CB371]/10'} transition-colors shrink-0`}
-                >
-                    <div className="flex items-center gap-2">
-                        <Trophy size={16} className="text-[#3CB371]" />
-                        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
-                            Leaderboard
-                        </span>
+                <div className={`
+                    w-full h-full pointer-events-auto
+                    backdrop-blur-xl border-t border-x rounded-t-[32px]
+                    flex flex-col overflow-hidden
+                    ${isDark
+                        ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
+                        : 'bg-gradient-to-br from-[#E2EFEA]/98 to-[#D9E9E2]/98 shadow-none border-[1.5px] border-[#3CB371]'}
+                `}>
+                    {/* Horizontal Toggle Handle Bar - Matching MobileBottomHistoryPane */}
+                    <div
+                        onClick={onToggle}
+                        className={`
+                            w-full h-8 flex items-center justify-center cursor-pointer 
+                            transition-all duration-300 relative shrink-0
+                            ${isDark 
+                                ? 'bg-white/5 border-b border-white/5' 
+                                : 'bg-black/5 border-b border-black/5'}
+                        `}
+                    >
+                        {/* Branded "Glow Line" at the top edge */}
+                        {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />}
+                        
+                        <div className="flex items-center justify-center gap-3 w-full">
+                            <Trophy size={14} className={isDark ? "text-white" : "text-[#0a261a]"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
+                            <span className={`text-[11px] font-black uppercase tracking-[0.25em] ${isDark ? "text-white" : "text-[#0a261a]"}`}>
+                                LEADERBOARD ({leaderboard.length})
+                            </span>
+                            {isOpen ? <ChevronDown size={12} className={isDark ? "text-white/80" : "text-black/60"} /> : <ChevronUp size={12} className={isDark ? "text-white/80" : "text-black/60"} />}
+                        </div>
                     </div>
-                    <div className={`w-12 h-1.5 rounded-full ${isDark ? 'bg-white/20' : 'bg-[#0f2618]/20'}`} />
-                    {isOpen ? <ChevronDown size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronUp size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
-                </div>
 
-                <div className="flex items-center justify-between px-6 pb-4">
-                    <div className="flex items-center gap-2">
-                        <h2 className={`text-lg font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>Live Leaderboard</h2>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 uppercase tracking-widest">
-                        {leaderboard.length} Entries
-                    </span>
-                </div>
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-8 flex flex-col gap-2">
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-12 flex flex-col gap-2">
                     {leaderboard.length === 0 ? (
                         <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
                             <Trophy size={48} className="mb-4" />
                             <p className="text-[10px] font-black uppercase tracking-widest text-center mt-2 leading-relaxed">
-                                You're not in an active campaign.<br/><br/>Subscribe to an active campaign to see the leaderboard.
+                                NO ACTIVE CAMPAIGN DATA
                             </p>
                         </div>
                     ) : (
@@ -62,7 +70,7 @@ const CampaignLeaderboardPane = ({
                             return (
                                 <div 
                                     key={entry.address}
-                                    className={`flex items-center justify-between p-3 rounded-[20px] transition-all
+                                    className={`flex items-center justify-between p-4 rounded-[20px] transition-all
                                         ${isMe 
                                             ? 'bg-[#3CB371]/20 border border-[#3CB371]/40 shadow-[0_0_15px_rgba(60,179,113,0.15)]' 
                                             : isDark ? 'bg-white/5 border border-white/5 hover:border-white/10' : 'bg-white/40 border border-[#3CB371]/10'
@@ -91,6 +99,7 @@ const CampaignLeaderboardPane = ({
                             )
                         })
                     )}
+                </div>
                 </div>
             </motion.div>
         );

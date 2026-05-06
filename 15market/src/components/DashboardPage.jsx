@@ -239,15 +239,17 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
     return (
         <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
-            <CampaignLeaderboardPane 
-                isOpen={isLeaderboardOpen} 
-                onToggle={() => setIsLeaderboardOpen(!isLeaderboardOpen)} 
-                leaderboard={activeCampaignLeaderboard} 
-                theme={theme} 
-                address={address} 
-                truncate={truncate} 
-                isSmallScreen={isSmallScreen} 
-            />
+            {!isSmallScreen && (
+                <CampaignLeaderboardPane 
+                    isOpen={isLeaderboardOpen} 
+                    onToggle={() => setIsLeaderboardOpen(!isLeaderboardOpen)} 
+                    leaderboard={activeCampaignLeaderboard} 
+                    theme={theme} 
+                    address={address} 
+                    truncate={truncate} 
+                    isSmallScreen={isSmallScreen} 
+                />
+            )}
             <div className={`flex-none ${isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
                 <div className="max-w-[1600px] mx-auto p-3 md:px-8 md:py-4">
                     <div className="flex items-center justify-between">
@@ -509,7 +511,18 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                         )}
 
                         {/* COL 3: Analytics Stats + Community Chat (lg:col-span-5) */}
-                        <div className="lg:col-span-5 flex flex-col gap-5 min-h-0">
+                        <div className={`lg:col-span-5 flex flex-col gap-5 min-h-0 ${isSmallScreen ? 'relative' : ''}`}>
+                            {isSmallScreen && (
+                                <CampaignLeaderboardPane 
+                                    isOpen={isLeaderboardOpen} 
+                                    onToggle={() => setIsLeaderboardOpen(!isLeaderboardOpen)} 
+                                    leaderboard={activeCampaignLeaderboard} 
+                                    theme={theme} 
+                                    address={address} 
+                                    truncate={truncate} 
+                                    isSmallScreen={isSmallScreen} 
+                                />
+                            )}
                             {/* Analytics Quick Stats */}
                             <div className="grid grid-cols-2 gap-3 flex-none">
                                 <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'}`}>

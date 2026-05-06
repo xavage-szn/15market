@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, random, Easing } from "remotion";
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, random, Easing, Img, staticFile } from "remotion";
 import { COLORS, FONTS } from "../constants";
 import { Logo3D, TerminalText, JitterScroll, AmbientGlow } from "../components/GlobalComponents";
 
@@ -257,7 +257,7 @@ export const Scene9: React.FC = () => {
         {/* TOP NAV */}
         <div style={{ height: 70, borderBottom: "1px solid rgba(0,230,118,0.2)", display: "flex", alignItems: "center", padding: "0 30px", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontFamily: FONTS.headline, fontWeight: 900, color: COLORS.greenGlow, fontSize: 24 }}>15<span style={{ color: COLORS.white }}>market</span></div>
+            <Img src={staticFile("15logo.png")} style={{ height: 32, width: "auto" }} />
           </div>
           
           {/* Classic / Rounds Toggle */}
