@@ -4,7 +4,102 @@ import { COLORS, FONTS } from "../constants";
 import { Logo3D, TerminalText, AmbientGlow, ArcGraphics } from "../components/GlobalComponents";
 
 // ─── SCENE 11: THE CLASSIC MODEL ───────────────────────────────────────────────
-// ... lines 7-101 (unchanged)
+export const Scene11: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  const card = { title: "THE CLASSIC MODEL", color: COLORS.greenGlow, desc1: "PLAYER vs HOUSE", desc2: "INSTANT SETTLEMENT" };
+
+  const s = spring({ frame: Math.max(0, frame - 30), fps, config: { damping: 20, stiffness: 150 } });
+  const scale = interpolate(s, [0, 1], [0.9, 1]);
+  const blur = interpolate(s, [0, 1], [20, 0]);
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
+      
+      <AmbientGlow color={COLORS.green} xOffset={0} yOffset={0} delay={0} />
+
+      <div style={{ position: "absolute", top: 150 }}>
+        <TerminalText text="SIMPLE. FAST. DIRECT." style={{ fontSize: 32, letterSpacing: "8px", fontWeight: 300, color: COLORS.white, fontFamily: FONTS.terminal }} delay={0} />
+      </div>
+
+      <div style={{ 
+        width: 600, height: 400, 
+        background: "rgba(255,255,255,0.02)", 
+        border: "1px solid rgba(0,230,118,0.2)", 
+        borderRadius: 30, 
+        transform: `scale(${scale})`, 
+        opacity: s, 
+        padding: 60, 
+        display: "flex", 
+        flexDirection: "column", 
+        justifyContent: "center",
+        alignItems: "center",
+        filter: `blur(${blur}px)`,
+        backdropFilter: "blur(30px)",
+        boxShadow: `0 40px 100px rgba(0,0,0,0.5)` 
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ color: card.color, fontFamily: FONTS.headline, fontSize: 40, fontWeight: 800, letterSpacing: "4px", marginBottom: 40 }}>{card.title}</div>
+        </div>
+        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ color: COLORS.white, fontFamily: FONTS.headline, fontSize: 32, fontWeight: 300, letterSpacing: "4px" }}>{card.desc1}</div>
+          <div style={{ color: COLORS.gray, fontFamily: FONTS.body, fontSize: 18, letterSpacing: "2px" }}>{card.desc2}</div>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ─── SCENE 12: FUTURE MODELS TEASE ───────────────────────────────────────────
+export const Scene12: React.FC = () => {
+  const frame = useCurrentFrame();
+
+  const text1Op = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  const text2Op = interpolate(frame, [120, 140], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+
+  const models = ["ROUNDS", "LADDER", "CLASH", "SURGE"];
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 60, opacity: text1Op }}>
+        <div style={{ fontFamily: FONTS.headline, fontSize: 36, color: COLORS.gray, fontWeight: 300, letterSpacing: "8px" }}>AND WE'RE JUST GETTING STARTED</div>
+        <div style={{ display: "flex", gap: 30, marginTop: 20 }}>
+          {models.map((m, i) => {
+            const op = interpolate(frame - (40 + i * 15), [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+            const y = interpolate(frame - (40 + i * 15), [0, 20], [40, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+            return (
+              <div key={m} style={{ 
+                padding: "20px 40px", 
+                background: "rgba(255,255,255,0.02)",
+                border: `1px solid rgba(0,230,118,0.3)`, 
+                borderRadius: 16, 
+                color: COLORS.white, 
+                fontFamily: FONTS.headline, 
+                fontWeight: 800,
+                fontSize: 24, 
+                letterSpacing: "4px",
+                opacity: op, 
+                transform: `translateY(${y}px)`,
+                backdropFilter: "blur(20px)"
+              }}>
+                {m}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ position: "absolute", bottom: 150, opacity: text2Op, textAlign: "center" }}>
+        <div style={{ fontFamily: FONTS.headline, fontSize: 36, color: COLORS.white, fontWeight: 300, letterSpacing: "8px" }}>MORE MODELS COMING SOON.</div>
+        <div style={{ fontFamily: FONTS.terminal, fontSize: 20, color: COLORS.greenGlow, marginTop: 20, letterSpacing: "4px" }}>ALL BUILT AROUND THE 15-SECOND CORE.</div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// ─── SCENE 13: ARC ───────────────────────────────────────────────────────────
 export const Scene13: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();

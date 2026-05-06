@@ -5,11 +5,10 @@ import {
   spring,
   useCurrentFrame,
   useVideoConfig,
-  Img,
-  staticFile,
   Easing,
   random,
 } from "remotion";
+import { LogoVector } from "./FullVideo/components/GlobalComponents";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -120,8 +119,6 @@ export const LogoAnimation: React.FC = () => {
   // ── Phase timings (all in frames @ 30fps) ──
   const BURST_START = 0;
   const LOGO_IN_START = 8;
-  const SHINE_START = 50;
-  const SHINE_END = 90;
   const HOLD_END = durationInFrames - 25;
   const FADE_START = HOLD_END;
 
@@ -138,20 +135,6 @@ export const LogoAnimation: React.FC = () => {
     frame,
     [LOGO_IN_START, LOGO_IN_START + 10, FADE_START, durationInFrames],
     [0, 1, 1, 0],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-  );
-
-  // ── Shine sweep: a bright glint moving across the logo ──
-  const shineProgress = interpolate(frame, [SHINE_START, SHINE_END], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.inOut(Easing.ease),
-  });
-  const shineX = interpolate(shineProgress, [0, 1], [-300, 700]);
-  const shineOpacity = interpolate(
-    frame,
-    [SHINE_START, SHINE_START + 5, SHINE_END - 5, SHINE_END],
-    [0, 0.7, 0.7, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
 
@@ -271,29 +254,7 @@ export const LogoAnimation: React.FC = () => {
           justifyContent: "center",
         }}
       >
-        <Img
-          src={staticFile("15logo.png")}
-          style={{
-            width: 480,
-            height: "auto",
-            objectFit: "contain",
-          }}
-        />
-
-        {/* ── Shine sweep overlay ── */}
-        <div
-          style={{
-            position: "absolute",
-            top: -20,
-            left: shineX,
-            width: 80,
-            height: "calc(100% + 40px)",
-            background:
-              "linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.7) 50%, transparent 100%)",
-            opacity: shineOpacity,
-            pointerEvents: "none",
-          }}
-        />
+        <LogoVector size={120} drawProgress={interpolate(frame - LOGO_IN_START, [0, 40], [0, 1], { extrapolateRight: "clamp" })} />
       </div>
 
       {/* ── Tagline text ── */}

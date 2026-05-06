@@ -110,7 +110,7 @@ const CampaignLeaderboardPane = ({
         <motion.div
             initial={false}
             animate={{
-                width: isOpen ? 320 : 48,
+                width: isOpen ? 230 : 48,
             }}
             transition={{ type: 'spring', damping: 20, stiffness: 100 }}
             className={`absolute right-0 top-0 bottom-0 z-[60] flex flex-row items-center pointer-events-none group`}
@@ -151,7 +151,7 @@ const CampaignLeaderboardPane = ({
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            className="flex-1 flex flex-col min-w-[272px] h-full"
+                            className="flex-1 flex flex-col min-w-[180px] h-full"
                         >
                 <div className="flex items-center justify-between p-6 pb-4 border-b border-white/5">
                     <div className="flex items-center gap-2">

@@ -38,7 +38,6 @@ export const FuturisticBackground: React.FC = () => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
 
-  // We'll use a canvas-like approach but with SVG/Divs for Remotion compatibility and performance
   // Orbs parameters
   const orbs = [
     { x: 0.15, y: 0.2,  r: 400, color: COLORS.green,  speed: 0.015, amp: 50 },
@@ -145,7 +144,6 @@ export const ArcGraphics: React.FC = () => {
   return (
     <div style={{ position: "relative", width: 400, height: 250, marginBottom: 40 }}>
       <svg width="400" height="250" viewBox="0 0 400 250">
-        {/* Connections */}
         {connections.map(([a, b], i) => {
           const n1 = nodes[a];
           const n2 = nodes[b];
@@ -170,7 +168,6 @@ export const ArcGraphics: React.FC = () => {
           );
         })}
 
-        {/* Nodes */}
         {nodes.map((node, i) => {
           const s = spring({ frame: Math.max(0, frame - (i * 3)), fps, config: { damping: 12 } });
           const pulse = 1 + Math.sin(frame * 0.1 + i) * 0.1;
@@ -196,7 +193,6 @@ export const ArcGraphics: React.FC = () => {
         })}
       </svg>
 
-      {/* Floating Bits */}
       {new Array(20).fill(0).map((_, i) => {
         const x = random(`bit-x-${i}`) * 400;
         const y = random(`bit-y-${i}`) * 250;
@@ -233,7 +229,6 @@ export const JitterScroll: React.FC<{
   const frame = useCurrentFrame();
   const t = Math.max(0, frame - delay);
   
-  // Create a continuous loop of items
   const totalHeight = items.length * itemHeight;
   const scrollY = (t * speed) % totalHeight;
 
@@ -314,13 +309,75 @@ export const TerminalText: React.FC<{
   );
 };
 
+// ─── LOGO VECTOR ─────────────────────────────────────────────────────────────
+export const LogoVector: React.FC<{ size?: number; drawProgress?: number }> = ({ size = 120, drawProgress = 1 }) => {
+  return (
+    <svg width={size * 4} height={size} viewBox="0 0 400 120" style={{ overflow: "visible" }}>
+      <defs>
+        <linearGradient id="logoGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#86efac" />
+          <stop offset="100%" stopColor="#166534" />
+        </linearGradient>
+        <filter id="logoShadow">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.5" />
+        </filter>
+      </defs>
+      
+      <g style={{ filter: "url(#logoShadow)" }}>
+        {/* "1" */}
+        <path
+          d="M10,20 L40,20 L40,100 L25,100 L25,35 L10,35 Z"
+          fill="url(#logoGrad)"
+          stroke={COLORS.greenGlow}
+          strokeWidth="1"
+          strokeDasharray="400"
+          strokeDashoffset={400 * (1 - drawProgress)}
+        />
+        
+        {/* "5" with the special arrow notch */}
+        <path
+          d="M55,20 L110,20 L110,35 L70,35 L70,55 L100,55 C115,55 115,100 100,100 L55,100 L55,85 L95,85 C100,85 100,70 95,70 L70,70 L55,70 Z"
+          fill="url(#logoGrad)"
+          stroke={COLORS.greenGlow}
+          strokeWidth="1"
+          strokeDasharray="600"
+          strokeDashoffset={600 * (1 - drawProgress)}
+        />
+
+        {/* The Arrow Notch detail in the 5 */}
+        <path 
+          d="M75,90 L85,100 L65,100 Z" 
+          fill={COLORS.bg} 
+          opacity={drawProgress > 0.9 ? 1 : 0}
+        />
+
+        {/* "market" */}
+        <text
+          x="130" y="85"
+          fontFamily={FONTS.headline}
+          fontSize="70"
+          fontWeight="400"
+          fill={COLORS.white}
+          fillOpacity={drawProgress > 0.5 ? (drawProgress - 0.5) * 2 : 0}
+          style={{ letterSpacing: "-2px" }}
+        >
+          market
+        </text>
+      </g>
+    </svg>
+  );
+};
+
 // ─── LOGO 3D ─────────────────────────────────────────────────────────────────
 export const Logo3D: React.FC<{ style?: React.CSSProperties }> = ({ style }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
   
-  // Gentle floating animation
-  const floatY = Math.sin(frame * 0.05) * 10;
-  const rotateY = Math.sin(frame * 0.03) * 15;
+  const intro = spring({ frame, fps, config: { damping: 12 } });
+  const draw = interpolate(frame, [0, 40], [0, 1], { extrapolateRight: "clamp" });
+
+  const floatY = Math.sin(frame * 0.05) * 15;
+  const rotateY = Math.sin(frame * 0.03) * 10;
 
   return (
     <div
@@ -329,44 +386,74 @@ export const Logo3D: React.FC<{ style?: React.CSSProperties }> = ({ style }) => 
         alignItems: "center",
         justifyContent: "center",
         position: "relative",
-        transform: `translateY(${floatY}px) rotateY(${rotateY}deg)`,
+        transform: `translateY(${floatY}px) rotateY(${rotateY}deg) scale(${intro})`,
         perspective: "1000px",
         ...style,
       }}
     >
-      {/* Glow behind */}
+      <div style={{ position: "absolute", width: "160%", height: "160%", opacity: 0.1 }}>
+        <svg viewBox="0 0 100 100" style={{ transform: `rotate(${frame * 0.1}deg)` }}>
+          <circle cx="50" cy="50" r="48" fill="none" stroke={COLORS.green} strokeWidth="0.5" strokeDasharray="2,4" />
+          <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={COLORS.green} strokeWidth="0.2" />
+        </svg>
+      </div>
+
+      {[0, 45, 90].map((rot, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            width: `${120 + i * 20}%`,
+            height: `${120 + i * 20}%`,
+            border: `1px solid ${COLORS.green}22`,
+            borderRadius: "50%",
+            transform: `rotateX(70deg) rotateZ(${frame * (0.5 + i * 0.2) + rot}deg)`,
+          }}
+        />
+      ))}
+
+      <div
+        style={{
+          position: "absolute",
+          width: "200%",
+          height: 2,
+          background: `linear-gradient(to right, transparent, ${COLORS.greenGlow}, transparent)`,
+          top: `${ (frame * 2) % 200 - 50 }%`,
+          opacity: 0.1,
+          filter: "blur(5px)",
+        }}
+      />
+
       <div
         style={{
           position: "absolute",
           width: "120%",
           height: "120%",
-          background: `radial-gradient(circle, ${COLORS.green}44 0%, transparent 70%)`,
-          filter: "blur(40px)",
+          background: `radial-gradient(circle, ${COLORS.green}33 0%, transparent 70%)`,
+          filter: "blur(60px)",
         }}
       />
 
-      <Img
-        src={staticFile("15logo.png")}
-        style={{
-          width: "100%",
-          height: "auto",
-          objectFit: "contain",
-          filter: `drop-shadow(0 0 20px ${COLORS.green}88)`,
-        }}
-      />
+      <LogoVector size={ (style?.width as number || 400) / 4 } drawProgress={draw} />
 
-      {/* Decorative elements */}
-      <div
-        style={{
-          position: "absolute",
-          border: `2px solid ${COLORS.green}`,
-          width: "110%",
-          height: "110%",
-          borderRadius: "20%",
-          opacity: 0.2,
-          transform: `rotate(${frame * 0.2}deg)`,
-        }}
-      />
+      {new Array(8).fill(0).map((_, i) => {
+        const angle = (i / 8) * Math.PI * 2 + (frame * 0.02);
+        const dist = 150 + Math.sin(frame * 0.05 + i) * 20;
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              width: 4, height: 4,
+              background: COLORS.greenGlow,
+              borderRadius: "50%",
+              transform: `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`,
+              boxShadow: `0 0 10px ${COLORS.greenGlow}`,
+              opacity: 0.5,
+            }}
+          />
+        );
+      })}
     </div>
   );
 };
