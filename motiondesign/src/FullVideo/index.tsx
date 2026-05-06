@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Series, useCurrentFrame, interpolate } from "remotion";
+import { AbsoluteFill, Series, useCurrentFrame, interpolate, Audio, staticFile } from "remotion";
 import { Scene1, Scene2, Scene3, Scene4, Scene5 } from "./scenes/Scene1_5";
 import { Scene6, Scene7, Scene8, Scene9, Scene10 } from "./scenes/Scene6_10";
 import { Scene11, Scene12, Scene13, Scene14, Scene15 } from "./scenes/Scene11_15";
@@ -14,8 +14,9 @@ export const FullVideo: React.FC = () => {
       {/* Global persistent background across all scenes */}
       <BackgroundGrid />
       <GreenParticles />
-      {/* Placeholder for Voice Over */}
-      {/* <Audio src={staticFile("voiceover.mp3")} /> */}
+      {/* Audio Tracks - Place 'voiceover.mp3' and 'music.mp3' in your public/ folder! */}
+      <Audio src={staticFile("voiceover.mp3")} />
+      <Audio src={staticFile("music.mp3")} volume={0.15} />
       
       <Series>
         <Series.Sequence durationInFrames={180}>

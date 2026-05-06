@@ -97,8 +97,7 @@ export const Scene7: React.FC = () => {
   const logoScaleVal = interpolate(logoScale, [0, 1], [0, 1]); // Spring goes 0 -> 1.2 -> 1
   const logoRotateY = Math.sin((frame - 60) * 0.05) * 5;
 
-  const marketTextX = interpolate(frame - 120, [0, 30], [60, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const marketTextOp = interpolate(frame - 120, [0, 30], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+
 
   const taglineOp = interpolate(frame - 180, [0, 30], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 

@@ -193,6 +193,7 @@ const CampaignLeaderboardPane = ({
                             )
                         })
                     )}
+                </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
