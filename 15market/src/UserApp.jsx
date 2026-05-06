@@ -1296,21 +1296,16 @@ export default function UserApp() {
   // Periodic Universal Sync (Optimized for Instant Pulse Mode)
   useEffect(() => {
     if (address) {
-      // 1. Instant Retention: Load session wallet from storage as soon as main wallet connects
-      let stored;
-      try {
-        stored = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
-      } catch (e) { console.warn("[Security] LocalStorage access restricted"); }
-
-      if (stored && (!evmSessionWallet || evmSessionWallet.address !== stored)) {
-        setEvmSessionWallet({ address: stored, isRemote: true });
-      }
-
-      // 2. Initial Fetch (Balance only syncs on Mount or Transaction)
+      // 1. Initial Fetch (Balance only syncs on Mount or Transaction)
       triggerGlobalRefresh(true);
       fetchMyProfile();
+      
+      // 2. Ensure session wallet is initialized immediately if missing
+      if (!evmSessionWallet && !isSignerInitializing) {
+          initializeSessionWallet();
+      }
     }
-  }, [address, triggerGlobalRefresh, fetchMyProfile]);
+  }, [address, triggerGlobalRefresh, fetchMyProfile, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
 
   const closeToast = useCallback(() => {
     setToast(null);
@@ -2557,7 +2552,6 @@ export default function UserApp() {
       // This ensures that new users have a trading wallet derived before their first deposit
       let activeSessionWallet = evmSessionWallet;
       if (!activeSessionWallet?.address) {
-        notify("Initializing trading wallet...", "pending");
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
             method: 'POST',
@@ -2691,7 +2685,6 @@ export default function UserApp() {
       // Ensure session wallet is ready
       let activeSessionWallet = evmSessionWallet;
       if (!activeSessionWallet) {
-        notify("Initializing trading wallet...", "pending");
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
             method: 'POST',

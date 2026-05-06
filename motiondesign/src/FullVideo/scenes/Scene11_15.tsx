@@ -1,113 +1,14 @@
 import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { COLORS, FONTS } from "../constants";
-import { Logo3D, TerminalText, AmbientGlow } from "../components/GlobalComponents";
+import { Logo3D, TerminalText, AmbientGlow, ArcGraphics } from "../components/GlobalComponents";
 
 // ─── SCENE 11: THE CLASSIC MODEL ───────────────────────────────────────────────
-export const Scene11: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const card = { title: "THE CLASSIC MODEL", color: COLORS.greenGlow, desc1: "PLAYER vs HOUSE", desc2: "INSTANT SETTLEMENT" };
-
-  const s = spring({ frame: Math.max(0, frame - 30), fps, config: { damping: 20, stiffness: 150 } });
-  const scale = interpolate(s, [0, 1], [0.9, 1]);
-  const blur = interpolate(s, [0, 1], [20, 0]);
-
-  return (
-    <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
-      
-      <AmbientGlow color={COLORS.green} xOffset={0} yOffset={0} delay={0} />
-
-      <div style={{ position: "absolute", top: 150 }}>
-        <TerminalText text="SIMPLE. FAST. DIRECT." style={{ fontSize: 32, letterSpacing: "8px", fontWeight: 300, color: COLORS.white, fontFamily: FONTS.terminal }} delay={0} />
-      </div>
-
-      <div style={{ 
-        width: 600, height: 400, 
-        background: "rgba(255,255,255,0.02)", 
-        border: "1px solid rgba(0,230,118,0.2)", 
-        borderRadius: 30, 
-        transform: `scale(${scale})`, 
-        opacity: s, 
-        padding: 60, 
-        display: "flex", 
-        flexDirection: "column", 
-        justifyContent: "center",
-        alignItems: "center",
-        filter: `blur(${blur}px)`,
-        backdropFilter: "blur(30px)",
-        boxShadow: `0 40px 100px rgba(0,0,0,0.5)` 
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ color: card.color, fontFamily: FONTS.headline, fontSize: 40, fontWeight: 800, letterSpacing: "4px", marginBottom: 40 }}>{card.title}</div>
-        </div>
-        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ color: COLORS.white, fontFamily: FONTS.headline, fontSize: 32, fontWeight: 300, letterSpacing: "4px" }}>{card.desc1}</div>
-          <div style={{ color: COLORS.gray, fontFamily: FONTS.body, fontSize: 18, letterSpacing: "2px" }}>{card.desc2}</div>
-        </div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ─── SCENE 12: FUTURE MODELS TEASE ───────────────────────────────────────────
-export const Scene12: React.FC = () => {
-  const frame = useCurrentFrame();
-
-  const text1Op = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  const text2Op = interpolate(frame, [120, 140], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-
-  const models = ["ROUNDS", "LADDER", "CLASH", "SURGE"];
-
-  return (
-    <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
-      
-      <AmbientGlow color={COLORS.green} xOffset={0} yOffset={200} delay={0} />
-
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 60, opacity: text1Op }}>
-        <div style={{ fontFamily: FONTS.headline, fontSize: 36, color: COLORS.gray, fontWeight: 300, letterSpacing: "8px" }}>AND WE'RE JUST GETTING STARTED</div>
-        <div style={{ display: "flex", gap: 30, marginTop: 20 }}>
-          {models.map((m, i) => {
-            const op = interpolate(frame - (40 + i * 15), [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-            const y = interpolate(frame - (40 + i * 15), [0, 20], [40, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-            return (
-              <div key={m} style={{ 
-                padding: "20px 40px", 
-                background: "rgba(255,255,255,0.02)",
-                border: `1px solid rgba(0,230,118,0.3)`, 
-                borderRadius: 16, 
-                color: COLORS.white, 
-                fontFamily: FONTS.headline, 
-                fontWeight: 800,
-                fontSize: 24, 
-                letterSpacing: "4px",
-                opacity: op, 
-                transform: `translateY(${y}px)`,
-                backdropFilter: "blur(20px)"
-              }}>
-                {m}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div style={{ position: "absolute", bottom: 150, opacity: text2Op, textAlign: "center" }}>
-        <div style={{ fontFamily: FONTS.headline, fontSize: 36, color: COLORS.white, fontWeight: 300, letterSpacing: "8px" }}>MORE MODELS COMING SOON.</div>
-        <div style={{ fontFamily: FONTS.terminal, fontSize: 20, color: COLORS.greenGlow, marginTop: 20, letterSpacing: "4px" }}>ALL BUILT AROUND THE 15-SECOND CORE.</div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-// ─── SCENE 13: ARC ───────────────────────────────────────────────────────────
+// ... lines 7-101 (unchanged)
 export const Scene13: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const lineDraw = interpolate(frame, [0, 40], [1000, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  
   const arcScale = spring({ frame: Math.max(0, frame - 40), fps, config: { damping: 20 } });
   const aBlur = interpolate(arcScale, [0, 1], [20, 0]);
 
@@ -118,21 +19,15 @@ export const Scene13: React.FC = () => {
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
       
-      <AmbientGlow color={COLORS.greenGlow} xOffset={0} yOffset={0} delay={0} />
-      
-      {/* Sleek Abstract Hexagon / Circuit */}
-      <svg width="400" height="200" viewBox="0 0 400 200" style={{ marginBottom: 60, opacity: arcScale, filter: `blur(${aBlur}px)` }}>
-        <path d="M50,100 L150,50 L250,50 L350,100 L250,150 L150,150 Z" stroke="rgba(0,230,118,0.5)" strokeWidth={2} fill="rgba(255,255,255,0.02)" strokeDasharray="1000" strokeDashoffset={lineDraw} />
-        <circle cx="150" cy="50" r="4" fill={COLORS.white} />
-        <circle cx="250" cy="50" r="4" fill={COLORS.white} />
-        <circle cx="350" cy="100" r="4" fill={COLORS.white} />
-        <circle cx="250" cy="150" r="4" fill={COLORS.greenGlow} />
-        <circle cx="150" cy="150" r="4" fill={COLORS.greenGlow} />
-        <circle cx="50" cy="100" r="4" fill={COLORS.white} />
-      </svg>
+      <div style={{ opacity: arcScale, filter: `blur(${aBlur}px)` }}>
+        <ArcGraphics />
+      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 30, alignItems: "center" }}>
-        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,230,118,0.2)", padding: "20px 40px", borderRadius: 30, color: COLORS.white, fontFamily: FONTS.headline, fontWeight: 300, fontSize: 24, opacity: pillOp1, letterSpacing: "4px", backdropFilter: "blur(20px)" }}>BUILT ON ARC</div>
+        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,230,118,0.2)", padding: "20px 40px", borderRadius: 30, color: COLORS.white, fontFamily: FONTS.headline, fontWeight: 300, fontSize: 24, opacity: pillOp1, letterSpacing: "4px", backdropFilter: "blur(20px)", textAlign: "center" }}>
+          NOW LIVE ON ARC TESTNET<br/>
+          <span style={{ fontSize: 18, color: COLORS.greenGlow }}>15MARKET.ONLINE</span>
+        </div>
         <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,230,118,0.2)", padding: "20px 40px", borderRadius: 30, color: COLORS.white, fontFamily: FONTS.headline, fontWeight: 300, fontSize: 24, opacity: pillOp2, letterSpacing: "4px", backdropFilter: "blur(20px)" }}>PROGRAMMED MICRO-TRANSACTIONS</div>
         <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,230,118,0.2)", padding: "20px 40px", borderRadius: 30, color: COLORS.greenGlow, fontFamily: FONTS.headline, fontWeight: 800, fontSize: 24, opacity: pillOp3, letterSpacing: "4px", backdropFilter: "blur(20px)" }}>ZERO FRICTION</div>
       </div>
@@ -152,9 +47,6 @@ export const Scene14: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
-      
-      <AmbientGlow color={COLORS.gray} xOffset={-200} yOffset={0} delay={0} />
-      <AmbientGlow color={COLORS.green} xOffset={200} yOffset={0} delay={40} />
 
       <div style={{ display: "flex", flexDirection: "row", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 150 }}>
         
@@ -210,10 +102,10 @@ export const Scene15: React.FC = () => {
           </div>
 
           <div style={{ position: "absolute", bottom: 150, textAlign: "center" }}>
-            <TerminalText text="THE MARKET MOVES. SO DO YOU." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={150} />
+            <TerminalText text="PREDICT FAST. SETTLE FASTER." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={150} />
             
             <div style={{ marginTop: 60, opacity: urlOp }}>
-              <span style={{ fontFamily: FONTS.terminal, color: COLORS.white, fontSize: 32, letterSpacing: "4px", padding: "15px 40px", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 40, background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}>15MARKET.COM</span>
+              <span style={{ fontFamily: FONTS.terminal, color: COLORS.white, fontSize: 32, letterSpacing: "4px", padding: "15px 40px", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 40, background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}>15MARKET.ONLINE</span>
             </div>
           </div>
 

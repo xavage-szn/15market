@@ -3,14 +3,16 @@ import { AbsoluteFill, Series, useCurrentFrame, interpolate, Audio, staticFile }
 import { Scene1, Scene2, Scene3, Scene4, Scene5 } from "./scenes/Scene1_5";
 import { Scene6, Scene7, Scene8, Scene9, Scene10 } from "./scenes/Scene6_10";
 import { Scene11, Scene12, Scene13, Scene14, Scene15 } from "./scenes/Scene11_15";
+import { FuturisticBackground } from "./components/GlobalComponents";
 
 export const FullVideo: React.FC = () => {
   const frame = useCurrentFrame();
   const fadeOut = interpolate(frame, [3870, 3900], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "#050A05" }}>
+    <AbsoluteFill style={{ backgroundColor: "#020402" }}>
       {/* Static Background */}
+      <FuturisticBackground />
       
       {/* Audio Tracks - Place 'voiceover.mp3' and 'music.mp3' in your public/ folder! */}
       <Audio src={staticFile("voiceover.mp3")} />

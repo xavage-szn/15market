@@ -379,7 +379,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                                 }}
                                                 className={`text-[8px] font-mono opacity-40 hover:opacity-100 cursor-pointer transition-all mt-1 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
                                             >
-                                                {evmSessionWallet?.address ? truncate(evmSessionWallet.address) : "Initializing..."}
+                                                {evmSessionWallet?.address ? truncate(evmSessionWallet.address) : (address ? "Ready" : "Connect Wallet")}
                                                 {evmSessionWallet?.address && <Copy size={8} />}
                                             </div>
                                         </div>

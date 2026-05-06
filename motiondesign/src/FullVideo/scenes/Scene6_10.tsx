@@ -111,25 +111,13 @@ export const Scene7: React.FC = () => {
       {frame >= 60 && (
         <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "transparent" }}>
           
-          <AmbientGlow color={COLORS.green} xOffset={-300} yOffset={-100} delay={60} />
-          <AmbientGlow color={COLORS.greenGlow} xOffset={300} yOffset={200} delay={80} />
-
-          {/* Abstract Data Streams (Vertical lines) */}
-          {new Array(5).fill(0).map((_, i) => {
-            const h = interpolate((frame + i * 20) % 100, [0, 100], [0, 1000]);
-            const y = interpolate((frame + i * 20) % 100, [0, 100], [1080, -1000]);
-            return (
-              <div key={i} style={{ position: "absolute", left: `${20 + i * 15}%`, top: y, width: 1, height: h, background: `linear-gradient(to bottom, transparent, ${COLORS.green}33, transparent)` }} />
-            );
-          })}
-          
           <div style={{ display: "flex", alignItems: "center", transform: `scale(${logoScaleVal})`, opacity: logoOp, filter: `blur(${logoBlur}px)` }}>
             {/* 3D 15 Logo */}
             <Logo3D style={{ width: 450, height: 450 }} />
           </div>
 
           <div style={{ position: "absolute", bottom: 200, opacity: taglineOp }}>
-            <TerminalText text="THE MARKET MOVES. SO DO YOU." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={180} />
+            <TerminalText text="PREDICT FAST. SETTLE FASTER." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={180} />
           </div>
         </AbsoluteFill>
       )}
@@ -153,8 +141,6 @@ export const Scene8: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent" }}>
-      
-      <AmbientGlow color={COLORS.green} xOffset={0} yOffset={0} />
 
       {/* Persistent Logo */}
       <div style={{ position: "absolute", left: "50%", top: "50%", transform: `translate(-50%, -50%) translate(${sX}px, ${sY}px) scale(${sScale})`, display: "flex", alignItems: "center", opacity: 0.5 }}>
@@ -211,100 +197,240 @@ export const Scene8: React.FC = () => {
   );
 };
 
-// ─── SCENE 9: 15 SECONDS ─────────────────────────────────────────────────────
+// ─── SCENE 9: 15 SECONDS (DESKTOP UI MOCKUP) ─────────────────────────────────
 export const Scene9: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // UI Slides in
+  // iMac Slides in
   const uiY = spring({ frame, fps, config: { damping: 20 } });
-  const translateY = interpolate(uiY, [0, 1], [1000, 0]);
+  const translateY = interpolate(uiY, [0, 1], [1080, 0]);
+  const scale = interpolate(uiY, [0, 1], [0.8, 1]);
 
   // Chart line drawing
-  const pathLen = 800;
-  const draw = interpolate(frame - 30, [0, 60], [pathLen, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  const pathLen = 1500;
+  const draw = interpolate(frame - 30, [0, 90], [pathLen, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
 
-  // Countdown
-  const countdownStart = 120;
-  const t = Math.max(0, frame - countdownStart);
-  const secondsLeft = Math.max(0, 15 - Math.floor(t / fps));
+  // Interactions
+  const isPutSelected = frame > 100;
+  const amountScale = spring({ frame: Math.max(0, frame - 120), fps, config: { damping: 15 } });
+  const amountStr = interpolate(amountScale, [0, 1], [0, 100]).toFixed(2);
+  const sliderWidth = interpolate(amountScale, [0, 1], [0, 40]);
   
-  // Countdown pop
-  const pop = spring({ frame: t % fps, fps, config: { damping: 20, stiffness: 400 } });
-  const popScale = secondsLeft > 0 ? interpolate(pop, [0, 1], [1.1, 1.0]) : 1;
+  const isConfirmClicked = frame > 150 && frame < 155;
+  const confirmScale = isConfirmClicked ? 0.95 : 1;
 
-  // Ring Explosion
-  const isZero = secondsLeft === 0 && t > 0;
-  const explode = spring({ frame: isZero ? frame - (countdownStart + 15 * fps) : 0, fps });
-  const exScale = interpolate(explode, [0, 1], [1, 5]);
-  const exOp = interpolate(explode, [0, 1], [0.5, 0]);
-
-  // Chart win movement
-  const winY = isZero ? interpolate(frame - (countdownStart + 15 * fps), [0, 20], [200, 150], { easing: Easing.out(Easing.cubic) }) : 200;
+  // Trade Execution Countdown
+  const tradeActive = frame > 160;
+  const timeLeft = tradeActive ? Math.max(0, 15 - ((frame - 160) / 10)).toFixed(2) : "15.00"; // fast countdown
+  
+  // Chart post-trade movement
+  const tradeChartX = interpolate(frame - 160, [0, 140], [0, 200], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  const tradeChartY = interpolate(frame - 160, [0, 140], [0, 50], { extrapolateRight: "clamp", extrapolateLeft: "clamp" }); // line goes down for PUT win
+  const isZero = tradeActive && parseFloat(timeLeft) === 0.00;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", justifyContent: "center", alignItems: "center" }}>
-      
-      <AmbientGlow color={COLORS.greenGlow} xOffset={0} yOffset={200} delay={0} />
 
-      {/* Futuristic Mobile App UI Mock */}
+      {/* iMac Stand */}
+      <div style={{ position: "absolute", bottom: -200, width: 300, height: 250, background: "linear-gradient(to bottom, #dcdcdc, #b5b5b5)", transform: `translateY(${translateY}px) scale(${scale})`, borderTopLeftRadius: 20, borderTopRightRadius: 20, zIndex: 1 }} />
+      <div style={{ position: "absolute", bottom: -200, width: 400, height: 20, background: "#a0a0a0", transform: `translateY(${translateY}px) scale(${scale})`, borderRadius: 10, zIndex: 1 }} />
+
+      {/* iMac Screen Shell */}
       <div style={{ 
-        width: 600, height: 900, 
-        background: "rgba(10,15,10,0.6)", 
-        border: "1px solid rgba(0,230,118,0.2)", 
+        width: 1600, height: 900, 
+        background: "#0A0D0A", // Very dark green/black
+        border: "24px solid #111", 
+        borderBottom: "60px solid #111", // iMac Chin
         borderRadius: 40, 
-        transform: `translateY(${translateY}px)`, 
+        transform: `translateY(${translateY}px) scale(${scale})`, 
         position: "relative", 
         overflow: "hidden",
-        backdropFilter: "blur(40px)",
-        boxShadow: "0 40px 100px rgba(0,0,0,0.8)"
+        boxShadow: "0 40px 100px rgba(0,0,0,0.8)",
+        zIndex: 2,
+        fontFamily: FONTS.body
       }}>
         
-        <div style={{ height: 400, position: "relative" }}>
-          {/* Chart SVG */}
-          <svg style={{ width: "100%", height: "100%" }}>
-            <defs>
-              <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={COLORS.green} stopOpacity="0.3" />
-                <stop offset="100%" stopColor={COLORS.green} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path 
-              d={`M0,300 Q100,280 200,${winY} T400,${winY - 20} T600,${winY}`} 
-              stroke={COLORS.green} 
-              strokeWidth={4} 
-              fill="none" 
-              strokeDasharray={pathLen} 
-              strokeDashoffset={draw} 
-              style={{ filter: "drop-shadow(0 0 10px rgba(0,230,118,0.8))" }}
-            />
-            {frame > countdownStart && <line x1="0" y1="200" x2="600" y2="200" stroke="rgba(255,255,255,0.2)" strokeDasharray="5,5" strokeWidth={2} />}
-          </svg>
-        </div>
+        {/* iMac Apple Logo Fake */}
+        <div style={{ position: "absolute", bottom: -45, left: "50%", transform: "translateX(-50%)", width: 30, height: 30, borderRadius: "50%", background: "#333" }} />
 
-        <div style={{ padding: 40 }}>
-          <div style={{ display: "flex", gap: 20, marginBottom: 40 }}>
-            <div style={{ flex: 1, height: 70, background: "linear-gradient(135deg, rgba(0,230,118,0.8), rgba(0,255,136,0.4))", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: 800, fontSize: 24, letterSpacing: "2px", fontFamily: FONTS.headline }}>CALL</div>
-            <div style={{ flex: 1, height: 70, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.white, fontWeight: 800, fontSize: 24, letterSpacing: "2px", fontFamily: FONTS.headline }}>PUT</div>
-          </div>
-
-          <div style={{ fontSize: 56, color: COLORS.white, textAlign: "center", fontFamily: FONTS.terminal, fontWeight: 300, letterSpacing: "2px" }}>
-            $100.00
+        {/* TOP NAV */}
+        <div style={{ height: 70, borderBottom: "1px solid rgba(0,230,118,0.2)", display: "flex", alignItems: "center", padding: "0 30px", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontFamily: FONTS.headline, fontWeight: 900, color: COLORS.greenGlow, fontSize: 24 }}>15<span style={{ color: COLORS.white }}>market</span></div>
           </div>
           
-          <div style={{ marginTop: 40, height: 80, background: "rgba(0,230,118,0.1)", border: `1px solid ${COLORS.green}`, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.green, fontWeight: 800, fontSize: 24, letterSpacing: "4px", fontFamily: FONTS.headline }}>
-            CONFIRM
+          {/* Classic / Rounds Toggle */}
+          <div style={{ display: "flex", background: "#131613", borderRadius: 30, padding: 4 }}>
+            <div style={{ padding: "8px 20px", background: COLORS.green, borderRadius: 20, color: "#000", fontWeight: "bold", fontSize: 14 }}>✦ CLASSIC</div>
+            <div style={{ padding: "8px 20px", color: COLORS.gray, fontWeight: "bold", fontSize: 14 }}>ROUNDS</div>
+          </div>
+
+          {/* Right Nav Items */}
+          <div style={{ display: "flex", gap: 15, alignItems: "center" }}>
+            <div style={{ padding: "10px 20px", background: "#131613", borderRadius: 20, color: COLORS.white, fontSize: 14, border: "1px solid #222" }}>
+              <span style={{ color: COLORS.greenGlow, marginRight: 8 }}>●</span> 81.9422 USDC
+            </div>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#131613", border: "1px solid #222" }} />
+            <div style={{ padding: "10px 20px", background: "#131613", borderRadius: 20, color: COLORS.white, fontSize: 14, border: "1px solid #222" }}>
+              <span style={{ color: COLORS.green, marginRight: 8 }}>0</span> 0x4c...C28C
+            </div>
           </div>
         </div>
 
-        {/* Countdown Overlay */}
-        {frame >= countdownStart && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(10px)" }}>
-            <div style={{ width: 250, height: 250, borderRadius: "50%", border: `2px solid rgba(0,230,118,0.3)`, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${isZero ? exScale : popScale})`, opacity: isZero ? exOp : 1, boxShadow: `inset 0 0 50px rgba(0,230,118,0.2)` }}>
-              {!isZero && <div style={{ fontSize: 100, color: COLORS.white, fontWeight: 300, fontFamily: FONTS.terminal }}>{secondsLeft}</div>}
+        {/* SUB NAV (Marquee) */}
+        <div style={{ height: 50, borderBottom: "1px solid #222", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: "20%", background: "#111", height: "100%", padding: "0 20px", display: "flex", alignItems: "center", gap: 20, borderRight: "1px solid #222" }}>
+            <span style={{ color: COLORS.gray }}>↑</span> <span style={{ color: COLORS.white, fontWeight: "bold" }}>ETH</span> <span style={{ color: COLORS.gray, fontSize: 12 }}>STAKE<br/>$2.95</span> <span style={{ color: COLORS.red }}>✖ LOST</span>
+          </div>
+          <div style={{ width: "20%", background: "rgba(0,230,118,0.1)", height: "100%", padding: "0 20px", display: "flex", alignItems: "center", gap: 20, borderRight: "1px solid #222" }}>
+            <span style={{ color: COLORS.gray }}>↓</span> <span style={{ color: COLORS.white, fontWeight: "bold" }}>BTC</span> <span style={{ color: COLORS.gray, fontSize: 12 }}>STAKE<br/>$4.51</span> <span style={{ color: COLORS.green }}>✓ WON</span>
+          </div>
+        </div>
+
+        {/* MAIN CONTENT */}
+        <div style={{ display: "flex", height: "calc(100% - 120px)" }}>
+          
+          {/* LEFT: CHART (60%) */}
+          <div style={{ flex: 6, position: "relative", borderRight: "1px solid #222", padding: 30 }}>
+            <div style={{ fontSize: 32, color: COLORS.white, fontWeight: 900, fontFamily: FONTS.headline }}>ETH <span style={{ color: COLORS.gray, fontSize: 20 }}>▼</span></div>
+            
+            {/* Background Watermark */}
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 200, fontFamily: FONTS.headline, fontWeight: 900, color: "rgba(255,255,255,0.02)", whiteSpace: "nowrap" }}>
+              15market
+            </div>
+
+            {/* Chart SVG */}
+            <div style={{ position: "absolute", inset: "100px 30px 30px 30px" }}>
+              <svg style={{ width: "100%", height: "100%" }} viewBox="0 0 1000 500" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="chartGradientDesktop" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={COLORS.green} stopOpacity="0.3" />
+                    <stop offset="100%" stopColor={COLORS.green} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path 
+                  d={`M0,100 C50,100 80,400 150,380 S250,200 350,220 S500,250 650,240 S800,280 850,250`} 
+                  stroke={COLORS.green} 
+                  strokeWidth={6} 
+                  fill="none" 
+                  strokeDasharray={pathLen} 
+                  strokeDashoffset={draw} 
+                  style={{ filter: "drop-shadow(0 0 10px rgba(0,230,118,0.8))" }}
+                />
+                
+                {/* Horizontal reference line */}
+                <line x1="0" y1="250" x2="1000" y2="250" stroke="rgba(255,255,255,0.1)" strokeDasharray="5,5" strokeWidth={2} />
+
+                {/* Animated trade continuation line */}
+                {tradeActive && (
+                  <path 
+                    d={`M850,250 Q${850 + tradeChartX/2},${250 + tradeChartY/2} ${850 + tradeChartX},${250 + tradeChartY}`} 
+                    stroke={COLORS.greenGlow} 
+                    strokeWidth={6} 
+                    fill="none" 
+                  />
+                )}
+              </svg>
+              
+              {/* Chart current price dot and pill */}
+              <div style={{ position: "absolute", left: tradeActive ? `${85 + tradeChartX/10}%` : "85%", top: tradeActive ? `calc(50% + ${tradeChartY/2}px)` : "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", opacity: frame > 90 ? 1 : 0 }}>
+                <div style={{ width: 15, height: 15, background: COLORS.white, borderRadius: "50%", boxShadow: `0 0 10px ${COLORS.white}` }} />
+                <div style={{ background: COLORS.green, padding: "5px 15px", borderRadius: 20, color: "#000", fontWeight: "bold", marginLeft: 10, fontFamily: FONTS.terminal }}>
+                  2046.00
+                </div>
+              </div>
             </div>
           </div>
-        )}
+
+          {/* MIDDLE: ORDER BOOK (20%) */}
+          <div style={{ flex: 2, borderRight: "1px solid #222", padding: 20, display: "flex", flexDirection: "column" }}>
+            <div style={{ color: COLORS.gray, fontWeight: "bold", letterSpacing: "2px", marginBottom: 20, fontSize: 14 }}>ORDER BOOK</div>
+            <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.gray, fontSize: 12, marginBottom: 20, paddingBottom: 10, borderBottom: "1px solid #222" }}>
+              <span>PRICE (ETH)</span>
+              <span>SIZE</span>
+            </div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, fontFamily: FONTS.terminal, fontSize: 14 }}>
+              {[14.38, 12.09, 9.79, 7.49, 5.19].map((p, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", color: COLORS.red }}>
+                  <span>205{p}</span>
+                  <span style={{ color: COLORS.gray }}>{(random(`s-${i}`)*500).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ margin: "20px 0", color: COLORS.greenGlow, fontSize: 24, fontWeight: "bold", fontFamily: FONTS.terminal, textAlign: "center", border: `1px solid rgba(0,230,118,0.2)`, padding: 10, borderRadius: 8, background: "rgba(0,230,118,0.05)" }}>
+              2045.9600 ↑
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, fontFamily: FONTS.terminal, fontSize: 14 }}>
+              {[44.93, 43.91, 42.89, 41.86, 40.84].map((p, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", color: COLORS.green }}>
+                  <span>204{p}</span>
+                  <span style={{ color: COLORS.gray }}>{(random(`b-${i}`)*500).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT: TERMINAL (20%) */}
+          <div style={{ flex: 2, padding: 20, display: "flex", flexDirection: "column", background: "#111" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
+              <div style={{ color: COLORS.white, fontWeight: "bold", letterSpacing: "2px", fontSize: 16 }}>TERMINAL</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: COLORS.gray }}>
+                <div style={{ width: 30, height: 16, borderRadius: 8, background: "#333", position: "relative" }}>
+                  <div style={{ width: 12, height: 12, background: COLORS.white, borderRadius: "50%", position: "absolute", left: 2, top: 2 }} />
+                </div>
+                AUTO
+              </div>
+            </div>
+
+            {/* Call / Put Buttons */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 30 }}>
+              <div style={{ flex: 1, height: 60, background: "#1A1D1A", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.gray, fontWeight: "bold", fontSize: 18, border: "1px solid #333" }}>CALL</div>
+              <div style={{ flex: 1, height: 60, background: isPutSelected ? COLORS.red : "#3A1010", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: isPutSelected ? COLORS.white : COLORS.red, fontWeight: "bold", fontSize: 18, boxShadow: isPutSelected ? `0 0 20px rgba(255,59,59,0.5)` : "none" }}>PUT</div>
+            </div>
+
+            {/* Time Selection */}
+            <div style={{ color: COLORS.gray, fontSize: 12, marginBottom: 10 }}>TIME</div>
+            <div style={{ display: "flex", background: "#1A1D1A", borderRadius: 12, padding: 4, marginBottom: 30 }}>
+              <div style={{ flex: 1, padding: "10px 0", textAlign: "center", background: COLORS.green, borderRadius: 8, color: "#000", fontWeight: "bold" }}>15s</div>
+              <div style={{ flex: 1, padding: "10px 0", textAlign: "center", color: COLORS.gray }}>10s</div>
+              <div style={{ flex: 1, padding: "10px 0", textAlign: "center", color: COLORS.gray }}>5s</div>
+            </div>
+
+            {/* Amount */}
+            <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.gray, fontSize: 12, marginBottom: 10 }}>
+              <span>AMOUNT</span>
+              <span style={{ color: COLORS.green }}>81.94</span>
+            </div>
+            <div style={{ background: "#1A1D1A", border: "1px solid #333", borderRadius: 12, padding: "15px 20px", color: COLORS.white, fontSize: 24, fontFamily: FONTS.terminal, marginBottom: 10 }}>
+              $ {amountStr}
+            </div>
+            <div style={{ height: 6, background: "#333", borderRadius: 3, marginBottom: 40, position: "relative" }}>
+              <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${sliderWidth}%`, background: COLORS.green, borderRadius: 3 }} />
+              <div style={{ position: "absolute", left: `${sliderWidth}%`, top: -4, width: 14, height: 14, background: COLORS.white, borderRadius: "50%", transform: "translateX(-50%)" }} />
+            </div>
+
+            {/* Confirm */}
+            <div style={{ height: 70, background: COLORS.green, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: 900, fontSize: 24, letterSpacing: "2px", transform: `scale(${confirmScale})`, cursor: "pointer", boxShadow: `0 0 20px rgba(0,230,118,0.3)` }}>
+              CONFIRM
+            </div>
+
+            {/* Active Trades */}
+            <div style={{ marginTop: 20, flex: 1, border: "1px solid #333", borderRadius: 16, background: "#131613", padding: 20 }}>
+              <div style={{ color: COLORS.gray, fontSize: 12, display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }}>
+                <span style={{ color: tradeActive ? COLORS.greenGlow : COLORS.gray }}>●</span> ACTIVE TRADES
+              </div>
+              <div style={{ textAlign: "center", color: tradeActive ? COLORS.white : COLORS.gray, fontFamily: tradeActive ? FONTS.terminal : FONTS.headline, fontSize: tradeActive ? 48 : 16, letterSpacing: tradeActive ? "2px" : "4px", fontWeight: tradeActive ? 300 : "bold" }}>
+                {tradeActive ? `${timeLeft}s` : "AWAITING SIGNAL"}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
 
       </div>
 
@@ -328,8 +454,6 @@ export const Scene10: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", justifyContent: "center", alignItems: "center" }}>
-      
-      <AmbientGlow color={COLORS.gold} xOffset={0} yOffset={0} delay={0} />
 
       {/* Win text */}
       <div style={{ transform: `scale(${wS})`, textAlign: "center" }}>
