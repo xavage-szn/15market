@@ -9,6 +9,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart,
 import { LatencyMeter } from "./LatencyMeter";
 import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
+import { socketService } from "../utils/socket";
 import { parseEther } from "viem";
 
 export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onDeposit, onWithdraw, treasuryBalance,
@@ -187,7 +188,14 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     useEffect(() => {
         fetchCampaigns();
         const interval = setInterval(fetchCampaigns, 15000);
-        return () => clearInterval(interval);
+        
+        const handleNewCampaign = () => fetchCampaigns();
+        socketService.on('new_campaign', handleNewCampaign);
+        
+        return () => {
+            clearInterval(interval);
+            socketService.off('new_campaign', handleNewCampaign);
+        };
     }, [address]);
 
     useEffect(() => {
@@ -529,7 +537,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                 <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <Trophy size={14} className="text-[#3CB371]" />
-                                        <h3 className={`text-[9px] font-black uppercase tracking-widest opacity-40`}>Campaigns & Leaderboards</h3>
+                                        <h3 className={`text-[9px] font-black uppercase tracking-widest opacity-40`}>Campaigns</h3>
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                         <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
@@ -594,12 +602,6 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             <div className="flex-1 flex flex-col gap-3 min-h-0">
                                                 <div className="flex items-center justify-between border-b border-white/5 pb-2">
                                                     <div className="text-[8px] font-black opacity-40 uppercase tracking-widest">Your Campaign Progress</div>
-                                                    <button 
-                                                        onClick={() => setIsLeaderboardOpen(true)}
-                                                        className="flex items-center gap-1 text-[8px] font-black text-[#3CB371] uppercase tracking-widest hover:brightness-110"
-                                                    >
-                                                        View Leaderboard <ChevronRight size={10} />
-                                                    </button>
                                                 </div>
                                                 
                                                 <div className="flex flex-col gap-3 overflow-y-auto no-scrollbar pb-2">

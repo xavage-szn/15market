@@ -845,8 +845,71 @@ app.get('/listings', (req, res) => {
     { id: 'sol', symbol: 'SOL', name: 'Solana' },
   ]);
 });
+let activeCampaigns = [
+  { id: 'genesis-1', title: 'Genesis Trading Pool', prize: '$1,000 USDC', startTime: Date.now() - 86400000, endTime: Date.now() + 86400000 * 7 }
+];
+let campaignEnrollments = {};
 
-app.get('/campaigns', (req, res) => res.json([]));
+app.get('/campaigns', (req, res) => res.json(activeCampaigns));
+app.post('/admin/campaigns', (req, res) => {
+  const newCampaign = {
+    id: `camp-${Date.now()}`,
+    title: req.body.title,
+    prize: req.body.prize,
+    startTime: req.body.startTime || Date.now(),
+    endTime: req.body.endTime || (Date.now() + 86400000 * 7)
+  };
+  activeCampaigns.push(newCampaign);
+  io.emit('new_campaign', newCampaign);
+  res.json({ success: true, campaign: newCampaign });
+});
+
+app.get('/leaderboard', (req, res) => {
+  const { campaignId } = req.query;
+  const campaign = activeCampaigns.find(c => c.id === campaignId);
+  if (!campaign) return res.json([]);
+  
+  const enrolledUsers = campaignEnrollments[campaignId] || [];
+  
+  const leaderboard = enrolledUsers.map(e => {
+    let wins = 0;
+    const profile = profiles.profiles[e.address.toLowerCase()];
+    if (profile && profile.trades) {
+       wins = profile.trades.filter(t => t.timestamp >= campaign.startTime && t.timestamp <= campaign.endTime && t.won).length;
+    }
+    return { address: e.address, enrolledAt: e.enrolledAt, wins };
+  });
+
+  // Sort by wins (descending), then by enrolledAt (ascending)
+  leaderboard.sort((a, b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    return a.enrolledAt - b.enrolledAt;
+  });
+
+  res.json(leaderboard);
+});
+
+app.post('/enroll', (req, res) => {
+  const { campaignId, address } = req.body;
+  if (!campaignId || !address) return res.status(400).json({ error: 'Missing parameters' });
+  
+  if (!campaignEnrollments[campaignId]) campaignEnrollments[campaignId] = [];
+  
+  const existing = campaignEnrollments[campaignId].find(e => e.address.toLowerCase() === address.toLowerCase());
+  if (!existing) {
+     campaignEnrollments[campaignId].push({ address, enrolledAt: Date.now() });
+  }
+  
+  res.json({ success: true, enrolled: true });
+});
+
+app.get('/enroll', (req, res) => {
+  const { campaignId, address } = req.query;
+  if (!campaignId || !address) return res.json({ enrolled: false });
+  const enrolled = (campaignEnrollments[campaignId] || []).some(e => e.address.toLowerCase() === address.toLowerCase());
+  res.json({ enrolled });
+});
+
 app.get('/winner-banner', (req, res) => res.json(null));
 app.post('/active-market', (req, res) => res.json({ success: true }));
 app.post('/record-fee', (req, res) => res.json({ success: true }));

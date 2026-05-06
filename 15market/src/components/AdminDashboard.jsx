@@ -21,7 +21,9 @@ import {
     Globe,
     TrendingUp,
     DollarSign,
-    Users
+    Users,
+    Trophy,
+    Calendar
 } from "lucide-react";
 import { KEEPER_URL_ARC, ADMIN_TOKEN } from "../constants";
 import { socketService } from "../utils/socket";
@@ -42,6 +44,9 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
     const [isSaving, setIsSaving] = useState(false);
     const [isConnected, setIsConnected] = useState(true);
     const [syncProgress, setSyncProgress] = useState(0);
+    const [campaignTitle, setCampaignTitle] = useState("");
+    const [campaignPrize, setCampaignPrize] = useState("$1,000 USDC");
+    const [campaignDelayMinutes, setCampaignDelayMinutes] = useState(0);
 
     const [stats, setStats] = useState({
         totalVolume: "0.00",
@@ -202,15 +207,15 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
         
         setIsSaving(true);
         try {
-            const res = await fetch(`${KEEPER_URL_ARC}/broadcast`, {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/broadcast`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': ADMIN_TOKEN 
                 },
                 body: JSON.stringify({
-                    text: broadcastText,
-                    duration: broadcastDuration,
+                    message: broadcastText,
+                    expiry: Date.now() + broadcastDuration * 1000,
                     type: 'MANUAL_ADMIN'
                 })
             });
@@ -226,6 +231,26 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
         }
     };
 
+    const handleLaunchCampaign = async () => {
+        if (!campaignTitle.trim() || !campaignPrize.trim()) return notify("Enter campaign details", "error");
+        setIsSaving(true);
+        try {
+            const startTime = Date.now() + campaignDelayMinutes * 60000;
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/campaigns`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': ADMIN_TOKEN },
+                body: JSON.stringify({ title: campaignTitle, prize: campaignPrize, startTime })
+            });
+            if (!res.ok) throw new Error("Failed to launch campaign");
+            notify("Campaign Launched Successfully", "success");
+            setCampaignTitle("");
+        } catch (e) {
+            notify("Campaign Error: " + e.message, "error");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const AdminCard = ({ title, icon: Icon, children, accent = "#3CB371" }) => (
         <div className={`p-6 border rounded-[32px] ${isLight ? 'bg-white/70 border-[#3CB371]/20 shadow-sm' : 'bg-[#0D0D0D]/80 border-white/5 shadow-2xl'} backdrop-blur-xl relative overflow-hidden group`}>
             <div className="absolute top-0 left-0 w-1 h-full opacity-40 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: accent }} />
@@ -236,12 +261,6 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                     </div>
                     <h3 className={`text-xs font-black uppercase tracking-[0.2em] ${isLight ? 'text-black' : 'text-white'}`}>{title}</h3>
                 </div>
-                {syncProgress > 0 && syncProgress < 100 && (
-                    <div className="flex items-center gap-2">
-                         <RefreshCw size={12} className="animate-spin text-[#3CB371]" />
-                         <span className="text-[8px] font-black uppercase text-[#3CB371]">{syncProgress}%</span>
-                    </div>
-                )}
             </div>
             {children}
         </div>
@@ -268,9 +287,6 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                         <div className="flex flex-col">
                             <h1 className={`text-xl font-black uppercase tracking-tighter flex items-center gap-3 ${isLight ? 'text-black' : 'text-white'}`}>
                                 Admin Citadel
-                                <span className={`text-[9px] px-2 py-0.5 rounded-full border ${isConnected ? 'bg-[#3CB371]/10 text-[#3CB371] border-[#3CB371]/30' : 'bg-red-500/10 text-red-500 border-red-500/30'}`}>
-                                    {isConnected ? 'NODE CONNECTED' : 'NODE DISCONNECTED'}
-                                </span>
                             </h1>
                             <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-0.5">Platform Security & Broadcast Center</p>
                         </div>
@@ -478,6 +494,58 @@ export function AdminDashboard({ onBack, theme, notify, platformSettings: initia
                                         {platformSettings.systemBanner || "No active manual broadcast. Platform running standard tickers."}
                                     </p>
                                 </div>
+                            </div>
+                        </AdminCard>
+
+                        <AdminCard title="Campaign Launcher" icon={Trophy} accent="#a855f7">
+                            <div className="flex flex-col gap-5">
+                                <div>
+                                    <label className="text-[9px] font-black uppercase opacity-30 tracking-[0.2em] block mb-2 ml-1">Campaign Title</label>
+                                    <input 
+                                        type="text"
+                                        value={campaignTitle}
+                                        onChange={(e) => setCampaignTitle(e.target.value)}
+                                        placeholder="e.g. Genesis Trading Pool"
+                                        className={`w-full p-4 rounded-2xl border text-sm font-bold outline-none transition-all ${isLight ? 'bg-white border-[#3CB371]/10 focus:border-[#a855f7]/40' : 'bg-black/40 border-white/10 focus:border-[#a855f7]/40'}`}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase opacity-30 tracking-[0.2em] block mb-2 ml-1">Prize Pool</label>
+                                        <input 
+                                            type="text"
+                                            value={campaignPrize}
+                                            onChange={(e) => setCampaignPrize(e.target.value)}
+                                            placeholder="$1,000 USDC"
+                                            className={`w-full p-4 rounded-2xl border text-sm font-bold outline-none transition-all ${isLight ? 'bg-white border-[#3CB371]/10 focus:border-[#a855f7]/40' : 'bg-black/40 border-white/10 focus:border-[#a855f7]/40'}`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase opacity-30 tracking-[0.2em] block mb-2 ml-1">Launch Timing</label>
+                                        <div className={`flex items-center gap-2 p-2 rounded-2xl border ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-black/40 border-white/10'}`}>
+                                            <button 
+                                                onClick={() => setCampaignDelayMinutes(0)}
+                                                className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${campaignDelayMinutes === 0 ? 'bg-[#a855f7] text-white' : 'hover:bg-white/5 opacity-50'}`}
+                                            >
+                                                Instant
+                                            </button>
+                                            <button 
+                                                onClick={() => setCampaignDelayMinutes(60)}
+                                                className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${campaignDelayMinutes > 0 ? 'bg-[#a855f7] text-white' : 'hover:bg-white/5 opacity-50'}`}
+                                            >
+                                                Scheduled
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={handleLaunchCampaign}
+                                    disabled={isSaving || !campaignTitle}
+                                    className="w-full py-4 mt-2 bg-[#a855f7] text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-[0_15px_30px_-10px_rgba(168,85,247,0.3)] hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                                >
+                                    <Trophy size={14} />
+                                    <span>Launch Campaign</span>
+                                </button>
                             </div>
                         </AdminCard>
 
