@@ -2,8 +2,9 @@ import React, { useEffect, useState, useMemo } from "react";
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
+import CampaignLeaderboardPane from "./CampaignLeaderboardPane";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
 import ArcABI from "../abi/ArcPrediction.json";
@@ -49,6 +50,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const [toast, setToast] = useState(null);
     const [enrolling, setEnrolling] = useState(false);
     const [enrollments, setEnrollments] = useState({});
+    const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -228,7 +230,16 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`h-screen w-full flex flex-col overflow-hidden ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+        <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+            <CampaignLeaderboardPane 
+                isOpen={isLeaderboardOpen} 
+                onToggle={() => setIsLeaderboardOpen(false)} 
+                leaderboard={activeCampaignLeaderboard} 
+                theme={theme} 
+                address={address} 
+                truncate={truncate} 
+                isSmallScreen={isSmallScreen} 
+            />
             <div className={`flex-none ${isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
                 <div className="max-w-[1600px] mx-auto p-3 md:px-8 md:py-4">
                     <div className="flex items-center justify-between">
@@ -348,19 +359,19 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>Trading Wallet</h4>
-                                            {evmSessionWallet?.address && (
-                                                <div 
-                                                    onClick={() => {
+                                            <div 
+                                                onClick={() => {
+                                                    if (evmSessionWallet?.address) {
                                                         navigator.clipboard.writeText(evmSessionWallet.address);
                                                         setToast("Address Copied!");
                                                         setTimeout(() => setToast(null), 2000);
-                                                    }}
-                                                    className={`text-[8px] font-mono opacity-40 hover:opacity-100 cursor-pointer transition-all mt-1 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
-                                                >
-                                                    {truncate(evmSessionWallet.address)}
-                                                    <Copy size={8} />
-                                                </div>
-                                            )}
+                                                    }
+                                                }}
+                                                className={`text-[8px] font-mono opacity-40 hover:opacity-100 cursor-pointer transition-all mt-1 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
+                                            >
+                                                {evmSessionWallet?.address ? truncate(evmSessionWallet.address) : "Initializing..."}
+                                                {evmSessionWallet?.address && <Copy size={8} />}
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="text-xl font-black text-[#3CB371] tabular-nums">${(parseFloat(sessionBalance || 0)).toFixed(2)}</div>
@@ -579,31 +590,66 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                                 )}
                                             </div>
 
-                                            {/* Live Mini-Leaderboard */}
-                                            <div className="flex-1 flex flex-col gap-2 min-h-0 overflow-y-auto no-scrollbar">
-                                                <div className="text-[8px] font-black opacity-40 uppercase tracking-widest border-b border-white/5 pb-1">Leaderboard Sync</div>
-                                                <div className="flex flex-col gap-1.5">
-                                                    {activeCampaignLeaderboard.slice(0, 8).map((entry, idx) => {
-                                                        const isMe = address && entry.address.toLowerCase() === address.toLowerCase();
-                                                        return (
-                                                            <motion.div 
-                                                                layout
-                                                                key={entry.address}
-                                                                initial={{ opacity: 0, x: -10 }}
-                                                                animate={{ opacity: 1, x: 0 }}
-                                                                className={`flex items-center justify-between p-2 rounded-xl transition-all ${isMe ? 'bg-[#3CB371]/30 border border-[#3CB371]/40' : 'bg-white/5 hover:bg-white/10'}`}
-                                                            >
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className={`text-[10px] font-black ${idx < 3 ? 'text-[#3CB371]' : 'opacity-40'}`}>#{idx + 1}</span>
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-[10px] font-bold font-mono">{truncate(entry.address)}</span>
-                                                                        {isMe && <span className="text-[6px] font-black text-[#3CB371] uppercase">My Position</span>}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-[10px] font-black text-[#3CB371]">{entry.wins} W</div>
-                                                            </motion.div>
-                                                        )
-                                                    })}
+                                            {/* Campaign Progress / Report */}
+                                            <div className="flex-1 flex flex-col gap-3 min-h-0">
+                                                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                                    <div className="text-[8px] font-black opacity-40 uppercase tracking-widest">Your Campaign Progress</div>
+                                                    <button 
+                                                        onClick={() => setIsLeaderboardOpen(true)}
+                                                        className="flex items-center gap-1 text-[8px] font-black text-[#3CB371] uppercase tracking-widest hover:brightness-110"
+                                                    >
+                                                        View Leaderboard <ChevronRight size={10} />
+                                                    </button>
+                                                </div>
+                                                
+                                                <div className="flex flex-col gap-3 overflow-y-auto no-scrollbar pb-2">
+                                                    {/* Stats Grid */}
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className={`p-3 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
+                                                            <div className="text-[7px] font-black uppercase tracking-widest opacity-40 mb-1">Start Date</div>
+                                                            <div className={`text-[10px] font-bold ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                                                                {new Date(campaigns.find(c => c.id === selectedCampaignId)?.startTime || Date.now()).toLocaleDateString()}
+                                                            </div>
+                                                        </div>
+                                                        <div className={`p-3 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
+                                                            <div className="text-[7px] font-black uppercase tracking-widest opacity-40 mb-1">End Date</div>
+                                                            <div className={`text-[10px] font-bold ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                                                                {new Date(campaigns.find(c => c.id === selectedCampaignId)?.endTime || (Date.now() + 86400000 * 7)).toLocaleDateString()}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {enrollments[selectedCampaignId] ? (
+                                                        <div className={`p-3 rounded-xl border flex flex-col gap-2 ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-[#3CB371]/10 border-[#3CB371]/20'}`}>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Your Current Rank</span>
+                                                                <span className="text-sm font-black text-[#3CB371]">
+                                                                    {activeCampaignLeaderboard.findIndex(e => e.address.toLowerCase() === address?.toLowerCase()) > -1 
+                                                                        ? `#${activeCampaignLeaderboard.findIndex(e => e.address.toLowerCase() === address?.toLowerCase()) + 1}`
+                                                                        : '-'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Eligible Wins</span>
+                                                                <span className="text-sm font-black text-[#3CB371]">
+                                                                    {activeCampaignLeaderboard.find(e => e.address.toLowerCase() === address?.toLowerCase())?.wins || '0'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between border-t border-[#3CB371]/10 pt-2 mt-1">
+                                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-60">First Entry</span>
+                                                                <span className={`text-[10px] font-bold ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                                                                    {userProfile?.trades?.find(t => t.timestamp >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0))?.timestamp 
+                                                                        ? new Date(userProfile.trades.find(t => t.timestamp >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0)).timestamp).toLocaleDateString() 
+                                                                        : 'Pending'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`p-4 rounded-xl border flex flex-col items-center text-center gap-1 ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
+                                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Not Enrolled</span>
+                                                            <span className="text-[8px] opacity-30 font-medium">Join the campaign to track your progress and compete.</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

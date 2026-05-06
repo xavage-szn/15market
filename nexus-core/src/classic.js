@@ -194,18 +194,30 @@ class ClassicEngine {
 
       trade.payoutTx = tx.hash;
       trade.status = 'SETTLED';
+
+      // OPTIMISTIC PAYOUT: Emit success immediately after broadcast for near-zero latency feel
+      const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
+      const payout = trade.amount * multiplier * 0.99;
+      this.io.to(trade.userAddr).emit('payout_completed', { 
+        tradeId: trade.id, 
+        betId: trade.id, 
+        tx: tx.hash,
+        payout: payout
+      });
+
+      // PERSISTENCE: Save to profile history immediately
+      cache.pushHistory(trade.userAddr, {
+        ...trade,
+        won: true,
+        exitPrice: trade.lockedExitPrice,
+        payout: payout,
+        settledAt: Date.now()
+      });
       
       tx.wait().then(async (receipt) => {
         if (receipt.status === 1) {
           console.log(`✅ [On-Chain] Bet #${betId} Confirmed. Winnings sent.`);
-          const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
-          const payout = trade.amount * multiplier * 0.99;
-          this.io.to(trade.userAddr).emit('payout_completed', { 
-            tradeId: trade.id, 
-            betId: trade.id, 
-            tx: tx.hash,
-            payout: payout
-          });
+          // (payout_completed already emitted optimistically above)
           
           // Final balance sync
           const balWei = await rpc.mainProvider.getBalance(trade.sessionAddress);
@@ -241,7 +253,28 @@ class ClassicEngine {
   settleTradeLocally(trade) {
     trade.status = 'LOST';
     trade.settledAt = Date.now();
-    this.io.to(trade.userAddr).emit('trade_settled', { betId: trade.id, won: false, status: 'LOST' });
+
+    // ENRICHED PAYLOAD: Ensure UI has all info for instant finalization without resolving delay
+    this.io.to(trade.userAddr).emit('trade_settled', { 
+      betId: trade.id, 
+      won: false, 
+      status: 'LOST',
+      exitPrice: trade.lockedExitPrice,
+      userAddr: trade.userAddr,
+      entryPrice: trade.entryPrice,
+      amount: trade.amount,
+      symbol: trade.symbol,
+      direction: trade.direction,
+      duration: trade.duration
+    });
+
+    // PERSISTENCE: Save to profile history immediately
+    cache.pushHistory(trade.userAddr, {
+      ...trade,
+      won: false,
+      exitPrice: trade.lockedExitPrice,
+      settledAt: Date.now()
+    });
   }
 
   async ensureOperatorFunded() {
