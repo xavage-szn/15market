@@ -665,7 +665,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                         </div>
                     </div>
                 </div>
-            </div>
+            
 
             {modalConfig && (
                 <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
