@@ -158,14 +158,10 @@ export const Scene8: React.FC = () => {
           
           return (
             <div key={i} style={{ 
-              background: "rgba(255,255,255,0.02)", 
-              border: "1px solid rgba(0,230,118,0.1)", 
-              borderRadius: 30, 
               padding: "40px 60px", 
               transform: `translateY(${yOff}px) scale(${s})`, 
               opacity: s,
               filter: `blur(${blur}px)`,
-              backdropFilter: "blur(20px)",
               display: "flex",
               flexDirection: "column",
               alignItems: "center"
@@ -257,7 +253,7 @@ export const Scene9: React.FC = () => {
         {/* TOP NAV */}
         <div style={{ height: 70, borderBottom: "1px solid rgba(0,230,118,0.2)", display: "flex", alignItems: "center", padding: "0 30px", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Img src={staticFile("15logo.png")} style={{ height: 32, width: "auto" }} />
+            <Img src={staticFile("15logo.png")} style={{ height: 54, width: "auto" }} />
           </div>
           
           {/* Classic / Rounds Toggle */}

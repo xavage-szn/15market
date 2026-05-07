@@ -527,28 +527,27 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }
 
         try {
-            const campaign = {
-                id: 'camp_' + Date.now(),
-                ...newCampaign,
-                createdAt: Date.now(),
-                startTime: new Date(newCampaign.startTime).getTime(),
-                endTime: new Date(newCampaign.endTime).getTime()
-            };
-
-            const updated = [...campaigns, campaign];
-            const res = await fetch(`${KEEPER_URL}/campaigns`, {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/campaigns`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${ADMIN_TOKEN}`
+                    'Authorization': ADMIN_TOKEN
                 },
-                body: JSON.stringify(updated)
+                body: JSON.stringify({
+                    title: newCampaign.title,
+                    prize: newCampaign.prize,
+                    startTime: new Date(newCampaign.startTime).getTime(),
+                    endTime: new Date(newCampaign.endTime).getTime()
+                })
             });
 
             if (res.ok) {
-                notify('success', 'CAMPAIGN READY', `Campaign "${campaign.title}" has been scheduled.`);
-                setCampaigns(updated);
-                setNewCampaign({ title: '', description: '', startTime: '', endTime: '', network: 'general', reboot: 'none', prize: '' });
+                const data = await res.json();
+                notify('success', 'CAMPAIGN READY', `Campaign "${data.campaign.title}" has been scheduled.`);
+                setCampaigns(prev => [...prev, data.campaign]);
+                setNewCampaign({ title: '', description: '', startTime: '', endTime: '', network: 'arc', reboot: 'none', prize: '' });
+            } else {
+                notify('error', 'SAVE FAILED', 'Could not create campaign.');
             }
         } catch (e) { notify('error', 'SAVE FAILED', e.message); }
     };
@@ -2471,19 +2470,27 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                     <div className="space-y-2">
                                                         <label className="text-[10px] font-black text-white/40 uppercase ml-1">Start Date & Time</label>
-                                                        <input
-                                                            type="datetime-local"
-                                                            onChange={(e) => setNewCampaign({ ...newCampaign, startTime: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-xs text-white/80 outline-none focus:border-yellow-500/40 transition-all font-mono"
-                                                        />
+                                                        <div className="relative">
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={newCampaign.startTime}
+                                                                style={{ colorScheme: 'dark' }}
+                                                                onChange={(e) => setNewCampaign({ ...newCampaign, startTime: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-xs text-white outline-none focus:border-yellow-500/40 transition-all font-mono"
+                                                            />
+                                                        </div>
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-[10px] font-black text-white/40 uppercase ml-1">End Date & Time</label>
-                                                        <input
-                                                            type="datetime-local"
-                                                            onChange={(e) => setNewCampaign({ ...newCampaign, endTime: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-xs text-white/80 outline-none focus:border-yellow-500/40 transition-all font-mono"
-                                                        />
+                                                        <div className="relative">
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={newCampaign.endTime}
+                                                                style={{ colorScheme: 'dark' }}
+                                                                onChange={(e) => setNewCampaign({ ...newCampaign, endTime: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl px-5 py-4 text-xs text-white outline-none focus:border-yellow-500/40 transition-all font-mono"
+                                                            />
+                                                        </div>
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-[10px] font-black text-white/40 uppercase ml-1">Target Network</label>

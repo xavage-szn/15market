@@ -57,6 +57,11 @@ class SocketService {
         }
     }
 
+    emit(event, data) {
+        if (!this.socket) this.connect();
+        this.socket.emit(event, data);
+    }
+
     disconnect() {
         if (this.socket) {
             this.socket.disconnect();

@@ -15,8 +15,8 @@ export const FullVideo: React.FC = () => {
       <FuturisticBackground />
       
       {/* Audio Tracks - Place 'voiceover.mp3' and 'music.mp3' in your public/ folder! */}
-      <Audio src={staticFile("voiceover.mp3")} />
-      <Audio src={staticFile("music.mp3")} volume={0.15} />
+      {/* <Audio src={staticFile("voiceover.mp3")} /> */}
+      {/* <Audio src={staticFile("music.mp3")} volume={0.15} /> */}
       
       <Series>
         <Series.Sequence durationInFrames={180}>

@@ -10,8 +10,14 @@ export const Scene11: React.FC = () => {
 
   const card = { title: "THE CLASSIC MODEL", color: COLORS.greenGlow, desc1: "PLAYER vs HOUSE", desc2: "INSTANT SETTLEMENT" };
 
-  const s = spring({ frame: Math.max(0, frame - 30), fps, config: { damping: 20, stiffness: 150 } });
-  const scale = interpolate(s, [0, 1], [0.9, 1]);
+  // Bouncy spring
+  const s = spring({ 
+    frame: Math.max(0, frame - 30), 
+    fps, 
+    config: { damping: 10, stiffness: 200 } // Bouncier
+  });
+  
+  const scale = interpolate(s, [0, 1], [0.8, 1]);
   const blur = interpolate(s, [0, 1], [20, 0]);
 
   return (
@@ -29,7 +35,7 @@ export const Scene11: React.FC = () => {
         border: "1px solid rgba(0,230,118,0.2)", 
         borderRadius: 30, 
         transform: `scale(${scale})`, 
-        opacity: s, 
+        opacity: interpolate(frame - 30, [0, 10], [0, 1]), 
         padding: 60, 
         display: "flex", 
         flexDirection: "column", 
@@ -54,6 +60,7 @@ export const Scene11: React.FC = () => {
 // ─── SCENE 12: FUTURE MODELS TEASE ───────────────────────────────────────────
 export const Scene12: React.FC = () => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
   const text1Op = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
   const text2Op = interpolate(frame, [120, 140], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
@@ -67,8 +74,14 @@ export const Scene12: React.FC = () => {
         <div style={{ fontFamily: FONTS.headline, fontSize: 36, color: COLORS.gray, fontWeight: 300, letterSpacing: "8px" }}>AND WE'RE JUST GETTING STARTED</div>
         <div style={{ display: "flex", gap: 30, marginTop: 20 }}>
           {models.map((m, i) => {
-            const op = interpolate(frame - (40 + i * 15), [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-            const y = interpolate(frame - (40 + i * 15), [0, 20], [40, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+            const b = spring({ 
+              frame: Math.max(0, frame - (40 + i * 15)), 
+              fps, 
+              config: { damping: 12, stiffness: 200 } 
+            });
+            const y = interpolate(b, [0, 1], [100, 0]);
+            const s = interpolate(b, [0, 1], [0.8, 1]);
+            
             return (
               <div key={m} style={{ 
                 padding: "20px 40px", 
@@ -80,8 +93,8 @@ export const Scene12: React.FC = () => {
                 fontWeight: 800,
                 fontSize: 24, 
                 letterSpacing: "4px",
-                opacity: op, 
-                transform: `translateY(${y}px)`,
+                opacity: b, 
+                transform: `translateY(${y}px) scale(${s})`,
                 backdropFilter: "blur(20px)"
               }}>
                 {m}
@@ -107,24 +120,49 @@ export const Scene13: React.FC = () => {
   const arcScale = spring({ frame: Math.max(0, frame - 40), fps, config: { damping: 20 } });
   const aBlur = interpolate(arcScale, [0, 1], [20, 0]);
 
-  const pillOp1 = interpolate(frame, [90, 110], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const pillOp2 = interpolate(frame, [120, 140], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const pillOp3 = interpolate(frame, [150, 170], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const pills = [
+    { text: "NOW LIVE ON ARC TESTNET", sub: "15MARKET.ONLINE", color: COLORS.white },
+    { text: "PROGRAMMED MICRO-TRANSACTIONS", color: COLORS.white },
+    { text: "ZERO FRICTION", color: COLORS.greenGlow, bold: true }
+  ];
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
       
-      <div style={{ opacity: arcScale, filter: `blur(${aBlur}px)` }}>
+      <div style={{ opacity: arcScale, filter: `blur(${aBlur}px)`, marginBottom: 40 }}>
         <ArcGraphics />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 30, alignItems: "center" }}>
-        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,230,118,0.2)", padding: "20px 40px", borderRadius: 30, color: COLORS.white, fontFamily: FONTS.headline, fontWeight: 300, fontSize: 24, opacity: pillOp1, letterSpacing: "4px", backdropFilter: "blur(20px)", textAlign: "center" }}>
-          NOW LIVE ON ARC TESTNET<br/>
-          <span style={{ fontSize: 18, color: COLORS.greenGlow }}>15MARKET.ONLINE</span>
-        </div>
-        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,230,118,0.2)", padding: "20px 40px", borderRadius: 30, color: COLORS.white, fontFamily: FONTS.headline, fontWeight: 300, fontSize: 24, opacity: pillOp2, letterSpacing: "4px", backdropFilter: "blur(20px)" }}>PROGRAMMED MICRO-TRANSACTIONS</div>
-        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,230,118,0.2)", padding: "20px 40px", borderRadius: 30, color: COLORS.greenGlow, fontFamily: FONTS.headline, fontWeight: 800, fontSize: 24, opacity: pillOp3, letterSpacing: "4px", backdropFilter: "blur(20px)" }}>ZERO FRICTION</div>
+        {pills.map((p, i) => {
+          const b = spring({ 
+            frame: Math.max(0, frame - (90 + i * 30)), 
+            fps, 
+            config: { damping: 10, stiffness: 200 } 
+          });
+          const x = interpolate(b, [0, 1], [-100, 0]);
+          
+          return (
+            <div key={i} style={{ 
+              background: "rgba(255,255,255,0.05)", 
+              border: "1px solid rgba(0,230,118,0.2)", 
+              padding: "20px 40px", 
+              borderRadius: 30, 
+              color: p.color, 
+              fontFamily: FONTS.headline, 
+              fontWeight: p.bold ? 800 : 300, 
+              fontSize: 24, 
+              opacity: b, 
+              letterSpacing: "4px", 
+              backdropFilter: "blur(20px)", 
+              textAlign: "center",
+              transform: `translateX(${x}px) scale(${b})`
+            }}>
+              {p.text}
+              {p.sub && <><br/><span style={{ fontSize: 18, color: COLORS.greenGlow }}>{p.sub}</span></>}
+            </div>
+          );
+        })}
       </div>
 
     </AbsoluteFill>
