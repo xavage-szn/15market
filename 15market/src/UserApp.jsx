@@ -436,6 +436,11 @@ export default function UserApp() {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
   
+  // PERSISTENCE: Transaction History
+  useEffect(() => {
+    localStorage.setItem("15market_transactions_v1", JSON.stringify(transactionHistory));
+  }, [transactionHistory]);
+  
   // LOCK SCROLL for Mobile History Drawer
   useEffect(() => {
     if (showMobileHistory) {

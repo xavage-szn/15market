@@ -37,6 +37,8 @@ export const Scene6: React.FC = () => {
         display: "flex", 
         flexDirection: "column", 
         justifyContent: "center", 
+        alignItems: "flex-end", // RIGHT ALIGN
+        textAlign: "right",     // RIGHT ALIGN
         opacity: sideOp 
       }}>
         <div style={{ fontSize: 24, fontWeight: 800, fontFamily: FONTS.headline, color: COLORS.gray, marginBottom: 10 }}>PREDICTION MARKETS</div>
@@ -64,8 +66,17 @@ export const Scene6: React.FC = () => {
         <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONTS.body, color: COLORS.gray }}>But dangerous. Rugs. Liquidations.</div>
       </div>
 
-      {/* CENTER LINE divider */}
-      <div style={{ width: 2, height: `${splitH}%`, background: COLORS.white, position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", opacity: 0.5 }} />
+      {/* CENTER LINE divider - Now an animated split effect */}
+      <div style={{ 
+        width: interpolate(pushS, [0, 1], [2, 0]), // Fades out as it pushes
+        height: `${splitH}%`, 
+        background: COLORS.white, 
+        position: "absolute", 
+        left: "50%", 
+        top: "50%", 
+        transform: "translate(-50%, -50%)", 
+        opacity: interpolate(pushS, [0, 0.5], [0.5, 0]) 
+      }} />
 
       {/* CENTRAL FEATURES LIST */}
       <div style={{ 
@@ -112,30 +123,26 @@ export const Scene7: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const impactOp = interpolate(frame - 30, [0, 4, 8], [0, 1, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  
-  // Elegant abstract logo reveal
-  const logoScale = spring({ frame: Math.max(0, frame - 60), fps, config: { damping: 12, stiffness: 80 } });
-  const logoScaleVal = interpolate(logoScale, [0, 1], [0.8, 1]); // Subtle scale in
-  const logoBlur = interpolate(logoScale, [0, 1], [20, 0]);
+  // Hero entrance
+  const logoScale = spring({ frame: Math.max(0, frame - 30), fps, config: { damping: 12, stiffness: 80 } });
+  const logoScaleVal = interpolate(logoScale, [0, 1], [0.7, 1]); // Larger for full logo
   const logoOp = interpolate(logoScale, [0, 1], [0, 1]);
 
-  const taglineOp = interpolate(frame - 180, [0, 30], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const taglineOp = interpolate(frame - 120, [0, 30], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent" }}>
       
-      {frame >= 60 && (
-
-        <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "transparent" }}>
+      {frame >= 30 && (
+        <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           
-          <div style={{ display: "flex", alignItems: "center", transform: `scale(${logoScaleVal})`, opacity: logoOp, filter: `blur(${logoBlur}px)` }}>
-            {/* 3D 15 Logo */}
-            <Logo3D style={{ width: 450, height: 450 }} />
+          <div style={{ display: "flex", alignItems: "center", transform: `scale(${logoScaleVal})`, opacity: logoOp }}>
+            {/* Full 15market Logo */}
+            <Logo3D style={{ width: 800, height: 400 }} />
           </div>
 
           <div style={{ position: "absolute", bottom: 200, opacity: taglineOp }}>
-            <TerminalText text="PREDICT FAST. SETTLE FASTER." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={180} />
+            <TerminalText text="PREDICT FAST. SETTLE FASTER." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={120} />
           </div>
         </AbsoluteFill>
       )}
@@ -143,6 +150,7 @@ export const Scene7: React.FC = () => {
     </AbsoluteFill>
   );
 };
+
 
 // ─── SCENE 8: REAL ASSETS. ZERO SCAM RISK. ───────────────────────────────────
 export const Scene8: React.FC = () => {
@@ -161,18 +169,33 @@ export const Scene8: React.FC = () => {
     <AbsoluteFill style={{ backgroundColor: "transparent" }}>
 
       {/* Persistent Logo */}
-      <div style={{ position: "absolute", left: "50%", top: "50%", transform: `translate(-50%, -50%) translate(${sX}px, ${sY}px) scale(${sScale})`, display: "flex", alignItems: "center", opacity: 0.5, overflow: "visible" }}>
+      <div style={{ 
+        position: "absolute", 
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transform: `translate(${sX}px, ${sY}px) scale(${sScale})`, 
+        opacity: 0.5 
+      }}>
         <Logo3D style={{ width: 450, height: 450 }} />
       </div>
 
 
       {/* Futuristic Floating Assets */}
-      <div style={{ position: "absolute", left: "50%", top: "45%", transform: "translate(-50%, -50%)", display: "flex", justifyContent: "center", gap: 60, width: 1200 }}>
+      <div style={{ 
+        position: "absolute", 
+        width: "100%",
+        top: "45%", 
+        display: "flex", 
+        justifyContent: "center", 
+        gap: 60 
+      }}>
         {assets.map((a, i) => {
           const delay = 60 + i * 15;
           const s = spring({ frame: Math.max(0, frame - delay), fps, config: { damping: 15 } });
           const price = 100 + Math.sin(frame * 0.05 + i) * 10;
-          const blur = interpolate(s, [0, 1], [20, 0]);
           const yOff = interpolate(s, [0, 1], [100, 0]);
           
           return (
@@ -193,6 +216,7 @@ export const Scene8: React.FC = () => {
           );
         })}
       </div>
+
 
 
       {frame > 120 && (

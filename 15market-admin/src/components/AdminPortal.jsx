@@ -688,6 +688,17 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         type: 'EMERGENCY' // EMERGENCY, MAINTENANCE, ANNOUNCEMENT
     });
 
+    const [broadcastHistory, setBroadcastHistory] = useState(() => {
+        try {
+            const saved = localStorage.getItem('15market_admin_broadcast_history');
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) { return []; }
+    });
+
+    useEffect(() => {
+        localStorage.setItem('15market_admin_broadcast_history', JSON.stringify(broadcastHistory));
+    }, [broadcastHistory]);
+
     // Cleanup expired broadcasts locally to keep UI in sync
     useEffect(() => {
         const timer = setInterval(() => {
@@ -719,6 +730,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             
             // Optimistic local update
             setBroadcasts([msg]);
+            setBroadcastHistory(prev => [msg, ...prev].slice(0, 100));
             localStorage.setItem('15market_admin_broadcast', JSON.stringify([msg]));
             setIsBroadcastModalOpen(false);
             setNewBroadcast({ message: '', duration: 30, type: 'EMERGENCY' });
@@ -2832,36 +2844,51 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                             </div>
                                             <div className="p-8">
                                                 <div className="space-y-4">
-                                                    {broadcasts.length > 0 ? broadcasts.map((b) => (
-                                                        <div key={b.id} className="p-6 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between">
-                                                            <div className="flex items-center gap-6">
-                                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${b.type === 'EMERGENCY' ? 'bg-red-500/10 text-red-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
-                                                                    <Megaphone size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs font-black text-white uppercase">{b.text}</p>
-                                                                    <div className="flex items-center gap-4 mt-1">
-                                                                        <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">ISSUED BY: {b.sender}</p>
-                                                                        <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-widest flex items-center gap-1">
-                                                                            <Clock size={10} />
-                                                                            {Math.max(0, Math.floor((b.expiry - Date.now()) / 1000))}s REMAINING
-                                                                        </p>
+                                                    {broadcastHistory.length > 0 ? broadcastHistory.map((b) => {
+                                                        const isActive = b.expiry > Date.now();
+                                                        return (
+                                                            <div key={b.id} className={`p-6 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between ${!isActive ? 'opacity-50' : ''}`}>
+                                                                <div className="flex items-center gap-6">
+                                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${b.type === 'EMERGENCY' ? 'bg-red-500/10 text-red-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
+                                                                        <Megaphone size={20} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs font-black text-white uppercase">{b.text}</p>
+                                                                        <div className="flex items-center gap-4 mt-1">
+                                                                            <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">ISSUED BY: {b.sender}</p>
+                                                                            <p className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${isActive ? 'text-[#3CB371]' : 'text-white/20'}`}>
+                                                                                <Clock size={10} />
+                                                                                {isActive ? `${Math.max(0, Math.floor((b.expiry - Date.now()) / 1000))}s REMAINING` : 'EXPIRED / ARCHIVED'}
+                                                                            </p>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {isActive && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const updated = broadcasts.filter(item => item.id !== b.id);
+                                                                                setBroadcasts(updated);
+                                                                                localStorage.setItem('15market_admin_broadcast', JSON.stringify(updated));
+                                                                            }}
+                                                                            className="px-4 py-2 bg-red-500/10 text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500/20 rounded-lg border border-red-500/20"
+                                                                        >
+                                                                            Halt
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setBroadcastHistory(prev => prev.filter(item => item.id !== b.id));
+                                                                        }}
+                                                                        className="px-4 py-2 bg-white/5 text-[9px] font-black uppercase tracking-widest text-white/40 hover:text-white rounded-lg border border-white/5"
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                            <button
-                                                                onClick={() => {
-                                                                    const updated = broadcasts.filter(item => item.id !== b.id);
-                                                                    setBroadcasts(updated);
-                                                                    localStorage.setItem('15market_admin_broadcast', JSON.stringify(updated));
-                                                                }}
-                                                                className="px-4 py-2 bg-white/5 text-[9px] font-black uppercase tracking-widest text-white/40 hover:text-red-500 rounded-lg border border-white/5"
-                                                            >
-                                                                Halt
-                                                            </button>
-                                                        </div>
-                                                    )) : (
-                                                        <div className="text-center py-12 text-white/20 uppercase font-black tracking-widest text-[10px]">No active broadcasts</div>
+                                                        );
+                                                    }) : (
+                                                        <div className="text-center py-12 text-white/20 uppercase font-black tracking-widest text-[10px]">No broadcast history</div>
                                                     )}
                                                 </div>
                                             </div>

@@ -404,14 +404,14 @@ export const LogoVector: React.FC<{ size?: number; drawProgress?: number }> = ({
         {/* Arrow Notch detail */}
         <path d={pathArrow} fill="url(#id1)" />
 
-        {/* "market" */}
-        <g transform="translate(1.4, 5.5) scale(0.002, -0.002) translateY(-500)">
+        {/* "market" - Horizontal Lockup */}
+        <g transform="translate(2.2, 3.8) scale(0.0018, -0.0018)">
           {["m", "a", "r", "k", "e", "t"].map((char, i) => {
             const charOffsets = [0, 889, 1445, 1834, 2390, 2946]; 
             const offset = charOffsets[i];
             return (
               <path
-                key={i}
+                key={char + i}
                 d={glyphs[char as keyof typeof glyphs]}
                 transform={`translate(${offset}, 0)`}
                 fill={COLORS.white}
@@ -421,6 +421,7 @@ export const LogoVector: React.FC<{ size?: number; drawProgress?: number }> = ({
         </g>
       </g>
     </svg>
+
   );
 };
 
