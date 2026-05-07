@@ -76,20 +76,19 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                         <div
                             className="absolute inset-0 pointer-events-none select-none overflow-hidden"
                             style={{
-                                backgroundImage: `url('/logo.png')`,
-                                backgroundSize: '40px 40px',
-                                backgroundRepeat: 'repeat',
-                                opacity: 0.08,
-                                transform: 'rotate(-20deg) scale(2)',
-                                mixBlendMode: 'multiply',
-                                filter: 'grayscale(100%) brightness(0.9)'
+                                backgroundImage: `url('/logo.SVG')`,
+                                backgroundSize: '40%',
+                                backgroundPosition: 'center',
+                                backgroundRepeat: 'no-repeat',
+                                opacity: 0.03,
+                                filter: 'brightness(2)'
                             }}
                         />
 
                         {/* Receipt Content */}
-                        <div className="relative z-10 flex flex-col items-center">
+                        <div className="relative z-10 flex flex-col items-center text-center">
                             <div className="flex flex-col items-center mb-5">
-                                <img src="/logo.png" alt="15market" className="h-20 w-auto mb-2 drop-shadow-sm" />
+                                <img src="/logo.SVG" alt="15market" className="h-20 w-auto mb-2 drop-shadow-sm" />
                                 <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">{trade.type === 'rounds' ? 'ROUNDS SETTLE' : '15MARKET'}</h1>
                                 <p className="text-[8px] font-black mt-1.5 tracking-[0.2em] text-black/50 uppercase">
                                     {trade.type === 'rounds' ? 'P2P POOLED SETTLEMENT' : 'VERIFIED PREDICTION'} • ARC_NETWORK

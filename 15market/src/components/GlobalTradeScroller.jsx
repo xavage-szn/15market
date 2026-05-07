@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Radio, ArrowUp, ArrowDown, Check, X, Megaphone } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 import { socketService } from '../utils/socket';
