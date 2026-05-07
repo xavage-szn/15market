@@ -30,64 +30,31 @@ export const Scene6: React.FC = () => {
   const isExploded = frame > explosionFrame;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "transparent", display: "flex", flexDirection: "row" }}>
+    <AbsoluteFill style={{ backgroundColor: "transparent" }}>
       
       {/* LEFT SIDE */}
-      <div style={{ flex: 1, height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp }}>
+      <div style={{ position: "absolute", left: 0, top: 0, width: "50%", height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp }}>
         <div style={{ fontSize: 24, fontWeight: 800, fontFamily: FONTS.headline, color: COLORS.gray, marginBottom: 10 }}>PREDICTION MARKETS</div>
         <div style={{ fontSize: 64, fontWeight: 900, fontFamily: FONTS.headline, color: COLORS.white }}>TRUSTED</div>
         <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONTS.body, color: COLORS.gray }}>But slow. Days to settle.</div>
       </div>
 
-      {/* CENTER LINE divider (Glowy, not a black void) */}
-      <div style={{ width: 2, height: `${splitH}%`, background: COLORS.white, alignSelf: "center", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 20px ${COLORS.white}` }}>
-
-        
-        {frame < explosionFrame && (
-          <div style={{ position: "absolute", opacity: linesFade, display: "flex", flexDirection: "column", gap: 20, textAlign: "center" }}>
-            <div style={{ fontFamily: FONTS.headline, fontWeight: 800, fontSize: 36, color: COLORS.green, opacity: line1Op }}>FAST MARKETS</div>
-            <div style={{ fontFamily: FONTS.headline, fontWeight: 800, fontSize: 36, color: COLORS.green, opacity: line2Op }}>REAL ASSETS</div>
-            <div style={{ fontFamily: FONTS.headline, fontWeight: 800, fontSize: 36, color: COLORS.green, opacity: line3Op }}>ZERO SCAM RISK</div>
-          </div>
-        )}
-
-        {frame >= explosionFrame - 20 && !isExploded && (
-          <div style={{ position: "absolute", fontFamily: FONTS.headline, fontWeight: 900, fontSize: 96, color: COLORS.green }}>
-            <div style={{ transform: `rotate(${questionRotate}deg)` }}>?</div>
-          </div>
-        )}
-
-        {isExploded && (
-          <div style={{ position: "absolute" }}>
-            {new Array(100).fill(0).map((_, i) => {
-              const dx = (random(`ex-${i}`) - 0.5) * 1000;
-              const dy = (random(`ey-${i}`) - 0.5) * 1000;
-              const f = frame - explosionFrame;
-              const x = interpolate(f, [0, 60], [0, dx], { easing: Easing.out(Easing.cubic) });
-              const y = interpolate(f, [0, 60], [0, dy], { easing: Easing.out(Easing.cubic) });
-              const op = interpolate(f, [0, 60], [1, 0]);
-              return (
-                <div key={i} style={{ position: "absolute", width: 4, height: 4, background: COLORS.white, transform: `translate(${x}px, ${y}px)`, opacity: op }} />
-              );
-            })}
-          </div>
-        )}
-
+      {/* CENTER LINE divider */}
+      <div style={{ width: 2, height: `${splitH}%`, background: COLORS.white, position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", opacity: 0.5 }}>
+        <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: COLORS.white }} />
       </div>
 
       {/* RIGHT SIDE */}
-      <div style={{ flex: 1, height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp, position: "relative" }}>
-        
+      <div style={{ position: "absolute", right: 0, top: 0, width: "50%", height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp }}>
         <div style={{ position: "relative", height: 60, marginBottom: 10, width: "100%" }}>
-          <JitterScroll items={["Futures", "Perps", "Memecoins"]} speed={8} itemHeight={60} align="flex-start" style={{ position: "absolute", width: "100%", left: 0 }} />
+          <JitterScroll items={["Futures", "Perps", "Memecoins"]} speed={8} itemHeight={60} align="flex-start" />
         </div>
-
         <div style={{ fontSize: 64, fontWeight: 900, fontFamily: FONTS.headline, color: COLORS.red }}>FAST</div>
         <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONTS.body, color: COLORS.gray }}>But dangerous. Rugs. Liquidations.</div>
       </div>
 
-
     </AbsoluteFill>
+
   );
 };
 

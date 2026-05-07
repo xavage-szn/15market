@@ -357,17 +357,16 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 setKeeperHealth(prev => ({ ...prev, connected: false, failCount: prev.failCount + 1 }));
             });
 
-            return () => {
-                if (unbindStats) unbindStats();
-                if (unbindDashboard) unbindDashboard();
-                if (unbindTrade) unbindTrade();
-                if (unbindSettled) unbindSettled();
-                if (unbindSettings) unbindSettings();
-                if (unbindConnect) unbindConnect();
-                if (unbindDisconnect) unbindDisconnect();
-                socketService.disconnect();
-            };
-        }
+        return () => {
+            if (unbindStats) unbindStats();
+            if (unbindDashboard) unbindDashboard();
+            if (unbindTrade) unbindTrade();
+            if (unbindSettled) unbindSettled();
+            if (unbindSettings) unbindSettings();
+            if (unbindConnect) unbindConnect();
+            if (unbindDisconnect) unbindDisconnect();
+            socketService.disconnect();
+        };
     }, [isLoggedIn]);
 
     // High-frequency UI tick (1s) to drive "Frontend-Only" timers - Optimized to reduce re-renders

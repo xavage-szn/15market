@@ -452,15 +452,15 @@ export const Logo3D: React.FC<{ style?: React.CSSProperties }> = ({ style }) => 
       <div
         style={{
           position: "absolute",
-          width: 800, // Much larger to avoid edge artifacts
+          width: 800,
           height: 800,
-          background: `radial-gradient(circle, ${COLORS.greenGlow}22 0%, transparent 70%)`,
-          filter: "blur(80px)",
+          background: `radial-gradient(circle, ${COLORS.greenGlow}11 0%, transparent 70%)`,
           transform: "translate(-50%, -50%)",
           left: "50%",
           top: "50%",
         }}
       />
+
 
 
       <LogoVector size={ (style?.width as number || 400) / 4 } drawProgress={1} />
