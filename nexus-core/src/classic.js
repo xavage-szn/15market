@@ -223,7 +223,6 @@ class ClassicEngine {
       if (session) {
           session.balance = Number((session.balance + payout).toFixed(6));
           session.lastWinAt = Date.now();
-          // Emit updated balance immediately for zero-latency feel
           this.io.to(trade.userAddr).emit('balance_update', { 
               balance: String(session.balance), 
               reason: 'WIN_PAYOUT_SETTLED',
@@ -237,6 +236,16 @@ class ClassicEngine {
         betId: trade.id, 
         tx: tx.hash,
         payout: payout
+      });
+
+      // Notify ALL admins of the settled trade status
+      this.io.emit('global_trade_settled', {
+        betId: trade.id,
+        won: true,
+        status: 'WON',
+        payout,
+        exitPrice: trade.lockedExitPrice,
+        userAddr: trade.userAddr
       });
 
       // PERSISTENCE: Save to profile history immediately
@@ -316,6 +325,16 @@ class ClassicEngine {
       won: false,
       exitPrice: trade.lockedExitPrice,
       settledAt: Date.now()
+    });
+
+    // Notify ALL admins of the settled trade status
+    this.io.emit('global_trade_settled', {
+      betId: trade.id,
+      won: false,
+      status: 'LOST',
+      payout: 0,
+      exitPrice: trade.lockedExitPrice,
+      userAddr: trade.userAddr
     });
   }
 

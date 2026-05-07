@@ -1209,11 +1209,10 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
         try {
             const targetUrl = KEEPER_URL_ARC;
-            const res = await fetch(`${targetUrl}/history`);
+            const res = await fetch(`${targetUrl}/admin/trades`);
             if (res.ok) {
                 const allTrades = await res.json();
-                allTrades.sort((a, b) => b.timestamp - a.timestamp);
-                setTradeHistory(allTrades.slice(0, 100));
+                setTradeHistory(allTrades.slice(0, 200));
             }
         } catch (e) {
             console.error("Trade History Fetch Error:", e);
@@ -1280,8 +1279,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const filteredHistory = useMemo(() => {
         return tradeHistory.filter(trade => {
             const matchesSearch = !historyFilter.search ||
-                trade.owner?.toLowerCase().includes(historyFilter.search.toLowerCase()) ||
-                trade.publicKey?.toLowerCase().includes(historyFilter.search.toLowerCase());
+                trade.userAddr?.toLowerCase().includes(historyFilter.search.toLowerCase()) ||
+                String(trade.id || trade.betId || '').includes(historyFilter.search) ||
+                trade.symbol?.toLowerCase().includes(historyFilter.search.toLowerCase());
             return matchesSearch;
         });
     }, [tradeHistory, historyFilter.search]);

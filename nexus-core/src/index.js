@@ -429,6 +429,18 @@ app.post('/session/execute', async (req, res) => {
       ...result,
       newBalance: String(cache.sessions.get(address.toLowerCase())?.balance || 0)
     });
+
+    // Notify all connected admins of the new trade in real-time
+    const newTrade = cache.trades.get(String(result.tradeId));
+    if (newTrade) {
+      io.emit('global_trade_executed', {
+        ...newTrade,
+        userAddr: address,
+        id: newTrade.id,
+        betId: newTrade.id,
+        status: 'PENDING'
+      });
+    }
   } catch (err) {
     console.error('[session/execute] error:', err.message);
     res.status(500).json({ error: err.message });
@@ -791,8 +803,31 @@ app.get('/admin/stats', (req, res) => {
 });
 
 app.get('/admin/trades', (req, res) => {
-  const stats = profiles.getGlobalStats();
-  res.json(stats.recentTrades || []);
+  // Collect ALL settled trades from profile history
+  const allSettled = [];
+  for (const addr in profiles.profiles) {
+    const userTrades = profiles.profiles[addr].trades || [];
+    for (const t of userTrades) {
+      allSettled.push({ ...t, userAddr: addr });
+    }
+  }
+
+  // Also include any still-active trades from the live cache
+  const activeTrades = Array.from(cache.trades.values()).map(t => ({ ...t, status: t.status || 'PENDING' }));
+
+  // Merge: settled trades already have their final state, skip if already in settled list
+  const settledIds = new Set(allSettled.map(t => String(t.id || t.betId)));
+  const onlyActive = activeTrades.filter(t => !settledIds.has(String(t.id)));
+
+  const merged = [...allSettled, ...onlyActive];
+  merged.sort((a, b) => (b.timestamp || b.createdAt || 0) - (a.timestamp || a.createdAt || 0));
+
+  res.json(merged.slice(0, 200));
+});
+
+// Alias used by older admin build
+app.get('/history', (req, res) => {
+  return res.redirect('/admin/trades');
 });
 
 app.get('/admin/trade/:id', (req, res) => {
