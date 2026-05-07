@@ -47,22 +47,22 @@ export const FuturisticBackground: React.FC = () => {
           position: "absolute",
           inset: -100,
           backgroundImage: `
-            linear-gradient(to right, rgba(0, 230, 118, 0.08) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0, 230, 118, 0.08) 1px, transparent 1px)
+            linear-gradient(to right, rgba(0, 230, 118, 0.05) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(0, 230, 118, 0.05) 1px, transparent 1px)
           `,
           backgroundSize: "80px 80px",
-          transform: `perspective(1000px) rotateX(60deg) translateY(${ (frame * 0.8) % 80 }px)`,
-          maskImage: "radial-gradient(circle at center, black 20%, transparent 80%)",
+          transform: `perspective(1000px) rotateX(60deg) translateY(${ (frame * 0.4) % 80 }px)`,
+          maskImage: "radial-gradient(circle at center, black 30%, transparent 80%)",
         }}
       />
 
 
-      {/* Moving Data Lines */}
-      {new Array(15).fill(0).map((_, i) => {
+      {/* Moving Data Lines - Reduced for performance */}
+      {new Array(8).fill(0).map((_, i) => {
         const x = random(`line-x-${i}`) * width;
         const startY = random(`line-y-${i}`) * height;
         const length = 100 + random(`line-l-${i}`) * 200;
-        const speed = 2 + random(`line-s-${i}`) * 4;
+        const speed = 1 + random(`line-s-${i}`) * 3;
         const y = (startY + frame * speed) % (height + length);
         
         return (
@@ -74,12 +74,12 @@ export const FuturisticBackground: React.FC = () => {
               top: y - length,
               width: 1,
               height: length,
-              background: `linear-gradient(to bottom, transparent, ${COLORS.greenGlow}44)`,
-              boxShadow: `0 0 10px ${COLORS.greenGlow}22`,
+              background: `linear-gradient(to bottom, transparent, ${COLORS.greenGlow}33)`,
             }}
           />
         );
       })}
+
 
       {/* Vignette Overlay */}
       <div
@@ -416,7 +416,7 @@ export const SceneZoomTransition: React.FC<{
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const inBlur = interpolate(entryProgress, [0, 0.6], [30, 0], {
+  const inBlur = interpolate(entryProgress, [0, 0.6], [15, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -433,10 +433,11 @@ export const SceneZoomTransition: React.FC<{
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const outBlur = interpolate(exitProgress, [0.2, 1], [0, 40], {
+  const outBlur = interpolate(exitProgress, [0.2, 1], [0, 15], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+
 
   const scale = inScale * outScale;
   const opacity = Math.min(inOpacity, outOpacity);

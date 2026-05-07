@@ -4,6 +4,8 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
     const [asks, setAsks] = useState([]);
     const [bids, setBids] = useState([]);
+    const [visibleRows, setVisibleRows] = useState(12);
+    const containerRef = useRef(null);
     const prevPriceRef = useRef(null);
 
     const isDark = theme !== 'light';
@@ -11,6 +13,26 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
     const GREEN = "#3CB371";
     const GREEN_BG = "rgba(60, 179, 113, 0.15)";
     const RED_BG = "rgba(255, 68, 68, 0.15)";
+
+    // Responsive Row Calculation
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const obs = new ResizeObserver((entries) => {
+            for (let entry of entries) {
+                const height = entry.contentRect.height;
+                // Subtract header (~32px) and price bar (~44px)
+                const availableHeight = height - 80;
+                const spacePerSide = availableHeight / 2;
+                // Each row is roughly 20-22px (py-0.5 + text-xs + gap)
+                const rows = Math.floor(spacePerSide / 21);
+                setVisibleRows(Math.max(5, rows));
+            }
+        });
+
+        obs.observe(containerRef.current);
+        return () => obs.disconnect();
+    }, []);
 
     // Regenerate order book levels on every price tick — gives live "beating" effect
     useEffect(() => {
@@ -32,17 +54,17 @@ export function OrderBook({ price, theme = 'dark', symbol = 'USDC' }) {
             });
 
         const spread = 0.00035; // ~0.035% per level — realistic for liquid pairs
-        setAsks(generateLevel(p, spread, 8, 'ask').reverse());
-        setBids(generateLevel(p, spread, 8, 'bid'));
+        setAsks(generateLevel(p, spread, visibleRows, 'ask').reverse());
+        setBids(generateLevel(p, spread, visibleRows, 'bid'));
         prevPriceRef.current = p;
-    }, [price]); // fires on every aggTrade price update
+    }, [price, visibleRows]); // fires on every aggTrade price update or resize
 
     const priceNum = parseFloat(price) || 0;
     const prevNum = prevPriceRef.current || priceNum;
     const isUp = priceNum >= prevNum;
 
     return (
-        <div className={`w-full h-full flex flex-col font-mono text-[10px] lg:text-xs overflow-hidden rounded-xl transition-colors duration-300 ${isDark ? 'text-white/80' : 'text-[#0a261a]'}`}>
+        <div ref={containerRef} className={`w-full h-full flex flex-col font-mono text-[10px] lg:text-xs overflow-hidden rounded-xl transition-colors duration-300 ${isDark ? 'text-white/80' : 'text-[#0a261a]'}`}>
             <div className={`flex items-center justify-between px-3 py-2 border-b ${isDark ? 'border-white/5 opacity-60' : 'border-[#3CB371]/10 text-[#0a261a]/40'} text-[9px] uppercase tracking-wider font-bold`}>
                 <span>Price (USDC)</span>
                 <span>Size</span>

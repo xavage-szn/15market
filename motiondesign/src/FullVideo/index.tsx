@@ -7,7 +7,8 @@ import { FuturisticBackground, SceneZoomTransition } from "./components/GlobalCo
 
 export const FullVideo: React.FC = () => {
   const frame = useCurrentFrame();
-  const fadeOut = interpolate(frame, [3870, 3900], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const fadeOut = interpolate(frame, [1920, 1950], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
@@ -20,60 +21,60 @@ export const FullVideo: React.FC = () => {
       {/* <Audio src={staticFile("music.mp3")} volume={0.15} /> */}
 
       <Series>
-        <Series.Sequence durationInFrames={180}>
+        <Series.Sequence durationInFrames={90}>
           <SceneZoomTransition><Scene1 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={270}>
+        <Series.Sequence durationInFrames={135}>
           <SceneZoomTransition><Scene2 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={300}>
+        <Series.Sequence durationInFrames={150}>
           <SceneZoomTransition><Scene3 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={300}>
+        <Series.Sequence durationInFrames={150}>
           <SceneZoomTransition><Scene4 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={330}>
+        <Series.Sequence durationInFrames={165}>
           <SceneZoomTransition><Scene5 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={240}>
+        <Series.Sequence durationInFrames={120}>
           <SceneZoomTransition><Scene6 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={300}>
+        <Series.Sequence durationInFrames={150}>
           {/* Scene 7 hero moment: slower entry to let logo breathe */}
-          <SceneZoomTransition entryFrames={30} exitFrames={10} entryScale={1.08} exitScale={1.2}>
+          <SceneZoomTransition entryFrames={15} exitFrames={5} entryScale={1.08} exitScale={1.2}>
             <Scene7 />
           </SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={300}>
+        <Series.Sequence durationInFrames={150}>
           <SceneZoomTransition><Scene8 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={300}>
+        <Series.Sequence durationInFrames={150}>
           {/* Scene 9 desktop UI: gentler zoom so the mockup reads clearly */}
-          <SceneZoomTransition entryFrames={22} exitFrames={12} entryScale={1.06} exitScale={1.1}>
+          <SceneZoomTransition entryFrames={11} exitFrames={6} entryScale={1.06} exitScale={1.1}>
             <Scene9 />
           </SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={180}>
+        <Series.Sequence durationInFrames={90}>
           {/* Scene 10 WIN: explosive punch in */}
-          <SceneZoomTransition entryFrames={8} exitFrames={10} entryScale={1.25} exitScale={1.12}>
+          <SceneZoomTransition entryFrames={4} exitFrames={5} entryScale={1.25} exitScale={1.12}>
             <Scene10 />
           </SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={300}>
+        <Series.Sequence durationInFrames={150}>
           <SceneZoomTransition><Scene11 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={240}>
+        <Series.Sequence durationInFrames={120}>
           <SceneZoomTransition><Scene12 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={180}>
+        <Series.Sequence durationInFrames={90}>
           <SceneZoomTransition><Scene13 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={180}>
+        <Series.Sequence durationInFrames={90}>
           <SceneZoomTransition><Scene14 /></SceneZoomTransition>
         </Series.Sequence>
-        <Series.Sequence durationInFrames={300}>
+        <Series.Sequence durationInFrames={150}>
           {/* Final scene: dramatic slow settle */}
-          <SceneZoomTransition entryFrames={40} exitFrames={20} entryScale={1.1} exitScale={1.05}>
+          <SceneZoomTransition entryFrames={20} exitFrames={10} entryScale={1.1} exitScale={1.05}>
             <Scene15 />
           </SceneZoomTransition>
         </Series.Sequence>
