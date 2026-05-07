@@ -45,7 +45,9 @@ import {
     Image as ImageIcon,
     Copy,
     Key,
-    Radio
+    Radio,
+    CheckCircle,
+    FileText
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import MessagingSystem from './MessagingSystem';
