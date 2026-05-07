@@ -563,7 +563,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             </div>
 
                             {/* Dynamic Campaigns Section - Replaces Generic Chat on Mobile/Dashboard context */}
-                            <div className={`flex-1 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
+                            <div className={`h-[380px] lg:h-auto lg:flex-1 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
                                 <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <Trophy size={14} className="text-[#3CB371]" />

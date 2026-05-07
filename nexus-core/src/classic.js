@@ -147,6 +147,18 @@ class ClassicEngine {
       };
 
       cache.trades.set(trade.id, trade);
+      
+      // Deduct from in-process session immediately for responsive balance tracking
+      const session = cache.sessions.get(userAddr);
+      if (session) {
+          session.balance = Number((session.balance - amount).toFixed(6));
+          this.io.to(userAddr).emit('balance_update', { 
+              balance: String(session.balance), 
+              reason: 'TRADE_PLACED', 
+              betId: numericId.toString() 
+          });
+      }
+
       cache.queueTradeForSettlement(trade);
       
       return { success: true, txHash: tx.hash, tradeId: trade.id };
@@ -202,9 +214,24 @@ class ClassicEngine {
       trade.payoutTx = tx.hash;
       trade.status = 'SETTLED';
 
-      // OPTIMISTIC PAYOUT: Emit success immediately after broadcast for near-zero latency feel
-      const multiplier = trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90);
-      const payout = trade.amount * multiplier * 0.99;
+      // AUTHORITATIVE PAYOUT CALCULATION: Stake * Multiplier * 0.99 (1% platform fee)
+      const durationTiers = config.MULTIPLIERS || { 5: 2.90, 10: 2.40, 15: 1.90 };
+      const baseMultiplier = durationTiers[trade.duration] || (trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90));
+      const payout = Number((trade.amount * baseMultiplier * 0.99).toFixed(6));
+      
+      const session = cache.sessions.get(trade.userAddr);
+      if (session) {
+          session.balance = Number((session.balance + payout).toFixed(6));
+          session.lastWinAt = Date.now();
+          // Emit updated balance immediately for zero-latency feel
+          this.io.to(trade.userAddr).emit('balance_update', { 
+              balance: String(session.balance), 
+              reason: 'WIN_PAYOUT_SETTLED',
+              betId: trade.id,
+              txHash: tx.hash
+          });
+      }
+
       this.io.to(trade.userAddr).emit('payout_completed', { 
         tradeId: trade.id, 
         betId: trade.id, 
@@ -227,10 +254,18 @@ class ClassicEngine {
           // (payout_completed already emitted optimistically above)
           
           // Final balance sync
+          // Optional: Sync with final on-chain balance after tx confirm to ensure precision
           const balWei = await rpc.mainProvider.getBalance(trade.sessionAddress);
+          const onChainBal = parseFloat(ethers.formatEther(balWei));
+          
+          if (session) {
+              session.balance = onChainBal;
+              session.lastWinAt = Date.now();
+          }
+
           this.io.to(trade.userAddr).emit('balance_update', { 
-            balance: ethers.formatEther(balWei), 
-            reason: 'WIN_PAYOUT_SETTLED',
+            balance: String(onChainBal), 
+            reason: 'WIN_CONFIRMED',
             betId: trade.id,
             txHash: tx.hash
           });

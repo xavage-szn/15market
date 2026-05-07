@@ -77,8 +77,8 @@ class Cache {
 
     // CRITICAL: If we are looking for a past expiration price and the engine is lagging, 
     // we must NOT use the 'latest' price (which could be a retracement).
-    // If the gap is > 2s, we prefer the closest price BEFORE the target if available.
-    if (minDiff > 2000 && targetTime < Date.now()) {
+    // If the gap is > 1s, we prefer the closest price BEFORE the target if available.
+    if (minDiff > 1000 && targetTime < Date.now()) {
       const before = history.filter(h => h.time <= targetTime).pop();
       if (before) {
         console.warn(`[Cache] Large gap (${minDiff}ms) for ${key} at ${targetTime}. Locking to last known price before expiry.`);
