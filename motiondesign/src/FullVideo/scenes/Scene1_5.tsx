@@ -1,7 +1,7 @@
 import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Easing } from "remotion";
 import { COLORS, FONTS } from "../constants";
-import { JitterScroll } from "../components/GlobalComponents";
+import { JitterScroll, LandingScroll } from "../components/GlobalComponents";
 
 // ─── SCENE 1: THE PREDICTION MARKET ERA ─────────────────────────────────────
 export const Scene1: React.FC = () => {
@@ -10,31 +10,36 @@ export const Scene1: React.FC = () => {
   const concepts = [
     "Crypto",
     "DeFi",
-    "Web3",
-    "Smart Contracts",
+    "Options",
+    "Perpetuals",
     "Prediction Markets"
   ];
 
-  const titleOp = interpolate(frame - 120, [0, 30], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  const titleOp = interpolate(frame - 70, [0, 15], [0, 1], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
       
-      <JitterScroll items={concepts} speed={8} itemHeight={100} delay={0} />
+      <LandingScroll 
+        items={concepts} 
+        targetIndex={4} 
+        duration={60} 
+        itemHeight={120} 
+      />
 
       {/* Headline */}
       <div
         style={{
           position: "absolute",
-          bottom: 150,
+          bottom: 120,
           width: "100%",
           textAlign: "center",
           color: COLORS.white,
           fontFamily: FONTS.headline,
-          fontSize: 48,
+          fontSize: 40,
           fontWeight: 800,
           opacity: titleOp,
-          letterSpacing: "2px",
+          letterSpacing: "8px",
         }}
       >
         CHANGED EVERYTHING
@@ -43,39 +48,46 @@ export const Scene1: React.FC = () => {
   );
 };
 
+
 // ─── SCENE 2: THE GIANTS ─────────────────────────────────────────────────────
 export const Scene2: React.FC = () => {
   const frame = useCurrentFrame();
 
-  const titleOp = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-
   const markets = [
     "Hedgehog",
     "Augur",
-    "Projection Finance",
-    "SanR.app",
-    "Better Fan",
+    "Projection",
+    "SanR",
     "DexWin",
-    "Oriole Insights",
+    "Oriole",
     "Duel Duck",
     "moonopol",
-    "due.box",
-    "Polymarket",
-    "Kalshi"
+    "Kalshi",
+    "Manifold",
+    "Polymarket"
   ];
+
+  const titleOp = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
       
-      <div style={{ position: "absolute", top: 150, width: "100%", textAlign: "center", color: COLORS.gray, fontFamily: FONTS.headline, fontSize: 36, opacity: titleOp }}>
+      <div style={{ position: "absolute", top: 120, width: "100%", textAlign: "center", color: COLORS.gray, fontFamily: FONTS.headline, fontSize: 32, opacity: titleOp, letterSpacing: "4px" }}>
         THE MARKETS THAT BUILT TRUST
       </div>
 
-      <JitterScroll items={markets} speed={12} itemHeight={120} delay={20} />
+      <LandingScroll 
+        items={markets} 
+        targetIndex={10} 
+        duration={80} 
+        itemHeight={140} 
+        style={{ width: "100%" }}
+      />
 
     </AbsoluteFill>
   );
 };
+
 
 // ─── SCENE 3: BUT THEY TAKE TOO LONG ─────────────────────────────────────────
 export const Scene3: React.FC = () => {

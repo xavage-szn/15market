@@ -22,10 +22,10 @@ export const FullVideo: React.FC = () => {
 
       <Series>
         <Series.Sequence durationInFrames={90}>
-          <SceneZoomTransition><Scene1 /></SceneZoomTransition>
+          <SceneZoomTransition exitFrames={30} exitScale={12.0}><Scene1 /></SceneZoomTransition>
         </Series.Sequence>
         <Series.Sequence durationInFrames={135}>
-          <SceneZoomTransition><Scene2 /></SceneZoomTransition>
+          <SceneZoomTransition entryFrames={20} entryScale={3.0}><Scene2 /></SceneZoomTransition>
         </Series.Sequence>
         <Series.Sequence durationInFrames={150}>
           <SceneZoomTransition><Scene3 /></SceneZoomTransition>

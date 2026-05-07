@@ -76,7 +76,7 @@ export const Scene6: React.FC = () => {
       </div>
 
       {/* RIGHT SIDE */}
-      <div style={{ flex: 1, height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp, backgroundColor: "rgba(255,59,59,0.05)", position: "relative" }}>
+      <div style={{ flex: 1, height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp, position: "relative" }}>
         
         <div style={{ position: "relative", height: 60, marginBottom: 10, width: "100%" }}>
           <JitterScroll items={["Futures", "Perps", "Memecoins"]} speed={8} itemHeight={60} align="flex-start" style={{ position: "absolute", width: "100%", left: 0 }} />
@@ -85,6 +85,7 @@ export const Scene6: React.FC = () => {
         <div style={{ fontSize: 64, fontWeight: 900, fontFamily: FONTS.headline, color: COLORS.red }}>FAST</div>
         <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONTS.body, color: COLORS.gray }}>But dangerous. Rugs. Liquidations.</div>
       </div>
+
 
     </AbsoluteFill>
   );
@@ -108,10 +109,8 @@ export const Scene7: React.FC = () => {
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent" }}>
       
-      {impactOp > 0 && <AbsoluteFill style={{ backgroundColor: COLORS.white, opacity: impactOp * 0.5, zIndex: 100 }} />}
-
-
       {frame >= 60 && (
+
         <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "transparent" }}>
           
           <div style={{ display: "flex", alignItems: "center", transform: `scale(${logoScaleVal})`, opacity: logoOp, filter: `blur(${logoBlur}px)` }}>
@@ -165,7 +164,6 @@ export const Scene8: React.FC = () => {
               padding: "40px 60px", 
               transform: `translateY(${yOff}px) scale(${s})`, 
               opacity: s,
-              filter: `blur(${blur}px)`,
               display: "flex",
               flexDirection: "column",
               alignItems: "center"
@@ -179,6 +177,7 @@ export const Scene8: React.FC = () => {
           );
         })}
       </div>
+
 
       {frame > 120 && (
         <div style={{ position: "absolute", top: "70%", width: "100%", textAlign: "center", opacity: interpolate(frame, [120, 150], [0, 1]) }}>

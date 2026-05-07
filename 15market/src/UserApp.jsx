@@ -179,7 +179,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
             </div>
           ) : (
             tradeHistory.slice(0, 50).map((trade) => {
-              const isWin = trade.status === 'WON';
+              const isWin = trade.status === 'WON' || trade.status === 'PAID';
               const isLoss = trade.status === 'LOST';
 
               return (
@@ -200,9 +200,16 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                       </div>
                       <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
                     </div>
-                    <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
-                      {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
-                    </span>
+                    <div className="flex flex-col items-end">
+                      <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                        {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
+                      </span>
+                      {isWin && (trade.payoutSettled || trade.status === 'PAID') && (
+                        <span className="text-[10px] font-bold italic text-yellow-400 tracking-wider">
+                          paid
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between">

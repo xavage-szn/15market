@@ -41,9 +41,9 @@ export const Scene11: React.FC = () => {
         flexDirection: "column", 
         justifyContent: "center",
         alignItems: "center",
-        filter: `blur(${blur}px)`,
         boxShadow: `0 40px 100px rgba(0,0,0,0.5)` 
       }}>
+
 
         <div style={{ textAlign: "center" }}>
           <div style={{ color: card.color, fontFamily: FONTS.headline, fontSize: 40, fontWeight: 800, letterSpacing: "4px", marginBottom: 40 }}>{card.title}</div>
@@ -211,41 +211,79 @@ export const Scene15: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const logoScale = spring({ frame: Math.max(0, frame - 30), fps, config: { damping: 20, stiffness: 100 } });
-  const lS = interpolate(logoScale, [0, 1], [0.9, 1]); // Subtle float
-  const blur = interpolate(logoScale, [0, 1], [40, 0]);
+  // "15MARKET IS LIVE" Animation
+  const liveS = spring({ frame: Math.max(0, frame - 20), fps, config: { damping: 12, stiffness: 150 } });
+  const liveOp = interpolate(frame - 20, [0, 15], [0, 1], { extrapolateRight: "clamp" });
+  const liveScale = interpolate(liveS, [0, 1], [1.1, 1]);
+  const liveTracking = interpolate(liveS, [0, 1], [40, 10]);
 
-  const urlOp = interpolate(frame - 240, [0, 20], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  // Subtext Animation
+  const subOp = interpolate(frame - 50, [0, 20], [0, 1], { extrapolateRight: "clamp" });
+  
+  // URL Animation
+  const urlS = spring({ frame: Math.max(0, frame - 80), fps, config: { damping: 15, stiffness: 120 } });
+  const urlOp = interpolate(frame - 80, [0, 15], [0, 1], { extrapolateRight: "clamp" });
+  const urlY = interpolate(urlS, [0, 1], [30, 0]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
       
       <AmbientGlow color={COLORS.green} xOffset={0} yOffset={0} delay={0} />
 
-      {/* Light Sweep */}
-      {frame >= 60 && frame < 120 && (
-        <div style={{ position: "absolute", width: 200, height: 2000, background: "rgba(255,255,255,0.1)", transform: `rotate(45deg) translateX(${interpolate(frame, [60, 120], [-2000, 2000])}px)`, filter: "blur(20px)" }} />
-      )}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+        
+        {/* Main Title */}
+        <div style={{ 
+          opacity: liveOp, 
+          transform: `scale(${liveScale})`,
+          fontFamily: FONTS.headline,
+          fontSize: 100,
+          fontWeight: 900,
+          color: COLORS.white,
+          letterSpacing: `${liveTracking}px`,
+          textShadow: `0 0 30px ${COLORS.greenGlow}44`,
+          marginBottom: 20
+        }}>
+          15MARKET IS LIVE
+        </div>
 
-      {frame >= 30 && (
-        <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          
-          <div style={{ display: "flex", alignItems: "center", transform: `scale(${lS})`, filter: `blur(${blur}px)` }}>
-            <Logo3D style={{ width: 600, height: 600 }} />
-          </div>
+        {/* Powerful Subtitle */}
+        <div style={{ 
+          opacity: subOp, 
+          fontFamily: FONTS.body,
+          fontSize: 24,
+          fontWeight: 300,
+          color: COLORS.gray,
+          letterSpacing: "8px",
+          marginBottom: 100
+        }}>
+          PREDICT FAST. SETTLE FASTER.
+        </div>
 
-          <div style={{ position: "absolute", bottom: 150, textAlign: "center" }}>
-            <TerminalText text="PREDICT FAST. SETTLE FASTER." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={150} />
-            
-            <div style={{ marginTop: 60, opacity: urlOp }}>
-              <span style={{ fontFamily: FONTS.terminal, color: COLORS.white, fontSize: 32, letterSpacing: "4px", padding: "15px 40px", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 40, background: "rgba(255,255,255,0.05)" }}>15MARKET.ONLINE</span>
-            </div>
+        {/* URL - Simple yet powerful */}
+        <div style={{ 
+          opacity: urlOp, 
+          transform: `translateY(${urlY}px)`,
+          padding: "20px 60px",
+          border: `2px solid ${COLORS.greenGlow}`,
+          borderRadius: 60,
+          background: "rgba(0,230,118,0.05)",
+          boxShadow: `0 0 40px ${COLORS.greenGlow}22`,
+        }}>
+          <span style={{ 
+            fontFamily: FONTS.terminal, 
+            color: COLORS.white, 
+            fontSize: 48, 
+            fontWeight: 800,
+            letterSpacing: "4px" 
+          }}>
+            15MARKET.ONLINE
+          </span>
+        </div>
 
-          </div>
-
-        </AbsoluteFill>
-      )}
+      </div>
 
     </AbsoluteFill>
   );
 };
+

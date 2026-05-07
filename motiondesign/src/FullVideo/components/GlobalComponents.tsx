@@ -188,6 +188,88 @@ export const ArcGraphics: React.FC = () => {
   );
 };
 
+// ─── LANDING SCROLL ──────────────────────────────────────────────────────────
+// Spins through items and lands exactly on a target index with a spring bounce.
+export const LandingScroll: React.FC<{
+  items: string[];
+  targetIndex: number;
+  itemHeight?: number;
+  duration?: number;
+  style?: React.CSSProperties;
+}> = ({ items = [], targetIndex, itemHeight = 100, duration = 60, style }) => {
+  const frame = useCurrentFrame();
+  
+  if (!items || items.length === 0) return null;
+
+  // The spin: fast at first, then settles on the target.
+  const laps = 3;
+  const totalItems = items.length;
+  const targetPos = laps * totalItems + targetIndex;
+
+  // Use interpolation for perfectly controlled duration
+  const progress = interpolate(frame, [0, duration], [0, 1], {
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.2, 1, 0.3, 1), // Fast start, very smooth settle
+  });
+
+  const scrollY = progress * targetPos * itemHeight;
+
+
+  return (
+    <div
+      style={{
+        height: itemHeight,
+        overflow: "hidden",
+        position: "relative",
+        ...style,
+      }}
+    >
+      <div
+        style={{
+          transform: `translateY(-${scrollY}px)`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        {/* Render many copies to allow for multiple laps */}
+        {new Array(laps + 2).fill(0).map((_, lap) => (
+          <React.Fragment key={lap}>
+            {items.map((item, i) => {
+              const globalIndex = lap * totalItems + i;
+              const dist = Math.abs(scrollY / itemHeight - globalIndex);
+              const opacity = interpolate(dist, [0, 1], [1, 0.2], { extrapolateRight: "clamp" });
+              const scale = interpolate(dist, [0, 1], [1, 0.8], { extrapolateRight: "clamp" });
+
+              return (
+                <div
+                  key={`${lap}-${i}`}
+                  style={{
+                    height: itemHeight,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: FONTS.headline,
+                    fontSize: itemHeight * 0.7,
+                    fontWeight: 900,
+                    color: dist < 0.5 ? COLORS.white : COLORS.gray,
+                    opacity,
+                    transform: `scale(${scale})`,
+                    whiteSpace: "nowrap",
+                    letterSpacing: "4px",
+                  }}
+                >
+                  {item.toUpperCase()}
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // ─── JITTER SCROLL ───────────────────────────────────────────────────────────
 export const JitterScroll: React.FC<{
   items: string[];
@@ -223,7 +305,7 @@ export const JitterScroll: React.FC<{
           alignItems: align,
         }}
       >
-        {[...items, ...items].map((item, i) => {
+        {[...items, ...items, ...items].map((item, i) => {
           const isTarget = Math.floor(scrollY / itemHeight) === i % items.length;
           return (
             <div
@@ -240,7 +322,6 @@ export const JitterScroll: React.FC<{
                 opacity: isTarget ? 1 : 0.3,
                 whiteSpace: "nowrap",
                 letterSpacing: "2px",
-                transition: "color 0.1s ease",
               }}
             >
               {item.toUpperCase()}
@@ -251,6 +332,7 @@ export const JitterScroll: React.FC<{
     </div>
   );
 };
+
 
 // ─── TERMINAL TEXT ───────────────────────────────────────────────────────────
 export const TerminalText: React.FC<{
@@ -448,7 +530,6 @@ export const SceneZoomTransition: React.FC<{
       style={{
         transform: `scale(${scale})`,
         opacity,
-        filter: blur > 1 ? `blur(${blur}px)` : "none",
         transformOrigin: "center center",
         willChange: "transform, opacity",
       }}
