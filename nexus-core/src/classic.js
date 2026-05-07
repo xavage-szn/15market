@@ -27,8 +27,8 @@ class ClassicEngine {
   }
 
   start() {
-    // 1. Authoritative Settlement Pulse
-    setInterval(() => this.processSettlementBatch(), 50);
+    // 1. Authoritative Settlement Pulse — 25ms for faster payouts
+    setInterval(() => this.processSettlementBatch(), 25);
     
     // 2. Gas Monitor (Ensures Root Wallet can pay for settleBet gas)
     setInterval(() => this.ensureOperatorFunded(), 15000);
@@ -174,7 +174,7 @@ class ClassicEngine {
     try {
       const pending = Array.from(cache.trades.values())
         .filter(t => t.status === 'RESOLVING' && t.lockedWon === true && !t.onChainSettleStarted)
-        .slice(0, 50);
+        .slice(0, 100); // Process up to 100 winning trades per tick
 
       for (const trade of pending) {
         await this.settleTradeOnChain(trade);
@@ -214,10 +214,12 @@ class ClassicEngine {
       trade.payoutTx = tx.hash;
       trade.status = 'SETTLED';
 
-      // AUTHORITATIVE PAYOUT CALCULATION: Stake * Multiplier * 0.99 (1% platform fee)
-      const durationTiers = config.MULTIPLIERS || { 5: 2.90, 10: 2.40, 15: 1.90 };
-      const baseMultiplier = durationTiers[trade.duration] || (trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90));
-      const payout = Number((trade.amount * baseMultiplier * 0.99).toFixed(6));
+      // AUTHORITATIVE PAYOUT CALCULATION — mirrors ArcPrediction.sol tier logic exactly
+      // 5s=2.90x, 10s=2.40x, 15s=1.90x gross; 1% platform fee baked in via *0.99
+      const MULTIPLIER_TIERS = { 5: 2.871, 10: 2.376, 15: 1.881 };
+      const mult = MULTIPLIER_TIERS[trade.duration] ||
+        (trade.duration <= 5 ? 2.871 : trade.duration <= 10 ? 2.376 : 1.881);
+      const payout = Number((trade.amount * mult).toFixed(6));
       
       const session = cache.sessions.get(trade.userAddr);
       if (session) {
@@ -248,14 +250,18 @@ class ClassicEngine {
         userAddr: trade.userAddr
       });
 
-      // PERSISTENCE: Save to profile history immediately
+      // PERSISTENCE: Save to profile history — status MUST be WON (not SETTLED) for UI
       cache.pushHistory(trade.userAddr, {
         ...trade,
         won: true,
+        status: 'WON',
         exitPrice: trade.lockedExitPrice,
         payout: payout,
         settledAt: Date.now()
       });
+
+      // Remove from active cache so it stops showing as pending
+      cache.trades.delete(trade.id);
       
       tx.wait().then(async (receipt) => {
         if (receipt.status === 1) {
@@ -278,6 +284,7 @@ class ClassicEngine {
             betId: trade.id,
             txHash: tx.hash
           });
+          console.log(`✅ [On-Chain] #${betId} confirmed. On-chain balance synced to ${onChainBal}`);
         } else {
           throw new Error("Transaction reverted on-chain");
         }

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title ArcPrediction Treasury
+ * @title 15market Treasury
  * @dev Optimized prediction market contract with direct Treasury payouts.
  */
 abstract contract Ownable {
@@ -90,18 +90,20 @@ contract ArcPrediction is Ownable {
 
         uint256 payout = 0;
         if (bet.won) {
-            uint256 multiplier;
+            // Duration-based multiplier tiers (matches backend config):
+            // 5s  = 2.90x gross → 2.871x net (1% platform fee)
+            // 10s = 2.40x gross → 2.376x net
+            // 15s = 1.90x gross → 1.881x net
+            // Formula: payout = stake * multiplierNumerator / multiplierDenominator
+            uint256 payoutNumerator;
             if (bet.duration <= 5) {
-                multiplier = 290;
+                payoutNumerator = 2871; // 2.90 * 0.99 * 1000
             } else if (bet.duration <= 10) {
-                multiplier = 240;
+                payoutNumerator = 2376; // 2.40 * 0.99 * 1000
             } else {
-                multiplier = 190;
+                payoutNumerator = 1881; // 1.90 * 0.99 * 1000
             }
-
-            // Calculation: (Stake * Multiplier / 100) * 0.99 (subtracting 1% fee)
-            // Multiplied out: (Stake * Multiplier * 99) / 10000
-            payout = (bet.amount * multiplier * 99) / 10000;
+            payout = (bet.amount * payoutNumerator) / 1000;
             
             require(address(this).balance >= payout, "Insufficient Treasury funds");
             
