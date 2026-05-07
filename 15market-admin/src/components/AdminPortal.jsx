@@ -345,12 +345,22 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                  notify('info', 'SYNCED', 'Platform configuration updated in real-time.');
             });
 
+            const unbindConnect = socketService.on('connect', () => {
+                setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
+            });
+
+            const unbindDisconnect = socketService.on('disconnect', () => {
+                setKeeperHealth(prev => ({ ...prev, connected: false, failCount: prev.failCount + 1 }));
+            });
+
             return () => {
                 unbindStats();
                 unbindDashboard();
                 unbindTrade();
                 unbindSettled();
                 unbindSettings();
+                unbindConnect();
+                unbindDisconnect();
                 socketService.disconnect();
             };
         }
@@ -1156,14 +1166,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             }
 
             setLastSync(new Date().toLocaleTimeString());
-            setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
         } catch (e) {
             console.error("Global Analysis Failed:", e);
-            setKeeperHealth(prev => ({
-                connected: false,
-                failCount: prev.failCount + 1,
-                lastCheck: Date.now()
-            }));
         } finally {
             triggerAnalysis.isRunning = false;
         }
@@ -1321,10 +1325,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     const data = await res.json();
                     if (activeTab === 'terminal') setKeeperLogs(data);
                     parseBetData(data);
-                    setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
                 } else throw new Error(`Server error`);
             } catch (e) {
-                setKeeperHealth({ connected: false, failCount: currentHealth.failCount + 1, lastCheck: Date.now() });
+                console.error("Log fetch failed:", e);
             }
         };
 

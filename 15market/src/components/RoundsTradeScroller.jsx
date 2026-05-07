@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { KEEPER_URL_ARC, KEEPER_URL_ROUNDS } from '../constants';
 import { Radio, ArrowUp, ArrowDown, Check, X } from 'lucide-react';
+import { socketService } from '../utils/socket';
 
 function RoundsTradeScrollerComponent({ theme, isV1 = false }) {
     const [history, setHistory] = useState([]);
@@ -61,11 +62,24 @@ function RoundsTradeScrollerComponent({ theme, isV1 = false }) {
         };
 
         fetchBroadcast();
-        const bInterval = setInterval(fetchBroadcast, 5000);
+        const bInterval = setInterval(fetchBroadcast, 15000); // Poll less frequently as fallback
+
+        // 3. Event-Driven Socket Listener (Zero Latency)
+        const unbindBroadcast = socketService.on('broadcast', (b) => {
+            if (b && (b.text || b.message) && b.expiry > Date.now()) {
+                setActiveBroadcast({
+                    ...b,
+                    text: b.text || b.message
+                });
+            } else {
+                setActiveBroadcast(null);
+            }
+        });
 
         return () => {
             clearInterval(interval);
             clearInterval(bInterval);
+            unbindBroadcast();
         };
     }, []);
 

@@ -103,6 +103,8 @@ async function emitAdminStats() {
 // Attach emitter to engine for trade-triggered updates
 classicEngine.onUpdate = emitAdminStats;
 
+let activeBroadcast = null;
+
 classicEngine.start();
 emitAdminStats(); // Initial broadcast
 setInterval(emitAdminStats, 10000); // Periodic 10s sync
@@ -242,6 +244,7 @@ io.on('connection', (socket) => {
       sender: msg.sender || 'SYSTEM'
     };
 
+    activeBroadcast = broadcast;
     io.emit('broadcast', broadcast);
     console.log(`[Socket-Admin] Broadcast Sent: ${broadcast.message}`);
 
@@ -817,6 +820,7 @@ app.post('/admin/broadcast', (req, res) => {
     timestamp: Date.now()
   };
   
+  activeBroadcast = broadcast;
   io.emit('broadcast', broadcast);
   console.log(`[Admin] Broadcast Sent: ${message}`);
   
@@ -834,6 +838,13 @@ app.post('/admin/settings/update', (req, res) => {
   // For now, we broadcast it instantly to all clients
   io.emit('settings_update', settings);
   res.json({ success: true, settings });
+});
+
+app.get('/broadcast', (req, res) => {
+  if (activeBroadcast && activeBroadcast.expiry < Date.now()) {
+    activeBroadcast = null;
+  }
+  res.json(activeBroadcast);
 });
 
 // ─── MISC ─────────────────────────────────────────────────────────────────────
