@@ -357,6 +357,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 setKeeperHealth(prev => ({ ...prev, connected: false, failCount: prev.failCount + 1 }));
             });
 
+        }
         return () => {
             if (unbindStats) unbindStats();
             if (unbindDashboard) unbindDashboard();

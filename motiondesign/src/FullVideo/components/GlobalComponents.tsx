@@ -52,9 +52,9 @@ export const FuturisticBackground: React.FC = () => {
           `,
           backgroundSize: "80px 80px",
           transform: `translateY(${ (frame * 0.4) % 80 }px)`,
-          maskImage: "linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)",
         }}
       />
+
 
 
 
@@ -82,17 +82,10 @@ export const FuturisticBackground: React.FC = () => {
       })}
 
 
-      {/* Vignette Overlay */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.9) 100%)",
-        }}
-      />
     </AbsoluteFill>
   );
 };
+
 
 // ─── ARC GRAPHICS (TESTNET) ──────────────────────────────────────────────────
 export const ArcGraphics: React.FC = () => {
