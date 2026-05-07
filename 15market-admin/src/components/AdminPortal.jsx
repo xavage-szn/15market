@@ -289,6 +289,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     // Real-time Event Subscription (SOCKET.IO)
     useEffect(() => {
+        let unbindStats, unbindDashboard, unbindTrade, unbindSettled, unbindSettings, unbindConnect, unbindDisconnect;
+
         if (isLoggedIn) {
             socketService.connect();
             fetchStaff();
@@ -296,7 +298,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
 
             // Listen for dashboard aggregated stats (Universal)
-            const unbindStats = socketService.on('admin_stats_update', (data) => {
+            unbindStats = socketService.on('admin_stats_update', (data) => {
                 setMetrics(prev => ({
                     ...prev,
                     totalWallets: data.totalWallets,
@@ -321,7 +323,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             });
 
             // Backward compatibility listener
-            const unbindDashboard = socketService.on('dashboard_stats', (data) => {
+            unbindDashboard = socketService.on('dashboard_stats', (data) => {
                 setMetrics(prev => ({
                     ...prev,
                     totalWallets: data.totalWallets,
@@ -333,36 +335,36 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             });
 
             // Listen for specific trade events
-            const unbindTrade = socketService.on('trade_detected', (trade) => {
+            unbindTrade = socketService.on('trade_detected', (trade) => {
                  setTradeHistory(prev => [trade, ...prev].slice(0, 100));
             });
 
-            const unbindSettled = socketService.on('global_trade_settled', (res) => {
+            unbindSettled = socketService.on('global_trade_settled', (res) => {
                  setTradeHistory(prev => prev.map(t => String(t.id) === String(res.betId) ? { ...t, status: res.won ? 'WON' : 'LOST', payout: res.payout } : t));
             });
 
             // Listen for settings updates (Instant UI feedback from backend)
-            const unbindSettings = socketService.on('settings_update', (data) => {
+            unbindSettings = socketService.on('settings_update', (data) => {
                  setPlatformSettings(prev => ({ ...prev, ...data }));
                  notify('info', 'SYNCED', 'Platform configuration updated in real-time.');
             });
 
-            const unbindConnect = socketService.on('connect', () => {
+            unbindConnect = socketService.on('connect', () => {
                 setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
             });
 
-            const unbindDisconnect = socketService.on('disconnect', () => {
+            unbindDisconnect = socketService.on('disconnect', () => {
                 setKeeperHealth(prev => ({ ...prev, connected: false, failCount: prev.failCount + 1 }));
             });
 
             return () => {
-                unbindStats();
-                unbindDashboard();
-                unbindTrade();
-                unbindSettled();
-                unbindSettings();
-                unbindConnect();
-                unbindDisconnect();
+                if (unbindStats) unbindStats();
+                if (unbindDashboard) unbindDashboard();
+                if (unbindTrade) unbindTrade();
+                if (unbindSettled) unbindSettled();
+                if (unbindSettings) unbindSettings();
+                if (unbindConnect) unbindConnect();
+                if (unbindDisconnect) unbindDisconnect();
                 socketService.disconnect();
             };
         }
@@ -453,7 +455,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             try {
                 const res = await fetch(`${KEEPER_URL}/campaigns`);
                 const data = await res.json();
-                setCampaigns(data);
+                if (Array.isArray(data)) {
+                    setCampaigns(data);
+                } else {
+                    setCampaigns([]);
+                }
             } catch (e) { }
 
             // Winner Banner
@@ -976,7 +982,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     if (!exists) {
                         combined.push({
                             id: trade.id,
-                            user: trade.userPublicKey ? `${trade.userPublicKey.slice(0, 4)}...${trade.userPublicKey.slice(-4)}` : "Anonym",
+                            user: (trade.userPublicKey && typeof trade.userPublicKey === 'string') ? `${trade.userPublicKey.slice(0, 4)}...${trade.userPublicKey.slice(-4)}` : "Anonym",
                             type: "Automated Dispute",
                             reason: trade.status === "STUCK" ? "Resolution Failed" : "Processing Timeout",
                             status: "PENDING",
@@ -1214,7 +1220,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             const res = await fetch(`${targetUrl}/admin/trades`);
             if (res.ok) {
                 const allTrades = await res.json();
-                setTradeHistory(allTrades.slice(0, 200));
+                if (Array.isArray(allTrades)) {
+                    setTradeHistory(allTrades.slice(0, 200));
+                } else {
+                    setTradeHistory([]);
+                }
             }
         } catch (e) {
             console.error("Trade History Fetch Error:", e);
@@ -2061,7 +2071,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 lg:mb-10 gap-6">
                             <div>
                                 <h1 className="text-2xl lg:text-3xl font-black text-white uppercase tracking-tight mb-1 mt-6 lg:mt-0">
-                                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                                    {activeTab && activeTab.length > 0 ? (activeTab.charAt(0).toUpperCase() + activeTab.slice(1)) : 'Dashboard'}
                                 </h1>
                                 <p className="text-[10px] lg:text-sm text-white/40 font-bold uppercase tracking-widest">
                                     System status: <span className="text-[#3CB371]">Operational</span> • {new Date().toLocaleDateString()}
@@ -2264,8 +2274,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                          >
                                                              <td className="px-6 lg:px-8 py-5">
                                                                  <div className="flex flex-col">
-                                                                     <span className="text-[10px] font-mono text-white">#{trade.publicKey?.slice(0, 4) || trade.id.slice(-4)}</span>
-                                                                     <span className="text-[8px] text-white/20 font-black uppercase mt-0.5">{trade.owner?.slice(0, 4)}...{trade.owner?.slice(-4)}</span>
+                                                                     <span className="text-[10px] font-mono text-white">#{trade.publicKey?.slice(0, 4) || trade.id?.toString().slice(-4) || 'N/A'}</span>
+                                                                     <span className="text-[8px] text-white/20 font-black uppercase mt-0.5">{trade.owner?.slice(0, 4) || '0x??'}...{trade.owner?.slice(-4) || '??'}</span>
                                                                  </div>
                                                              </td>
                                                              <td className="hidden lg:table-cell px-8 py-5">
@@ -4039,8 +4049,8 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                     {i + 1}
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-xs font-black text-white uppercase">{p.username}</p>
-                                                                    <p className="text-[9px] font-mono text-white/20">{p.address.slice(0,6)}...{p.address.slice(-4)}</p>
+                                                                    <p className="text-xs font-black text-white uppercase">{p.username || 'Trader'}</p>
+                                                                    <p className="text-[9px] font-mono text-white/20">{p.address?.slice(0, 6) || '0x????'}...{p.address?.slice(-4) || '????'}</p>
                                                                 </div>
                                                             </div>
                                                         </td>

@@ -33,14 +33,15 @@ export const Scene6: React.FC = () => {
     <AbsoluteFill style={{ backgroundColor: "transparent", display: "flex", flexDirection: "row" }}>
       
       {/* LEFT SIDE */}
-      <div style={{ flex: 1, height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp, filter: "grayscale(1)" }}>
+      <div style={{ flex: 1, height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp }}>
         <div style={{ fontSize: 24, fontWeight: 800, fontFamily: FONTS.headline, color: COLORS.gray, marginBottom: 10 }}>PREDICTION MARKETS</div>
         <div style={{ fontSize: 64, fontWeight: 900, fontFamily: FONTS.headline, color: COLORS.white }}>TRUSTED</div>
         <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONTS.body, color: COLORS.gray }}>But slow. Days to settle.</div>
       </div>
 
-      {/* CENTER LINE / VOID */}
-      <div style={{ width: centerW, height: `${splitH}%`, background: centerW > 2 ? "#000" : COLORS.white, alignSelf: "center", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {/* CENTER LINE divider (Glowy, not a black void) */}
+      <div style={{ width: 2, height: `${splitH}%`, background: COLORS.white, alignSelf: "center", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 20px ${COLORS.white}` }}>
+
         
         {frame < explosionFrame && (
           <div style={{ position: "absolute", opacity: linesFade, display: "flex", flexDirection: "column", gap: 20, textAlign: "center" }}>
@@ -105,9 +106,10 @@ export const Scene7: React.FC = () => {
   const taglineOp = interpolate(frame - 180, [0, 30], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "#020402" }}>
+    <AbsoluteFill style={{ backgroundColor: "transparent" }}>
       
-      {impactOp > 0 && <AbsoluteFill style={{ backgroundColor: COLORS.white, opacity: impactOp, zIndex: 100 }} />}
+      {impactOp > 0 && <AbsoluteFill style={{ backgroundColor: COLORS.white, opacity: impactOp * 0.5, zIndex: 100 }} />}
+
 
       {frame >= 60 && (
         <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "transparent" }}>
@@ -144,9 +146,10 @@ export const Scene8: React.FC = () => {
     <AbsoluteFill style={{ backgroundColor: "transparent" }}>
 
       {/* Persistent Logo */}
-      <div style={{ position: "absolute", left: "50%", top: "50%", transform: `translate(-50%, -50%) translate(${sX}px, ${sY}px) scale(${sScale})`, display: "flex", alignItems: "center", opacity: 0.5 }}>
+      <div style={{ position: "absolute", left: "50%", top: "50%", transform: `translate(-50%, -50%) translate(${sX}px, ${sY}px) scale(${sScale})`, display: "flex", alignItems: "center", opacity: 0.5, overflow: "visible" }}>
         <Logo3D style={{ width: 450, height: 450 }} />
       </div>
+
 
       {/* Futuristic Floating Assets */}
       <div style={{ position: "absolute", left: "50%", top: "45%", transform: "translate(-50%, -50%)", display: "flex", justifyContent: "center", gap: 60, width: 1200 }}>
@@ -512,7 +515,8 @@ export const Scene10: React.FC = () => {
       </div>
 
       {/* Top right balance */}
-      <div style={{ position: "absolute", top: 60, right: 60, background: "rgba(255,255,255,0.05)", padding: "20px 40px", borderRadius: 20, border: `1px solid rgba(0,230,118,0.2)`, color: COLORS.white, fontFamily: FONTS.terminal, fontSize: 36, display: "flex", alignItems: "center", backdropFilter: "blur(20px)" }}>
+      <div style={{ position: "absolute", top: 60, right: 60, background: "rgba(0,230,118,0.1)", padding: "20px 40px", borderRadius: 20, border: `1px solid rgba(0,230,118,0.3)`, color: COLORS.white, fontFamily: FONTS.terminal, fontSize: 36, display: "flex", alignItems: "center" }}>
+
         <div style={{ color: COLORS.gray, fontSize: 16, marginRight: 20, letterSpacing: "2px", fontFamily: FONTS.headline }}>BALANCE</div>
         <span style={{ color: COLORS.greenGlow }}>${balance}.00</span>
       </div>

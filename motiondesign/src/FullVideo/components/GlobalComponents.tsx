@@ -47,14 +47,15 @@ export const FuturisticBackground: React.FC = () => {
           position: "absolute",
           inset: -100,
           backgroundImage: `
-            linear-gradient(to right, rgba(0, 230, 118, 0.05) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(0, 230, 118, 0.05) 1px, transparent 1px)
+            linear-gradient(to right, rgba(0, 230, 118, 0.08) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(0, 230, 118, 0.08) 1px, transparent 1px)
           `,
           backgroundSize: "80px 80px",
-          transform: `perspective(1000px) rotateX(60deg) translateY(${ (frame * 0.5) % 80 }px)`,
-          maskImage: "radial-gradient(circle at center, black, transparent 90%)",
+          transform: `perspective(1000px) rotateX(60deg) translateY(${ (frame * 0.8) % 80 }px)`,
+          maskImage: "radial-gradient(circle at center, black 20%, transparent 80%)",
         }}
       />
+
 
       {/* Moving Data Lines */}
       {new Array(15).fill(0).map((_, i) => {
@@ -369,12 +370,16 @@ export const Logo3D: React.FC<{ style?: React.CSSProperties }> = ({ style }) => 
       <div
         style={{
           position: "absolute",
-          width: "120%",
-          height: "120%",
+          width: 800, // Much larger to avoid edge artifacts
+          height: 800,
           background: `radial-gradient(circle, ${COLORS.greenGlow}22 0%, transparent 70%)`,
-          filter: "blur(60px)",
+          filter: "blur(80px)",
+          transform: "translate(-50%, -50%)",
+          left: "50%",
+          top: "50%",
         }}
       />
+
 
       <LogoVector size={ (style?.width as number || 400) / 4 } drawProgress={1} />
     </div>
@@ -382,8 +387,8 @@ export const Logo3D: React.FC<{ style?: React.CSSProperties }> = ({ style }) => 
 };
 
 // ─── SCENE ZOOM TRANSITION ───────────────────────────────────────────────────
-// Wraps any scene with a cinematic zoom-punch: bursts in from scale>1, punches
-// out to scale>1 on exit — exactly like the dynamic zoom reference.
+// A seamless "zoom-through" camera move. It pulls the scene from a massive 
+// scale down to focus, then zooms "past" the camera on exit.
 export const SceneZoomTransition: React.FC<{
   children: React.ReactNode;
   entryFrames?: number;
@@ -392,51 +397,43 @@ export const SceneZoomTransition: React.FC<{
   exitScale?: number;
 }> = ({
   children,
-  entryFrames = 20,
-  exitFrames = 15,
-  entryScale = 1.15,
-  exitScale = 1.2,
+  entryFrames = 25,
+  exitFrames = 18,
+  entryScale = 2.5, // Start from way outside
+  exitScale = 4.0,  // Zoom past the camera
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
 
-  // ── Entry: settle from large → 1 (camera pulls back / focus lands)
+  // ── Entry: Fast settle from massive → 1
   const entryProgress = interpolate(frame, [0, entryFrames], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.out(Easing.bezier(0.33, 1, 0.68, 1)),
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
   const inScale = interpolate(entryProgress, [0, 1], [entryScale, 1]);
-  const inOpacity = interpolate(frame, [0, 8], [0, 1], {
+  const inOpacity = interpolate(frame, [0, 10], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const inBlur = interpolate(entryProgress, [0, 1], [15, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const inBrightness = interpolate(entryProgress, [0, 0.5, 1], [2, 1.2, 1], {
+  const inBlur = interpolate(entryProgress, [0, 0.6], [30, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Exit: punch forward large (camera slams into next scene)
+  // ── Exit: Rapid zoom into the camera
   const exitStart = durationInFrames - exitFrames;
   const exitProgress = interpolate(frame, [exitStart, durationInFrames], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.in(Easing.bezier(0.32, 0, 0.67, 0)),
+    easing: Easing.bezier(0.7, 0, 0.84, 0),
   });
   const outScale = interpolate(exitProgress, [0, 1], [1, exitScale]);
-  const outOpacity = interpolate(exitProgress, [0.4, 1], [1, 0], {
+  const outOpacity = interpolate(exitProgress, [0.4, 0.9], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const outBlur = interpolate(exitProgress, [0, 1], [0, 20], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const outBrightness = interpolate(exitProgress, [0, 1], [1, 2.5], {
+  const outBlur = interpolate(exitProgress, [0.2, 1], [0, 40], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -444,29 +441,18 @@ export const SceneZoomTransition: React.FC<{
   const scale = inScale * outScale;
   const opacity = Math.min(inOpacity, outOpacity);
   const blur = inBlur + outBlur;
-  const brightness = inBrightness * outBrightness;
 
   return (
     <AbsoluteFill
       style={{
         transform: `scale(${scale})`,
         opacity,
-        filter: `blur(${blur}px) brightness(${brightness})`,
+        filter: blur > 1 ? `blur(${blur}px)` : "none",
         transformOrigin: "center center",
-        overflow: "hidden",
+        willChange: "transform, opacity",
       }}
     >
       {children}
-      
-      {/* Dynamic Overlay Flash */}
-      <div style={{
-        position: "absolute",
-        inset: 0,
-        backgroundColor: "white",
-        opacity: interpolate(frame, [0, 5], [0.3, 0], { extrapolateRight: "clamp" }),
-        pointerEvents: "none",
-        zIndex: 1000,
-      }} />
     </AbsoluteFill>
   );
 };

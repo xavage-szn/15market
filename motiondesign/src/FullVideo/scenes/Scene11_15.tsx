@@ -42,9 +42,9 @@ export const Scene11: React.FC = () => {
         justifyContent: "center",
         alignItems: "center",
         filter: `blur(${blur}px)`,
-        backdropFilter: "blur(30px)",
         boxShadow: `0 40px 100px rgba(0,0,0,0.5)` 
       }}>
+
         <div style={{ textAlign: "center" }}>
           <div style={{ color: card.color, fontFamily: FONTS.headline, fontSize: 40, fontWeight: 800, letterSpacing: "4px", marginBottom: 40 }}>{card.title}</div>
         </div>
@@ -95,10 +95,10 @@ export const Scene12: React.FC = () => {
                 letterSpacing: "4px",
                 opacity: b, 
                 transform: `translateY(${y}px) scale(${s})`,
-                backdropFilter: "blur(20px)"
               }}>
                 {m}
               </div>
+
             );
           })}
         </div>
@@ -154,10 +154,10 @@ export const Scene13: React.FC = () => {
               fontSize: 24, 
               opacity: b, 
               letterSpacing: "4px", 
-              backdropFilter: "blur(20px)", 
               textAlign: "center",
               transform: `translateX(${x}px) scale(${b})`
             }}>
+
               {p.text}
               {p.sub && <><br/><span style={{ fontSize: 18, color: COLORS.greenGlow }}>{p.sub}</span></>}
             </div>
@@ -238,8 +238,9 @@ export const Scene15: React.FC = () => {
             <TerminalText text="PREDICT FAST. SETTLE FASTER." style={{ fontSize: 24, letterSpacing: "8px", fontWeight: 300, color: COLORS.gray }} delay={150} />
             
             <div style={{ marginTop: 60, opacity: urlOp }}>
-              <span style={{ fontFamily: FONTS.terminal, color: COLORS.white, fontSize: 32, letterSpacing: "4px", padding: "15px 40px", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 40, background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}>15MARKET.ONLINE</span>
+              <span style={{ fontFamily: FONTS.terminal, color: COLORS.white, fontSize: 32, letterSpacing: "4px", padding: "15px 40px", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 40, background: "rgba(255,255,255,0.05)" }}>15MARKET.ONLINE</span>
             </div>
+
           </div>
 
         </AbsoluteFill>

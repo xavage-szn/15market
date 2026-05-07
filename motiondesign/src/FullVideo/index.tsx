@@ -10,7 +10,8 @@ export const FullVideo: React.FC = () => {
   const fadeOut = interpolate(frame, [3870, 3900], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "#020402" }}>
+    <AbsoluteFill style={{ backgroundColor: "#000" }}>
+
       {/* Static Background */}
       <FuturisticBackground />
 

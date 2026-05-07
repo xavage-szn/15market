@@ -33,7 +33,7 @@ class SocketService {
         });
 
         // Setup generic listeners that dispatch to registered handlers
-        const events = ['dashboard_stats', 'trade_detected', 'trade_settled', 'settings_confirmed', 'settings_updated', 'new_broadcast'];
+        const events = ['dashboard_stats', 'trade_detected', 'trade_settled', 'settings_confirmed', 'settings_updated', 'new_broadcast', 'admin_stats_update', 'settings_update'];
         events.forEach(event => {
             this.socket.on(event, (data) => {
                 if (this.handlers.has(event)) {
