@@ -1,5 +1,18 @@
-import dotenv from "dotenv";
-dotenv.config({ path: "../nexus-core/.env" });
+import fs from "fs";
+import path from "path";
+
+// Manually parse .env to avoid dotenv dependency issues
+const envPath = path.resolve("../nexus-core/.env");
+if (fs.existsSync(envPath)) {
+  const envFile = fs.readFileSync(envPath, "utf8");
+  envFile.split("\n").forEach(line => {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (match) {
+      let val = match[2] || "";
+      process.env[match[1]] = val.trim();
+    }
+  });
+}
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
