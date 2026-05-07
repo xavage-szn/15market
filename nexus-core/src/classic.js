@@ -68,6 +68,21 @@ class ClassicEngine {
 
   normalizeAddr(addr) { return String(addr || '').toLowerCase(); }
 
+  /**
+   * Resolves the canonical user identity from a session init request payload.
+   * Accepts { address } or { walletAddress } as the primary identity key.
+   * Returns { ok, identityKey, walletAddress } on success or { ok: false, error } on failure.
+   */
+  resolveSessionIdentity(body) {
+    const raw = body.address || body.walletAddress || body.userAddress;
+    if (!raw) return { ok: false, error: 'Missing address in request body' };
+    const identityKey = this.normalizeAddr(raw);
+    if (!identityKey || identityKey.length < 10) {
+      return { ok: false, error: 'Invalid address format' };
+    }
+    return { ok: true, identityKey, walletAddress: identityKey };
+  }
+
   resolveDirection(dir) {
     if (dir === 1 || dir === '1' || String(dir).toUpperCase() === 'UP') return 1;
     if (dir === 0 || dir === '0' || String(dir).toUpperCase() === 'DOWN') return 0;

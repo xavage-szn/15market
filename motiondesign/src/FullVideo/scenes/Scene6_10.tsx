@@ -1,7 +1,8 @@
 import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, random, Easing, Img, staticFile } from "remotion";
 import { COLORS, FONTS } from "../constants";
-import { Logo3D, TerminalText, JitterScroll, AmbientGlow } from "../components/GlobalComponents";
+import { Logo3D, TerminalText, JitterScroll, AmbientGlow, AnimatedCursor } from "../components/GlobalComponents";
+import type { CursorWaypoint } from "../components/GlobalComponents";
 
 // ─── SCENE 6: THE GAP ────────────────────────────────────────────────────────
 export const Scene6: React.FC = () => {
@@ -194,6 +195,20 @@ export const Scene8: React.FC = () => {
 };
 
 // ─── SCENE 9: 15 SECONDS (DESKTOP UI MOCKUP) ─────────────────────────────────
+
+// Cursor waypoints in 1920x1080 space.
+// Terminal panel is the rightmost 20% of the 1600px iMac, centered in frame.
+// iMac content left edge ≈ 160px, terminal panel starts at ≈ x:1440.
+const SCENE9_CURSOR: CursorWaypoint[] = [
+  { frame: 55,  x: 1050, y: 530 },                        // appears near chart
+  { frame: 80,  x: 1655, y: 315 },                        // glides to PUT button
+  { frame: 102, x: 1655, y: 315, click: true },           // clicks PUT
+  { frame: 126, x: 1600, y: 440 },                        // drifts to amount slider
+  { frame: 146, x: 1600, y: 505 },                        // moves to CONFIRM
+  { frame: 152, x: 1600, y: 505, click: true },           // clicks CONFIRM
+  { frame: 175, x: 1350, y: 560 },                        // retreats to chart area
+];
+
 export const Scene9: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -202,27 +217,37 @@ export const Scene9: React.FC = () => {
   const uiY = spring({ frame, fps, config: { damping: 20 } });
   const translateY = interpolate(uiY, [0, 1], [1080, 0]);
   const scale = interpolate(uiY, [0, 1], [0.8, 1]);
+  const entranceBlur = interpolate(uiY, [0, 0.8, 1], [20, 5, 0], { extrapolateRight: "clamp" });
+
 
   // Chart line drawing
   const pathLen = 1500;
   const draw = interpolate(frame - 30, [0, 90], [pathLen, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
 
   // Interactions
+  const putClickFrame = 102;
   const isPutSelected = frame > 100;
+  const putScale = spring({ frame: Math.max(0, frame - putClickFrame), fps, config: { damping: 10, stiffness: 200 } });
+  const putScaleVal = interpolate(putScale, [0, 0.5, 1], [1, 0.9, 1]);
+
   const amountScale = spring({ frame: Math.max(0, frame - 120), fps, config: { damping: 15 } });
   const amountStr = interpolate(amountScale, [0, 1], [0, 100]).toFixed(2);
   const sliderWidth = interpolate(amountScale, [0, 1], [0, 40]);
   
-  const isConfirmClicked = frame > 150 && frame < 155;
-  const confirmScale = isConfirmClicked ? 0.95 : 1;
+  const confirmClickFrame = 152;
+  const isConfirmClicked = frame > confirmClickFrame && frame < confirmClickFrame + 10;
+  const confirmSpring = spring({ frame: Math.max(0, frame - confirmClickFrame), fps, config: { damping: 10, stiffness: 200 } });
+  const confirmScaleVal = interpolate(confirmSpring, [0, 0.5, 1], [1, 0.92, 1]);
+
 
   // Trade Execution Countdown
-  const tradeActive = frame > 160;
-  const timeLeft = tradeActive ? Math.max(0, 15 - ((frame - 160) / 10)).toFixed(2) : "15.00"; // fast countdown
+  const tradeStartFrame = 160;
+  const tradeActive = frame > tradeStartFrame;
+  const timeLeft = tradeActive ? Math.max(0, 15 - ((frame - tradeStartFrame) / 10)).toFixed(2) : "15.00";
   
   // Chart post-trade movement
-  const tradeChartX = interpolate(frame - 160, [0, 140], [0, 200], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  const tradeChartY = interpolate(frame - 160, [0, 140], [0, 50], { extrapolateRight: "clamp", extrapolateLeft: "clamp" }); // line goes down for PUT win
+  const tradeChartX = interpolate(frame - tradeStartFrame, [0, 140], [0, 200], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  const tradeChartY = interpolate(frame - tradeStartFrame, [0, 140], [0, 50], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
   const isZero = tradeActive && parseFloat(timeLeft) === 0.00;
 
   return (
@@ -240,12 +265,14 @@ export const Scene9: React.FC = () => {
         borderBottom: "60px solid #111", // iMac Chin
         borderRadius: 40, 
         transform: `translateY(${translateY}px) scale(${scale})`, 
+        filter: `blur(${entranceBlur}px)`,
         position: "relative", 
         overflow: "hidden",
         boxShadow: "0 40px 100px rgba(0,0,0,0.8)",
         zIndex: 2,
         fontFamily: FONTS.body
       }}>
+
         
         {/* iMac Apple Logo Fake */}
         <div style={{ position: "absolute", bottom: -45, left: "50%", transform: "translateX(-50%)", width: 30, height: 30, borderRadius: "50%", background: "#333" }} />
@@ -385,8 +412,18 @@ export const Scene9: React.FC = () => {
             {/* Call / Put Buttons */}
             <div style={{ display: "flex", gap: 10, marginBottom: 30 }}>
               <div style={{ flex: 1, height: 60, background: "#1A1D1A", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.gray, fontWeight: "bold", fontSize: 18, border: "1px solid #333" }}>CALL</div>
-              <div style={{ flex: 1, height: 60, background: isPutSelected ? COLORS.red : "#3A1010", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: isPutSelected ? COLORS.white : COLORS.red, fontWeight: "bold", fontSize: 18, boxShadow: isPutSelected ? `0 0 20px rgba(255,59,59,0.5)` : "none" }}>PUT</div>
+              <div style={{ 
+                flex: 1, height: 60, 
+                background: isPutSelected ? COLORS.red : "#3A1010", 
+                borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", 
+                color: isPutSelected ? COLORS.white : COLORS.red, 
+                fontWeight: "bold", fontSize: 18, 
+                boxShadow: isPutSelected ? `0 0 25px rgba(255,59,59,0.6)` : "none",
+                transform: `scale(${putScaleVal})`,
+                transition: "background 0.1s ease"
+              }}>PUT</div>
             </div>
+
 
             {/* Time Selection */}
             <div style={{ color: COLORS.gray, fontSize: 12, marginBottom: 10 }}>TIME</div>
@@ -410,9 +447,19 @@ export const Scene9: React.FC = () => {
             </div>
 
             {/* Confirm */}
-            <div style={{ height: 70, background: COLORS.green, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: 900, fontSize: 24, letterSpacing: "2px", transform: `scale(${confirmScale})`, cursor: "pointer", boxShadow: `0 0 20px rgba(0,230,118,0.3)` }}>
+            <div style={{ 
+              height: 70, 
+              background: isConfirmClicked ? COLORS.white : COLORS.green, 
+              borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", 
+              color: "#000", fontWeight: 900, fontSize: 24, letterSpacing: "2px", 
+              transform: `scale(${confirmScaleVal})`, 
+              cursor: "pointer", 
+              boxShadow: isConfirmClicked ? `0 0 40px ${COLORS.white}` : `0 0 20px rgba(0,230,118,0.3)`,
+              transition: "background 0.05s ease"
+            }}>
               CONFIRM
             </div>
+
 
             {/* Active Trades */}
             <div style={{ marginTop: 20, flex: 1, border: "1px solid #333", borderRadius: 16, background: "#131613", padding: 20 }}>
@@ -430,7 +477,13 @@ export const Scene9: React.FC = () => {
 
       </div>
 
-      {isZero && <div style={{ position: "absolute", inset: 0, backgroundColor: COLORS.greenGlow, opacity: interpolate(frame - (countdownStart + 15 * fps), [0, 10, 20], [0, 0.2, 0]) }} />}
+      {/* Green flash when countdown hits zero */}
+      {isZero && (
+        <AbsoluteFill style={{ backgroundColor: COLORS.greenGlow, opacity: interpolate(frame - (tradeStartFrame + 15 * fps / 10), [0, 8, 20], [0, 0.25, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) }} />
+      )}
+
+      {/* Animated cursor overlay */}
+      <AnimatedCursor waypoints={SCENE9_CURSOR} />
     </AbsoluteFill>
   );
 };

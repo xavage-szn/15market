@@ -2,6 +2,7 @@ import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, random, Easing, Img, staticFile } from "remotion";
 import { COLORS, FONTS } from "../constants";
 
+
 // ─── AMBIENT GLOW ────────────────────────────────────────────────────────────
 export const AmbientGlow: React.FC<{
   color: string;
@@ -377,5 +378,246 @@ export const Logo3D: React.FC<{ style?: React.CSSProperties }> = ({ style }) => 
 
       <LogoVector size={ (style?.width as number || 400) / 4 } drawProgress={1} />
     </div>
+  );
+};
+
+// ─── SCENE ZOOM TRANSITION ───────────────────────────────────────────────────
+// Wraps any scene with a cinematic zoom-punch: bursts in from scale>1, punches
+// out to scale>1 on exit — exactly like the dynamic zoom reference.
+export const SceneZoomTransition: React.FC<{
+  children: React.ReactNode;
+  entryFrames?: number;
+  exitFrames?: number;
+  entryScale?: number;
+  exitScale?: number;
+}> = ({
+  children,
+  entryFrames = 20,
+  exitFrames = 15,
+  entryScale = 1.15,
+  exitScale = 1.2,
+}) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+
+  // ── Entry: settle from large → 1 (camera pulls back / focus lands)
+  const entryProgress = interpolate(frame, [0, entryFrames], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.bezier(0.33, 1, 0.68, 1)),
+  });
+  const inScale = interpolate(entryProgress, [0, 1], [entryScale, 1]);
+  const inOpacity = interpolate(frame, [0, 8], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const inBlur = interpolate(entryProgress, [0, 1], [15, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const inBrightness = interpolate(entryProgress, [0, 0.5, 1], [2, 1.2, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // ── Exit: punch forward large (camera slams into next scene)
+  const exitStart = durationInFrames - exitFrames;
+  const exitProgress = interpolate(frame, [exitStart, durationInFrames], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.in(Easing.bezier(0.32, 0, 0.67, 0)),
+  });
+  const outScale = interpolate(exitProgress, [0, 1], [1, exitScale]);
+  const outOpacity = interpolate(exitProgress, [0.4, 1], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const outBlur = interpolate(exitProgress, [0, 1], [0, 20], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const outBrightness = interpolate(exitProgress, [0, 1], [1, 2.5], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const scale = inScale * outScale;
+  const opacity = Math.min(inOpacity, outOpacity);
+  const blur = inBlur + outBlur;
+  const brightness = inBrightness * outBrightness;
+
+  return (
+    <AbsoluteFill
+      style={{
+        transform: `scale(${scale})`,
+        opacity,
+        filter: `blur(${blur}px) brightness(${brightness})`,
+        transformOrigin: "center center",
+        overflow: "hidden",
+      }}
+    >
+      {children}
+      
+      {/* Dynamic Overlay Flash */}
+      <div style={{
+        position: "absolute",
+        inset: 0,
+        backgroundColor: "white",
+        opacity: interpolate(frame, [0, 5], [0.3, 0], { extrapolateRight: "clamp" }),
+        pointerEvents: "none",
+        zIndex: 1000,
+      }} />
+    </AbsoluteFill>
+  );
+};
+
+// ─── ANIMATED CURSOR ─────────────────────────────────────────────────────────
+// A smooth spring-tracked cursor with click-ripple effect, for mockup scenes.
+export type CursorWaypoint = {
+  frame: number;
+  x: number;
+  y: number;
+  click?: boolean;
+};
+
+export const AnimatedCursor: React.FC<{ waypoints: CursorWaypoint[] }> = ({ waypoints }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  if (waypoints.length === 0) return null;
+  const sorted = [...waypoints].sort((a, b) => a.frame - b.frame);
+  if (frame < sorted[0].frame) return null;
+
+  // Function to get position at a specific frame
+  const getPos = (f: number) => {
+    let x = sorted[sorted.length - 1].x;
+    let y = sorted[sorted.length - 1].y;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const from = sorted[i];
+      const to = sorted[i + 1];
+      if (f >= from.frame && f <= to.frame) {
+        const t = Math.min(
+          1,
+          spring({
+            frame: f - from.frame,
+            fps,
+            config: { damping: 26, stiffness: 220, mass: 0.6 },
+          })
+        );
+        x = from.x + (to.x - from.x) * t;
+        y = from.y + (to.y - from.y) * t;
+        break;
+      }
+    }
+    return { x, y };
+  };
+
+  const currentPos = getPos(frame);
+
+  // ── Click detection
+  const clickWp = sorted.find(
+    (wp) => wp.click && frame >= wp.frame && frame < wp.frame + 18
+  );
+  const clickAge = clickWp ? frame - clickWp.frame : -1;
+  const clickRingScale = clickAge >= 0
+    ? interpolate(clickAge, [0, 18], [0.2, 3], { extrapolateRight: "clamp" })
+    : 0;
+  const clickRingOpacity = clickAge >= 0
+    ? interpolate(clickAge, [0, 4, 18], [1, 0.8, 0], { extrapolateRight: "clamp" })
+    : 0;
+  const cursorPressScale = clickWp && clickAge >= 0 && clickAge < 6 ? 0.8 : 1;
+
+  return (
+    <>
+      {/* Mouse Trail */}
+      {[2, 4, 6].map((offset, i) => {
+        const trailPos = getPos(frame - offset);
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: trailPos.x,
+              top: trailPos.y,
+              width: 8 - i * 2,
+              height: 8 - i * 2,
+              background: COLORS.greenGlow,
+              borderRadius: "50%",
+              opacity: 0.3 - i * 0.1,
+              filter: "blur(2px)",
+              pointerEvents: "none",
+              zIndex: 9998,
+              transform: "translate(-50%, -50%)",
+            }}
+          />
+        );
+      })}
+
+      <div
+        style={{
+          position: "absolute",
+          left: currentPos.x,
+          top: currentPos.y,
+          pointerEvents: "none",
+          zIndex: 9999,
+          transform: "translate(-3px, -2px)",
+        }}
+      >
+        {/* Click ripple rings */}
+        {clickRingOpacity > 0 && (
+          <div style={{ position: "absolute" }}>
+            <div
+              style={{
+                position: "absolute",
+                left: -24,
+                top: -24,
+                width: 48,
+                height: 48,
+                border: `3px solid ${COLORS.greenGlow}`,
+                borderRadius: "50%",
+                transform: `scale(${clickRingScale})`,
+                opacity: clickRingOpacity,
+                boxShadow: `0 0 20px ${COLORS.greenGlow}`,
+              }}
+            />
+          </div>
+        )}
+
+        {/* Ambient glow dot */}
+        <div
+          style={{
+            position: "absolute",
+            left: -25,
+            top: -25,
+            width: 50,
+            height: 50,
+            borderRadius: "50%",
+            background: `radial-gradient(circle, ${COLORS.greenGlow}44 0%, transparent 70%)`,
+            filter: "blur(6px)",
+          }}
+        />
+
+        {/* Cursor arrow */}
+        <svg
+          width={32}
+          height={40}
+          viewBox="0 0 30 38"
+          style={{
+            transform: `scale(${cursorPressScale})`,
+            transformOrigin: "0 0",
+            filter:
+              "drop-shadow(0 3px 10px rgba(0,0,0,0.8)) drop-shadow(0 0 12px rgba(0,255,136,0.4))",
+          }}
+        >
+          <path
+            d="M 3 2 L 3 28 L 9 21 L 15.5 35 L 19.5 33 L 13 20 L 21 20 Z"
+            fill="white"
+            stroke="black"
+            strokeWidth={1}
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+    </>
   );
 };

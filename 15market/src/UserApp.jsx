@@ -989,23 +989,26 @@ export default function UserApp() {
         throw new Error(`Connection to Backend Failed`);
       });
 
-      if (!res.ok) throw new Error(`Backend init failed`);
+      if (!res.ok) throw new Error(`Backend init failed (${res.status})`);
 
       const data = await res.json();
+      if (!data.sessionAddress) throw new Error("No session address returned");
+
       const sessionObj = { address: data.sessionAddress, isRemote: true };
       
       setEvmSessionWallet(sessionObj);
-      setSessionBalance(parseFloat(data.balance));
+      setSessionBalance(parseFloat(data.balance) || 0);
       setIsSessionSynced(true);
       setSessionMode(true);
       localStorage.setItem(`15market_session_addr_${address.toLowerCase()}`, data.sessionAddress);
 
       setIsSignerInitializing(false);
-      // notify("Trading Wallet Synced", "success");
 
     } catch (err) {
       setIsSignerInitializing(false);
+      hasInitAttempted.current = false; // Allow automatic retries if it failed
       console.warn("Session init fallback:", err.message);
+      // Cached address (if any) is already shown via the fast-path in the useEffect below
     }
   }, [address]);
 
@@ -1057,11 +1060,22 @@ export default function UserApp() {
   const hasInitAttempted = useRef(false);
   useEffect(() => { hasInitAttempted.current = false; }, [address]);
 
-  // AUTO-INITIALIZE Session Wallet as soon as any address is available
+  // AUTO-INITIALIZE Session Wallet as soon as any address is available.
+  // FAST PATH: Restore cached session address immediately so the UI shows the
+  // wallet address right away before the network call completes.
   useEffect(() => {
-    if (address && !evmSessionWallet && !isSignerInitializing && !hasInitAttempted.current) {
-        hasInitAttempted.current = true;
-        initializeSessionWallet();
+    if (!address) return;
+
+    // Instantly restore cached address for returning users
+    const cachedAddr = localStorage.getItem(`15market_session_addr_${address.toLowerCase()}`);
+    if (cachedAddr && !evmSessionWallet) {
+      setEvmSessionWallet({ address: cachedAddr, isRemote: true, cached: true });
+    }
+
+    // Always fire a background network sync (for fresh balance + confirming address)
+    if (!isSignerInitializing && !hasInitAttempted.current) {
+      hasInitAttempted.current = true;
+      initializeSessionWallet();
     }
   }, [address, evmSessionWallet, isSignerInitializing, initializeSessionWallet]);
 
@@ -2848,7 +2862,7 @@ export default function UserApp() {
           onBack={() => setView("trading")}
           wallet={wallet}
           sessionBalance={sessionBalance}
-          evmBalance={parseFloat(evmBalance || "0")}
+          evmBalance={evmBalance}
           onDeposit={handleDeposit}
           onWithdraw={handleWithdraw}
           treasuryBalance={treasuryBalance}
@@ -2858,12 +2872,11 @@ export default function UserApp() {
           isSmallScreen={isSmallScreen}
           evmSessionWallet={evmSessionWallet}
           isSignerInitializing={isSignerInitializing}
+          onRetryInit={initializeSessionWallet}
           transactionHistory={transactionHistory}
+          onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
           uiVersion={uiVersion}
-          onViewReceipt={(tx) => {
-            setSelectedTransaction(tx);
-            setIsTransactionReceiptOpen(true);
-          }}
+          setUiVersion={setUiVersion}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
@@ -3271,6 +3284,7 @@ export default function UserApp() {
         evmSessionWallet={evmSessionWallet}
         userProfile={userProfile}
         isSignerInitializing={isSignerInitializing}
+        onRetryInit={initializeSessionWallet}
         sessionBalance={sessionBalance}
         evmBalance={evmBalance}
         onDeposit={handleDeposit}

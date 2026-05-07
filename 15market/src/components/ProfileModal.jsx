@@ -30,7 +30,8 @@ export function ProfileModal({
     sessionBalance, 
     evmBalance, 
     onDeposit, 
-    onWithdraw 
+    onWithdraw,
+    onRetryInit
 }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
@@ -273,7 +274,14 @@ export function ProfileModal({
                                     <div className="flex-1">
                                         <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Trading Wallet (On-Chain)</p>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <h4 className={`text-sm font-black font-mono ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>
+                                            <h4 
+                                                className={`text-sm font-black font-mono cursor-pointer hover:opacity-80 transition-all ${isLight ? 'text-black' : 'text-[#3CB371]'}`}
+                                                onClick={() => {
+                                                    if (!evmSessionWallet?.address && !isSignerInitializing && address) {
+                                                        onRetryInit?.();
+                                                    }
+                                                }}
+                                            >
                                                 {evmSessionWallet?.address ? truncate(evmSessionWallet.address) : (isSignerInitializing ? "Syncing..." : (address ? "Not Ready (Retry)" : "Connect Wallet"))}
                                             </h4>
                                             <div className="flex items-center gap-1.5">

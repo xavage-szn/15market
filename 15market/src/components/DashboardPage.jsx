@@ -19,6 +19,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     isSmallScreen,
     evmSessionWallet,
     isSignerInitializing,
+    onRetryInit,
     transactionHistory,
     onViewReceipt,
     uiVersion,
@@ -391,6 +392,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                                         navigator.clipboard.writeText(evmSessionWallet.address);
                                                         setToast("Address Copied!");
                                                         setTimeout(() => setToast(null), 2000);
+                                                    } else if (!isSignerInitializing && address) {
+                                                        onRetryInit?.();
                                                     }
                                                 }}
                                                 className={`text-[8px] font-mono opacity-40 hover:opacity-100 cursor-pointer transition-all mt-1 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
