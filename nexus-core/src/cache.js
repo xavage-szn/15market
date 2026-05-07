@@ -66,6 +66,7 @@ class Cache {
     let closest = history[0];
     let minDiff = Math.abs(targetTime - closest.time);
 
+    // Find the price capture closest to our target expiration timestamp
     for (const entry of history) {
       const diff = Math.abs(targetTime - entry.time);
       if (diff < minDiff) {
@@ -74,11 +75,17 @@ class Cache {
       }
     }
 
-    if (minDiff > 3000) {
-      // History gap is too wide — use the most recent snapshot as the best proxy
-      console.warn(`[Cache] Historical price for ${key} at ${targetTime} gap=${minDiff}ms — using latest snapshot.`);
-      return this.getLatestPrice(key);
+    // CRITICAL: If we are looking for a past expiration price and the engine is lagging, 
+    // we must NOT use the 'latest' price (which could be a retracement).
+    // If the gap is > 2s, we prefer the closest price BEFORE the target if available.
+    if (minDiff > 2000 && targetTime < Date.now()) {
+      const before = history.filter(h => h.time <= targetTime).pop();
+      if (before) {
+        console.warn(`[Cache] Large gap (${minDiff}ms) for ${key} at ${targetTime}. Locking to last known price before expiry.`);
+        return before.price;
+      }
     }
+
     return closest.price;
   }
 

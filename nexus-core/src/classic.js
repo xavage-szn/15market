@@ -43,10 +43,12 @@ class ClassicEngine {
           
           if (trade.expiryEmitted) continue;
 
+          // Snapshot the price right before expiry to ensure high-res history coverage
           const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
-          if (currentPrice > 0) cache.snapshotPrice(trade.symbol);
+          if (msLeft < 500 && currentPrice > 0) cache.snapshotPrice(trade.symbol);
           
-          if (timeLeft <= 0) {
+          if (msLeft <= 0) {
+            // AUTHORITATIVE LOCK: Once msLeft hits 0, the result is calculated and frozen.
             this.lockResult(trade);
           } else {
             const isUp = this.resolveDirection(trade.direction) === 1;
@@ -74,11 +76,16 @@ class ClassicEngine {
 
   lockResult(trade) {
     if (trade.expiryEmitted) return;
+    
     const targetTime = trade.settleAt;
+    // CRITICAL: Ensure we use the historical price captured exactly at expiry.
+    // If we are late, getHistoricalPrice will now safely avoid the current 'retraced' price.
     const exitPrice = cache.getHistoricalPrice(trade.symbol, targetTime) || cache.prices[trade.symbol] || trade.entryPrice;
+    
     const isUp = this.resolveDirection(trade.direction) === 1;
     const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
 
+    // FREEZE STATE: Once status moves to RESOLVING, lockedExitPrice and lockedWon are final.
     trade.status = 'RESOLVING';
     trade.expiryEmitted = true;
     trade.lockedExitPrice = exitPrice;
