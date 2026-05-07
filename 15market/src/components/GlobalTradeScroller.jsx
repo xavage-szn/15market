@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, memo, useMemo, useCallback } from 'react';
-import { Radio, ArrowUp, ArrowDown, Check, X } from 'lucide-react';
+import { Radio, ArrowUp, ArrowDown, Check, X, Megaphone } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
+import { socketService } from '../utils/socket';
 
 function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
     const [history, setHistory] = useState(() => {
@@ -69,11 +70,19 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
 
     useEffect(() => {
         fetchGlobalData();
-        const interval = setInterval(fetchGlobalData, 8000);
+        const interval = setInterval(fetchGlobalData, 12000);
+
+        // Real-time Socket Listener for Zero-Latency Broadcasts
+        const unbindBroadcast = socketService.on('new_broadcast', (msg) => {
+            if (msg && msg.text && msg.expiry > Date.now()) {
+                console.log("📢 Real-time Broadcast Received:", msg);
+                setActiveBroadcast(msg);
+            }
+        });
 
         const fetchBroadcast = async () => {
             try {
-                // 1. Check Maintenance Mode Local Cache
+                // Check Maintenance Mode
                 const settingsSaved = localStorage.getItem('15market_citadel_settings');
                 if (settingsSaved) {
                     const settings = JSON.parse(settingsSaved);
@@ -88,25 +97,23 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
                     }
                 }
 
-                // 2. Fetch Live Global Broadcast
                 const res = await fetch(`${KEEPER_URL_ARC}/broadcast`);
                 if (res.ok) {
                     const b = await res.json();
                     if (b && b.text && b.expiry > Date.now()) {
                         setActiveBroadcast(b);
                     } else {
-                        setActiveBroadcast(null);
+                        // Only clear if it's not a real-time broadcast that hasn't expired yet
+                        setActiveBroadcast(prev => (prev && prev.expiry > Date.now()) ? prev : null);
                     }
-                } else {
-                    setActiveBroadcast(null);
                 }
-            } catch (e) { setActiveBroadcast(null); }
+            } catch (e) { }
         };
 
         fetchBroadcast();
-        const bInterval = setInterval(fetchBroadcast, 15000);
+        const bInterval = setInterval(fetchBroadcast, 30000);
 
-        // 3. Campaign Scroller Logic (1min every 10min)
+        // Campaign Scroller Logic
         const fetchCampaigns = async () => {
             try {
                 const res = await fetch(`${KEEPER_URL_ARC}/campaigns`);
@@ -128,16 +135,12 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
         const checkTimeWindow = () => {
             const now = new Date();
             const minutes = now.getMinutes();
-            const seconds = now.getSeconds();
-            
-            // Show for minute 0 of every 10-minute cycle (e.g. 0:00, 10:00, 20:00...)
-            const minuteInCycle = minutes % 10;
-            const inWindow = minuteInCycle === 0;
-            setIsCampaignWindow(inWindow);
+            // Show for minute 0 of every 10-minute cycle
+            setIsCampaignWindow(minutes % 10 === 0);
         };
 
         fetchCampaigns();
-        const cInterval = setInterval(fetchCampaigns, 30000);
+        const cInterval = setInterval(fetchCampaigns, 60000);
         
         checkTimeWindow();
         const tInterval = setInterval(checkTimeWindow, 1000);
@@ -147,6 +150,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
             clearInterval(bInterval);
             clearInterval(cInterval);
             clearInterval(tInterval);
+            unbindBroadcast();
         };
     }, []);
 
@@ -194,63 +198,79 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
 
     return (
         <div className={`w-full ${isV1 ? 'h-7 md:h-8 lg:h-12 ' + v1Bg : 'h-7 md:h-8 lg:h-12 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden`}>
-            {(activeBroadcast || (isCampaignWindow && campaignBroadcast)) ? (
-                <div className="absolute inset-0 flex items-center" style={{ animation: 'fadeIn 0.3s ease' }}>
-                    <div
-                        className={`flex items-center gap-10 whitespace-nowrap px-10 ${isV1 ? 'bg-amber-500/10' : ''}`}
-                        style={{ animation: 'ticker-move 90s linear infinite', willChange: 'transform' }}
+            {/* Smooth Transition Layer for Broadcasts */}
+            <AnimatePresence mode="wait">
+                {(activeBroadcast || (isCampaignWindow && campaignBroadcast)) ? (
+                    <motion.div
+                        key="broadcast-ticker"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.5, ease: "circOut" }}
+                        className="absolute inset-0 flex items-center"
                     >
-                        {[...Array(10)].map((_, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                                <Radio size={isV1 ? 14 : 12} className={`${isV1 ? 'text-amber-500' : 'text-white'}`} />
-                                <span className={`${isV1 ? 'text-[11px] font-black' : 'text-[10px]'} uppercase tracking-[0.2em] ${isV1 ? 'text-amber-500' : 'text-white'}`}>
-                                    {isCampaignWindow && campaignBroadcast ? campaignBroadcast.text : activeBroadcast.text}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ) : (
-                <div className="flex items-center h-full" style={{ animation: 'fadeIn 0.2s ease' }}>
-                    <div
+                        <div
+                            className={`flex items-center gap-10 whitespace-nowrap px-10 ${isV1 ? 'bg-amber-500/10' : ''}`}
+                            style={{ animation: 'ticker-move 60s linear infinite', willChange: 'transform' }}
+                        >
+                            {[...Array(15)].map((_, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                    <Megaphone size={isV1 ? 14 : 12} className={`${isV1 ? 'text-amber-500' : 'text-white'}`} />
+                                    <span className={`${isV1 ? 'text-[11px] font-black' : 'text-[10px]'} uppercase tracking-[0.2em] ${isV1 ? 'text-amber-500' : 'text-white'}`}>
+                                        {isCampaignWindow && campaignBroadcast ? campaignBroadcast.text : activeBroadcast.text}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+                ) : (
+                    <motion.div
                         key={scrollerKey}
-                        className="flex items-center h-full whitespace-nowrap"
-                        style={{ animation: 'ticker-move 300s linear infinite', willChange: 'transform' }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.4, ease: "circOut" }}
+                        className="flex items-center h-full"
                     >
-                        {repeatedHistory.map((event, i) => {
-                            const isUp = event.direction === "UP" || event.direction === 1 || String(event.direction) === "1";
-                            const isWon = event.status === "WON";
+                        <div
+                            className="flex items-center h-full whitespace-nowrap"
+                            style={{ animation: 'ticker-move 280s linear infinite', willChange: 'transform' }}
+                        >
+                            {repeatedHistory.map((event, i) => {
+                                const isUp = event.direction === "UP" || event.direction === 1 || String(event.direction) === "1";
+                                const isWon = event.status === "WON";
 
-                            return (
-                                <div key={`${event.id}-${i}`} className={`flex items-center gap-6 ${isV1 ? 'px-10 border-r-2' : 'px-12 border-r'} border-white/10 h-full`}>
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-1 rounded-full bg-white/10">
-                                            {isUp ? <ArrowUp size={isV1 ? 10 : 12} className="text-white" /> : <ArrowDown size={isV1 ? 10 : 12} className="text-white" />}
-                                        </div>
-                                        <span className={`${isV1 ? 'text-[10px]' : 'text-[11px]'} font-black uppercase tracking-[0.2em] text-white`}>
-                                            {event.symbol ? event.symbol.split('/')[0] : 'BTC'}
-                                        </span>
-                                    </div>
-
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex flex-col items-start leading-tight">
-                                            <span className={`${isV1 ? 'text-[8px]' : 'text-[9px]'} font-black tracking-[0.2em] text-white/50`}>STAKE</span>
-                                            <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${parseFloat(event.amount || 0).toFixed(2)}</span>
-                                        </div>
-                                        <div className="h-6 w-px bg-white/10" />
-                                        <div className="flex items-center gap-2">
-                                            {isWon ? <Check size={isV1 ? 10 : 12} className="text-white" /> : <X size={isV1 ? 10 : 12} className="text-white/60" />}
-                                            <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black uppercase tracking-widest text-white`}>
-                                                {event.status}
+                                return (
+                                    <div key={`${event.id}-${i}`} className={`flex items-center gap-6 ${isV1 ? 'px-10 border-r-2' : 'px-12 border-r'} border-white/10 h-full`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-1 rounded-full bg-white/10">
+                                                {isUp ? <ArrowUp size={isV1 ? 10 : 12} className="text-white" /> : <ArrowDown size={isV1 ? 10 : 12} className="text-white" />}
+                                            </div>
+                                            <span className={`${isV1 ? 'text-[10px]' : 'text-[11px]'} font-black uppercase tracking-[0.2em] text-white`}>
+                                                {event.symbol ? event.symbol.split('/')[0] : 'BTC'}
                                             </span>
                                         </div>
+
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex flex-col items-start leading-tight">
+                                                <span className={`${isV1 ? 'text-[8px]' : 'text-[9px]'} font-black tracking-[0.2em] text-white/50`}>STAKE</span>
+                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${parseFloat(event.amount || 0).toFixed(2)}</span>
+                                            </div>
+                                            <div className="h-6 w-px bg-white/10" />
+                                            <div className="flex items-center gap-2">
+                                                {isWon ? <Check size={isV1 ? 10 : 12} className="text-white" /> : <X size={isV1 ? 10 : 12} className="text-white/60" />}
+                                                <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black uppercase tracking-widest text-white`}>
+                                                    {event.status}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

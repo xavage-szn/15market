@@ -10,42 +10,53 @@ export const Scene6: React.FC = () => {
   const { width } = useVideoConfig();
 
   // Split line
-  const splitH = interpolate(frame, [0, 30], [0, 100], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  const { fps } = useVideoConfig();
+
+  // The split animation
+  const splitH = interpolate(frame, [0, 20], [0, 100], { extrapolateRight: "clamp" });
   
-  // Left/Right fade
-  const sideOp = interpolate(frame, [15, 45], [0, 0.5], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+  // Pushing sides apart
+  const pushS = spring({ frame: Math.max(0, frame - 40), fps, config: { damping: 15, stiffness: 100 } });
+  const pushX = interpolate(pushS, [0, 1], [0, 400]); // Pushes each side by 400px
+  const sideOp = interpolate(frame, [0, 15], [0, 1]);
 
-  // Center void expand
-  const centerW = interpolate(frame - 60, [0, 30], [2, width * 0.4], { easing: Easing.bezier(0.2, 0, 0, 1), extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-
-  const line1Op = interpolate(frame - 80, [0, 10], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  const line2Op = interpolate(frame - 110, [0, 10], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  const line3Op = interpolate(frame - 130, [0, 10], [0, 1], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-
-  const linesFade = interpolate(frame - 150, [0, 10], [1, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
-  
-  const questionRotate = interpolate(frame, [0, 100], [0, 360], { extrapolateRight: "wrap" });
-
-  const explosionFrame = 150; // question mark shatters
-  const isExploded = frame > explosionFrame;
+  // Central solutions reveal
+  const features = ["FAST MARKETS", "REAL ASSETS", "ZERO SCAM RISK"];
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent" }}>
       
-      {/* LEFT SIDE */}
-      <div style={{ position: "absolute", left: 0, top: 0, width: "50%", height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp }}>
+      {/* LEFT SIDE - Pushes Left */}
+      <div style={{ 
+        position: "absolute", 
+        left: `calc(0% - ${pushX}px)`, 
+        top: 0, 
+        width: "50%", 
+        height: "100%", 
+        padding: 100, 
+        display: "flex", 
+        flexDirection: "column", 
+        justifyContent: "center", 
+        opacity: sideOp 
+      }}>
         <div style={{ fontSize: 24, fontWeight: 800, fontFamily: FONTS.headline, color: COLORS.gray, marginBottom: 10 }}>PREDICTION MARKETS</div>
         <div style={{ fontSize: 64, fontWeight: 900, fontFamily: FONTS.headline, color: COLORS.white }}>TRUSTED</div>
         <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONTS.body, color: COLORS.gray }}>But slow. Days to settle.</div>
       </div>
 
-      {/* CENTER LINE divider */}
-      <div style={{ width: 2, height: `${splitH}%`, background: COLORS.white, position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", opacity: 0.5 }}>
-        <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: COLORS.white }} />
-      </div>
-
-      {/* RIGHT SIDE */}
-      <div style={{ position: "absolute", right: 0, top: 0, width: "50%", height: "100%", padding: 100, display: "flex", flexDirection: "column", justifyContent: "center", opacity: sideOp }}>
+      {/* RIGHT SIDE - Pushes Right */}
+      <div style={{ 
+        position: "absolute", 
+        right: `calc(0% - ${pushX}px)`, 
+        top: 0, 
+        width: "50%", 
+        height: "100%", 
+        padding: 100, 
+        display: "flex", 
+        flexDirection: "column", 
+        justifyContent: "center", 
+        opacity: sideOp 
+      }}>
         <div style={{ position: "relative", height: 60, marginBottom: 10, width: "100%" }}>
           <JitterScroll items={["Futures", "Perps", "Memecoins"]} speed={8} itemHeight={60} align="flex-start" />
         </div>
@@ -53,8 +64,46 @@ export const Scene6: React.FC = () => {
         <div style={{ fontSize: 32, fontWeight: 600, fontFamily: FONTS.body, color: COLORS.gray }}>But dangerous. Rugs. Liquidations.</div>
       </div>
 
-    </AbsoluteFill>
+      {/* CENTER LINE divider */}
+      <div style={{ width: 2, height: `${splitH}%`, background: COLORS.white, position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", opacity: 0.5 }} />
 
+      {/* CENTRAL FEATURES LIST */}
+      <div style={{ 
+        position: "absolute", 
+        left: "50%", 
+        top: "50%", 
+        transform: "translate(-50%, -50%)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 30,
+        alignItems: "center",
+        width: 800
+      }}>
+        {features.map((feat, i) => {
+          const delay = 60 + i * 15;
+          const s = spring({ frame: Math.max(0, frame - delay), fps, config: { damping: 12, stiffness: 200 } });
+          const op = interpolate(frame - delay, [0, 10], [0, 1]);
+          const x = interpolate(s, [0, 1], [50, 0]);
+          const scale = interpolate(s, [0, 1], [0.8, 1]);
+
+          return (
+            <div key={feat} style={{ 
+              opacity: op, 
+              transform: `translateX(${x}px) scale(${scale})`,
+              fontFamily: FONTS.headline,
+              fontSize: 54,
+              fontWeight: 900,
+              color: COLORS.greenGlow,
+              textShadow: `0 0 20px ${COLORS.greenGlow}44`,
+              letterSpacing: "4px"
+            }}>
+              {feat}
+            </div>
+          );
+        })}
+      </div>
+
+    </AbsoluteFill>
   );
 };
 

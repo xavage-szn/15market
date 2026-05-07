@@ -51,10 +51,11 @@ export const FuturisticBackground: React.FC = () => {
             linear-gradient(to bottom, rgba(0, 230, 118, 0.05) 1px, transparent 1px)
           `,
           backgroundSize: "80px 80px",
-          transform: `perspective(1000px) rotateX(60deg) translateY(${ (frame * 0.4) % 80 }px)`,
-          maskImage: "radial-gradient(circle at center, black 30%, transparent 80%)",
+          transform: `translateY(${ (frame * 0.4) % 80 }px)`,
+          maskImage: "linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)",
         }}
       />
+
 
 
       {/* Moving Data Lines - Reduced for performance */}
@@ -531,13 +532,13 @@ export const SceneZoomTransition: React.FC<{
         transform: `scale(${scale})`,
         opacity,
         transformOrigin: "center center",
-        willChange: "transform, opacity",
       }}
     >
       {children}
     </AbsoluteFill>
   );
 };
+
 
 // ─── ANIMATED CURSOR ─────────────────────────────────────────────────────────
 // A smooth spring-tracked cursor with click-ripple effect, for mockup scenes.

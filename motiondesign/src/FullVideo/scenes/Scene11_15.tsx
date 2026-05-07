@@ -22,8 +22,7 @@ export const Scene11: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
-      
-      <AmbientGlow color={COLORS.green} xOffset={0} yOffset={0} delay={0} />
+
 
       <div style={{ position: "absolute", top: 150 }}>
         <TerminalText text="SIMPLE. FAST. DIRECT." style={{ fontSize: 32, letterSpacing: "8px", fontWeight: 300, color: COLORS.white, fontFamily: FONTS.terminal }} delay={0} />
@@ -227,8 +226,7 @@ export const Scene15: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "transparent", alignItems: "center", justifyContent: "center" }}>
-      
-      <AmbientGlow color={COLORS.green} xOffset={0} yOffset={0} delay={0} />
+
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
         
