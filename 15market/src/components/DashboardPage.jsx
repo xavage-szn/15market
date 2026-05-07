@@ -265,6 +265,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                     isSmallScreen={isSmallScreen} 
                 />
             )}
+            {/* Fixed header — never grows */}
             <div className={`flex-none ${isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
                 <div className="max-w-[1600px] mx-auto p-3 md:px-8 md:py-4">
                     <div className="flex items-center justify-between">
@@ -281,20 +282,18 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                 </h1>
                             </div>
                         </div>
-                        <div className="flex items-center gap-4 text-right">
-
-
-                        </div>
+                        <div className="flex items-center gap-4 text-right"></div>
                     </div>
                 </div>
             </div>
 
-                <div 
-                    className="w-full h-full p-4 md:p-6 lg:p-8 flex flex-col gap-6 transition-all duration-500"
-                    style={!isSmallScreen && hasActiveCampaign ? { paddingRight: isLeaderboardOpen ? '234px' : '52px' } : {}}
-                >
+            {/* Scrollable content area — absorbs all remaining height, never pushes past screen */}
+            <div 
+                className="flex-1 min-h-0 overflow-hidden p-4 md:p-6 lg:p-8 flex flex-col gap-6 transition-all duration-500"
+                style={!isSmallScreen && hasActiveCampaign ? { paddingRight: isLeaderboardOpen ? '234px' : '52px' } : {}}
+            >
                     {/* Unified Grid Layout - 3 Column: Controls | Transactions | Analytics+Chat */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0 overflow-hidden">
 
                         {/* COL 1: Profile + Auto-Signer + Activity (lg:col-span-4) */}
                         <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
@@ -450,7 +449,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
                             {/* Activity Pulse Chart - Desktop Only */}
                             {!isSmallScreen && (
-                            <div className={`hidden lg:flex flex-1 min-h-[120px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
+                            <div className={`hidden lg:flex flex-1 min-h-0 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
                                     <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
@@ -476,8 +475,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
                         {/* COL 2: Transaction Matrix - Desktop Only */}
                         {!isSmallScreen && (
-                        <div className="hidden lg:flex lg:col-span-3 flex-col gap-5 min-h-0">
-                            <div className={`flex-1 min-h-0 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
+                        <div className="hidden lg:flex lg:col-span-3 flex-col gap-5 min-h-0 overflow-hidden">
+                            <div className={`flex-1 min-h-0 overflow-hidden ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Transactions</h3>
                                     <div className="flex items-center gap-1.5">
@@ -526,7 +525,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                         )}
 
                         {/* COL 3: Analytics Stats + Community Chat (lg:col-span-5) */}
-                        <div className={`lg:col-span-5 flex flex-col gap-5 min-h-0 ${isSmallScreen ? 'relative' : ''}`}>
+                        <div className={`lg:col-span-5 flex flex-col gap-5 min-h-0 overflow-hidden ${isSmallScreen ? 'relative' : ''}`}>
                             {isSmallScreen && hasActiveCampaign && (
                                 <CampaignLeaderboardPane 
                                     isOpen={isLeaderboardOpen} 
@@ -563,7 +562,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             </div>
 
                             {/* Dynamic Campaigns Section - Replaces Generic Chat on Mobile/Dashboard context */}
-                            <div className={`h-[380px] lg:h-auto lg:flex-1 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
+                            <div className={`flex-1 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
                                 <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <Trophy size={14} className="text-[#3CB371]" />
@@ -692,8 +691,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             </div>
                         </div>
                     </div>
-                </div>
-            
+            </div>
+
 
             {modalConfig && (
                 <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
