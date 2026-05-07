@@ -884,18 +884,67 @@ app.get('/leaderboard', (req, res) => {
     let wins = 0;
     const profile = profiles.profiles[e.address.toLowerCase()];
     if (profile && profile.trades) {
-       wins = profile.trades.filter(t => t.timestamp >= campaign.startTime && t.timestamp <= campaign.endTime && t.won).length;
+       wins = profile.trades.filter(t => {
+         const tTime = Number(t.timestamp || t.settledAt || 0);
+         return tTime >= campaign.startTime && tTime <= campaign.endTime && (t.won || t.status === 'WON');
+       }).length;
     }
     return { address: e.address, enrolledAt: e.enrolledAt, wins };
   });
 
-  // Sort by wins (descending), then by enrolledAt (ascending)
   leaderboard.sort((a, b) => {
     if (b.wins !== a.wins) return b.wins - a.wins;
     return a.enrolledAt - b.enrolledAt;
   });
 
   res.json(leaderboard);
+});
+
+app.get('/admin/campaign-report', (req, res) => {
+  const { campaignId } = req.query;
+  const campaign = activeCampaigns.find(c => c.id === campaignId);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const enrolledUsers = campaignEnrollments[campaignId] || [];
+  
+  const report = enrolledUsers.map(e => {
+    const addr = e.address.toLowerCase();
+    const profile = profiles.profiles[addr];
+    const campaignTrades = (profile?.trades || []).filter(t => {
+      const tTime = Number(t.timestamp || t.settledAt || 0);
+      return tTime >= campaign.startTime && tTime <= campaign.endTime;
+    });
+
+    const wonTrades = campaignTrades.filter(t => t.won || t.status === 'WON');
+    const lostTrades = campaignTrades.filter(t => !t.won && t.status !== 'WON');
+    const totalVolume = campaignTrades.reduce((acc, t) => acc + (parseFloat(t.amount) || 0), 0);
+    const firstTrade = campaignTrades.length > 0 ? [...campaignTrades].sort((a, b) => (a.timestamp || a.settledAt || 0) - (b.timestamp || b.settledAt || 0))[0] : null;
+
+    return {
+      address: e.address,
+      username: profile?.username || 'Trader',
+      enrolledAt: e.enrolledAt,
+      firstTradeTime: firstTrade ? (firstTrade.timestamp || firstTrade.settledAt) : null,
+      totalTrades: campaignTrades.length,
+      wonTrades: wonTrades.length,
+      lostTrades: lostTrades.length,
+      winRate: campaignTrades.length > 0 ? ((wonTrades.length / campaignTrades.length) * 100).toFixed(1) : "0.0",
+      volume: totalVolume.toFixed(2),
+      history: campaignTrades.slice(-12).map(t => (t.won || t.status === 'WON' ? 1 : 0))
+    };
+  });
+
+  report.sort((a, b) => b.wonTrades - a.wonTrades || a.enrolledAt - b.enrolledAt);
+
+  res.json({
+    campaign,
+    participants: report,
+    summary: {
+      totalParticipants: report.length,
+      totalTrades: report.reduce((acc, p) => acc + p.totalTrades, 0),
+      totalVolume: report.reduce((acc, p) => acc + parseFloat(p.volume), 0).toFixed(2)
+    }
+  });
 });
 
 app.post('/enroll', (req, res) => {

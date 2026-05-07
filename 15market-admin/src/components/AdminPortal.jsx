@@ -411,6 +411,29 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [selectedCampaignForAnalytics, setSelectedCampaignForAnalytics] = useState(null);
     const [leaderboardData, setLeaderboardData] = useState([]);
     const [campaignTradesData, setCampaignTradesData] = useState([]);
+    
+    // Campaign Reporting
+    const [selectedReportCampaign, setSelectedReportCampaign] = useState(null);
+    const [reportData, setReportData] = useState(null);
+    const [isReportLoading, setIsReportLoading] = useState(false);
+
+    const handleViewReport = async (campaignId) => {
+        setIsReportLoading(true);
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/campaign-report?campaignId=${campaignId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setReportData(data);
+                setSelectedReportCampaign(campaignId);
+            } else {
+                notify('error', 'Report Error', 'Could not fetch detailed campaign report.');
+            }
+        } catch (e) {
+            notify('error', 'Network Error', 'Backend sync failed for reporting.');
+        } finally {
+            setIsReportLoading(false);
+        }
+    };
 
     const notify = useCallback((type, title, message) => {
         setNotification({
@@ -2564,6 +2587,18 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                                 Live Now
                                                                             </div>
                                                                         )}
+                                                                        {Date.now() >= camp.endTime && (
+                                                                            <div className="flex items-center gap-2 px-2.5 py-1 bg-red-500/20 border border-red-500/30 rounded-md text-[8px] font-black text-red-500 uppercase">
+                                                                                <CheckCircle size={10} />
+                                                                                Completed
+                                                                            </div>
+                                                                        )}
+                                                                        {Date.now() <= camp.startTime && (
+                                                                            <div className="flex items-center gap-2 px-2.5 py-1 bg-blue-500/20 border border-blue-500/30 rounded-md text-[8px] font-black text-blue-500 uppercase">
+                                                                                <Clock size={10} />
+                                                                                Upcoming
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                     <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest leading-relaxed mb-6">
                                                                         Timeline: {new Date(camp.startTime).toLocaleString()} — {new Date(camp.endTime).toLocaleString()}
@@ -2591,6 +2626,14 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                                 >
                                                                     📊 Data & Ranks
                                                                 </button>
+                                                                {Date.now() >= camp.endTime && (
+                                                                    <button
+                                                                        onClick={() => handleViewReport(camp.id)}
+                                                                        className="px-6 py-3 bg-blue-600/10 hover:bg-blue-600 text-blue-500 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest border border-blue-500/20 transition-all hover:scale-105"
+                                                                    >
+                                                                        📑 Detailed Report
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={() => handleDeleteCampaign(camp.id)}
                                                                     className="px-6 py-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest border border-red-500/20 transition-all hover:scale-105"
@@ -3906,6 +3949,144 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 )}
             </AnimatePresence>
 
+
+            <AnimatePresence>
+                {selectedReportCampaign && reportData && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[1100] flex items-center justify-center p-4 lg:p-12 bg-black/90 backdrop-blur-2xl"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.95, opacity: 0, y: 30 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            className="w-full max-w-7xl h-full max-h-[90vh] bg-[#0a0a0a] border border-white/5 rounded-[40px] shadow-2xl flex flex-col overflow-hidden relative"
+                        >
+                            {/* Decorative Background */}
+                            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 blur-[120px] rounded-full -mr-64 -mt-64 pointer-events-none" />
+
+                            <div className="p-8 lg:p-12 border-b border-white/5 flex items-center justify-between shrink-0 relative z-10">
+                                <div>
+                                    <div className="flex items-center gap-4 mb-3">
+                                        <div className="p-3 bg-blue-600/10 rounded-2xl border border-blue-500/20 text-blue-500">
+                                            <FileText size={28} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl lg:text-3xl font-black text-white uppercase tracking-tight">Campaign Audit Report</h2>
+                                            <p className="text-[10px] text-white/30 font-bold uppercase tracking-[0.3em]">{reportData.campaign.title} • ID: {selectedReportCampaign}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-white/40">
+                                        <span>Start: {new Date(reportData.campaign.startTime).toLocaleString()}</span>
+                                        <span className="text-white/10">|</span>
+                                        <span>End: {new Date(reportData.campaign.endTime).toLocaleString()}</span>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        setSelectedReportCampaign(null);
+                                        setReportData(null);
+                                    }}
+                                    className="p-4 bg-white/5 hover:bg-white/10 rounded-2xl text-white/40 hover:text-white transition-all border border-white/10"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-8 lg:p-12 relative z-10 custom-scrollbar">
+                                {/* Summary Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                                    <div className="p-8 bg-white/5 border border-white/10 rounded-3xl">
+                                        <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Total Participants</p>
+                                        <h4 className="text-4xl font-black text-white">{reportData.summary.totalParticipants}</h4>
+                                    </div>
+                                    <div className="p-8 bg-white/5 border border-white/10 rounded-3xl">
+                                        <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Aggregate Trades</p>
+                                        <h4 className="text-4xl font-black text-[#3CB371]">{reportData.summary.totalTrades}</h4>
+                                    </div>
+                                    <div className="p-8 bg-white/5 border border-white/10 rounded-3xl">
+                                        <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Cumulative Volume</p>
+                                        <h4 className="text-4xl font-black text-blue-500 font-mono">{reportData.summary.totalVolume} <span className="text-sm">USDC</span></h4>
+                                    </div>
+                                </div>
+
+                                {/* Participants Table */}
+                                <div className="space-y-4">
+                                    <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.4em] mb-6">Operator Breakdown</h3>
+                                    
+                                    <div className="w-full overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="border-b border-white/5">
+                                                    <th className="pb-4 text-[9px] font-black text-white/20 uppercase tracking-widest">Trader / Address</th>
+                                                    <th className="pb-4 text-[9px] font-black text-white/20 uppercase tracking-widest">First Trade</th>
+                                                    <th className="pb-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-center">Total</th>
+                                                    <th className="pb-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-center">Won / Lost</th>
+                                                    <th className="pb-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-center">Win Rate</th>
+                                                    <th className="pb-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-right">Volume</th>
+                                                    <th className="pb-4 text-[9px] font-black text-white/20 uppercase tracking-widest text-right">Trend</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/[0.02]">
+                                                {reportData.participants.map((p, i) => (
+                                                    <tr key={p.address} className="group hover:bg-white/[0.01] transition-all">
+                                                        <td className="py-6">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-white/40">
+                                                                    {i + 1}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-black text-white uppercase">{p.username}</p>
+                                                                    <p className="text-[9px] font-mono text-white/20">{p.address.slice(0,6)}...{p.address.slice(-4)}</p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-6">
+                                                            <p className="text-[10px] font-bold text-white/40 uppercase">
+                                                                {p.firstTradeTime ? new Date(p.firstTradeTime).toLocaleString() : 'No Trades'}
+                                                            </p>
+                                                        </td>
+                                                        <td className="py-6 text-center">
+                                                            <p className="text-xs font-black text-white">{p.totalTrades}</p>
+                                                        </td>
+                                                        <td className="py-6 text-center">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <span className="text-[10px] font-black text-[#3CB371]">{p.wonTrades}W</span>
+                                                                <span className="text-[10px] font-black text-red-500">{p.lostTrades}L</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-6 text-center">
+                                                            <div className={`inline-block px-3 py-1 rounded-lg text-[10px] font-black ${parseFloat(p.winRate) >= 50 ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-red-500/20 text-red-500'}`}>
+                                                                {p.winRate}%
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-6 text-right">
+                                                            <p className="text-xs font-black text-blue-500 font-mono">${p.volume}</p>
+                                                        </td>
+                                                        <td className="py-6 text-right">
+                                                            {/* Mini Sparkline Visualization */}
+                                                            <div className="flex items-end justify-end gap-0.5 h-6">
+                                                                {p.history.map((h, hi) => (
+                                                                    <div 
+                                                                        key={hi} 
+                                                                        className={`w-1 rounded-full ${h === 1 ? 'bg-[#3CB371]' : 'bg-red-500/30'}`}
+                                                                        style={{ height: h === 1 ? '100%' : '30%' }}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <MessagingSystem
                 wallet={null}
