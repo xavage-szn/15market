@@ -41,6 +41,7 @@ import CustomChart from './components/CustomChart';
 import Toast from "./components/Toast";
 import { ThemeToggle } from "./components/ThemeToggle";
 import SideHistoryPane from "./components/SideHistoryPane";
+import WalletConnectionLoading from "./components/WalletConnectionLoading";
 
 import { RoundsTerminal } from "./components/RoundsTerminal";
 // Rounds chart logic merged into LiveStreamingChart/CustomChart for performance
@@ -435,6 +436,18 @@ export default function UserApp() {
   const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
+  
+  const [isWalletLoading, setIsWalletLoading] = useState(false);
+  const wasConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    if (isConnected && !wasConnectedRef.current) {
+      setIsWalletLoading(true);
+    }
+    wasConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  // PERSISTENCE: Transaction History
   
   // PERSISTENCE: Transaction History
   useEffect(() => {
@@ -2857,9 +2870,16 @@ export default function UserApp() {
 
 
   return (
-    <ErrorBoundary>
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
+    <div className={`min-h-screen ${theme === 'light' ? 'bg-[#f0f8f4] text-[#0a261a]' : 'bg-[#050505] text-white'} selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-x-hidden font-sans`}>
+      <AnimatePresence>
+        {isWalletLoading && (
+          <WalletConnectionLoading onFinish={() => setIsWalletLoading(false)} />
+        )}
+      </AnimatePresence>
+      
+      <ErrorBoundary>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
       style={{
         color: theme === 'light' ? '#1f2937' : '#ffffff',
         transition: "color 0.3s ease"
@@ -2898,8 +2918,6 @@ export default function UserApp() {
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
               <img src="/logo.SVG" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
-
-
 
             <div className="hidden lg:flex items-center gap-3 px-2 py-1">
               {/* Branded Game Mode Switcher - Large Screens */}

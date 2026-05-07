@@ -230,6 +230,11 @@ export const Scene15: React.FC = () => {
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
         
+        {/* Official Logo */}
+        <div style={{ opacity: liveOp, transform: `scale(${liveScale * 0.8})`, marginBottom: 40 }}>
+          <Logo3D style={{ width: 600, height: 300 }} />
+        </div>
+
         {/* Main Title */}
         <div style={{ 
           opacity: liveOp, 
@@ -242,8 +247,9 @@ export const Scene15: React.FC = () => {
           textShadow: `0 0 30px ${COLORS.greenGlow}44`,
           marginBottom: 20
         }}>
-          15MARKET IS LIVE
+          IS LIVE
         </div>
+
 
         {/* Powerful Subtitle */}
         <div style={{ 
