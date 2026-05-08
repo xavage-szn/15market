@@ -28,27 +28,28 @@ const SideHistoryPane = ({
                 transition-all duration-500 flex flex-row overflow-hidden
                 ${isDark
                     ? 'bg-[#0a0a0a]/90 border-white/10'
-                    : 'bg-[#3CB371]/12 border-[#3CB371]/20'}
+                    : 'bg-transparent border-[#3CB371]/30 shadow-[30px_0_70px_rgba(0,0,0,0.25)]'}
             `}>
                 {/* Vertical Toggle Bar */}
                 <div
                     onClick={onToggle}
                     className={`
                         w-12 h-full flex flex-col items-center justify-center cursor-pointer 
-                        hover:bg-white/5 transition-colors relative shrink-0
-                        ${!isOpen && 'group-hover:bg-[#3CB371]/10'}
+                        transition-all relative shrink-0 z-10
+                        ${isDark ? 'hover:bg-white/5' : 'bg-[#3CB371] shadow-[2px_0_15px_rgba(0,0,0,0.1)]'}
                     `}
                 >
                     <div className="flex flex-col items-center gap-8">
-                        <History size={20} className={isOpen ? 'text-[#3CB371]' : (isDark ? 'text-white/40 group-hover:text-white' : 'text-[#0f2618]/40 group-hover:text-[#0f2618]')} />
+                        <History size={20} className={isOpen ? 'text-white' : (isDark ? 'text-white/40 group-hover:text-white' : 'text-white/60 group-hover:text-white')} />
 
                         <div className="flex items-center gap-2" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isOpen ? (isDark ? 'text-white' : 'text-[#0f2618]') : (isDark ? 'text-white/40 group-hover:text-white' : 'text-[#0f2618]/40 group-hover:text-[#0f2618]')}`}>
+                            <span className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isOpen ? 'text-white' : (isDark ? 'text-white/40 group-hover:text-white' : 'text-white/60 group-hover:text-white')}`}
+                                style={{ fontFamily: '"Comfortaa", cursive' }}>
                                 History
                             </span>
                         </div>
 
-                        {isOpen ? <ChevronLeft size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} /> : <ChevronRight size={16} className={isDark ? 'text-white/40' : 'text-[#0f2618]/40'} />}
+                        {isOpen ? <ChevronLeft size={16} className={isDark ? 'text-white/40' : 'text-white/60'} /> : <ChevronRight size={16} className={isDark ? 'text-white/40' : 'text-white/60'} />}
                     </div>
                 </div>
 
@@ -60,10 +61,13 @@ const SideHistoryPane = ({
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -20 }}
                             transition={{ delay: 0.1 }}
-                            className="flex-1 flex flex-col overflow-hidden py-6 pr-4 pl-2"
+                            className={`flex-1 flex flex-col overflow-hidden py-6 pr-4 pl-2 ${!isDark ? 'bg-[#c8eadd]' : ''}`}
                         >
                             <div className="flex items-center justify-between mb-6 px-2">
-                                <h2 className={`text-lg font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>Trade History</h2>
+                                <h2 className={`text-lg font-bold uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}
+                                    style={{ fontFamily: '"Comfortaa", cursive' }}>
+                                    Trade History
+                                </h2>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 uppercase tracking-widest">
                                     {tradeHistory.length} Trades
                                 </span>
@@ -85,7 +89,7 @@ const SideHistoryPane = ({
                                                 key={trade.id}
                                                 className={`
                                                     p-3 rounded-[22px] border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
-                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#3CB371]/4 border-[#3CB371]/35 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
+                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#3CB371] border-[#3CB371]/10 shadow-[0_4px_15px_rgba(0,0,0,0.05)]'}
                                                 `}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -96,7 +100,7 @@ const SideHistoryPane = ({
                                                         `}>
                                                             {trade.direction}
                                                         </div>
-                                                        <span className={`text-[11px] font-bold ${isDark ? 'text-white/90' : 'text-[#0f2618]/90'}`}>{trade.symbol || 'BTC'}</span>
+                                                        <span className={`text-[11px] font-bold ${isDark ? 'text-white/90' : 'text-[#c8eadd]'}`}>{trade.symbol || 'BTC'}</span>
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
                                                         {isWin && !trade.payoutSettled && (
@@ -117,8 +121,8 @@ const SideHistoryPane = ({
 
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex flex-col">
-                                                        <span className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-[#0f2618]/40'}`}>Entry: ${Number(trade.entryPrice || 0).toFixed(2)}</span>
-                                                        <span className={`text-[9px] font-mono ${isDark ? 'text-white/20' : 'text-[#0f2618]/20'}`}>
+                                                        <span className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-[#c8eadd]/70'}`}>Entry: ${Number(trade.entryPrice || 0).toFixed(2)}</span>
+                                                        <span className={`text-[9px] font-mono ${isDark ? 'text-white/20' : 'text-[#c8eadd]/40'}`}>
                                                             {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                                         </span>
                                                     </div>

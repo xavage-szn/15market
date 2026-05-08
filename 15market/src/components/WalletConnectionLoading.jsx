@@ -7,7 +7,7 @@ const WalletConnectionLoading = ({ onFinish }) => {
     useEffect(() => {
         const timer = setTimeout(() => {
             onFinish();
-        }, 5500); // Slightly more than 5s to ensure clean exit
+        }, 5000); // Exactly 5s
         return () => clearTimeout(timer);
     }, [onFinish]);
 
@@ -32,7 +32,7 @@ const WalletConnectionLoading = ({ onFinish }) => {
             {/* Background Grain/Texture for Premium Feel */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
             
-            <div className="relative flex items-center gap-4 md:gap-8">
+            <div className="relative flex items-center gap-0">
                 {/* 1. Logo Fades Up */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -40,7 +40,7 @@ const WalletConnectionLoading = ({ onFinish }) => {
                     transition={{ duration: 0.8, ease: "easeOut" }}
                     className="flex items-center"
                 >
-                    <img src="/logo.SVG" alt="15market" className="h-12 md:h-16 lg:h-20 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.3)]" />
+                    <img src="/logo.png" alt="15market" className="h-[72px] md:h-[100px] w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.3)] brightness-0 invert" />
                 </motion.div>
 
                 {/* 2. Two Lines (//) Fade In from Right */}
@@ -48,65 +48,51 @@ const WalletConnectionLoading = ({ onFinish }) => {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.8, duration: 0.6 }}
-                    className="flex items-center gap-1"
+                    className="flex items-center gap-0 translate-y-1.5 -ml-2 z-10 relative"
                 >
                     <motion.span 
                         animate={{ opacity: [0.4, 1, 0.4] }}
                         transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                        className="text-4xl md:text-6xl font-thin text-[#3CB371] italic"
+                        className="text-3xl md:text-4xl font-thin text-[#3CB371]"
                     >
                         /
                     </motion.span>
                     <motion.span 
                         animate={{ opacity: [1, 0.4, 1] }}
                         transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                        className="text-4xl md:text-6xl font-thin text-[#3CB371] italic"
+                        className="text-3xl md:text-4xl font-thin text-[#3CB371] -ml-1"
                     >
                         /
                     </motion.span>
                 </motion.div>
 
                 {/* 3. "Loading" Types In */}
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline ml-1.5 gap-1">
                     <motion.span
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 1.4, duration: 0.4 }}
-                        className="text-2xl md:text-4xl font-black text-white uppercase tracking-[0.2em]"
+                        className="text-[17px] font-medium text-white tracking-tight"
+                        style={{ fontFamily: '"Comfortaa", cursive' }}
                     >
-                        {"LOADING".split("").map((char, i) => (
-                            <motion.span
-                                key={i}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 1.4 + (i * 0.1) }}
-                            >
-                                {char}
-                            </motion.span>
-                        ))}
+                        Loading
                     </motion.span>
-
-                    {/* 4. Three dots dropping like balls */}
-                    <div className="flex items-center gap-2 ml-2 h-8">
-                        <AnimatePresence>
-                            {[0, 1, 2].map((i) => (
-                                <motion.div
-                                    key={i}
-                                    initial={{ y: -40, opacity: 0 }}
-                                    animate={{ 
-                                        y: 0, 
-                                        opacity: 1,
-                                        transition: { 
-                                            delay: 2.5 + (i * 0.3),
-                                            type: "spring",
-                                            stiffness: 300,
-                                            damping: 10
-                                        }
-                                    }}
-                                    className="w-2 h-2 rounded-full bg-[#3CB371] shadow-[0_0_10px_rgba(60,179,113,0.8)]"
-                                />
-                            ))}
-                        </AnimatePresence>
+                    <div className="flex items-baseline gap-1 ml-0.5">
+                        {[0, 1, 2].map((i) => (
+                            <motion.div
+                                key={i}
+                                animate={{ 
+                                    opacity: [0.2, 1, 0.2],
+                                }}
+                                transition={{ 
+                                    repeat: Infinity, 
+                                    duration: 1.5, 
+                                    delay: 1.6 + (i * 0.2),
+                                    ease: "easeInOut" 
+                                }}
+                                className="w-[5px] h-[5px] rounded-full bg-white"
+                            />
+                        ))}
                     </div>
                 </div>
             </div>

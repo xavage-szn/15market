@@ -48,7 +48,7 @@ function TradeTerminalComponent({
 
             <div className="flex flex-col items-end opacity-60">
                 <span className="text-[6px] lg:text-[7px] font-black uppercase tracking-widest">Market</span>
-                <span className="text-[7px] lg:text-[10px] font-mono font-black text-[#3CB371]">
+                <span className={`text-[8px] lg:text-[11px] font-mono font-black ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>
                     ${(Math.floor(Number(price) * 100) / 100).toFixed(2)}
                 </span>
             </div>
@@ -91,7 +91,7 @@ function TradeTerminalComponent({
         <div className="flex flex-col gap-1 pointer-events-auto">
             <div className="flex items-center justify-between px-1">
                 <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white opacity-30'}`}>Time</span>
-                <span className="text-[6px] md:text-[7px] font-mono font-bold" style={{ color: '#3CB371' }}>
+                <span className={`text-[9px] md:text-[11px] font-mono font-black ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>
                     {duration === 5 ? '2.90x' : duration === 10 ? '2.40x' : '1.90x'}
                 </span>
             </div>
@@ -125,7 +125,7 @@ function TradeTerminalComponent({
         <div className="flex flex-col gap-0.5 pointer-events-auto">
             <div className="flex items-center justify-between px-1.5 mb-0.5">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`}>Amount</span>
-                <span className={`text-[6px] lg:text-[7px] font-bold ${isLight ? 'text-[#3CB371]' : 'text-yellow-400'}`}>
+                <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-yellow-400'}`}>
                     ${(sessionBalance || 0).toFixed(2)}
                 </span>
             </div>

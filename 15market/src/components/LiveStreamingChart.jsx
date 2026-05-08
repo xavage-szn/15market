@@ -122,8 +122,7 @@ function LiveStreamingChartComponent({ theme, symbol }) {
 
             const nowPx = Date.now();
             const windowMs = 20000;
-            const elapsed = nowPx - startTimeRef.current;
-            const viewStartTime = elapsed < windowMs ? startTimeRef.current : nowPx - windowMs;
+            const viewStartTime = nowPx - windowMs;
             const oldest = viewStartTime;
 
             const isMobile = W < 600;
@@ -189,7 +188,8 @@ function LiveStreamingChartComponent({ theme, symbol }) {
                 lastThemeRef.current = theme;
             }
 
-            const startX = getX(history[firstIdx].t);
+            // Smooth clipping: Always start the line slightly off-screen to the left
+            const startX = -20;
             const startY = toY(history[firstIdx].p);
 
             // FILL
@@ -237,16 +237,35 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.textBaseline = 'middle';
             ctx.fillText(latestPriceValStr, liveX + 16, liveY);
 
-            // PULSE
-            const pulse = Math.sin(nowPx / 250) * 2;
+            // INTENSE SIGNAL GLOW
+            const pulseSize = Math.sin(nowPx / 200) * 4;
+            const glowSize = 15 + pulseSize;
+            
+            // Outer soft glow
+            const signalGlow = ctx.createRadialGradient(liveX, liveY, 2, liveX, liveY, glowSize);
+            signalGlow.addColorStop(0, isLight ? 'rgba(30,90,56,0.6)' : `${GREEN}80`);
+            signalGlow.addColorStop(0.4, isLight ? 'rgba(30,90,56,0.2)' : `${GREEN}30`);
+            signalGlow.addColorStop(1, 'transparent');
+            
+            ctx.beginPath();
+            ctx.arc(liveX, liveY, glowSize, 0, Math.PI * 2);
+            ctx.fillStyle = signalGlow;
+            ctx.fill();
+
+            // Core point
             ctx.beginPath();
             ctx.arc(liveX, liveY, 4, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
+            ctx.shadowBlur = isLight ? 10 : 20;
+            ctx.shadowColor = isLight ? 'rgba(30,90,56,0.8)' : GREEN;
             ctx.fill();
+            ctx.shadowBlur = 0; // Reset for other elements
+
+            // Precision Ring
             ctx.beginPath();
-            ctx.arc(liveX, liveY, 6 + pulse, 0, Math.PI * 2);
-            ctx.strokeStyle = `${GREEN}80`;
-            ctx.lineWidth = 1.5;
+            ctx.arc(liveX, liveY, 6 + (pulseSize * 0.5), 0, Math.PI * 2);
+            ctx.strokeStyle = isLight ? 'rgba(30,90,56,0.4)' : `${GREEN}60`;
+            ctx.lineWidth = 1;
             ctx.stroke();
 
             rafRef.current = requestAnimationFrame(draw);

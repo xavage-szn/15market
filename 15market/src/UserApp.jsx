@@ -42,6 +42,7 @@ import Toast from "./components/Toast";
 import { ThemeToggle } from "./components/ThemeToggle";
 import SideHistoryPane from "./components/SideHistoryPane";
 import WalletConnectionLoading from "./components/WalletConnectionLoading";
+import GlobalLoader from "./components/GlobalLoader";
 
 import { RoundsTerminal } from "./components/RoundsTerminal";
 // Rounds chart logic merged into LiveStreamingChart/CustomChart for performance
@@ -146,7 +147,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
-          : 'bg-gradient-to-br from-[#E2EFEA]/98 to-[#D9E9E2]/98 shadow-none border-[1.5px] border-[#3CB371]'}
+          : 'bg-[#c8eadd] shadow-2xl border-[1.5px] border-[#3CB371]'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -156,18 +157,19 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
             transition-all duration-300 relative shrink-0
             ${isDark 
               ? 'bg-white/5 border-b border-white/5' 
-              : 'bg-black/5 border-b border-black/5'}
+              : 'bg-[#3CB371] border-b border-[#3CB371]/20'}
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
           {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />}
           
           <div className="flex items-center justify-center gap-3 w-full">
-            <History size={14} className={isDark ? "text-white" : "text-[#0a261a]"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
-            <span className={`text-[11px] font-black uppercase tracking-[0.25em] ${isDark ? "text-white" : "text-[#0a261a]"}`}>
+            <History size={14} className={isDark ? "text-white" : "text-white"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
+            <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? "text-white" : "text-white"}`}
+              style={{ fontFamily: '"Comfortaa", cursive' }}>
               TRADE HISTORY ({userProfile?.stats?.totalTrades || tradeHistory.length})
             </span>
-            {isOpen ? <ChevronDown size={12} className={isDark ? "text-white/80" : "text-black/60"} /> : <ChevronUp size={12} className={isDark ? "text-white/80" : "text-black/60"} />}
+            {isOpen ? <ChevronDown size={12} className={isDark ? "text-white/80" : "text-white/80"} /> : <ChevronUp size={12} className={isDark ? "text-white/80" : "text-white/80"} />}
           </div>
         </div>
 
@@ -188,7 +190,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                   key={trade.id}
                   className={`
                     p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#cce3d7] border-[#3CB371]/20 shadow-sm'}
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#3CB371] border-[#3CB371]/10 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -199,7 +201,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                       `}>
                         {trade.direction === 'UP' ? 'LONG' : (trade.direction === 'DOWN' ? 'SHORT' : trade.direction)}
                       </div>
-                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
+                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#c8eadd]'}`}>{trade.symbol || 'BTC'}</span>
                     </div>
                     <div className="flex flex-col items-end">
                       <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
@@ -214,13 +216,13 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <div className="text-[10px] opacity-40">
+                    <div className={`text-[10px] ${isDark ? 'opacity-40 text-white' : 'text-[#c8eadd]/70'}`}>
                       ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
-                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-white/10 text-white/70'}`}
                       >
                         <Share2 size={12} />
                       </button>
@@ -394,7 +396,7 @@ export default function UserApp() {
       const timer = setTimeout(() => {
         setIsAppReady(true); 
         setIsGlobalLoading(false);
-      }, 4000); // 4s absolute maximum wait for any sequence
+      }, 5000); // 5s absolute maximum wait for any sequence
       return () => clearTimeout(timer);
     }
   }, [isGlobalLoading]);
@@ -604,10 +606,15 @@ export default function UserApp() {
     }
 
     // Wrap up: Instant delivery
+    const startTime = Date.now();
     const finish = () => {
-      clearInterval(progressInterval);
-      setGlobalLoadingProgress(100);
-      setIsGlobalLoading(false);
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, 5000 - elapsed);
+      setTimeout(() => {
+        clearInterval(progressInterval);
+        setGlobalLoadingProgress(100);
+        setIsGlobalLoading(false);
+      }, remaining);
     };
 
     if (success) {
@@ -661,7 +668,6 @@ export default function UserApp() {
     window.addEventListener('storage', syncLocal);
 
     return () => {
-      unbindSettings();
       window.removeEventListener('storage', syncLocal);
     };
   }, [fetchGlobalSettings]);
@@ -2870,20 +2876,38 @@ export default function UserApp() {
 
 
   return (
-    <div className={`min-h-screen ${theme === 'light' ? 'bg-[#f0f8f4] text-[#0a261a]' : 'bg-[#050505] text-white'} selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-x-hidden font-sans`}>
+    <div className={`min-h-screen ${theme === 'light' ? 'bg-[#c8eadd] text-[#0a261a]' : 'bg-[#050505] text-white'} selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-x-hidden font-sans relative`}>
+      {/* Sitewide Background Texture - HIGH VISIBILITY BRANDED GREEN */}
+      <div className={`fixed inset-0 pointer-events-none z-0 
+        ${theme === 'light' 
+          ? "bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-[#3CB371] opacity-[0.08] mix-blend-multiply" 
+          : 'opacity-0'}`} 
+      />
       <AnimatePresence>
+        {isConnected && address && !isAppReady && (
+          <motion.div 
+            key="platform-mask"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className={`fixed inset-0 z-[5000] ${theme === 'light' ? 'bg-[#c8eadd]' : 'bg-[#050505]'}`}
+          />
+        )}
         {isWalletLoading && (
           <WalletConnectionLoading onFinish={() => setIsWalletLoading(false)} />
+        )}
+        {isGlobalLoading && (
+          <GlobalLoader theme={theme} />
         )}
       </AnimatePresence>
       
       <ErrorBoundary>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
-      style={{
-        color: theme === 'light' ? '#1f2937' : '#ffffff',
-        transition: "color 0.3s ease"
-      }}>
+            className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
+        style={{
+          color: theme === 'light' ? '#1f2937' : '#ffffff',
+          transition: "color 0.3s ease"
+        }}>
 
 
 
@@ -2908,7 +2932,6 @@ export default function UserApp() {
           transactionHistory={transactionHistory}
           onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
           uiVersion={uiVersion}
-          setUiVersion={setUiVersion}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
@@ -2916,7 +2939,7 @@ export default function UserApp() {
           <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 ${isSmallScreen ? 'py-0 h-[48px]' : 'py-1 lg:py-0'}`}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.SVG" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
             <div className="hidden lg:flex items-center gap-3 px-2 py-1">
@@ -3063,44 +3086,49 @@ export default function UserApp() {
                     )}
 
 
-                    {/* Chart Container - flex-1 fills all remaining vertical space on mobile */}
-                    <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0`}
+                    {/* Chart Container Wrapper for Shadow - PREVENTS CLIPPING */}
+                    <div className="flex-1 w-full flex flex-col relative z-0"
                       style={{
-                        background: isSmallScreen 
-                          ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
-                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
-                        boxShadow: theme === 'light'
-                          ? 'none'
-                          : (isSmallScreen
-                            ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
-                            : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
-                        borderColor: isSmallScreen
-                          ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
-                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
+                        filter: theme === 'light' ? 'drop-shadow(0 30px 60px rgba(0,0,0,0.18))' : 'none'
                       }}>
-                      <div className="flex-1 w-full h-full flex relative">
-                        {/* Chart Area */}
-                        <div className="flex-1 w-full h-full relative min-w-0">
-                          <CustomChart
-                            symbol={activeMarket?.binance || 'BTCUSDT'}
-                            theme={theme}
-                            network={network}
-                            activeMarket={activeMarket}
-                            uiVersion={uiVersion}
-                            setActiveMarket={handleMarketChange}
-                            activeTrades={activeTrades}
-                            currentPrice={price}
-                            priceHistory={priceHistoryRef.current}
-                          />
-                        </div>
-
-                        {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
-                        <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
-                          <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
-                            Order Book
+                      <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
+                        style={{
+                          background: isSmallScreen 
+                            ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
+                            : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
+                          boxShadow: theme === 'light'
+                            ? 'none'
+                            : (isSmallScreen
+                              ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
+                              : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
+                          borderColor: isSmallScreen
+                            ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
+                            : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
+                        }}>
+                        <div className="flex-1 w-full h-full flex relative">
+                          {/* Chart Area */}
+                          <div className="flex-1 w-full h-full relative min-w-0">
+                            <CustomChart
+                              symbol={activeMarket?.binance || 'BTCUSDT'}
+                              theme={theme}
+                              network={network}
+                              activeMarket={activeMarket}
+                              uiVersion={uiVersion}
+                              setActiveMarket={handleMarketChange}
+                              activeTrades={activeTrades}
+                              currentPrice={price}
+                              priceHistory={priceHistoryRef.current}
+                            />
                           </div>
-                          <div className="flex-1 overflow-hidden p-2">
-                            <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+
+                          {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
+                          <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                            <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                              Order Book
+                            </div>
+                            <div className="flex-1 overflow-hidden p-2">
+                              <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -3227,7 +3255,8 @@ export default function UserApp() {
                         <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
                           style={{
                             background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
-                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)')
+                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'),
+                            boxShadow: (theme === 'light' && gameMode !== 'rounds') ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
                           }}>
                           <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
                             {gameMode === 'rounds' ? (
@@ -3272,7 +3301,8 @@ export default function UserApp() {
                           <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                             style={{
                               background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)',
+                              boxShadow: theme === 'light' ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
                             }}>
                             <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
                               <LiveExecution
@@ -3386,7 +3416,7 @@ export default function UserApp() {
       <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
         style={{ fontFamily: 'Arial, sans-serif' }}>
         <div className="flex items-center gap-4 pointer-events-auto">
-          <img src="/logo.SVG" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
+          <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
           <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
             © 2026 15market
           </span>
@@ -3448,5 +3478,6 @@ export default function UserApp() {
       )}
     </motion.div >
     </ErrorBoundary>
+    </div>
   );
 }

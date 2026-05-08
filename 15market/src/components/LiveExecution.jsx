@@ -366,7 +366,8 @@ function LiveExecutionComponent({
                     })()
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-20 h-full">
-                        <div className="text-[9px] uppercase font-black tracking-[0.4em] mb-2">
+                        <div className="text-[10px] uppercase font-bold tracking-[0.2em] mb-2"
+                            style={{ fontFamily: '"Comfortaa", cursive' }}>
                             Awaiting Signal
                         </div>
                         <div className="w-16 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />

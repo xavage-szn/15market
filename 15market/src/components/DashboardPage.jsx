@@ -11,6 +11,7 @@ import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
 import { socketService } from "../utils/socket";
 import { parseEther } from "viem";
+import GlobalLoader from "./GlobalLoader";
 
 export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onDeposit, onWithdraw, treasuryBalance,
     autoSignerFees,
