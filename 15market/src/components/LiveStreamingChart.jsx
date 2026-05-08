@@ -205,18 +205,24 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.fillStyle = gradRef.current;
             ctx.fill();
 
-            // STROKE
+            // STROKE WITH INTENSE SHADOW
             ctx.beginPath();
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
             ctx.lineWidth = 3;
             ctx.strokeStyle = isLight ? '#1e5a38' : GREEN;
+            
+            // Add depth shadow to the line itself
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = isLight ? 'rgba(30,90,56,0.5)' : 'rgba(60,179,113,0.6)';
+            
             ctx.moveTo(startX, startY);
             for (let i = firstIdx + 1; i <= lastIdx; i++) {
                 ctx.lineTo(getX(history[i].t), toY(history[i].p));
             }
             ctx.lineTo(liveX, liveY);
             ctx.stroke();
+            ctx.shadowBlur = 0; // Reset for subsequent draws
 
             // CROSSHAIR
             ctx.setLineDash([5, 5]);
@@ -237,14 +243,13 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.textBaseline = 'middle';
             ctx.fillText(latestPriceValStr, liveX + 16, liveY);
 
-            // INTENSE SIGNAL GLOW
-            const pulseSize = Math.sin(nowPx / 200) * 4;
-            const glowSize = 15 + pulseSize;
+            // ULTRA-INTENSE SIGNAL GLOW (Behind the point)
+            const pulseSize = Math.sin(nowPx / 150) * 5;
+            const glowSize = 25 + pulseSize;
             
-            // Outer soft glow
             const signalGlow = ctx.createRadialGradient(liveX, liveY, 2, liveX, liveY, glowSize);
-            signalGlow.addColorStop(0, isLight ? 'rgba(30,90,56,0.6)' : `${GREEN}80`);
-            signalGlow.addColorStop(0.4, isLight ? 'rgba(30,90,56,0.2)' : `${GREEN}30`);
+            signalGlow.addColorStop(0, isLight ? 'rgba(30,90,56,0.8)' : `${GREEN}aa`);
+            signalGlow.addColorStop(0.5, isLight ? 'rgba(30,90,56,0.3)' : `${GREEN}40`);
             signalGlow.addColorStop(1, 'transparent');
             
             ctx.beginPath();
@@ -252,19 +257,16 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.fillStyle = signalGlow;
             ctx.fill();
 
-            // Core point
+            // Core point (Clean, no shadow to 'fade out' the glow at the point)
             ctx.beginPath();
-            ctx.arc(liveX, liveY, 4, 0, Math.PI * 2);
+            ctx.arc(liveX, liveY, 4.5, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
-            ctx.shadowBlur = isLight ? 10 : 20;
-            ctx.shadowColor = isLight ? 'rgba(30,90,56,0.8)' : GREEN;
             ctx.fill();
-            ctx.shadowBlur = 0; // Reset for other elements
 
-            // Precision Ring
+            // Precision Outer Ring (Subtle)
             ctx.beginPath();
-            ctx.arc(liveX, liveY, 6 + (pulseSize * 0.5), 0, Math.PI * 2);
-            ctx.strokeStyle = isLight ? 'rgba(30,90,56,0.4)' : `${GREEN}60`;
+            ctx.arc(liveX, liveY, 7 + (pulseSize * 0.5), 0, Math.PI * 2);
+            ctx.strokeStyle = isLight ? 'rgba(30,90,56,0.3)' : `${GREEN}40`;
             ctx.lineWidth = 1;
             ctx.stroke();
 

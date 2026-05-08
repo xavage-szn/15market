@@ -298,19 +298,23 @@ export default function UserApp() {
     if (isAnimatingTheme) return;
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
 
+    // Show the branded loading modal during the switch
+    setIsGlobalLoading(true);
+
     setTargetTheme(nextTheme);
     setIsAnimatingTheme(true);
 
-    // Sync theme swap with the mid-point of the dissolve (fully opaque)
+    // Sync theme swap with the mid-point of the transition
     setTimeout(() => {
       setTheme(nextTheme);
-    }, 400);
+    }, 450);
 
-    // End animation state after cycle completes
+    // Complete the transition and hide the loader
     setTimeout(() => {
       setIsAnimatingTheme(false);
       setTargetTheme(null);
-    }, 800);
+      setIsGlobalLoading(false);
+    }, 1800); // 1.8s provides a smooth, premium branded transition
   }, [theme, isAnimatingTheme]);
 
   // Keep-Alive Heartbeat (Prevents Backend from Sleeping while user is active)
@@ -2894,7 +2898,7 @@ export default function UserApp() {
           />
         )}
         {isWalletLoading && (
-          <WalletConnectionLoading onFinish={() => setIsWalletLoading(false)} />
+          <WalletConnectionLoading theme={theme} onFinish={() => setIsWalletLoading(false)} />
         )}
         {isGlobalLoading && (
           <GlobalLoader theme={theme} />

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const WalletConnectionLoading = ({ onFinish }) => {
+const WalletConnectionLoading = ({ onFinish, theme = 'dark' }) => {
+    const isLight = theme === 'light';
     const [dots, setDots] = useState([]);
 
     useEffect(() => {
@@ -27,10 +28,9 @@ const WalletConnectionLoading = ({ onFinish }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-[#050505] flex items-center justify-center overflow-hidden"
+            className={`fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden ${isLight ? 'bg-[#3CB371]' : 'bg-[#050505]'}`}
         >
-            {/* Background Grain/Texture for Premium Feel */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+            <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
             
             <div className="relative flex items-center gap-0">
                 {/* 1. Logo Fades Up */}
@@ -40,7 +40,7 @@ const WalletConnectionLoading = ({ onFinish }) => {
                     transition={{ duration: 0.8, ease: "easeOut" }}
                     className="flex items-center"
                 >
-                    <img src="/logo.png" alt="15market" className="h-[72px] md:h-[100px] w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.3)] brightness-0 invert" />
+                    <img src="/logo.png" alt="15market" className={`h-[72px] md:h-[100px] w-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.1)] ${isLight ? 'brightness-0' : 'brightness-0 invert'}`} />
                 </motion.div>
 
                 {/* 2. Two Lines (//) Fade In from Right */}
@@ -48,19 +48,19 @@ const WalletConnectionLoading = ({ onFinish }) => {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.8, duration: 0.6 }}
-                    className="flex items-center gap-0 translate-y-1.5 -ml-2 z-10 relative"
+                    className="flex items-center gap-0 -translate-y-8 md:-translate-y-12 -ml-2 z-10 relative"
                 >
                     <motion.span 
-                        animate={{ opacity: [0.4, 1, 0.4] }}
-                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                        className="text-3xl md:text-4xl font-thin text-[#3CB371]"
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                        className={`text-3xl md:text-4xl font-light select-none ${isLight ? 'text-black/90' : 'text-white/90'}`}
                     >
                         /
                     </motion.span>
                     <motion.span 
-                        animate={{ opacity: [1, 0.4, 1] }}
-                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                        className="text-3xl md:text-4xl font-thin text-[#3CB371] -ml-1"
+                        animate={{ opacity: [1, 0.3, 1] }}
+                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                        className={`text-3xl md:text-4xl font-light select-none -ml-1 ${isLight ? 'text-black/90' : 'text-white/90'}`}
                     >
                         /
                     </motion.span>
@@ -72,7 +72,7 @@ const WalletConnectionLoading = ({ onFinish }) => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 1.4, duration: 0.4 }}
-                        className="text-[17px] font-medium text-white tracking-tight"
+                        className={`text-[17px] font-medium tracking-tight ${isLight ? 'text-black' : 'text-white'}`}
                         style={{ fontFamily: '"Comfortaa", cursive' }}
                     >
                         Loading
@@ -90,7 +90,7 @@ const WalletConnectionLoading = ({ onFinish }) => {
                                     delay: 1.6 + (i * 0.2),
                                     ease: "easeInOut" 
                                 }}
-                                className="w-[5px] h-[5px] rounded-full bg-white"
+                                className={`w-[5px] h-[5px] rounded-full ${isLight ? 'bg-black/40 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-[#1e5a38] shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`}
                             />
                         ))}
                     </div>
