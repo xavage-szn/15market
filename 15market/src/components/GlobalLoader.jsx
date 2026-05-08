@@ -34,7 +34,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.4, duration: 0.5 }}
-                    className="flex items-center gap-0 -translate-y-8 md:-translate-y-12 -ml-2 z-10 relative"
+                    className="flex items-center gap-0 -translate-y-14 md:-translate-y-20 -ml-2 z-10 relative"
                 >
                     <motion.span 
                         animate={{ opacity: [0.3, 1, 0.3] }}

@@ -48,7 +48,7 @@ const WalletConnectionLoading = ({ onFinish, theme = 'dark' }) => {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.8, duration: 0.6 }}
-                    className="flex items-center gap-0 -translate-y-8 md:-translate-y-12 -ml-2 z-10 relative"
+                    className="flex items-center gap-0 -translate-y-14 md:-translate-y-20 -ml-2 z-10 relative"
                 >
                     <motion.span 
                         animate={{ opacity: [0.3, 1, 0.3] }}
