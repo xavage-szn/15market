@@ -32,9 +32,17 @@ services:
     publishDir: dist
     envVars:
       - key: VITE_KEEPER_URL
-        value: https://15market-backend.onrender.com
+        value: https://api.15market.online
       - key: VITE_KEEPER_URL_ARC
-        value: https://15market-backend.onrender.com
+        value: https://api.15market.online
+      - key: VITE_TURNKEY_ORGANIZATION_ID
+        value: 29276b8b-8776-4c78-8c2e-c63cc6dde605
+      - key: VITE_TURNKEY_AUTH_PROXY_CONFIG_ID
+        value: 562519f9-2589-45e7-be1f-5fc06da1d19b
+      - key: VITE_TURNKEY_API_BASE_URL
+        value: https://api.turnkey.com
+      - key: VITE_TURNKEY_RP_ID
+        value: 15market.online
 
   # Admin Frontend Service (Static Site)
   - type: static
