@@ -22,7 +22,8 @@ const queryClient = new QueryClient();
 const turnkeyConfig = {
   organizationId: import.meta.env.VITE_TURNKEY_ORGANIZATION_ID,
   authProxyConfigId: import.meta.env.VITE_TURNKEY_AUTH_PROXY_CONFIG_ID,
-  apiBaseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL,
+  apiBaseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL || "https://api.turnkey.com",
+  baseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL || "https://api.turnkey.com",
   rpId: getRpId(),
   iframeUrl: "https://auth.turnkey.com",
   defaultNetwork: "ethereum",
