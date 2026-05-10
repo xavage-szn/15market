@@ -70,22 +70,6 @@ function TurnkeyStateBridge({ children }) {
   }
 
   useEffect(() => {
-    // Auto-provision wallet for new users who have 0 wallets
-    if (isConnected && wallets && wallets.length === 0) {
-      console.log("🚀 New user detected. Provisioning embedded wallet...");
-      createWallet({
-        walletName: "15market Wallet",
-        accounts: ["ADDRESS_FORMAT_ETHEREUM"],
-      }).then(() => {
-        console.log("✅ Embedded wallet provisioned successfully.");
-      }).catch(err => {
-        // If it's a 'Wallet already exists' error or similar, we can ignore it
-        if (!err?.message?.includes("already exists")) {
-          console.error("❌ Failed to auto-provision wallet:", err);
-        }
-      });
-    }
-
     if (wallets && wallets.length > 0) {
       window.getTurnkeyWallets = () => wallets;
     } else {
@@ -96,7 +80,7 @@ function TurnkeyStateBridge({ children }) {
     return () => {
       window.getTurnkeyWallets = () => [];
     };
-  }, [wallets, isConnected, createWallet]);
+  }, [wallets]);
 
   return children;
 }

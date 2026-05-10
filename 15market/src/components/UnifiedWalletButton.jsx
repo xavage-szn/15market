@@ -14,7 +14,7 @@ export function UnifiedWalletButton({ theme }) {
     const { connect, connectors } = useConnect();
     const { disconnect } = useDisconnect();
     const { switchChain } = useSwitchChain();
-    const { handleLogin } = useTurnkey();
+    const { handleLogin, createWallet, wallets: turnkeyWallets } = useTurnkey();
     
     const [isConnecting, setIsConnecting] = useState(false);
 
@@ -33,38 +33,56 @@ export function UnifiedWalletButton({ theme }) {
         if (isConnecting) return;
         setIsConnecting(true);
         try {
-            console.log("📂 [WALLET] Resetting session and opening Turnkey Onboarding...");
+            console.log("📂 [WALLET] Opening Turnkey Onboarding...");
             
-            // SECURITY: Clear any existing sessions before starting a new one
-            await handleLogout(); 
-            if (typeof window !== 'undefined') window.getTurnkeyWallets = () => [];
-            
+            // If we are already "connected" to Turnkey but have no Wagmi connection,
+            // we should still proceed. We don't necessarily need to logout first.
             await handleLogin();
             
             // After Turnkey login, check if we need to create a wallet
             const turnkeyConnector = connectors.find(c => c.id === 'turnkey');
             if (turnkeyConnector) {
-                // RETRY LOOP: Wait for Turnkey to propagate the new wallet (if auto-create is on)
-                let wallets = [];
-                for (let i = 0; i < 5; i++) {
+                // 1. Check if we already have wallets (from hook or window)
+                let wallets = turnkeyWallets || window.getTurnkeyWallets?.() || [];
+                
+                // 2. If NO wallets, trigger creation immediately
+                if (wallets.length === 0) {
+                    console.log("🚀 [WALLET] No wallet found. Provisioning new embedded wallet...");
+                    try {
+                        await createWallet({
+                            walletName: "15market Wallet",
+                            accounts: ["ADDRESS_FORMAT_ETHEREUM"],
+                        });
+                        console.log("✅ [WALLET] Provisioning request sent.");
+                    } catch (err) {
+                        console.error("❌ [WALLET] Wallet creation failed:", err);
+                        // If it's a "wallet already exists" error, we can ignore it and proceed to wait
+                    }
+                }
+
+                // 3. RETRY LOOP: Wait for the wallet to appear in the SDK state
+                let foundWallet = false;
+                for (let i = 0; i < 10; i++) { // Increase to 10 attempts (15 seconds)
                     wallets = window.getTurnkeyWallets?.() || [];
-                    if (wallets.length > 0) break;
-                    console.log(`⏳ [WALLET] Waiting for wallet creation (Attempt ${i + 1}/5)...`);
+                    if (wallets.length > 0) {
+                        foundWallet = true;
+                        break;
+                    }
+                    console.log(`⏳ [WALLET] Waiting for wallet propagation (Attempt ${i + 1}/10)...`);
                     await new Promise(r => setTimeout(r, 1500));
                 }
                 
-                if (wallets.length === 0) {
-                    console.error("❌ [WALLET] No wallet found after 5 attempts.");
-                    alert("Account created! We are just waiting for Turnkey to finalize your wallet. Please refresh and click Connect again in 30 seconds.");
+                if (!foundWallet) {
+                    console.error("❌ [WALLET] No wallet found after 15 seconds.");
+                    alert("Your account is ready, but Turnkey is taking a moment to finalize your wallet. Please click 'Connect' once more in 10 seconds.");
                     return;
                 }
 
-                console.log("✅ [WALLET] Wallet found, connecting...");
+                console.log("✅ [WALLET] Wallet found, connecting Wagmi...");
                 connect({ connector: turnkeyConnector });
             }
         } catch (err) {
             console.error("Connect failed:", err);
-            // If it fails because of no wallets, we can show a specific message
             if (err.message?.includes('No Turnkey wallets found')) {
                  alert("Your account was created, but we're still setting up your wallet. Please click Connect again in a moment.");
             }
