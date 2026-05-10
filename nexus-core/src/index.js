@@ -270,6 +270,14 @@ io.on('connection', (socket) => {
 // API Routes
 // ============================================================
 
+app.get('/time', (req, res) => {
+  res.json({ timestamp: Date.now() });
+});
+
+app.get('/protocol-stats', (req, res) => {
+  res.json(profiles.getGlobalStats());
+});
+
 app.get('/settings', (req, res) => {
   res.json({
     minBet: config.DEFAULT_MIN_BET || 1.0,
