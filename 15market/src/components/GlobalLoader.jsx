@@ -87,7 +87,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
             <motion.div 
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: "100%", opacity: 0.5 }}
-                transition={{ duration: 3, ease: "easeInOut" }}
+                transition={{ duration: 1.2, ease: "easeInOut" }}
                 className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-transparent via-[#3CB371] to-transparent"
             />
         </motion.div>

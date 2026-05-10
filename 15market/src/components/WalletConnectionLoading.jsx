@@ -8,7 +8,7 @@ const WalletConnectionLoading = ({ onFinish, theme = 'dark' }) => {
     useEffect(() => {
         const timer = setTimeout(() => {
             onFinish();
-        }, 5000); // Exactly 5s
+        }, 1200); // Exactly 1.2s
         return () => clearTimeout(timer);
     }, [onFinish]);
 
@@ -101,7 +101,7 @@ const WalletConnectionLoading = ({ onFinish, theme = 'dark' }) => {
             <motion.div 
                 initial={{ width: 0 }}
                 animate={{ width: "100%" }}
-                transition={{ duration: 5, ease: "linear" }}
+                transition={{ duration: 1.2, ease: "linear" }}
                 className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent opacity-50"
             />
         </motion.div>

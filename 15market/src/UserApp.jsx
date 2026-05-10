@@ -400,7 +400,7 @@ export default function UserApp() {
       const timer = setTimeout(() => {
         setIsAppReady(true); 
         setIsGlobalLoading(false);
-      }, 5000); // 5s absolute maximum wait for any sequence
+      }, 1200); // 1.2s absolute maximum wait for any sequence
       return () => clearTimeout(timer);
     }
   }, [isGlobalLoading]);
@@ -613,7 +613,7 @@ export default function UserApp() {
     const startTime = Date.now();
     const finish = () => {
       const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 5000 - elapsed);
+      const remaining = Math.max(0, 1200 - elapsed);
       setTimeout(() => {
         clearInterval(progressInterval);
         setGlobalLoadingProgress(100);
