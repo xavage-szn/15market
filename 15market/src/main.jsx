@@ -45,7 +45,7 @@ const turnkeyConfig = {
     logoLight: "/logo.SVG",
     darkMode: true,
     renderModalInProvider: true,
-    preferLargeActionButtons: true,
+    preferLargeActionButtons: false,
     colors: {
       dark: {
         primary: "#3CB371",
@@ -55,13 +55,6 @@ const turnkeyConfig = {
     }
   }
 };
-
-console.log("🛠️ [Turnkey] Config Diagnostic:", {
-  org: turnkeyConfig.organizationId?.slice(0, 8) + "...",
-  proxy: turnkeyConfig.authProxyConfigId?.slice(0, 8) + "...",
-  rpId: turnkeyConfig.rpId,
-  api: turnkeyConfig.apiBaseUrl
-});
 
 // Helper for the custom Wagmi connector to access Turnkey state
 function TurnkeyStateBridge({ children }) {
