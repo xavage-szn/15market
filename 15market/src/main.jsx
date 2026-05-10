@@ -52,9 +52,15 @@ const turnkeyConfig = {
         primaryText: "#ffffff",
         modalBackground: "#111111",
       }
-    }
   }
 };
+
+console.log("🛠️ [Turnkey] Config Diagnostic:", {
+  org: turnkeyConfig.organizationId?.slice(0, 8) + "...",
+  proxy: turnkeyConfig.authProxyConfigId?.slice(0, 8) + "...",
+  rpId: turnkeyConfig.rpId,
+  api: turnkeyConfig.apiBaseUrl
+});
 
 // Helper for the custom Wagmi connector to access Turnkey state
 function TurnkeyStateBridge({ children }) {
