@@ -787,7 +787,7 @@ export default function UserApp() {
   const showPortraitLock = false; 
 
   const postDebugLog = useCallback((payload) => {
-    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'488cf3'},body:JSON.stringify({sessionId:'488cf3',...payload,timestamp:Date.now()})}).catch(()=>{});
+
   }, []);
 
   const handleRoundsUnlock = useCallback(() => {
@@ -2072,7 +2072,7 @@ export default function UserApp() {
         postDebugLog({runId:'initial',hypothesisId:'H9',location:'UserApp.jsx:syncMarket:override',message:'syncMarket changed active market and reset price',data:{from:activeMarket?.id,to:resolvedMarket?.id}});
         // #endregion
         // #region agent log
-        fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:syncMarket:override',message:'syncMarket overriding active market from localStorage/listings',data:{from:activeMarket?.id,to:resolvedMarket?.id,listingHasBinance:!!resolvedMarket?.binance,listingHasPyth:!!resolvedMarket?.pythId},timestamp:Date.now()})}).catch(()=>{});
+
         // #endregion
         // Re-sync with current local authority
         setActiveMarket(resolvedMarket);
@@ -2098,7 +2098,7 @@ export default function UserApp() {
   // Handle market changes from UI (persist to localStorage and sync with keeper)
   const handleMarketChange = useCallback(async (newMarket) => {
     // #region agent log
-    fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H4',location:'UserApp.jsx:handleMarketChange:entry',message:'User requested market switch',data:{current:activeMarket?.id,next:newMarket?.id,nextHasBinance:!!newMarket?.binance,nextHasPyth:!!newMarket?.pythId},timestamp:Date.now()})}).catch(()=>{});
+
     // #endregion
     if (!newMarket || newMarket.id === activeMarket.id) return;
 

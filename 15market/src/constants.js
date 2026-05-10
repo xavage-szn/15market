@@ -14,6 +14,30 @@ export const ARC_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_CONTRACT_ADDRESS;
 export const ARC_ROUNDS_CONTRACT_ADDRESS = import.meta.env.VITE_ARC_ROUNDS_CONTRACT_ADDRESS || "0x02AE9D2a7CEca436E7B3A482772EfB74C4fE4721";
 export const ARC_USDC_ADDRESS = "0x0000000000000000000000000000000000000000"; // Native Coin
 export const ARC_RPC_BACKUP = ARC_RPCS[0];
+
+// 3. Chain Definition for Arc (Moved to top to prevent TDZ)
+export const arcTestnet = defineChain({
+    id: 5042002,
+    name: 'Arc Testnet',
+    nativeCurrency: {
+        name: 'USDC',
+        symbol: 'USDC',
+        decimals: 18
+    },
+    rpcUrls: {
+        default: {
+            http: [...ARC_RPCS],
+        },
+        public: {
+            http: [...ARC_RPCS],
+        },
+    },
+    blockExplorers: {
+        default: { name: 'ArcScan', url: 'https://testnet.arcscan.app' },
+    },
+    testnet: true,
+});
+
 // 2. Keeper Configuration
 const isNative = typeof window !== 'undefined' && !!window.Capacitor;
 const isLocal = typeof window !== 'undefined' &&
@@ -87,25 +111,3 @@ export const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN;
 // 2. Project ID (Reown / WalletConnect)
 export const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
 
-// 3. Chain Definition for Arc
-export const arcTestnet = defineChain({
-    id: 5042002,
-    name: 'Arc Testnet',
-    nativeCurrency: {
-        name: 'USDC',
-        symbol: 'USDC',
-        decimals: 18
-    },
-    rpcUrls: {
-        default: {
-            http: [...ARC_RPCS],
-        },
-        public: {
-            http: [...ARC_RPCS],
-        },
-    },
-    blockExplorers: {
-        default: { name: 'ArcScan', url: 'https://testnet.arcscan.app' },
-    },
-    testnet: true,
-});

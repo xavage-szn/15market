@@ -1,38 +1,23 @@
 import { Buffer } from 'buffer';
 
-window.Buffer = Buffer;
-window.global = window;
+if (typeof window !== 'undefined') {
+    window.Buffer = Buffer;
+    window.global = window;
+}
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TurnkeyProvider, useTurnkey } from "@turnkey/react-wallet-kit";
+
 import App from './App.jsx';
 import './index.css';
 import { config } from './wagmiConfig';
-import { WagmiProvider } from 'wagmi';
-import { useTurnkey } from "@turnkey/react-wallet-kit";
-import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { arcTestnet, projectId } from './constants';
-
-import { TurnkeyProvider } from "@turnkey/react-wallet-kit";
-
+import { getRpId } from './utils/turnkeyHelpers';
 
 const queryClient = new QueryClient();
-
-// Helper to get the correct RP_ID for Turnkey based on the current domain
-export const getRpId = () => {
-  if (typeof window === 'undefined') return import.meta.env.VITE_TURNKEY_RP_ID;
-  const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') return 'localhost';
-  
-  const envRpId = import.meta.env.VITE_TURNKEY_RP_ID;
-  // If the current host ends with the configured RP_ID (e.g. www.15market.online ends with 15market.online), 
-  // we use the configured RP_ID to match the Turnkey registration.
-  if (envRpId && host.endsWith(envRpId)) return envRpId;
-  
-  // Otherwise fallback to the actual hostname to avoid WebAuthn SecurityErrors
-  return host;
-};
 
 const turnkeyConfig = {
   organizationId: import.meta.env.VITE_TURNKEY_ORGANIZATION_ID,
@@ -84,11 +69,6 @@ function TurnkeyStateBridge({ children }) {
 
   return children;
 }
-
-
-// #region agent log
-fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H6',location:'main.jsx:startup',message:'App startup probe log emitted',data:{href:window.location.href},timestamp:Date.now()})}).catch(()=>{});
-// #endregion
 
 
 class ErrorBoundary extends React.Component {

@@ -1,7 +1,7 @@
 import { createConfig, http } from 'wagmi';
 import { arcTestnet } from './constants';
 import { turnkeyConnector } from './utils/TurnkeyConnector';
-import { getRpId } from './main';
+import { getRpId } from './utils/turnkeyHelpers';
 
 // We will pass a reference to the Turnkey state to this connector 
 // This is initialized in main.jsx via the TurnkeyProvider
