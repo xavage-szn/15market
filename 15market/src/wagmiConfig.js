@@ -1,14 +1,21 @@
-import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
-import { arcTestnet, projectId } from './constants';
+import { createConfig, http } from 'wagmi';
+import { arcTestnet } from './constants';
+import { turnkeyConnector } from './utils/TurnkeyConnector';
 
-// WagmiAdapter is Reown's official wrapper that wires AppKit with Wagmi.
-// The createAppKit() call in main.jsx will consume this adapter.
-export const wagmiAdapter = new WagmiAdapter({
-    networks: [arcTestnet],
-    projectId,
-    ssr: false,
+// We will pass a reference to the Turnkey state to this connector 
+// This is initialized in main.jsx via the TurnkeyProvider
+export const config = createConfig({
+    chains: [arcTestnet],
+    connectors: [
+        turnkeyConnector({
+            organizationId: import.meta.env.VITE_TURNKEY_ORGANIZATION_ID,
+            apiBaseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL,
+            rpId: import.meta.env.VITE_TURNKEY_RP_ID,
+            getWallets: () => window.getTurnkeyWallets?.() || [],
+        }),
+    ],
+    transports: {
+        [arcTestnet.id]: http(),
+    },
 });
 
-// Export the wagmi config produced by the adapter so components
-// that need <WagmiProvider config={...}> can import it directly.
-export const config = wagmiAdapter.wagmiConfig;

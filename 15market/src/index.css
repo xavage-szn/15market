@@ -615,4 +615,152 @@ input[type="range"]::-moz-range-thumb:hover {
 .overflow-y-auto,
 .overflow-hidden {
   contain: layout style;
+}
+
+/* ===== TURNKEY MODAL PREMIUM OVERRIDES ===== */
+.tk-modal {
+  background-color: #0a0a0a !important;
+  border: 1px solid rgba(60, 179, 113, 0.3) !important;
+  box-shadow: 0 0 50px rgba(60, 179, 113, 0.15) !important;
+  border-radius: 16px !important;
+  font-family: "Comfortaa", "Inter", sans-serif !important;
+}
+
+/* Make sure the modal overlay backdrop is blurred */
+.tk-modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.tk-modal input {
+  background-color: #141414 !important;
+  border: 1px solid #333333 !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  padding: 14px 16px !important;
+  font-size: 14px !important;
+  outline: none !important;
+  transition: all 0.3s ease !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.tk-modal input:focus {
+  border-color: #3CB371 !important;
+  box-shadow: 0 0 15px rgba(60, 179, 113, 0.3) !important;
+  background-color: #1a1a1a !important;
+}
+
+.tk-modal button {
+  border-radius: 8px !important;
+  padding: 14px 24px !important;
+  font-weight: 800 !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  letter-spacing: 0.05em !important;
+  cursor: pointer !important;
+}
+
+/* Primary/Submit buttons */
+.tk-modal button[type="submit"] {
+  background-color: #3CB371 !important;
+  color: #000000 !important;
+  border: none !important;
+  box-shadow: 0 0 20px rgba(60, 179, 113, 0.4) !important;
+  text-transform: uppercase !important;
+}
+
+.tk-modal button[type="submit"]:hover {
+  background-color: #4ade80 !important;
+  box-shadow: 0 0 30px rgba(60, 179, 113, 0.6) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Social and Secondary buttons */
+.tk-modal button[type="button"] {
+  background-color: #141414 !important;
+  border: 1px solid #333333 !important;
+  color: #e0e0e0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+}
+
+.tk-modal button[type="button"]:hover {
+  border-color: #3CB371 !important;
+  background-color: rgba(60, 179, 113, 0.1) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Typography inside the modal */
+.tk-modal h1, .tk-modal h2, .tk-modal h3 {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.tk-modal p, .tk-modal span, .tk-modal label {
+  color: #888888 !important;
+}
+
+/* Separators */
+.tk-modal hr {
+  border-color: #222222 !important;
+  margin: 24px 0 !important;
+}
+
+/* Ensure the brand logo has breathing room */
+.tk-modal img[src*="logo.png"] {
+  margin-bottom: 8px !important;
+  max-height: 48px !important;
+  border-radius: 8px !important;
+}
+
+/* ===== TURNKEY MODAL LOADING ANIMATION OVERRIDES ===== */
+
+/* 
+ * ONLY target the large "Verifying..." or "Creating..." loading container inside the Turnkey modal. 
+ * This container uses a specific flex row with a spinner SVG and a text span.
+ */
+.tk-modal div.flex-row.items-center.justify-center.gap-2:has(svg:has(g.spinner_V8m1)):has(span) {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+/* Hide Turnkey's default circling spinner SVG and its default text */
+.tk-modal div.flex-row.items-center.justify-center.gap-2:has(svg:has(g.spinner_V8m1)):has(span) > * {
+  display: none !important;
+}
+
+/* Inject the 15market Logo directly into the transparent container */
+.tk-modal div.flex-row.items-center.justify-center.gap-2:has(svg:has(g.spinner_V8m1)):has(span)::before {
+  content: "";
+  display: block;
+  width: 90px;
+  height: 24px;
+  background-image: url('/logo.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  /* Make the logo stark white for the dark mode modal */
+  filter: brightness(0) invert(1);
+}
+
+/* Inject the signature "// loading..." text animation */
+.tk-modal div.flex-row.items-center.justify-center.gap-2:has(svg:has(g.spinner_V8m1)):has(span)::after {
+  content: "// loading...";
+  font-family: inherit;
+  font-size: 1.125rem;
+  font-weight: 300;
+  color: #ffffff;
+  animation: tk-pulse-opacity 1.5s infinite;
+  white-space: nowrap;
+}
+
+@keyframes tk-pulse-opacity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }

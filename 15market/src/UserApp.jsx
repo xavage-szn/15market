@@ -385,7 +385,8 @@ export default function UserApp() {
   const [duration, setDuration] = useState(15);
   const [timeLeft, setTimeLeft] = useState(15);
 
-  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  // Show the branded splash on initial page load, cleared after 1.8s
+  const [isGlobalLoading, setIsGlobalLoading] = useState(true);
   const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
   const [isAppReady, setIsAppReady] = useState(false);
   const isInitializing = status === 'reconnecting' || (status === 'connecting' && !isConnected);
@@ -394,13 +395,13 @@ export default function UserApp() {
 
   const activeTrade = activeTrades[0] || null; 
 
-  // Safety Timeout: Reset and trigger whenever a GLOBAL load starts
+  // Safety Timeout: Clear splash/global loader whenever it triggers
   useEffect(() => {
     if (isGlobalLoading) {
       const timer = setTimeout(() => {
         setIsAppReady(true); 
         setIsGlobalLoading(false);
-      }, 1200); // 1.2s absolute maximum wait for any sequence
+      }, 1800); // 1.8s for initial branded splash
       return () => clearTimeout(timer);
     }
   }, [isGlobalLoading]);
@@ -443,15 +444,10 @@ export default function UserApp() {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
   
+  // WalletConnectionLoading disabled — Turnkey modal now opens instantly on click.
+  // The branded splash runs on page load instead (isGlobalLoading above).
   const [isWalletLoading, setIsWalletLoading] = useState(false);
   const wasConnectedRef = useRef(isConnected);
-
-  useEffect(() => {
-    if (isConnected && !wasConnectedRef.current) {
-      setIsWalletLoading(true);
-    }
-    wasConnectedRef.current = isConnected;
-  }, [isConnected]);
 
   // PERSISTENCE: Transaction History
   

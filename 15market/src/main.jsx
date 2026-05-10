@@ -7,69 +7,66 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
-import { createAppKit } from '@reown/appkit/react';
+import { config } from './wagmiConfig';
 import { WagmiProvider } from 'wagmi';
-import { wagmiAdapter, config } from './wagmiConfig';
+import { useTurnkey } from "@turnkey/react-wallet-kit";
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { arcTestnet, projectId } from './constants';
 
+import { TurnkeyProvider } from "@turnkey/react-wallet-kit";
+
+
 const queryClient = new QueryClient();
 
-// --- Initialize Reown AppKit ---
-// createAppKit wires up the modal, wagmi adapter, and network configuration globally.
-// It MUST be called before any component that uses useAppKit/useAccount etc.
-createAppKit({
-  adapters: [wagmiAdapter],
-  networks: [arcTestnet],
-  projectId,
-  metadata: {
-    name: '15market',
-    description: '15market — Ultra-low-latency binary options trading on Arc Testnet',
-    url: 'https://15market.com',
-    icons: ['https://15market.com/logo.png'],
+const turnkeyConfig = {
+  organizationId: import.meta.env.VITE_TURNKEY_ORGANIZATION_ID,
+  authProxyConfigId: import.meta.env.VITE_TURNKEY_AUTH_PROXY_CONFIG_ID,
+  apiBaseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL,
+  defaultNetwork: "ethereum", // Turnkey currently uses ethereum/solana types
+  passkeyConfig: {
+    rpId: import.meta.env.VITE_TURNKEY_RP_ID,
   },
-  features: {
-    analytics: false,
-    socials: false,
-    email: false,
-  },
-  themeMode: 'dark',
-  themeVariables: {
-    '--w3m-accent': '#3CB371',
-    '--w3m-border-radius-master': '12px',
-  },
-  defaultNetwork: arcTestnet,
-});
+  ui: {
+    authModal: {
+      methods: {
+        googleOauthEnabled: true,
+        appleOauthEnabled: false,
+        passkeyAuthEnabled: true,
+        emailOtpAuthEnabled: true,
+        walletAuthEnabled: true,
+      },
+      methodOrder: ["socials", "passkey", "email", "wallet"],
+    },
+    logoDark: "/logo.png",
+    logoLight: "/logo.png",
+    darkMode: true,
+    renderModalInProvider: true,
+    preferLargeActionButtons: true,
+    colors: {
+      dark: {
+        primary: "#3CB371",
+        primaryText: "#ffffff",
+        modalBackground: "#111111",
+      }
+    }
+  }
+};
+
+// Helper for the custom Wagmi connector to access Turnkey state
+function TurnkeyStateBridge({ children }) {
+  const { wallets } = useTurnkey();
+  useEffect(() => {
+    window.getTurnkeyWallets = () => wallets;
+  }, [wallets]);
+  return children;
+}
+
 
 // #region agent log
 fetch('http://127.0.0.1:7763/ingest/3594a004-3d00-491a-a04f-c0eea15a4941',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'de7e69'},body:JSON.stringify({sessionId:'de7e69',runId:'initial',hypothesisId:'H6',location:'main.jsx:startup',message:'App startup probe log emitted',data:{href:window.location.href},timestamp:Date.now()})}).catch(()=>{});
 // #endregion
 
-// --- CONSOLE LOG CLEANER & SDK ERROR SUPPRESSOR ---
-// Silence known non-critical third-party SDK errors to keep logs clean for platform operations.
-(function silenceSDKNoise() {
-  const originalError = console.error;
-  const originalWarn = console.warn;
-  const suppressedErrors = [
-    "TypeError: Cannot read properties of undefined (reading 'includes')", // Para SDK Storage Listener bug
-    "violates the document's Content Security Policy", // CSP noise
-    "api.binance.com", // Binance monitoring
-    "stream.binance.com", // WebSocket monitoring
-    "Cannot redefine property: ethereum" // Wallet extension conflict noise
-  ];
-
-  console.error = (...args) => {
-    const msg = args[0]?.toString() || "";
-    if (suppressedErrors.some(sub => msg.includes(sub))) return;
-    originalError.apply(console, args);
-  };
-
-  console.warn = (...args) => {
-    const msg = args[0]?.toString() || "";
-    if (suppressedErrors.some(sub => msg.includes(sub))) return;
-    originalWarn.apply(console, args);
-  };
-})();
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -130,13 +127,18 @@ class ErrorBoundary extends React.Component {
 function Root() {
   return (
     <React.StrictMode>
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
-        </QueryClientProvider>
-      </WagmiProvider>
+      <TurnkeyProvider config={turnkeyConfig} onError={(err) => console.error('🔴 [Turnkey] Initialization Error:', err)}>
+
+        <TurnkeyStateBridge>
+          <WagmiProvider config={config}>
+            <QueryClientProvider client={queryClient}>
+              <ErrorBoundary>
+                <App />
+              </ErrorBoundary>
+            </QueryClientProvider>
+          </WagmiProvider>
+        </TurnkeyStateBridge>
+      </TurnkeyProvider>
     </React.StrictMode>
   );
 }

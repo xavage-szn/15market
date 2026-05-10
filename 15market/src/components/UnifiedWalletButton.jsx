@@ -1,24 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
-import { useDisconnect, useSwitchChain } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from 'wagmi';
+import { useTurnkey } from '@turnkey/react-wallet-kit';
 import { ARC_CHAIN_ID } from '../constants';
 
 export function UnifiedWalletButton({ theme }) {
     const navigate = useNavigate();
-    // Reown AppKit modal control
-    const { open } = useAppKit();
-    // Reown AppKit connection state (superset of wagmi's useAccount)
-    const { address, isConnected, caipChainId } = useAppKitAccount();
-    // Wagmi hooks for chain switching and disconnect
+    const { address, isConnected } = useAccount();
+    const connectedChainId = useChainId();
+    const { connect, connectors } = useConnect();
     const { disconnect } = useDisconnect();
     const { switchChain } = useSwitchChain();
+    const { handleLogin } = useTurnkey();
+    
     const [isConnecting, setIsConnecting] = useState(false);
-
-    // Parse the numeric chain ID from the CAIP-2 format returned by AppKit (e.g. "eip155:5042002")
-    const connectedChainId = caipChainId
-        ? Number(caipChainId.split(':')[1])
-        : undefined;
 
     // Auto-switch to Arc Testnet if wallet is on any other network
     useEffect(() => {
@@ -28,23 +23,21 @@ export function UnifiedWalletButton({ theme }) {
         }
     }, [isConnected, connectedChainId, switchChain]);
 
-    // Navigate to trade page after connection on correct chain
-    useEffect(() => {
-        if (isConnected && address && connectedChainId === ARC_CHAIN_ID) {
-            console.log("✅ [WALLET] Connected to Arc Testnet.");
-            // setTimeout(() => navigate('/'), 500); // Optional auto-navigation
-        }
-    }, [isConnected, address, connectedChainId, navigate]);
-
     const currentColor = '#3CB371';
 
-    // Open Reown AppKit modal
-    const handleLogin = async () => {
+    // Open Turnkey onboarding flow
+    const onConnect = async () => {
         if (isConnecting) return;
         setIsConnecting(true);
         try {
-            console.log("📂 [WALLET] Opening Reown AppKit Modal...");
-            await open();
+            console.log("📂 [WALLET] Opening Turnkey Onboarding...");
+            await handleLogin();
+            
+            // After Turnkey login, we need to connect the Wagmi connector
+            const turnkeyConnector = connectors.find(c => c.id === 'turnkey');
+            if (turnkeyConnector) {
+                connect({ connector: turnkeyConnector });
+            }
         } catch (err) {
             console.error("Connect failed:", err);
         } finally {
@@ -64,7 +57,7 @@ export function UnifiedWalletButton({ theme }) {
     if (!isConnected) {
         return (
             <button
-                onClick={handleLogin}
+                onClick={onConnect}
                 disabled={isConnecting}
                 id="connect-wallet-btn"
                 className="px-4 lg:px-8 py-2.5 lg:py-3 font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] rounded-full transition-all active:scale-95 text-white relative overflow-hidden group shadow-xl"
