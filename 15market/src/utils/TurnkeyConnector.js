@@ -22,7 +22,8 @@ export function turnkeyConnector({ organizationId, apiBaseUrl, rpId, getWallets 
             const wallets = await getWallets();
             
             if (!wallets || wallets.length === 0) {
-                throw new Error('No Turnkey wallets found. Please log in first.');
+                console.error('❌ [Turnkey] Connect failed: No wallets available from Turnkey SDK.');
+                throw new Error('No Turnkey wallets found. Please ensure you are logged in.');
             }
 
             const wallet = wallets[0];
@@ -59,10 +60,10 @@ export function turnkeyConnector({ organizationId, apiBaseUrl, rpId, getWallets 
             
             // Get wallets to find the first one
             const wallets = await getWallets();
-            const walletId = wallets?.[0]?.id || "81f5a651-62ea-5a27-bcad-a5ac69ece2a2"; // Fallback to default wallet
+            const walletId = wallets?.[0]?.id;
 
             if (!walletId) {
-                console.warn('⚠️ [Turnkey] No wallet ID available for provider initialization.');
+                console.warn('⚠️ [Turnkey] No wallet available. User must be logged in through the Turnkey modal first.');
                 return null;
             }
 
