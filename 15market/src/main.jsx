@@ -58,7 +58,7 @@ const turnkeyConfig = {
 
 // Helper for the custom Wagmi connector to access Turnkey state
 function TurnkeyStateBridge({ children }) {
-  const { wallets } = useTurnkey();
+  const { wallets, isConnected, createWallet } = useTurnkey();
   
   // Sync wallets to window synchronously during render to avoid race conditions with Wagmi connect()
   if (typeof window !== 'undefined') {
@@ -70,6 +70,22 @@ function TurnkeyStateBridge({ children }) {
   }
 
   useEffect(() => {
+    // Auto-provision wallet for new users who have 0 wallets
+    if (isConnected && wallets && wallets.length === 0) {
+      console.log("🚀 New user detected. Provisioning embedded wallet...");
+      createWallet({
+        walletName: "15market Wallet",
+        accounts: ["ADDRESS_FORMAT_ETHEREUM"],
+      }).then(() => {
+        console.log("✅ Embedded wallet provisioned successfully.");
+      }).catch(err => {
+        // If it's a 'Wallet already exists' error or similar, we can ignore it
+        if (!err?.message?.includes("already exists")) {
+          console.error("❌ Failed to auto-provision wallet:", err);
+        }
+      });
+    }
+
     if (wallets && wallets.length > 0) {
       window.getTurnkeyWallets = () => wallets;
     } else {
@@ -80,7 +96,7 @@ function TurnkeyStateBridge({ children }) {
     return () => {
       window.getTurnkeyWallets = () => [];
     };
-  }, [wallets]);
+  }, [wallets, isConnected, createWallet]);
 
   return children;
 }
