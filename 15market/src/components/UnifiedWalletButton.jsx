@@ -17,6 +17,7 @@ export function UnifiedWalletButton({ theme }) {
     const { handleLogin, createWallet, wallets: turnkeyWallets } = useTurnkey();
     
     const [isConnecting, setIsConnecting] = useState(false);
+    const [connectStatus, setConnectStatus] = useState('');
 
     // Auto-switch to Arc Testnet if wallet is on any other network
     useEffect(() => {
@@ -32,21 +33,20 @@ export function UnifiedWalletButton({ theme }) {
     const onConnect = async () => {
         if (isConnecting) return;
         setIsConnecting(true);
+        setConnectStatus('Authenticating...');
         try {
             console.log("📂 [WALLET] Opening Turnkey Onboarding...");
-            
-            // If we are already "connected" to Turnkey but have no Wagmi connection,
-            // we should still proceed. We don't necessarily need to logout first.
             await handleLogin();
             
             // After Turnkey login, check if we need to create a wallet
             const turnkeyConnector = connectors.find(c => c.id === 'turnkey');
             if (turnkeyConnector) {
-                // 1. Check if we already have wallets (from hook or window)
+                setConnectStatus('Checking Wallet...');
                 let wallets = turnkeyWallets || window.getTurnkeyWallets?.() || [];
                 
-                // 2. If NO wallets, trigger creation immediately
+                // If NO wallets, trigger creation immediately
                 if (wallets.length === 0) {
+                    setConnectStatus('Creating Wallet...');
                     console.log("🚀 [WALLET] No wallet found. Provisioning new embedded wallet...");
                     try {
                         await createWallet({
@@ -56,38 +56,48 @@ export function UnifiedWalletButton({ theme }) {
                         console.log("✅ [WALLET] Provisioning request sent.");
                     } catch (err) {
                         console.error("❌ [WALLET] Wallet creation failed:", err);
-                        // If it's a "wallet already exists" error, we can ignore it and proceed to wait
                     }
                 }
 
-                // 3. RETRY LOOP: Wait for the wallet to appear in the SDK state
+                // RETRY LOOP: Wait for the wallet to appear in the SDK state
                 let foundWallet = false;
-                for (let i = 0; i < 10; i++) { // Increase to 10 attempts (15 seconds)
+                for (let i = 0; i < 25; i++) { // Increased to 25 attempts (~25 seconds)
                     wallets = window.getTurnkeyWallets?.() || [];
                     if (wallets.length > 0) {
                         foundWallet = true;
                         break;
                     }
-                    console.log(`⏳ [WALLET] Waiting for wallet propagation (Attempt ${i + 1}/10)...`);
-                    await new Promise(r => setTimeout(r, 1500));
+                    
+                    // Dynamic status messages to feel 'alive'
+                    if (i < 5) setConnectStatus('Finalizing...');
+                    else if (i < 15) setConnectStatus('Securing Account...');
+                    else setConnectStatus('Almost Ready...');
+
+                    console.log(`⏳ [WALLET] Waiting for wallet propagation (Attempt ${i + 1}/25)...`);
+                    await new Promise(r => setTimeout(r, 1000)); // Poll every 1 second
                 }
                 
                 if (!foundWallet) {
-                    console.error("❌ [WALLET] No wallet found after 15 seconds.");
-                    alert("Your account is ready, but Turnkey is taking a moment to finalize your wallet. Please click 'Connect' once more in 10 seconds.");
+                    console.error("❌ [WALLET] No wallet found after timeout.");
+                    setConnectStatus('Network Busy');
+                    setTimeout(() => setConnectStatus('Try Again'), 2000);
                     return;
                 }
 
+                setConnectStatus('Connecting...');
                 console.log("✅ [WALLET] Wallet found, connecting Wagmi...");
                 connect({ connector: turnkeyConnector });
             }
         } catch (err) {
             console.error("Connect failed:", err);
-            if (err.message?.includes('No Turnkey wallets found')) {
-                 alert("Your account was created, but we're still setting up your wallet. Please click Connect again in a moment.");
-            }
+            setConnectStatus('Error');
+            setTimeout(() => setConnectStatus(''), 2000);
         } finally {
-            setTimeout(() => setIsConnecting(false), 1000);
+            // Keep the connecting state active until Wagmi actually connects (or fails)
+            // This prevents the button from flickering back to 'Connect Wallet' too early
+            setTimeout(() => {
+                if (!isConnected) setIsConnecting(false);
+            }, 5000);
         }
     };
 
@@ -114,7 +124,7 @@ export function UnifiedWalletButton({ theme }) {
                 }}
             >
                 <span className="relative z-10 flex items-center gap-2">
-                    {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                    {isConnecting ? (connectStatus || 'Connecting...') : 'Connect Wallet'}
                 </span>
             </button>
         );
