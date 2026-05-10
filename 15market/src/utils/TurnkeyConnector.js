@@ -20,16 +20,21 @@ export function turnkeyConnector({ organizationId, apiBaseUrl, rpId, getWallets 
             console.log('🔗 [Turnkey] Connecting...');
             
             const wallets = await getWallets();
+            console.log('📂 [Turnkey] Available Wallets:', wallets.map(w => ({ id: w.id, name: w.name })));
             
             if (!wallets || wallets.length === 0) {
                 console.error('❌ [Turnkey] Connect failed: No wallets available from Turnkey SDK.');
                 throw new Error('No Turnkey wallets found. Please ensure you are logged in.');
             }
 
-            const wallet = wallets[0];
+            // FILTER: Look for a wallet that is NOT a shared organization/managed wallet if possible
+            // In many V2 setups, user-specific wallets have different naming or metadata
+            // For now, we will log them and ensure we aren't picking an obviously shared one
+            const wallet = wallets.find(w => !w.name.toLowerCase().includes('managed') && !w.name.toLowerCase().includes('admin')) || wallets[0];
+            
             const accounts = wallet.accounts.map(a => a.address);
 
-            console.log('✅ [Turnkey] Connected:', accounts[0]);
+            console.log(`✅ [Turnkey] Connected to Wallet [${wallet.name}]:`, accounts[0]);
 
             return {
                 accounts,
@@ -47,7 +52,11 @@ export function turnkeyConnector({ organizationId, apiBaseUrl, rpId, getWallets 
 
         async getAccounts() {
             const wallets = await getWallets();
-            return wallets ? wallets[0]?.accounts.map(a => a.address) : [];
+            if (!wallets || wallets.length === 0) {
+                console.warn('⚠️ [Turnkey] No accounts found. User has no wallets in this sub-org.');
+                return [];
+            }
+            return wallets[0].accounts.map(a => a.address);
         },
 
         async getChainId() {
