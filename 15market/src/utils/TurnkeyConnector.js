@@ -40,6 +40,9 @@ export function turnkeyConnector({ organizationId, apiBaseUrl, rpId, getWallets 
         async disconnect() {
             console.log('🚪 [Turnkey] Disconnecting...');
             provider = null;
+            if (typeof window !== 'undefined') {
+                window.getTurnkeyWallets = () => [];
+            }
         },
 
         async getAccounts() {

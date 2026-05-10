@@ -62,12 +62,24 @@ function TurnkeyStateBridge({ children }) {
   
   // Sync wallets to window synchronously during render to avoid race conditions with Wagmi connect()
   if (typeof window !== 'undefined') {
-    window.getTurnkeyWallets = () => wallets;
+    if (wallets && wallets.length > 0) {
+      window.getTurnkeyWallets = () => wallets;
+    } else {
+      window.getTurnkeyWallets = () => [];
+    }
   }
 
   useEffect(() => {
-    // Also keep the effect for any reactive listeners
-    window.getTurnkeyWallets = () => wallets;
+    if (wallets && wallets.length > 0) {
+      window.getTurnkeyWallets = () => wallets;
+    } else {
+      window.getTurnkeyWallets = () => [];
+    }
+    
+    // Cleanup on unmount or session change
+    return () => {
+      window.getTurnkeyWallets = () => [];
+    };
   }, [wallets]);
 
   return children;
