@@ -5,7 +5,7 @@ if (typeof window !== 'undefined') {
     window.global = window;
 }
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -23,7 +23,9 @@ const turnkeyConfig = {
   organizationId: import.meta.env.VITE_TURNKEY_ORGANIZATION_ID,
   authProxyConfigId: import.meta.env.VITE_TURNKEY_AUTH_PROXY_CONFIG_ID,
   apiBaseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL,
-  defaultNetwork: "ethereum", // Turnkey currently uses ethereum/solana types
+  rpId: getRpId(),
+  iframeUrl: "https://auth.turnkey.com",
+  defaultNetwork: "ethereum",
   passkeyConfig: {
     rpId: getRpId(),
   },
@@ -38,8 +40,8 @@ const turnkeyConfig = {
       },
       methodOrder: ["socials", "passkey", "email", "wallet"],
     },
-    logoDark: "/logo.png",
-    logoLight: "/logo.png",
+    logoDark: "/logo.SVG",
+    logoLight: "/logo.SVG",
     darkMode: true,
     renderModalInProvider: true,
     preferLargeActionButtons: true,
@@ -130,18 +132,17 @@ class ErrorBoundary extends React.Component {
 function Root() {
   return (
     <React.StrictMode>
-      <TurnkeyProvider config={turnkeyConfig} onError={(err) => console.error('🔴 [Turnkey] Initialization Error:', err)}>
-
-        <TurnkeyStateBridge>
-          <WagmiProvider config={config}>
-            <QueryClientProvider client={queryClient}>
-              <ErrorBoundary>
+      <ErrorBoundary>
+        <TurnkeyProvider config={turnkeyConfig} onError={(err) => console.error('🔴 [Turnkey] Initialization Error:', err)}>
+          <TurnkeyStateBridge>
+            <WagmiProvider config={config}>
+              <QueryClientProvider client={queryClient}>
                 <App />
-              </ErrorBoundary>
-            </QueryClientProvider>
-          </WagmiProvider>
-        </TurnkeyStateBridge>
-      </TurnkeyProvider>
+              </QueryClientProvider>
+            </WagmiProvider>
+          </TurnkeyStateBridge>
+        </TurnkeyProvider>
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }
