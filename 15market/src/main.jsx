@@ -52,6 +52,7 @@ const turnkeyConfig = {
         primaryText: "#ffffff",
         modalBackground: "#111111",
       }
+    }
   }
 };
 
