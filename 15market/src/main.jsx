@@ -89,6 +89,10 @@ function Root() {
               createOnLogin: 'all-users',
               requireUserPasswordOnCreate: false,
             },
+            // Enable delegated actions for frictionless experience
+            delegatedActions: {
+              enabled: true,
+            },
             appearance: {
               theme: 'dark',
               accentColor: '#3CB371',

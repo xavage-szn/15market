@@ -31,7 +31,10 @@ export function ProfileModal({
     evmBalance, 
     onDeposit, 
     onWithdraw,
-    onRetryInit
+    onRetryInit,
+    isEmbedded,
+    isDelegated,
+    onDelegate
 }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
@@ -333,6 +336,30 @@ export function ProfileModal({
                                     </div>
                                 </div>
                             </div>
+
+                            {isEmbedded && (
+                                <div className={`mb-4 p-3 rounded-xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-[#3CB371]/20 flex items-center justify-between`}>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`p-1.5 rounded-full ${isDelegated ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-yellow-500/20 text-yellow-500'}`}>
+                                            <Zap size={12} />
+                                        </div>
+                                        <div>
+                                            <p className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-white'}`}>1-Click Mode</p>
+                                            <p className={`text-[8px] font-bold ${isLight ? 'text-black/40' : 'text-white/40'}`}>
+                                                {isDelegated ? "Frictionless Trading Enabled" : "Enable for prompt-free transfers"}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {!isDelegated && (
+                                        <button 
+                                            onClick={onDelegate}
+                                            className="px-3 py-1.5 rounded-lg bg-[#3CB371] text-white text-[8px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20"
+                                        >
+                                            Enable
+                                        </button>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="flex flex-col gap-3">
                                 <div className="relative">

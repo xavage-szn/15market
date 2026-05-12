@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo, Component } from "re
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
+import { usePrivy, useWallets, useDelegatedActions } from '@privy-io/react-auth';
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { RoundsTradeScroller } from "./components/RoundsTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
@@ -273,6 +274,14 @@ export default function UserApp() {
   const { isConnected, address, chainId: connectedChainId, status } = useAccount();
   const { switchChain, switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
+  const { user, authenticated } = usePrivy();
+  const { wallets } = useWallets();
+  const { delegateWallet } = useDelegatedActions();
+  const embeddedWallet = useMemo(() => wallets.find((w) => w.walletClientType === 'privy'), [wallets]);
+  const isEmbedded = useMemo(() => {
+    return embeddedWallet && address && embeddedWallet.address.toLowerCase() === address.toLowerCase();
+  }, [embeddedWallet, address]);
+  const isDelegated = embeddedWallet?.delegated;
 
   const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
   const [isAnimatingTheme, setIsAnimatingTheme] = useState(false);
@@ -2550,6 +2559,17 @@ export default function UserApp() {
     });
   }, [activeTrades, evmSessionWallet, notify]);
 
+  const handleDelegate = useCallback(async () => {
+    if (!embeddedWallet) return;
+    try {
+      await delegateWallet({ address: embeddedWallet.address });
+      notify("1-Click Mode Enabled!", "success");
+    } catch (err) {
+      console.error("Delegation failed:", err);
+      notify("Failed to enable 1-Click Mode", "error");
+    }
+  }, [embeddedWallet, delegateWallet, notify]);
+
   /**
    * DEPOSIT HANDLER
    * ---------------
@@ -2638,18 +2658,34 @@ export default function UserApp() {
         console.log(`[Deposit] Splitting: ${depositAmt.toFixed(4)} to Session, ${feeAmt.toFixed(4)} to Treasury`);
 
         // STEP 1: Send 1% Fee directly to Treasury
-        const feeTx = await walletClient.sendTransaction({
-          to: ARC_CONTRACT_ADDRESS,
-          value: parseEther(feeAmt.toFixed(18)),
-          account: address,
-        });
+        let feeTx;
+        if (isEmbedded) {
+          feeTx = await embeddedWallet.sendTransaction({
+            to: ARC_CONTRACT_ADDRESS,
+            value: parseEther(feeAmt.toFixed(18)),
+          }, { delegated: true });
+        } else {
+          feeTx = await walletClient.sendTransaction({
+            to: ARC_CONTRACT_ADDRESS,
+            value: parseEther(feeAmt.toFixed(18)),
+            account: address,
+          });
+        }
 
         // STEP 2: Send remaining 99% to the user's Session Trading Wallet
-        const hash = await walletClient.sendTransaction({
-          to: activeSessionWallet.address,
-          value: parseEther(depositAmt.toFixed(18)),
-          account: address,
-        });
+        let hash;
+        if (isEmbedded) {
+          hash = await embeddedWallet.sendTransaction({
+            to: activeSessionWallet.address,
+            value: parseEther(depositAmt.toFixed(18)),
+          }, { delegated: true });
+        } else {
+          hash = await walletClient.sendTransaction({
+            to: activeSessionWallet.address,
+            value: parseEther(depositAmt.toFixed(18)),
+            account: address,
+          });
+        }
 
         notify("Deposit Split! Waiting for confirmations...", "success");
 
@@ -2772,7 +2808,10 @@ export default function UserApp() {
       // This prevents unauthorized API calls from draining session wallets.
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
       try {
-        if (walletClient) {
+        if (isEmbedded) {
+          // Use Privy's signMessage with delegated flag to skip UI prompts
+          await embeddedWallet.signMessage(authMsg, { delegated: true });
+        } else if (walletClient) {
           await walletClient.signMessage({ message: authMsg, account: address });
         } else if (window.ethereum) {
           const msgHex = '0x' + Array.from(new TextEncoder().encode(authMsg)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -3351,6 +3390,9 @@ export default function UserApp() {
         evmBalance={evmBalance}
         onDeposit={handleDeposit}
         onWithdraw={handleWithdraw}
+        isEmbedded={isEmbedded}
+        isDelegated={isDelegated}
+        onDelegate={handleDelegate}
         transactionHistory={transactionHistory}
         onViewReceipt={(tx) => {
           setSelectedTransaction(tx);
