@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { toPng } from 'html-to-image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, ExternalLink } from 'lucide-react';
+import { Stamp } from './Stamp';
 
 export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
     const cardRef = useRef(null);
@@ -51,13 +52,16 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                 >
                     <div
                         ref={cardRef}
-                        className="bg-[#f8f8f8] text-[#1a1a1a] p-5 sm:p-8 font-mono shadow-2xl relative overflow-y-auto max-h-[95vh] rounded-sm custom-scrollbar"
+                        className="bg-white text-[#1a1a1a] p-5 sm:p-8 font-mono shadow-2xl relative overflow-hidden custom-scrollbar"
                         style={{
-                            backgroundImage: 'linear-gradient(#eee 1px, transparent 1px), linear-gradient(90deg, #eee 1px, transparent 1px)',
-                            backgroundSize: '18px 18px',
-                            minHeight: 'min(480px, 85vh)',
+                            minHeight: 'min(520px, 90vh)',
+                            clipPath: 'polygon(0% 0%, 30% 0%, 35% 5%, 65% 5%, 70% 0%, 100% 0%, 100% 97%, 98.5% 100%, 97% 97%, 95.5% 100%, 94% 97%, 92.5% 100%, 91% 97%, 89.5% 100%, 88% 97%, 86.5% 100%, 85% 97%, 83.5% 100%, 82% 97%, 80.5% 100%, 79% 97%, 77.5% 100%, 76% 97%, 74.5% 100%, 73% 97%, 71.5% 100%, 70% 97%, 68.5% 100%, 67% 97%, 65.5% 100%, 64% 97%, 62.5% 100%, 61% 97%, 59.5% 100%, 58% 97%, 56.5% 100%, 55% 97%, 53.5% 100%, 52% 97%, 50.5% 100%, 49% 97%, 47.5% 100%, 46% 97%, 44.5% 100%, 43% 97%, 41.5% 100%, 40% 97%, 38.5% 100%, 37% 97%, 35.5% 100%, 34% 97%, 32.5% 100%, 31% 97%, 29.5% 100%, 28% 97%, 26.5% 100%, 25% 97%, 23.5% 100%, 22% 97%, 20.5% 100%, 19% 97%, 17.5% 100%, 16% 97%, 14.5% 100%, 13% 97%, 11.5% 100%, 10% 97%, 8.5% 100%, 7% 97%, 5.5% 100%, 4% 97%, 2.5% 100%, 1% 97%, 0% 100%)',
+                            border: '2px solid #3CB371',
                         }}
                     >
+                        {/* Green Border Simulation (since clip-path clips actual borders) */}
+                        <div className="absolute inset-0 pointer-events-none" style={{ border: '4px solid #3CB371', opacity: 0.8, clipPath: 'inherit' }} />
+
                         <div
                             className="absolute inset-0 pointer-events-none select-none overflow-hidden"
                             style={{
@@ -65,8 +69,8 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                 backgroundSize: '40%',
                                 backgroundPosition: 'center',
                                 backgroundRepeat: 'no-repeat',
-                                opacity: 0.03,
-                                filter: 'brightness(2)'
+                                opacity: 0.05,
+                                filter: 'grayscale(1) brightness(0.5)'
                             }}
                         />
 
@@ -123,7 +127,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                 </div>
 
                                 {transaction.type !== 'DEPOSIT' && transaction.type !== 'CASHOUT' && (
-                                    <div className="flex justify-between px-1 py-1 border-b border-black/5">
+                                    <div className="flex justify-between px-1 py-1 border-b border-black/5 relative">
                                         <div className="flex flex-col">
                                             <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">STAKE_PRICE</span>
                                             <span className="text-xs font-black">${Number(transaction.entryPrice || 0).toFixed(2)}</span>
@@ -138,6 +142,13 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                                 {transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'LONG' : 'SHORT'}
                                             </span>
                                         </div>
+
+                                        {/* STATUS STAMP OVERLAY */}
+                                        {(transaction.status === 'WON' || transaction.status === 'LOST') && (
+                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[20] pointer-events-none opacity-80">
+                                                <Stamp status={transaction.status} size="lg" />
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

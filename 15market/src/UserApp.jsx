@@ -1389,16 +1389,7 @@ export default function UserApp() {
     checkChain();
   }, []);
 
-  // Sticky Authentication: Prevent flicker on sync or chain switch
-  const [authenticated, setAuthenticated] = useState(false);
-  useEffect(() => {
-    if (isConnected) {
-      setAuthenticated(true);
-    } else {
-      const timer = setTimeout(() => setAuthenticated(false), 2000); // 2s grace
-      return () => clearTimeout(timer);
-    }
-  }, [isConnected]);
+  // Sticky Authentication: Removed duplicate logic as Privy handles state
 
   const wallet = useMemo(() => {
     if (!isConnected || !address) return { connected: false };
@@ -1413,10 +1404,7 @@ export default function UserApp() {
   const login = () => {
   };
 
-  const user = useMemo(() => {
-    if (isConnected && address) return { wallet: { address } };
-    return null;
-  }, [isConnected, address]);
+  // User object: Removed duplicate as it is now provided by usePrivy()
 
   const GREEN = "#3CB371";
   const CORAL = "#FF4444";
