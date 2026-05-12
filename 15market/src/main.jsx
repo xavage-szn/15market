@@ -5,86 +5,18 @@ if (typeof window !== 'undefined') {
     window.global = window;
 }
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { WagmiProvider } from 'wagmi';
+import { PrivyProvider } from '@privy-io/react-auth';
+import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
+import { WagmiProvider } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TurnkeyProvider, useTurnkey } from "@turnkey/react-wallet-kit";
 
 import App from './App.jsx';
 import './index.css';
 import { config } from './wagmiConfig';
-import { arcTestnet, projectId } from './constants';
-import { getRpId } from './utils/turnkeyHelpers';
 
 const queryClient = new QueryClient();
-
-const turnkeyConfig = {
-  organizationId: import.meta.env.VITE_TURNKEY_ORGANIZATION_ID,
-  authProxyConfigId: import.meta.env.VITE_TURNKEY_AUTH_PROXY_CONFIG_ID,
-  apiBaseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL || "https://api.turnkey.com",
-  baseUrl: import.meta.env.VITE_TURNKEY_API_BASE_URL || "https://api.turnkey.com",
-  rpId: getRpId(),
-  iframeUrl: "https://auth.turnkey.com",
-  defaultNetwork: "ethereum",
-  passkeyConfig: {
-    rpId: getRpId(),
-  },
-  ui: {
-    authModal: {
-      methods: {
-        googleOauthEnabled: true,
-        appleOauthEnabled: false,
-        passkeyAuthEnabled: false,
-        emailOtpAuthEnabled: true,
-        walletAuthEnabled: true,
-      },
-      methodOrder: ["socials", "email", "wallet"],
-    },
-    logoDark: "https://www.15market.online/logo.png",
-    logoLight: "https://www.15market.online/logo.png",
-    darkMode: true,
-    renderModalInProvider: true,
-    preferLargeActionButtons: false,
-    colors: {
-      dark: {
-        primary: "#3CB371",
-        primaryText: "#ffffff",
-        modalBackground: "#111111",
-      }
-    }
-  }
-};
-
-// Helper for the custom Wagmi connector to access Turnkey state
-function TurnkeyStateBridge({ children }) {
-  const { wallets, isConnected, createWallet } = useTurnkey();
-  
-  // Sync wallets to window synchronously during render to avoid race conditions with Wagmi connect()
-  if (typeof window !== 'undefined') {
-    if (wallets && wallets.length > 0) {
-      window.getTurnkeyWallets = () => wallets;
-    } else {
-      window.getTurnkeyWallets = () => [];
-    }
-  }
-
-  useEffect(() => {
-    if (wallets && wallets.length > 0) {
-      window.getTurnkeyWallets = () => wallets;
-    } else {
-      window.getTurnkeyWallets = () => [];
-    }
-    
-    // Cleanup on unmount or session change
-    return () => {
-      window.getTurnkeyWallets = () => [];
-    };
-  }, [wallets]);
-
-  return children;
-}
-
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -146,18 +78,34 @@ function Root() {
   return (
     <React.StrictMode>
       <ErrorBoundary>
-        <TurnkeyProvider config={turnkeyConfig} onError={(err) => console.error('🔴 [Turnkey] Initialization Error:', err)}>
-          <TurnkeyStateBridge>
-            <WagmiProvider config={config}>
-              <QueryClientProvider client={queryClient}>
+        <PrivyProvider
+          appId={import.meta.env.VITE_PRIVY_APP_ID}
+          config={{
+            // Frictionless onboarding: create embedded wallets on login for all users
+            embeddedWallets: {
+              createOnLogin: 'all-users',
+              requireUserPasswordOnCreate: false,
+            },
+            appearance: {
+              theme: 'dark',
+              accentColor: '#3CB371',
+              logo: 'https://www.15market.online/logo.png',
+              walletList: ['metamask', 'rabby', 'okx_wallet', 'detected_ethereum_wallets', 'wallet_connect'],
+            },
+          }}
+        >
+          <SmartWalletsProvider>
+            <QueryClientProvider client={queryClient}>
+              <WagmiProvider config={config}>
                 <App />
-              </QueryClientProvider>
-            </WagmiProvider>
-          </TurnkeyStateBridge>
-        </TurnkeyProvider>
+              </WagmiProvider>
+            </QueryClientProvider>
+          </SmartWalletsProvider>
+        </PrivyProvider>
       </ErrorBoundary>
     </React.StrictMode>
   );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+
