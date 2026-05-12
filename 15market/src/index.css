@@ -616,3 +616,24 @@ input[type="range"]::-moz-range-thumb:hover {
 .overflow-hidden {
   contain: layout style;
 }
+
+/* ===== Custom Privy Modal Brand Overrides ===== */
+:root {
+  --privy-color-background: #050505 !important;
+  --privy-color-foreground: #ffffff !important;
+  --privy-color-foreground-2: #888888 !important;
+  --privy-color-foreground-3: #555555 !important;
+  --privy-color-background-2: #111111 !important;
+  --privy-color-accent: #3CB371 !important;
+  --privy-color-accent-light: rgba(60, 179, 113, 0.1) !important;
+  --privy-color-success: #3CB371 !important;
+  --privy-color-error: #FF7F50 !important;
+}
+
+div[id^="privy-dialog"] {
+  background: #050505 !important;
+  border: 1px solid rgba(60, 179, 113, 0.3) !important;
+  box-shadow: 0 0 50px rgba(60, 179, 113, 0.15), inset 0 0 20px rgba(60, 179, 113, 0.05) !important;
+  border-radius: 24px !important;
+  backdrop-filter: blur(20px) !important;
+}

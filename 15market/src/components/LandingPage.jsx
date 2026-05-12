@@ -161,12 +161,6 @@ export function LandingPage({ theme, onToggle }) {
                 </motion.div>
             </main>
 
-            {/* Minimal Footer */}
-            <footer className={`w-full relative z-20 px-6 py-10 flex items-center justify-center border-t ${isLight ? 'border-[#3CB371]/10 bg-white/20' : 'border-white/[0.03] bg-[#050505]/50'} backdrop-blur-md`}>
-                <span className={`text-[10px] md:text-xs font-black uppercase tracking-[0.5em] ${isLight ? 'text-[#0a261a]/20' : 'text-white/20'}`}>
-                    Built by 15Labs
-                </span>
-            </footer>
         </div>
     );
 }

@@ -312,10 +312,24 @@ export function ProfileModal({
                                             <span className={`text-[12px] font-black ${isLight ? 'text-black' : 'text-white'}`}>{Number(sessionBalance || 0).toFixed(2)} <span className="text-[8px] opacity-40">USDC</span></span>
                                         </div>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right flex flex-col items-end">
                                         <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Main Source</p>
-                                        <p className={`text-[10px] font-bold font-mono ${isLight ? 'text-black/60' : 'text-white/60'}`}>{truncate(address)}</p>
-                                        <p className={`text-[10px] font-black ${isLight ? 'text-black/60' : 'text-white/60'}`}>{Number(evmBalance || 0).toFixed(2)} USDC</p>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <p className={`text-[10px] font-bold font-mono ${isLight ? 'text-black/60' : 'text-white/60'}`}>{truncate(address)}</p>
+                                            <button 
+                                                onClick={() => {
+                                                    if (address) {
+                                                        navigator.clipboard.writeText(address);
+                                                        notify("Copied to clipboard!", "success");
+                                                    }
+                                                }}
+                                                className={`p-1 rounded-md ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'} transition-all`}
+                                                title="Copy Address"
+                                            >
+                                                <LinkIcon size={10} className="opacity-40" />
+                                            </button>
+                                        </div>
+                                        <p className={`text-[10px] font-black mt-0.5 ${isLight ? 'text-black/60' : 'text-white/60'}`}>{Number(evmBalance || 0).toFixed(2)} USDC</p>
                                     </div>
                                 </div>
                             </div>

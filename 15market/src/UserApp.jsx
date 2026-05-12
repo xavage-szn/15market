@@ -190,7 +190,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                   key={trade.id}
                   className={`
                     p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#3CB371] border-[#3CB371]/10 shadow-sm'}
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/40 border-[#3CB371]/20 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -201,10 +201,12 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                       `}>
                         {trade.direction === 'UP' ? 'LONG' : (trade.direction === 'DOWN' ? 'SHORT' : trade.direction)}
                       </div>
-                      <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#c8eadd]'}`}>{trade.symbol || 'BTC'}</span>
+                      <span className={`text-xs font-bold uppercase tracking-widest ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
+                        {trade.symbol?.toUpperCase() || 'BTC'}
+                      </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                      <span className={`text-xs font-black uppercase ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
                         {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                       </span>
                       {isWin && (trade.payoutSettled || trade.status === 'PAID') && (
@@ -215,14 +217,14 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className={`text-[10px] ${isDark ? 'opacity-40 text-white' : 'text-[#c8eadd]/70'}`}>
+                  <div className="flex items-center justify-between mt-1">
+                    <div className={`text-[10px] font-medium ${isDark ? 'opacity-40 text-white' : 'text-[#0a261a]/60'}`}>
                       ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
-                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-white/10 text-white/70'}`}
+                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#3CB371]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#3CB371]/5'}`}
                       >
                         <Share2 size={12} />
                       </button>
@@ -230,7 +232,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                         href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`p-1.5 rounded-lg ${isDark ? 'bg-white/5 text-white/40' : 'bg-black/5 text-black/40'}`}
+                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#3CB371]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#3CB371]/5'}`}
                       >
                         <ExternalLink size={12} />
                       </a>
@@ -3437,6 +3439,7 @@ export default function UserApp() {
         <OnboardingFlow
           address={address}
           theme={theme}
+          evmSessionWallet={evmSessionWallet}
           onComplete={(profile) => {
             setShowOnboarding(false);
             performStealthChecks(address); // Final refresh

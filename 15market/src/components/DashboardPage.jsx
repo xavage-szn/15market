@@ -413,7 +413,19 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                         <div className="flex justify-between items-center">
                                             <div className="flex flex-col">
                                                 <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>Main Wallet Balance</span>
-                                                <span className={`text-[9px] font-mono font-bold ${isLight ? 'text-[#0a261a]/60' : 'text-white/60'}`}>{truncate(address)}</span>
+                                                <div 
+                                                    onClick={() => {
+                                                        if (address) {
+                                                            navigator.clipboard.writeText(address);
+                                                            setToast("Address Copied!");
+                                                            setTimeout(() => setToast(null), 2000);
+                                                        }
+                                                    }}
+                                                    className={`text-[9px] font-mono font-bold opacity-60 hover:opacity-100 cursor-pointer transition-all mt-0.5 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
+                                                >
+                                                    {truncate(address)}
+                                                    {address && <Copy size={8} />}
+                                                </div>
                                             </div>
                                             <div className={`text-sm font-black ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>
                                                 ${(parseFloat(evmBalance || 0)).toFixed(2)}

@@ -3,58 +3,80 @@ import React from 'react';
 export function Stamp({ status, size = 'md', isWon: forcedIsWon }) {
     // Priority: forcedIsWon prop > status === 'WON'
     const isWon = forcedIsWon !== undefined ? forcedIsWon : status === 'WON';
-    const color = isWon ? '#059669' : '#dc2626';
-    const subText = isWon ? 'TAKE PROFIT' : 'LIQUIDATED';
+    const color = isWon ? '#3CB371' : '#dc2626'; // Green for WON, Red for LOST
+    const text = isWon ? 'WON' : 'LOST';
 
     const sizes = {
         sm: {
-            border: 'border-[3px]',
-            padding: 'p-1 px-3',
-            rounded: 'rounded-lg',
-            text: 'text-sm font-black',
-            subText: 'hidden',
-            rotate: '-rotate-12'
+            container: 'w-16 h-16',
+            rotate: '-rotate-[15deg]',
+            textSize: '1.2rem'
         },
         md: {
-            border: 'border-[4px]',
-            padding: 'p-2 px-5',
-            rounded: 'rounded-xl',
-            text: 'text-2xl font-black',
-            subText: 'text-[10px] font-bold',
-            rotate: '-rotate-[15deg]'
+            container: 'w-24 h-24',
+            rotate: '-rotate-[15deg]',
+            textSize: '1.8rem'
         },
         lg: {
-            border: 'border-[6px]',
-            padding: 'p-3 px-8',
-            rounded: 'rounded-xl',
-            text: 'text-5xl font-black',
-            subText: 'text-xl font-black mb-1',
-            rotate: '-rotate-[15deg]'
+            container: 'w-48 h-48',
+            rotate: '-rotate-[15deg]',
+            textSize: '4rem'
         }
     };
 
     const s = sizes[size] || sizes.md;
 
     return (
-        <div className={`transform ${s.rotate} ${s.border} border-double ${s.padding} ${s.rounded} inline-block relative overflow-hidden transition-all hover:scale-105 active:scale-95`}
-            style={{
-                borderColor: color,
-                color: color,
-                backgroundColor: `${color}05`,
-                boxShadow: `0 0 0 2px #f8f8f8 inset, 0 8px 24px -8px ${color}44`
-            }}
+        <div 
+            className={`relative flex items-center justify-center ${s.container} ${s.rotate} select-none pointer-events-none`}
+            style={{ color: color }}
         >
-            <div className="flex flex-col items-center leading-none uppercase tracking-tighter">
-                {size === 'lg' && <span className={s.subText}>STAMPED</span>}
-                <span className={s.text}>{subText}</span>
-                {size === 'md' && <span className={s.subText}>{status}</span>}
-            </div>
-
-            <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-multiply"
+            <div 
+                className="absolute inset-0 w-full h-full opacity-90"
                 style={{
-                    backgroundImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+                    maskImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+                    WebkitMaskImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+                    maskSize: '150px 150px',
+                    WebkitMaskSize: '150px 150px',
+                }}
+            >
+                <svg className="w-full h-full" viewBox="0 0 100 100">
+                    {/* Outer thin ring */}
+                    <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="1" />
+                    
+                    {/* Thick dashed/distressed ring */}
+                    <circle cx="50" cy="50" r="43" fill="none" stroke="currentColor" strokeWidth="4" />
+                    
+                    {/* Inner thin ring */}
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="0.5" />
+                    
+                    {/* Top Star */}
+                    <polygon points="50,11 51.5,15.5 56.5,15.5 52.5,18.5 54,23 50,20 46,23 47.5,18.5 43.5,15.5 48.5,15.5" fill="currentColor" />
+                    
+                    {/* Bottom Star */}
+                    <polygon points="50,77 51.5,81.5 56.5,81.5 52.5,84.5 54,89 50,86 46,89 47.5,84.5 43.5,81.5 48.5,81.5" fill="currentColor" />
+                </svg>
+            </div>
+            
+            <div 
+                className="absolute inset-0 w-full h-full opacity-60 mix-blend-multiply"
+                style={{
+                    backgroundImage: 'url("https://www.transparenttextures.com/patterns/dust.png")',
                 }}
             />
+
+            <span 
+                className="font-black uppercase tracking-tight z-10" 
+                style={{ 
+                    fontSize: s.textSize, 
+                    lineHeight: 1,
+                    textShadow: `0 0 1px ${color}`,
+                    maskImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+                    WebkitMaskImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+                }}
+            >
+                {text}
+            </span>
         </div>
     );
 };

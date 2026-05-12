@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, Check, ChevronRight, Zap, Shield, Sparkles, Twitter, Camera } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-export const OnboardingFlow = ({ address, onComplete, theme, userProfile }) => {
+export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSessionWallet }) => {
     const [step, setStep] = useState(1);
     const [username, setUsername] = useState(userProfile?.username || '');
     const [selectedAvatar, setSelectedAvatar] = useState(userProfile?.avatar || '');
     const [saveError, setSaveError] = useState('');
+    const [savedProfile, setSavedProfile] = useState(null);
     const isLight = theme === 'light';
 
     const [isSaving, setIsSaving] = useState(false);
@@ -32,10 +33,11 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile }) => {
             const data = await res.json();
             if (res.ok && data.success) {
                 localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, 'true');
-                onComplete(data.profile || { 
+                setSavedProfile(data.profile || { 
                     username: username.trim(), 
                     avatar: selectedAvatar.trim() 
                 });
+                setStep(3);
             } else {
                 setSaveError(data.error || 'Failed to save profile. Please try again.');
             }
@@ -172,6 +174,56 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile }) => {
                                 >
                                     {isSaving ? "Finalizing..." : "Complete Setup"}
                                     {!isSaving && <Zap size={18} />}
+                                </button>
+                            </motion.div>
+                        )}
+
+                        {step === 3 && (
+                            <motion.div 
+                                key="step3"
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                className="space-y-8"
+                            >
+                                <div className="text-center">
+                                    <h3 className={`text-2xl font-black uppercase tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                                        Your Wallets
+                                    </h3>
+                                    <p className={`text-xs ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} font-bold uppercase tracking-widest mt-1`}>
+                                        Step 3 of 3: Ready to trade
+                                    </p>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className={`p-5 rounded-2xl border ${isLight ? 'bg-black/5 border-[#3CB371]/20' : 'bg-white/5 border-white/10'}`}>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <Shield size={16} className="text-[#3CB371]" />
+                                            <h4 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>Main Wallet</h4>
+                                        </div>
+                                        <p className={`text-sm font-mono font-bold ${isLight ? 'text-[#0a261a]/80' : 'text-white/80'} break-all`}>
+                                            {address}
+                                        </p>
+                                        <p className={`text-[9px] font-bold mt-2 ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>Connected via Privy / Web3</p>
+                                    </div>
+
+                                    <div className={`p-5 rounded-2xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30' : 'bg-[#3CB371]/10 border-[#3CB371]/20'}`}>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <Zap size={16} className="text-[#3CB371]" />
+                                            <h4 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>Trading Wallet (Auto-Signer)</h4>
+                                        </div>
+                                        <p className={`text-sm font-mono font-bold ${isLight ? 'text-[#0a261a]/80' : 'text-white/80'} break-all`}>
+                                            {evmSessionWallet?.address || "Syncing..."}
+                                        </p>
+                                        <p className={`text-[9px] font-bold mt-2 ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>Zero-click execution layer</p>
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={() => onComplete(savedProfile)}
+                                    className={`w-full py-5 bg-[#3CB371] text-white shadow-[0_0_20px_rgba(60,179,113,0.3)] rounded-2xl font-black uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-3`}
+                                >
+                                    Enter 15market
+                                    <ChevronRight size={18} />
                                 </button>
                             </motion.div>
                         )}

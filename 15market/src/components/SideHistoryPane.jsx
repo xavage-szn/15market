@@ -89,7 +89,7 @@ const SideHistoryPane = ({
                                                 key={trade.id}
                                                 className={`
                                                     p-3 rounded-[22px] border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
-                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#3CB371] border-[#3CB371]/10 shadow-[0_4px_15px_rgba(0,0,0,0.05)]'}
+                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-white/40 border-[#3CB371]/20 shadow-[0_4px_15px_rgba(0,0,0,0.02)]'}
                                                 `}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
@@ -100,14 +100,14 @@ const SideHistoryPane = ({
                                                         `}>
                                                             {trade.direction}
                                                         </div>
-                                                        <span className={`text-[11px] font-bold ${isDark ? 'text-white/90' : 'text-[#c8eadd]'}`}>{trade.symbol || 'BTC'}</span>
+                                                        <span className={`text-[11px] font-bold uppercase tracking-widest ${isDark ? 'text-white/90' : 'text-[#0a261a]'}`}>{trade.symbol?.toUpperCase() || 'BTC'}</span>
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
                                                         {isWin && !trade.payoutSettled && (
                                                             <div className="w-2 h-2 rounded-full border border-[#3CB371] border-t-transparent animate-spin" />
                                                         )}
                                                     <div className="flex flex-col items-end">
-                                                        <span className={`text-[11px] font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0f2618]/40')}`}>
+                                                        <span className={`text-[11px] font-black uppercase ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
                                                             {isWin ? `+${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                                                         </span>
                                                         {isWin && (trade.payoutSettled || trade.status === 'PAID') && (
@@ -119,11 +119,11 @@ const SideHistoryPane = ({
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex items-center justify-between mt-1">
                                                     <div className="flex flex-col">
-                                                        <span className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-[#c8eadd]/70'}`}>Entry: ${Number(trade.entryPrice || 0).toFixed(2)}</span>
-                                                        <span className={`text-[9px] font-mono ${isDark ? 'text-white/20' : 'text-[#c8eadd]/40'}`}>
-                                                            {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                        <span className={`text-[10px] font-medium ${isDark ? 'text-white/40' : 'text-[#0a261a]/60'}`}>Entry: ${Number(trade.entryPrice || 0).toFixed(2)}</span>
+                                                        <span className={`text-[9px] font-mono ${isDark ? 'text-white/20' : 'text-[#0a261a]/40'}`}>
+                                                            {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
                                                     </div>
 
@@ -133,7 +133,7 @@ const SideHistoryPane = ({
                                                                 setSelectedPnLTrade(trade);
                                                                 setIsPnLOpen(true);
                                                             }}
-                                                            className={`p-1.5 rounded-full transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
+                                                            className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#3CB371]/20 hover:bg-[#3CB371]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
                                                         >
                                                             <Share2 size={12} />
                                                         </button>
@@ -141,7 +141,7 @@ const SideHistoryPane = ({
                                                             href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className={`p-1.5 rounded-full transition-all ${isDark ? 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white' : 'bg-[#0f2618]/5 hover:bg-[#0f2618]/10 text-[#0f2618]/40 hover:text-[#0f2618]'}`}
+                                                            className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#3CB371]/20 hover:bg-[#3CB371]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
                                                         >
                                                             <ExternalLink size={12} />
                                                         </a>

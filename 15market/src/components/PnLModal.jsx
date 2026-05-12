@@ -82,9 +82,8 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                             
                             {/* Header Section */}
                             <div className="flex flex-col items-center mb-6 w-full">
-                                <div className="flex items-center justify-center gap-2 mb-2">
-                                    <span className="text-[#3CB371] text-2xl font-black">15</span>
-                                    <span className={`text-xl font-normal ${isLight ? 'text-black/50' : 'text-white/50'}`}>market</span>
+                                <div className="flex items-center justify-center mb-2">
+                                    <img src="/logo.png" alt="15market" className={`h-8 w-auto drop-shadow-md opacity-80 ${isLight ? 'invert hue-rotate-180' : ''}`} />
                                 </div>
                                 
                                 <div className={`w-full border-t border-b ${isLight ? 'border-black/20' : 'border-white/20'} py-2 mb-2 flex items-center justify-center gap-3`}>
