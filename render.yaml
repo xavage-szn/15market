@@ -28,7 +28,7 @@ services:
     name: 15market-frontend
     env: static
     rootDir: 15market
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --legacy-peer-deps && npm run build
     publishDir: dist
     envVars:
       - key: VITE_KEEPER_URL
@@ -49,7 +49,7 @@ services:
     name: 15market-admin
     env: static
     rootDir: 15market-admin
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --legacy-peer-deps && npm run build
     publishDir: dist
     envVars:
       - key: VITE_KEEPER_URL
