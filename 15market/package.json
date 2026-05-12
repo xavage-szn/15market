@@ -55,7 +55,7 @@
     "swiper": "^9.4.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
-    "viem": "^2.48.4",
+    "viem": "2.47.12",
     "vite-plugin-node-polyfills": "^0.24.0",
     "wagmi": "2.19.5"
   },
@@ -82,5 +82,8 @@
     "util": "^0.12.5",
     "vite": "^7.2.4",
     "vite-plugin-pwa": "^1.2.0"
+  },
+  "overrides": {
+    "viem": "2.47.12"
   }
 }

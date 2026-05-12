@@ -65,133 +65,127 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                     {/* The PnL Card (Receipt Style) */}
                     <div
                         ref={cardRef}
-                        className="bg-[#f8f8f8] text-[#1a1a1a] p-4 sm:p-8 font-mono shadow-2xl relative overflow-y-auto max-h-[90vh] rounded-sm custom-scrollbar"
+                        className={`p-6 sm:p-8 font-mono shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative rounded-t-2xl flex flex-col justify-between ${isLight ? 'text-black' : 'text-white'}`}
                         style={{
-                            backgroundImage: 'linear-gradient(#eee 1px, transparent 1px), linear-gradient(90deg, #eee 1px, transparent 1px)',
-                            backgroundSize: '18px 18px',
-                            minHeight: 'min(580px, 85vh)',
+                            background: isLight ? 'rgba(255, 255, 255, 0.4)' : 'rgba(20, 20, 20, 0.4)',
+                            backdropFilter: 'blur(20px)',
+                            WebkitBackdropFilter: 'blur(20px)',
+                            borderTop: '2px solid rgba(60, 179, 113, 0.5)',
+                            borderLeft: '2px solid rgba(60, 179, 113, 0.5)',
+                            borderRight: '2px solid rgba(60, 179, 113, 0.5)',
+                            clipPath: 'polygon(0% 0%, 100% 0%, 100% calc(100% - 8px), 96% 100%, 92% calc(100% - 8px), 88% 100%, 84% calc(100% - 8px), 80% 100%, 76% calc(100% - 8px), 72% 100%, 68% calc(100% - 8px), 64% 100%, 60% calc(100% - 8px), 56% 100%, 52% calc(100% - 8px), 48% 100%, 44% calc(100% - 8px), 40% 100%, 36% calc(100% - 8px), 32% 100%, 28% calc(100% - 8px), 24% 100%, 20% calc(100% - 8px), 16% 100%, 12% calc(100% - 8px), 8% 100%, 4% calc(100% - 8px), 0% 100%)',
+                            minHeight: '500px',
                         }}
                     >
-                        {/* Repeating Watermark Pattern */}
-                        <div
-                            className="absolute inset-0 pointer-events-none select-none overflow-hidden"
-                            style={{
-                                backgroundImage: `url('/logo.png')`,
-                                backgroundSize: '40%',
-                                backgroundPosition: 'center',
-                                backgroundRepeat: 'no-repeat',
-                                opacity: 0.03,
-                                filter: 'brightness(2)'
-                            }}
-                        />
-
                         {/* Receipt Content */}
-                        <div className="relative z-10 flex flex-col items-center text-center">
-                            <div className="flex flex-col items-center mb-5">
-                                <img src="/logo.png" alt="15market" className="h-20 w-auto mb-2 drop-shadow-sm" />
-                                <h1 className="text-2xl font-black tracking-tighter border-y border-black px-4 py-0.5">{trade.type === 'rounds' ? 'ROUNDS SETTLE' : '15MARKET'}</h1>
-                                <p className="text-[8px] font-black mt-1.5 tracking-[0.2em] text-black/50 uppercase">
+                        <div className="relative z-10 flex flex-col items-center text-center w-full h-full">
+                            
+                            {/* Header Section */}
+                            <div className="flex flex-col items-center mb-6 w-full">
+                                <div className="flex items-center justify-center gap-2 mb-2">
+                                    <span className="text-[#3CB371] text-2xl font-black">15</span>
+                                    <span className={`text-xl font-normal ${isLight ? 'text-black/50' : 'text-white/50'}`}>market</span>
+                                </div>
+                                
+                                <div className={`w-full border-t border-b ${isLight ? 'border-black/20' : 'border-white/20'} py-2 mb-2 flex items-center justify-center gap-3`}>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
+                                    <h1 className="text-3xl font-black tracking-widest">{trade.type === 'rounds' ? 'ROUNDS SETTLE' : '15MARKET'}</h1>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
+                                </div>
+                                
+                                <p className={`text-[10px] font-bold tracking-[0.2em] uppercase ${isLight ? 'text-black/60' : 'text-white/60'}`}>
                                     {trade.type === 'rounds' ? 'P2P POOLED SETTLEMENT' : 'VERIFIED PREDICTION'} • ARC_NETWORK
                                 </p>
                             </div>
 
-                            <div className="w-full border-t border-dashed border-black/20 my-1.5" />
-
-                            <div className="w-full py-2 space-y-0.5 text-[10px] font-bold opacity-70">
-                                <div className="flex justify-between">
-                                    <span className="opacity-40 uppercase">TX_REF:</span>
-                                    <span>{trade.tx ? `${trade.tx.slice(0, 8)}...${trade.tx.slice(-6)}` : 'OFF_CHAIN'}</span>
+                            {/* Details Section */}
+                            <div className="w-full space-y-2 text-xs font-bold mb-4">
+                                <div className="flex justify-between items-center">
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>TX_REF:</span>
+                                    <span className="font-mono">{trade.tx ? `${trade.tx.slice(0, 10)}...${trade.tx.slice(-6)}` : 'OFF_CHAIN'}</span>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="opacity-40 uppercase">TIMESTAMP:</span>
+                                <div className="flex justify-between items-center">
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>TIMESTAMP:</span>
                                     <span>{new Date(trade.timestamp || Date.now()).toLocaleString()}</span>
                                 </div>
                                 {trade.type === 'rounds' && (
-                                    <div className="flex justify-between">
-                                        <span className="opacity-40 uppercase">POOL_ID:</span>
+                                    <div className="flex justify-between items-center">
+                                        <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>POOL_ID:</span>
                                         <span>#{trade.poolId || 'N/A'}</span>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="w-full border-t border-black/10 my-3" />
+                            <div className={`w-full border-t border-dashed ${isLight ? 'border-black/20' : 'border-white/20'} my-4`} />
 
-                            <div className="w-full space-y-3 py-1">
-                                <div className="flex justify-between items-end border-b border-black/5 pb-1.5">
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] opacity-40 font-black">{trade.type === 'rounds' ? 'ACTIVE_POOL' : 'ASSET_PAIR'}</span>
-                                        <span className="text-base font-black tracking-tighter">
-                                            {trade.symbol ? `${trade.symbol.toUpperCase()} // USD` : 'ETH // USD'}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">{trade.type === 'rounds' ? 'P2P_DIRECTION' : 'EXECUTION'}</span>
-                                        <span className={`font-black uppercase text-sm ${isUp ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                            {trade.type === 'rounds' ? (isUp ? 'LONG_POOL' : 'SHORT_POOL') : (isUp ? 'LONG' : 'SHORT')}
-                                        </span>
-                                    </div>
+                            {/* Trade Info Section */}
+                            <div className="w-full grid grid-cols-2 gap-y-6 relative mb-4">
+                                <div className="flex flex-col items-start text-left">
+                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>{trade.type === 'rounds' ? 'ACTIVE POOL' : 'ASSET PAIR'}</span>
+                                    <span className="text-xl font-black tracking-tight">
+                                        {trade.symbol ? `${trade.symbol.toUpperCase()} // USD` : 'ETH // USD'}
+                                    </span>
+                                </div>
+                                <div className="flex flex-col items-end text-right">
+                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>{trade.type === 'rounds' ? 'P2P DIRECTION' : 'EXECUTION'}</span>
+                                    <span className={`font-black uppercase text-xl ${isUp ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                        {trade.type === 'rounds' ? (isUp ? 'LONG POOL' : 'SHORT POOL') : (isUp ? 'LONG' : 'SHORT')}
+                                    </span>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex flex-col">
-                                        <span className="text-[8px] opacity-40 font-black">ENTRY</span>
-                                        <span className="text-sm font-black italic">${Number(trade.entryPrice || 0).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[8px] opacity-40 font-black">STAKE</span>
-                                        <span className="text-sm font-black italic">{Number(trade.amount || 0).toFixed(2)} {currency}</span>
-                                    </div>
+                                <div className="flex flex-col items-start text-left">
+                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>ENTRY</span>
+                                    <span className="text-lg font-black">${Number(trade.entryPrice || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex flex-col items-end text-right">
+                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>STAKE</span>
+                                    <span className="text-lg font-black">{Number(trade.amount || 0).toFixed(2)} {currency}</span>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-dashed border-black/10">
-                                    <div className="flex flex-col">
-                                        <span className="text-[8px] opacity-40 font-black">SETTLED</span>
-                                        <span className="text-sm font-black italic">{trade.status !== "PENDING" && (trade.settlementPrice || trade.exitPrice) ? `$${Number(trade.settlementPrice || trade.exitPrice || 0).toFixed(2)}` : 'PENDING'}</span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[8px] opacity-40 font-black">PNL_OUTCOME</span>
-                                        <span className={`text-2xl font-black tracking-tighter ${isWon ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
-                                            {isWon ? '▲' : '▼'}{profit} <small className="text-[9px] opacity-40">{currency}</small>
-                                        </span>
-                                    </div>
+                                <div className="flex flex-col items-start text-left mt-2">
+                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>SETTLED</span>
+                                    <span className={`text-lg font-black ${trade.status === "PENDING" ? 'text-[#3CB371]' : ''}`}>
+                                        {trade.status !== "PENDING" && (trade.settlementPrice || trade.exitPrice) ? `$${Number(trade.settlementPrice || trade.exitPrice || 0).toFixed(2)}` : 'PENDING'}
+                                    </span>
+                                </div>
+                                <div className="flex flex-col items-end text-right mt-2">
+                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>PNL_OUTCOME</span>
+                                    <span className={`text-xl font-black tracking-tight ${isWon ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                        {isWon ? '▲' : '▼'}{profit} <span className="text-xs">{currency}</span>
+                                    </span>
                                 </div>
                             </div>
 
-                            <div className="w-full border-t border-dashed border-black/20 my-4" />
+                            <div className={`w-full border-t border-dashed ${isLight ? 'border-black/20' : 'border-white/20'} mb-4`} />
 
-                            {/* Stamp: Scaled down for better fit */}
-                            <div className="my-2 transform scale-[0.85] origin-center">
-                                <Stamp status={trade.status} isWon={isWon} size="md" />
+                            {/* Stamp Positioned in Center Overlay */}
+                            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 scale-110 pointer-events-none mix-blend-screen opacity-90">
+                                <Stamp status={trade.status} isWon={isWon} size="lg" />
                             </div>
-
-                            <div className="w-full border-t border-dashed border-black/20 mt-3 mb-4" />
 
                             {/* FOOTER CONTROLS */}
-                            <div className="w-full grid grid-cols-2 gap-3 mb-4 receipt-control">
+                            <div className="w-full grid grid-cols-2 gap-4 mt-auto mb-6 receipt-control relative z-20">
                                 <button
                                     onClick={handleDownload}
-                                    className="py-2.5 bg-black text-white text-[9px] font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-1.5 hover:bg-black/80 transition-all shadow-md"
+                                    className="py-3 bg-[#2d7a46] text-white text-xs font-black uppercase tracking-widest rounded-sm flex items-center justify-center gap-2 hover:bg-[#3CB371] transition-all shadow-lg"
                                 >
-                                    <Download size={14} />
+                                    <Download size={16} />
                                     SAVE IMAGE
                                 </button>
                                 <button
                                     onClick={onClose}
-                                    className="py-2.5 bg-transparent text-black border border-black/20 text-[9px] font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-1.5 hover:bg-black/5 transition-all"
+                                    className={`py-3 bg-transparent ${isLight ? 'text-[#2d7a46]' : 'text-[#3CB371]'} border border-[#3CB371]/50 text-xs font-black uppercase tracking-widest rounded-sm flex items-center justify-center gap-2 hover:bg-[#3CB371]/10 transition-all`}
                                 >
-                                    <X size={14} />
+                                    <X size={16} />
                                     CLOSE VIEW
                                 </button>
                             </div>
 
-                            <p className="text-[8px] text-black/30 text-center font-black tracking-[0.2em] leading-relaxed">
+                            <p className={`text-[9px] font-bold tracking-[0.2em] leading-relaxed uppercase ${isLight ? 'text-black/40' : 'text-white/40'}`}>
                                 TRADING_RECEIPT // 15MARKET_PROTOCOL<br />
                                 0xDE738...BLOCK_VERIFIED
                             </p>
                         </div>
-
-                        {/* Jagged Bottom Edge */}
-                        <div className="absolute bottom-0 left-0 w-full h-4 bg-white" style={{ clipPath: 'polygon(0% 0%, 5% 100%, 10% 0%, 15% 100%, 20% 0%, 25% 100%, 30% 0%, 35% 100%, 40% 0%, 45% 100%, 50% 0%, 55% 100%, 60% 0%, 65% 100%, 70% 0%, 75% 100%, 80% 0%, 85% 100%, 90% 0%, 95% 100%, 100% 0%)' }} />
                     </div>
                 </motion.div>
             </div>
