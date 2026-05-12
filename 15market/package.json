@@ -19,7 +19,7 @@
     "@phosphor-icons/webcomponents": "^2.1.4",
     "@privy-io/react-auth": "^3.24.0",
     "@privy-io/wagmi": "^4.0.7",
-    "permissionless": "^0.1.44",
+    "permissionless": "^0.2.47",
     "@pythnetwork/client": "^2.22.1",
     "@pythnetwork/pyth-solana-receiver": "^0.13.0",
     "@radix-ui/react-label": "^2.1.8",
