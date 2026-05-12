@@ -15,6 +15,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.jsx';
 import './index.css';
 import { config } from './wagmiConfig';
+import { arcTestnet } from './constants';
 
 const queryClient = new QueryClient();
 
@@ -81,6 +82,8 @@ function Root() {
         <PrivyProvider
           appId={import.meta.env.VITE_PRIVY_APP_ID}
           config={{
+            defaultChain: arcTestnet,
+            supportedChains: [arcTestnet],
             // Frictionless onboarding: create embedded wallets on login for all users
             embeddedWallets: {
               createOnLogin: 'all-users',

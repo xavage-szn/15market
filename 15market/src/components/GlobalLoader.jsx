@@ -37,46 +37,61 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                     className="flex items-center gap-0 -translate-y-14 md:-translate-y-20 -ml-2 z-10 relative"
                 >
                     <motion.span 
-                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        animate={{ 
+                            opacity: [0.3, 1, 0.3],
+                            color: isLight 
+                                ? ['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)'] 
+                                : ['#ffffff', '#3CB371', '#ffffff']
+                        }}
                         transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                        className={`text-3xl md:text-4xl font-light select-none ${isLight ? 'text-black/90' : 'text-white/90'}`}
+                        className={`text-3xl md:text-4xl font-light select-none`}
                     >
                         /
                     </motion.span>
                     <motion.span 
-                        animate={{ opacity: [1, 0.3, 1] }}
+                        animate={{ 
+                            opacity: [1, 0.3, 1],
+                            color: isLight 
+                                ? ['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)'] 
+                                : ['#3CB371', '#ffffff', '#3CB371']
+                        }}
                         transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                        className={`text-3xl md:text-4xl font-light select-none -ml-1 ${isLight ? 'text-black/90' : 'text-white/90'}`}
+                        className={`text-3xl md:text-4xl font-light select-none -ml-1`}
                     >
                         /
                     </motion.span>
                 </motion.div>
 
-                {/* 3. Loading Text */}
+                {/* 3. Loading Text (Typing Effect + Looping Balls) */}
                 <div className="flex items-baseline ml-1.5 gap-1">
-                    <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.8, duration: 0.4 }}
-                        className={`text-[17px] font-medium tracking-tight ${isLight ? 'text-black' : 'text-white'}`}
-                        style={{ fontFamily: '"Comfortaa", cursive' }}
-                    >
-                        Loading
-                    </motion.span>
+                    <div className="flex">
+                        {"Loading".split("").map((char, index) => (
+                            <motion.span
+                                key={index}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.8 + index * 0.1, duration: 0.1 }}
+                                className={`text-[15px] font-medium tracking-tight ${isLight ? 'text-black' : 'text-white'}`}
+                                style={{ fontFamily: '"Comfortaa", cursive' }}
+                            >
+                                {char}
+                            </motion.span>
+                        ))}
+                    </div>
                     <div className="flex items-baseline gap-1 ml-0.5">
                         {[0, 1, 2].map((i) => (
                             <motion.div
                                 key={i}
                                 animate={{ 
-                                    opacity: [0.2, 1, 0.2],
+                                    opacity: [0, 1, 0],
                                 }}
                                 transition={{ 
                                     repeat: Infinity, 
                                     duration: 1.5, 
-                                    delay: 1 + (i * 0.2),
+                                    delay: 0.8 + (7 * 0.1) + (i * 0.2), // Types in after "Loading"
                                     ease: "easeInOut" 
                                 }}
-                                className={`w-[5px] h-[5px] rounded-full ${isLight ? 'bg-black/40 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-[#1e5a38] shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`}
+                                className={`w-[4px] h-[4px] rounded-full ${isLight ? 'bg-black/60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-[#3CB371] shadow-[0_0_8px_rgba(60,179,113,0.5)]'}`}
                             />
                         ))}
                     </div>
