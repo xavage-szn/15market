@@ -9,13 +9,6 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
 
     if (!trade || !isOpen) return null;
 
-    const isUp = trade.direction === "UP";
-    
-    // Calculate derived values
-    const tradeDuration = trade.duration || 15;
-    const multiplier = tradeDuration <= 5 ? 2.90 : (tradeDuration <= 10 ? 2.40 : 1.90);
-    const profitPercentage = Math.round((multiplier - 1) * 100);
-
     const isLight = theme === 'light';
 
     const handleDownload = async () => {
@@ -44,7 +37,7 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
     };
 
     // Trust the backend status - it now comes from the authoritative on-chain result
-    const isWon = trade.status === "WON";
+    const isWon = trade.status?.toUpperCase() === "WON" || trade.status?.toUpperCase() === "SUCCESS";
     const isUp = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
 
     // Calculate profit based on duration multiplier
@@ -54,8 +47,10 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
         return 1.90;
     };
 
+    const tradeDuration = trade.duration || 15;
     const currency = trade.currency || (trade.network === 'sol' || trade.network === 'SOL' ? 'SOL' : 'USDC');
-    const multiplier = getMultiplier(trade.duration || 15);
+    const multiplier = getMultiplier(tradeDuration);
+    const profitPercentage = Math.round((multiplier - 1) * 100);
     const totalPayout = trade.payout ? parseFloat(trade.payout) : (parseFloat(trade.amount) * multiplier);
     // SYSTEM-WIDE: 2 decimal places only
     const profit = isWon ? `+${(Math.floor(totalPayout * 100) / 100).toFixed(2)}` : `-${Number(trade.amount).toFixed(2)}`;

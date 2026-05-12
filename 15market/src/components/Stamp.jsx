@@ -1,8 +1,10 @@
 import React from 'react';
 
 export function Stamp({ status, size = 'md', isWon: forcedIsWon }) {
-    // Priority: forcedIsWon prop > status === 'WON'
-    const isWon = forcedIsWon !== undefined ? forcedIsWon : status === 'WON';
+    // Priority: forcedIsWon prop > status check (case-insensitive)
+    const isWon = forcedIsWon !== undefined 
+        ? forcedIsWon 
+        : (status?.toUpperCase() === 'WON' || status?.toUpperCase() === 'SUCCESS');
     const color = isWon ? '#3CB371' : '#dc2626'; // Green for WON, Red for LOST
     const text = isWon ? 'WON' : 'LOST';
 
@@ -71,8 +73,7 @@ export function Stamp({ status, size = 'md', isWon: forcedIsWon }) {
                     fontSize: s.textSize, 
                     lineHeight: 1,
                     textShadow: `0 0 1px ${color}`,
-                    maskImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
-                    WebkitMaskImage: 'url("https://www.transparenttextures.com/patterns/stardust.png")',
+                    // Removed maskImage here to ensure text is always visible even if texture fails
                 }}
             >
                 {text}
