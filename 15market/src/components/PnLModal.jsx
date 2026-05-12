@@ -9,6 +9,13 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
 
     if (!trade || !isOpen) return null;
 
+    const isUp = trade.direction === "UP";
+    
+    // Calculate derived values
+    const tradeDuration = trade.duration || 15;
+    const multiplier = tradeDuration <= 5 ? 2.90 : (tradeDuration <= 10 ? 2.40 : 1.90);
+    const profitPercentage = Math.round((multiplier - 1) * 100);
+
     const isLight = theme === 'light';
 
     const handleDownload = async () => {
@@ -77,20 +84,29 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                             minHeight: '500px',
                         }}
                     >
+                        {/* Background Watermark */}
+                        <div className="absolute inset-0 z-0 overflow-hidden opacity-[0.03] pointer-events-none flex flex-wrap items-center justify-center gap-4 -rotate-12 scale-150">
+                            {Array(60).fill('15market').map((text, i) => (
+                                <span key={i} className={`text-4xl font-black ${isLight ? 'text-black' : 'text-white'}`}>{text}</span>
+                            ))}
+                        </div>
+
                         {/* Receipt Content */}
                         <div className="relative z-10 flex flex-col items-center text-center w-full h-full">
                             
                             {/* Header Section */}
                             <div className="flex flex-col items-center mb-6 w-full">
-                                <div className="flex items-center justify-center mb-2">
-                                    <img src="/logo.png" alt="15market" className={`h-8 w-auto drop-shadow-md opacity-80 ${isLight ? 'invert hue-rotate-180' : ''}`} />
+                                <div className="flex items-center justify-center mb-4 mt-2">
+                                    <img src="/logo.png" alt="15market" className={`h-16 w-auto drop-shadow-md opacity-80 ${isLight ? 'invert hue-rotate-180' : ''}`} />
                                 </div>
                                 
-                                <div className={`w-full border-t border-b ${isLight ? 'border-black/20' : 'border-white/20'} py-2 mb-2 flex items-center justify-center gap-3`}>
-                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
-                                    <h1 className="text-3xl font-black tracking-widest">{trade.type === 'rounds' ? 'ROUNDS SETTLE' : '15MARKET'}</h1>
-                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
-                                </div>
+                                {trade.type === 'rounds' && (
+                                    <div className={`w-full border-t border-b ${isLight ? 'border-black/20' : 'border-white/20'} py-2 mb-2 flex items-center justify-center gap-3`}>
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
+                                        <h1 className="text-3xl font-black tracking-widest">ROUNDS SETTLE</h1>
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
+                                    </div>
+                                )}
                                 
                                 <p className={`text-[10px] font-bold tracking-[0.2em] uppercase ${isLight ? 'text-black/60' : 'text-white/60'}`}>
                                     {trade.type === 'rounds' ? 'P2P POOLED SETTLEMENT' : 'VERIFIED PREDICTION'} • ARC_NETWORK
@@ -106,6 +122,10 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                 <div className="flex justify-between items-center">
                                     <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>TIMESTAMP:</span>
                                     <span>{new Date(trade.timestamp || Date.now()).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>DURATION // PROFIT:</span>
+                                    <span>{tradeDuration}s // +{profitPercentage}%</span>
                                 </div>
                                 {trade.type === 'rounds' && (
                                     <div className="flex justify-between items-center">
@@ -158,7 +178,7 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                             <div className={`w-full border-t border-dashed ${isLight ? 'border-black/20' : 'border-white/20'} mb-4`} />
 
                             {/* Stamp Positioned in Center Overlay */}
-                            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 scale-110 pointer-events-none mix-blend-screen opacity-90">
+                            <div className="absolute top-[60%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 scale-[1.15] pointer-events-none opacity-90 z-30 drop-shadow-sm">
                                 <Stamp status={trade.status} isWon={isWon} size="lg" />
                             </div>
 
@@ -166,14 +186,14 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                             <div className="w-full grid grid-cols-2 gap-4 mt-auto mb-6 receipt-control relative z-20">
                                 <button
                                     onClick={handleDownload}
-                                    className="py-3 bg-[#2d7a46] text-white text-xs font-black uppercase tracking-widest rounded-sm flex items-center justify-center gap-2 hover:bg-[#3CB371] transition-all shadow-lg"
+                                    className="py-3 bg-[#2d7a46] text-white text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 hover:bg-[#3CB371] transition-all shadow-lg"
                                 >
                                     <Download size={16} />
                                     SAVE IMAGE
                                 </button>
                                 <button
                                     onClick={onClose}
-                                    className={`py-3 bg-transparent ${isLight ? 'text-[#2d7a46]' : 'text-[#3CB371]'} border border-[#3CB371]/50 text-xs font-black uppercase tracking-widest rounded-sm flex items-center justify-center gap-2 hover:bg-[#3CB371]/10 transition-all`}
+                                    className={`py-3 bg-transparent ${isLight ? 'text-[#2d7a46]' : 'text-[#3CB371]'} border border-[#3CB371]/50 text-xs font-black uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 hover:bg-[#3CB371]/10 transition-all`}
                                 >
                                     <X size={16} />
                                     CLOSE VIEW
