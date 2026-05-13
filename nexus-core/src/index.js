@@ -21,6 +21,7 @@ const ClassicEngine = require('./classic');
 const profiles = require('./profiles');
 const { ethers } = require('ethers');
 const Redis = require('ioredis');
+const circleService = require('./services/circleService');
 
 const redis = new Redis(config.REDIS_URL || 'redis://localhost:6379');
 
@@ -788,6 +789,37 @@ app.get('/auth/twitter/callback', async (req, res) => {
   } catch (err) {
     console.error('Twitter callback error:', err);
     res.status(500).send('Internal Server Error during X authentication');
+  }
+});
+
+// ─── CIRCLE WALLET ROUTES ───────────────────────────────────────────────────
+
+app.get('/circle/wallet/:address', async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    const wallet = await circleService.getOrCreateWallet(address);
+    const balances = await circleService.getBalance(wallet.walletId);
+    res.json({ success: true, wallet, balances });
+  } catch (err) {
+    console.error('[Circle/Wallet] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/circle/transfer', async (req, res) => {
+  const { address, destinationAddress, amount, tokenId } = req.body;
+  if (!address || !destinationAddress || !amount || !tokenId) {
+    return res.status(400).json({ error: 'Missing transfer parameters' });
+  }
+
+  try {
+    const userAddr = address.toLowerCase();
+    const wallet = await circleService.getOrCreateWallet(userAddr);
+    const result = await circleService.transfer(wallet.walletId, destinationAddress, amount, tokenId);
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('[Circle/Transfer] Error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

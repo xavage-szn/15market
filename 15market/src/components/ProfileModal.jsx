@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { KEEPER_URL_ARC } from '../constants';
 
 import { Zap, Shield, TrendingUp, TrendingDown, Camera, Edit3, Image as ImageIcon, Link as LinkIcon, Check } from 'lucide-react';
+import { CircleWalletSection } from './CircleWalletSection';
 
 const PRESET_AVATARS = [
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
@@ -417,6 +418,12 @@ export function ProfileModal({
                                     <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Faucet ↗</a>
                                 </div>
                             </div>
+
+                            <CircleWalletSection 
+                                address={address} 
+                                isLight={isLight} 
+                                notify={notify} 
+                            />
                         </div>
                     </div>
 
