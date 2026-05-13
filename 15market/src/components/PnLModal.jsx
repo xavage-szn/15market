@@ -64,18 +64,27 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                     exit={{ opacity: 0, scale: 0.9 }}
                     className="relative max-w-[90vw] sm:max-w-sm w-full"
                 >
+                    {/* Top Notch */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full z-20 border-2 border-[rgba(60,179,113,0.5)]"
+                        style={{
+                            background: 'transparent',
+                            boxShadow: 'none',
+                        }}
+                    >
+                        {/* Inner fill to mask the card top border */}
+                        <div className="absolute inset-[2px] rounded-full" style={{ background: isLight ? 'rgb(235,245,235)' : 'rgb(10,10,10)' }} />
+                    </div>
+
                     {/* The PnL Card (Receipt Style) */}
                     <div
                         ref={cardRef}
-                        className={`p-6 sm:p-8 font-mono shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative rounded-t-2xl flex flex-col justify-between ${isLight ? 'text-black' : 'text-white'}`}
+                        className={`p-6 sm:p-8 font-mono shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative rounded-2xl flex flex-col justify-between ${isLight ? 'text-black' : 'text-white'}`}
                         style={{
-                            background: isLight ? 'rgba(255, 255, 255, 0.4)' : 'rgba(20, 20, 20, 0.4)',
+                            background: isLight ? 'rgba(245, 250, 245, 0.95)' : 'rgba(14, 14, 14, 0.97)',
                             backdropFilter: 'blur(20px)',
                             WebkitBackdropFilter: 'blur(20px)',
-                            borderTop: '2px solid rgba(60, 179, 113, 0.5)',
-                            borderLeft: '2px solid rgba(60, 179, 113, 0.5)',
-                            borderRight: '2px solid rgba(60, 179, 113, 0.5)',
-                            clipPath: 'polygon(0% 0%, 100% 0%, 100% calc(100% - 8px), 96% 100%, 92% calc(100% - 8px), 88% 100%, 84% calc(100% - 8px), 80% 100%, 76% calc(100% - 8px), 72% 100%, 68% calc(100% - 8px), 64% 100%, 60% calc(100% - 8px), 56% 100%, 52% calc(100% - 8px), 48% 100%, 44% calc(100% - 8px), 40% 100%, 36% calc(100% - 8px), 32% 100%, 28% calc(100% - 8px), 24% 100%, 20% calc(100% - 8px), 16% 100%, 12% calc(100% - 8px), 8% 100%, 4% calc(100% - 8px), 0% 100%)',
+                            border: '2px solid rgba(60, 179, 113, 0.45)',
+                            clipPath: 'polygon(0% 0%, 44% 0%, 44% 0%, 50% 0%, 56% 0%, 100% 0%, 100% calc(100% - 8px), 96% 100%, 92% calc(100% - 8px), 88% 100%, 84% calc(100% - 8px), 80% 100%, 76% calc(100% - 8px), 72% 100%, 68% calc(100% - 8px), 64% 100%, 60% calc(100% - 8px), 56% 100%, 52% calc(100% - 8px), 48% 100%, 44% calc(100% - 8px), 40% 100%, 36% calc(100% - 8px), 32% 100%, 28% calc(100% - 8px), 24% 100%, 20% calc(100% - 8px), 16% 100%, 12% calc(100% - 8px), 8% 100%, 4% calc(100% - 8px), 0% 100%)',
                             minHeight: '500px',
                         }}
                     >
@@ -95,13 +104,14 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                     <img src="/logo.png" alt="15market" className={`h-16 w-auto drop-shadow-md opacity-80 ${isLight ? 'invert hue-rotate-180' : ''}`} />
                                 </div>
                                 
-                                {trade.type === 'rounds' && (
-                                    <div className={`w-full border-t border-b ${isLight ? 'border-black/20' : 'border-white/20'} py-2 mb-2 flex items-center justify-center gap-3`}>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
-                                        <h1 className="text-3xl font-black tracking-widest">ROUNDS SETTLE</h1>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
-                                    </div>
-                                )}
+                                <div className={`w-full border-t border-b ${isLight ? 'border-black/20' : 'border-white/20'} py-2 mb-2 flex items-center justify-center gap-3`}>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
+                                    <h1 className="text-3xl font-black tracking-widest">
+                                        {trade.type === 'rounds' ? 'ROUNDS SETTLE' : '15MARKET'}
+                                    </h1>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371]"></div>
+                                </div>
+
                                 
                                 <p className={`text-[10px] font-bold tracking-[0.2em] uppercase ${isLight ? 'text-black/60' : 'text-white/60'}`}>
                                     {trade.type === 'rounds' ? 'P2P POOLED SETTLEMENT' : 'VERIFIED PREDICTION'} • ARC_NETWORK
@@ -168,14 +178,16 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                         {isWon ? '▲' : '▼'}{profit} <span className="text-xs">{currency}</span>
                                     </span>
                                 </div>
+
+                                {/* Stamp Positioned in Center Overlay */}
+                                {trade.status !== "PENDING" && (
+                                    <div className="absolute top-[65%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 scale-[1.15] pointer-events-none opacity-90 z-30 drop-shadow-sm">
+                                        <Stamp status={trade.status} isWon={isWon} size="lg" />
+                                    </div>
+                                )}
                             </div>
 
                             <div className={`w-full border-t border-dashed ${isLight ? 'border-black/20' : 'border-white/20'} mb-4`} />
-
-                            {/* Stamp Positioned in Center Overlay */}
-                            <div className="absolute top-[60%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 scale-[1.15] pointer-events-none opacity-90 z-30 drop-shadow-sm">
-                                <Stamp status={trade.status} isWon={isWon} size="lg" />
-                            </div>
 
                             {/* FOOTER CONTROLS */}
                             <div className="w-full grid grid-cols-2 gap-4 mt-auto mb-6 receipt-control relative z-20">
