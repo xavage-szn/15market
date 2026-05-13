@@ -108,7 +108,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                 <div className="flex justify-between items-end border-b border-black/5 pb-1.5">
                                     <div className="flex flex-col">
                                         <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">{transaction.type === 'rounds' ? 'P2P_ROUND_TYPE' : 'TRANSACTION_TYPE'}</span>
-                                        <span className={`text-base font-black tracking-tighter ${transaction.type === 'rounds' ? 'text-[#3CB371]' : (isDeposit ? 'text-green-600' : 'text-orange-600')}`}>
+                                        <span className={`text-base font-black tracking-tighter ${transaction.type === 'rounds' ? 'text-[#3CB371]' : (isDeposit ? 'text-[#3CB371]' : 'text-orange-600')}`}>
                                             {transaction.type === 'rounds' ? 'LIVE_ROUNDS_ENTRY' : transaction.type}
                                         </span>
                                     </div>
