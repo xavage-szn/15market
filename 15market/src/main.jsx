@@ -84,18 +84,10 @@ function Root() {
           config={{
             defaultChain: arcTestnet,
             supportedChains: [arcTestnet],
-            // Frictionless onboarding: create embedded wallets on login for all users
             embeddedWallets: {
               createOnLogin: 'all-users',
               requireUserPasswordOnCreate: false,
             },
-            // Enable delegated actions for frictionless experience
-            delegatedActions: {
-              enabled: true,
-            },
-            // Explicitly disable Turnstile captcha - matches Privy dashboard setting
-            // Without this, the SDK still tries to call execute()/reset() on the
-            // Turnstile script even when it hasn't loaded, causing the modal to silently fail
             captchaEnabled: false,
             appearance: {
               theme: 'dark',
