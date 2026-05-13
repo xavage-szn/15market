@@ -4,7 +4,7 @@ import { Shield, Zap, Send, ArrowDownLeft, Copy, ExternalLink, RefreshCw, X, Che
 import { KEEPER_URL_ARC } from '../constants';
 import QRCode from 'qrcode';
 
-export function CircleWalletPage({ address, isLight, notify, onBack, initialMode }) {
+export function CircleWalletPage({ address, isLight, notify, onBack, initialMode, evmBalance = '0', sessionBalance = 0 }) {
     const [walletInfo, setWalletInfo] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -15,6 +15,7 @@ export function CircleWalletPage({ address, isLight, notify, onBack, initialMode
     const [isSending, setIsSending] = useState(false);
     const [qrCodeData, setQrCodeData] = useState("");
     const [activeTab, setActiveTab] = useState('assets'); // 'assets' or 'history'
+    const [walletSource, setWalletSource] = useState('circle'); // 'circle' | 'main' | 'trading'
 
     const fetchWalletInfo = async (silent = false) => {
         if (!address) return;
@@ -306,72 +307,107 @@ export function CircleWalletPage({ address, isLight, notify, onBack, initialMode
 
             {/* Modals */}
             <AnimatePresence>
-                {showSendModal && (
-                    <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setShowSendModal(false)}
-                            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                        />
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className={`w-full max-w-md relative z-10 p-8 rounded-[40px] border ${isLight ? 'bg-white border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'}`}
-                        >
-                            <div className="flex items-center justify-between mb-8">
-                                <h3 className={`text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>External Transfer</h3>
-                                <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-                                    <X size={24} />
-                                </button>
-                            </div>
+                {showSendModal && (() => {
+                    // Determine available balance from selected source
+                    const sourceBalance =
+                        walletSource === 'main'    ? parseFloat(evmBalance || '0') :
+                        walletSource === 'trading' ? parseFloat(sessionBalance || 0) :
+                        parseFloat(usdcBalance); // circle
 
-                            <div className="flex flex-col gap-6">
-                                <div>
-                                    <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-2`}>Destination Address</label>
-                                    <input 
-                                        type="text"
-                                        placeholder="0x..."
-                                        value={destAddress}
-                                        onChange={(e) => setDestAddress(e.target.value)}
-                                        className={`w-full py-4 px-5 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-sm font-bold transition-all`}
-                                    />
+                    return (
+                        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
+                            <motion.div
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                onClick={() => setShowSendModal(false)}
+                                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                className={`w-full max-w-md relative z-10 p-8 rounded-[40px] border ${isLight ? 'bg-white border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'}`}
+                            >
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className={`text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>External Transfer</h3>
+                                    <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                                        <X size={24} />
+                                    </button>
                                 </div>
-                                <div>
-                                    <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-2`}>Amount (USDC)</label>
-                                    <div className="relative">
-                                        <input 
-                                            type="number"
-                                            placeholder="0.00"
-                                            value={sendAmount}
-                                            onChange={(e) => setSendAmount(e.target.value)}
-                                            className={`w-full py-4 px-5 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-xl font-black transition-all`}
-                                        />
-                                        <button 
-                                            onClick={() => setSendAmount(usdcBalance)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#3CB371] uppercase hover:underline"
-                                        >
-                                            Max
-                                        </button>
+
+                                {/* Wallet Source Selector */}
+                                <div className="mb-6">
+                                    <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-3`}>Send From</label>
+                                    <div className={`grid grid-cols-3 gap-2 p-1.5 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
+                                        {[
+                                            { key: 'circle',  label: 'Circle Wallet',    bal: parseFloat(usdcBalance) },
+                                            { key: 'main',    label: 'Main Wallet',      bal: parseFloat(evmBalance || '0') },
+                                            { key: 'trading', label: 'Trading Wallet',   bal: parseFloat(sessionBalance || 0) },
+                                        ].map(({ key, label, bal }) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => { setWalletSource(key); setSendAmount(''); }}
+                                                className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl transition-all text-center ${
+                                                    walletSource === key
+                                                        ? 'bg-[#3CB371] text-white shadow-lg shadow-[#3CB371]/20'
+                                                        : (isLight ? 'text-black/50 hover:bg-black/5' : 'text-white/40 hover:bg-white/5')
+                                                }`}
+                                            >
+                                                <span className="text-[8px] font-black uppercase tracking-widest leading-tight">{label}</span>
+                                                <span className={`text-[11px] font-black tabular-nums ${walletSource === key ? 'text-white' : 'text-[#3CB371]'}`}>
+                                                    {bal.toFixed(2)}
+                                                </span>
+                                            </button>
+                                        ))}
                                     </div>
-                                    <p className={`text-[9px] font-bold uppercase mt-2 ${isLight ? 'text-black/20' : 'text-white/20'}`}>
-                                        Available: {parseFloat(usdcBalance).toFixed(2)} USDC
-                                    </p>
                                 </div>
 
-                                <button 
-                                    onClick={handleSend}
-                                    disabled={isSending}
-                                    className="w-full bg-[#3CB371] text-black font-black py-5 rounded-[24px] text-[14px] uppercase tracking-widest mt-4 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#3CB371]/20"
-                                >
-                                    {isSending ? "Authorizing MPC..." : "Confirm & Send"}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
+                                <div className="flex flex-col gap-5">
+                                    <div>
+                                        <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-2`}>Destination Address</label>
+                                        <input
+                                            type="text"
+                                            placeholder="0x..."
+                                            value={destAddress}
+                                            onChange={(e) => setDestAddress(e.target.value)}
+                                            className={`w-full py-4 px-5 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-sm font-bold transition-all`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-2`}>Amount (USDC)</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                placeholder="0.00"
+                                                value={sendAmount}
+                                                onChange={(e) => setSendAmount(e.target.value)}
+                                                className={`w-full py-4 px-5 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-xl font-black transition-all`}
+                                            />
+                                            <button
+                                                onClick={() => setSendAmount(sourceBalance.toFixed(4))}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#3CB371] uppercase hover:underline"
+                                            >
+                                                Max
+                                            </button>
+                                        </div>
+                                        <p className={`text-[9px] font-bold uppercase mt-2 ${isLight ? 'text-black/20' : 'text-white/20'}`}>
+                                            Available: <span className="text-[#3CB371]">{sourceBalance.toFixed(2)} USDC</span>
+                                            {' · '}
+                                            {walletSource === 'circle' ? 'Circle Managed Wallet' : walletSource === 'main' ? 'Main Wallet' : 'Trading Wallet'}
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={handleSend}
+                                        disabled={isSending}
+                                        className="w-full bg-[#3CB371] text-black font-black py-5 rounded-[24px] text-[14px] uppercase tracking-widest mt-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#3CB371]/20"
+                                    >
+                                        {isSending ? 'Authorizing MPC...' : 'Confirm & Send'}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    );
+                })()}
 
                 {showReceiveModal && (
                     <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">

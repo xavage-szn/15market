@@ -2968,6 +2968,8 @@ export default function UserApp() {
             setCircleWalletMode(null);
           }}
           initialMode={circleWalletMode}
+          evmBalance={evmBalance}
+          sessionBalance={sessionBalance}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
