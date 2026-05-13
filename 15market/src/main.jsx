@@ -8,7 +8,6 @@ if (typeof window !== 'undefined') {
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { PrivyProvider } from '@privy-io/react-auth';
-import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
 import { WagmiProvider } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -97,13 +96,11 @@ function Root() {
             },
           }}
         >
-          <SmartWalletsProvider>
-            <QueryClientProvider client={queryClient}>
-              <WagmiProvider config={config}>
-                <App />
-              </WagmiProvider>
-            </QueryClientProvider>
-          </SmartWalletsProvider>
+          <QueryClientProvider client={queryClient}>
+            <WagmiProvider config={config}>
+              <App />
+            </WagmiProvider>
+          </QueryClientProvider>
         </PrivyProvider>
       </ErrorBoundary>
     </React.StrictMode>
