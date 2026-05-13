@@ -84,11 +84,11 @@ function Root() {
           config={{
             defaultChain: arcTestnet,
             supportedChains: [arcTestnet],
+            // Frictionless onboarding: create embedded wallets on login for all users
             embeddedWallets: {
               createOnLogin: 'all-users',
               requireUserPasswordOnCreate: false,
             },
-            captchaEnabled: false,
             appearance: {
               theme: 'dark',
               accentColor: '#3CB371',
