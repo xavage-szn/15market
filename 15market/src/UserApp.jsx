@@ -2897,7 +2897,7 @@ export default function UserApp() {
 
 
   return (
-    <div className={`min-h-screen ${theme === 'light' ? 'bg-[#c8eadd] text-[#0a261a]' : 'bg-[#050505] text-white'} selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-x-hidden font-sans relative`}>
+    <div className={`h-[100dvh] w-full ${theme === 'light' ? 'bg-[#c8eadd] text-[#0a261a]' : 'bg-[#050505] text-white'} selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
       {/* Sitewide Background Texture - HIGH VISIBILITY BRANDED GREEN */}
       <div className={`fixed inset-0 pointer-events-none z-0 
         ${theme === 'light' 
@@ -2924,7 +2924,7 @@ export default function UserApp() {
       
       <ErrorBoundary>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className={`${isSmallScreen ? 'h-[100dvh] overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
+            className={`${isSmallScreen ? 'h-[100dvh] w-full overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
         style={{
           color: theme === 'light' ? '#1f2937' : '#ffffff',
           transition: "color 0.3s ease"
@@ -2972,7 +2972,7 @@ export default function UserApp() {
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
-          <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 ${isSmallScreen ? 'py-0 h-[48px]' : 'py-1 lg:py-0'}`}>
+          <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 safe-top ${isSmallScreen ? 'py-0 h-auto min-h-[54px]' : 'py-1 lg:py-0'}`}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
               <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
@@ -3076,12 +3076,12 @@ export default function UserApp() {
             )}
           </AnimatePresence>
 
-          {/* Global V2 Architectural Separator (Runs across the screen) */}
-          <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[2px] mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
-            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
-            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />
+          {/* Global V2 Architectural Separator - REFINED FOR FULL SCREEN */}
+          <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[1px] mb-[1px] gap-[1px] opacity-40' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
+            <div className="w-full h-[1px] bg-[#3CB371]/30 shadow-[0_0_10px_rgba(60,179,113,0.2)]" />
+            {!isSmallScreen && <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />}
             {isSmallScreen && (
-              <div className="w-full mt-[2px]">
+              <div className="w-full mt-[1px]">
                 <GlobalTradeScroller theme={theme} />
               </div>
             )}

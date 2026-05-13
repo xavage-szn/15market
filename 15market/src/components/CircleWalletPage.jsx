@@ -116,9 +116,9 @@ export function CircleWalletPage({ address, isLight, notify, onBack, initialMode
     const transactions = walletInfo?.transactions || [];
 
     return (
-        <div className={`fixed inset-0 z-[200] ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'} overflow-y-auto custom-scrollbar flex flex-col`}>
+        <div className={`fixed inset-0 h-[100dvh] z-[200] ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'} overflow-y-auto custom-scrollbar flex flex-col`}>
             {/* Header */}
-            <div className={`sticky top-0 z-30 p-6 flex items-center justify-between backdrop-blur-xl border-b ${isLight ? 'bg-white/80 border-black/5' : 'bg-black/80 border-white/5'}`}>
+            <div className={`sticky top-0 z-30 p-6 flex items-center justify-between backdrop-blur-xl border-b safe-top ${isLight ? 'bg-white/80 border-black/5' : 'bg-black/80 border-white/5'}`}>
                 <div className="flex items-center gap-4">
                     <button 
                         onClick={onBack}

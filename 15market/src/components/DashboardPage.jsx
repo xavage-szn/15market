@@ -256,7 +256,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+        <div className={`h-[100dvh] w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
             {!isSmallScreen && hasActiveCampaign && (
                 <CampaignLeaderboardPane 
                     isOpen={isLeaderboardOpen} 

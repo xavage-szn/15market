@@ -11,6 +11,12 @@
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
 }
 
+.safe-top { padding-top: var(--safe-area-inset-top); }
+.safe-bottom { padding-bottom: var(--safe-area-inset-bottom); }
+.safe-left { padding-left: var(--safe-area-inset-left); }
+.safe-right { padding-right: var(--safe-area-inset-right); }
+
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -23,6 +29,7 @@ body {
   background-image:
     radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.02) 1px, transparent 0);
   background-size: 32px 32px;
+  background-attachment: fixed !important;
   /* Deeper black for high contrast */
   overscroll-behavior: none !important;
   /* Professional font stack similar to Calibre */
@@ -30,10 +37,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
-  padding: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom) var(--safe-area-inset-left);
-  height: 100%;
+  padding: 0;
+  height: 100dvh;
+  width: 100vw;
   transition: background-color 0.3s ease;
-  overflow-x: hidden;
+  overflow: hidden;
+  position: fixed;
 }
 
 /* Base Neon Glow Variables */
