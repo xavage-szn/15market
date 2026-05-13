@@ -654,7 +654,6 @@ body > div > div[id^="privy"],
 [data-privy-modal],
 [data-privy-dialog] {
   z-index: 99999 !important;
-  position: relative !important;
 }
 
 /* The outermost body-level portal div that Privy creates */
