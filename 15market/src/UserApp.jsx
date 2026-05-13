@@ -2946,7 +2946,7 @@ export default function UserApp() {
           <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 ${isSmallScreen ? 'py-0 h-[48px]' : 'py-1 lg:py-0'}`}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
             </div>
 
             <div className="hidden lg:flex items-center gap-3 px-2 py-1">
@@ -3423,7 +3423,7 @@ export default function UserApp() {
       <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
         style={{ fontFamily: 'Arial, sans-serif' }}>
         <div className="flex items-center gap-4 pointer-events-auto">
-          <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
+          <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
           <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
             © 2026 15market
           </span>

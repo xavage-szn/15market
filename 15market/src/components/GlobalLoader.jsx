@@ -23,9 +23,9 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                     className="flex items-center"
                 >
                     <img 
-                        src="/logo.png" 
+                        src={theme === 'light' ? "/goblogo.png" : "/gowlogo.png"} 
                         alt="15market" 
-                        className={`h-[72px] md:h-[100px] w-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.1)] ${isLight ? 'brightness-0' : 'brightness-0 invert'}`} 
+                        className="h-[72px] md:h-[100px] w-auto" 
                     />
                 </motion.div>
 

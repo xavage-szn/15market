@@ -106,9 +106,9 @@ export function LandingPage({ theme, onToggle }) {
                     transition={{ duration: 0.8 }}
                 >
                     <img
-                        src="/logo.png"
+                        src={isLight ? "/goblogo.png" : "/gowlogo.png"}
                         alt="15market"
-                        className={`h-16 md:h-28 lg:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)] ${isLight ? 'invert hue-rotate-180' : ''}`}
+                        className={`h-16 md:h-28 lg:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)]`}
                     />
                 </motion.div>
 

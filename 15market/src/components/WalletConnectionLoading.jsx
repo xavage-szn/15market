@@ -40,7 +40,7 @@ const WalletConnectionLoading = ({ onFinish, theme = 'dark' }) => {
                     transition={{ duration: 0.8, ease: "easeOut" }}
                     className="flex items-center"
                 >
-                    <img src="/logo.png" alt="15market" className={`h-[72px] md:h-[100px] w-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.1)] ${isLight ? 'brightness-0' : 'brightness-0 invert'}`} />
+                    <img src={isLight ? "/goblogo.png" : "/gowlogo.png"} alt="15market" className="h-[72px] md:h-[100px] w-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]" />
                 </motion.div>
 
                 {/* 2. Two Lines (//) Fade In from Right */}

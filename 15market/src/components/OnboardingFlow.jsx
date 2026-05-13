@@ -69,7 +69,7 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSes
                                 className="space-y-6 text-center"
                             >
                                 <div className="w-20 h-20 bg-[#3CB371]/5 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-[#3CB371]/10">
-                                    <img src="/logo.png" alt="15market" className="w-12 h-auto" />
+                                    <img src={isLight ? "/goblogo.png" : "/gowlogo.png"} alt="15market" className="w-12 h-auto" />
                                 </div>
                                 <h2 className={`text-3xl font-black uppercase tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
                                     Welcome to 15market
