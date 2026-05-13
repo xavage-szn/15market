@@ -90,7 +90,7 @@ const WalletConnectionLoading = ({ onFinish, theme = 'dark' }) => {
                                     delay: 1.6 + (i * 0.2),
                                     ease: "easeInOut" 
                                 }}
-                                className={`w-[5px] h-[5px] rounded-full ${isLight ? 'bg-black/40 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-[#1e5a38] shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`}
+                                className={`w-[5px] h-[5px] rounded-full ${isLight ? 'bg-black/40 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-white/80 shadow-[0_0_8px_rgba(255,255,255,0.3)]'}`}
                             />
                         ))}
                     </div>
@@ -102,7 +102,7 @@ const WalletConnectionLoading = ({ onFinish, theme = 'dark' }) => {
                 initial={{ width: 0 }}
                 animate={{ width: "100%" }}
                 transition={{ duration: 1.2, ease: "linear" }}
-                className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-transparent via-[#3CB371] to-transparent opacity-50"
+                className={`absolute bottom-0 left-0 h-1 bg-gradient-to-r from-transparent ${isLight ? 'via-black' : 'via-white'} to-transparent opacity-50`}
             />
         </motion.div>
     );

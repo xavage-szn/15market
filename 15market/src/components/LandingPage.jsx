@@ -4,7 +4,7 @@ import { UnifiedWalletButton } from "./UnifiedWalletButton";
 import { ThemeToggle } from "./ThemeToggle";
 
 const LandingBackground = ({ theme }) => {
-    const isLight = false; // Forced dark as requested
+    const isLight = theme === 'light';
     const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 });
 
     useEffect(() => {
@@ -57,7 +57,7 @@ const RisingBalance = () => {
 };
 
 export function LandingPage({ theme, onToggle }) {
-    const isLight = false; // Forced dark as requested
+    const isLight = theme === 'light';
     const [currentTextIndex, setCurrentTextIndex] = useState(0);
     const [displayText, setDisplayText] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);

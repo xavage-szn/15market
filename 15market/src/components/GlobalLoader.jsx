@@ -41,7 +41,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                             opacity: [0.3, 1, 0.3],
                             color: isLight 
                                 ? ['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)'] 
-                                : ['#ffffff', '#3CB371', '#ffffff']
+                                : ['#ffffff', '#ffffff', '#ffffff']
                         }}
                         transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
                         className={`text-3xl md:text-4xl font-light select-none`}
@@ -53,7 +53,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                             opacity: [1, 0.3, 1],
                             color: isLight 
                                 ? ['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)'] 
-                                : ['#3CB371', '#ffffff', '#3CB371']
+                                : ['#ffffff', '#ffffff', '#ffffff']
                         }}
                         transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
                         className={`text-3xl md:text-4xl font-light select-none -ml-1`}
@@ -91,7 +91,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                                     delay: 0.8 + (7 * 0.1) + (i * 0.2), // Types in after "Loading"
                                     ease: "easeInOut" 
                                 }}
-                                className={`w-[4px] h-[4px] rounded-full ${isLight ? 'bg-black/60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-[#3CB371] shadow-[0_0_8px_rgba(60,179,113,0.5)]'}`}
+                                className={`w-[4px] h-[4px] rounded-full ${isLight ? 'bg-black/60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-white/80 shadow-[0_0_8px_rgba(255,255,255,0.3)]'}`}
                             />
                         ))}
                     </div>
@@ -103,7 +103,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: "100%", opacity: 0.5 }}
                 transition={{ duration: 1.2, ease: "easeInOut" }}
-                className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-transparent via-[#3CB371] to-transparent"
+                className={`absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-transparent ${isLight ? 'via-black' : 'via-white'} to-transparent`}
             />
         </motion.div>
     );
