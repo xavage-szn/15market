@@ -274,7 +274,7 @@ export default function UserApp() {
   const { isConnected, address, chainId: connectedChainId, status } = useAccount();
   const { switchChain, switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
-  const { user } = usePrivy();
+  const { user, authenticated } = usePrivy();
   const { wallets } = useWallets();
   const embeddedWallet = useMemo(() => wallets.find((w) => w.walletClientType === 'privy'), [wallets]);
 
@@ -1385,15 +1385,6 @@ export default function UserApp() {
   }, []);
 
   // Sticky Authentication: Prevent flicker on sync or chain switch
-  const [authenticated, setAuthenticated] = useState(false);
-  useEffect(() => {
-    if (isConnected) {
-      setAuthenticated(true);
-    } else {
-      const timer = setTimeout(() => setAuthenticated(false), 2000); // 2s grace
-      return () => clearTimeout(timer);
-    }
-  }, [isConnected]);
 
   const wallet = useMemo(() => {
     if (!isConnected || !address) return { connected: false };
@@ -3454,7 +3445,7 @@ export default function UserApp() {
 
       {/* OVERLAY: Landing Page (Not Connected) */}
       <AnimatePresence>
-        {!isConnected && (
+        {!authenticated && (
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
