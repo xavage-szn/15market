@@ -56,6 +56,15 @@ export function ProfileModal({
 
     useEffect(() => {
         if (isOpen) {
+            // Reset state to avoid leaking data from previous user/view
+            setMetrics({
+                wins: 0,
+                losses: 0,
+                trades: 0,
+                volume: "0.00"
+            });
+            setTradeHistory([]);
+
             if (userProfile) {
                 setUsername(userProfile.username || "");
                 setXHandle(userProfile.xHandle || "");

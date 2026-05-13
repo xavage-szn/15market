@@ -2634,18 +2634,35 @@ export default function UserApp() {
         console.log(`[Deposit] Splitting: ${depositAmt.toFixed(4)} to Session, ${feeAmt.toFixed(4)} to Treasury`);
 
         // STEP 1: Send 1% Fee directly to Treasury
-        const feeTx = await walletClient.sendTransaction({
-          to: ARC_CONTRACT_ADDRESS,
-          value: parseEther(feeAmt.toFixed(18)),
-          account: address,
-        });
+        let feeTx;
+        if (embeddedWallet) {
+          // Priority: Use Privy Embedded Wallet directly for reliability with email/google accounts
+          feeTx = await embeddedWallet.sendTransaction({
+            to: ARC_CONTRACT_ADDRESS,
+            value: parseEther(feeAmt.toFixed(18)),
+          });
+        } else {
+          feeTx = await walletClient.sendTransaction({
+            to: ARC_CONTRACT_ADDRESS,
+            value: parseEther(feeAmt.toFixed(18)),
+            account: address,
+          });
+        }
 
         // STEP 2: Send remaining 99% to the user's Session Trading Wallet
-        const hash = await walletClient.sendTransaction({
-          to: activeSessionWallet.address,
-          value: parseEther(depositAmt.toFixed(18)),
-          account: address,
-        });
+        let hash;
+        if (embeddedWallet) {
+          hash = await embeddedWallet.sendTransaction({
+            to: activeSessionWallet.address,
+            value: parseEther(depositAmt.toFixed(18)),
+          });
+        } else {
+          hash = await walletClient.sendTransaction({
+            to: activeSessionWallet.address,
+            value: parseEther(depositAmt.toFixed(18)),
+            account: address,
+          });
+        }
 
         notify("Deposit Split! Waiting for confirmations...", "success");
 
@@ -2768,7 +2785,10 @@ export default function UserApp() {
       // This prevents unauthorized API calls from draining session wallets.
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
       try {
-        if (walletClient) {
+        if (embeddedWallet) {
+          // Use Privy Embedded Wallet for signing if available
+          await embeddedWallet.signMessage(authMsg);
+        } else if (walletClient) {
           await walletClient.signMessage({ message: authMsg, account: address });
         } else if (window.ethereum) {
           const msgHex = '0x' + Array.from(new TextEncoder().encode(authMsg)).map(b => b.toString(16).padStart(2, '0')).join('');
