@@ -630,6 +630,7 @@ input[type="range"]::-moz-range-thumb:hover {
   --privy-color-error: #FF7F50 !important;
 }
 
+/* 
 div[id^="privy-dialog"] {
   background: #050505 !important;
   border: 1px solid rgba(60, 179, 113, 0.3) !important;
@@ -637,9 +638,6 @@ div[id^="privy-dialog"] {
   border-radius: 24px !important;
   backdrop-filter: blur(20px) !important;
 }
-
-/* ===== PRIVY MODAL - FORCE ABOVE ALL OVERLAYS (absolute max z-index) ===== */
-/* Privy renders portals to document.body - these must beat all app-level overlays */
 
 body > div[id^="privy"],
 body > div[class*="privy"],
@@ -655,13 +653,12 @@ body > div > div[id^="privy"],
   z-index: 2147483647 !important;
 }
 
-/* The outermost body-level portal div that Privy creates */
 body > div:not(#root):not([class]) {
   z-index: 2147483647 !important;
 }
 
-/* Privy iframe (embedded wallets flow) */
 iframe[src*="privy.io"],
 iframe[id*="privy"] {
   z-index: 2147483647 !important;
 }
+*/

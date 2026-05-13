@@ -24,8 +24,30 @@ export function UnifiedWalletButton({ theme }) {
 
     // Open Privy login flow
     const onConnect = () => {
-        console.log("📂 [WALLET] Opening Privy Login...");
-        login();
+        console.log("📂 [WALLET] login() called");
+        try {
+            login({
+                onComplete: (user, isNewUser, wasAlreadyAuthenticated) => {
+                    console.log("✅ [WALLET] Login Complete", { user, isNewUser, wasAlreadyAuthenticated });
+                },
+                onError: (error) => {
+                    console.error("❌ [WALLET] Login Error:", error);
+                }
+            });
+            
+            // Check if modal doesn't appear after 2 seconds
+            setTimeout(() => {
+                const modalExists = !!document.querySelector('div[id^="privy"]');
+                if (!modalExists) {
+                    console.warn("⚠️ [WALLET] 2s passed and no Privy modal found in DOM. The login() call might have hung.");
+                } else {
+                    console.log("💎 [WALLET] Privy modal found in DOM");
+                }
+            }, 2000);
+
+        } catch (err) {
+            console.error("💥 [WALLET] login() crashed synchronously:", err);
+        }
     };
 
     const handleLogout = async () => {
