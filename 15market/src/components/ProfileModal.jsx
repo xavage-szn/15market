@@ -35,7 +35,8 @@ export function ProfileModal({
     onRetryInit,
     isEmbedded,
     isDelegated,
-    onDelegate
+    onDelegate,
+    onOpenCircleWallet
 }) {
     const [username, setUsername] = useState("");
     const [xHandle, setXHandle] = useState("");
@@ -423,6 +424,7 @@ export function ProfileModal({
                                 address={address} 
                                 isLight={isLight} 
                                 notify={notify} 
+                                onOpen={onOpenCircleWallet}
                             />
                         </div>
                     </div>

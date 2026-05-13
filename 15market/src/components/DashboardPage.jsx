@@ -24,7 +24,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     transactionHistory,
     onViewReceipt,
     uiVersion,
-    setUiVersion
+    setUiVersion,
+    onOpenCircleWallet
 }) {
     const isLight = theme === 'light';
     const { isConnected, address } = useAccount();
@@ -458,6 +459,22 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             });
                                         }} className={`py-3 ${isLight ? 'bg-white/40 border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 active:scale-95 transition-all`}>
                                             Withdraw
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2.5 mt-2.5">
+                                        <button 
+                                            onClick={() => onOpenCircleWallet && onOpenCircleWallet('send')}
+                                            className={`py-3 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-white/5 border-white/5 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#3CB371]/20 transition-all flex items-center justify-center gap-2`}
+                                        >
+                                            <Send size={10} />
+                                            Send
+                                        </button>
+                                        <button 
+                                            onClick={() => onOpenCircleWallet && onOpenCircleWallet('receive')}
+                                            className={`py-3 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-white/5 border-white/5 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#3CB371]/20 transition-all flex items-center justify-center gap-2`}
+                                        >
+                                            <ArrowDownLeft size={10} />
+                                            Receive
                                         </button>
                                     </div>
                                 </div>

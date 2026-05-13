@@ -119,26 +119,28 @@ class CircleService {
      * @param {string} tokenId 
      */
     async transfer(walletId, destinationAddress, amount, tokenId) {
-        // Developer-controlled transfers require the entity secret for signing if using the SDK,
-        // but via REST API, you need to provide the encrypted entity secret in the challenge if needed.
-        // For simple transfers, it might require a challenge-response flow.
-        
-        // However, Circle also has a "Developer-Controlled Transfer" endpoint that might be simpler
-        // if the wallet is already initialized.
-        
         console.log(`[Circle] Initiating transfer from ${walletId} to ${destinationAddress}`);
         
         const response = await this.request('POST', '/developer/transactions/transfer', {
             idempotencyKey: crypto.randomUUID(),
-            entitySecretCiphertext: this.entitySecret, // This is usually required for dev-controlled
+            entitySecretCiphertext: this.entitySecret,
             walletId,
             destinationAddress,
-            amounts: [amount],
+            amounts: [String(amount)], // Must be array of strings
             tokenId,
             feeLevel: 'MEDIUM'
         });
 
         return response;
+    }
+
+    /**
+     * Get transaction history for a wallet
+     * @param {string} walletId 
+     */
+    async getTransactions(walletId) {
+        const data = await this.request('GET', `/transactions?walletIds=${walletId}`);
+        return data.transactions || [];
     }
 }
 

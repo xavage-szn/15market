@@ -799,9 +799,22 @@ app.get('/circle/wallet/:address', async (req, res) => {
     const address = req.params.address.toLowerCase();
     const wallet = await circleService.getOrCreateWallet(address);
     const balances = await circleService.getBalance(wallet.walletId);
-    res.json({ success: true, wallet, balances });
+    const transactions = await circleService.getTransactions(wallet.walletId);
+    res.json({ success: true, wallet, balances, transactions });
   } catch (err) {
     console.error('[Circle/Wallet] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/circle/transactions/:address', async (req, res) => {
+  try {
+    const address = req.params.address.toLowerCase();
+    const wallet = await circleService.getOrCreateWallet(address);
+    const transactions = await circleService.getTransactions(wallet.walletId);
+    res.json({ success: true, transactions });
+  } catch (err) {
+    console.error('[Circle/Transactions] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

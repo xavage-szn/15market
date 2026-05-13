@@ -24,6 +24,7 @@ import { publicClient } from "./client";
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
+import { CircleWalletPage } from "./components/CircleWalletPage";
 
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
@@ -448,7 +449,9 @@ export default function UserApp() {
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
   const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [view, setView] = useState("trading"); // "trading", "dashboard", or "history"
+  const [view, setView] = useState("trading"); // "trading", "dashboard", "history", or "circle_wallet"
+  const [circleWalletMode, setCircleWalletMode] = useState(null); // 'send' or 'receive'
+  const [showCircleWallet, setShowCircleWallet] = useState(false);
   
   // WalletConnectionLoading disabled — Turnkey modal now opens instantly on click.
   // The branded splash runs on page load instead (isGlobalLoading above).
@@ -2950,6 +2953,21 @@ export default function UserApp() {
           transactionHistory={transactionHistory}
           onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
           uiVersion={uiVersion}
+          onOpenCircleWallet={(initialMode) => {
+            setCircleWalletMode(initialMode);
+            setView("circle_wallet");
+          }}
+        />
+      ) : view === "circle_wallet" ? (
+        <CircleWalletPage 
+          address={address}
+          isLight={theme === 'light'}
+          notify={notify}
+          onBack={() => {
+            setView("dashboard");
+            setCircleWalletMode(null);
+          }}
+          initialMode={circleWalletMode}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
@@ -3375,6 +3393,11 @@ export default function UserApp() {
         notify={notify}
         theme={theme}
         onUpdate={() => performStealthChecks(address)}
+        onOpenCircleWallet={(mode) => {
+          setIsProfileOpen(false);
+          setCircleWalletMode(mode);
+          setView("circle_wallet");
+        }}
       />
       <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
 

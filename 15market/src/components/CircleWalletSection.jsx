@@ -3,14 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Zap, Send, ArrowDownLeft, Copy, ExternalLink, RefreshCw, X, Check } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 
-export function CircleWalletSection({ address, isLight, notify }) {
+export function CircleWalletSection({ address, isLight, notify, onOpen }) {
     const [walletInfo, setWalletInfo] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [showSendModal, setShowSendModal] = useState(false);
-    const [sendAmount, setSendAmount] = useState("");
-    const [destAddress, setDestAddress] = useState("");
-    const [isSending, setIsSending] = useState(false);
 
     const fetchWalletInfo = async (silent = false) => {
         if (!address) return;
@@ -143,81 +139,20 @@ export function CircleWalletSection({ address, isLight, notify }) {
 
                 <div className="grid grid-cols-2 gap-3 relative z-10">
                     <button 
-                        onClick={() => setShowSendModal(true)}
+                        onClick={() => onOpen?.('send')}
                         className="flex items-center justify-center gap-2 bg-[#3CB371] text-black font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-[#3CB371]/20"
                     >
                         <Send size={14} />
                         Send Tokens
                     </button>
                     <button 
-                        onClick={() => {
-                            // Show address modal for receiving
-                            notify(`Deposit Address: ${walletInfo.wallet.address}`, "success");
-                        }}
+                        onClick={() => onOpen?.('receive')}
                         className={`flex items-center justify-center gap-2 ${isLight ? 'bg-black/5 text-black hover:bg-black/10' : 'bg-white/5 text-white hover:bg-white/10'} font-black py-3 rounded-xl text-[10px] uppercase tracking-widest transition-all`}
                     >
                         <ArrowDownLeft size={14} />
                         Receive
                     </button>
                 </div>
-
-                {/* Send Modal Overlay */}
-                <AnimatePresence>
-                    {showSendModal && (
-                        <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            className={`absolute inset-0 z-20 ${isLight ? 'bg-white' : 'bg-[#0D0D0D]'} p-5 flex flex-col`}
-                        >
-                            <div className="flex items-center justify-between mb-4">
-                                <h4 className={`text-xs font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-white'}`}>External Transfer</h4>
-                                <button onClick={() => setShowSendModal(false)} className="p-1 hover:bg-white/5 rounded-full">
-                                    <X size={16} />
-                                </button>
-                            </div>
-
-                            <div className="flex flex-col gap-3 flex-1">
-                                <div>
-                                    <label className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-1.5`}>Destination Address</label>
-                                    <input 
-                                        type="text"
-                                        placeholder="0x..."
-                                        value={destAddress}
-                                        onChange={(e) => setDestAddress(e.target.value)}
-                                        className={`w-full py-2.5 px-3 rounded-lg ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-transparent focus:border-[#3CB371]/50 outline-none text-[10px] font-bold`}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-1.5`}>Amount (USDC)</label>
-                                    <div className="relative">
-                                        <input 
-                                            type="number"
-                                            placeholder="0.00"
-                                            value={sendAmount}
-                                            onChange={(e) => setSendAmount(e.target.value)}
-                                            className={`w-full py-2.5 px-3 rounded-lg ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-transparent focus:border-[#3CB371]/50 outline-none text-[10px] font-black`}
-                                        />
-                                        <button 
-                                            onClick={() => setSendAmount(usdcBalance)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-black text-[#3CB371] uppercase"
-                                        >
-                                            Max
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <button 
-                                    onClick={handleSend}
-                                    disabled={isSending}
-                                    className="w-full bg-[#3CB371] text-black font-black py-3 rounded-xl text-[10px] uppercase tracking-widest mt-auto disabled:opacity-50"
-                                >
-                                    {isSending ? "Processing..." : "Confirm & Send"}
-                                </button>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
             
             <p className={`text-center text-[7px] mt-2 font-bold uppercase tracking-widest ${isLight ? 'text-black/20' : 'text-white/20'}`}>
