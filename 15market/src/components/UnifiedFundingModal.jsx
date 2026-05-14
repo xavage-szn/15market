@@ -182,11 +182,11 @@ export function UnifiedFundingModal({
                                     exit={{ opacity: 0, scale: 0.8, x: -50 }}
                                     className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
                                 >
-                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-2 ${isLight ? 'bg-black text-white' : 'bg-white text-black'} shadow-2xl`}>
+                                    <div className="flex items-center justify-center mb-4">
                                         <img 
                                             src={selectedToken.icon} 
-                                            className="w-10 h-10 object-contain" 
-                                            style={{ filter: isLight ? 'invert(1) brightness(0)' : 'invert(0) brightness(100)' }}
+                                            className="w-20 h-20 object-contain drop-shadow-[0_0_30px_rgba(60,179,113,0.3)]" 
+                                            style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
                                             alt={selectedToken.symbol} 
                                         />
                                     </div>

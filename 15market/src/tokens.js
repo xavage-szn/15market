@@ -3,7 +3,7 @@ export const SUPPORTED_TOKENS = [
         id: 'usdc',
         symbol: 'USDC',
         name: 'USD Coin',
-        icon: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png',
+        icon: '/usdc.png',
         chainId: 5042002,
         address: '0x0000000000000000000000000000000000000000', // Native on Arc
         decimals: 18,
@@ -12,8 +12,8 @@ export const SUPPORTED_TOKENS = [
         id: 'mon',
         symbol: 'MON',
         name: 'Monad',
-        icon: 'https://pbs.twimg.com/profile_images/1643640247754399744/wM8d-8jD_400x400.jpg',
-        chainId: 10143, // Monad Testnet Chain ID (Commonly used)
+        icon: '/monad.png',
+        chainId: 10143, 
         address: '0x0000000000000000000000000000000000000000', // Native
         decimals: 18,
     },
@@ -21,7 +21,7 @@ export const SUPPORTED_TOKENS = [
         id: 'avax',
         symbol: 'AVAX',
         name: 'Avalanche',
-        icon: 'https://cryptologos.cc/logos/avalanche-avax-logo.png',
+        icon: '/avax.png',
         chainId: 43113, // Fuji Testnet
         address: '0x0000000000000000000000000000000000000000', // Native
         decimals: 18,
@@ -30,7 +30,7 @@ export const SUPPORTED_TOKENS = [
         id: 'eth',
         symbol: 'ETH',
         name: 'Ethereum',
-        icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+        icon: '/ethereum.png',
         chainId: 11155111, // Sepolia
         address: '0x0000000000000000000000000000000000000000', // Native
         decimals: 18,
@@ -39,7 +39,7 @@ export const SUPPORTED_TOKENS = [
         id: 'sol',
         symbol: 'SOL',
         name: 'Solana',
-        icon: 'https://cryptologos.cc/logos/solana-sol-logo.png',
+        icon: '/sol.png',
         chainId: 101, // Devnet/Testnet
         address: '11111111111111111111111111111111', 
         decimals: 9,
