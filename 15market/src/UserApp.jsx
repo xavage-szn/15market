@@ -2885,7 +2885,7 @@ export default function UserApp() {
 
 
   return (
-    <div className={`h-[100dvh] w-full text-current selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
+    <div className={`min-h-screen w-full text-current selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
       {/* Sitewide Background Texture - HIGH VISIBILITY BRANDED GREEN */}
       <div className={`fixed inset-0 pointer-events-none z-0 
         ${theme === 'light' 
@@ -2912,7 +2912,7 @@ export default function UserApp() {
       
       <ErrorBoundary>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className={`${isSmallScreen ? 'h-[100dvh] w-full overflow-hidden' : 'min-h-screen h-screen overflow-hidden'} font-sans flex flex-col items-center ${themeClass}`}
+            className={`min-h-screen w-full overflow-hidden font-sans flex flex-col items-center ${themeClass}`}
         style={{
           color: theme === 'light' ? '#1f2937' : '#ffffff',
           transition: "color 0.3s ease"

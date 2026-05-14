@@ -25,24 +25,21 @@
 
 html,
 body {
-  background-color: #030303 !important;
+  background-color: #050505 !important;
   background-image:
+    url('https://www.transparenttextures.com/patterns/carbon-fibre.png'),
     radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.02) 1px, transparent 0);
-  background-size: 32px 32px;
+  background-size: auto, 32px 32px;
   background-attachment: fixed !important;
-  /* Deeper black for high contrast */
   overscroll-behavior: none !important;
-  /* Professional font stack similar to Calibre */
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
   padding: 0;
-  height: 100dvh;
-  width: 100vw;
+  min-height: 100%;
+  width: 100%;
   transition: background-color 0.3s ease;
-  overflow: hidden;
-  position: fixed;
 }
 
 /* Base Neon Glow Variables */
