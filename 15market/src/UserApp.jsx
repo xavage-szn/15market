@@ -3070,10 +3070,12 @@ export default function UserApp() {
             )}
           </AnimatePresence>
 
-
-
-
-
+          {/* Weighted Green Line Separator */}
+          {!isSmallScreen && (
+            <div className="w-full flex flex-col relative z-[170] -mt-2 md:mt-0 mb-2">
+              <div className="w-full h-[2px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.6)]" />
+            </div>
+          )}
 
           <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
             <RoundsAccessGate 
@@ -3082,7 +3084,7 @@ export default function UserApp() {
               verified={hasRoundsAccess} 
               onUnlock={handleRoundsUnlock}
             >
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-6 md:mb-8 relative z-0 flex-1 min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-5 md:mb-5 relative z-0 flex-1 min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -3100,9 +3102,11 @@ export default function UserApp() {
                       />
                     )}
 
-                    <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
-                      <GlobalTradeScroller theme={theme} />
-                    </div>
+                    {!isSmallScreen && (
+                      <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
+                        <GlobalTradeScroller theme={theme} />
+                      </div>
+                    )}
 
 
                     {/* Chart Container Wrapper for Shadow - PREVENTS CLIPPING */}
