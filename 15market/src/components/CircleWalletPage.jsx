@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { Shield, Zap, Send, ArrowDownLeft, Copy, ExternalLink, RefreshCw, X, Check, ArrowLeft, History, Wallet, Globe, Info, ChevronDown, Download, Save, CreditCard } from 'lucide-react';
+import { Shield, Zap, Send, ArrowDownLeft, Copy, ExternalLink, RefreshCw, X, Check, ArrowLeft, History, Wallet, Globe, Info, ChevronDown, Download, Save, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
 import { SUPPORTED_TOKENS } from '../tokens';
 import QRCode from 'qrcode';
@@ -223,7 +223,21 @@ export function CircleWalletPage({
             <div className="flex-1 w-full max-w-lg mx-auto px-4 py-2 flex flex-col gap-2 overflow-hidden">
                 
                 {/* Swipeable Wallet Card */}
-                <div className="relative h-[160px] md:h-[220px] w-full mt-0">
+                <div className="relative h-[160px] md:h-[220px] w-full mt-0 group">
+                    {/* Navigation Buttons (Desktop Friendly) */}
+                    <button 
+                        onClick={() => handleSwipeWallet('right')}
+                        className={`absolute left-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === 0 ? 'invisible' : ''}`}
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                    <button 
+                        onClick={() => handleSwipeWallet('left')}
+                        className={`absolute right-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === walletOptions.length - 1 ? 'invisible' : ''}`}
+                    >
+                        <ChevronRight size={20} />
+                    </button>
+
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeWalletIdx}
@@ -325,7 +339,21 @@ export function CircleWalletPage({
                                                 </div>
                                             </div>
 
-                                            <div className="relative h-[200px] w-full flex items-center justify-center overflow-hidden">
+                                            <div className="relative h-[200px] w-full flex items-center justify-center overflow-hidden group/token">
+                                                {/* Token Navigation Buttons */}
+                                                <button 
+                                                    onClick={() => handleSwipeToken('right')}
+                                                    className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === 0 ? 'invisible' : ''}`}
+                                                >
+                                                    <ChevronLeft size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleSwipeToken('left')}
+                                                    className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === SUPPORTED_TOKENS.length - 1 ? 'invisible' : ''}`}
+                                                >
+                                                    <ChevronRight size={18} />
+                                                </button>
+
                                                 <AnimatePresence mode="wait">
                                                     <motion.div
                                                         key={activeTokenIdx}
