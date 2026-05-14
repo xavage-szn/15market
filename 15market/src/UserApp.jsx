@@ -3082,7 +3082,7 @@ export default function UserApp() {
               verified={hasRoundsAccess} 
               onUnlock={handleRoundsUnlock}
             >
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 ${isSmallScreen ? 'flex-1 overflow-hidden' : 'h-auto lg:h-[calc(100vh-105px)] landscape:h-[calc(100vh-105px)]'} min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-6 md:mb-8 relative z-0 flex-1 min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
