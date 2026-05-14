@@ -207,6 +207,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                         </div>
                         <ChevronDown size={12} className={`opacity-20 group-hover:opacity-100 transition-all ${isSelectorOpen ? 'rotate-180' : ''}`} />
                     </div>
+                    <AnimatePresence>
                         {isSelectorOpen && (
                             <motion.div
                                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -233,6 +234,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             </motion.div>
                         )}
                     </AnimatePresence>
+                </div>
+            </div>
         </div>
     );
 }
