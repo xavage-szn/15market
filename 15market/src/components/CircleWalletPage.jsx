@@ -97,8 +97,10 @@ export function CircleWalletPage({
         try {
             await new Promise(r => setTimeout(r, 100));
             const dataUrl = await toPng(captureElement, {
-                pixelRatio: 2,
+                pixelRatio: 3,
                 backgroundColor: isLight ? '#ffffff' : '#0a0a0a',
+                cacheBust: true,
+                skipAutoScale: true,
             });
             const link = document.createElement('a');
             link.download = `15market-qr-${currentWallet.key}.png`;
@@ -323,7 +325,7 @@ export function CircleWalletPage({
                                                 </div>
                                             </div>
 
-                                            <div className="relative h-[120px] w-full flex items-center justify-center overflow-hidden">
+                                            <div className="relative h-[240px] w-full flex items-center justify-center overflow-hidden">
                                                 <AnimatePresence mode="wait">
                                                     <motion.div
                                                         key={activeTokenIdx}
@@ -333,21 +335,23 @@ export function CircleWalletPage({
                                                             if (info.offset.x < -50) handleSwipeToken('left');
                                                             else if (info.offset.x > 50) handleSwipeToken('right');
                                                         }}
-                                                        initial={{ opacity: 0, x: 50 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                        exit={{ opacity: 0, x: -50 }}
+                                                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                        exit={{ opacity: 0, scale: 0.8, y: -20 }}
                                                         className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
                                                     >
-                                                        <div className="flex items-center justify-center mb-4">
+                                                        <div className="flex items-center justify-center mb-0 relative">
                                                             <img 
                                                                  src={selectedToken.icon} 
-                                                                 className="w-20 h-20 object-contain drop-shadow-[0_0_30px_rgba(60,179,113,0.3)]" 
+                                                                 className="w-44 h-44 object-contain drop-shadow-[0_0_50px_rgba(60,179,113,0.4)]" 
                                                                  style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
                                                                  alt={selectedToken.symbol} 
                                                             />
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-20">
+                                                                <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'} drop-shadow-lg`}>{selectedToken.symbol}</p>
+                                                                <p className="text-[11px] font-black text-[#3CB371] uppercase tracking-[0.25em] drop-shadow-md bg-black/20 px-2 py-0.5 rounded-full">{selectedToken.name}</p>
+                                                            </div>
                                                         </div>
-                                                        <p className={`text-xl font-black ${isLight ? 'text-black' : 'text-white'}`}>{selectedToken.symbol}</p>
-                                                        <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{selectedToken.name}</p>
                                                     </motion.div>
                                                 </AnimatePresence>
                                             </div>

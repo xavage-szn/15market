@@ -141,7 +141,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
       className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: 'calc(100% - 64px)' }}
+      style={{ height: '280px' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
@@ -2965,7 +2965,8 @@ export default function UserApp() {
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
-          <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-50 safe-top ${isSmallScreen ? 'h-16' : 'h-20 lg:h-24'}`}>
+          <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-[160] safe-top ${isSmallScreen ? 'h-auto py-4' : 'h-20 lg:h-24'}`}
+            style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 20px)' } : {}}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
               <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-10' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
@@ -3070,7 +3071,7 @@ export default function UserApp() {
           </AnimatePresence>
 
           {/* Global V2 Architectural Separator - REFINED FOR FULL SCREEN */}
-          <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[1px] mb-[1px] gap-[1px] opacity-40' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
+          <div className={`w-full flex flex-col relative z-[170] ${isSmallScreen ? '-mt-[1px] mb-[1px] gap-[1px] opacity-100' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
             <div className="w-full h-[1px] bg-[#3CB371]/30 shadow-[0_0_10px_rgba(60,179,113,0.2)]" />
             {!isSmallScreen && <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />}
             {isSmallScreen && (
@@ -3166,10 +3167,10 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-auto flex-none relative' : 'h-full flex-1'} min-h-0`}
+                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[240px] flex-none relative' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
-                    <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex flex-1 min-h-0 pb-[34px] px-1' : 'hidden md:hidden lg:hidden'}`}>
+                    <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex h-full min-h-0 pb-[34px] px-1' : 'hidden md:hidden lg:hidden'}`}>
                       {/* Terminal Area */}
                       <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
                         style={{
@@ -3502,7 +3503,7 @@ export default function UserApp() {
       )}
 
       {/* Authoritative Mobile History Drawer (Unconstrained) */}
-      {isSmallScreen && authenticated && (
+      {isSmallScreen && authenticated && view === "trading" && (
         <MobileBottomHistoryPane
           isOpen={showMobileHistory}
           onToggle={() => setShowMobileHistory(!showMobileHistory)}
