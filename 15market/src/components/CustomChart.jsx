@@ -187,28 +187,26 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             </div>
 
             {/* Top Controls */}
-            <div className="absolute top-0 left-0 right-0 z-30 p-2 lg:p-4 pointer-events-none">
+            <div className="absolute top-0 left-0 right-0 z-30 p-1 lg:p-4 pointer-events-none">
                 <div className="flex items-center justify-between gap-2 pointer-events-auto">
-                            {/* Asset Trigger - Cleaned up */}
-                            <div
-                                onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                                className={`flex items-center gap-1.5 cursor-pointer px-1 py-1 transition-all pointer-events-auto group`}
-                            >
-                                <div className="flex flex-col">
-                                    <span className={`text-[10px] md:text-xs font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
-                                        {activeMarket?.symbol || 'ETH'}
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-1 h-1 rounded-full bg-[#3CB371] animate-pulse" />
-                                        <span className="text-[7px] font-bold opacity-30 uppercase tracking-widest">Live</span>
-                                    </div>
+                    {/* Asset Trigger - Cleaned up */}
+                    <div
+                        onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                        className={`flex items-center gap-1.5 cursor-pointer px-1 py-1 transition-all pointer-events-auto group`}
+                    >
+                        <div className="flex flex-col">
+                            <span className={`text-[10px] md:text-xs font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
+                                {activeMarket?.symbol || 'ETH'}
+                            </span>
+                            {window.innerWidth >= 768 && (
+                                <div className="flex items-center gap-1">
+                                    <div className="w-1 h-1 rounded-full bg-[#3CB371] animate-pulse" />
+                                    <span className="text-[7px] font-bold opacity-30 uppercase tracking-widest">Live</span>
                                 </div>
-                                <ChevronDown size={12} className={`opacity-20 group-hover:opacity-100 transition-all ${isSelectorOpen ? 'rotate-180' : ''}`} />
-                            </div>
+                            )}
                         </div>
+                        <ChevronDown size={12} className={`opacity-20 group-hover:opacity-100 transition-all ${isSelectorOpen ? 'rotate-180' : ''}`} />
                     </div>
-
-                    <AnimatePresence>
                         {isSelectorOpen && (
                             <motion.div
                                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
