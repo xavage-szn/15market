@@ -236,7 +236,7 @@ export function CircleWalletPage({
                             initial={{ opacity: 0, scale: 0.9, x: 100 }}
                             animate={{ opacity: 1, scale: 1, x: 0 }}
                             exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                            className={`w-full h-full p-6 md:p-10 rounded-[40px] border relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white border-black/5 shadow-[0_40px_100px_rgba(0,0,0,0.15)]' : 'bg-[#111] border-white/5 shadow-[0_40px_100px_rgba(0,0,0,0.6)]'}`}
+                            className={`w-full h-full p-6 md:p-10 rounded-[40px] border relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white border-black/5 shadow-[0_40px_100px_rgba(60,179,113,0.2)]' : 'bg-[#111] border-white/5 shadow-[0_40px_100px_rgba(60,179,113,0.4)]'}`}
                         >
                             {/* Animated Background Glow */}
                             <motion.div 
@@ -291,7 +291,7 @@ export function CircleWalletPage({
                     </button>
                     <button 
                         onClick={() => setShowReceiveModal(true)}
-                        className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black text-white' : 'bg-white text-black'} font-black py-5 rounded-[24px] text-xs uppercase tracking-widest active:scale-[0.95] transition-all`}
+                        className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-white font-black py-5 rounded-[24px] text-xs uppercase tracking-widest active:scale-[0.95] transition-all shadow-xl shadow-black/20`}
                     >
                         <ArrowDownLeft size={16} /> Receive
                     </button>
