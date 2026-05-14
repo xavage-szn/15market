@@ -205,7 +205,7 @@ export function CircleWalletPage({
             </div>
 
             {/* Sticky Header */}
-            <div className={`px-4 pt-10 flex items-center justify-between backdrop-blur-xl border-b safe-top ${isLight ? 'bg-white/80 border-black/5' : 'bg-black/80 border-white/5'} h-24 shrink-0`}>
+            <div className={`px-4 pt-6 flex items-center justify-between backdrop-blur-xl border-b safe-top ${isLight ? 'bg-white/80 border-black/5' : 'bg-black/80 border-white/5'} h-20 shrink-0`}>
                 <div className="flex items-center gap-3">
                     <button onClick={onBack} className={`p-2 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
                         <ArrowLeft size={18} />
@@ -220,10 +220,10 @@ export function CircleWalletPage({
                 </button>
             </div>
 
-            <div className="flex-1 w-full max-w-lg mx-auto p-4 flex flex-col gap-6 overflow-hidden">
+            <div className="flex-1 w-full max-w-lg mx-auto px-4 py-2 flex flex-col gap-2 overflow-hidden">
                 
                 {/* Swipeable Wallet Card */}
-                <div className="relative h-[180px] md:h-[240px] w-full mt-2">
+                <div className="relative h-[160px] md:h-[220px] w-full mt-0">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeWalletIdx}
@@ -299,8 +299,8 @@ export function CircleWalletPage({
 
                 {/* Secondary Section - Tokens or History */}
                 <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex items-center gap-6 mb-4 border-b border-white/5 shrink-0">
-                        <button onClick={() => setActiveTab('assets')} className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'assets' ? 'text-[#3CB371]' : 'text-white/20'}`}>
+                    <div className="flex items-center gap-6 mb-2 border-b border-white/5 shrink-0">
+                        <button onClick={() => setActiveTab('assets')} className={`pb-2 text-[11px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'assets' ? 'text-[#3CB371]' : 'text-white/20'}`}>
                             Assets & Funding
                             {activeTab === 'assets' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#3CB371]" />}
                         </button>
@@ -314,8 +314,8 @@ export function CircleWalletPage({
                         {activeTab === 'assets' ? (
                             <div className="flex flex-col gap-4">
                                 {currentWallet.key === 'main' ? (
-                                    <div className="flex flex-col gap-3">
-                                        <div className={`p-4 rounded-[32px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-4`}>
+                                    <div className="flex flex-col gap-2">
+                                        <div className={`p-2 px-4 rounded-[32px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-2`}>
                                             <div className="flex items-center justify-between">
                                                 <h3 className={`text-[10px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Funding Assets</h3>
                                                 <div className="flex gap-1">
@@ -343,13 +343,12 @@ export function CircleWalletPage({
                                                         <div className="flex items-center justify-center mb-0 relative">
                                                             <img 
                                                                  src={selectedToken.icon} 
-                                                                 className="w-40 h-40 object-contain drop-shadow-[0_0_50px_rgba(60,179,113,0.4)]" 
+                                                                 className="w-48 h-48 object-contain drop-shadow-[0_0_60px_rgba(60,179,113,0.5)]" 
                                                                  style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
                                                                  alt={selectedToken.symbol} 
                                                             />
-                                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-28">
-                                                                <p className={`text-2xl font-black ${isLight ? 'text-black' : 'text-white'} drop-shadow-lg`}>{selectedToken.symbol}</p>
-                                                                <p className="text-[11px] font-black text-[#3CB371] uppercase tracking-[0.25em] drop-shadow-md bg-black/20 px-2 py-0.5 rounded-full">{selectedToken.name}</p>
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-32">
+                                                                <p className={`text-4xl font-black ${isLight ? 'text-black' : 'text-white'} drop-shadow-2xl`}>{selectedToken.symbol}</p>
                                                             </div>
                                                         </div>
                                                     </motion.div>
