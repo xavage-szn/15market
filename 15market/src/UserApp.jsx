@@ -141,7 +141,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
       className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '280px' }}
+      style={{ height: '340px' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
