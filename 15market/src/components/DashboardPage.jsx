@@ -269,7 +269,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                 />
             )}
             {/* Fixed header — never grows */}
-            <div className={`flex-none ${isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl safe-top`}>
+            <div className={`flex-none ${isSmallScreen ? 'bg-transparent border-transparent shadow-none' : (isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5')} border-b backdrop-blur-xl safe-top`}>
                 <div className={`max-w-[1600px] mx-auto flex items-center ${isSmallScreen ? 'h-16 px-4' : 'px-8 py-4'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">

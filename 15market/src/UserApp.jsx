@@ -140,16 +140,16 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         y: isOpen ? 0 : 'calc(100% - 32px)',
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-      className="absolute inset-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '100%' }}
+      className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
+      style={{ height: 'calc(100% - 64px)' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
-        backdrop-blur-xl border-t border-x rounded-t-[32px]
+        backdrop-blur-xl border-t rounded-t-[40px]
         flex flex-col overflow-hidden
         ${isDark
-          ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
-          : 'bg-[#c8eadd] shadow-2xl border-[1.5px] border-[#3CB371]'}
+          ? 'bg-[#0D2B1D] shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
+          : 'bg-[#c8eadd] shadow-2xl border-t-[2px] border-[#3CB371]'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -2965,10 +2965,10 @@ export default function UserApp() {
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
-          <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-50 safe-top ${isSmallScreen ? 'h-16 bg-black/40 backdrop-blur-md border-b border-white/5' : 'h-20 lg:h-24'}`}>
+          <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-50 safe-top ${isSmallScreen ? 'h-16' : 'h-20 lg:h-24'}`}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-8' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
+              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-10' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
             </div>
 
             <div className="hidden lg:flex items-center gap-3 px-2 py-1">
@@ -3229,18 +3229,7 @@ export default function UserApp() {
                         </div>
                       )}
                     </div>
-                    {/* V2 Mobile History Drawer - Integrated into the terminal section */}
-                    {isSmallScreen && (
-                      <MobileBottomHistoryPane
-                        isOpen={showMobileHistory}
-                        onToggle={() => setShowMobileHistory(!showMobileHistory)}
-                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-                        theme={theme}
-                        setSelectedPnLTrade={setSelectedPnLTrade}
-                        setIsPnLOpen={setIsPnLOpen}
-                        userProfile={userProfile}
-                      />
-                    )}
+                    {/* V2 Mobile History Drawer integrated at bottom level */}
                     {/* Compact spacer */}
 
                     {!isSmallScreen && (
@@ -3510,6 +3499,19 @@ export default function UserApp() {
             We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
           </p>
         </div>
+      )}
+
+      {/* Authoritative Mobile History Drawer (Unconstrained) */}
+      {isSmallScreen && authenticated && (
+        <MobileBottomHistoryPane
+          isOpen={showMobileHistory}
+          onToggle={() => setShowMobileHistory(!showMobileHistory)}
+          tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+          theme={theme}
+          setSelectedPnLTrade={setSelectedPnLTrade}
+          setIsPnLOpen={setIsPnLOpen}
+          userProfile={userProfile}
+        />
       )}
     </motion.div >
     </ErrorBoundary>

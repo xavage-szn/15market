@@ -95,7 +95,7 @@ export function LandingPage({ theme, onToggle }) {
     }, [displayText, isDeleting, currentTextIndex]);
 
     return (
-        <div className={`h-screen w-screen ${isLight ? 'bg-[#e2efea] text-[#0a261a]' : 'bg-[#050505] text-white'} overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30 transition-colors duration-500`}>
+        <div className={`h-[100dvh] w-screen ${isLight ? 'bg-[#e2efea] text-[#0a261a]' : 'bg-[#050505] text-white'} overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30 transition-colors duration-500`}>
             <LandingBackground theme={theme} />
 
             {/* Top Navigation - Minimal */}
@@ -108,7 +108,7 @@ export function LandingPage({ theme, onToggle }) {
                     <img
                         src={isLight ? "/goblogo.png" : "/gowlogo.png"}
                         alt="15market"
-                        className={`h-16 md:h-28 lg:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)]`}
+                        className={`h-20 md:h-28 lg:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)]`}
                     />
                 </motion.div>
 
