@@ -3070,14 +3070,7 @@ export default function UserApp() {
             )}
           </AnimatePresence>
 
-          {/* Global V2 Architectural Separator - REFINED FOR FULL SCREEN */}
-          <div className={`w-full flex flex-col relative z-[170] ${isSmallScreen ? '-mt-10 mb-[1px] gap-[1px] opacity-100' : '-mt-2 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
-            <div className={`w-full max-w-[1600px] h-10 md:h-12 relative z-[150] overflow-hidden ${isSmallScreen ? '-mt-6' : ''}`}>
-              <GlobalTradeScroller theme={theme} />
-            </div>
-            <div className="w-full h-[1px] bg-[#3CB371]/30 shadow-[0_0_10px_rgba(60,179,113,0.2)]" />
-            {!isSmallScreen && <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />}
-          </div>
+
 
 
 
