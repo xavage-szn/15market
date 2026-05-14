@@ -3100,11 +3100,9 @@ export default function UserApp() {
                       />
                     )}
 
-                    {!isSmallScreen && (
-                      <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
-                        <GlobalTradeScroller theme={theme} />
-                      </div>
-                    )}
+                    <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
+                      <GlobalTradeScroller theme={theme} />
+                    </div>
 
 
                     {/* Chart Container Wrapper for Shadow - PREVENTS CLIPPING */}
