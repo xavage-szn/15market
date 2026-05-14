@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { KEEPER_URL_ARC } from '../constants';
 
-import { Zap, Shield, TrendingUp, TrendingDown, Camera, Edit3, Image as ImageIcon, Link as LinkIcon, Check } from 'lucide-react';
-import { CircleWalletSection } from './CircleWalletSection';
+import { Zap, Shield, TrendingUp, TrendingDown, Camera, Edit3, Image as ImageIcon, Link as LinkIcon, Check, Send, ArrowDownLeft } from 'lucide-react';
 
 const PRESET_AVATARS = [
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
@@ -420,12 +419,22 @@ export function ProfileModal({
                                 </div>
                             </div>
 
-                            <CircleWalletSection 
-                                address={address} 
-                                isLight={isLight} 
-                                notify={notify} 
-                                onOpen={onOpenCircleWallet}
-                            />
+                            <div className="grid grid-cols-2 gap-3 mt-4">
+                                <button 
+                                    onClick={() => onOpenCircleWallet?.('send')}
+                                    className="flex items-center justify-center gap-2 bg-[#3CB371] text-black font-black py-3 rounded-xl text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-[#3CB371]/20"
+                                >
+                                    <Send size={14} />
+                                    Send Tokens
+                                </button>
+                                <button 
+                                    onClick={() => onOpenCircleWallet?.('receive')}
+                                    className={`flex items-center justify-center gap-2 ${isLight ? 'bg-black/5 text-black hover:bg-black/10' : 'bg-white/5 text-white hover:bg-white/10'} font-black py-3 rounded-xl text-[10px] uppercase tracking-widest active:scale-[0.98] transition-all`}
+                                >
+                                    <ArrowDownLeft size={14} />
+                                    Receive
+                                </button>
+                            </div>
                         </div>
                     </div>
 

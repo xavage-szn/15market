@@ -471,16 +471,33 @@ app.post('/session/execute', async (req, res) => {
  * errors during concurrent transfers.
  */
 app.post('/session/cashout', async (req, res) => {
-  const { address, amount } = req.body;
+  const { address, amount, destination } = req.body;
   if (!address) return res.status(400).json({ error: "Missing address" });
   
   try {
     const userAddr = address.toLowerCase();
     const sessionWallet = deriveSessionWallet(userAddr);
+    const targetAddr = destination ? ethers.getAddress(destination) : ethers.getAddress(address);
+
+    // --- SECURITY VERIFICATION ---
+    const { signature, message } = req.body;
+    if (signature && message) {
+      try {
+        const recoveredAddr = ethers.verifyMessage(message, signature);
+        if (recoveredAddr.toLowerCase() !== userAddr) {
+          return res.status(401).json({ error: "Invalid signature: Address mismatch" });
+        }
+      } catch (sigErr) {
+        return res.status(401).json({ error: "Signature verification failed" });
+      }
+    } else if (destination && destination.toLowerCase() !== address.toLowerCase()) {
+      // For external transfers, we REQUIRE a signature for safety
+      return res.status(401).json({ error: "Signature required for external transfers" });
+    }
+    // Note: Internal withdrawals (to main wallet) could potentially be less strict if needed,
+    // but we've implemented signatures in the frontend now.
 
     // CRITICAL: Use a direct JsonRpcProvider (not FallbackProvider) for nonce and balance queries.
-    // FallbackProvider in ethers v6 does NOT support the 'pending' block tag, which causes
-    // stale nonce reads and lost transactions.
     const directProvider = rpc.providers[0];
     if (!directProvider) throw new Error("No RPC provider available");
 
@@ -490,9 +507,7 @@ app.post('/session/cashout', async (req, res) => {
     }
 
     const feeData = await directProvider.getFeeData();
-    // 1.3x gas multiplier for reliability on congested blocks
     const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 13n / 10n;
-    // Use a fixed safe gas limit for simple ETH transfers — estimateGas can be unreliable on Arc
     const gasLimit = 21000n;
     const gasCost = gasPrice * gasLimit;
 
@@ -500,43 +515,33 @@ app.post('/session/cashout', async (req, res) => {
     let feeAmount = 0n;
 
     if (amount && Number(amount) > 0) {
-      // FIX: Clamp to 6 decimal places BEFORE converting to wei.
-      // Number(29.99).toFixed(18) produces floating-point garbage that ethers.parseUnits rejects.
       const clampedAmount = parseFloat(Number(amount).toFixed(6));
       const requestedWei = ethers.parseUnits(clampedAmount.toString(), 18);
 
       feeAmount = (requestedWei * 1n) / 100n;
       sendAmount = requestedWei - feeAmount;
 
-      // Ensure the EOA can cover the full requested amount + gas for both transactions
       if (requestedWei + (gasCost * 2n) > balWei) {
         return res.status(400).json({ error: `Insufficient balance. Need ${ethers.formatEther(requestedWei + gasCost * 2n)} USDC.` });
       }
     } else {
-      // FULL SWEEP: Reserve gas for two transactions (fee tx + user tx)
       const totalAvailable = balWei - (gasCost * 2n);
       if (totalAvailable <= 0n) {
         return res.status(400).json({ error: "Balance too low to cover network gas." });
       }
       
-      // Calculate 1% platform fee on the amount being swept
       feeAmount = (totalAvailable * 1n) / 100n;
       sendAmount = totalAvailable - feeAmount;
-      
-      console.log(`[Full Sweep] Total: ${ethers.formatEther(balWei)} | Reserved Gas: ${ethers.formatEther(gasCost * 2n)} | Fee: ${ethers.formatEther(feeAmount)} | Payout: ${ethers.formatEther(sendAmount)}`);
     }
 
     if (sendAmount <= 0n) {
       return res.status(400).json({ error: "Balance too low to cover gas and platform fees." });
     }
 
-    console.log(`[Withdrawal] Routing: ${ethers.formatEther(sendAmount)} USDC to User | ${ethers.formatEther(feeAmount)} USDC to Treasury`);
+    console.log(`[Withdrawal] Routing: ${ethers.formatEther(sendAmount)} USDC to ${targetAddr} | ${ethers.formatEther(feeAmount)} USDC to Treasury`);
 
-    // Fetch the pending nonce from the DIRECT provider (FallbackProvider cannot do this)
     let currentNonce = await directProvider.getTransactionCount(sessionWallet.address, 'pending');
 
-    // STEP 1: Route 1% Platform Fee to Treasury
-    // We await the broadcast (not confirmation) so the nonce increment is safe
     if (feeAmount > 0n && config.TREASURY_ADDRESS && config.TREASURY_ADDRESS !== ethers.ZeroAddress) {
       try {
         const feeTx = await sessionWallet.sendTransaction({
@@ -546,33 +551,27 @@ app.post('/session/cashout', async (req, res) => {
           gasPrice,
           nonce: currentNonce
         });
-        console.log(`[Withdrawal] Fee tx broadcast: ${feeTx.hash} | Nonce: ${currentNonce}`);
-        currentNonce++; // Only increment AFTER a successful broadcast
+        currentNonce++;
       } catch (feeErr) {
         console.warn("[Withdrawal] Treasury transfer failed:", feeErr.message);
-        // Re-read nonce in case state is uncertain after the failed broadcast
         currentNonce = await directProvider.getTransactionCount(sessionWallet.address, 'pending');
       }
     }
 
-    // STEP 2: Return Remaining Funds to User's Main Wallet
     const tx = await sessionWallet.sendTransaction({
-      to: ethers.getAddress(address),
+      to: targetAddr,
       value: sendAmount,
       gasLimit,
       gasPrice,
       nonce: currentNonce
     });
-    console.log(`[Withdrawal] User tx broadcast: ${tx.hash} | Nonce: ${currentNonce} | Amount: ${ethers.formatEther(sendAmount)} USDC`);
 
-    // Sync the in-memory cache to reflect the post-withdrawal balance
     const session = cache.sessions.get(userAddr);
     if (session) {
       const newBal = await rpc.getBalance(sessionWallet.address);
       session.balance = parseFloat(newBal);
     }
 
-    // Notify frontend via WebSocket for instant balance update
     io.to(userAddr).emit('balance_update', {
       balance: String(session?.balance || '0'),
       reason: 'CASHOUT',
@@ -582,7 +581,7 @@ app.post('/session/cashout', async (req, res) => {
     res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sendAmount) });
   } catch (err) {
     console.error('[Withdrawal] Critical System Failure:', err);
-    res.status(500).json({ error: "Withdrawal error. Your funds remain safe in your session wallet. Error: " + err.message });
+    res.status(500).json({ error: "Withdrawal error. Error: " + err.message });
   }
 });
 

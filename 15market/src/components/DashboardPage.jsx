@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import CampaignLeaderboardPane from "./CampaignLeaderboardPane";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -269,8 +269,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                 />
             )}
             {/* Fixed header — never grows */}
-            <div className={`flex-none ${isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl`}>
-                <div className="max-w-[1600px] mx-auto p-3 md:px-8 md:py-4">
+            <div className={`flex-none ${isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5'} border-b backdrop-blur-xl safe-top`}>
+                <div className={`max-w-[1600px] mx-auto flex items-center ${isSmallScreen ? 'h-16 px-4' : 'px-8 py-4'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <button
@@ -333,6 +333,16 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             accept="image/jpeg,image/jpg,image/png,image/gif"
                                             onChange={handleAvatarUpload}
                                         />
+                                        {/* Circle Wallet Access Icon — mobile shortcut */}
+                                        {isSmallScreen && onOpenCircleWallet && (
+                                            <button
+                                                onClick={() => onOpenCircleWallet('send')}
+                                                className={`p-2 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all`}
+                                                title="Circle Wallet"
+                                            >
+                                                <Wallet size={14} />
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={() => setModalConfig({
                                                 title: "Profile Settings",
@@ -361,7 +371,6 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                                         }
                                                     });
                                                 },
-                                                // Added a secondary button for Avatar
                                                 footer: (
                                                     <button 
                                                         onClick={() => {
@@ -461,6 +470,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             Withdraw
                                         </button>
                                     </div>
+                                    {/* Send/Receive — desktop only; mobile uses the wallet icon in the header */}
+                                    {!isSmallScreen && (
                                     <div className="grid grid-cols-2 gap-2.5 mt-2.5">
                                         <button 
                                             onClick={() => onOpenCircleWallet && onOpenCircleWallet('send')}
@@ -477,6 +488,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             Receive
                                         </button>
                                     </div>
+                                    )}
                                 </div>
                             </div>
 

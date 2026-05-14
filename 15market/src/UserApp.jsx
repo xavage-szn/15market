@@ -2713,7 +2713,7 @@ export default function UserApp() {
    * 
    * IMPACT IF BUGGED: Funds would stay stuck in the session wallet.
    */
-  const handleWithdraw = useCallback(async (amt) => {
+  const handleWithdraw = useCallback(async (amt, destination = null) => {
     if (isExecuting) return;
 
     try {
@@ -2757,6 +2757,9 @@ export default function UserApp() {
         return;
       }
 
+      const targetAddr = destination || address;
+      const isExternal = destination && destination.toLowerCase() !== address.toLowerCase();
+
       // Reserving a small amount for gas to ensure the transaction doesn't fail on-chain
       const gasBuffer = 0.01;
       const netAmt = amtNum - gasBuffer;
@@ -2767,24 +2770,29 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
-      notify("Sign to authorize withdrawal...", "pending");
+      notify(isExternal ? `Authorizing transfer to ${destination.slice(0,6)}...` : "Sign to authorize withdrawal...", "pending");
 
       // --- SECURITY SIGNATURE ---
-      // This prevents unauthorized API calls from draining session wallets.
-      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: WITHDRAW FROM AUTO-SIGNER\nAMOUNT: ${amt} USDC\nTO: ${address}\nTIMESTAMP: ${Date.now()}`;
+      const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: ${isExternal ? 'EXTERNAL TRANSFER' : 'WITHDRAW FROM AUTO-SIGNER'}\nAMOUNT: ${amt} USDC\nTO: ${targetAddr}\nTIMESTAMP: ${Date.now()}`;
+      let signature = "authorized"; // Fallback placeholder if verification is disabled on backend
+
       try {
-        if (walletClient) {
-          await walletClient.signMessage({ message: authMsg, account: address });
+        if (embeddedWallet) {
+          // Privy Embedded Wallet (Seamless/Integrated)
+          signature = await embeddedWallet.sign(authMsg);
+        } else if (walletClient) {
+          // Wagmi / External Wallet
+          signature = await walletClient.signMessage({ message: authMsg, account: address });
         } else if (window.ethereum) {
+          // Direct EIP-1193 Injection
           const msgHex = '0x' + Array.from(new TextEncoder().encode(authMsg)).map(b => b.toString(16).padStart(2, '0')).join('');
-          await window.ethereum.request({ method: 'personal_sign', params: [msgHex, address] });
+          signature = await window.ethereum.request({ method: 'personal_sign', params: [msgHex, address] });
         } else {
           throw new Error("No wallet available to sign");
         }
-        console.log("✅ [WITHDRAW] User authorized");
       } catch (sigErr) {
         if (sigErr.code === 4001 || sigErr.message?.includes('rejected') || sigErr.message?.includes('denied')) {
-          notify("Withdrawal cancelled by user", "error");
+          notify("Transfer cancelled by user", "error");
         } else {
           notify("Signature failed: " + (sigErr.shortMessage || sigErr.message), "error");
         }
@@ -2792,11 +2800,10 @@ export default function UserApp() {
         return;
       }
 
-      notify("Processing withdrawal...", "pending");
+      notify("Processing transfer...", "pending");
 
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 
-      // Network Timeout Protection
       const controller = new AbortController();
       const fetchTimeout = setTimeout(() => controller.abort(), 60000); 
 
@@ -2809,12 +2816,14 @@ export default function UserApp() {
           body: JSON.stringify({
             address,
             amount: cleanNetAmt,
-            signature: "authorized"
+            destination: targetAddr,
+            signature: signature,
+            message: authMsg
           })
         });
       } catch (fetchErr) {
         if (fetchErr.name === 'AbortError') {
-          throw new Error("Network timeout — Arc RPC may be congested. Try again in a moment.");
+          throw new Error("Network timeout. Try again.");
         }
         throw fetchErr;
       } finally {
@@ -2823,52 +2832,49 @@ export default function UserApp() {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Withdrawal failed");
+        throw new Error(errData.error || "Transfer failed");
       }
 
       const data = await res.json();
       const withdrawalHash = data.txHash;
 
-      notify("Arc Withdrawal Successful!", "success");
+      notify(isExternal ? "Transfer Successful!" : "Arc Withdrawal Successful!", "success");
 
-      // --- OPTIMISTIC UI UPDATE ---
-      // Update local state instantly so the user doesn't think the action failed
       setSessionBalance(prev => Math.max(0, prev - amtNum));
-      setEvmBalance(prev => {
-        const current = parseFloat(prev || '0');
-        return (current + cleanNetAmt).toFixed(6);
-      });
+      if (!isExternal) {
+        setEvmBalance(prev => {
+          const current = parseFloat(prev || '0');
+          return (current + cleanNetAmt).toFixed(6);
+        });
+      }
       lastOptimisticActionTime.current = Date.now();
 
       const newTx = {
-        id: `withdraw-${Date.now()}`,
-        type: "WITHDRAW",
+        id: `tx-${Date.now()}`,
+        type: isExternal ? "TRANSFER" : "WITHDRAW",
         amount: amtNum.toFixed(4),
         timestamp: Date.now(),
         tx: withdrawalHash,
+        to: targetAddr,
         network: 'arc'
       };
 
       setTransactionHistory(prev => [newTx, ...prev]);
 
-      // Sync with cloud for persistent history tracking
       fetch(`${KEEPER_URL_ARC}/push-tx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address, transaction: newTx })
-      }).catch(e => console.warn("Failed to sync withdrawal to cloud:", e));
+      }).catch(() => {});
 
-      // Multi-wave balance refresh after withdrawal.
-      // Arc RPC nodes can take a few seconds to index the transaction, so we
-      // poll at 2s, 5s, and 10s to guarantee the updated main wallet balance is shown.
-      [2000, 5000, 10000].forEach(delay => {
+      [2000, 5000].forEach(delay => {
         setTimeout(() => {
           updateEvmSessionBal(true);
           refetchEvmBalance(true);
         }, delay);
       });
     } catch (e) {
-      notify("Withdrawal failed: " + (e.shortMessage || e.message), "error");
+      notify("Transfer failed: " + (e.shortMessage || e.message), "error");
     } finally {
       setIsExecuting(false);
     }
@@ -2952,14 +2958,16 @@ export default function UserApp() {
           initialMode={circleWalletMode}
           evmBalance={evmBalance}
           sessionBalance={sessionBalance}
+          wallets={wallets}
+          onWithdraw={handleWithdraw}
         />
       ) : (
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
-          <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 safe-top ${isSmallScreen ? 'py-0 h-auto min-h-[54px]' : 'py-1 lg:py-0'}`}>
+          <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-50 safe-top ${isSmallScreen ? 'h-16 bg-black/40 backdrop-blur-md border-b border-white/5' : 'h-20 lg:h-24'}`}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
+              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-8' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
             </div>
 
             <div className="hidden lg:flex items-center gap-3 px-2 py-1">

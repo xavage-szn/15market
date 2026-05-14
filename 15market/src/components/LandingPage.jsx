@@ -99,7 +99,7 @@ export function LandingPage({ theme, onToggle }) {
             <LandingBackground theme={theme} />
 
             {/* Top Navigation - Minimal */}
-            <nav className="w-full relative z-50 flex items-center justify-between px-6 py-4 md:px-12 md:py-8 max-w-7xl mx-auto">
+            <nav className="w-full relative z-50 flex items-center justify-between px-6 h-20 md:h-28 lg:h-32 max-w-7xl mx-auto safe-top">
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
