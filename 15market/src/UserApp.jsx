@@ -2958,6 +2958,7 @@ export default function UserApp() {
           initialMode={circleWalletMode}
           evmBalance={evmBalance}
           sessionBalance={sessionBalance}
+          sessionAddress={evmSessionWallet?.address}
           wallets={wallets}
           onWithdraw={handleWithdraw}
         />

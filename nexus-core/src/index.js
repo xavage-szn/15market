@@ -22,6 +22,8 @@ const profiles = require('./profiles');
 const { ethers } = require('ethers');
 const Redis = require('ioredis');
 const circleService = require('./services/circleService');
+const fundingService = require('./services/fundingService');
+
 
 const redis = new Redis(config.REDIS_URL || 'redis://localhost:6379');
 
@@ -300,6 +302,64 @@ app.get('/balance/:address', async (req, res) => {
     res.status(500).json({ error: "Failed to fetch balance" });
   }
 });
+
+// --- UNIFIED FUNDING ROUTES (Multi-Token Deposits) ---
+
+/**
+ * GET /fund/quote
+ * Returns the estimated USDC output for a given source token and amount.
+ */
+app.get('/fund/quote', async (req, res) => {
+  try {
+    const { fromToken, amount } = req.query;
+    if (!fromToken || !amount) return res.status(400).json({ error: "Missing parameters" });
+    
+    const quote = await fundingService.getQuote(fromToken, parseFloat(amount));
+    res.json({ success: true, ...quote });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /fund/confirm
+ * Confirms a deposit transaction and credits the user's Trading Wallet.
+ */
+app.post('/fund/confirm', async (req, res) => {
+  try {
+    const { address, amount, fromToken, txHash } = req.body;
+    if (!address || !amount || !txHash) return res.status(400).json({ error: "Missing deposit details" });
+
+    const userAddr = address.toLowerCase();
+    const sessionWallet = deriveSessionWallet(userAddr);
+
+    // Get final quote to calculate credit amount
+    const quote = await fundingService.getQuote(fromToken || 'USDC', parseFloat(amount));
+    
+    const result = await fundingService.creditTradingWallet(
+        userAddr, 
+        parseFloat(quote.estimatedUsdc), 
+        txHash, 
+        sessionWallet.address
+    );
+
+    // Update session balance in cache (optimistic sync)
+    const session = cache.sessions.get(userAddr);
+    if (session) {
+      session.balance = Number((session.balance + parseFloat(quote.estimatedUsdc)).toFixed(4));
+      io.to(userAddr).emit('balance_update', {
+        balance: String(session.balance),
+        reason: 'DEPOSIT',
+        txHash
+      });
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ─── SESSION WALLET ROUTES (Embedded EOA) ─────────────────────────────────────
 
