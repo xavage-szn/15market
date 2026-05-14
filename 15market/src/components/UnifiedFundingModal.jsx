@@ -11,17 +11,22 @@ export function UnifiedFundingModal({
     notify, 
     address, 
     sessionAddress, 
-    onSuccess 
+    onSuccess,
+    initialToken
 }) {
-    const [selectedToken, setSelectedToken] = useState(SUPPORTED_TOKENS[0]);
+    const [selectedToken, setSelectedToken] = useState(initialToken || SUPPORTED_TOKENS[0]);
     const [amount, setAmount] = useState("");
     const [isQuoting, setIsQuoting] = useState(false);
     const [quote, setQuote] = useState(null);
     const [isConfirming, setIsConfirming] = useState(false);
-    const [showTokenSelector, setShowTokenSelector] = useState(false);
     const [balances, setBalances] = useState({});
 
-    // Fetch Balances for all tokens (Simulated for this demo, in real-world use wagmi/viem)
+    // Keep state in sync with initialToken prop
+    useEffect(() => {
+        if (initialToken) setSelectedToken(initialToken);
+    }, [initialToken]);
+
+    // Fetch Balances
     useEffect(() => {
         if (!isOpen) return;
         const fetchBalances = async () => {
@@ -30,7 +35,8 @@ export function UnifiedFundingModal({
                 'usdc': 1250.45,
                 'mon': 500.0,
                 'avax': 12.5,
-                'eth': 1.2
+                'eth': 1.2,
+                'sol': 45.8
             });
         };
         fetchBalances();
@@ -62,20 +68,30 @@ export function UnifiedFundingModal({
         return () => clearTimeout(timer);
     }, [amount, selectedToken]);
 
+    const handleSwipeToken = (direction) => {
+        const currentIndex = SUPPORTED_TOKENS.findIndex(t => t.id === selectedToken.id);
+        if (direction === 'left' && currentIndex < SUPPORTED_TOKENS.length - 1) {
+            setSelectedToken(SUPPORTED_TOKENS[currentIndex + 1]);
+        } else if (direction === 'right' && currentIndex > 0) {
+            setSelectedToken(SUPPORTED_TOKENS[currentIndex - 1]);
+        }
+    };
+
     const handleFunding = async () => {
         if (!amount || !quote) return;
 
         setIsConfirming(true);
-        notify("Initiating Bridge & Swap...", "pending");
+        notify("Confirming Deposit...", "pending");
 
         try {
-            // 1. Simulate the Transaction from the Main Wallet
-            // In real world: const tx = await sendTransaction({ to: BRIDGE_ADDR, value: amount })
-            const mockTxHash = `0x${Math.random().toString(16).slice(2)}...${Math.random().toString(16).slice(-4)}`;
+            // In real app, we would use ethers/viem to send the transaction:
+            // const tx = await wallets[0].sendTransaction({ ... })
             
-            await new Promise(r => setTimeout(r, 2000)); // Simulate chain confirmation
+            const mockTxHash = `0x${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(-4)}`;
+            
+            await new Promise(r => setTimeout(r, 2000)); // Simulate chain interaction
 
-            // 2. Notify Backend to verify and credit
+            // Notify Backend
             const res = await fetch(`${KEEPER_URL_ARC}/fund/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -89,7 +105,7 @@ export function UnifiedFundingModal({
 
             const data = await res.json();
             if (data.success) {
-                notify(`Successfully funded Trading Wallet with ${quote.estimatedUsdc} USDC!`, "success");
+                notify(`Success! ${quote.estimatedUsdc} USDC added to Trading Wallet`, "success");
                 if (onSuccess) onSuccess();
                 onClose();
             } else {
@@ -118,17 +134,17 @@ export function UnifiedFundingModal({
                 initial={{ opacity: 0, y: 100 }} 
                 animate={{ opacity: 1, y: 0 }} 
                 exit={{ opacity: 0, y: 100 }}
-                className={`w-full md:max-w-xl relative z-10 rounded-t-[40px] md:rounded-[40px] border-t md:border overflow-hidden ${isLight ? 'bg-white border-black/5 shadow-2xl' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'}`}
+                className={`w-full md:max-w-xl relative z-10 rounded-t-[40px] md:rounded-[40px] border-t md:border overflow-hidden flex flex-col ${isLight ? 'bg-[#f0f9f4] border-black/5 shadow-2xl' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'}`}
             >
                 {/* Header Section */}
-                <div className={`p-6 border-b flex items-center justify-between ${isLight ? 'bg-black/[0.02] border-black/5' : 'bg-white/[0.02] border-white/5'}`}>
+                <div className={`p-6 border-b flex items-center justify-between shrink-0 ${isLight ? 'bg-white/40 border-black/5' : 'bg-white/[0.02] border-white/5'}`}>
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-[#3CB371]/10 flex items-center justify-center">
                             <Zap className="text-[#3CB371]" size={20} />
                         </div>
                         <div>
-                            <h3 className={`text-lg font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Unified Funding</h3>
-                            <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-widest">Main Wallet → Trading Wallet</p>
+                            <h3 className={`text-lg font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Quick Fund</h3>
+                            <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-widest">Main → Trading Vault</p>
                         </div>
                     </div>
                     <button onClick={onClose} className={`p-2 rounded-full transition-colors ${isLight ? 'hover:bg-black/5 text-black/40' : 'hover:bg-white/5 text-white/40'}`}>
@@ -136,62 +152,56 @@ export function UnifiedFundingModal({
                     </button>
                 </div>
 
-                <div className="p-6 flex flex-col gap-6 max-h-[80dvh] overflow-y-auto custom-scrollbar">
-                    {/* Token Selection & Balance */}
-                    <div>
-                        <label className={`text-[10px] font-black uppercase tracking-widest block mb-3 ${isLight ? 'text-black/40' : 'text-white/40'}`}>Select Source Asset</label>
-                        <div className="grid grid-cols-1 gap-3">
-                            <button 
-                                onClick={() => setShowTokenSelector(!showTokenSelector)}
-                                className={`w-full p-5 rounded-[24px] border-2 flex items-center justify-between transition-all ${showTokenSelector ? 'border-[#3CB371]' : (isLight ? 'bg-black/5 border-transparent' : 'bg-white/5 border-transparent')}`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <img src={selectedToken.icon} className="w-8 h-8 rounded-full shadow-lg" alt={selectedToken.symbol} />
-                                    <div className="text-left">
-                                        <p className={`text-base font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{selectedToken.name}</p>
-                                        <p className="text-[10px] font-bold text-[#3CB371] uppercase">Balance: {balances[selectedToken.id]?.toFixed(2) || '0.00'} {selectedToken.symbol}</p>
+                <div className="p-6 flex flex-col gap-6 max-h-[85dvh] overflow-y-auto custom-scrollbar">
+                    
+                    {/* Swipeable Token Selector */}
+                    <div className={`p-8 rounded-[40px] border relative overflow-hidden flex flex-col items-center justify-center gap-4 ${isLight ? 'bg-white border-black/5 shadow-xl' : 'bg-[#111] border-white/5 shadow-2xl'}`}>
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#3CB371]/5 blur-[60px] rounded-full" />
+                        
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <p className={`text-[10px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Select Funding Asset</p>
+                            <div className="flex gap-1">
+                                {SUPPORTED_TOKENS.map(t => (
+                                    <div key={t.id} className={`w-1 h-1 rounded-full transition-all ${selectedToken.id === t.id ? 'w-3 bg-[#3CB371]' : 'bg-white/10'}`} />
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="relative h-[100px] w-full flex items-center justify-center">
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={selectedToken.id}
+                                    drag="x"
+                                    dragConstraints={{ left: 0, right: 0 }}
+                                    onDragEnd={(e, info) => {
+                                        if (info.offset.x < -50) handleSwipeToken('left');
+                                        else if (info.offset.x > 50) handleSwipeToken('right');
+                                    }}
+                                    initial={{ opacity: 0, scale: 0.8, x: 50 }}
+                                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                                    exit={{ opacity: 0, scale: 0.8, x: -50 }}
+                                    className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
+                                >
+                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-2 ${isLight ? 'bg-black text-white' : 'bg-white text-black'} shadow-2xl`}>
+                                        <img 
+                                            src={selectedToken.icon} 
+                                            className="w-10 h-10 object-contain" 
+                                            style={{ filter: isLight ? 'invert(1) brightness(0)' : 'invert(0) brightness(100)' }}
+                                            alt={selectedToken.symbol} 
+                                        />
                                     </div>
-                                </div>
-                                <ChevronDown className={`transition-transform duration-300 ${showTokenSelector ? 'rotate-180' : ''}`} />
-                            </button>
-                            
-                            <AnimatePresence>
-                                {showTokenSelector && (
-                                    <motion.div 
-                                        initial={{ height: 0, opacity: 0 }} 
-                                        animate={{ height: 'auto', opacity: 1 }} 
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden flex flex-col gap-2"
-                                    >
-                                        {SUPPORTED_TOKENS.map(token => (
-                                            <button 
-                                                key={token.id}
-                                                onClick={() => { setSelectedToken(token); setShowTokenSelector(false); }}
-                                                className={`p-4 rounded-2xl flex items-center justify-between transition-all ${selectedToken.id === token.id ? 'bg-[#3CB371]/10 border border-[#3CB371]/30' : (isLight ? 'hover:bg-black/5' : 'hover:bg-white/5')}`}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <img src={token.icon} className="w-6 h-6 rounded-full" alt={token.symbol} />
-                                                    <span className={`text-[11px] font-black uppercase ${selectedToken.id === token.id ? 'text-[#3CB371]' : (isLight ? 'text-black' : 'text-white')}`}>{token.name}</span>
-                                                </div>
-                                                <span className="text-[10px] font-bold opacity-40">{balances[token.id]?.toFixed(2)}</span>
-                                            </button>
-                                        ))}
-                                    </motion.div>
-                                )}
+                                    <p className={`text-xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{selectedToken.symbol}</p>
+                                    <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{balances[selectedToken.id]?.toFixed(2) || '0.00'} Available</p>
+                                </motion.div>
                             </AnimatePresence>
                         </div>
                     </div>
 
                     {/* Amount Input */}
-                    <div>
-                        <div className="flex items-center justify-between mb-3">
-                            <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Amount to Fund</label>
-                            <button 
-                                onClick={() => setAmount(balances[selectedToken.id]?.toString())}
-                                className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest hover:underline"
-                            >
-                                Max Available
-                            </button>
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between px-2">
+                            <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Funding Amount</label>
+                            <button onClick={() => setAmount(balances[selectedToken.id]?.toString())} className="text-[10px] font-black text-[#3CB371] uppercase hover:underline">Use Max</button>
                         </div>
                         <div className="relative group">
                             <input 
@@ -199,66 +209,41 @@ export function UnifiedFundingModal({
                                 placeholder="0.00"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className={`w-full py-6 px-8 rounded-[32px] text-4xl font-black transition-all outline-none border-2 border-transparent focus:border-[#3CB371]/30 ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'}`}
+                                className={`w-full py-6 px-8 rounded-[32px] text-4xl font-black transition-all outline-none border-2 border-transparent focus:border-[#3CB371]/30 ${isLight ? 'bg-white text-black shadow-lg' : 'bg-white/5 text-white shadow-2xl'}`}
                             />
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                            <div className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                 <span className="text-xl font-black text-[#3CB371]">{selectedToken.symbol}</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Flow Diagram */}
-                    <div className="flex items-center justify-center gap-4 py-4">
-                        <div className="flex flex-col items-center gap-2">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isLight ? 'bg-black text-white' : 'bg-white text-black'}`}>
-                                <Wallet size={20} />
-                            </div>
-                            <span className="text-[8px] font-black uppercase opacity-40">Main Wallet</span>
-                        </div>
-                        <motion.div animate={{ x: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="text-[#3CB371]">
-                            <ArrowRight size={20} />
-                        </motion.div>
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="w-12 h-12 rounded-2xl bg-[#3CB371] text-black flex items-center justify-center shadow-lg shadow-[#3CB371]/20">
-                                <Zap size={20} />
-                            </div>
-                            <span className="text-[8px] font-black uppercase text-[#3CB371]">Trading Wallet</span>
-                        </div>
-                    </div>
-
-                    {/* Quote Results */}
+                    {/* Quote & Results */}
                     <AnimatePresence>
-                        {quote && (
-                            <motion.div 
-                                initial={{ opacity: 0, scale: 0.95 }} 
-                                animate={{ opacity: 1, scale: 1 }}
-                                className={`p-6 rounded-3xl border ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/20' : 'bg-[#3CB371]/5 border-[#3CB371]/10'}`}
-                            >
-                                <div className="flex flex-col gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Estimated Output</span>
-                                        <span className="text-2xl font-black text-[#3CB371]">{quote.estimatedUsdc} USDC</span>
+                        {quote ? (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`p-6 rounded-[32px] border ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-[#151515] border-white/5'} flex flex-col gap-4`}>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Estimated Deposit</p>
+                                        <p className="text-2xl font-black text-[#3CB371]">{quote.estimatedUsdc} USDC</p>
                                     </div>
-                                    
-                                    <div className="h-[1px] bg-[#3CB371]/10 w-full" />
-                                    
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-[8px] font-black uppercase tracking-widest opacity-40 mb-1">Exchange Rate</p>
-                                            <p className={`text-xs font-bold ${isLight ? 'text-black' : 'text-white'}`}>1 {selectedToken.symbol} ≈ {quote.rate.toFixed(2)} USDC</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[8px] font-black uppercase tracking-widest opacity-40 mb-1">Total Fees (incl. Spread)</p>
-                                            <p className="text-xs font-bold text-orange-500">{(parseFloat(quote.fee) + parseFloat(quote.spread)).toFixed(2)} USDC</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#3CB371]/10">
-                                        <ShieldCheck size={12} className="text-[#3CB371]" />
-                                        <p className="text-[8px] font-bold uppercase tracking-wide opacity-40">Exchange spread applied for high-speed automated settlement.</p>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Net Fees</p>
+                                        <p className="text-xs font-bold text-orange-500">{(parseFloat(quote.fee) + parseFloat(quote.spread)).toFixed(2)} USDC</p>
                                     </div>
                                 </div>
+                                <div className="h-[1px] bg-white/5 w-full" />
+                                <div className="flex items-center gap-2">
+                                    <ShieldCheck size={14} className="text-[#3CB371]" />
+                                    <p className="text-[9px] font-bold uppercase tracking-wide opacity-40">Automated settlement on Arc Mainnet Node.</p>
+                                </div>
                             </motion.div>
+                        ) : (
+                            <div className={`p-6 rounded-[32px] border border-dashed flex items-center gap-4 ${isLight ? 'border-black/10' : 'border-white/10'}`}>
+                                <Info size={18} className="text-[#3CB371] shrink-0" />
+                                <p className="text-[9px] font-bold uppercase leading-relaxed opacity-40">
+                                    Funding your Trading Wallet converts any asset to USDC instantly for high-speed trade execution.
+                                </p>
+                            </div>
                         )}
                     </AnimatePresence>
 
@@ -266,23 +251,15 @@ export function UnifiedFundingModal({
                     <button 
                         onClick={handleFunding}
                         disabled={!quote || isConfirming}
-                        className={`w-full py-5 rounded-[24px] font-black uppercase tracking-[0.2em] text-sm transition-all shadow-xl ${(!quote || isConfirming) ? 'bg-white/10 text-white/20 cursor-not-allowed' : 'bg-[#3CB371] text-black hover:scale-[1.02] active:scale-[0.98] shadow-[#3CB371]/20'}`}
+                        className={`w-full py-6 rounded-[28px] font-black uppercase tracking-[0.2em] text-sm transition-all shadow-xl ${(!quote || isConfirming) ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-[#3CB371] text-black hover:scale-[1.02] active:scale-[0.98] shadow-[#3CB371]/20'}`}
                     >
                         {isConfirming ? (
                             <div className="flex items-center justify-center gap-3">
                                 <RefreshCw className="animate-spin" size={18} />
-                                Processing Bridge...
+                                Bridging Assets...
                             </div>
                         ) : quote ? `Fund ${quote.estimatedUsdc} USDC` : 'Enter Amount'}
                     </button>
-
-                    {/* Warning Footer */}
-                    <div className={`p-4 rounded-2xl border border-dashed flex gap-3 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}>
-                        <Info size={16} className="text-[#3CB371] shrink-0" />
-                        <p className="text-[9px] font-bold uppercase leading-relaxed opacity-40">
-                            By funding your Trading Wallet, you authorize the platform to swap your deposited assets to USDC. Assets are settled on the Arc Network for zero-latency trading.
-                        </p>
-                    </div>
                 </div>
             </motion.div>
         </div>

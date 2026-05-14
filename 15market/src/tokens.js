@@ -34,5 +34,14 @@ export const SUPPORTED_TOKENS = [
         chainId: 11155111, // Sepolia
         address: '0x0000000000000000000000000000000000000000', // Native
         decimals: 18,
+    },
+    {
+        id: 'sol',
+        symbol: 'SOL',
+        name: 'Solana',
+        icon: 'https://cryptologos.cc/logos/solana-sol-logo.png',
+        chainId: 101, // Devnet/Testnet
+        address: '11111111111111111111111111111111', 
+        decimals: 9,
     }
 ];
