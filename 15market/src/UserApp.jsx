@@ -148,8 +148,8 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         backdrop-blur-xl border-t rounded-t-[40px]
         flex flex-col overflow-hidden
         ${isDark
-          ? 'bg-[#0D2B1D] shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
-          : 'bg-[#c8eadd] shadow-2xl border-t-[2px] border-[#3CB371]'}
+          ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
+          : 'bg-[#c8eadd]/80 shadow-2xl border-t-[2px] border-[#3CB371]'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -2885,11 +2885,11 @@ export default function UserApp() {
 
 
   return (
-    <div className={`h-[100dvh] w-full ${theme === 'light' ? 'bg-[#c8eadd] text-[#0a261a]' : 'bg-[#050505] text-white'} selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
+    <div className={`h-[100dvh] w-full text-current selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
       {/* Sitewide Background Texture - HIGH VISIBILITY BRANDED GREEN */}
       <div className={`fixed inset-0 pointer-events-none z-0 
         ${theme === 'light' 
-          ? "bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-[#3CB371] opacity-[0.08] mix-blend-multiply" 
+          ? "bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.08] mix-blend-multiply" 
           : 'opacity-0'}`} 
       />
       <AnimatePresence>
@@ -2966,10 +2966,10 @@ export default function UserApp() {
         <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
           <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-[160] safe-top ${isSmallScreen ? 'h-auto py-4' : 'h-20 lg:h-24'}`}
-            style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 20px)' } : {}}>
+            style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 10px)' } : {}}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-10' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
+              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-14' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
             </div>
 
             <div className="hidden lg:flex items-center gap-3 px-2 py-1">
@@ -3167,7 +3167,7 @@ export default function UserApp() {
 
                   <motion.div
                     layout
-                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[240px] flex-none relative' : 'h-full flex-1'} min-h-0`}
+                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[300px] flex-none relative' : 'h-full flex-1'} min-h-0`}
                   >
                     {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
                     <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex h-full min-h-0 pb-[34px] px-1' : 'hidden md:hidden lg:hidden'}`}>
