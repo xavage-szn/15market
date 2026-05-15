@@ -3072,19 +3072,19 @@ export default function UserApp() {
 
           {/* Weighted Green Line Separator */}
           {!isSmallScreen && (
-            <div className="w-full flex flex-col relative z-[170] -mt-2 md:mt-0 mb-2">
+            <div className="w-full flex flex-col relative z-[170] -mt-2 lg:-mt-6 mb-2">
               <div className="w-full h-[2px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.6)]" />
             </div>
           )}
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 -mt-[10vh] lg:mt-2 relative z-10`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 -mt-[10vh] lg:-mt-[10vh] relative z-10`}>
             <RoundsAccessGate 
               theme={theme} 
               active={gameMode === 'rounds'} 
               verified={hasRoundsAccess} 
               onUnlock={handleRoundsUnlock}
             >
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-5 md:mb-5 relative z-0 flex-1 min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-3'} mb-5 md:mb-5 relative z-0 flex-1 lg:h-[72vh] lg:min-h-[580px] min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -3114,7 +3114,7 @@ export default function UserApp() {
                       style={{
                         filter: theme === 'light' ? 'drop-shadow(0 30px 60px rgba(0,0,0,0.18))' : 'none'
                       }}>
-                      <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[540px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
+                      <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
                         style={{
                           background: isSmallScreen 
                             ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
