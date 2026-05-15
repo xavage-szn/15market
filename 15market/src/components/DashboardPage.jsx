@@ -336,7 +336,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                         {/* Circle Wallet Access Icon — desktop shortcut to transfer hub */}
                                         {!isSmallScreen && onOpenCircleWallet && (
                                             <button
-                                                onClick={() => onOpenCircleWallet('send')}
+                                                onClick={() => onOpenCircleWallet(null)}
                                                 className={`p-2 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all mr-1`}
                                                 title="Access Transfer Hub"
                                             >
@@ -346,7 +346,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                         {/* Circle Wallet Access Icon — mobile shortcut */}
                                         {isSmallScreen && onOpenCircleWallet && (
                                             <button
-                                                onClick={() => onOpenCircleWallet('send')}
+                                                onClick={() => onOpenCircleWallet(null)}
                                                 className={`p-2 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all`}
                                                 title="Circle Wallet"
                                             >

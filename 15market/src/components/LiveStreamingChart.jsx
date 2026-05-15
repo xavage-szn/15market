@@ -173,7 +173,7 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             const lo = yMinRef.current;
             const hi = yMaxRef.current;
             const range = hi - lo || 1;
-            const vPadding = isMobile ? H * 0.25 : H * 0.12;
+            const vPadding = isMobile ? H * 0.08 : H * 0.12;
             const effectiveH = H - (vPadding * 2);
             const toY = (p) => (H - vPadding) - ((p - lo) / range) * effectiveH;
             

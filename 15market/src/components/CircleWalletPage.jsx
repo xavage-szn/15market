@@ -37,6 +37,7 @@ export function CircleWalletPage({
     const [qrCodeData, setQrCodeData] = useState("");
     const [activeTab, setActiveTab] = useState('assets'); 
     const [isDownloading, setIsDownloading] = useState(false);
+    const [showDesktopFunding, setShowDesktopFunding] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
 
     const walletOptions = [
         { key: 'trading', label: 'Trading Wallet', bal: parseFloat(sessionBalance || 0), icon: Zap, color: '#3CB371' },
@@ -220,138 +221,165 @@ export function CircleWalletPage({
                 </button>
             </div>
 
-            <div className="flex-1 w-full max-w-lg mx-auto px-4 py-2 flex flex-col gap-2 overflow-hidden">
+            <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-12 overflow-hidden items-stretch justify-start">
                 
-                {/* Swipeable Wallet Card */}
-                <div className="relative h-[160px] md:h-[220px] w-full mt-0 group">
-                    {/* Navigation Buttons (Desktop Friendly) */}
-                    <button 
-                        onClick={() => handleSwipeWallet('right')}
-                        className={`absolute left-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === 0 ? 'invisible' : ''}`}
-                    >
-                        <ChevronLeft size={20} />
-                    </button>
-                    <button 
-                        onClick={() => handleSwipeWallet('left')}
-                        className={`absolute right-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === walletOptions.length - 1 ? 'invisible' : ''}`}
-                    >
-                        <ChevronRight size={20} />
-                    </button>
-
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={activeWalletIdx}
-                            drag="x"
-                            dragConstraints={{ left: 0, right: 0 }}
-                            onDragEnd={(e, info) => {
-                                if (info.offset.x < -100) handleSwipeWallet('left');
-                                else if (info.offset.x > 100) handleSwipeWallet('right');
-                            }}
-                            initial={{ opacity: 0, scale: 0.9, x: 100 }}
-                            animate={{ opacity: 1, scale: 1, x: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                            className={`w-full h-full p-6 md:p-10 rounded-[40px] border relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white border-black/5 shadow-[0_40px_100px_rgba(60,179,113,0.2)]' : 'bg-[#111] border-white/5 shadow-[0_40px_100px_rgba(60,179,113,0.4)]'}`}
+                {/* LEFT SIDE: WALLETS & PRIMARY ACTIONS */}
+                <div className={`flex flex-col gap-6 w-full lg:max-w-md shrink-0 transition-all duration-500`}>
+                    {/* Swipeable Wallet Card */}
+                    <div className="relative h-[220px] md:h-[260px] w-full mt-0 group">
+                        {/* Navigation Buttons (Desktop Friendly) */}
+                        <button 
+                            onClick={() => handleSwipeWallet('right')}
+                            className={`absolute left-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === 0 ? 'invisible' : ''}`}
                         >
-                            {/* Animated Background Glow */}
-                            <motion.div 
-                                animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
-                                transition={{ duration: 4, repeat: Infinity }}
-                                className="absolute -top-20 -right-20 w-64 h-64 rounded-full blur-[80px]"
-                                style={{ backgroundColor: currentWallet.color }}
-                            />
-
-                            <div className="flex items-center justify-between relative z-10">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center`} style={{ backgroundColor: `${currentWallet.color}15` }}>
-                                        <currentWallet.icon size={24} style={{ color: currentWallet.color }} />
-                                    </div>
-                                    <div>
-                                        <p className={`text-[10px] font-black uppercase tracking-[0.2em] opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>{currentWallet.label}</p>
-                                        <p className="text-[8px] font-bold text-[#3CB371] uppercase tracking-widest">Active Session</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-1">
-                                    {walletOptions.map((_, i) => (
-                                        <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeWalletIdx === i ? 'w-4 bg-[#3CB371]' : 'bg-white/20'}`} />
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="relative z-10">
-                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Available Balance</p>
-                                <h1 className={`text-4xl md:text-5xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
-                                    {currentWallet.bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                    <span className="text-xl md:text-2xl opacity-20 ml-2">USDC</span>
-                                </h1>
-                            </div>
-
-                            <div className="flex items-center gap-2 relative z-10">
-                                <Shield size={12} className="text-[#3CB371]" />
-                                <p className={`text-[9px] font-bold uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>
-                                    Encrypted & Deterministic Vault
-                                </p>
-                            </div>
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-
-                {/* Primary Actions */}
-                <div className="grid grid-cols-2 gap-3 shrink-0">
-                    <button 
-                        onClick={() => setShowSendModal(true)}
-                        className="flex items-center justify-center gap-3 bg-[#3CB371] text-black font-black py-5 rounded-[24px] text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20"
-                    >
-                        <Send size={16} /> Send
-                    </button>
-                    <button 
-                        onClick={() => setShowReceiveModal(true)}
-                        className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-white font-black py-5 rounded-[24px] text-xs uppercase tracking-widest active:scale-[0.95] transition-all shadow-xl shadow-black/20`}
-                    >
-                        <ArrowDownLeft size={16} /> Receive
-                    </button>
-                </div>
-
-                {/* Secondary Section - Tokens or History */}
-                <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex items-center gap-6 mb-2 border-b border-white/5 shrink-0">
-                        <button onClick={() => setActiveTab('assets')} className={`pb-2 text-[11px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'assets' ? 'text-[#3CB371]' : 'text-white/20'}`}>
-                            Assets & Funding
-                            {activeTab === 'assets' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#3CB371]" />}
+                            <ChevronLeft size={20} />
                         </button>
-                        <button onClick={() => setActiveTab('history')} className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all relative ${activeTab === 'history' ? 'text-[#3CB371]' : 'text-white/20'}`}>
-                            Activity
-                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#3CB371]" />}
+                        <button 
+                            onClick={() => handleSwipeWallet('left')}
+                            className={`absolute right-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === walletOptions.length - 1 ? 'invisible' : ''}`}
+                        >
+                            <ChevronRight size={20} />
+                        </button>
+
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeWalletIdx}
+                                drag="x"
+                                dragConstraints={{ left: 0, right: 0 }}
+                                onDragEnd={(e, info) => {
+                                    if (info.offset.x < -100) handleSwipeWallet('left');
+                                    else if (info.offset.x > 100) handleSwipeWallet('right');
+                                }}
+                                initial={{ opacity: 0, scale: 0.9, x: 100 }}
+                                animate={{ opacity: 1, scale: 1, x: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, x: -100 }}
+                                className={`w-full h-full p-8 md:p-10 rounded-[48px] border relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white border-black/5 shadow-[0_40px_100px_rgba(60,179,113,0.2)]' : 'bg-[#111] border-white/5 shadow-[0_40px_100px_rgba(60,179,113,0.4)]'}`}
+                            >
+                                {/* Animated Background Glow */}
+                                <motion.div 
+                                    animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
+                                    transition={{ duration: 4, repeat: Infinity }}
+                                    className="absolute -top-20 -right-20 w-64 h-64 rounded-full blur-[80px]"
+                                    style={{ backgroundColor: currentWallet.color }}
+                                />
+
+                                <div className="flex items-start justify-between relative z-10">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-14 h-14 rounded-full flex items-center justify-center`} style={{ backgroundColor: `${currentWallet.color}15` }}>
+                                            <currentWallet.icon size={28} style={{ color: currentWallet.color }} />
+                                        </div>
+                                        <div>
+                                            <p className={`text-[11px] font-black uppercase tracking-[0.2em] opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>{currentWallet.label}</p>
+                                            <p className="text-[9px] font-bold text-[#3CB371] uppercase tracking-widest">Active Session</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-4">
+                                        <div className="flex gap-1.5">
+                                            {walletOptions.map((_, i) => (
+                                                <div key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${activeWalletIdx === i ? 'w-5 bg-[#3CB371]' : 'bg-white/20'}`} />
+                                            ))}
+                                        </div>
+                                        {/* DESKTOP ACCESS ICON: Toggles the funding pane */}
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); setShowDesktopFunding(!showDesktopFunding); }}
+                                            className={`p-2.5 rounded-xl border hidden lg:flex hover:scale-110 active:scale-95 transition-all ${showDesktopFunding ? 'bg-[#3CB371] text-black border-[#3CB371]' : 'bg-white/5 border-white/10 text-white'}`}
+                                            title="Toggle Funding Details"
+                                        >
+                                            <Zap size={14} className={showDesktopFunding ? 'animate-pulse' : ''} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="relative z-10">
+                                    <p className={`text-[11px] font-black uppercase tracking-[0.2em] mb-2 opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Available Balance</p>
+                                    <h1 className={`text-5xl md:text-6xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
+                                        {currentWallet.bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        <span className="text-2xl md:text-3xl opacity-20 ml-3">USDC</span>
+                                    </h1>
+                                </div>
+
+                                <div className="flex items-center gap-2 relative z-10">
+                                    <Shield size={12} className="text-[#3CB371]" />
+                                    <p className={`text-[10px] font-bold uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>
+                                        Encrypted & Deterministic Vault
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Primary Actions */}
+                    <div className="grid grid-cols-2 gap-4 shrink-0">
+                        <button 
+                            onClick={() => setShowSendModal(true)}
+                            className="flex items-center justify-center gap-3 bg-[#3CB371] text-black font-black py-6 rounded-[28px] text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
+                        >
+                            <Send size={18} /> Send
+                        </button>
+                        <button 
+                            onClick={() => setShowReceiveModal(true)}
+                            className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-white font-black py-6 rounded-[28px] text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
+                        >
+                            <ArrowDownLeft size={18} /> Receive
+                        </button>
+                    </div>
+                </div>
+
+                {/* VERTICAL DIVIDER (Desktop Only) */}
+                {showDesktopFunding && (
+                    <motion.div 
+                        initial={{ opacity: 0, scaleY: 0 }}
+                        animate={{ opacity: 1, scaleY: 1 }}
+                        className="hidden lg:block w-px bg-white/10 self-stretch my-4"
+                    />
+                )}
+
+                {/* RIGHT SIDE: ASSETS & FUNDING (Hidden by default on Desktop) */}
+                {showDesktopFunding && (
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-hidden"
+                    >
+                    <div className="flex items-center gap-8 mb-6 border-b border-white/5 shrink-0">
+                        <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? 'text-[#3CB371]' : 'text-white/20'}`}>
+                            Assets & Funding
+                            {activeTab === 'assets' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#3CB371]" />}
+                        </button>
+                        <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? 'text-[#3CB371]' : 'text-white/20'}`}>
+                            Activity Pulse
+                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#3CB371]" />}
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-10">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-20">
                         {activeTab === 'assets' ? (
-                            <div className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-6">
                                 {currentWallet.key === 'main' ? (
-                                    <div className="flex flex-col gap-2">
-                                        <div className={`p-2 px-4 rounded-[32px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-2`}>
+                                    <div className="flex flex-col gap-4">
+                                        <div className={`p-8 rounded-[48px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-4`}>
                                             <div className="flex items-center justify-between">
-                                                <h3 className={`text-[10px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Funding Assets</h3>
-                                                <div className="flex gap-1">
+                                                <h3 className={`text-[11px] font-black uppercase tracking-[0.3em] opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Funding Assets</h3>
+                                                <div className="flex gap-1.5">
                                                     {SUPPORTED_TOKENS.map((_, i) => (
-                                                        <div key={i} className={`w-1 h-1 rounded-full ${activeTokenIdx === i ? 'bg-[#3CB371]' : 'bg-white/10'}`} />
+                                                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${activeTokenIdx === i ? 'bg-[#3CB371]' : 'bg-white/10'}`} />
                                                     ))}
                                                 </div>
                                             </div>
 
-                                            <div className="relative h-[200px] w-full flex items-center justify-center overflow-hidden group/token">
+                                            <div className="relative h-[240px] md:h-[280px] w-full flex items-center justify-center overflow-hidden group/token">
                                                 {/* Token Navigation Buttons */}
                                                 <button 
                                                     onClick={() => handleSwipeToken('right')}
-                                                    className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === 0 ? 'invisible' : ''}`}
+                                                    className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === 0 ? 'invisible' : ''}`}
                                                 >
-                                                    <ChevronLeft size={18} />
+                                                    <ChevronLeft size={24} />
                                                 </button>
                                                 <button 
                                                     onClick={() => handleSwipeToken('left')}
-                                                    className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === SUPPORTED_TOKENS.length - 1 ? 'invisible' : ''}`}
+                                                    className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === SUPPORTED_TOKENS.length - 1 ? 'invisible' : ''}`}
                                                 >
-                                                    <ChevronRight size={18} />
+                                                    <ChevronRight size={24} />
                                                 </button>
 
                                                 <AnimatePresence mode="wait">
@@ -371,12 +399,12 @@ export function CircleWalletPage({
                                                         <div className="flex items-center justify-center mb-0 relative">
                                                             <img 
                                                                  src={selectedToken.icon} 
-                                                                 className="w-48 h-48 object-contain drop-shadow-[0_0_60px_rgba(60,179,113,0.5)]" 
+                                                                 className="w-56 h-56 md:w-64 md:h-64 object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)]" 
                                                                  style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
                                                                  alt={selectedToken.symbol} 
                                                             />
-                                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-32">
-                                                                <p className={`text-4xl font-black ${isLight ? 'text-black' : 'text-white'} drop-shadow-2xl`}>{selectedToken.symbol}</p>
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-40">
+                                                                <p className={`text-5xl font-black ${isLight ? 'text-black' : 'text-white'} drop-shadow-2xl`}>{selectedToken.symbol}</p>
                                                             </div>
                                                         </div>
                                                     </motion.div>
@@ -385,39 +413,39 @@ export function CircleWalletPage({
 
                                             <button 
                                                 onClick={() => setShowUnifiedFunding(true)}
-                                                className="w-full py-4 rounded-2xl bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 font-black uppercase text-[10px] tracking-widest hover:bg-[#3CB371]/20 transition-all"
+                                                className="w-full py-5 rounded-[24px] bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 font-black uppercase text-xs tracking-widest hover:bg-[#3CB371]/20 transition-all"
                                             >
                                                 Fund Trading Wallet with {selectedToken.symbol}
                                             </button>
                                         </div>
 
-                                        <div className={`p-4 rounded-[32px] border border-dashed flex items-start gap-4 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}>
-                                            <Info size={18} className="text-[#3CB371] shrink-0" />
-                                            <p className={`text-[9px] font-bold uppercase leading-relaxed ${isLight ? 'text-black/60' : 'text-white/40'}`}>
+                                        <div className={`p-6 rounded-[32px] border border-dashed flex items-start gap-5 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}>
+                                            <Info size={20} className="text-[#3CB371] shrink-0" />
+                                            <p className={`text-xs font-bold uppercase leading-relaxed tracking-wider ${isLight ? 'text-black/60' : 'text-white/40'}`}>
                                                 Swipe to select token. Unified funding swaps any asset to USDC and deposits it into your Vault for zero-latency execution.
                                             </p>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col gap-3">
-                                        <div className={`p-6 rounded-[32px] border ${isLight ? 'bg-white border-black/5' : 'bg-[#111] border-white/5'} flex items-center justify-between group`}>
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-full bg-[#3CB371]/10 flex items-center justify-center">
-                                                    <Zap size={20} className="text-[#3CB371]" />
+                                    <div className="flex flex-col gap-4">
+                                        <div className={`p-8 rounded-[48px] border ${isLight ? 'bg-white border-black/5' : 'bg-[#111] border-white/5'} flex items-center justify-between group`}>
+                                            <div className="flex items-center gap-6">
+                                                <div className="w-16 h-16 rounded-full bg-[#3CB371]/10 flex items-center justify-center">
+                                                    <Zap size={28} className="text-[#3CB371]" />
                                                 </div>
                                                 <div>
-                                                    <h3 className={`text-base font-black ${isLight ? 'text-black' : 'text-white'}`}>Active Vault</h3>
-                                                    <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">Arc Testnet Node</p>
+                                                    <h3 className={`text-xl font-black ${isLight ? 'text-black' : 'text-white'}`}>Active Vault</h3>
+                                                    <p className="text-xs font-bold opacity-40 uppercase tracking-[0.2em]">Arc Testnet Node</p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className={`text-lg font-black ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>{sessionBalance.toFixed(2)}</p>
-                                                <p className="text-[9px] font-bold opacity-40 uppercase">USDC</p>
+                                                <p className={`text-3xl font-black ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>{sessionBalance.toFixed(2)}</p>
+                                                <p className="text-xs font-bold opacity-40 uppercase tracking-widest">USDC</p>
                                             </div>
                                         </div>
                                         <button 
                                             onClick={() => setShowUnifiedFunding(true)}
-                                            className="w-full py-5 rounded-[28px] bg-white/5 border border-white/5 text-white/40 font-black uppercase text-[10px] tracking-widest hover:bg-white/10 hover:text-white transition-all"
+                                            className="w-full py-6 rounded-[32px] bg-white/5 border border-white/5 text-white/40 font-black uppercase text-xs tracking-widest hover:bg-white/10 hover:text-white transition-all"
                                         >
                                             Deposit more assets
                                         </button>
@@ -427,25 +455,26 @@ export function CircleWalletPage({
                         ) : (
                             <div className="flex flex-col gap-4">
                                 {walletInfo?.transactions?.map((tx, i) => (
-                                    <div key={i} className={`p-6 rounded-[32px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex items-center justify-between`}>
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${tx.type === 'OUTGOING' ? 'bg-orange-500/10 text-orange-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
-                                                {tx.type === 'OUTGOING' ? <Send size={20} /> : <ArrowDownLeft size={20} />}
+                                    <div key={i} className={`p-8 rounded-[40px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex items-center justify-between transition-all hover:scale-[1.01]`}>
+                                        <div className="flex items-center gap-5">
+                                            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${tx.type === 'OUTGOING' ? 'bg-orange-500/10 text-orange-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
+                                                {tx.type === 'OUTGOING' ? <Send size={24} /> : <ArrowDownLeft size={24} />}
                                             </div>
                                             <div>
-                                                <p className={`text-xs font-black uppercase ${isLight ? 'text-black' : 'text-white'}`}>{tx.type}</p>
-                                                <p className="text-[9px] font-bold opacity-40 uppercase">{new Date(tx.createDate).toLocaleDateString()}</p>
+                                                <p className={`text-sm font-black uppercase tracking-wider ${isLight ? 'text-black' : 'text-white'}`}>{tx.type}</p>
+                                                <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">{new Date(tx.createDate).toLocaleDateString()}</p>
                                             </div>
                                         </div>
-                                        <p className={`text-base font-black ${tx.type === 'OUTGOING' ? 'text-orange-500' : 'text-[#3CB371]'}`}>
+                                        <p className={`text-xl font-black ${tx.type === 'OUTGOING' ? 'text-orange-500' : 'text-[#3CB371]'}`}>
                                             {tx.type === 'OUTGOING' ? '-' : '+'}{tx.amounts?.[0] || '0.00'}
                                         </p>
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
             </div>
 
             {/* Modals Integrated */}

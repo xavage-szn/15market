@@ -410,6 +410,10 @@ export default function UserApp() {
         setIsGlobalLoading(false);
       }, 1800); // 1.8s for initial branded splash
       return () => clearTimeout(timer);
+    } else {
+      // If global loading is turned off elsewhere (e.g. stealth checks),
+      // we must ensure the app is marked as ready.
+      setIsAppReady(true);
     }
   }, [isGlobalLoading]);
 
@@ -3081,7 +3085,7 @@ export default function UserApp() {
               )}
 
               {/* MAIN CONTENT CONTAINER (LOCKED DESKTOP MARGIN: lg:mt-2) */}
-              <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 ${!isSmallScreen ? 'h-full' : '-mt-[2vh]'} lg:mt-2 relative z-10`}>
+              <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 h-full lg:mt-2 relative z-10`}>
                 <RoundsAccessGate
                   theme={theme}
                   active={gameMode === 'rounds'}
@@ -3126,7 +3130,7 @@ export default function UserApp() {
                           filter: theme === 'light' ? 'drop-shadow(0 30px 60px rgba(0,0,0,0.18))' : 'none'
                         }}>
                         {/* CHART CONTAINER (LOCKED DESKTOP HEIGHT: lg:min-h-[470px]) */}
-                        <div className={`${isSmallScreen ? 'flex-1 min-h-0' : 'flex-[2] min-h-[280px]'} lg:min-h-[470px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
+                        <div className={`${isSmallScreen ? 'flex-grow h-full' : 'flex-[2] min-h-[280px]'} lg:min-h-[470px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
                           style={{
                             background: isSmallScreen
                               ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)')
@@ -3140,32 +3144,46 @@ export default function UserApp() {
                               ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
                               : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
                           }}>
-                          <div className="flex-1 w-full h-full flex relative">
-                            {/* Chart Area */}
-                            <div className="flex-1 w-full h-full relative min-w-0">
-                              <CustomChart
-                                symbol={activeMarket?.binance || 'BTCUSDT'}
-                                theme={theme}
-                                network={network}
-                                activeMarket={activeMarket}
-                                uiVersion={uiVersion}
-                                setActiveMarket={handleMarketChange}
-                                activeTrades={activeTrades}
-                                currentPrice={price}
-                                priceHistory={priceHistoryRef.current}
-                              />
-                            </div>
+                          {isSmallScreen ? (
+                            <CustomChart
+                              symbol={activeMarket?.binance || 'BTCUSDT'}
+                              theme={theme}
+                              network={network}
+                              activeMarket={activeMarket}
+                              uiVersion={uiVersion}
+                              setActiveMarket={handleMarketChange}
+                              activeTrades={activeTrades}
+                              currentPrice={price}
+                              priceHistory={priceHistoryRef.current}
+                            />
+                          ) : (
+                            <div className="flex-1 w-full h-full flex flex-row relative">
+                              {/* Chart Area */}
+                              <div className="flex-1 w-full h-full relative min-w-0">
+                                <CustomChart
+                                  symbol={activeMarket?.binance || 'BTCUSDT'}
+                                  theme={theme}
+                                  network={network}
+                                  activeMarket={activeMarket}
+                                  uiVersion={uiVersion}
+                                  setActiveMarket={handleMarketChange}
+                                  activeTrades={activeTrades}
+                                  currentPrice={price}
+                                  priceHistory={priceHistoryRef.current}
+                                />
+                              </div>
 
-                            {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
-                            <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
-                              <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
-                                Order Book
-                              </div>
-                              <div className="flex-1 overflow-hidden p-2">
-                                <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+                              {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
+                              <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                                <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                                  Order Book
+                                </div>
+                                <div className="flex-1 overflow-hidden p-2">
+                                  <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>

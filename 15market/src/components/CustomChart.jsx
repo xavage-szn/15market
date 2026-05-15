@@ -16,9 +16,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const [hasReceivedPrice, setHasReceivedPrice] = useState(false);
 
     // Track first price tick
-    if (!hasReceivedPrice && currentPrice && currentPrice !== "0" && currentPrice !== "0.00") {
-        setHasReceivedPrice(true);
-    }
+    useEffect(() => {
+        if (!hasReceivedPrice && currentPrice && currentPrice !== "0" && currentPrice !== "0.00") {
+            setHasReceivedPrice(true);
+        }
+    }, [currentPrice, hasReceivedPrice]);
 
     // Asset switch transition handler
     const onAssetSwitch = (t) => {
@@ -123,23 +125,21 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             style={{
                 backgroundColor: 'transparent',
                 borderRadius: 'inherit',
-                minHeight: uiVersion === 'v2' ? '120px' : '220px'
+                minHeight: isSmallScreen ? 'unset' : (uiVersion === 'v2' ? '120px' : '220px')
             }}
         >
             {/* Branded Background Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                 <img src="/logo.png" alt="15market" style={{
-                    width: isSmallScreen ? '70%' : '85%',
-                    maxWidth: isSmallScreen ? '240px' : '320px',
-                    opacity: isDark ? 0.1 : 0.06,
+                    width: isSmallScreen ? '180px' : '320px',
+                    opacity: isDark ? 0.12 : 0.08,
                     filter: isDark ? 'grayscale(1) brightness(0.7)' : 'grayscale(1) brightness(0.1)',
-                    mixBlendMode: isDark ? 'screen' : 'multiply',
-                    marginTop: isSmallScreen ? '4px' : '0'
+                    mixBlendMode: isDark ? 'screen' : 'multiply'
                 }} />
             </div>
 
             {/* Chart Area */}
-            <div className="absolute inset-0 z-10 flex-1 h-full">
+            <div className="absolute inset-0 z-10 w-full h-full">
                 <LiveStreamingChart
                     theme={theme}
                     symbol={symbol}
