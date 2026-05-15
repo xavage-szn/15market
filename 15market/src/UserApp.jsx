@@ -3077,20 +3077,14 @@ export default function UserApp() {
             </div>
           )}
 
-          {isSmallScreen && (
-            <div className="w-full relative z-[45] overflow-hidden mb-1 px-2">
-              <GlobalTradeScroller theme={theme} />
-            </div>
-          )}
-
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 -mt-[10vh] lg:-mt-[15vh] pb-[10vh] lg:pb-[15vh] relative z-10`}>
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 -mt-[10vh] lg:-mt-[5vh] relative z-10`}>
             <RoundsAccessGate 
               theme={theme} 
               active={gameMode === 'rounds'} 
               verified={hasRoundsAccess} 
               onUnlock={handleRoundsUnlock}
             >
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 flex-1 min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-5 md:mb-5 relative z-0 flex-1 min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
@@ -3120,7 +3114,7 @@ export default function UserApp() {
                       style={{
                         filter: theme === 'light' ? 'drop-shadow(0 30px 60px rgba(0,0,0,0.18))' : 'none'
                       }}>
-                      <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[400px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
+                      <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:min-h-[600px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
                         style={{
                           background: isSmallScreen 
                             ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
@@ -3316,7 +3310,7 @@ export default function UserApp() {
 
                         {/* Active Trade / Controls Box — hidden in Rounds */}
                         {gameMode !== 'rounds' && (
-                          <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
+                          <div className={`flex-1 min-h-[160px] md:min-h-0 lg:min-h-[300px] rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                             style={{
                               background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                               borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)',
