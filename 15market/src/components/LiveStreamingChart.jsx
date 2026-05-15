@@ -129,7 +129,9 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             const latestPriceValStr = latestPriceVal.toFixed(2);
             ctx.font = `bold ${isMobile ? 14 : 12}px IBM Plex Mono, monospace`;
             const labelW = ctx.measureText(latestPriceValStr).width + 16;
-            const liveXBoundary = W - labelW - 15;
+            
+            // CENTER SIGNAL ON MOBILE: Set boundary to center of screen
+            const liveXBoundary = isMobile ? (W / 2) : (W - labelW - 15);
             const getX = (t) => ((t - viewStartTime) / windowMs) * liveXBoundary;
 
             let pMin = latestPriceVal;

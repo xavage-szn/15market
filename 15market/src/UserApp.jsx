@@ -3077,14 +3077,20 @@ export default function UserApp() {
             </div>
           )}
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0`}>
+          {isSmallScreen && (
+            <div className="w-full relative z-[45] overflow-hidden mb-1 px-2">
+              <GlobalTradeScroller theme={theme} />
+            </div>
+          )}
+
+          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 -mt-[10vh] lg:-mt-[15vh] pb-[10vh] lg:pb-[15vh] relative z-10`}>
             <RoundsAccessGate 
               theme={theme} 
               active={gameMode === 'rounds'} 
               verified={hasRoundsAccess} 
               onUnlock={handleRoundsUnlock}
             >
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-5 md:mb-5 relative z-0 flex-1 min-h-0`}>
+                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} mb-0 md:mb-0 relative z-0 flex-1 min-h-0`}>
                   {/* V2 Integrated Content Container */}
                   <motion.div
                     layout
