@@ -11,6 +11,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const controlTextDim = isDark ? 'text-white/40' : 'text-[#0a261a]/60';
 
     const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+    const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 1024;
     const [isInternalLoading, setIsInternalLoading] = useState(false);
     const [hasReceivedPrice, setHasReceivedPrice] = useState(false);
 
@@ -128,10 +129,12 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
             {/* Branded Background Watermark */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
                 <img src="/logo.png" alt="15market" style={{
-                    width: '85%',
-                    opacity: isDark ? 0.12 : 0.08,
+                    width: isSmallScreen ? '70%' : '85%',
+                    maxWidth: isSmallScreen ? '240px' : '320px',
+                    opacity: isDark ? 0.1 : 0.06,
                     filter: isDark ? 'grayscale(1) brightness(0.7)' : 'grayscale(1) brightness(0.1)',
-                    mixBlendMode: isDark ? 'screen' : 'multiply'
+                    mixBlendMode: isDark ? 'screen' : 'multiply',
+                    marginTop: isSmallScreen ? '4px' : '0'
                 }} />
             </div>
 

@@ -125,7 +125,7 @@ function RoundsTradeScrollerComponent({ theme, isV1 = false }) {
                             const isUp = event.settlePrice > event.lockPrice;
 
                             return (
-                                <div key={`${event.id}-${i}`} className={`flex items-center gap-6 ${isV1 ? 'px-10 border-r-2' : 'px-12 border-r'} border-white/10 h-full`}>
+                                <div key={`${event.id}-${i}`} className={`flex items-center gap-5 ${isV1 ? 'px-8 border-r-2' : 'px-10 border-r'} border-white/10 h-full`}>
                                     <div className="flex items-center gap-3">
                                         <div className="p-1 rounded bg-white/10">
                                             {isUp ? <ArrowUp size={isV1 ? 10 : 12} className="text-white" /> : <ArrowDown size={isV1 ? 10 : 12} className="text-white" />}
@@ -139,15 +139,10 @@ function RoundsTradeScrollerComponent({ theme, isV1 = false }) {
                                     </div>
 
                                     <div className="flex items-center gap-3">
-                                        <div className="flex flex-col items-start leading-tight">
-                                            <span className={`${isV1 ? 'text-[8px]' : 'text-[9px]'} font-black tracking-[0.2em] text-white/50`}>STAKE</span>
-                                            <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black text-white font-mono`}>${parseFloat(event.amount || 0).toFixed(2)}</span>
-                                        </div>
-                                        <div className="h-6 w-px bg-white/10" />
                                         <div className="flex items-center gap-2">
                                             {isWon ? <Check size={isV1 ? 10 : 12} className="text-white" /> : <X size={isV1 ? 10 : 12} className="text-white/60" />}
                                             <span className={`${isV1 ? 'text-[9px]' : 'text-[10px]'} font-black uppercase tracking-widest text-white`}>
-                                                {event.status}
+                                                {isWon ? `WON $${parseFloat(event.payout || event.amount || 0).toFixed(2)}` : 'LOST'}
                                             </span>
                                         </div>
                                     </div>

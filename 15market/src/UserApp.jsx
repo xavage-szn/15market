@@ -137,7 +137,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     <motion.div
       initial={false}
       animate={{
-        y: isOpen ? 0 : 'calc(100% - 32px)',
+        y: isOpen ? 0 : 'calc(100% - 32px - 2vh)',
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
       className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
@@ -157,14 +157,14 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
           className={`
             w-full h-8 flex items-center justify-center cursor-pointer 
             transition-all duration-300 relative shrink-0
-            ${isDark 
-              ? 'bg-white/5 border-b border-white/5' 
+            ${isDark
+              ? 'bg-white/5 border-b border-white/5'
               : 'bg-[#3CB371] border-b border-[#3CB371]/20'}
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
           {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />}
-          
+
           <div className="flex items-center justify-center gap-3 w-full">
             <History size={14} className={isDark ? "text-white" : "text-white"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
             <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? "text-white" : "text-white"}`}
@@ -400,13 +400,13 @@ export default function UserApp() {
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
-  const activeTrade = activeTrades[0] || null; 
+  const activeTrade = activeTrades[0] || null;
 
   // Safety Timeout: Clear splash/global loader whenever it triggers
   useEffect(() => {
     if (isGlobalLoading) {
       const timer = setTimeout(() => {
-        setIsAppReady(true); 
+        setIsAppReady(true);
         setIsGlobalLoading(false);
       }, 1800); // 1.8s for initial branded splash
       return () => clearTimeout(timer);
@@ -452,19 +452,19 @@ export default function UserApp() {
   const [view, setView] = useState("trading"); // "trading", "dashboard", "history", or "circle_wallet"
   const [circleWalletMode, setCircleWalletMode] = useState(null); // 'send' or 'receive'
   const [showCircleWallet, setShowCircleWallet] = useState(false);
-  
+
   // WalletConnectionLoading disabled — Turnkey modal now opens instantly on click.
   // The branded splash runs on page load instead (isGlobalLoading above).
   const [isWalletLoading, setIsWalletLoading] = useState(false);
   const wasConnectedRef = useRef(isConnected);
 
   // PERSISTENCE: Transaction History
-  
+
   // PERSISTENCE: Transaction History
   useEffect(() => {
     localStorage.setItem("15market_transactions_v1", JSON.stringify(transactionHistory));
   }, [transactionHistory]);
-  
+
   // LOCK SCROLL for Mobile History Drawer
   useEffect(() => {
     if (showMobileHistory) {
@@ -514,7 +514,7 @@ export default function UserApp() {
 
   const performStealthChecks = useCallback(async (addr) => {
     if (!addr) return;
-    
+
     setIsGlobalLoading(true);
     setGlobalLoadingProgress(0);
     setIsOffline(!navigator.onLine);
@@ -550,16 +550,16 @@ export default function UserApp() {
 
         // 1. Database User Verification (SILENT)
         const profileRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
-        
+
         if (profileRes && profileRes.ok) {
           const pData = await profileRes.json();
           setUserProfile(pData);
           if (!pData.username) {
-             setShowOnboarding(true);
-             localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
+            setShowOnboarding(true);
+            localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
           } else {
-             setShowOnboarding(false);
-             localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+            setShowOnboarding(false);
+            localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
           }
         } else {
           // Force onboarding if profile missing or 404
@@ -574,7 +574,7 @@ export default function UserApp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address: addr.toLowerCase() })
         }).catch(() => null);
-        
+
         if (sessionRes && sessionRes.ok) {
           const sData = await sessionRes.json();
           setSessionBalance(parseFloat(sData.balance || 0));
@@ -607,7 +607,7 @@ export default function UserApp() {
           setIsOffline(true);
         }
       }, 3000);
-      
+
       // We don't block the UI forever if it's already cached
       if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
         setTimeout(() => { if (!success) setIsGlobalLoading(false); }, 10000);
@@ -745,7 +745,7 @@ export default function UserApp() {
   const [isSignerInitializing, setIsSignerInitializing] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
-  
+
   // Security Handshake Purged
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
@@ -775,14 +775,18 @@ export default function UserApp() {
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
   );
   const [isSmallScreen, setIsSmallScreen] = useState(
-    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
+    typeof window !== 'undefined' ? (window.innerWidth < 1024 && window.innerHeight > window.innerWidth) : false
   );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
-      setIsPortrait(window.innerHeight > window.innerWidth);
-      setIsSmallScreen(window.innerWidth < 1024); 
+      const portrait = window.innerHeight > window.innerWidth;
+      const small = window.innerWidth < 1024;
+      setIsPortrait(portrait);
+      // The Mobile UI is now strictly locked to Portrait orientation on small screens.
+      // Landscape orientation will always trigger the Desktop view for maximum workspace.
+      setIsSmallScreen(small && portrait);
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -793,7 +797,7 @@ export default function UserApp() {
     };
   }, []);
 
-  const showPortraitLock = false; 
+  const showPortraitLock = false;
 
   const postDebugLog = useCallback((payload) => {
 
@@ -843,12 +847,12 @@ export default function UserApp() {
         const current = parseFloat(prev || '0');
         return Math.abs(newBalNum - current) > 0.000001 ? formatted : prev;
       });
-    } catch (e) { 
+    } catch (e) {
       // Last resort: direct on-chain fetch (no comparison, just set it)
       try {
         const balWei = await publicClient.getBalance({ address });
         setEvmBalance(formatUnits(balWei, 18));
-      } catch (err) {}
+      } catch (err) { }
     }
   }, [address]);
 
@@ -860,7 +864,7 @@ export default function UserApp() {
 
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
-    
+
     // GUARD: If user just performed an optimistic action (Trade/Deposit), 
     // ignore backend syncs for 15s to allow chain confirmation.
     const msSinceAction = Date.now() - lastOptimisticActionTime.current;
@@ -939,7 +943,7 @@ export default function UserApp() {
           // If in both, merge them with a status hierarchy
           const statusOrder = { "PAID": 4, "WON": 3, "LOST": 3, "RESOLVING": 2, "PENDING": 1, "TIMEOUT": 0 };
           const finalStatus = (statusOrder[local.status] || 0) > (statusOrder[bt.status] || 0) ? local.status : bt.status;
-          
+
           mergedMap.set(key, {
             ...bt,
             ...local, // Prefer local fields for UI state (optimistic, etc)
@@ -980,20 +984,20 @@ export default function UserApp() {
       }).forEach(t => {
         const key = getTradeKey(t);
         const local = prev.find(p => getTradeKey(p) === key);
-        
+
         const startTime = (t.timestamp || t.startTime || local?.startTime || now);
         const normStart = startTime > 1000000000000 ? startTime : startTime * 1000;
         const expiryMs = local?.expiryMs || t.expiryMs || (normStart + (t.duration * 1000));
 
         // Only keep in active view if not too old
         if (now <= (expiryMs + GHOST_GRACE)) {
-           mergedMap.set(key, { 
-             ...local, 
-             ...t, 
-             startTime: normStart, 
-             expiryMs, 
-             confirmed: true 
-           });
+          mergedMap.set(key, {
+            ...local,
+            ...t,
+            startTime: normStart,
+            expiryMs,
+            confirmed: true
+          });
         }
       });
 
@@ -1020,7 +1024,7 @@ export default function UserApp() {
 
     try {
       setIsSignerInitializing(true);
-      
+
       const res = await fetch(`${KEEPER_URL_ARC}/session/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1035,7 +1039,7 @@ export default function UserApp() {
       if (!data.sessionAddress) throw new Error("No session address returned");
 
       const sessionObj = { address: data.sessionAddress, isRemote: true };
-      
+
       setEvmSessionWallet(sessionObj);
       setSessionBalance(parseFloat(data.balance) || 0);
       setIsSessionSynced(true);
@@ -1063,28 +1067,28 @@ export default function UserApp() {
         const data = await res.json();
         if (data && !data.error) {
           setUserProfile(data);
-          
+
           if (!data.username) {
-             setShowOnboarding(true);
-             localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+            setShowOnboarding(true);
+            localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
           } else {
-             setShowOnboarding(false);
-             localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+            setShowOnboarding(false);
+            localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
           }
-          
+
           // Persistent History Sync: Merge backend profile trades into UI history
           if (Array.isArray(data.trades)) {
             reconcileTrades(data.trades);
           }
           // AUTO-INIT session wallet for returning users
           if (!evmSessionWallet && !isSignerInitializing) {
-             initializeSessionWallet();
+            initializeSessionWallet();
           }
         }
       } else if (res.status === 404) {
-         // Profile wiped or never existed
-         setShowOnboarding(true);
-         localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+        // Profile wiped or never existed
+        setShowOnboarding(true);
+        localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
       }
     } catch (e) {
       console.error("Profile fetch error:", e);
@@ -1164,14 +1168,14 @@ export default function UserApp() {
 
   useEffect(() => {
     if (!address) return;
-    
+
     // Bind Socket listeners
     const unbindBal = socketService.on('balance_update', (data) => {
       // GUARD: If user just performed an optimistic action, ignore socket updates for 15s
       // EXCEPT for winnings, which we always want to see instantly.
       const msSinceAction = Date.now() - lastOptimisticActionTime.current;
       const isWinningEvent = data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED';
-      
+
       if (msSinceAction < 15000 && !isWinningEvent) return;
 
       const val = data.balance || data.available;
@@ -1182,30 +1186,30 @@ export default function UserApp() {
       if (data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED') {
         const payoutAmt = parseFloat(data.payout || 0);
         const reasonLabel = data.reason === 'WIN_PAYOUT_SETTLED' ? 'Confirmed' : 'Received';
-        
+
         notify(`$${payoutAmt.toFixed(2)} has been added to your balance`, "success", () => {
           // Find the trade in history or active to show receipt
           const tid = String(data.betId || "");
           const tx = String(data.txHash || "");
-          const trade = [...activeTrades, ...tradeHistory].find(t => 
-            (tid && String(t.id || t.nonce) === tid) || 
+          const trade = [...activeTrades, ...tradeHistory].find(t =>
+            (tid && String(t.id || t.nonce) === tid) ||
             (tx && String(t.tx || t.txHash) === tx)
           );
           if (trade) {
-             setSelectedTransaction({
-                ...trade,
-                tx: data.txHash || trade.tx
-             });
-             setIsTransactionReceiptOpen(true);
+            setSelectedTransaction({
+              ...trade,
+              tx: data.txHash || trade.tx
+            });
+            setIsTransactionReceiptOpen(true);
           }
         });
 
         if (data.reason === 'WIN_PAYOUT_SETTLED') {
-           const tid = String(data.betId || "");
-           const tx = String(data.txHash || "");
-           const matchFn = t => (tid && String(t.id || t.nonce) === tid) || (tx && String(t.tx || t.txHash) === tx);
-           setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
-           setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+          const tid = String(data.betId || "");
+          const tx = String(data.txHash || "");
+          const matchFn = t => (tid && String(t.id || t.nonce) === tid) || (tx && String(t.tx || t.txHash) === tx);
+          setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+          setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
         }
         triggerGlobalRefresh(true);
       }
@@ -1215,11 +1219,11 @@ export default function UserApp() {
       const tid = String(data.betId || data.tradeId);
       setActiveTrades(prev => prev.map(t => {
         if (String(t.id || t.nonce) === tid) {
-          return { 
-            ...t, 
-            timeLeft: data.timeLeft, 
-            currentPrice: data.currentPrice, 
-            isWinning: data.isWinning 
+          return {
+            ...t,
+            timeLeft: data.timeLeft,
+            currentPrice: data.currentPrice,
+            isWinning: data.isWinning
           };
         }
         return t;
@@ -1231,8 +1235,8 @@ export default function UserApp() {
       const tid = String(data.betId || data.tradeId);
       const updateFn = (t) => {
         if (String(t.id || t.nonce) === tid) {
-          return { 
-            ...t, 
+          return {
+            ...t,
             status: data.won ? 'WON' : 'LOST',
             won: data.won,
             settlementPrice: data.exitPrice,
@@ -1261,8 +1265,8 @@ export default function UserApp() {
       const tid = String(data.betId || data.tradeId);
       const updateFn = (t) => {
         if (String(t.id || t.nonce) === tid) {
-          return { 
-            ...t, 
+          return {
+            ...t,
             status: data.won ? 'WON' : 'LOST',
             won: data.won,
             confirmed: true,
@@ -1280,11 +1284,11 @@ export default function UserApp() {
     const unbindPayout = socketService.on('payout_completed', (data) => {
       console.log("[Socket] Payout Completed:", data);
       const tid = String(data.betId || data.tradeId);
-      
+
       const updateFn = (t) => {
         if (String(t.id || t.tx || t.nonce) === tid) {
-          return { 
-            ...t, 
+          return {
+            ...t,
             status: 'PAID',
             payoutTx: data.txHash || data.tx,
             tx: data.txHash || data.tx,
@@ -1304,11 +1308,11 @@ export default function UserApp() {
     const unbindPayoutFailed = socketService.on('payout_failed', (data) => {
       console.warn("[Socket] Payout Failed:", data);
       const tid = String(data.betId || data.tradeId);
-      
+
       const updateFn = (t) => {
         if (String(t.id || t.tx || t.nonce) === tid) {
-          return { 
-            ...t, 
+          return {
+            ...t,
             status: 'PAYOUT_FAILED',
             payoutPending: false,
             error: data.message || "On-chain payout failed"
@@ -1343,7 +1347,7 @@ export default function UserApp() {
       unbindErr();
     };
   }, [address, notify, triggerGlobalRefresh]);
-  
+
 
 
 
@@ -1353,7 +1357,7 @@ export default function UserApp() {
       // 1. Initial Fetch (Balance only syncs on Mount or Transaction)
       triggerGlobalRefresh(true);
       fetchMyProfile();
-      
+
       // 2. Ensure session wallet is initialized immediately if missing
       // (Consolidated with the auto-init logic above to prevent loops)
     }
@@ -1419,7 +1423,7 @@ export default function UserApp() {
   const toggleSessionMode = () => {
     // Session mode is now the only mode. This just ensures we are synced.
     if (!evmSessionWallet) {
-       initializeSessionWallet();
+      initializeSessionWallet();
     }
   };
 
@@ -1441,13 +1445,13 @@ export default function UserApp() {
       }
     };
     fetchTreasury();
-  }, []); 
+  }, []);
 
   // Execute trade
   const executeTrade = async (params = null) => {
     const probeId = `exec-${Date.now()}-${++execProbeSeqRef.current}`;
     // #region agent log
-    postDebugLog({runId:'initial',hypothesisId:'H1',location:'UserApp.jsx:executeTrade:entry',message:'executeTrade entry',data:{probeId,isExecuting,gameMode,paramsType:params?.type || null,sessionMode,sessionBalance:sessionBalanceRef.current,amount,duration,direction}});
+    postDebugLog({ runId: 'initial', hypothesisId: 'H1', location: 'UserApp.jsx:executeTrade:entry', message: 'executeTrade entry', data: { probeId, isExecuting, gameMode, paramsType: params?.type || null, sessionMode, sessionBalance: sessionBalanceRef.current, amount, duration, direction } });
     // #endregion
     if (isExecuting) return;
 
@@ -1476,13 +1480,13 @@ export default function UserApp() {
     const stakeAmt = parseFloat(sanitizedAmount);
 
     // Reserve a tiny margin for gas (USDC is gas on Arc)
-    const gasMargin = 0.001; 
+    const gasMargin = 0.001;
 
     if (stakeAmt + gasMargin > currentBal) {
       return notify(`Insufficient Session Balance. Need at least ${(stakeAmt + gasMargin).toFixed(4)} USDC. Please Deposit.`, "error");
     }
     // #region agent log
-    postDebugLog({runId:'initial',hypothesisId:'H2',location:'UserApp.jsx:executeTrade:validated',message:'trade validated pre-submit',data:{probeId,activeType,stakeAmt,currentBal,gasMargin,activeDirection,activeDuration}});
+    postDebugLog({ runId: 'initial', hypothesisId: 'H2', location: 'UserApp.jsx:executeTrade:validated', message: 'trade validated pre-submit', data: { probeId, activeType, stakeAmt, currentBal, gasMargin, activeDirection, activeDuration } });
     // #endregion
 
     if (Number(activeAmount) < parseFloat(platformSettings.minBet) && activeType !== 'rounds') {
@@ -1514,7 +1518,7 @@ export default function UserApp() {
       if (!isConnected) {
         throw new Error("Please connect wallet first");
       }
-      
+
       let txHash;
 
       // ─── ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) ───
@@ -1527,7 +1531,7 @@ export default function UserApp() {
         setSessionBalance(prev => Math.max(0, prev - amtNum));
         lastOptimisticActionTime.current = Date.now();
         // #region agent log
-        postDebugLog({runId:'initial',hypothesisId:'H3',location:'UserApp.jsx:executeTrade:rounds:deduct1',message:'rounds first optimistic deduction applied',data:{probeId,amtNum,balanceBefore:sessionBalanceRef.current}});
+        postDebugLog({ runId: 'initial', hypothesisId: 'H3', location: 'UserApp.jsx:executeTrade:rounds:deduct1', message: 'rounds first optimistic deduction applied', data: { probeId, amtNum, balanceBefore: sessionBalanceRef.current } });
         // #endregion
 
         if (evmSessionWallet) {
@@ -1598,7 +1602,7 @@ export default function UserApp() {
       // --- Show trade card as PENDING immediately (Optimistic) ---
       const confirmedNow = Date.now();
       const dedupeAndAdd = (prev, item) => [item, ...prev.filter(t => (
-        String(t.id) !== String(item.id) && 
+        String(t.id) !== String(item.id) &&
         (!item.tx || String(t.tx) !== String(item.tx)) &&
         (!item.nonce || String(t.nonce) !== String(item.nonce))
       ))];
@@ -1665,7 +1669,7 @@ export default function UserApp() {
           // ✅ Trade Active (On-chain stake moved)
           const confirmedTradeId = data.tradeId || tradeId;
           const txHash = data.txHash;
-          
+
           setActiveTrades(prev => prev.map(t =>
             t.id === tradeId
               ? { ...t, id: confirmedTradeId, tx: txHash, confirmed: true, status: 'PENDING' }
@@ -1689,7 +1693,7 @@ export default function UserApp() {
       };
 
       backgroundTrade();
-      
+
       // Safety: If backend hangs forever, we still want to let the user trade again
       setTimeout(() => {
         setIsExecuting(false);
@@ -1866,13 +1870,13 @@ export default function UserApp() {
       if (typeof p === 'number' && p > 0) {
         const truncated = Math.floor(p * 100) / 100;
         const pStr = truncated.toFixed(2);
-        
+
         setPrice(pStr);
         priceRef.current = pStr;
-        
+
         priceHistoryRef.current.push({ p: truncated, t: sourceTs });
         if (priceHistoryRef.current.length > 500) priceHistoryRef.current.shift();
-        
+
         lastPriceUpdateRef.current = Date.now();
       }
     }, 200);
@@ -1901,10 +1905,10 @@ export default function UserApp() {
         address && data.userAddr.toLowerCase() === address.toLowerCase();
       if (!isMine) return;
 
-      const betId       = String(data.betId || data.id);
+      const betId = String(data.betId || data.id);
       const finalStatus = data.won ? 'WON' : 'LOST';
-      const exitPrice   = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
-      const payout      = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
+      const exitPrice = data.exitPrice ? parseFloat(data.exitPrice).toFixed(2) : '0.00';
+      const payout = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
 
       console.log(`[Settlement] Backend settled #${betId}: ${finalStatus} @ $${exitPrice}`);
       lockedResults.current.set(betId, { status: finalStatus, settlementPrice: exitPrice });
@@ -1912,23 +1916,23 @@ export default function UserApp() {
 
       // Build the fully-settled trade record
       const settledRecord = {
-        id:              betId,
-        nonce:           betId,
-        status:          finalStatus,
+        id: betId,
+        nonce: betId,
+        status: finalStatus,
         settlementPrice: exitPrice,
-        entryPrice:      data.entryPrice ? parseFloat(data.entryPrice).toFixed(2) : '0.00',
+        entryPrice: data.entryPrice ? parseFloat(data.entryPrice).toFixed(2) : '0.00',
         exitPrice,
         payout,
-        won:             data.won,
-        direction:       data.direction === 1 || data.direction === 'UP' ? 'UP' : 'DOWN',
-        amount:          data.amount,
-        symbol:          data.symbol || 'ETH',
-        duration:        data.duration,
-        timestamp:       data.timestamp || Date.now(),
-        txHash:          data.txHash || null,
-        tx:              data.txHash || null,
-        backendSettled:  true,
-        balanceApplied:  true,
+        won: data.won,
+        direction: data.direction === 1 || data.direction === 'UP' ? 'UP' : 'DOWN',
+        amount: data.amount,
+        symbol: data.symbol || 'ETH',
+        duration: data.duration,
+        timestamp: data.timestamp || Date.now(),
+        txHash: data.txHash || null,
+        tx: data.txHash || null,
+        backendSettled: true,
+        balanceApplied: true,
       };
 
       // Allow the reconciler to handle the removal after a grace period
@@ -1944,8 +1948,8 @@ export default function UserApp() {
 
       setActiveTrades(prev => prev.map(updateFn));
       setTradeHistory(prev => {
-        const existing = prev.find(t => 
-          String(t.id) === betId || String(t.nonce) === betId || 
+        const existing = prev.find(t =>
+          String(t.id) === betId || String(t.nonce) === betId ||
           (data.tx && (String(t.tx) === String(data.tx) || String(t.txHash) === String(data.tx)))
         );
         if (existing) return prev.map(updateFn);
@@ -1970,7 +1974,7 @@ export default function UserApp() {
       console.log(`[Broadcast] New announcement: ${data.message}`);
       // Show notification instantly
       notify(`📢 ${data.message}`, 'info');
-      
+
       // Update system banner if it's maintenance or emergency
       if (data.type === 'MAINTENANCE' || data.type === 'EMERGENCY') {
         setPlatformSettings(prev => ({
@@ -2004,12 +2008,12 @@ export default function UserApp() {
         const isFrontendExpired = t.timeLeft <= 0 || t.won !== undefined || t.status === 'RESOLVING';
         if (isFrontendExpired) return t;
 
-        return { 
-          ...t, 
-          timeLeft: data.timeLeft, 
-          livePrice: data.currentPrice, 
-          lastTickPrice: data.currentPrice, 
-          isWinning: data.isWinning 
+        return {
+          ...t,
+          timeLeft: data.timeLeft,
+          livePrice: data.currentPrice,
+          lastTickPrice: data.currentPrice,
+          isWinning: data.isWinning
         };
       }));
     });
@@ -2018,10 +2022,10 @@ export default function UserApp() {
       const bid = String(data.betId);
       console.log(`[Trade] Authority Locked: #${bid} -> ${data.won ? 'WON' : 'LOST'} @ $${data.exitPrice}`);
       lockedResults.current.set(bid, { status: data.won ? 'WON' : 'LOST', settlementPrice: data.exitPrice });
-      
-      setActiveTrades(prev => prev.map(t => 
-        String(t.id) === bid || String(t.nonce) === bid 
-          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0, status: 'RESOLVING' } 
+
+      setActiveTrades(prev => prev.map(t =>
+        String(t.id) === bid || String(t.nonce) === bid
+          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0, status: 'RESOLVING' }
           : t
       ));
     });
@@ -2069,7 +2073,7 @@ export default function UserApp() {
 
       if (resolvedMarket && resolvedMarket.id !== activeMarket.id) {
         // #region agent log
-        postDebugLog({runId:'initial',hypothesisId:'H9',location:'UserApp.jsx:syncMarket:override',message:'syncMarket changed active market and reset price',data:{from:activeMarket?.id,to:resolvedMarket?.id}});
+        postDebugLog({ runId: 'initial', hypothesisId: 'H9', location: 'UserApp.jsx:syncMarket:override', message: 'syncMarket changed active market and reset price', data: { from: activeMarket?.id, to: resolvedMarket?.id } });
         // #endregion
         // #region agent log
 
@@ -2104,12 +2108,12 @@ export default function UserApp() {
 
     localStorage.setItem('15market_active_token_id', newMarket.id);
     const resolvedMarket = mergeMarketWithDefault(newMarket);
-    
+
     // Explicitly reset price to trigger loading modal in CustomChart
     setPrice("0");
     priceRef.current = "0";
     priceHistoryRef.current = [];
-    
+
     setActiveMarket(resolvedMarket);
 
     // Sync with keeper
@@ -2132,7 +2136,7 @@ export default function UserApp() {
       if (!res.ok) return;
       const data = await res.json();
       setCampaigns(data);
-      
+
       const wbRes = await fetch(`${targetUrl}/winner-banner`);
       if (wbRes.ok) {
         const wbData = await wbRes.json();
@@ -2316,13 +2320,13 @@ export default function UserApp() {
         }
         return t;
       });
-      
+
       if (changed) {
         setTradeHistory(h => {
           const hMap = new Map();
           h.forEach(x => hMap.set(x.id, x));
           cleaned.forEach(c => hMap.set(c.id, c));
-          return Array.from(hMap.values()).sort((a,b) => b.id - a.id);
+          return Array.from(hMap.values()).sort((a, b) => b.id - a.id);
         });
       }
       return changed ? cleaned : prev;
@@ -2660,7 +2664,7 @@ export default function UserApp() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address, amount: depositAmt, txHash: hash })
-        }).catch(() => {});
+        }).catch(() => { });
 
         // STEP 4: Optimistic Local State Update
         // Provides immediate visual feedback to the user before block confirmation
@@ -2770,7 +2774,7 @@ export default function UserApp() {
       }
 
       setIsExecuting(true);
-      notify(isExternal ? `Authorizing transfer to ${destination.slice(0,6)}...` : "Sign to authorize withdrawal...", "pending");
+      notify(isExternal ? `Authorizing transfer to ${destination.slice(0, 6)}...` : "Sign to authorize withdrawal...", "pending");
 
       // --- SECURITY SIGNATURE ---
       const authMsg = `--- 15MARKET PROTOCOL ---\nACTION: ${isExternal ? 'EXTERNAL TRANSFER' : 'WITHDRAW FROM AUTO-SIGNER'}\nAMOUNT: ${amt} USDC\nTO: ${targetAddr}\nTIMESTAMP: ${Date.now()}`;
@@ -2805,7 +2809,7 @@ export default function UserApp() {
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 60000); 
+      const fetchTimeout = setTimeout(() => controller.abort(), 60000);
 
       let res;
       try {
@@ -2865,7 +2869,7 @@ export default function UserApp() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address, transaction: newTx })
-      }).catch(() => {});
+      }).catch(() => { });
 
       [2000, 5000].forEach(delay => {
         setTimeout(() => {
@@ -2885,16 +2889,16 @@ export default function UserApp() {
 
 
   return (
-    <div className={`min-h-screen w-full text-current selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
+    <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full text-current selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
       {/* Sitewide Background Texture - HIGH VISIBILITY BRANDED GREEN */}
       <div className={`fixed inset-0 pointer-events-none z-0 
-        ${theme === 'light' 
-          ? "bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.08] mix-blend-multiply" 
-          : 'opacity-0'}`} 
+        ${theme === 'light'
+          ? "bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.08] mix-blend-multiply"
+          : 'opacity-0'}`}
       />
       <AnimatePresence>
         {isConnected && address && !isAppReady && (
-          <motion.div 
+          <motion.div
             key="platform-mask"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2909,606 +2913,614 @@ export default function UserApp() {
           <GlobalLoader theme={theme} />
         )}
       </AnimatePresence>
-      
+
       <ErrorBoundary>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className={`min-h-screen w-full overflow-hidden font-sans flex flex-col items-center ${themeClass}`}
-        style={{
-          color: theme === 'light' ? '#1f2937' : '#ffffff',
-          transition: "color 0.3s ease"
-        }}>
+          className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full overflow-hidden font-sans flex flex-col items-center ${themeClass}`}
+          style={{
+            color: theme === 'light' ? '#1f2937' : '#ffffff',
+            transition: "color 0.3s ease"
+          }}>
 
 
 
-      <DissolveTransition isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
+          <DissolveTransition isAnimating={isAnimatingTheme} targetTheme={targetTheme} />
 
-      {view === "dashboard" ? (
-        <DashboardPage
-          onBack={() => setView("trading")}
-          wallet={wallet}
-          sessionBalance={sessionBalance}
-          evmBalance={evmBalance}
-          onDeposit={handleDeposit}
-          onWithdraw={handleWithdraw}
-          treasuryBalance={treasuryBalance}
-          autoSignerFees={autoSignerFees}
-          userProfile={userProfile}
-          theme={theme}
-          isSmallScreen={isSmallScreen}
-          evmSessionWallet={evmSessionWallet}
-          isSignerInitializing={isSignerInitializing}
-          onRetryInit={initializeSessionWallet}
-          transactionHistory={transactionHistory}
-          onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
-          uiVersion={uiVersion}
-          onOpenCircleWallet={(initialMode) => {
-            setCircleWalletMode(initialMode);
-            setView("circle_wallet");
-          }}
-        />
-      ) : view === "circle_wallet" ? (
-        <CircleWalletPage 
-          address={address}
-          isLight={theme === 'light'}
-          notify={notify}
-          onBack={() => {
-            setView("dashboard");
-            setCircleWalletMode(null);
-          }}
-          initialMode={circleWalletMode}
-          evmBalance={evmBalance}
-          sessionBalance={sessionBalance}
-          sessionAddress={evmSessionWallet?.address}
-          wallets={wallets}
-          onWithdraw={handleWithdraw}
-        />
-      ) : (
-        <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
+          {view === "dashboard" ? (
+            <DashboardPage
+              onBack={() => setView("trading")}
+              wallet={wallet}
+              sessionBalance={sessionBalance}
+              evmBalance={evmBalance}
+              onDeposit={handleDeposit}
+              onWithdraw={handleWithdraw}
+              treasuryBalance={treasuryBalance}
+              autoSignerFees={autoSignerFees}
+              userProfile={userProfile}
+              theme={theme}
+              isSmallScreen={isSmallScreen}
+              evmSessionWallet={evmSessionWallet}
+              isSignerInitializing={isSignerInitializing}
+              onRetryInit={initializeSessionWallet}
+              transactionHistory={transactionHistory}
+              onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
+              uiVersion={uiVersion}
+              onOpenCircleWallet={(initialMode) => {
+                setCircleWalletMode(initialMode);
+                setView("circle_wallet");
+              }}
+            />
+          ) : view === "circle_wallet" ? (
+            <CircleWalletPage
+              address={address}
+              isLight={theme === 'light'}
+              notify={notify}
+              onBack={() => {
+                setView("dashboard");
+                setCircleWalletMode(null);
+              }}
+              initialMode={circleWalletMode}
+              evmBalance={evmBalance}
+              sessionBalance={sessionBalance}
+              sessionAddress={evmSessionWallet?.address}
+              wallets={wallets}
+              onWithdraw={handleWithdraw}
+            />
+          ) : (
+            <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
-          <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-[160] safe-top ${isSmallScreen ? 'h-auto py-1' : 'h-20 lg:h-24'}`}
-            style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 2px)' } : {}}>
-            <div className="flex items-center transition-all duration-500 h-full"
-              style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-14' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
-            </div>
+              <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-[160] safe-top ${isSmallScreen ? 'h-auto py-1' : 'h-20 lg:h-24'}`}
+                style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 2px)' } : {}}>
+                <div className="flex items-center transition-all duration-500 h-full"
+                  style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
+                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-14' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
+                </div>
 
-            <div className="hidden lg:flex items-center gap-3 px-2 py-1">
-              {/* Branded Game Mode Switcher - Large Screens */}
-              <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
-                <motion.div
-                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
-                  initial={false}
-                  animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                />
-                {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
-                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                    className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
-                    <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
-                    <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
-                  </button>
-                ))}
-              </div>
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              <div className="flex items-center gap-2">
-                {/* Desktop: Only show session balance per user request */}
-                <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
-              </div>
-              <button onClick={() => setView("dashboard")} className="w-9 h-9 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
-                style={{
-                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                }}>
-                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
-                  <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
-                ) : (
-                  <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-                )}
-              </button>
-              <UnifiedWalletButton theme={theme} />
-            </div>
-
-            <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
-              {/* Branded Game Mode Switcher - Mobile */}
-              <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
-                <motion.div
-                  className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
-                  initial={false}
-                  animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                />
-                {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
-                  <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                    className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
-                    <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
-                  </button>
-                ))}
-              </div>
-              <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
-                <ThemeToggle theme={theme} onToggle={toggleTheme} />
-              </div>
-              <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden p-[1px]"
-                style={{
-                  backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                  borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                }}>
-                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
-                  <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
-                ) : (
-                  <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-                )}
-              </button>
-              <div className="scale-[0.9] origin-right ml-[-2px]">
-                <UnifiedWalletButton theme={theme} />
-              </div>
-            </div>
-          </header>
-
-          {/* Winner/Campaign Banner (Authoritative UX) */}
-          <AnimatePresence>
-            {winnerBanner && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#3CB371]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#3CB371]/5 to-yellow-500/10 border-white/5'}`}
-              >
-                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
+                <div className="hidden lg:flex items-center gap-3 px-2 py-1">
+                  {/* Branded Game Mode Switcher - Large Screens */}
+                  <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
+                    <motion.div
+                      className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
+                      initial={false}
+                      animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                    {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
+                      <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                        className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
+                        <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                        <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <ThemeToggle theme={theme} onToggle={toggleTheme} />
                   <div className="flex items-center gap-3">
-                    <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
-                    <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#3CB371]'}`}>
-                      {winnerBanner.text || "New Winner Leaderboard is Live!"}
+                    <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
+                  </div>
+                  <button onClick={() => setView("dashboard")} className="w-10 h-10 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
+                    style={{
+                      backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                      borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                    }}>
+                    {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                      <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                    )}
+                  </button>
+                  <UnifiedWalletButton theme={theme} />
+                </div>
+
+                <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
+                  {/* Branded Game Mode Switcher - Mobile */}
+                  <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
+                    <motion.div
+                      className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
+                      initial={false}
+                      animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                    {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
+                      <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                        className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
+                        <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                      </button>
+                    ))}
+                  </div>
+                  <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
+                    <ThemeToggle theme={theme} onToggle={toggleTheme} />
+                  </div>
+                  <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden p-[1px]"
+                    style={{
+                      backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                      borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                    }}>
+                    {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                      <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                    )}
+                  </button>
+                  <div className="scale-[0.9] origin-right ml-[-2px]">
+                    <UnifiedWalletButton theme={theme} />
+                  </div>
+                </div>
+              </header>
+
+              {/* Winner/Campaign Banner (Authoritative UX) */}
+              <AnimatePresence>
+                {winnerBanner && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#3CB371]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#3CB371]/5 to-yellow-500/10 border-white/5'}`}
+                  >
+                    <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
+                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#3CB371]'}`}>
+                          {winnerBanner.text || "New Winner Leaderboard is Live!"}
+                        </span>
+                      </div>
+                      {winnerBanner.cta && (
+                        <button className="px-3 py-0.5 md:py-1 bg-[#3CB371] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
+                          {winnerBanner.cta}
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* DESKTOP-ONLY: Weighted Green Line Separator (LOCKED POSITION) */}
+              {!isSmallScreen && (
+                <div className="w-full flex flex-col relative z-[170] -mt-2 md:mt-0 lg:-mt-4 mb-2">
+                  <div className="w-full h-[2px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.6)]" />
+                </div>
+              )}
+
+              {/* MAIN CONTENT CONTAINER (LOCKED DESKTOP MARGIN: lg:mt-2) */}
+              <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 ${!isSmallScreen ? 'h-full' : '-mt-[2vh]'} lg:mt-2 relative z-10`}>
+                <RoundsAccessGate
+                  theme={theme}
+                  active={gameMode === 'rounds'}
+                  verified={hasRoundsAccess}
+                  onUnlock={handleRoundsUnlock}
+                >
+                  {/* MOBILE FULL-WIDTH SCROLLER (Matching Desktop Design) */}
+                  {isSmallScreen && (
+                    <div className="h-7 mb-1.5 overflow-hidden relative z-[50]" style={{ width: '105vw', marginLeft: '-8px', transform: 'translateX(3%)' }}>
+                      <GlobalTradeScroller theme={theme} />
+                    </div>
+                  )}
+
+                  <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} ${isSmallScreen ? 'mb-0' : 'mb-5 md:mb-5'} relative z-0 flex-1 min-h-0`}>
+                    {/* V2 Integrated Content Container */}
+                    <motion.div
+                      layout
+                      className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-0' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
+                      style={{ paddingLeft: !isSmallScreen && showSideHistory ? '202px' : (!isSmallScreen ? '20px' : '0px') }}>
+
+                      {!isSmallScreen && (
+                        <SideHistoryPane
+                          isOpen={showSideHistory}
+                          onToggle={() => setShowSideHistory(!showSideHistory)}
+                          tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                          theme={theme}
+                          setSelectedPnLTrade={setSelectedPnLTrade}
+                          setIsPnLOpen={setIsPnLOpen}
+                        />
+                      )}
+
+                      {!isSmallScreen && (
+                        <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
+                          <GlobalTradeScroller theme={theme} />
+                        </div>
+                      )}
+
+
+                      {/* Chart Container Wrapper for Shadow - PREVENTS CLIPPING */}
+                      <div className="flex-1 w-full flex flex-col relative z-0"
+                        style={{
+                          filter: theme === 'light' ? 'drop-shadow(0 30px 60px rgba(0,0,0,0.18))' : 'none'
+                        }}>
+                        {/* CHART CONTAINER (LOCKED DESKTOP HEIGHT: lg:min-h-[470px]) */}
+                        <div className={`${isSmallScreen ? 'flex-1 min-h-0' : 'flex-[2] min-h-[280px]'} lg:min-h-[470px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
+                          style={{
+                            background: isSmallScreen
+                              ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)')
+                              : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
+                            boxShadow: theme === 'light'
+                              ? 'none'
+                              : (isSmallScreen
+                                ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
+                                : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
+                            borderColor: isSmallScreen
+                              ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
+                              : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
+                          }}>
+                          <div className="flex-1 w-full h-full flex relative">
+                            {/* Chart Area */}
+                            <div className="flex-1 w-full h-full relative min-w-0">
+                              <CustomChart
+                                symbol={activeMarket?.binance || 'BTCUSDT'}
+                                theme={theme}
+                                network={network}
+                                activeMarket={activeMarket}
+                                uiVersion={uiVersion}
+                                setActiveMarket={handleMarketChange}
+                                activeTrades={activeTrades}
+                                currentPrice={price}
+                                priceHistory={priceHistoryRef.current}
+                              />
+                            </div>
+
+                            {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
+                            <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                              <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                                Order Book
+                              </div>
+                              <div className="flex-1 overflow-hidden p-2">
+                                <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      layout
+                      className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[300px] flex-none relative mt-auto' : 'h-full flex-1'} min-h-0`}
+                    >
+                      {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
+                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex h-full min-h-0 pb-[calc(34px+2vh)] px-1' : 'hidden md:hidden lg:hidden'}`}>
+                        {/* Terminal Area */}
+                        <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
+                          style={{
+                            background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
+                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)')
+                          }}>
+                          {gameMode === 'rounds' ? (
+                            <RoundsTerminal
+                              price={price}
+                              balance={parseFloat(evmBalance || '0')}
+                              executeTrade={executeTrade}
+                              isExecuting={isExecuting}
+                              theme={theme}
+                              sessionMode={sessionMode}
+                              sessionBalance={sessionBalance}
+                              amount={amount}
+                              handleAmountChange={handleAmountChange}
+                              sliderValue={sliderValue}
+                              handleSliderChange={handleSliderChange}
+                              activeMarket={activeMarket}
+                              onRoundPhaseChange={handleRoundPhaseChange}
+                              maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                            />
+                          ) : (
+                            <TradeTerminal
+                              transparent={true}
+                              activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                              sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                              setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
+                              sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                              theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                              depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
+                              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                              evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                              activeMarket={activeMarket}
+                              maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                              tradingHalted={platformSettings.tradingHalted}
+                              uiVersion={uiVersion}
+                            />
+                          )}
+                        </div>
+
+                        {/* ACTIVE EXECUTION - Hidden entirely in Rounds mode */}
+                        {(gameMode !== 'rounds') && (
+                          <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'} flex flex-col`}
+                            style={{
+                              background: theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)',
+                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)'
+                            }}>
+                            <div className="flex flex-col h-full min-h-0">
+                              <LiveExecution
+                                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                                theme={theme} currentNetwork={network}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {/* V2 Mobile History Drawer integrated at bottom level */}
+                      {/* Compact spacer */}
+
+                      {!isSmallScreen && (
+                        /* Existing Desktop V2 Layout */
+                        <>
+                          {/* Global System Banner */}
+                          <AnimatePresence>
+                            {platformSettings.systemBanner && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
+                                  platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
+                                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
+                                      'bg-blue-500/10 border-blue-500/20'
+                                  }`}
+                              >
+                                <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
+                                      platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
+                                          'bg-blue-500'
+                                      }`} />
+                                    <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
+                                      platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
+                                        platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
+                                          'text-blue-500'
+                                      }`}>
+                                      {platformSettings.systemBanner}
+                                    </span>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* Navigation Bar - TOP BAR */}
+                          {/* Trading Terminal Box - Dynamic height to maximize active trades space */}
+                          <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
+                            style={{
+                              background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
+                              borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'),
+                              boxShadow: (theme === 'light' && gameMode !== 'rounds') ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
+                            }}>
+                            <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
+                              {gameMode === 'rounds' ? (
+                                <RoundsTerminal
+                                  price={price}
+                                  balance={parseFloat(evmBalance || '0')}
+                                  executeTrade={executeTrade}
+                                  isExecuting={isExecuting}
+                                  theme={theme}
+                                  sessionMode={sessionMode}
+                                  sessionBalance={sessionBalance}
+                                  amount={amount}
+                                  handleAmountChange={handleAmountChange}
+                                  sliderValue={sliderValue}
+                                  handleSliderChange={handleSliderChange}
+                                  activeMarket={activeMarket}
+                                  onRoundPhaseChange={handleRoundPhaseChange}
+                                  maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                                />
+                              ) : (
+                                <TradeTerminal
+                                  transparent={true}
+                                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
+                                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
+                                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
+                                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
+                                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
+                                  depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
+                                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
+                                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
+                                  activeMarket={activeMarket}
+                                  maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                                  tradingHalted={platformSettings.tradingHalted}
+                                  uiVersion={uiVersion}
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* ACTIVE TRADES (LOCKED DESKTOP HEIGHT: lg:min-h-[200px]) */}
+                          {gameMode !== 'rounds' && (
+                            <div className={`flex-1 min-h-[160px] md:min-h-0 lg:min-h-[200px] rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
+                              style={{
+                                background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
+                                borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)',
+                                boxShadow: theme === 'light' ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
+                              }}>
+                              <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
+                                <LiveExecution
+                                  activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
+                                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
+                                  theme={theme} currentNetwork={network}
+                                  isTruncated={uiVersion === 'v2' && !showActiveExpanded}
+                                  isExpanded={showActiveExpanded}
+                                  setIsExpanded={setShowActiveExpanded}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </motion.div>
+                  </div>
+
+
+                  {/* Forced Orientation Overlay for V2 Mobile */}
+                  {showPortraitLock && <PortraitPrompt theme={theme} />}
+
+
+                </RoundsAccessGate>
+
+
+
+              </div>
+            </div>
+          )
+          }
+
+
+
+          <ProfileModal
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            wallet={wallet}
+            evmSessionWallet={evmSessionWallet}
+            userProfile={userProfile}
+            isSignerInitializing={isSignerInitializing}
+            onRetryInit={initializeSessionWallet}
+            sessionBalance={sessionBalance}
+            evmBalance={evmBalance}
+            onDeposit={handleDeposit}
+            onWithdraw={handleWithdraw}
+            transactionHistory={transactionHistory}
+            onViewReceipt={(tx) => {
+              setSelectedTransaction(tx);
+              setIsTransactionReceiptOpen(true);
+            }}
+            notify={notify}
+            theme={theme}
+            onUpdate={() => performStealthChecks(address)}
+            onOpenCircleWallet={(mode) => {
+              setIsProfileOpen(false);
+              setCircleWalletMode(mode);
+              setView("circle_wallet");
+            }}
+          />
+          <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
+
+
+
+          <AnimatePresence>
+            {toast && (
+              <Toast
+                message={toast.message}
+                type={toast.type}
+                onClose={closeToast}
+                onClick={toast.onClick}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Network Status Overlay */}
+          <AnimatePresence>
+            {!isOnline && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="fixed top-0 left-0 w-full z-[200000] bg-red-600/90 backdrop-blur-xl border-b border-white/10"
+              >
+                <div className="flex items-center justify-center gap-3 py-1.5 px-4 overflow-hidden">
+                  <div className="flex items-center gap-2">
+                    <Activity size={10} className="text-white animate-pulse" />
+                    <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
+                      Disconnected • Internet Connection Lost
                     </span>
                   </div>
-                  {winnerBanner.cta && (
-                    <button className="px-3 py-0.5 md:py-1 bg-[#3CB371] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
-                      {winnerBanner.cta}
-                    </button>
-                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {isOnline && navigator.onLine && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{
+                  opacity: [0, 1, 1, 0],
+                  height: ['auto', 'auto', 'auto', 0]
+                }}
+                transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
+                className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
+              >
+                <div className="flex items-center justify-center gap-3 py-1.5 px-4">
+                  <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
+                    <CheckCircle size={10} />
+                    Network Reconnected • System Online
+                  </span>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Weighted Green Line Separator */}
-          {!isSmallScreen && (
-            <div className="w-full flex flex-col relative z-[170] -mt-2 lg:-mt-6 mb-2">
-              <div className="w-full h-[2px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.6)]" />
+          <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
+            style={{ fontFamily: 'Arial, sans-serif' }}>
+            <div className="flex items-center gap-4 pointer-events-auto">
+              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
+              <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+                © 2026 15market
+              </span>
+            </div>
+            <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+              Built by 15labs
+            </span>
+          </footer>
+          <TransactionReceiptModal
+            isOpen={isTransactionReceiptOpen}
+            onClose={() => setIsTransactionReceiptOpen(false)}
+            transaction={selectedTransaction}
+          />
+
+
+          {/* Onboarding Flow for new users */}
+          {showOnboarding && address && !isGlobalLoading && (
+            <OnboardingFlow
+              address={address}
+              theme={theme}
+              evmSessionWallet={evmSessionWallet}
+              onComplete={(profile) => {
+                setShowOnboarding(false);
+                performStealthChecks(address); // Final refresh
+              }}
+            />
+          )}
+
+          {/* OVERLAY: Landing Page (Not Connected) */}
+          <AnimatePresence>
+            {!authenticated && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100]"
+              >
+                <LandingPage theme={theme} onToggle={toggleTheme} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Removed Global Initial Loader with Lane as requested */}
+
+          {/* Removed Signer Sync Loader with Lane as requested */}
+
+          {/* OVERLAY: Maintenance Mode */}
+          {platformSettings.maintenanceMode && (
+            <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
+              <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
+                <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
+              </div>
+              <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                Under Maintenance
+              </h1>
+              <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+                We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
+              </p>
             </div>
           )}
 
-          <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 -mt-[10vh] lg:-mt-[10vh] relative z-10`}>
-            <RoundsAccessGate 
-              theme={theme} 
-              active={gameMode === 'rounds'} 
-              verified={hasRoundsAccess} 
-              onUnlock={handleRoundsUnlock}
-            >
-                <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-3'} mb-5 md:mb-5 relative z-0 flex-1 lg:h-[72vh] lg:min-h-[580px] min-h-0`}>
-                  {/* V2 Integrated Content Container */}
-                  <motion.div
-                    layout
-                    className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-0' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
-                    style={{ paddingLeft: !isSmallScreen && showSideHistory ? '202px' : (!isSmallScreen ? '20px' : '0px') }}>
-
-                    {!isSmallScreen && (
-                      <SideHistoryPane
-                        isOpen={showSideHistory}
-                        onToggle={() => setShowSideHistory(!showSideHistory)}
-                        tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-                        theme={theme}
-                        setSelectedPnLTrade={setSelectedPnLTrade}
-                        setIsPnLOpen={setIsPnLOpen}
-                      />
-                    )}
-
-                    {!isSmallScreen && (
-                      <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
-                        <GlobalTradeScroller theme={theme} />
-                      </div>
-                    )}
-
-
-                    {/* Chart Container Wrapper for Shadow - PREVENTS CLIPPING */}
-                    <div className="flex-1 w-full flex flex-col relative z-0"
-                      style={{
-                        filter: theme === 'light' ? 'drop-shadow(0 30px 60px rgba(0,0,0,0.18))' : 'none'
-                      }}>
-                      <div className={`${isSmallScreen ? 'flex-1' : 'flex-[2] min-h-[280px]'} lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
-                        style={{
-                          background: isSmallScreen 
-                            ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
-                            : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
-                          boxShadow: theme === 'light'
-                            ? 'none'
-                            : (isSmallScreen
-                              ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
-                              : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
-                          borderColor: isSmallScreen
-                            ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
-                            : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
-                        }}>
-                        <div className="flex-1 w-full h-full flex relative">
-                          {/* Chart Area */}
-                          <div className="flex-1 w-full h-full relative min-w-0">
-                            <CustomChart
-                              symbol={activeMarket?.binance || 'BTCUSDT'}
-                              theme={theme}
-                              network={network}
-                              activeMarket={activeMarket}
-                              uiVersion={uiVersion}
-                              setActiveMarket={handleMarketChange}
-                              activeTrades={activeTrades}
-                              currentPrice={price}
-                              priceHistory={priceHistoryRef.current}
-                            />
-                          </div>
-
-                          {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
-                          <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
-                            <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
-                              Order Book
-                            </div>
-                            <div className="flex-1 overflow-hidden p-2">
-                              <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-
-                  <motion.div
-                    layout
-                    className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[300px] flex-none relative' : 'h-full flex-1'} min-h-0`}
-                  >
-                    {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
-                    <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex h-full min-h-0 pb-[34px] px-1' : 'hidden md:hidden lg:hidden'}`}>
-                      {/* Terminal Area */}
-                      <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
-                        style={{
-                          background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
-                          borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)')
-                        }}>
-                        {gameMode === 'rounds' ? (
-                          <RoundsTerminal
-                            price={price}
-                            balance={parseFloat(evmBalance || '0')}
-                            executeTrade={executeTrade}
-                            isExecuting={isExecuting}
-                            theme={theme}
-                            sessionMode={sessionMode}
-                            sessionBalance={sessionBalance}
-                            amount={amount}
-                            handleAmountChange={handleAmountChange}
-                            sliderValue={sliderValue}
-                            handleSliderChange={handleSliderChange}
-                            activeMarket={activeMarket}
-                            onRoundPhaseChange={handleRoundPhaseChange}
-                            maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                          />
-                        ) : (
-                          <TradeTerminal
-                            transparent={true}
-                            activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                            sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                            setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
-                            sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                            theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                            depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
-                            CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                            evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                            activeMarket={activeMarket}
-                            maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                            tradingHalted={platformSettings.tradingHalted}
-                            uiVersion={uiVersion}
-                          />
-                        )}
-                      </div>
-
-                      {/* ACTIVE EXECUTION - Hidden entirely in Rounds mode */}
-                      {(gameMode !== 'rounds') && (
-                        <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'} flex flex-col`}
-                          style={{
-                            background: theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)',
-                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)'
-                          }}>
-                          <div className="flex flex-col h-full min-h-0">
-                            <LiveExecution
-                              activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                              setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                              theme={theme} currentNetwork={network}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    {/* V2 Mobile History Drawer integrated at bottom level */}
-                    {/* Compact spacer */}
-
-                    {!isSmallScreen && (
-                      /* Existing Desktop V2 Layout */
-                      <>
-                        {/* Global System Banner */}
-                        <AnimatePresence>
-                          {platformSettings.systemBanner && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
-                                  platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
-                                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
-                                      'bg-blue-500/10 border-blue-500/20'
-                                }`}
-                            >
-                              <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
-                                      platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
-                                          'bg-blue-500'
-                                    }`} />
-                                  <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
-                                      platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
-                                          'text-blue-500'
-                                    }`}>
-                                    {platformSettings.systemBanner}
-                                  </span>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {/* Navigation Bar - TOP BAR */}
-                        {/* Trading Terminal Box - Dynamic height to maximize active trades space */}
-                        <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
-                          style={{
-                            background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
-                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'),
-                            boxShadow: (theme === 'light' && gameMode !== 'rounds') ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
-                          }}>
-                          <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
-                            {gameMode === 'rounds' ? (
-                              <RoundsTerminal
-                                price={price}
-                                balance={parseFloat(evmBalance || '0')}
-                                executeTrade={executeTrade}
-                                isExecuting={isExecuting}
-                                theme={theme}
-                                sessionMode={sessionMode}
-                                sessionBalance={sessionBalance}
-                                amount={amount}
-                                handleAmountChange={handleAmountChange}
-                                sliderValue={sliderValue}
-                                handleSliderChange={handleSliderChange}
-                                activeMarket={activeMarket}
-                                onRoundPhaseChange={handleRoundPhaseChange}
-                                maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                              />
-                            ) : (
-                              <TradeTerminal
-                                transparent={true}
-                                activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                                sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                                setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
-                                sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                                theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                                depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
-                                CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                                evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                                activeMarket={activeMarket}
-                                maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                                tradingHalted={platformSettings.tradingHalted}
-                                uiVersion={uiVersion}
-                              />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Active Trade / Controls Box — hidden in Rounds */}
-                        {gameMode !== 'rounds' && (
-                          <div className={`flex-1 min-h-[160px] md:min-h-0 lg:min-h-[200px] rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
-                            style={{
-                              background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)',
-                              boxShadow: theme === 'light' ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
-                            }}>
-                            <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
-                              <LiveExecution
-                                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                                theme={theme} currentNetwork={network}
-                                isTruncated={uiVersion === 'v2' && !showActiveExpanded}
-                                isExpanded={showActiveExpanded}
-                                setIsExpanded={setShowActiveExpanded}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </motion.div>
-                </div>
-
-
-              {/* Forced Orientation Overlay for V2 Mobile */}
-              {showPortraitLock && <PortraitPrompt theme={theme} />}
-
-
-            </RoundsAccessGate>
-
-
-
-          </div>
-        </div>
-      )
-      }
-
-
-
-      <ProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        wallet={wallet}
-        evmSessionWallet={evmSessionWallet}
-        userProfile={userProfile}
-        isSignerInitializing={isSignerInitializing}
-        onRetryInit={initializeSessionWallet}
-        sessionBalance={sessionBalance}
-        evmBalance={evmBalance}
-        onDeposit={handleDeposit}
-        onWithdraw={handleWithdraw}
-        transactionHistory={transactionHistory}
-        onViewReceipt={(tx) => {
-          setSelectedTransaction(tx);
-          setIsTransactionReceiptOpen(true);
-        }}
-        notify={notify}
-        theme={theme}
-        onUpdate={() => performStealthChecks(address)}
-        onOpenCircleWallet={(mode) => {
-          setIsProfileOpen(false);
-          setCircleWalletMode(mode);
-          setView("circle_wallet");
-        }}
-      />
-      <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
-
-
-
-      <AnimatePresence>
-        {toast && (
-          <Toast 
-            message={toast.message} 
-            type={toast.type} 
-            onClose={closeToast} 
-            onClick={toast.onClick}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Network Status Overlay */}
-      <AnimatePresence>
-        {!isOnline && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="fixed top-0 left-0 w-full z-[200000] bg-red-600/90 backdrop-blur-xl border-b border-white/10"
-          >
-            <div className="flex items-center justify-center gap-3 py-1.5 px-4 overflow-hidden">
-              <div className="flex items-center gap-2">
-                <Activity size={10} className="text-white animate-pulse" />
-                <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
-                  Disconnected • Internet Connection Lost
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-        
-        {isOnline && navigator.onLine && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ 
-              opacity: [0, 1, 1, 0],
-              height: ['auto', 'auto', 'auto', 0]
-            }}
-            transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
-            className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
-          >
-            <div className="flex items-center justify-center gap-3 py-1.5 px-4">
-              <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
-                <CheckCircle size={10} />
-                Network Reconnected • System Online
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
-        style={{ fontFamily: 'Arial, sans-serif' }}>
-        <div className="flex items-center gap-4 pointer-events-auto">
-          <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
-          <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-            © 2026 15market
-          </span>
-        </div>
-        <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-          Built by 15labs
-        </span>
-      </footer>
-      <TransactionReceiptModal
-        isOpen={isTransactionReceiptOpen}
-        onClose={() => setIsTransactionReceiptOpen(false)}
-        transaction={selectedTransaction}
-      />
-
-
-      {/* Onboarding Flow for new users */}
-      {showOnboarding && address && !isGlobalLoading && (
-        <OnboardingFlow
-          address={address}
-          theme={theme}
-          evmSessionWallet={evmSessionWallet}
-          onComplete={(profile) => {
-            setShowOnboarding(false);
-            performStealthChecks(address); // Final refresh
-          }}
-        />
-      )}
-
-      {/* OVERLAY: Landing Page (Not Connected) */}
-      <AnimatePresence>
-        {!authenticated && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100]"
-          >
-            <LandingPage theme={theme} onToggle={toggleTheme} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Removed Global Initial Loader with Lane as requested */}
-
-      {/* Removed Signer Sync Loader with Lane as requested */}
-
-      {/* OVERLAY: Maintenance Mode */}
-      {platformSettings.maintenanceMode && (
-        <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
-          <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
-            <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
-          </div>
-          <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-            Under Maintenance
-          </h1>
-          <p className={`text-sm max-w-xs font-medium leading-relaxed ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
-            We are currently upgrading the platform to provide the best trading experience. Please check back shortly.
-          </p>
-        </div>
-      )}
-
-      {/* Authoritative Mobile History Drawer (Unconstrained) */}
-      {isSmallScreen && authenticated && view === "trading" && (
-        <MobileBottomHistoryPane
-          isOpen={showMobileHistory}
-          onToggle={() => setShowMobileHistory(!showMobileHistory)}
-          tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-          theme={theme}
-          setSelectedPnLTrade={setSelectedPnLTrade}
-          setIsPnLOpen={setIsPnLOpen}
-          userProfile={userProfile}
-        />
-      )}
-    </motion.div >
-    </ErrorBoundary>
+          {/* Authoritative Mobile History Drawer (Unconstrained) */}
+          {isSmallScreen && authenticated && view === "trading" && (
+            <MobileBottomHistoryPane
+              isOpen={showMobileHistory}
+              onToggle={() => setShowMobileHistory(!showMobileHistory)}
+              tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+              theme={theme}
+              setSelectedPnLTrade={setSelectedPnLTrade}
+              setIsPnLOpen={setIsPnLOpen}
+              userProfile={userProfile}
+            />
+          )}
+        </motion.div >
+      </ErrorBoundary>
     </div>
   );
 }

@@ -173,7 +173,9 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             const lo = yMinRef.current;
             const hi = yMaxRef.current;
             const range = hi - lo || 1;
-            const toY = (p) => H - ((p - lo) / range) * H;
+            const vPadding = isMobile ? H * 0.25 : H * 0.12;
+            const effectiveH = H - (vPadding * 2);
+            const toY = (p) => (H - vPadding) - ((p - lo) / range) * effectiveH;
             
             const liveX = getX(nowPx);
             const liveY = toY(latestPriceVal);
@@ -242,6 +244,16 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.fillStyle = '#ffffff';
             ctx.textBaseline = 'middle';
             ctx.fillText(latestPriceValStr, liveX + 16, liveY);
+
+            // WIDE AMBIENT BACKGROUND GLOW (New request: ambient light under signal point)
+            const ambientGlow = ctx.createRadialGradient(liveX, liveY, 0, liveX, liveY, isMobile ? 120 : 180);
+            ambientGlow.addColorStop(0, isLight ? 'rgba(60, 179, 113, 0.15)' : 'rgba(60, 179, 113, 0.2)');
+            ambientGlow.addColorStop(0.5, isLight ? 'rgba(60, 179, 113, 0.05)' : 'rgba(60, 179, 113, 0.08)');
+            ambientGlow.addColorStop(1, 'transparent');
+            ctx.fillStyle = ambientGlow;
+            ctx.globalCompositeOperation = 'screen';
+            ctx.fillRect(0, 0, W, H);
+            ctx.globalCompositeOperation = 'source-over';
 
             // ULTRA-INTENSE SIGNAL GLOW (Behind the point)
             const pulseSize = Math.sin(nowPx / 150) * 5;

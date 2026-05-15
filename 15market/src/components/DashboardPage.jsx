@@ -333,6 +333,16 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             accept="image/jpeg,image/jpg,image/png,image/gif"
                                             onChange={handleAvatarUpload}
                                         />
+                                        {/* Circle Wallet Access Icon — desktop shortcut to transfer hub */}
+                                        {!isSmallScreen && onOpenCircleWallet && (
+                                            <button
+                                                onClick={() => onOpenCircleWallet('send')}
+                                                className={`p-2 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all mr-1`}
+                                                title="Access Transfer Hub"
+                                            >
+                                                <Wallet size={14} />
+                                            </button>
+                                        )}
                                         {/* Circle Wallet Access Icon — mobile shortcut */}
                                         {isSmallScreen && onOpenCircleWallet && (
                                             <button
@@ -470,25 +480,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             Withdraw
                                         </button>
                                     </div>
-                                    {/* Send/Receive — desktop only; mobile uses the wallet icon in the header */}
-                                    {!isSmallScreen && (
-                                    <div className="grid grid-cols-2 gap-2.5 mt-2.5">
-                                        <button 
-                                            onClick={() => onOpenCircleWallet && onOpenCircleWallet('send')}
-                                            className={`py-3 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-white/5 border-white/5 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#3CB371]/20 transition-all flex items-center justify-center gap-2`}
-                                        >
-                                            <Send size={10} />
-                                            Send
-                                        </button>
-                                        <button 
-                                            onClick={() => onOpenCircleWallet && onOpenCircleWallet('receive')}
-                                            className={`py-3 ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-white/5 border-white/5 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#3CB371]/20 transition-all flex items-center justify-center gap-2`}
-                                        >
-                                            <ArrowDownLeft size={10} />
-                                            Receive
-                                        </button>
-                                    </div>
-                                    )}
+
                                 </div>
                             </div>
 
