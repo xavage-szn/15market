@@ -272,7 +272,7 @@ const DissolveTransition = ({ isAnimating, targetTheme }) => {
 };
 
 export default function UserApp() {
-  const { isConnected, address: wagmiAddress, status } = useAccount();
+  const { isConnected, address: wagmiAddress, chainId: connectedChainId, status } = useAccount();
   const { switchChain, switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const { user, authenticated } = usePrivy();
