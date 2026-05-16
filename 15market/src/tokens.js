@@ -1,14 +1,5 @@
 export const SUPPORTED_TOKENS = [
     {
-        id: 'usdc',
-        symbol: 'USDC',
-        name: 'USD Coin',
-        icon: '/usdc.png',
-        chainId: 5042002,
-        address: '0x0000000000000000000000000000000000000000', // Native on Arc
-        decimals: 18,
-    },
-    {
         id: 'mon',
         symbol: 'MON',
         name: 'Monad',

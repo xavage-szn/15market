@@ -256,7 +256,9 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`h-[100dvh] w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`}>
+        <div className={`h-[100dvh] w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+            {/* Full-page Background Texture */}
+            <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.04] mix-blend-screen'}`} />
             {!isSmallScreen && hasActiveCampaign && (
                 <CampaignLeaderboardPane 
                     isOpen={isLeaderboardOpen} 

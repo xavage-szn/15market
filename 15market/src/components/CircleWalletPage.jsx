@@ -6,6 +6,7 @@ import { SUPPORTED_TOKENS } from '../tokens';
 import QRCode from 'qrcode';
 import { toPng } from 'html-to-image';
 import { UnifiedFundingModal } from './UnifiedFundingModal';
+import WalletConnectionLoading from './WalletConnectionLoading';
 
 export function CircleWalletPage({ 
     address, 
@@ -26,6 +27,7 @@ export function CircleWalletPage({
     // UI State
     const [activeWalletIdx, setActiveWalletIdx] = useState(0); // 0: Trading, 1: Main
     const [activeTokenIdx, setActiveTokenIdx] = useState(0); // For Main Wallet token funding
+    const [fundingType, setFundingType] = useState(null); // null | 'native' | 'usdc'
     const [showSendModal, setShowSendModal] = useState(initialMode === 'send');
     const [showReceiveModal, setShowReceiveModal] = useState(initialMode === 'receive');
     const [showUnifiedFunding, setShowUnifiedFunding] = useState(false);
@@ -40,8 +42,18 @@ export function CircleWalletPage({
     const [showDesktopFunding, setShowDesktopFunding] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
 
     const walletOptions = [
-        { key: 'trading', label: 'Trading Wallet', bal: parseFloat(sessionBalance || 0), icon: Zap, color: '#3CB371' },
-        { key: 'main',    label: 'Main Wallet',    bal: parseFloat(evmBalance || '0'),   icon: Wallet, color: '#FFFFFF' },
+        { 
+            key: 'trading', 
+            label: 'Trading Wallet', 
+            bal: parseFloat(sessionBalance || 0), 
+            address: sessionAddress || walletInfo?.wallet?.address 
+        },
+        { 
+            key: 'main', 
+            label: 'Main Wallet', 
+            bal: parseFloat(evmBalance || 0), 
+            address: address 
+        }
     ];
 
     const currentWallet = walletOptions[activeWalletIdx];
@@ -78,8 +90,8 @@ export function CircleWalletPage({
                 width: 400,
                 margin: 2,
                 color: {
-                    dark: isLight ? '#000000' : '#3CB371',
-                    light: isLight ? '#ffffff' : '#000000',
+                    dark: '#FFFFFF',
+                    light: '#000000',
                 },
             }, (err, url) => {
                 if (err) console.error(err);
@@ -160,85 +172,92 @@ export function CircleWalletPage({
     };
 
     const handleSwipeWallet = (direction) => {
-        if (direction === 'left' && activeWalletIdx < walletOptions.length - 1) {
-            setActiveWalletIdx(prev => prev + 1);
-        } else if (direction === 'right' && activeWalletIdx > 0) {
-            setActiveWalletIdx(prev => prev - 1);
+        if (direction === 'left') {
+            setActiveWalletIdx(prev => (prev + 1) % walletOptions.length);
+        } else if (direction === 'right') {
+            setActiveWalletIdx(prev => (prev - 1 + walletOptions.length) % walletOptions.length);
         }
     };
 
     const handleSwipeToken = (direction) => {
-        if (direction === 'left' && activeTokenIdx < SUPPORTED_TOKENS.length - 1) {
-            setActiveTokenIdx(prev => prev + 1);
-        } else if (direction === 'right' && activeTokenIdx > 0) {
-            setActiveTokenIdx(prev => prev - 1);
+        if (direction === 'left') {
+            setActiveTokenIdx(prev => (prev + 1) % SUPPORTED_TOKENS.length);
+        } else if (direction === 'right') {
+            setActiveTokenIdx(prev => (prev - 1 + SUPPORTED_TOKENS.length) % SUPPORTED_TOKENS.length);
         }
     };
 
-    if (isLoading) {
-        return (
-            <div className={`fixed inset-0 z-[200] ${isLight ? 'bg-[#b4d9c7]' : 'bg-[#050505]'} flex items-center justify-center`}>
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-16 h-16 rounded-full border-4 border-[#3CB371]/20 border-t-[#3CB371] animate-spin" />
-                    <p className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>
-                        Preparing Vault...
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className={`fixed inset-0 h-[100dvh] z-[200] ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'} overflow-hidden flex flex-col`}>
+        <>
+        <AnimatePresence>
+            {isLoading && (
+                <WalletConnectionLoading 
+                    theme={isLight ? 'light' : 'dark'} 
+                    onFinish={() => setIsLoading(false)} 
+                />
+            )}
+        </AnimatePresence>
+
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className={`absolute inset-0 z-[100] ${isLight ? 'bg-white' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
+            style={{ fontFamily: '"Comfortaa", cursive' }}
+        >
+            {/* Full-page Background Texture */}
+            <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.04] mix-blend-screen'}`} />
             
-            {/* Hidden Capture Container */}
-            <div id="qr-capture-container" className="fixed left-[-9999px] top-[-9999px] w-[400px] p-10 flex flex-col items-center justify-center gap-6"
-                style={{ backgroundColor: isLight ? '#ffffff' : '#0a0a0a' }}>
-                <img src={isLight ? "https://15market.com/goblogo.png" : "https://15market.com/gowlogo.png"} className="h-12 w-auto mb-2" alt="Logo" />
-                <p className={`text-sm italic font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>15market.com</p>
-                <div className={`p-4 rounded-3xl bg-white shadow-xl`}>
-                    <img src={qrCodeData} alt="QR" className="w-64 h-64" />
-                </div>
-                <div className="text-center">
-                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 ${isLight ? 'text-black/40' : 'text-white/40'}`}>Address ({currentWallet.label})</p>
-                    <p className={`text-xs font-black font-mono break-all ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
-                </div>
+            {/* Immersive Ambiance (Global Glows) */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
+                <div className={`absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
             </div>
 
-            {/* Sticky Header */}
-            <div className={`px-4 pt-6 flex items-center justify-between backdrop-blur-xl border-b safe-top ${isLight ? 'bg-white/80 border-black/5' : 'bg-black/80 border-white/5'} h-20 shrink-0`}>
-                <div className="flex items-center gap-3">
-                    <button onClick={onBack} className={`p-2 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
-                        <ArrowLeft size={18} />
-                    </button>
-                    <div>
-                        <h2 className={`text-base font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Transfer Hub</h2>
-                        <p className={`text-[8px] font-bold uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-[#3CB371]'}`}>Swipe to Switch Wallets</p>
+            {/* Sticky Header - Full Width */}
+            <div className="w-full shrink-0 relative z-50">
+                <div className="w-full px-6 md:px-12 pt-8 h-24 flex items-center justify-between safe-top">
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => fundingType ? setFundingType(null) : onBack()} 
+                            className={`p-3 rounded-full bg-white/5 hover:bg-white/10 text-white transition-all hover:scale-110 active:scale-95`}
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
+                        <div>
+                            <h2 className={`text-xl font-black uppercase tracking-tighter text-white leading-none`}>
+                                {fundingType ? 'Select Source' : 'Transfer Hub'}
+                            </h2>
+                            <p className={`text-[9px] font-bold uppercase tracking-[0.3em] text-[#3CB371] mt-1`}>
+                                {fundingType ? 'Choose how to add funds' : 'Swipe to Switch Wallets'}
+                            </p>
+                        </div>
                     </div>
+                    <button onClick={() => fetchWalletInfo(true)} className={`p-3 rounded-full bg-white/5 hover:bg-white/10 text-white ${isRefreshing ? 'animate-spin' : ''}`}>
+                        <RefreshCw size={20} />
+                    </button>
                 </div>
-                <button onClick={() => fetchWalletInfo(true)} className={`p-2 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black' : 'bg-white/5 hover:bg-white/10 text-white'} ${isRefreshing ? 'animate-spin' : ''}`}>
-                    <RefreshCw size={18} />
-                </button>
             </div>
 
-            <div className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-12 overflow-hidden items-stretch justify-start">
+            {/* Main Content - Full Width */}
+            <div className="flex-1 w-full px-6 md:px-12 py-8 flex flex-col lg:flex-row gap-16 overflow-y-auto no-scrollbar items-start justify-start relative z-10">
                 
                 {/* LEFT SIDE: WALLETS & PRIMARY ACTIONS */}
-                <div className={`flex flex-col gap-6 w-full lg:max-w-md shrink-0 transition-all duration-500`}>
+                <div className={`flex flex-col gap-4 md:gap-8 w-full lg:max-w-md shrink-0 transition-all duration-500 -mt-10 md:mt-0`}>
                     {/* Swipeable Wallet Card */}
-                    <div className="relative h-[220px] md:h-[260px] w-full mt-0 group">
-                        {/* Navigation Buttons (Desktop Friendly) */}
+                    <div className="relative h-[220px] md:h-[260px] w-full mt-4 md:mt-0 group">
+                        {/* Static Navigation Buttons (Shifted Outside) - Hidden on Mobile */}
                         <button 
                             onClick={() => handleSwipeWallet('right')}
-                            className={`absolute left-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === 0 ? 'invisible' : ''}`}
+                            className="hidden md:block absolute left-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
                         >
-                            <ChevronLeft size={20} />
+                            <ChevronLeft size={32} strokeWidth={2.5} />
                         </button>
                         <button 
                             onClick={() => handleSwipeWallet('left')}
-                            className={`absolute right-[-12px] top-1/2 -translate-y-1/2 z-20 p-2 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover:opacity-100 transition-all active:scale-90 ${activeWalletIdx === walletOptions.length - 1 ? 'invisible' : ''}`}
+                            className="hidden md:block absolute right-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
                         >
-                            <ChevronRight size={20} />
+                            <ChevronRight size={32} strokeWidth={2.5} />
                         </button>
 
                         <AnimatePresence mode="wait">
@@ -253,74 +272,128 @@ export function CircleWalletPage({
                                 initial={{ opacity: 0, scale: 0.9, x: 100 }}
                                 animate={{ opacity: 1, scale: 1, x: 0 }}
                                 exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                                className={`w-full h-full p-8 md:p-10 rounded-[48px] border relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white border-black/5 shadow-[0_40px_100px_rgba(60,179,113,0.2)]' : 'bg-[#111] border-white/5 shadow-[0_40px_100px_rgba(60,179,113,0.4)]'}`}
+                                className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#3CB371] ${isLight ? 'shadow-[0_40px_100px_rgba(0,0,0,0.25)]' : 'shadow-[0_40px_100px_rgba(60,179,113,0.35)]'} border border-white/20`}
                             >
-                                {/* Animated Background Glow */}
-                                <motion.div 
-                                    animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
-                                    transition={{ duration: 4, repeat: Infinity }}
-                                    className="absolute -top-20 -right-20 w-64 h-64 rounded-full blur-[80px]"
-                                    style={{ backgroundColor: currentWallet.color }}
-                                />
+                                {/* Nature Texture Layer (Organic Gradients & Overlays) */}
+                                <div className="absolute inset-0">
+                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#2E8B57_0%,transparent_60%)] opacity-60" />
+                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,#1E5D3B_0%,transparent_60%)] opacity-40" />
+                                    <div 
+                                        className="absolute inset-0 opacity-10 mix-blend-overlay"
+                                        style={{ 
+                                            backgroundImage: `url('https://www.transparenttextures.com/patterns/leaf.png')`,
+                                            backgroundSize: '200px'
+                                        }} 
+                                    />
+                                    <div 
+                                        className="absolute inset-0 opacity-[0.05] mix-blend-overlay"
+                                        style={{ 
+                                            backgroundImage: `url('https://www.transparenttextures.com/patterns/carbon-fibre.png')`,
+                                            backgroundSize: '10px'
+                                        }} 
+                                    />
+                                    {/* Subtle Glass Ripple */}
+                                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent opacity-30" />
+                                </div>
 
-                                <div className="flex items-start justify-between relative z-10">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-14 h-14 rounded-full flex items-center justify-center`} style={{ backgroundColor: `${currentWallet.color}15` }}>
-                                            <currentWallet.icon size={28} style={{ color: currentWallet.color }} />
-                                        </div>
-                                        <div>
-                                            <p className={`text-[11px] font-black uppercase tracking-[0.2em] opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>{currentWallet.label}</p>
-                                            <p className="text-[9px] font-bold text-[#3CB371] uppercase tracking-widest">Active Session</p>
-                                        </div>
+                                {/* Credit Card Chip (Metallic Gold) - Moved to Right */}
+                                <div className="absolute top-1/2 right-10 -translate-y-1/2 w-14 h-11 rounded-xl bg-gradient-to-br from-[#E6BE8A] via-[#C5A059] to-[#8B7355] shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-black/20 z-10">
+                                    <div className="absolute inset-0 grid grid-cols-2 grid-rows-3 gap-[1.5px] p-2.5 opacity-30">
+                                        {[...Array(6)].map((_, i) => (
+                                            <div key={i} className="border border-black/40 rounded-[3px]" />
+                                        ))}
                                     </div>
-                                    <div className="flex flex-col items-end gap-4">
-                                        <div className="flex gap-1.5">
+                                    <div className="absolute top-1/2 left-0 w-full h-[1px] bg-black/20" />
+                                </div>
+
+                                <motion.div className="flex-1 flex flex-col justify-between relative z-20"
+                                    animate={{ y: '-15%' }}
+                                    transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] text-white`}>{currentWallet.label}</p>
+                                        <img 
+                                            src="/boblogo.png" 
+                                            alt="Logo" 
+                                            className="h-16 md:h-20 object-contain brightness-0 invert mix-blend-overlay opacity-80" 
+                                        />
+                                    </div>
+
+                                    {/* Card Number (Wallet Address) */}
+                                    <div className="py-2">
+                                        <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
+                                            {currentWallet.address 
+                                                ? `${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)}`.toUpperCase()
+                                                : "xxxx...xxxx"}
+                                        </p>
+                                        <div className="flex gap-1.5 mt-4">
                                             {walletOptions.map((_, i) => (
-                                                <div key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${activeWalletIdx === i ? 'w-5 bg-[#3CB371]' : 'bg-white/20'}`} />
+                                                <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeWalletIdx === i ? 'w-4 bg-white' : 'bg-white/10'}`} />
                                             ))}
                                         </div>
-                                        {/* DESKTOP ACCESS ICON: Toggles the funding pane */}
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); setShowDesktopFunding(!showDesktopFunding); }}
-                                            className={`p-2.5 rounded-xl border hidden lg:flex hover:scale-110 active:scale-95 transition-all ${showDesktopFunding ? 'bg-[#3CB371] text-black border-[#3CB371]' : 'bg-white/5 border-white/10 text-white'}`}
-                                            title="Toggle Funding Details"
-                                        >
-                                            <Zap size={14} className={showDesktopFunding ? 'animate-pulse' : ''} />
-                                        </button>
                                     </div>
-                                </div>
 
-                                <div className="relative z-10">
-                                    <p className={`text-[11px] font-black uppercase tracking-[0.2em] mb-2 opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Available Balance</p>
-                                    <h1 className={`text-5xl md:text-6xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
-                                        {currentWallet.bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                        <span className="text-2xl md:text-3xl opacity-20 ml-3">USDC</span>
-                                    </h1>
-                                </div>
+                                    <div className="flex items-end justify-between relative">
+                                        <div>
+                                            <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-white`}>Available Balance</p>
+                                            <h1 className={`text-4xl md:text-5xl font-black tracking-tighter text-white flex items-baseline gap-2`}>
+                                                {currentWallet.bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                <span className="text-xl text-white/60">USDC</span>
+                                            </h1>
+                                        </div>
 
-                                <div className="flex items-center gap-2 relative z-10">
-                                    <Shield size={12} className="text-[#3CB371]" />
-                                    <p className={`text-[10px] font-bold uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>
-                                        Encrypted & Deterministic Vault
-                                    </p>
-                                </div>
+                                        {/* Premium Nature Decoration Layer */}
+                                        <div className="absolute inset-0 opacity-20 pointer-events-none overflow-hidden">
+                                            {/* Topographical Curves */}
+                                            <svg className="absolute top-[-10%] right-[-10%] w-[120%] h-[120%] opacity-40" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                <path d="M0,50 Q25,30 50,50 T100,50" fill="none" stroke="white" strokeWidth="0.5" />
+                                                <path d="M0,60 Q25,40 50,60 T100,60" fill="none" stroke="white" strokeWidth="0.5" />
+                                                <path d="M0,70 Q25,50 50,70 T100,70" fill="none" stroke="white" strokeWidth="0.5" />
+                                                <path d="M0,80 Q25,60 50,80 T100,80" fill="none" stroke="white" strokeWidth="0.5" />
+                                            </svg>
+                                            
+                                            {/* Pine Trees Silhouettes */}
+                                            <svg className="absolute bottom-[10%] right-[5%] w-24 h-24" viewBox="0 0 100 100" fill="white">
+                                                <path d="M20,80 L50,20 L80,80 Z" opacity="0.6" />
+                                                <path d="M5,90 L35,40 L65,90 Z" opacity="0.4" />
+                                                <rect x="33" y="85" width="4" height="10" opacity="0.3" />
+                                                <rect x="48" y="75" width="4" height="10" opacity="0.5" />
+                                            </svg>
+
+                                            {/* Geometric Accents (Dots & Plus) */}
+                                            <div className="absolute top-1/4 left-1/3 w-1 h-1 bg-white rounded-full opacity-30" />
+                                            <div className="absolute top-1/3 left-1/4 w-2 h-[1px] bg-white opacity-20" />
+                                            <div className="absolute top-1/3 left-1/4 h-2 w-[1px] bg-white opacity-20" />
+                                            <div className="absolute bottom-1/4 left-1/2 flex gap-1">
+                                                {[...Array(4)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full opacity-20" />)}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <Shield size={10} className="text-white opacity-40" />
+                                        <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>
+                                            Secured
+                                        </p>
+                                    </div>
+                                </motion.div>
                             </motion.div>
                         </AnimatePresence>
                     </div>
 
                     {/* Primary Actions */}
-                    <div className="grid grid-cols-2 gap-4 shrink-0">
+                    <div className="grid grid-cols-2 gap-3 md:gap-4 shrink-0">
                         <button 
                             onClick={() => setShowSendModal(true)}
-                            className="flex items-center justify-center gap-3 bg-[#3CB371] text-black font-black py-6 rounded-[28px] text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
+                            className="flex items-center justify-center gap-2 md:gap-3 bg-[#3CB371] text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
                         >
-                            <Send size={18} /> Send
+                            <Send size={16} /> Send
                         </button>
                         <button 
                             onClick={() => setShowReceiveModal(true)}
-                            className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-white font-black py-6 rounded-[28px] text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
+                            className={`flex items-center justify-center gap-2 md:gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
                         >
-                            <ArrowDownLeft size={18} /> Receive
+                            <ArrowDownLeft size={16} /> Receive
                         </button>
                     </div>
                 </div>
@@ -330,57 +403,145 @@ export function CircleWalletPage({
                     <motion.div 
                         initial={{ opacity: 0, scaleY: 0 }}
                         animate={{ opacity: 1, scaleY: 1 }}
-                        className="hidden lg:block w-px bg-white/10 self-stretch my-4"
+                        className={`hidden lg:block w-[2px] rounded-full self-stretch my-4 bg-[#3CB371]/40`}
                     />
                 )}
 
-                {/* RIGHT SIDE: ASSETS & FUNDING (Hidden by default on Desktop) */}
-                {showDesktopFunding && (
-                    <motion.div 
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-hidden"
-                    >
+                {/* RIGHT SIDE: ASSETS & FUNDING (Visible on Mobile & Desktop) */}
+                <motion.div 
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-hidden -mt-12 md:mt-0"
+                >
                     <div className="flex items-center gap-8 mb-6 border-b border-white/5 shrink-0">
-                        <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? 'text-[#3CB371]' : 'text-white/20'}`}>
+                        <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? 'text-white' : 'text-white/20'}`}>
                             Assets & Funding
-                            {activeTab === 'assets' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#3CB371]" />}
+                            {activeTab === 'assets' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white" />}
                         </button>
-                        <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? 'text-[#3CB371]' : 'text-white/20'}`}>
+                        <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? 'text-white' : 'text-white/20'}`}>
                             Activity Pulse
-                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#3CB371]" />}
+                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white" />}
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-20">
+                    <div className={`flex-1 overflow-hidden custom-scrollbar pr-2 pb-20`}>
                         {activeTab === 'assets' ? (
                             <div className="flex flex-col gap-6">
-                                {currentWallet.key === 'main' ? (
-                                    <div className="flex flex-col gap-4">
-                                        <div className={`p-8 rounded-[48px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-4`}>
-                                            <div className="flex items-center justify-between">
-                                                <h3 className={`text-[11px] font-black uppercase tracking-[0.3em] opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Funding Assets</h3>
-                                                <div className="flex gap-1.5">
-                                                    {SUPPORTED_TOKENS.map((_, i) => (
-                                                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${activeTokenIdx === i ? 'bg-[#3CB371]' : 'bg-white/10'}`} />
-                                                    ))}
+                                    <div className="flex flex-col gap-4 h-full min-h-[400px]">
+                                        {!fundingType ? (
+                                            <div className="flex flex-col items-center justify-center flex-1 py-4 md:py-10 gap-8 md:gap-16 relative z-10 -mt-48 md:mt-0">
+                                                <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] opacity-40 text-white`}>Select Funding Type</h3>
+                                                
+                                                <div className="flex items-center justify-center gap-6 md:gap-16 w-full">
+                                                    <button 
+                                                        onClick={() => setFundingType('native')}
+                                                        className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
+                                                    >
+                                                        <Globe size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
+                                                        <div className="text-center">
+                                                            <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>Native Tokens</p>
+                                                        </div>
+                                                    </button>
+                                                    {/* Divider Line */}
+                                                <div className={`w-[2px] h-16 md:h-24 bg-[#3CB371]/40 mx-2 md:mx-12 rounded-full`}></div>
+ 
+                                                    <button 
+                                                        onClick={() => setFundingType('usdc')}
+                                                        className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
+                                                    >
+                                                        <Shield size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
+                                                        <div className="center">
+                                                            <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>USDC</p>
+                                                        </div>
+                                                    </button>
+                                                </div>
+
+                                                {/* Infinite Scrolling Asset Marquee - Hidden on Mobile */}
+                                                <div className="hidden md:block w-full max-w-5xl mx-auto mt-6 md:mt-8 overflow-hidden relative pointer-events-none [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-0">
+                                                    <motion.div
+                                                        animate={{ x: ["0%", "-50%"] }}
+                                                        transition={{ ease: "linear", duration: 25, repeat: Infinity }}
+                                                        className="flex items-center w-max"
+                                                    >
+                                                        {/* Duplicate exactly TWICE for seamless -50% loop */}
+                                                        {[...Array(2)].map((_, groupIdx) => (
+                                                            <div key={groupIdx} className="flex items-center">
+                                                                {/* To make it long enough, repeat the tokens within each half */}
+                                                                {[...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS].map((token, i) => (
+                                                                    <div key={`${groupIdx}-${i}`} className="flex items-center justify-center w-16 md:w-24">
+                                                                        <img 
+                                                                            src={token.icon} 
+                                                                            alt={token.name} 
+                                                                            className="w-8 h-8 md:w-10 md:h-10 object-contain opacity-30 grayscale transition-all drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
+                                                                        />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ))}
+                                                    </motion.div>
+                                                </div>
+
+                                                {/* Powered By Badge */}
+                                                <div className="flex items-center justify-center gap-3 -mt-4 md:-mt-6 -translate-y-[30%] opacity-60 hover:opacity-100 transition-opacity duration-500 relative z-20">
+                                                    <span className={`relative z-30 text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Powered by</span>
+                                                    <div className="flex items-center gap-2.5 relative z-30">
+                                                        <img 
+                                                            src="/circle.png" 
+                                                            alt="Circle" 
+                                                            className="h-8 md:h-10 object-contain drop-shadow-[0_0_10px_rgba(60,179,113,0.3)] relative z-30"
+                                                            style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
+                                                        />
+                                                        <div className={`relative z-30 text-white opacity-40`}>
+                                                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                                                <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
+                                                                <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
+                                                            </svg>
+                                                        </div>
+                                                        <span className="relative z-30 text-[11px] md:text-xs font-black tracking-widest text-[#3CB371]">CCTP</span>
+                                                        <div className={`relative z-30 text-white opacity-40`}>
+                                                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                                                <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
+                                                                <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
+                                                            </svg>
+                                                        </div>
+                                                        <span className={`relative z-30 text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>GATEWAY</span>
+                                                    </div>
                                                 </div>
                                             </div>
+                                        ) : (
+                                            <>
+                                                <div className={`flex flex-col gap-4 relative z-10`}>
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <button 
+                                                            onClick={() => setFundingType(null)}
+                                                            className={`p-2.5 rounded-full border transition-all ${isLight ? 'bg-white/50 border-black/10 text-black/60 hover:text-black hover:bg-black/5' : 'bg-black/50 border-white/10 text-white/60 hover:text-white hover:bg-white/5'}`}
+                                                        >
+                                                            <ArrowLeft size={16} />
+                                                        </button>
+                                                        <h3 className={`text-[11px] font-black uppercase tracking-[0.3em] opacity-40 text-white`}>
+                                                            {fundingType === 'native' ? 'Native Tokens' : 'USDC'}
+                                                        </h3>
+                                                        <div className="flex gap-1.5">
+                                                            {SUPPORTED_TOKENS.map((_, i) => (
+                                                                <div key={i} className={`w-1.5 h-1.5 rounded-full ${activeTokenIdx === i ? 'bg-[#3CB371]' : 'bg-white/10'}`} />
+                                                            ))}
+                                                        </div>
+                                                    </div>
 
                                             <div className="relative h-[240px] md:h-[280px] w-full flex items-center justify-center overflow-hidden group/token">
-                                                {/* Token Navigation Buttons */}
-                                                <button 
-                                                    onClick={() => handleSwipeToken('right')}
-                                                    className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === 0 ? 'invisible' : ''}`}
-                                                >
-                                                    <ChevronLeft size={24} />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleSwipeToken('left')}
-                                                    className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 p-3 rounded-full backdrop-blur-md border ${isLight ? 'bg-white/80 border-black/5 text-black' : 'bg-black/80 border-white/10 text-white'} opacity-0 group-hover/token:opacity-100 transition-all active:scale-90 ${activeTokenIdx === SUPPORTED_TOKENS.length - 1 ? 'invisible' : ''}`}
-                                                >
-                                                    <ChevronRight size={24} />
-                                                </button>
+                                                {/* Static Token Navigation Buttons (Green & Standalone) */}
+                                            <button 
+                                                onClick={() => handleSwipeToken('right')}
+                                                className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
+                                            >
+                                                <ChevronLeft size={36} strokeWidth={2.5} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleSwipeToken('left')}
+                                                className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
+                                            >
+                                                <ChevronRight size={36} strokeWidth={2.5} />
+                                            </button>
 
                                                 <AnimatePresence mode="wait">
                                                     <motion.div
@@ -396,61 +557,59 @@ export function CircleWalletPage({
                                                         exit={{ opacity: 0, scale: 0.8, y: -20 }}
                                                         className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
                                                     >
-                                                        <div className="flex items-center justify-center mb-0 relative">
-                                                            <img 
-                                                                 src={selectedToken.icon} 
-                                                                 className="w-56 h-56 md:w-64 md:h-64 object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)]" 
-                                                                 style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
-                                                                 alt={selectedToken.symbol} 
-                                                            />
-                                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-40">
-                                                                <p className={`text-5xl font-black ${isLight ? 'text-black' : 'text-white'} drop-shadow-2xl`}>{selectedToken.symbol}</p>
+                                                        <div className="flex items-center justify-center relative w-full h-full">
+                                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-56 h-56 md:w-64 md:h-64 pointer-events-none z-0">
+                                                                <img 
+                                                                    src={selectedToken.icon} 
+                                                                    className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)] transition-all" 
+                                                                    style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                    alt={selectedToken.symbol} 
+                                                                />
+                                                                {fundingType === 'usdc' && (
+                                                                    <img 
+                                                                        src="/circlewhite.png" 
+                                                                        className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${
+                                                                            selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' :
+                                                                            selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' :
+                                                                            selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' :
+                                                                            selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
+                                                                            'top-[50%] left-[50%] w-[20%] h-[20%]'
+                                                                        }`}
+                                                                        style={{ filter: 'brightness(0) invert(1)' }}
+                                                                        alt="USDC" 
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                            <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none translate-y-10">
+                                                                <p className={`text-5xl font-black tracking-tighter text-white drop-shadow-2xl`}>
+                                                                    {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
+                                                                </p>
                                                             </div>
                                                         </div>
                                                     </motion.div>
                                                 </AnimatePresence>
                                             </div>
 
-                                            <button 
-                                                onClick={() => setShowUnifiedFunding(true)}
-                                                className="w-full py-5 rounded-[24px] bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20 font-black uppercase text-xs tracking-widest hover:bg-[#3CB371]/20 transition-all"
-                                            >
-                                                Fund Trading Wallet with {selectedToken.symbol}
-                                            </button>
-                                        </div>
+                                            <div className="relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
+                                                <button 
+                                                    onClick={() => setShowUnifiedFunding(true)}
+                                                    className="w-auto px-12 py-5 rounded-[24px] bg-[#3CB371] text-white font-black uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
+                                                >
+                                                    Fund with {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
+                                                </button>
 
-                                        <div className={`p-6 rounded-[32px] border border-dashed flex items-start gap-5 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'}`}>
-                                            <Info size={20} className="text-[#3CB371] shrink-0" />
-                                            <p className={`text-xs font-bold uppercase leading-relaxed tracking-wider ${isLight ? 'text-black/60' : 'text-white/40'}`}>
-                                                Swipe to select token. Unified funding swaps any asset to USDC and deposits it into your Vault for zero-latency execution.
-                                            </p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col gap-4">
-                                        <div className={`p-8 rounded-[48px] border ${isLight ? 'bg-white border-black/5' : 'bg-[#111] border-white/5'} flex items-center justify-between group`}>
-                                            <div className="flex items-center gap-6">
-                                                <div className="w-16 h-16 rounded-full bg-[#3CB371]/10 flex items-center justify-center">
-                                                    <Zap size={28} className="text-[#3CB371]" />
-                                                </div>
-                                                <div>
-                                                    <h3 className={`text-xl font-black ${isLight ? 'text-black' : 'text-white'}`}>Active Vault</h3>
-                                                    <p className="text-xs font-bold opacity-40 uppercase tracking-[0.2em]">Arc Testnet Node</p>
+                                                <div className={`w-full py-4 px-6 rounded-[32px] border border-dashed flex items-center justify-center gap-4 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'} -translate-y-[12%]`}>
+                                                    <Info size={14} className="text-[#3CB371] shrink-0" />
+                                                    <p className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white/40'}`}>
+                                                        Click icons or swipe to change asset
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className={`text-3xl font-black ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>{sessionBalance.toFixed(2)}</p>
-                                                <p className="text-xs font-bold opacity-40 uppercase tracking-widest">USDC</p>
-                                            </div>
                                         </div>
-                                        <button 
-                                            onClick={() => setShowUnifiedFunding(true)}
-                                            className="w-full py-6 rounded-[32px] bg-white/5 border border-white/5 text-white/40 font-black uppercase text-xs tracking-widest hover:bg-white/10 hover:text-white transition-all"
-                                        >
-                                            Deposit more assets
-                                        </button>
-                                    </div>
+                                    </>
                                 )}
+                            </div>
+                                {/* Quick fund view removed - always showing token funding layout */}
                             </div>
                         ) : (
                             <div className="flex flex-col gap-4">
@@ -461,11 +620,11 @@ export function CircleWalletPage({
                                                 {tx.type === 'OUTGOING' ? <Send size={24} /> : <ArrowDownLeft size={24} />}
                                             </div>
                                             <div>
-                                                <p className={`text-sm font-black uppercase tracking-wider ${isLight ? 'text-black' : 'text-white'}`}>{tx.type}</p>
-                                                <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">{new Date(tx.createDate).toLocaleDateString()}</p>
+                                                <p className={`text-sm font-black uppercase tracking-wider text-white`}>{tx.type}</p>
+                                                <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest text-white">{new Date(tx.createDate).toLocaleDateString()}</p>
                                             </div>
                                         </div>
-                                        <p className={`text-xl font-black ${tx.type === 'OUTGOING' ? 'text-orange-500' : 'text-[#3CB371]'}`}>
+                                        <p className={`text-xl font-black text-white`}>
                                             {tx.type === 'OUTGOING' ? '-' : '+'}{tx.amounts?.[0] || '0.00'}
                                         </p>
                                     </div>
@@ -474,8 +633,7 @@ export function CircleWalletPage({
                             )}
                         </div>
                     </motion.div>
-                )}
-            </div>
+                </div>
 
             {/* Modals Integrated */}
             <AnimatePresence>
@@ -484,14 +642,14 @@ export function CircleWalletPage({
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSendModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
                         <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-white border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} max-h-[92dvh] overflow-y-auto`}>
                             <div className="flex items-center justify-between mb-8">
-                                <h3 className={`text-2xl font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Send Assets</h3>
+                                <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Send Assets</h3>
                                 <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
                             </div>
                             
                             <div className="flex flex-col gap-6">
                                 <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-[#3CB371]/20`}>
                                     <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Source Wallet</p>
-                                    <p className={`text-sm font-black uppercase ${isLight ? 'text-black' : 'text-white'}`}>{currentWallet.label}</p>
+                                    <p className={`text-sm font-black uppercase text-white`}>{currentWallet.label}</p>
                                 </div>
 
                                 <div>
@@ -520,7 +678,7 @@ export function CircleWalletPage({
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowReceiveModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
                         <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-white border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} flex flex-col items-center max-h-[92dvh] overflow-y-auto`}>
                             <div className="flex items-center justify-between w-full mb-8">
-                                <h3 className={`text-2xl font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>Receive</h3>
+                                <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Receive</h3>
                                 <button onClick={() => setShowReceiveModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
                             </div>
 
@@ -537,12 +695,12 @@ export function CircleWalletPage({
                             </div>
 
                             <div className={`w-full p-6 rounded-3xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-dashed text-center mb-8`}>
-                                <p className={`text-[10px] font-black uppercase tracking-widest mb-3 opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Deposit to {currentWallet.label}</p>
-                                <p className={`text-xs font-black font-mono break-all ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
+                                <p className={`text-[10px] font-black uppercase tracking-widest mb-3 opacity-40 text-white`}>Deposit to {currentWallet.label}</p>
+                                <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-3 w-full">
-                                <button onClick={() => { navigator.clipboard.writeText(currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address); notify("Copied!", "success"); }} className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black text-white' : 'bg-[#3CB371] text-black'} font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
+                                <button onClick={() => { navigator.clipboard.writeText(currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address); notify("Copied!", "success"); }} className={`flex items-center justify-center gap-3 bg-[#3CB371] text-white font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
                                     <Copy size={16} /> Copy
                                 </button>
                                 <button onClick={handleDownloadQR} className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/10' : 'border-white/10'} font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
@@ -562,8 +720,46 @@ export function CircleWalletPage({
                 address={address}
                 sessionAddress={sessionAddress}
                 initialToken={selectedToken}
+                fundingType={fundingType}
                 onSuccess={() => fetchWalletInfo(true)}
             />
-        </div>
+
+            {/* Hidden Capture Container (QR) */}
+            <div id="qr-capture-container" className="fixed left-[-9999px] top-[-9999px] w-[400px] p-10 flex flex-col items-center justify-center gap-6"
+                style={{ backgroundColor: isLight ? '#ffffff' : '#0a0a0a' }}>
+                <img src={isLight ? "https://15market.com/goblogo.png" : "https://15market.com/gowlogo.png"} className="h-12 w-auto mb-2" alt="Logo" />
+                <p className={`text-sm italic font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>15market.com</p>
+                <div className={`p-4 rounded-3xl bg-white shadow-xl`}>
+                    <img src={qrCodeData} alt="QR" className="w-64 h-64" />
+                </div>
+                <div className="text-center">
+                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-white/40`}>Address ({currentWallet.label})</p>
+                    <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
+                </div>
+            </div>
+            {/* Mobile Footer Marquee */}
+            <div className="md:hidden fixed bottom-4 left-0 right-0 overflow-hidden pointer-events-none [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-50">
+                <motion.div
+                    animate={{ x: ["0%", "-50%"] }}
+                    transition={{ ease: "linear", duration: 20, repeat: Infinity }}
+                    className="flex items-center w-max"
+                >
+                    {[...Array(2)].map((_, groupIdx) => (
+                        <div key={groupIdx} className="flex items-center">
+                            {[...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS].map((token, i) => (
+                                <div key={`${groupIdx}-${i}`} className="flex items-center justify-center w-16">
+                                    <img 
+                                        src={token.icon} 
+                                        alt={token.name} 
+                                        className="w-6 h-6 object-contain opacity-20 grayscale"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </motion.div>
+            </div>
+        </motion.div>
+        </>
     );
 }

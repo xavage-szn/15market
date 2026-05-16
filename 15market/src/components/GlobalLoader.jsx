@@ -23,7 +23,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                     className="flex items-center"
                 >
                     <img 
-                        src={theme === 'light' ? "/goblogo.png" : "/gowlogo.png"} 
+                        src={theme === 'light' ? "/boblogo.png" : "/gowlogo.png"} 
                         alt="15market" 
                         className="h-[72px] md:h-[100px] w-auto" 
                     />
@@ -84,6 +84,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                                 key={i}
                                 animate={{ 
                                     opacity: [0, 1, 0],
+                                    backgroundColor: isLight ? '#000000' : ['#ffffff', '#000000']
                                 }}
                                 transition={{ 
                                     repeat: Infinity, 
@@ -91,7 +92,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                                     delay: 0.8 + (7 * 0.1) + (i * 0.2), // Types in after "Loading"
                                     ease: "easeInOut" 
                                 }}
-                                className={`w-[4px] h-[4px] rounded-full ${isLight ? 'bg-black/60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'bg-white/80 shadow-[0_0_8px_rgba(255,255,255,0.3)]'}`}
+                                className={`w-[4px] h-[4px] rounded-full ${isLight ? 'opacity-60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'shadow-[0_0_12px_rgba(255,255,255,0.3)]'}`}
                             />
                         ))}
                     </div>

@@ -14,7 +14,23 @@ export function UnifiedFundingModal({
     onSuccess,
     initialToken
 }) {
+    const TokenLogoInfused = ({ token, isLight, size = "w-20 h-20", mode = 'stables' }) => {
+        const iconSrc = mode === 'stables' ? `/${token.id}usdc.png` : token.icon;
+        
+        return (
+            <div className={`relative ${size} flex items-center justify-center`}>
+                <img 
+                    src={iconSrc} 
+                    className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(60,179,113,0.3)]" 
+                    style={{ filter: isLight && mode === 'native' ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                    alt={token.symbol} 
+                />
+            </div>
+        );
+    };
+
     const [selectedToken, setSelectedToken] = useState(initialToken || SUPPORTED_TOKENS[0]);
+    const [fundingMode, setFundingMode] = useState(null); // null | 'native' | 'stables'
     const [amount, setAmount] = useState("");
     const [isQuoting, setIsQuoting] = useState(false);
     const [quote, setQuote] = useState(null);
@@ -121,7 +137,7 @@ export function UnifiedFundingModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[500] flex items-end md:items-center justify-center p-0 md:p-6 overflow-hidden">
+        <div className="fixed inset-0 z-[500] flex items-end md:items-center justify-center p-0 md:p-6 overflow-hidden" style={{ fontFamily: '"Comfortaa", cursive' }}>
             <motion.div 
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1 }} 
@@ -153,49 +169,113 @@ export function UnifiedFundingModal({
                 </div>
 
                 <div className="p-6 flex flex-col gap-6 max-h-[85dvh] overflow-y-auto custom-scrollbar">
-                    
-                    {/* Swipeable Token Selector */}
-                    <div className={`p-8 rounded-[40px] border relative overflow-hidden flex flex-col items-center justify-center gap-4 ${isLight ? 'bg-white border-black/5 shadow-xl' : 'bg-[#111] border-white/5 shadow-2xl'}`}>
+                                        {/* Guided Funding Selection */}
+                    <div className={`p-8 rounded-[40px] border relative overflow-hidden flex flex-col items-center justify-center min-h-[320px] ${isLight ? 'bg-white border-black/5 shadow-xl' : 'bg-[#111] border-white/5 shadow-2xl'}`}>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-[#3CB371]/5 blur-[60px] rounded-full" />
                         
-                        <div className="flex items-center justify-between w-full mb-2">
-                            <p className={`text-[10px] font-black uppercase tracking-widest opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Select Funding Asset</p>
-                            <div className="flex gap-1">
-                                {SUPPORTED_TOKENS.map(t => (
-                                    <div key={t.id} className={`w-1 h-1 rounded-full transition-all ${selectedToken.id === t.id ? 'w-3 bg-[#3CB371]' : 'bg-white/10'}`} />
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="relative h-[100px] w-full flex items-center justify-center">
-                            <AnimatePresence mode="wait">
-                                <motion.div
-                                    key={selectedToken.id}
-                                    drag="x"
-                                    dragConstraints={{ left: 0, right: 0 }}
-                                    onDragEnd={(e, info) => {
-                                        if (info.offset.x < -50) handleSwipeToken('left');
-                                        else if (info.offset.x > 50) handleSwipeToken('right');
-                                    }}
-                                    initial={{ opacity: 0, scale: 0.8, x: 50 }}
-                                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                                    exit={{ opacity: 0, scale: 0.8, x: -50 }}
-                                    className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
+                        <AnimatePresence mode="wait">
+                            {!fundingMode ? (
+                                <motion.div 
+                                    key="selection"
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    className="flex flex-row items-center justify-center gap-0 w-full h-full"
                                 >
-                                    <div className="flex items-center justify-center mb-4">
-                                        <img 
-                                            src={selectedToken.icon} 
-                                            className="w-20 h-20 object-contain drop-shadow-[0_0_30px_rgba(60,179,113,0.3)]" 
-                                            style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
-                                            alt={selectedToken.symbol} 
-                                        />
-                                    </div>
-                                    <p className={`text-xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>{selectedToken.symbol}</p>
-                                    <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{balances[selectedToken.id]?.toFixed(2) || '0.00'} Available</p>
+                                    <button 
+                                        onClick={() => setFundingMode('native')}
+                                        className={`flex-1 group relative p-6 h-full flex flex-col items-center justify-center gap-4 transition-all hover:bg-[#3CB371]/5 active:scale-[0.98]`}
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-[#3CB371]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <Zap size={24} className="text-[#3CB371]" />
+                                        </div>
+                                        <div className="text-center">
+                                            <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black' : 'text-white'}`}>Native</p>
+                                        </div>
+                                    </button>
+
+                                    {/* Vertical Divider */}
+                                    <div className="w-px h-16 bg-[#3CB371]/20" />
+
+                                    <button 
+                                        onClick={() => setFundingMode('stables')}
+                                        className={`flex-1 group relative p-6 h-full flex flex-col items-center justify-center gap-4 transition-all hover:bg-[#3CB371]/5 active:scale-[0.98]`}
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-[#3CB371]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <Globe size={24} className="text-[#3CB371]" />
+                                        </div>
+                                        <div className="text-center">
+                                            <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black' : 'text-white'}`}>Stables</p>
+                                        </div>
+                                    </button>
                                 </motion.div>
-                            </AnimatePresence>
-                        </div>
+                            ) : (
+                                <motion.div 
+                                    key="assets"
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    className="flex flex-col gap-4 w-full"
+                                >
+                                    <div className="flex items-center justify-between w-full mb-2">
+                                        <button 
+                                            onClick={() => setFundingMode(null)}
+                                            className={`p-2 rounded-xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white/60'}`}
+                                        >
+                                            <ChevronLeft size={16} />
+                                            <span className="text-[9px] font-black uppercase tracking-widest">Type</span>
+                                        </button>
+                                        <div className="flex gap-1">
+                                            {SUPPORTED_TOKENS.map(t => (
+                                                <div key={t.id} className={`w-1 h-1 rounded-full transition-all ${selectedToken.id === t.id ? 'w-3 bg-[#3CB371]' : 'bg-white/10'}`} />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="relative h-[120px] w-full flex items-center justify-center">
+                                        {/* Token Navigation Buttons */}
+                                        <button 
+                                            onClick={() => handleSwipeToken('right')}
+                                            className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 p-2 text-[#3CB371] hover:scale-110 active:scale-90 transition-all`}
+                                        >
+                                            <ChevronLeft size={32} strokeWidth={3} />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleSwipeToken('left')}
+                                            className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 p-2 text-[#3CB371] hover:scale-110 active:scale-90 transition-all`}
+                                        >
+                                            <ChevronRight size={32} strokeWidth={3} />
+                                        </button>
+
+                                        <AnimatePresence mode="wait">
+                                            <motion.div
+                                                key={`${selectedToken.id}-${fundingMode}`}
+                                                drag="x"
+                                                dragConstraints={{ left: 0, right: 0 }}
+                                                onDragEnd={(e, info) => {
+                                                    if (info.offset.x < -50) handleSwipeToken('left');
+                                                    else if (info.offset.x > 50) handleSwipeToken('right');
+                                                }}
+                                                initial={{ opacity: 0, scale: 0.8, x: 50 }}
+                                                animate={{ opacity: 1, scale: 1, x: 0 }}
+                                                exit={{ opacity: 0, scale: 0.8, x: -50 }}
+                                                className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
+                                            >
+                                                <div className="flex items-center justify-center mb-4">
+                                                    <TokenLogoInfused token={selectedToken} isLight={isLight} mode={fundingMode} />
+                                                </div>
+                                                <p className={`text-xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
+                                                    {fundingMode === 'stables' ? `${selectedToken.symbol}USDC` : selectedToken.symbol}
+                                                </p>
+                                                <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{balances[selectedToken.id]?.toFixed(2) || '0.00'} Available</p>
+                                            </motion.div>
+                                        </AnimatePresence>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
+
 
                     {/* Amount Input */}
                     <div className="flex flex-col gap-2">
