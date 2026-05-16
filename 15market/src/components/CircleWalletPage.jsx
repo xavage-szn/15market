@@ -435,7 +435,7 @@ export function CircleWalletPage({
                 <motion.div 
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-hidden -mt-12 md:mt-0"
+                    className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-visible md:overflow-hidden -mt-12 md:mt-0"
                 >
                     <div className="flex items-center gap-8 mb-6 border-b border-white/5 shrink-0">
                         <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? 'text-white' : 'text-white/20'}`}>
@@ -448,15 +448,15 @@ export function CircleWalletPage({
                         </button>
                     </div>
 
-                    <div className={`flex-1 overflow-hidden custom-scrollbar pr-2 pb-20`}>
+                    <div className={`flex-1 overflow-visible md:overflow-hidden custom-scrollbar pr-2 pb-20`}>
                         {activeTab === 'assets' ? (
                             <div className="flex flex-col gap-6">
                                     <div className="flex flex-col gap-4 h-full min-h-[400px]">
                                         {!fundingType ? (
-                                            <div className="flex flex-col items-center justify-center flex-1 py-4 md:py-10 gap-8 md:gap-16 relative z-10 -mt-56 md:mt-0">
-                                                <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] opacity-40 text-white`}>Select Funding Type</h3>
+                                            <div className="flex flex-col items-center justify-center flex-1 py-4 md:py-10 gap-8 md:gap-16 relative z-10 -mt-64 md:mt-0">
+                                                <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] opacity-40 text-white mt-1 md:mt-0`}>Select Funding Type</h3>
                                                 
-                                                <div className="flex items-center justify-center gap-6 md:gap-16 w-full">
+                                                <div className="flex items-center justify-center gap-6 md:gap-16 w-full -mt-3 md:mt-0">
                                                     <button 
                                                         onClick={() => setFundingType('native')}
                                                         className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
@@ -480,8 +480,8 @@ export function CircleWalletPage({
                                                     </button>
                                                 </div>
 
-                                                {/* Infinite Scrolling Asset Marquee - Hidden on Mobile */}
-                                                <div className="hidden md:block w-full max-w-5xl mx-auto mt-6 md:mt-8 overflow-hidden relative pointer-events-none [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-0">
+                                                {/* Infinite Scrolling Asset Marquee - Enabled on Mobile & Desktop */}
+                                                <div className="block w-full max-w-5xl mx-auto -mt-8 md:mt-8 overflow-hidden relative pointer-events-none [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-0">
                                                     <motion.div
                                                         animate={{ x: ["0%", "-50%"] }}
                                                         transition={{ ease: "linear", duration: 25, repeat: Infinity }}
@@ -496,7 +496,7 @@ export function CircleWalletPage({
                                                                         <img 
                                                                             src={token.icon} 
                                                                             alt={token.name} 
-                                                                            className="w-8 h-8 md:w-10 md:h-10 object-contain opacity-30 grayscale transition-all drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
+                                                                            className="w-8 h-8 md:w-10 md:h-10 object-contain opacity-30 brightness-0 md:brightness-100 grayscale transition-all drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
                                                                         />
                                                                     </div>
                                                                 ))}
@@ -506,7 +506,7 @@ export function CircleWalletPage({
                                                 </div>
 
                                                 {/* Powered By Badge */}
-                                                <div className="flex items-center justify-center gap-3 -mt-4 md:-mt-6 -translate-y-[30%] opacity-60 hover:opacity-100 transition-opacity duration-500 relative z-20">
+                                                <div className="flex items-center justify-center gap-3 relative -mt-10 md:-mt-6 opacity-60 hover:opacity-100 transition-opacity duration-500 z-20">
                                                     <span className={`relative z-30 text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Powered by</span>
                                                     <div className="flex items-center gap-2.5 relative z-30">
                                                         <img 
@@ -633,7 +633,6 @@ export function CircleWalletPage({
                                     </>
                                 )}
                             </div>
-                                {/* Quick fund view removed - always showing token funding layout */}
                             </div>
                         ) : (
                             <div className="flex flex-col gap-4">
@@ -760,28 +759,6 @@ export function CircleWalletPage({
                     <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-white/40`}>Address ({currentWallet.label})</p>
                     <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
                 </div>
-            </div>
-            {/* Mobile Footer Marquee */}
-            <div className="md:hidden fixed bottom-4 left-0 right-0 overflow-hidden pointer-events-none [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-50">
-                <motion.div
-                    animate={{ x: ["0%", "-50%"] }}
-                    transition={{ ease: "linear", duration: 20, repeat: Infinity }}
-                    className="flex items-center w-max"
-                >
-                    {[...Array(2)].map((_, groupIdx) => (
-                        <div key={groupIdx} className="flex items-center">
-                            {[...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS].map((token, i) => (
-                                <div key={`${groupIdx}-${i}`} className="flex items-center justify-center w-16">
-                                    <img 
-                                        src={token.icon} 
-                                        alt={token.name} 
-                                        className="w-6 h-6 object-contain opacity-20 grayscale"
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                </motion.div>
             </div>
         </motion.div>
         </>
