@@ -43,6 +43,9 @@ export function CircleWalletPage({
     const [showSendModal, setShowSendModal] = useState(initialMode === 'send');
     const [showReceiveModal, setShowReceiveModal] = useState(initialMode === 'receive');
     const [showUnifiedFunding, setShowUnifiedFunding] = useState(false);
+    const [fundingStep, setFundingStep] = useState('selection'); // selection, loading, input, confirming, success
+    const [fundingAmount, setFundingAmount] = useState('');
+    const [isFundingSuccess, setIsFundingSuccess] = useState(false);
     
     // Form State
     const [sendAmount, setSendAmount] = useState("");
@@ -260,6 +263,42 @@ export function CircleWalletPage({
             setActiveTokenIdx(prev => (prev - 1 + SUPPORTED_TOKENS.length) % SUPPORTED_TOKENS.length);
         }
     };
+
+    const startFundingFlow = () => {
+        setFundingStep('loading');
+        setTimeout(() => {
+            setFundingStep('input');
+        }, 3000);
+    };
+
+    const handleConfirmFunding = () => {
+        setFundingStep('confirming');
+        setTimeout(() => {
+            setFundingStep('success');
+            setIsFundingSuccess(true);
+            setTimeout(() => {
+                setFundingStep('selection');
+                setFundingType(null);
+                setFundingAmount('');
+                setIsFundingSuccess(false);
+            }, 5000);
+        }, 3000);
+    };
+
+    const LocalLoading = () => (
+        <div className="flex flex-col items-center justify-center gap-6 h-full py-12">
+            <img 
+                src={isLight ? "/goblogo.png" : "/gowlogo.png"} 
+                className="h-16 w-auto animate-pulse" 
+                alt="Logo" 
+            />
+            <div className="flex flex-col gap-3 w-32">
+                <div className={`h-[1px] w-full ${isLight ? 'bg-black/10' : 'bg-[#3CB371]/30'}`} />
+                <div className={`h-[1px] w-full ${isLight ? 'bg-black/10' : 'bg-[#3CB371]/30'}`} />
+            </div>
+            <div className="w-8 h-8 border-2 border-[#3CB371]/20 border-t-[#3CB371] rounded-full animate-spin" />
+        </div>
+    );
 
     return (
         <>
@@ -624,185 +663,203 @@ export function CircleWalletPage({
                                                         </div>
                                                     </div>
 
-                                            {/* MOBILE SIDE-BY-SIDE VIEW (Scroll-free) */}
-                                            <div className="flex md:hidden flex-row flex-nowrap items-center justify-between w-full h-[280px] -mt-12 gap-0 relative overflow-visible">
-                                                {/* Big Swipeable Logo Area (60%) */}
-                                                <div className="relative w-[60%] h-full flex items-center justify-center overflow-visible group/token z-10">
-                                                    {/* Navigation Arrows for Mobile */}
-                                                    <button onClick={() => handleSwipeToken('right')} className="absolute left-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronLeft size={20} /></button>
-                                                    <button onClick={() => handleSwipeToken('left')} className="absolute right-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronRight size={20} /></button>
-
-                                                    <AnimatePresence mode="wait">
-                                                        <motion.div
-                                                            key={activeTokenIdx}
-                                                            drag="x"
-                                                            dragConstraints={{ left: 0, right: 0 }}
-                                                            onDragEnd={(e, info) => {
-                                                                if (info.offset.x < -30) handleSwipeToken('left');
-                                                                else if (info.offset.x > 30) handleSwipeToken('right');
-                                                            }}
-                                                            initial={{ opacity: 0, scale: 0.8 }}
-                                                            animate={{ opacity: 1, scale: 1 }}
-                                                            exit={{ opacity: 0, scale: 0.8 }}
-                                                            className="absolute inset-0 flex flex-col items-center justify-center"
-                                                        >
-                                                            <div className="relative w-full h-full flex items-center justify-center">
-                                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-44 h-44 pointer-events-none z-0">
-                                                                    <img 
-                                                                        src={selectedToken.icon} 
-                                                                        className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(60,179,113,0.3)]" 
-                                                                        style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
-                                                                        alt={selectedToken.symbol} 
-                                                                    />
-                                                                    {fundingType === 'usdc' && (
-                                                                        <img 
-                                                                            src="/circlewhite.png" 
-                                                                            className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${
-                                                                                selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' :
-                                                                                selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' :
-                                                                                selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' :
-                                                                                selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
-                                                                                'top-[50%] left-[50%] w-[20%] h-[20%]'
-                                                                            }`}
-                                                                            style={{ filter: 'brightness(0) invert(1)' }}
-                                                                            alt="USDC" 
-                                                                        />
-                                                                    )}
-                                                                </div>
-                                                                <div className="relative z-10 -translate-y-[3vh]">
-                                                                    <p className="text-xl md:text-2xl font-black tracking-tighter text-white drop-shadow-xl text-center">
-                                                                        {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        </motion.div>
-                                                    </AnimatePresence>
-                                                </div>
-
-                                                {/* Vertical Divider (In front) */}
-                                                <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
-
-                                                {/* Normal Fund Button Area (38%) */}
-                                                <div className="w-[38%] flex flex-col gap-1.5 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
-                                                    <div className="flex flex-col items-center opacity-80">
-                                                        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
-                                                        <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                            {fundingType === 'usdc' ? 
-                                                                (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
-                                                                : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
-                                                        </span>
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => setShowUnifiedFunding(true)}
-                                                        className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
+                                            <AnimatePresence mode="wait">
+                                                {fundingStep === 'selection' ? (
+                                                    <motion.div 
+                                                        key="selection"
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0 }}
+                                                        className="w-full h-full flex flex-col"
                                                     >
-                                                        Fund {selectedToken.symbol}
-                                                    </button>
-                                                </div>
+                                                        {/* MOBILE SIDE-BY-SIDE VIEW (Scroll-free) */}
+                                                        <div className="flex md:hidden flex-row flex-nowrap items-center justify-between w-full h-[280px] -mt-12 gap-0 relative overflow-visible">
+                                                            {/* Big Swipeable Logo Area (60%) */}
+                                                            <div className="relative w-[60%] h-full flex items-center justify-center overflow-visible group/token z-10">
+                                                                <button onClick={() => handleSwipeToken('right')} className="absolute left-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronLeft size={20} /></button>
+                                                                <button onClick={() => handleSwipeToken('left')} className="absolute right-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronRight size={20} /></button>
 
-                                                {/* Mobile Specific Nature Decoration */}
-                                                <div className="absolute inset-0 opacity-[0.15] pointer-events-none overflow-hidden z-0">
-                                                    <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                        <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.2" />
-                                                        <path d="M0,50 Q20,40 40,50 T80,50 T100,40" fill="none" stroke="white" strokeWidth="0.2" />
-                                                        <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.2" />
-                                                    </svg>
-                                                    <div className="absolute bottom-4 left-4 opacity-40 scale-75">
-                                                        <svg width="24" height="32" viewBox="0 0 24 32" fill="white">
-                                                            <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
-                                                        </svg>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* DESKTOP CAROUSEL (Existing) */}
-                                            <div className="hidden md:flex relative h-[280px] w-full items-center justify-center overflow-hidden group/token">
-                                                {/* Static Token Navigation Buttons (Green & Standalone) */}
-                                            <button 
-                                                onClick={() => handleSwipeToken('right')}
-                                                className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
-                                            >
-                                                <ChevronLeft size={36} strokeWidth={2.5} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleSwipeToken('left')}
-                                                className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
-                                            >
-                                                <ChevronRight size={36} strokeWidth={2.5} />
-                                            </button>
-
-                                                <AnimatePresence mode="wait">
-                                                    <motion.div
-                                                        key={activeTokenIdx}
-                                                        drag="x"
-                                                        dragConstraints={{ left: 0, right: 0 }}
-                                                        onDragEnd={(e, info) => {
-                                                            if (info.offset.x < -50) handleSwipeToken('left');
-                                                            else if (info.offset.x > 50) handleSwipeToken('right');
-                                                        }}
-                                                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                        exit={{ opacity: 0, scale: 0.8, y: -20 }}
-                                                        className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
-                                                    >
-                                                        <div className="flex items-center justify-center relative w-full h-full">
-                                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-64 h-64 pointer-events-none z-0">
-                                                                <img 
-                                                                    src={selectedToken.icon} 
-                                                                    className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)] transition-all" 
-                                                                    style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
-                                                                    alt={selectedToken.symbol} 
-                                                                />
-                                                                {fundingType === 'usdc' && (
-                                                                    <img 
-                                                                        src="/circlewhite.png" 
-                                                                        className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${
-                                                                            selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' :
-                                                                            selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' :
-                                                                            selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' :
-                                                                            selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
-                                                                            'top-[50%] left-[50%] w-[20%] h-[20%]'
-                                                                        }`}
-                                                                        style={{ filter: 'brightness(0) invert(1)' }}
-                                                                        alt="USDC" 
-                                                                    />
-                                                                )}
+                                                                <AnimatePresence mode="wait">
+                                                                    <motion.div
+                                                                        key={activeTokenIdx}
+                                                                        drag="x"
+                                                                        dragConstraints={{ left: 0, right: 0 }}
+                                                                        onDragEnd={(e, info) => {
+                                                                            if (info.offset.x < -30) handleSwipeToken('left');
+                                                                            else if (info.offset.x > 30) handleSwipeToken('right');
+                                                                        }}
+                                                                        initial={{ opacity: 0, scale: 0.8 }}
+                                                                        animate={{ opacity: 1, scale: 1 }}
+                                                                        exit={{ opacity: 0, scale: 0.8 }}
+                                                                        className="absolute inset-0 flex flex-col items-center justify-center"
+                                                                    >
+                                                                        <div className="relative w-full h-full flex items-center justify-center">
+                                                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-44 h-44 pointer-events-none z-0">
+                                                                                <img 
+                                                                                    src={selectedToken.icon} 
+                                                                                    className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(60,179,113,0.3)]" 
+                                                                                    style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                                    alt={selectedToken.symbol} 
+                                                                                />
+                                                                                {fundingType === 'usdc' && (
+                                                                                    <img 
+                                                                                        src="/circlewhite.png" 
+                                                                                        className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${
+                                                                                            selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' :
+                                                                                            selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' :
+                                                                                            selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' :
+                                                                                            selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
+                                                                                            'top-[50%] left-[50%] w-[20%] h-[20%]'
+                                                                                        }`}
+                                                                                        style={{ filter: 'brightness(0) invert(1)' }}
+                                                                                        alt="USDC" 
+                                                                                    />
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="relative z-10 -translate-y-[3vh]">
+                                                                                <p className="text-xl md:text-2xl font-black tracking-tighter text-white drop-shadow-xl text-center">
+                                                                                    {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </motion.div>
+                                                                </AnimatePresence>
                                                             </div>
-                                                            <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none translate-y-10">
-                                                                <p className={`text-5xl font-black tracking-tighter text-white drop-shadow-2xl`}>
-                                                                    {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
-                                                                </p>
+
+                                                            <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
+
+                                                            <div className="w-[38%] flex flex-col gap-1.5 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
+                                                                <div className="flex flex-col items-center opacity-80">
+                                                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                                    <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                                        {fundingType === 'usdc' ? 
+                                                                            (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
+                                                                            : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                                    </span>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={startFundingFlow}
+                                                                    className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
+                                                                >
+                                                                    Fund {selectedToken.symbol}
+                                                                </button>
                                                             </div>
                                                         </div>
+
+                                                        {/* DESKTOP CAROUSEL */}
+                                                        <div className="hidden md:flex relative h-[280px] w-full items-center justify-center overflow-hidden group/token">
+                                                            <button onClick={() => handleSwipeToken('right')} className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronLeft size={36} strokeWidth={2.5} /></button>
+                                                            <button onClick={() => handleSwipeToken('left')} className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronRight size={36} strokeWidth={2.5} /></button>
+
+                                                            <AnimatePresence mode="wait">
+                                                                <motion.div
+                                                                    key={activeTokenIdx}
+                                                                    initial={{ opacity: 0, scale: 0.8 }}
+                                                                    animate={{ opacity: 1, scale: 1 }}
+                                                                    exit={{ opacity: 0, scale: 0.8 }}
+                                                                    className="absolute inset-0 flex flex-col items-center justify-center"
+                                                                >
+                                                                    <div className="flex items-center justify-center relative w-full h-full">
+                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-64 h-64 pointer-events-none z-0">
+                                                                            <img 
+                                                                                src={selectedToken.icon} 
+                                                                                className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)]" 
+                                                                                style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                                alt={selectedToken.symbol} 
+                                                                            />
+                                                                            {fundingType === 'usdc' && (
+                                                                                <img src="/circlewhite.png" className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' : selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' : selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' : selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' : 'top-[50%] left-[50%] w-[20%] h-[20%]'}`} style={{ filter: 'brightness(0) invert(1)' }} alt="USDC" />
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="relative z-10 flex flex-col items-center justify-center translate-y-10">
+                                                                            <p className="text-5xl font-black tracking-tighter text-white drop-shadow-2xl">
+                                                                                {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </motion.div>
+                                                            </AnimatePresence>
+                                                        </div>
+
+                                                        <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
+                                                            <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
+                                                                <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                                <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                                    {fundingType === 'usdc' ? 
+                                                                        (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
+                                                                        : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                                </span>
+                                                            </div>
+                                                            <button 
+                                                                onClick={startFundingFlow}
+                                                                className="w-auto px-10 py-4 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[11px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20 -translate-y-[7.5vh]"
+                                                            >
+                                                                Fund {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
+                                                            </button>
+                                                        </div>
                                                     </motion.div>
-                                                </AnimatePresence>
-                                            </div>
-
-                                            <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
-                                                {/* Desktop Available Balance */}
-                                                <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
-                                                    <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
-                                                    <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                        {fundingType === 'usdc' ? 
-                                                            (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
-                                                            : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
-                                                    </span>
-                                                </div>
-
-                                                <button 
-                                                    onClick={() => setShowUnifiedFunding(true)}
-                                                    className="w-auto px-10 py-4 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[11px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20 -translate-y-[7.5vh]"
-                                                >
-                                                    Fund with {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
-                                                </button>
-
-                                                <div className={`w-[70%] py-3 px-4 rounded-[24px] border border-dashed flex items-center justify-center gap-3 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'} -translate-y-[10.5vh]`}>
-                                                    <Info size={12} className="text-[#3CB371] shrink-0" />
-                                                    <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white/40'}`}>
-                                                        Click icons or swipe to change asset
-                                                    </p>
-                                                </div>
-                                            </div>
+                                                ) : fundingStep === 'loading' || fundingStep === 'confirming' ? (
+                                                    <motion.div 
+                                                        key="loading"
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0 }}
+                                                        className="w-full h-full flex items-center justify-center"
+                                                    >
+                                                        <LocalLoading />
+                                                    </motion.div>
+                                                ) : fundingStep === 'input' ? (
+                                                    <motion.div 
+                                                        key="input"
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: -20 }}
+                                                        className="w-full h-full flex flex-col items-center justify-center gap-8 py-8"
+                                                    >
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Enter Amount</span>
+                                                            <div className="relative group">
+                                                                <input 
+                                                                    type="number"
+                                                                    placeholder="0.00"
+                                                                    value={fundingAmount}
+                                                                    onChange={(e) => setFundingAmount(e.target.value)}
+                                                                    className={`w-48 bg-transparent border-b-2 border-[#3CB371]/20 focus:border-[#3CB371] transition-all text-center text-4xl font-black py-4 outline-none text-white`}
+                                                                />
+                                                                <span className="absolute right-0 bottom-4 text-[10px] font-black text-[#3CB371] uppercase">{fundingType === 'usdc' ? 'USDC' : selectedToken.symbol}</span>
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={handleConfirmFunding}
+                                                            disabled={!fundingAmount}
+                                                            className={`px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all ${!fundingAmount ? 'bg-white/5 text-white/20' : 'bg-[#3CB371] text-white shadow-xl shadow-[#3CB371]/20 hover:scale-105 active:scale-95'}`}
+                                                        >
+                                                            Confirm Deposit
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setFundingStep('selection')}
+                                                            className="text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </motion.div>
+                                                ) : fundingStep === 'success' ? (
+                                                    <motion.div 
+                                                        key="success"
+                                                        initial={{ opacity: 0, scale: 0.9 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className="w-full h-full flex flex-col items-center justify-center gap-6 py-12"
+                                                    >
+                                                        <div className="w-20 h-20 rounded-full bg-[#3CB371]/20 flex items-center justify-center">
+                                                            <Check size={40} className="text-[#3CB371]" />
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <h3 className="text-2xl font-black uppercase tracking-tighter text-white">Congratulations!</h3>
+                                                            <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-2">Transaction successfully initiated.</p>
+                                                        </div>
+                                                    </motion.div>
+                                                ) : null}
+                                            </AnimatePresence>
                                         </div>
                                     </>
                                 )}
