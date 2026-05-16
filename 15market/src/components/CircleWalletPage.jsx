@@ -7,6 +7,16 @@ import QRCode from 'qrcode';
 import { toPng } from 'html-to-image';
 import { UnifiedFundingModal } from './UnifiedFundingModal';
 import WalletConnectionLoading from './WalletConnectionLoading';
+import * as ethers from 'ethers';
+
+const CHAIN_CONFIG = {
+    'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x0000000000000000000000000000000000000000' }, // Monad placeholder until updated
+    'avax': { rpc: 'https://api.avax-test.network/ext/bc/C/rpc', isEVM: true, usdc: '0x5425890298aed601595a70AB815c96711a31Bc65' },
+    'eth': { rpc: 'https://ethereum-sepolia-rpc.publicnode.com', isEVM: true, usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
+    'sol': { rpc: 'https://api.testnet.solana.com', isEVM: false, usdc: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' }
+};
+
+const ERC20_ABI = ["function balanceOf(address owner) view returns (uint256)", "function decimals() view returns (uint8)"];
 
 export function CircleWalletPage({ 
     address, 
@@ -23,6 +33,8 @@ export function CircleWalletPage({
     const [walletInfo, setWalletInfo] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [multiChainBalances, setMultiChainBalances] = useState({});
+    const [isFetchingBalances, setIsFetchingBalances] = useState(false);
     
     // UI State
     const [activeWalletIdx, setActiveWalletIdx] = useState(0); // 0: Trading, 1: Main
@@ -81,6 +93,68 @@ export function CircleWalletPage({
     useEffect(() => {
         fetchWalletInfo();
     }, [address]);
+
+    useEffect(() => {
+        if (!address) return;
+
+        let isMounted = true;
+        const fetchAllBalances = async () => {
+            setIsFetchingBalances(true);
+            const newBalances = { ...multiChainBalances };
+            
+            // Extract solana address if present in privy wallets
+            const solWallet = wallets?.find(w => w.address && !w.address.startsWith('0x'));
+            const solAddress = solWallet?.address || null;
+
+            const promises = SUPPORTED_TOKENS.map(async (token) => {
+                const config = CHAIN_CONFIG[token.id];
+                if (!config) return;
+                
+                newBalances[token.id] = { native: 0, usdc: 0 };
+
+                try {
+                    if (config.isEVM) {
+                        const provider = new ethers.JsonRpcProvider(config.rpc);
+                        
+                        // Native
+                        const nativeBal = await provider.getBalance(address).catch(() => 0n);
+                        newBalances[token.id].native = parseFloat(ethers.formatEther(nativeBal));
+                        
+                        // USDC
+                        if (config.usdc && config.usdc !== '0x0000000000000000000000000000000000000000') {
+                            const contract = new ethers.Contract(config.usdc, ERC20_ABI, provider);
+                            const usdcBal = await contract.balanceOf(address).catch(() => 0n);
+                            const decimals = await contract.decimals().catch(() => 6);
+                            newBalances[token.id].usdc = parseFloat(ethers.formatUnits(usdcBal, decimals));
+                        }
+                    } else if (token.id === 'sol' && solAddress) {
+                        // Solana Native
+                        const bodyNative = { jsonrpc: "2.0", id: 1, method: "getBalance", params: [solAddress] };
+                        const resNative = await fetch(config.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyNative) });
+                        const dataNative = await resNative.json();
+                        newBalances[token.id].native = (dataNative.result?.value || 0) / 1e9;
+
+                        // Solana USDC
+                        const bodyUsdc = { jsonrpc: "2.0", id: 1, method: "getTokenAccountsByOwner", params: [solAddress, { mint: config.usdc }, { encoding: "jsonParsed" }] };
+                        const resUsdc = await fetch(config.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyUsdc) });
+                        const dataUsdc = await resUsdc.json();
+                        newBalances[token.id].usdc = dataUsdc.result?.value?.[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
+                    }
+                } catch (e) {
+                    console.warn(`Failed to fetch balance for ${token.id}`, e);
+                }
+            });
+
+            await Promise.allSettled(promises);
+            if (isMounted) {
+                setMultiChainBalances(newBalances);
+                setIsFetchingBalances(false);
+            }
+        };
+
+        fetchAllBalances();
+        return () => { isMounted = false; };
+    }, [address, wallets]);
 
     useEffect(() => {
         const receiveAddr = currentWallet.key === 'trading' && walletInfo?.wallet?.address ? walletInfo.wallet.address : address;
@@ -417,13 +491,11 @@ export function CircleWalletPage({
                 </div>
 
                 {/* VERTICAL DIVIDER (Desktop Only) */}
-                {showDesktopFunding && (
-                    <motion.div 
-                        initial={{ opacity: 0, scaleY: 0 }}
-                        animate={{ opacity: 1, scaleY: 1 }}
-                        className={`hidden lg:block w-[2px] rounded-full self-stretch my-4 bg-[#3CB371]/40`}
-                    />
-                )}
+                <motion.div 
+                    initial={{ opacity: 0, scaleY: 0 }}
+                    animate={{ opacity: 1, scaleY: 1 }}
+                    className={`hidden lg:block w-[2px] rounded-full self-stretch my-4 bg-[#3CB371]/40`}
+                />
 
                 {/* RIGHT SIDE: ASSETS & FUNDING (Visible on Mobile & Desktop) */}
                 <motion.div 
@@ -615,7 +687,9 @@ export function CircleWalletPage({
                                                     <div className="flex flex-col items-center opacity-80">
                                                         <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
                                                         <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                            {fundingType === 'usdc' ? currentWallet.bal.toFixed(2) : '0.00'} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                            {fundingType === 'usdc' ? 
+                                                                (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
+                                                                : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
                                                         </span>
                                                     </div>
                                                     <button 
@@ -709,7 +783,9 @@ export function CircleWalletPage({
                                                 <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
                                                     <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
                                                     <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                        {fundingType === 'usdc' ? currentWallet.bal.toFixed(2) : '0.00'} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                        {fundingType === 'usdc' ? 
+                                                            (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
+                                                            : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
                                                     </span>
                                                 </div>
 
