@@ -786,7 +786,7 @@ export function CircleWalletPage({
                                                                 <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
                                                                 <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
                                                                     {fundingType === 'usdc' ? 
-                                                                        (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
+                                                                        (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2) 
                                                                         : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
                                                                 </span>
                                                             </div>
