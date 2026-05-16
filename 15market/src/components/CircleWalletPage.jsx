@@ -447,11 +447,13 @@ export function CircleWalletPage({
                             <div className="flex flex-col gap-6">
                                     <div className="flex flex-col gap-4 h-full min-h-[400px]">
                                         {!fundingType ? (
-                                            <div className="flex flex-col items-center justify-center flex-1 py-4 md:py-10 gap-8 md:gap-16 relative z-10 -mt-64 md:mt-0">
-                                                <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] opacity-40 text-white mt-1 md:mt-0`}>Select Funding Type</h3>
-                                                
-                                                <div className="flex items-center justify-center gap-6 md:gap-16 w-full -mt-3 md:mt-0">
-                                                    <button 
+                                            <div className="flex flex-col items-center justify-start md:justify-center flex-1 pt-6 pb-16 md:py-10 gap-4 md:gap-16 relative z-10 w-full h-full md:min-h-[300px] md:pb-0">
+                                                {/* TOP SECTION: Funding Buttons */}
+                                                <div className="flex flex-col items-center gap-6 md:gap-16 w-full -translate-y-[5vh] md:-translate-y-[5vh] mt-2 md:mt-0">
+                                                    <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] opacity-40 text-white mt-1 md:mt-0`}>Select Funding Type</h3>
+                                                    
+                                                    <div className="flex items-center justify-center gap-6 md:gap-16 w-full -mt-3 md:mt-0">
+                                                        <button 
                                                         onClick={() => setFundingType('native')}
                                                         className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
                                                     >
@@ -473,10 +475,13 @@ export function CircleWalletPage({
                                                         </div>
                                                     </button>
                                                 </div>
+                                                </div>
 
-                                                {/* Infinite Scrolling Asset Marquee - Enabled on Mobile & Desktop */}
-                                                <div className="block w-full max-w-5xl mx-auto -mt-8 md:mt-8 overflow-hidden relative pointer-events-none [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-0">
-                                                    <motion.div
+                                                {/* BOTTOM SECTION: Logos and Powered By */}
+                                                <div className={`fixed md:relative bottom-0 left-0 w-full flex flex-col items-center gap-1 md:gap-8 mt-auto md:mt-0 pt-0 pb-0 z-50 md:z-auto safe-bottom pointer-events-none md:pointer-events-auto -translate-y-[3vh] md:translate-y-0`}>
+                                                    {/* Infinite Scrolling Asset Marquee - Enabled on Mobile & Desktop */}
+                                                    <div className="block w-full max-w-5xl mx-auto md:mt-8 overflow-hidden relative [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-0 translate-y-[2vh] md:translate-y-0">
+                                                        <motion.div
                                                         animate={{ x: ["0%", "-50%"] }}
                                                         transition={{ ease: "linear", duration: 25, repeat: Infinity }}
                                                         className="flex items-center w-max"
@@ -486,11 +491,11 @@ export function CircleWalletPage({
                                                             <div key={groupIdx} className="flex items-center">
                                                                 {/* To make it long enough, repeat the tokens within each half */}
                                                                 {[...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS].map((token, i) => (
-                                                                    <div key={`${groupIdx}-${i}`} className="flex items-center justify-center w-16 md:w-24">
+                                                                    <div key={`${groupIdx}-${i}`} className="flex items-center justify-center w-12 md:w-24">
                                                                         <img 
                                                                             src={token.icon} 
                                                                             alt={token.name} 
-                                                                            className="w-8 h-8 md:w-10 md:h-10 object-contain opacity-30 brightness-0 md:brightness-100 grayscale transition-all drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
+                                                                            className="w-5 h-5 md:w-10 md:h-10 object-contain opacity-30 brightness-0 md:brightness-100 grayscale transition-all drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
                                                                         />
                                                                     </div>
                                                                 ))}
@@ -500,30 +505,31 @@ export function CircleWalletPage({
                                                 </div>
 
                                                 {/* Powered By Badge */}
-                                                <div className="flex items-center justify-center gap-3 relative -mt-10 md:-mt-6 opacity-60 hover:opacity-100 transition-opacity duration-500 z-20">
-                                                    <span className={`relative z-30 text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Powered by</span>
-                                                    <div className="flex items-center gap-2.5 relative z-30">
+                                                <div className="flex items-center justify-center gap-2 md:gap-3 relative md:-mt-6 opacity-60 hover:opacity-100 transition-opacity duration-500 z-20 translate-y-[2vh] md:translate-y-0">
+                                                    <span className={`relative z-30 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Powered by</span>
+                                                    <div className="flex items-center gap-1.5 md:gap-2.5 relative z-30">
                                                         <img 
                                                             src="/circle.png" 
                                                             alt="Circle" 
-                                                            className="h-8 md:h-10 object-contain drop-shadow-[0_0_10px_rgba(60,179,113,0.3)] relative z-30"
+                                                            className="h-5 md:h-10 object-contain drop-shadow-[0_0_10px_rgba(60,179,113,0.3)] relative z-30"
                                                             style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
                                                         />
-                                                        <div className={`relative z-30 text-white opacity-40`}>
+                                                        <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
                                                             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                                                 <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
                                                                 <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
                                                             </svg>
                                                         </div>
-                                                        <span className="relative z-30 text-[11px] md:text-xs font-black tracking-widest text-[#3CB371]">CCTP</span>
-                                                        <div className={`relative z-30 text-white opacity-40`}>
+                                                        <span className="relative z-30 text-[9px] md:text-xs font-black tracking-widest text-[#3CB371]">CCTP</span>
+                                                        <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
                                                             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                                                 <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
                                                                 <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
                                                             </svg>
                                                         </div>
-                                                        <span className={`relative z-30 text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>GATEWAY</span>
+                                                        <span className={`relative z-30 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>GATEWAY</span>
                                                     </div>
+                                                </div>
                                                 </div>
                                             </div>
                                         ) : (
@@ -551,8 +557,8 @@ export function CircleWalletPage({
                                                 {/* Big Swipeable Logo Area (60%) */}
                                                 <div className="relative w-[60%] h-full flex items-center justify-center overflow-visible group/token z-10">
                                                     {/* Navigation Arrows for Mobile */}
-                                                    <button onClick={() => handleSwipeToken('right')} className="absolute left-[-15px] top-1/2 -translate-y-1/2 z-20 p-2 text-[#3CB371]"><ChevronLeft size={28} /></button>
-                                                    <button onClick={() => handleSwipeToken('left')} className="absolute right-[-15px] top-1/2 -translate-y-1/2 z-20 p-2 text-[#3CB371]"><ChevronRight size={28} /></button>
+                                                    <button onClick={() => handleSwipeToken('right')} className="absolute left-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronLeft size={20} /></button>
+                                                    <button onClick={() => handleSwipeToken('left')} className="absolute right-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronRight size={20} /></button>
 
                                                     <AnimatePresence mode="wait">
                                                         <motion.div
@@ -576,9 +582,25 @@ export function CircleWalletPage({
                                                                         style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
                                                                         alt={selectedToken.symbol} 
                                                                     />
+                                                                    {fundingType === 'usdc' && (
+                                                                        <img 
+                                                                            src="/circlewhite.png" 
+                                                                            className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${
+                                                                                selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' :
+                                                                                selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' :
+                                                                                selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' :
+                                                                                selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
+                                                                                'top-[50%] left-[50%] w-[20%] h-[20%]'
+                                                                            }`}
+                                                                            style={{ filter: 'brightness(0) invert(1)' }}
+                                                                            alt="USDC" 
+                                                                        />
+                                                                    )}
                                                                 </div>
-                                                                <div className="relative z-10 translate-y-1">
-                                                                    <p className="text-2xl font-black tracking-tighter text-white drop-shadow-xl">{selectedToken.symbol}</p>
+                                                                <div className="relative z-10 -translate-y-[3vh]">
+                                                                    <p className="text-xl md:text-2xl font-black tracking-tighter text-white drop-shadow-xl text-center">
+                                                                        {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
+                                                                    </p>
                                                                 </div>
                                                             </div>
                                                         </motion.div>
@@ -586,10 +608,10 @@ export function CircleWalletPage({
                                                 </div>
 
                                                 {/* Vertical Divider (In front) */}
-                                                <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30" />
+                                                <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
 
                                                 {/* Normal Fund Button Area (38%) */}
-                                                <div className="w-[38%] flex flex-col gap-3 items-center justify-center px-2 relative z-30">
+                                                <div className="w-[38%] flex flex-col gap-3 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
                                                     <button 
                                                         onClick={() => setShowUnifiedFunding(true)}
                                                         className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
