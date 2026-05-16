@@ -342,30 +342,54 @@ export function CircleWalletPage({
                                             </h1>
                                         </div>
 
-                                        {/* Premium Nature Decoration Layer */}
+                                        {/* Premium Nature-Series Decoration Layer */}
                                         <div className="absolute inset-0 opacity-20 pointer-events-none overflow-hidden">
-                                            {/* Topographical Curves */}
-                                            <svg className="absolute top-[-10%] right-[-10%] w-[120%] h-[120%] opacity-40" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                <path d="M0,50 Q25,30 50,50 T100,50" fill="none" stroke="white" strokeWidth="0.5" />
-                                                <path d="M0,60 Q25,40 50,60 T100,60" fill="none" stroke="white" strokeWidth="0.5" />
-                                                <path d="M0,70 Q25,50 50,70 T100,70" fill="none" stroke="white" strokeWidth="0.5" />
-                                                <path d="M0,80 Q25,60 50,80 T100,80" fill="none" stroke="white" strokeWidth="0.5" />
-                                            </svg>
-                                            
-                                            {/* Pine Trees Silhouettes */}
-                                            <svg className="absolute bottom-[10%] right-[5%] w-24 h-24" viewBox="0 0 100 100" fill="white">
-                                                <path d="M20,80 L50,20 L80,80 Z" opacity="0.6" />
-                                                <path d="M5,90 L35,40 L65,90 Z" opacity="0.4" />
-                                                <rect x="33" y="85" width="4" height="10" opacity="0.3" />
-                                                <rect x="48" y="75" width="4" height="10" opacity="0.5" />
+                                            {/* Complex Topographic Texture */}
+                                            <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.2" />
+                                                <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.2" />
+                                                <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.2" />
+                                                <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.2" />
                                             </svg>
 
+                                            {/* Winding Road with Dashed Lines */}
+                                            <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-60" viewBox="0 0 200 100" preserveAspectRatio="none">
+                                                <path 
+                                                    d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
+                                                    fill="none" 
+                                                    stroke="white" 
+                                                    strokeWidth="12" 
+                                                    className="opacity-20"
+                                                />
+                                                <path 
+                                                    d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
+                                                    fill="none" 
+                                                    stroke="white" 
+                                                    strokeWidth="0.8" 
+                                                    strokeDasharray="4 6" 
+                                                    className="opacity-60"
+                                                />
+                                            </svg>
+                                            
+                                            {/* Detailed Pine Tree Clusters */}
+                                            <div className="absolute bottom-[10%] right-[10%] flex items-end gap-1 opacity-50">
+                                                <svg width="24" height="32" viewBox="0 0 24 32" fill="white">
+                                                    <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                                </svg>
+                                                <svg width="18" height="24" viewBox="0 0 24 32" fill="white" className="opacity-70">
+                                                    <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                                </svg>
+                                                <svg width="14" height="18" viewBox="0 0 24 32" fill="white" className="opacity-40">
+                                                    <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                                </svg>
+                                            </div>
+
                                             {/* Geometric Accents (Dots & Plus) */}
-                                            <div className="absolute top-1/4 left-1/3 w-1 h-1 bg-white rounded-full opacity-30" />
-                                            <div className="absolute top-1/3 left-1/4 w-2 h-[1px] bg-white opacity-20" />
-                                            <div className="absolute top-1/3 left-1/4 h-2 w-[1px] bg-white opacity-20" />
-                                            <div className="absolute bottom-1/4 left-1/2 flex gap-1">
-                                                {[...Array(4)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full opacity-20" />)}
+                                            <div className="absolute top-[15%] left-[40%] w-1.5 h-[1px] bg-white opacity-40 rotate-45" />
+                                            <div className="absolute top-[15%] left-[40%] h-1.5 w-[1px] bg-white opacity-40 rotate-45" />
+                                            
+                                            <div className="absolute bottom-[40%] right-[20%] grid grid-cols-3 gap-1.5 opacity-20">
+                                                {[...Array(6)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full" />)}
                                             </div>
                                         </div>
                                     </div>
@@ -429,7 +453,7 @@ export function CircleWalletPage({
                             <div className="flex flex-col gap-6">
                                     <div className="flex flex-col gap-4 h-full min-h-[400px]">
                                         {!fundingType ? (
-                                            <div className="flex flex-col items-center justify-center flex-1 py-4 md:py-10 gap-8 md:gap-16 relative z-10 -mt-48 md:mt-0">
+                                            <div className="flex flex-col items-center justify-center flex-1 py-4 md:py-10 gap-8 md:gap-16 relative z-10 -mt-56 md:mt-0">
                                                 <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] opacity-40 text-white`}>Select Funding Type</h3>
                                                 
                                                 <div className="flex items-center justify-center gap-6 md:gap-16 w-full">
