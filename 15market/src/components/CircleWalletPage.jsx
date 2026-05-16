@@ -611,7 +611,13 @@ export function CircleWalletPage({
                                                 <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
 
                                                 {/* Normal Fund Button Area (38%) */}
-                                                <div className="w-[38%] flex flex-col gap-3 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
+                                                <div className="w-[38%] flex flex-col gap-1.5 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
+                                                    <div className="flex flex-col items-center opacity-80">
+                                                        <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                        <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                            {fundingType === 'usdc' ? currentWallet.bal.toFixed(2) : '0.00'} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                        </span>
+                                                    </div>
                                                     <button 
                                                         onClick={() => setShowUnifiedFunding(true)}
                                                         className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
@@ -699,16 +705,24 @@ export function CircleWalletPage({
                                             </div>
 
                                             <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
+                                                {/* Desktop Available Balance */}
+                                                <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
+                                                    <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                    <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                        {fundingType === 'usdc' ? currentWallet.bal.toFixed(2) : '0.00'} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                    </span>
+                                                </div>
+
                                                 <button 
                                                     onClick={() => setShowUnifiedFunding(true)}
-                                                    className="w-auto px-12 py-5 rounded-[24px] bg-[#3CB371] text-white font-black uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
+                                                    className="w-auto px-10 py-4 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[11px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20 -translate-y-[7.5vh]"
                                                 >
                                                     Fund with {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
                                                 </button>
 
-                                                <div className={`w-full py-4 px-6 rounded-[32px] border border-dashed flex items-center justify-center gap-4 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'} -translate-y-[12%]`}>
-                                                    <Info size={14} className="text-[#3CB371] shrink-0" />
-                                                    <p className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white/40'}`}>
+                                                <div className={`w-[70%] py-3 px-4 rounded-[24px] border border-dashed flex items-center justify-center gap-3 ${isLight ? 'bg-black/5 border-black/10' : 'bg-white/5 border-white/10'} -translate-y-[10.5vh]`}>
+                                                    <Info size={12} className="text-[#3CB371] shrink-0" />
+                                                    <p className={`text-[8px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white/40'}`}>
                                                         Click icons or swipe to change asset
                                                     </p>
                                                 </div>
