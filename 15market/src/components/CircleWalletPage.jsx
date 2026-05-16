@@ -205,8 +205,8 @@ export function CircleWalletPage({
             className={`absolute inset-0 z-[100] ${isLight ? 'bg-white' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
             style={{ fontFamily: '"Comfortaa", cursive' }}
         >
-            {/* Full-page Background Texture */}
-            <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.04] mix-blend-screen'}`} />
+            {/* Full-page Standard Carbon-Fibre Texture */}
+            <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.05] mix-blend-screen'}`} />
             
             {/* Immersive Ambiance (Global Glows) */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
@@ -272,24 +272,68 @@ export function CircleWalletPage({
                                 initial={{ opacity: 0, scale: 0.9, x: 100 }}
                                 animate={{ opacity: 1, scale: 1, x: 0 }}
                                 exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                                className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#3CB371] ${isLight ? 'shadow-[0_40px_100px_rgba(0,0,0,0.25)]' : 'shadow-[0_40px_100px_rgba(60,179,113,0.35)]'} border border-white/20`}
+                                className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#3CB371] ${isLight ? 'shadow-[0_60px_120px_rgba(0,0,0,0.5)]' : 'shadow-[0_40px_100px_rgba(60,179,113,0.35)]'} border border-white/20`}
                             >
-                                {/* Nature Texture Layer (Organic Gradients & Overlays) */}
-                                <div className="absolute inset-0">
+                                {/* Immersive Nature-Series Layer (Behind Texture) */}
+                                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                                    {/* Complex Topographic Texture */}
+                                    <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                        <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.15" />
+                                        <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.15" />
+                                        <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.15" />
+                                        <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.15" />
+                                    </svg>
+
+                                    {/* Winding Road Path */}
+                                    <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-40" viewBox="0 0 200 100" preserveAspectRatio="none">
+                                        <path 
+                                            d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
+                                            fill="none" 
+                                            stroke="white" 
+                                            strokeWidth="10" 
+                                            className="opacity-10"
+                                        />
+                                        <path 
+                                            d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
+                                            fill="none" 
+                                            stroke="white" 
+                                            strokeWidth="0.6" 
+                                            strokeDasharray="4 6" 
+                                            className="opacity-30"
+                                        />
+                                    </svg>
+                                    
+                                    {/* Pine Tree Silhouettes */}
+                                    <div className="absolute bottom-[15%] right-[12%] flex items-end gap-1 opacity-30">
+                                        <svg width="20" height="28" viewBox="0 0 24 32" fill="white">
+                                            <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                        </svg>
+                                        <svg width="14" height="20" viewBox="0 0 24 32" fill="white" className="opacity-60">
+                                            <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                        </svg>
+                                    </div>
+
+                                    {/* Geometric Icons (Plus/Cross) */}
+                                    <div className="absolute top-[20%] left-[45%] opacity-20">
+                                        <div className="relative w-3 h-3">
+                                            <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white" />
+                                            <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white" />
+                                        </div>
+                                    </div>
+                                    <div className="absolute bottom-[30%] left-[20%] opacity-10 grid grid-cols-2 gap-2">
+                                        <div className="w-1 h-1 rounded-full bg-white" />
+                                        <div className="w-1 h-1 rounded-full bg-white" />
+                                    </div>
+                                </div>
+
+                                {/* Platform Standard Texture Layer (On Top) */}
+                                <div className="absolute inset-0 z-0">
                                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#2E8B57_0%,transparent_60%)] opacity-60" />
                                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,#1E5D3B_0%,transparent_60%)] opacity-40" />
                                     <div 
-                                        className="absolute inset-0 opacity-10 mix-blend-overlay"
+                                        className="absolute inset-0 opacity-[0.07] mix-blend-overlay"
                                         style={{ 
-                                            backgroundImage: `url('https://www.transparenttextures.com/patterns/leaf.png')`,
-                                            backgroundSize: '200px'
-                                        }} 
-                                    />
-                                    <div 
-                                        className="absolute inset-0 opacity-[0.05] mix-blend-overlay"
-                                        style={{ 
-                                            backgroundImage: `url('https://www.transparenttextures.com/patterns/carbon-fibre.png')`,
-                                            backgroundSize: '10px'
+                                            backgroundImage: `url('https://www.transparenttextures.com/patterns/carbon-fibre.png')`
                                         }} 
                                     />
                                     {/* Subtle Glass Ripple */}
@@ -342,56 +386,6 @@ export function CircleWalletPage({
                                             </h1>
                                         </div>
 
-                                        {/* Premium Nature-Series Decoration Layer */}
-                                        <div className="absolute inset-0 opacity-20 pointer-events-none overflow-hidden">
-                                            {/* Complex Topographic Texture */}
-                                            <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.2" />
-                                                <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.2" />
-                                                <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.2" />
-                                                <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.2" />
-                                            </svg>
-
-                                            {/* Winding Road with Dashed Lines */}
-                                            <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-60" viewBox="0 0 200 100" preserveAspectRatio="none">
-                                                <path 
-                                                    d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
-                                                    fill="none" 
-                                                    stroke="white" 
-                                                    strokeWidth="12" 
-                                                    className="opacity-20"
-                                                />
-                                                <path 
-                                                    d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
-                                                    fill="none" 
-                                                    stroke="white" 
-                                                    strokeWidth="0.8" 
-                                                    strokeDasharray="4 6" 
-                                                    className="opacity-60"
-                                                />
-                                            </svg>
-                                            
-                                            {/* Detailed Pine Tree Clusters */}
-                                            <div className="absolute bottom-[10%] right-[10%] flex items-end gap-1 opacity-50">
-                                                <svg width="24" height="32" viewBox="0 0 24 32" fill="white">
-                                                    <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
-                                                </svg>
-                                                <svg width="18" height="24" viewBox="0 0 24 32" fill="white" className="opacity-70">
-                                                    <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
-                                                </svg>
-                                                <svg width="14" height="18" viewBox="0 0 24 32" fill="white" className="opacity-40">
-                                                    <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
-                                                </svg>
-                                            </div>
-
-                                            {/* Geometric Accents (Dots & Plus) */}
-                                            <div className="absolute top-[15%] left-[40%] w-1.5 h-[1px] bg-white opacity-40 rotate-45" />
-                                            <div className="absolute top-[15%] left-[40%] h-1.5 w-[1px] bg-white opacity-40 rotate-45" />
-                                            
-                                            <div className="absolute bottom-[40%] right-[20%] grid grid-cols-3 gap-1.5 opacity-20">
-                                                {[...Array(6)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full" />)}
-                                            </div>
-                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-2 mt-2">
@@ -406,7 +400,7 @@ export function CircleWalletPage({
                     </div>
 
                     {/* Primary Actions */}
-                    <div className="grid grid-cols-2 gap-3 md:gap-4 shrink-0">
+                    <div className="grid grid-cols-2 gap-3 md:gap-4 shrink-0 relative z-20">
                         <button 
                             onClick={() => setShowSendModal(true)}
                             className="flex items-center justify-center gap-2 md:gap-3 bg-[#3CB371] text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
@@ -415,9 +409,9 @@ export function CircleWalletPage({
                         </button>
                         <button 
                             onClick={() => setShowReceiveModal(true)}
-                            className={`flex items-center justify-center gap-2 md:gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
+                            className={`flex items-center justify-center gap-2 md:gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-[#3CB371] font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
                         >
-                            <ArrowDownLeft size={16} /> Receive
+                            <ArrowDownLeft size={16} className="text-[#3CB371]" /> Receive
                         </button>
                     </div>
                 </div>
@@ -552,7 +546,75 @@ export function CircleWalletPage({
                                                         </div>
                                                     </div>
 
-                                            <div className="relative h-[240px] md:h-[280px] w-full flex items-center justify-center overflow-hidden group/token">
+                                            {/* MOBILE SIDE-BY-SIDE VIEW (Scroll-free) */}
+                                            <div className="flex md:hidden flex-row flex-nowrap items-center justify-between w-full h-[280px] -mt-12 gap-0 relative overflow-visible">
+                                                {/* Big Swipeable Logo Area (60%) */}
+                                                <div className="relative w-[60%] h-full flex items-center justify-center overflow-visible group/token z-10">
+                                                    {/* Navigation Arrows for Mobile */}
+                                                    <button onClick={() => handleSwipeToken('right')} className="absolute left-[-15px] top-1/2 -translate-y-1/2 z-20 p-2 text-[#3CB371]"><ChevronLeft size={28} /></button>
+                                                    <button onClick={() => handleSwipeToken('left')} className="absolute right-[-15px] top-1/2 -translate-y-1/2 z-20 p-2 text-[#3CB371]"><ChevronRight size={28} /></button>
+
+                                                    <AnimatePresence mode="wait">
+                                                        <motion.div
+                                                            key={activeTokenIdx}
+                                                            drag="x"
+                                                            dragConstraints={{ left: 0, right: 0 }}
+                                                            onDragEnd={(e, info) => {
+                                                                if (info.offset.x < -30) handleSwipeToken('left');
+                                                                else if (info.offset.x > 30) handleSwipeToken('right');
+                                                            }}
+                                                            initial={{ opacity: 0, scale: 0.8 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            exit={{ opacity: 0, scale: 0.8 }}
+                                                            className="absolute inset-0 flex flex-col items-center justify-center"
+                                                        >
+                                                            <div className="relative w-full h-full flex items-center justify-center">
+                                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-44 h-44 pointer-events-none z-0">
+                                                                    <img 
+                                                                        src={selectedToken.icon} 
+                                                                        className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(60,179,113,0.3)]" 
+                                                                        style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                        alt={selectedToken.symbol} 
+                                                                    />
+                                                                </div>
+                                                                <div className="relative z-10 translate-y-1">
+                                                                    <p className="text-2xl font-black tracking-tighter text-white drop-shadow-xl">{selectedToken.symbol}</p>
+                                                                </div>
+                                                            </div>
+                                                        </motion.div>
+                                                    </AnimatePresence>
+                                                </div>
+
+                                                {/* Vertical Divider (In front) */}
+                                                <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30" />
+
+                                                {/* Normal Fund Button Area (38%) */}
+                                                <div className="w-[38%] flex flex-col gap-3 items-center justify-center px-2 relative z-30">
+                                                    <button 
+                                                        onClick={() => setShowUnifiedFunding(true)}
+                                                        className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
+                                                    >
+                                                        Fund {selectedToken.symbol}
+                                                    </button>
+                                                </div>
+
+                                                {/* Mobile Specific Nature Decoration */}
+                                                <div className="absolute inset-0 opacity-[0.15] pointer-events-none overflow-hidden z-0">
+                                                    <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                        <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.2" />
+                                                        <path d="M0,50 Q20,40 40,50 T80,50 T100,40" fill="none" stroke="white" strokeWidth="0.2" />
+                                                        <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.2" />
+                                                    </svg>
+                                                    <div className="absolute bottom-4 left-4 opacity-40 scale-75">
+                                                        <svg width="24" height="32" viewBox="0 0 24 32" fill="white">
+                                                            <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* DESKTOP CAROUSEL (Existing) */}
+                                            <div className="hidden md:flex relative h-[280px] w-full items-center justify-center overflow-hidden group/token">
                                                 {/* Static Token Navigation Buttons (Green & Standalone) */}
                                             <button 
                                                 onClick={() => handleSwipeToken('right')}
@@ -582,7 +644,7 @@ export function CircleWalletPage({
                                                         className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
                                                     >
                                                         <div className="flex items-center justify-center relative w-full h-full">
-                                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-56 h-56 md:w-64 md:h-64 pointer-events-none z-0">
+                                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-64 h-64 pointer-events-none z-0">
                                                                 <img 
                                                                     src={selectedToken.icon} 
                                                                     className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)] transition-all" 
@@ -614,7 +676,7 @@ export function CircleWalletPage({
                                                 </AnimatePresence>
                                             </div>
 
-                                            <div className="relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
+                                            <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
                                                 <button 
                                                     onClick={() => setShowUnifiedFunding(true)}
                                                     className="w-auto px-12 py-5 rounded-[24px] bg-[#3CB371] text-white font-black uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"

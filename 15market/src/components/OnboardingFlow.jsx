@@ -43,7 +43,8 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSes
             }
         } catch (e) {
             console.error("Save profile failed:", e);
-            setSaveError('Network error — is the backend running? Check localhost:3010.');
+            const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+            setSaveError(`Network error — is the backend running? Check ${host}:3010.`);
         } finally {
             setIsSaving(false);
         }

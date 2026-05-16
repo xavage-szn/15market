@@ -68,7 +68,8 @@ const getBaseUrl = (envValue) => {
 
     // Optional explicit local override for developers.
     if (isLocal && import.meta.env.VITE_FORCE_LOCAL_BACKEND === 'true') {
-        return "http://localhost:3010";
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+        return `http://${host}:3010`;
     }
 
     // Relative path env values (e.g. /arc-api) are still supported.
