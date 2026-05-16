@@ -3,6 +3,24 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, ArrowRight, Zap, Wallet, Info, RefreshCw, Check, ArrowDownLeft, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { SUPPORTED_TOKENS } from '../tokens';
 import { KEEPER_URL_ARC } from '../constants';
+import * as ethers from 'ethers';
+
+const GATEWAY_ABI = [
+    "function fundWithNative(bytes32 tradingWallet, uint256 minUsdcOut) external payable",
+    "function fundWithUSDC(uint256 amount, bytes32 tradingWallet) external"
+];
+
+// Deployments on Fuji/Sepolia/Monad
+const GATEWAY_ADDRESSES = {
+    'mon': '0x0000000000000000000000000000000000000000', 
+    'avax': '0x0000000000000000000000000000000000000000',
+    'eth': '0x0000000000000000000000000000000000000000'
+};
+
+const ERC20_ABI = [
+    "function approve(address spender, uint256 amount) external returns (bool)",
+    "function allowance(address owner, address spender) view returns (uint256)"
+];
 
 export function UnifiedFundingModal({ 
     isOpen, 
@@ -42,6 +60,10 @@ export function UnifiedFundingModal({
         if (initialToken) setSelectedToken(initialToken);
     }, [initialToken]);
 
+    // Multi-chain address mapping
+    const solWallet = useMemo(() => wallets?.find(w => w.address && !w.address.startsWith('0x')), [wallets]);
+    const evmWallet = useMemo(() => wallets?.find(w => w.address && w.address.startsWith('0x')), [wallets]);
+
     // Fetch Balances
     useEffect(() => {
         if (!isOpen) return;
@@ -68,11 +90,22 @@ export function UnifiedFundingModal({
         const fetchQuote = async () => {
             setIsQuoting(true);
             try {
-                const res = await fetch(`${KEEPER_URL_ARC}/fund/quote?fromToken=${selectedToken.symbol}&amount=${amount}`);
-                const data = await res.json();
-                if (data.success) {
-                    setQuote(data);
-                }
+                // In production, we'd call Unitflow/Xylonet API here
+                // For now, we simulate the aggregator pricing for the testnets
+                const mockPrices = { 'ETH': 3500, 'AVAX': 35, 'MON': 2.5, 'SOL': 150 };
+                const price = mockPrices[selectedToken.symbol] || 1;
+                const rawUsdc = parseFloat(amount) * (fundingMode === 'stables' ? 1 : price);
+                
+                // Apply 1% spread for the Gateway fee
+                const spread = rawUsdc * 0.01;
+                const estimatedUsdc = rawUsdc - spread;
+
+                setQuote({
+                    estimatedUsdc: estimatedUsdc.toFixed(2),
+                    fee: (0.50).toFixed(2), // Flat relayer gas fee
+                    spread: spread.toFixed(2),
+                    aggregator: "Unitflow + Xylonet"
+                });
             } catch (err) {
                 console.error("Quote error:", err);
             } finally {
@@ -82,7 +115,7 @@ export function UnifiedFundingModal({
 
         const timer = setTimeout(fetchQuote, 500);
         return () => clearTimeout(timer);
-    }, [amount, selectedToken]);
+    }, [amount, selectedToken, fundingMode]);
 
     const handleSwipeToken = (direction) => {
         const currentIndex = SUPPORTED_TOKENS.findIndex(t => t.id === selectedToken.id);
@@ -94,41 +127,66 @@ export function UnifiedFundingModal({
     };
 
     const handleFunding = async () => {
-        if (!amount || !quote) return;
+        if (!amount || !quote || !evmWallet) return;
 
         setIsConfirming(true);
-        notify("Confirming Deposit...", "pending");
+        notify("Initiating Cross-Chain Funding...", "pending");
 
         try {
-            // In real app, we would use ethers/viem to send the transaction:
-            // const tx = await wallets[0].sendTransaction({ ... })
+            const provider = await evmWallet.getEthersProvider();
+            const signer = provider.getSigner();
+            const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
+            const usdcAddr = selectedToken.usdcAddress; // We should add this to tokens.js or config
             
-            const mockTxHash = `0x${Math.random().toString(16).slice(2, 10)}...${Math.random().toString(16).slice(-4)}`;
-            
-            await new Promise(r => setTimeout(r, 2000)); // Simulate chain interaction
+            if (!gatewayAddr || gatewayAddr === ethers.ZeroAddress) {
+                throw new Error(`Funding Gateway not yet deployed on ${selectedToken.name} Testnet`);
+            }
 
-            // Notify Backend
-            const res = await fetch(`${KEEPER_URL_ARC}/fund/confirm`, {
+            const gateway = new ethers.Contract(gatewayAddr, GATEWAY_ABI, signer);
+            const tradingWalletBytes32 = ethers.zeroPadValue(sessionAddress, 32);
+
+            let tx;
+            if (fundingMode === 'native') {
+                const val = ethers.parseEther(amount);
+                const minUsdc = ethers.parseUnits((parseFloat(quote.estimatedUsdc) * 0.99).toFixed(6), 6); // 1% slippage
+                tx = await gateway.fundWithNative(tradingWalletBytes32, minUsdc, { value: val });
+            } else {
+                // USDC Funding
+                const usdcContract = new ethers.Contract(usdcAddr, ERC20_ABI, signer);
+                const val = ethers.parseUnits(amount, 6);
+                
+                // Check allowance
+                const allowance = await usdcContract.allowance(address, gatewayAddr);
+                if (allowance < val) {
+                    notify("Approving USDC...", "pending");
+                    const appTx = await usdcContract.approve(gatewayAddr, ethers.MaxUint256);
+                    await appTx.wait();
+                }
+
+                tx = await gateway.fundWithUSDC(val, tradingWalletBytes32);
+            }
+
+            notify("Transaction Sent! Waiting for Circle CCTP...", "pending");
+            const receipt = await tx.wait();
+            
+            // Notify Backend to start monitoring the CCTP attestation
+            await fetch(`${KEEPER_URL_ARC}/fund/monitor-cctp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     address,
-                    amount,
-                    fromToken: selectedToken.symbol,
-                    txHash: mockTxHash
+                    txHash: receipt.hash,
+                    fromChain: selectedToken.chainId,
+                    amount: quote.estimatedUsdc
                 })
             });
 
-            const data = await res.json();
-            if (data.success) {
-                notify(`Success! ${quote.estimatedUsdc} USDC added to Trading Wallet`, "success");
-                if (onSuccess) onSuccess();
-                onClose();
-            } else {
-                throw new Error(data.error || "Funding failed");
-            }
+            notify(`Success! ${quote.estimatedUsdc} USDC will arrive in Trading Wallet shortly via Circle CCTP.`, "success");
+            if (onSuccess) onSuccess();
+            onClose();
         } catch (err) {
-            notify(err.message, "error");
+            console.error("Funding Error:", err);
+            notify(err.message || "Funding failed", "error");
         } finally {
             setIsConfirming(false);
         }

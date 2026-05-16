@@ -916,6 +916,7 @@ export function CircleWalletPage({
                 notify={notify}
                 address={address}
                 sessionAddress={sessionAddress}
+                wallets={wallets}
                 initialToken={selectedToken}
                 fundingType={fundingType}
                 onSuccess={() => fetchWalletInfo(true)}

@@ -360,6 +360,26 @@ app.post('/fund/confirm', async (req, res) => {
   }
 });
 
+/**
+ * POST /fund/monitor-cctp
+ * Starts monitoring a Circle CCTP burn transaction.
+ */
+app.post('/fund/monitor-cctp', async (req, res) => {
+  try {
+    const { address, txHash, fromChain, amount } = req.body;
+    if (!txHash || !fromChain) return res.status(400).json({ error: "Missing CCTP details" });
+
+    console.log(`[CCTP] Monitoring burn on chain ${fromChain}: ${txHash}`);
+
+    // Offload to funding service to handle the async polling and execution
+    fundingService.monitorAndSettleCCTP(address.toLowerCase(), txHash, fromChain, amount);
+
+    res.json({ success: true, message: "Monitoring started" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ─── SESSION WALLET ROUTES (Embedded EOA) ─────────────────────────────────────
 

@@ -3,6 +3,23 @@ const { ethers } = require('ethers');
 const config = require('../config');
 const profiles = require('../profiles');
 
+const IRIS_API_URL = 'https://iris-api-sandbox.circle.com/attestations';
+
+const CCTP_CONFIG = {
+    // MessageTransmitter addresses
+    transmitters: {
+        '43113': '0xa4202283e3cf3d726615b3a6e8b939462d7c078b', // Fuji
+        '111155111': '0x7865f3c0f72783f6836a001d2938888e888e888e', // Sepolia (Example)
+        'arc': '0x0000000000000000000000000000000000000000' // Your Arc Testnet Transmitter
+    },
+    // Domain IDs
+    domains: {
+        '43113': 1,
+        '111155111': 0,
+        'arc': 5 // Example Domain ID for Arc
+    }
+};
+
 /**
  * FundingService
  * Handles multi-token funding quotes, swaps, and revenue distribution.
@@ -69,6 +86,73 @@ class FundingService {
     async distributeFees(amount) {
         console.log(`[Nanopayments] Streaming ${amount.toFixed(6)} USDC to Treasury: ${config.TREASURY_ADDRESS}`);
         // Implementation would use @circle-fin/x402-batching
+    }
+
+    /**
+     * Monitor a CCTP burn transaction, fetch attestation, and settle on Arc.
+     */
+    async monitorAndSettleCCTP(userAddr, txHash, fromChain, amount) {
+        console.log(`[CCTP-Relayer] Starting process for ${txHash} on chain ${fromChain}`);
+
+        try {
+            // 1. Get Source Chain Provider
+            // In a real app, these would come from config.js
+            const rpcUrls = {
+                '43113': 'https://api.avax-test.network/ext/bc/C/rpc',
+                '111155111': 'https://ethereum-sepolia-rpc.publicnode.com'
+            };
+            const sourceProvider = new ethers.JsonRpcProvider(rpcUrls[fromChain]);
+            
+            // 2. Wait for transaction and extract message
+            const receipt = await sourceProvider.waitForTransaction(txHash);
+            
+            // The message is emitted in the MessageSent event of the MessageTransmitter
+            // We find the log and extract the 'message' bytes
+            const messageSentTopic = ethers.id("MessageSent(bytes)");
+            const log = receipt.logs.find(l => l.topics[0] === messageSentTopic);
+            
+            if (!log) throw new Error("CCTP MessageSent log not found");
+            const messageBytes = ethers.AbiCoder.defaultAbiCoder().decode(['bytes'], log.data)[0];
+            const messageHash = ethers.keccak256(messageBytes);
+
+            console.log(`[CCTP-Relayer] Message Hash: ${messageHash}. Polling Iris API...`);
+
+            // 3. Poll Iris API for Attestation
+            let attestation = null;
+            for (let i = 0; i < 60; i++) { // Poll for 10 minutes (10s intervals)
+                try {
+                    const res = await axios.get(`${IRIS_API_URL}/${messageHash}`);
+                    if (res.data.status === 'complete') {
+                        attestation = res.data.attestation;
+                        break;
+                    }
+                } catch (e) {
+                    // Not ready yet
+                }
+                await new Promise(r => setTimeout(r, 10000));
+            }
+
+            if (!attestation) throw new Error("Attestation timeout");
+            console.log(`[CCTP-Relayer] Attestation received! Executing receiveMessage on Arc...`);
+
+            // 4. Execute receiveMessage on Arc Testnet
+            const arcProvider = new ethers.JsonRpcProvider(config.RPC_URL || 'http://localhost:8545');
+            const relayerWallet = new ethers.Wallet(process.env.RELAYER_PRIVATE_KEY || process.env.SESSION_MASTER_SECRET, arcProvider);
+            
+            const transmitterAbi = ["function receiveMessage(bytes message, bytes attestation) external returns (bool)"];
+            const transmitter = new ethers.Contract(CCTP_CONFIG.transmitters.arc, transmitterAbi, relayerWallet);
+
+            const tx = await transmitter.receiveMessage(messageBytes, attestation);
+            await tx.wait();
+
+            console.log(`[CCTP-Relayer] Successfully settled on Arc! TX: ${tx.hash}`);
+
+            // 5. Finalize in platform cache
+            await this.creditTradingWallet(userAddr, amount, txHash, userAddr); // Simplified for demo
+            
+        } catch (err) {
+            console.error(`[CCTP-Relayer] Settlement Failed:`, err.message);
+        }
     }
 }
 

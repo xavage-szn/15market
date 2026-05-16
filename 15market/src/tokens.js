@@ -6,6 +6,7 @@ export const SUPPORTED_TOKENS = [
         icon: '/monad.png',
         chainId: 10143, 
         address: '0x0000000000000000000000000000000000000000', // Native
+        usdcAddress: '0x0000000000000000000000000000000000000000', // Placeholder
         decimals: 18,
     },
     {
@@ -15,6 +16,7 @@ export const SUPPORTED_TOKENS = [
         icon: '/avax.png',
         chainId: 43113, // Fuji Testnet
         address: '0x0000000000000000000000000000000000000000', // Native
+        usdcAddress: '0x5425890298aed601595a70AB815c96711a31Bc65', // Fuji USDC
         decimals: 18,
     },
     {
@@ -24,6 +26,7 @@ export const SUPPORTED_TOKENS = [
         icon: '/ethereum.png',
         chainId: 11155111, // Sepolia
         address: '0x0000000000000000000000000000000000000000', // Native
+        usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
         decimals: 18,
     },
     {
@@ -33,6 +36,7 @@ export const SUPPORTED_TOKENS = [
         icon: '/sol.png',
         chainId: 101, // Devnet/Testnet
         address: '11111111111111111111111111111111', 
+        usdcAddress: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', // Devnet USDC
         decimals: 9,
     }
 ];
