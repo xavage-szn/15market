@@ -54,7 +54,16 @@ export function CircleWalletPage({
     const [qrCodeData, setQrCodeData] = useState("");
     const [activeTab, setActiveTab] = useState('assets'); 
     const [isDownloading, setIsDownloading] = useState(false);
+    const [copied, setCopied] = useState(false);
     const [showDesktopFunding, setShowDesktopFunding] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
+
+    const handleCopy = (text) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        if (notify) notify("Address Copied!", "success");
+    };
 
     const walletOptions = [
         { 
@@ -478,11 +487,16 @@ export function CircleWalletPage({
 
                                     {/* Card Number (Wallet Address) */}
                                     <div className="py-2">
-                                        <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
-                                            {currentWallet.address 
-                                                ? `${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)}`.toUpperCase()
-                                                : "xxxx...xxxx"}
-                                        </p>
+                                        <div className="flex items-center gap-3 group/copy cursor-pointer" onClick={(e) => { e.stopPropagation(); handleCopy(currentWallet.address); }}>
+                                            <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
+                                                {currentWallet.address 
+                                                    ? `${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)}`.toUpperCase()
+                                                    : "xxxx...xxxx"}
+                                            </p>
+                                            <div className="p-1.5 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
+                                                {copied ? <Check size={14} className="text-[#3CB371]" /> : <Copy size={14} className="text-white/40" />}
+                                            </div>
+                                        </div>
                                         <div className="flex gap-1.5 mt-4">
                                             {walletOptions.map((_, i) => (
                                                 <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeWalletIdx === i ? 'w-4 bg-white' : 'bg-white/10'}`} />

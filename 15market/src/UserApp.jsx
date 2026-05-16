@@ -1409,7 +1409,7 @@ export default function UserApp() {
   // Sticky Authentication: Prevent flicker on sync or chain switch
 
   const wallet = useMemo(() => {
-    if (!isConnected || !address) return { connected: false };
+    if (!address) return { connected: false };
 
     return {
       connected: true,
@@ -1530,8 +1530,8 @@ export default function UserApp() {
     setTimeout(() => setIsExecuting(false), 2000);
 
     try {
-      if (!isConnected) {
-        throw new Error("Please connect wallet first");
+      if (!address) {
+        throw new Error("Please sign in or connect wallet to trade");
       }
 
       let txHash;
