@@ -19,8 +19,17 @@ const GATEWAY_ADDRESSES = {
 
 const ERC20_ABI = [
     "function approve(address spender, uint256 amount) external returns (bool)",
-    "function allowance(address owner, address spender) view returns (uint256)"
+    "function allowance(address owner, address spender) view returns (uint256)",
+    "function balanceOf(address account) view returns (uint256)",
+    "function decimals() view returns (uint8)"
 ];
+
+const TESTNET_RPCS = {
+    'eth': 'https://rpc.ankr.com/eth_sepolia',
+    'avax': 'https://api.avax-test.network/ext/bc/C/rpc',
+    'mon': 'https://testnet-rpc.monad.xyz',
+    'sol': 'https://api.devnet.solana.com'
+};
 
 export function UnifiedFundingModal({ 
     isOpen, 
@@ -67,19 +76,52 @@ export function UnifiedFundingModal({
 
     // Fetch Balances
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen || !evmWallet) return;
+
         const fetchBalances = async () => {
-            // Simulated balances for research demonstration
-            setBalances({
-                'usdc': 1250.45,
-                'mon': 500.0,
-                'avax': 12.5,
-                'eth': 1.2,
-                'sol': 45.8
-            });
+            const newBalances = {};
+            
+            for (const token of SUPPORTED_TOKENS) {
+                try {
+                    if (token.id === 'sol') {
+                        // Simulated for Solana devnet unless we add @solana/web3.js
+                        newBalances[`${token.id}_native`] = 45.8;
+                        newBalances[`${token.id}_stables`] = 250.0;
+                        continue;
+                    }
+
+                    const rpcUrl = TESTNET_RPCS[token.id];
+                    if (!rpcUrl) continue;
+
+                    const provider = new ethers.JsonRpcProvider(rpcUrl);
+                    
+                    // Fetch Native
+                    const nativeBal = await provider.getBalance(evmWallet.address);
+                    newBalances[`${token.id}_native`] = parseFloat(ethers.formatEther(nativeBal));
+
+                    // Fetch USDC
+                    if (token.usdcAddress && token.usdcAddress !== ethers.ZeroAddress) {
+                        const usdcContract = new ethers.Contract(token.usdcAddress, ERC20_ABI, provider);
+                        const usdcBal = await usdcContract.balanceOf(evmWallet.address);
+                        // USDC usually has 6 decimals on Fuji/Sepolia
+                        const decimals = token.id === 'mon' ? 18 : 6; 
+                        newBalances[`${token.id}_stables`] = parseFloat(ethers.formatUnits(usdcBal, decimals));
+                    } else {
+                        newBalances[`${token.id}_stables`] = 0;
+                    }
+                } catch (err) {
+                    console.warn(`Balance fetch failed for ${token.name}:`, err);
+                    newBalances[`${token.id}_native`] = 0;
+                    newBalances[`${token.id}_stables`] = 0;
+                }
+            }
+            setBalances(newBalances);
         };
+
         fetchBalances();
-    }, [isOpen]);
+        const interval = setInterval(fetchBalances, 10000);
+        return () => clearInterval(interval);
+    }, [isOpen, evmWallet]);
 
     // Fetch Quote when amount or token changes
     useEffect(() => {
@@ -326,7 +368,9 @@ export function UnifiedFundingModal({
                                                 <p className={`text-xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
                                                     {fundingMode === 'stables' ? `${selectedToken.symbol}USDC` : selectedToken.symbol}
                                                 </p>
-                                                <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">{balances[selectedToken.id]?.toFixed(2) || '0.00'} Available</p>
+                                                <p className="text-[10px] font-bold text-[#3CB371] uppercase tracking-[0.2em]">
+                                                    {balances[`${selectedToken.id}_${fundingMode}`]?.toFixed(2) || '0.00'} Available
+                                                </p>
                                             </motion.div>
                                         </AnimatePresence>
                                     </div>
@@ -340,7 +384,7 @@ export function UnifiedFundingModal({
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between px-2">
                             <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Funding Amount</label>
-                            <button onClick={() => setAmount(balances[selectedToken.id]?.toString())} className="text-[10px] font-black text-[#3CB371] uppercase hover:underline">Use Max</button>
+                             <button onClick={() => setAmount(balances[`${selectedToken.id}_${fundingMode}`]?.toString())} className="text-[10px] font-black text-[#3CB371] uppercase hover:underline">Use Max</button>
                         </div>
                         <div className="relative group">
                             <input 
