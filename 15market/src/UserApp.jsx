@@ -272,12 +272,23 @@ const DissolveTransition = ({ isAnimating, targetTheme }) => {
 };
 
 export default function UserApp() {
-  const { isConnected, address, chainId: connectedChainId, status } = useAccount();
+  const { isConnected, address: wagmiAddress, status } = useAccount();
   const { switchChain, switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient();
   const { user, authenticated } = usePrivy();
   const { wallets } = useWallets();
-  const embeddedWallet = useMemo(() => wallets.find((w) => w.walletClientType === 'privy'), [wallets]);
+
+  // Authoritative address derivation: Wagmi first, then Privy embedded wallet
+  const address = useMemo(() => {
+    if (wagmiAddress) return wagmiAddress;
+    if (user?.wallet?.address) return user.wallet.address;
+    return null;
+  }, [wagmiAddress, user]);
+
+  const embeddedWallet = useMemo(() => {
+    if (!wallets || !Array.isArray(wallets)) return null;
+    return wallets.find((w) => w.walletClientType === 'privy');
+  }, [wallets]);
 
   const [theme, setTheme] = useState(() => localStorage.getItem('15market_theme') || 'dark');
   const [isAnimatingTheme, setIsAnimatingTheme] = useState(false);
@@ -2967,7 +2978,7 @@ export default function UserApp() {
               evmBalance={evmBalance}
               sessionBalance={sessionBalance}
               sessionAddress={evmSessionWallet?.address}
-              wallets={wallets}
+              wallets={wallets || []}
               onWithdraw={handleWithdraw}
             />
           ) : (

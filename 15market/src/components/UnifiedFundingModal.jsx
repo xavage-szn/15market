@@ -30,7 +30,8 @@ export function UnifiedFundingModal({
     address, 
     sessionAddress, 
     onSuccess,
-    initialToken
+    initialToken,
+    wallets = []
 }) {
     const TokenLogoInfused = ({ token, isLight, size = "w-20 h-20", mode = 'stables' }) => {
         const iconSrc = mode === 'stables' ? `/${token.id}usdc.png` : token.icon;
