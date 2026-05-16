@@ -213,33 +213,33 @@ input[type=number] {
 /* ===== PREMIUM LIGHT MODE — Light Coral Green Branding ===== */
 html.light,
 body.light {
-  background-color: #b4d9c7 !important; /* More intense coral green */
+  background-color: #CFDCD5 !important; /* Subdued Sage Green */
   background-image:
-    radial-gradient(circle at 2px 2px, rgba(42, 157, 92, 0.08) 1px, transparent 0),
-    linear-gradient(180deg, #b4d9c7 0%, #a2ccb6 100%) !important;
+    radial-gradient(circle at 2px 2px, rgba(60, 110, 80, 0.05) 1px, transparent 0),
+    linear-gradient(180deg, #CFDCD5 0%, #C2D1C9 100%) !important;
   background-size: 32px 32px, 100% 100% !important;
   background-attachment: fixed !important;
 }
 
 .light {
   --primary-color: #3CB371;
-  --primary-glow: rgba(60, 179, 113, 0.3);
-  --primary-glow-strong: rgba(60, 179, 113, 0.5);
-  --primary-glow-subtle: rgba(60, 179, 113, 0.15);
-  --glass-bg: rgba(226, 239, 234, 0.95);
-  --glass-border: rgba(60, 179, 113, 0.25); /* Stronger outline */
-  --glass-highlight: rgba(255, 255, 255, 0.5);
-  --text-primary: #0a261a;
-  --text-secondary: #1a3d2e;
-  --text-tertiary: #2d5a45;
+  --primary-glow: rgba(60, 179, 113, 0.2);
+  --primary-glow-strong: rgba(60, 179, 113, 0.4);
+  --primary-glow-subtle: rgba(60, 179, 113, 0.1);
+  --glass-bg: rgba(207, 220, 213, 0.95);
+  --glass-border: rgba(60, 110, 80, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.3);
+  --text-primary: #2d3d34;
+  --text-secondary: #3d4c44;
+  --text-tertiary: #4d5c54;
 }
 
 /* Light Mode Glass Panels */
 .light .glass-panel {
-  background: rgba(180, 217, 199, 0.94) !important; /* Intensified */
+  background: rgba(207, 220, 213, 0.94) !important;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1.5px solid rgba(60, 179, 113, 0.3) !important;
+  border: 1.5px solid rgba(60, 110, 80, 0.2) !important;
   box-shadow: none !important;
 }
 
@@ -249,11 +249,11 @@ body.light {
 
 /* Light Mode Static Panels */
 .light .static-panel-light {
-  background: #cce3d7 !important; /* Intense version of diluted white */
-  border: 1.5px solid rgba(60, 179, 113, 0.35) !important;
+  background: #C2D1C9 !important;
+  border: 1.5px solid rgba(60, 110, 80, 0.25) !important;
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.06),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset !important;
+    0 10px 40px rgba(0, 0, 0, 0.04),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset !important;
 }
 
 /* Light Mode Nav */
@@ -346,8 +346,8 @@ body.light {
 }
 
 .light .bg-white {
-  background-color: #cce3d7 !important; /* Intense */
-  border: 1px solid rgba(60, 179, 113, 0.3) !important;
+  background-color: #C2D1C9 !important; /* Muted Sage Elevation */
+  border: 1px solid rgba(60, 110, 80, 0.2) !important;
 }
 
 .light .bg-white\/60 {

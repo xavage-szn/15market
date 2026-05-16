@@ -315,7 +315,7 @@ export function CircleWalletPage({
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className={`absolute inset-0 z-[100] ${isLight ? 'bg-white' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
+            className={`absolute inset-0 z-[100] ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
             style={{ fontFamily: '"Comfortaa", cursive' }}
         >
             {/* Full-page Standard Carbon-Fibre Texture */}
@@ -333,12 +333,12 @@ export function CircleWalletPage({
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => fundingType ? setFundingType(null) : onBack()} 
-                            className={`p-3 rounded-full bg-white/5 hover:bg-white/10 text-white transition-all hover:scale-110 active:scale-95`}
+                            className={`p-3 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/80' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all hover:scale-110 active:scale-95`}
                         >
                             <ArrowLeft size={20} />
                         </button>
                         <div>
-                            <h2 className={`text-xl font-black uppercase tracking-tighter text-white leading-none`}>
+                            <h2 className={`text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black/80' : 'text-white'} leading-none`}>
                                 {fundingType ? 'Select Source' : 'Transfer Hub'}
                             </h2>
                             <p className={`text-[9px] font-bold uppercase tracking-[0.3em] text-[#3CB371] mt-1`}>
@@ -346,7 +346,7 @@ export function CircleWalletPage({
                             </p>
                         </div>
                     </div>
-                    <button onClick={() => fetchWalletInfo(true)} className={`p-3 rounded-full bg-white/5 hover:bg-white/10 text-white ${isRefreshing ? 'animate-spin' : ''}`}>
+                    <button onClick={() => fetchWalletInfo(true)} className={`p-3 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/80' : 'bg-white/5 hover:bg-white/10 text-white'} ${isRefreshing ? 'animate-spin' : ''}`}>
                         <RefreshCw size={20} />
                     </button>
                 </div>
@@ -543,13 +543,13 @@ export function CircleWalletPage({
                     className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-visible md:overflow-hidden -mt-12 md:mt-0"
                 >
                     <div className="flex items-center gap-8 mb-6 border-b border-white/5 shrink-0">
-                        <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? 'text-white' : 'text-white/20'}`}>
+                        <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/20' : 'text-white/20')}`}>
                             Assets & Funding
-                            {activeTab === 'assets' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white" />}
+                            {activeTab === 'assets' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
                         </button>
-                        <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? 'text-white' : 'text-white/20'}`}>
+                        <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/20' : 'text-white/20')}`}>
                             Activity Pulse
-                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white" />}
+                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
                         </button>
                     </div>
 
@@ -561,7 +561,7 @@ export function CircleWalletPage({
                                             <div className="flex flex-col items-center justify-start md:justify-center flex-1 pt-6 pb-16 md:py-10 gap-4 md:gap-16 relative z-10 w-full h-full md:min-h-[300px] md:pb-0">
                                                 {/* TOP SECTION: Funding Buttons */}
                                                 <div className="flex flex-col items-center gap-6 md:gap-16 w-full -translate-y-[5vh] md:-translate-y-[5vh] mt-2 md:mt-0">
-                                                    <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] opacity-40 text-white mt-1 md:mt-0`}>Select Funding Type</h3>
+                                                    <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/40' : 'text-white/40'} mt-1 md:mt-0`}>Select Funding Type</h3>
                                                     
                                                     <div className="flex items-center justify-center gap-6 md:gap-16 w-full -mt-3 md:mt-0">
                                                         <button 
@@ -868,7 +868,7 @@ export function CircleWalletPage({
                         ) : (
                             <div className="flex flex-col gap-4">
                                 {walletInfo?.transactions?.map((tx, i) => (
-                                    <div key={i} className={`p-8 rounded-[40px] border ${isLight ? 'bg-white border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex items-center justify-between transition-all hover:scale-[1.01]`}>
+                                    <div key={i} className={`p-8 rounded-[40px] border ${isLight ? 'bg-[#C2D1C9] border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex items-center justify-between transition-all hover:scale-[1.01]`}>
                                         <div className="flex items-center gap-5">
                                             <div className={`w-14 h-14 rounded-full flex items-center justify-center ${tx.type === 'OUTGOING' ? 'bg-orange-500/10 text-orange-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
                                                 {tx.type === 'OUTGOING' ? <Send size={24} /> : <ArrowDownLeft size={24} />}
@@ -894,7 +894,7 @@ export function CircleWalletPage({
                 {showSendModal && (
                     <div className="fixed inset-0 z-[400] flex items-end md:items-center justify-center p-0 md:p-6">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSendModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-                        <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-white border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} max-h-[92dvh] overflow-y-auto`}>
+                        <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-[#CFDCD5] border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} max-h-[92dvh] overflow-y-auto`}>
                             <div className="flex items-center justify-between mb-8">
                                 <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Send Assets</h3>
                                 <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
@@ -930,7 +930,7 @@ export function CircleWalletPage({
                 {showReceiveModal && (
                     <div className="fixed inset-0 z-[400] flex items-end md:items-center justify-center p-0 md:p-6">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowReceiveModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-                        <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-white border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} flex flex-col items-center max-h-[92dvh] overflow-y-auto`}>
+                        <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-[#CFDCD5] border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} flex flex-col items-center max-h-[92dvh] overflow-y-auto`}>
                             <div className="flex items-center justify-between w-full mb-8">
                                 <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Receive</h3>
                                 <button onClick={() => setShowReceiveModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>

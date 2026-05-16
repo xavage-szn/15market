@@ -303,14 +303,14 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                         {/* COL 1: Profile + Auto-Signer + Activity (lg:col-span-4) */}
                         <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
                             {/* Profile & Auto-Signer Compact Card */}
-                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
+                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <button 
                                             onClick={() => fileInputRef.current?.click()}
                                             className="group relative w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px] hover:scale-105 active:scale-95 transition-all overflow-hidden"
                                         >
-                                            <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#c8ddd2]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
+                                            <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#C2D1C9]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
                                                 {(userProfile?.avatar || userProfile?.xProfileImage) ? (
                                                     <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
                                                 ) : (
@@ -488,7 +488,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
                             {/* Activity Pulse Chart - Desktop Only */}
                             {!isSmallScreen && (
-                            <div className={`hidden lg:flex flex-1 min-h-0 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
+                            <div className={`hidden lg:flex flex-1 min-h-0 ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
                                 <div className="flex justify-between items-center mb-3">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
                                     <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
@@ -515,7 +515,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                         {/* COL 2: Transaction Matrix - Desktop Only */}
                         {!isSmallScreen && (
                         <div className="hidden lg:flex lg:col-span-3 flex-col gap-5 min-h-0 overflow-hidden">
-                            <div className={`flex-1 min-h-0 overflow-hidden ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
+                            <div className={`flex-1 min-h-0 overflow-hidden ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Transactions</h3>
                                     <div className="flex items-center gap-1.5">
@@ -578,7 +578,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             )}
                             {/* Analytics Quick Stats */}
                             <div className="grid grid-cols-2 gap-3 flex-none">
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'}`}>
+                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'}`}>
                                     <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">24h Volume</div>
                                     <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketTotalVol}</div>
                                     <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
@@ -601,7 +601,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             </div>
 
                             {/* Dynamic Campaigns Section - Replaces Generic Chat on Mobile/Dashboard context */}
-                            <div className={`flex-1 ${isLight ? 'bg-[#cce3d7] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
+                            <div className={`flex-1 ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
                                 <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <Trophy size={14} className="text-[#3CB371]" />

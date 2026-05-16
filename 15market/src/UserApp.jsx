@@ -89,7 +89,7 @@ const PortraitPrompt = ({ theme }) => (
     animate={{ opacity: 1 }}
     className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center p-8 text-center backdrop-blur-3xl`}
     style={{
-      background: theme === 'light' ? 'rgba(180, 217, 199, 0.98)' : 'rgba(5, 5, 5, 0.98)'
+      background: theme === 'light' ? '#CFDCD5' : 'rgba(5, 5, 5, 0.98)'
     }}
   >
     <div className="relative mb-12">
@@ -149,7 +149,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
-          : 'bg-[#c8eadd]/80 shadow-2xl border-t-[2px] border-[#3CB371]'}
+          : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#3CB371]'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div

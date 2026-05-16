@@ -209,7 +209,7 @@ export function UnifiedFundingModal({
                 initial={{ opacity: 0, y: 100 }} 
                 animate={{ opacity: 1, y: 0 }} 
                 exit={{ opacity: 0, y: 100 }}
-                className={`w-full md:max-w-xl relative z-10 rounded-t-[40px] md:rounded-[40px] border-t md:border overflow-hidden flex flex-col ${isLight ? 'bg-[#f0f9f4] border-black/5 shadow-2xl' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'}`}
+                className={`w-full md:max-w-xl relative z-10 rounded-t-[40px] md:rounded-[40px] border-t md:border overflow-hidden flex flex-col ${isLight ? 'bg-[#CFDCD5] border-black/5 shadow-2xl' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'}`}
             >
                 {/* Header Section */}
                 <div className={`p-6 border-b flex items-center justify-between shrink-0 ${isLight ? 'bg-white/40 border-black/5' : 'bg-white/[0.02] border-white/5'}`}>
@@ -229,7 +229,7 @@ export function UnifiedFundingModal({
 
                 <div className="p-6 flex flex-col gap-6 max-h-[85dvh] overflow-y-auto custom-scrollbar">
                                         {/* Guided Funding Selection */}
-                    <div className={`p-8 rounded-[40px] border relative overflow-hidden flex flex-col items-center justify-center min-h-[320px] ${isLight ? 'bg-white border-black/5 shadow-xl' : 'bg-[#111] border-white/5 shadow-2xl'}`}>
+                    <div className={`p-8 rounded-[40px] border relative overflow-hidden flex flex-col items-center justify-center min-h-[320px] ${isLight ? 'bg-[#C2D1C9] border-black/5 shadow-xl' : 'bg-[#111] border-white/5 shadow-2xl'}`}>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-[#3CB371]/5 blur-[60px] rounded-full" />
                         
                         <AnimatePresence mode="wait">
@@ -348,7 +348,7 @@ export function UnifiedFundingModal({
                                 placeholder="0.00"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className={`w-full py-6 px-8 rounded-[32px] text-4xl font-black transition-all outline-none border-2 border-transparent focus:border-[#3CB371]/30 ${isLight ? 'bg-white text-black shadow-lg' : 'bg-white/5 text-white shadow-2xl'}`}
+                                className={`w-full py-6 px-8 rounded-[32px] text-4xl font-black transition-all outline-none border-2 border-transparent focus:border-[#3CB371]/30 ${isLight ? 'bg-[#CFDCD5] text-[#2d3d34] shadow-lg' : 'bg-white/5 text-white shadow-2xl'}`}
                             />
                             <div className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                 <span className="text-xl font-black text-[#3CB371]">{selectedToken.symbol}</span>
@@ -359,7 +359,7 @@ export function UnifiedFundingModal({
                     {/* Quote & Results */}
                     <AnimatePresence>
                         {quote ? (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`p-6 rounded-[32px] border ${isLight ? 'bg-white border-black/5 shadow-md' : 'bg-[#151515] border-white/5'} flex flex-col gap-4`}>
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`p-6 rounded-[32px] border ${isLight ? 'bg-[#C2D1C9] border-black/5 shadow-md' : 'bg-[#151515] border-white/5'} flex flex-col gap-4`}>
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Estimated Deposit</p>
