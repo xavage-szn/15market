@@ -215,8 +215,8 @@ export function CircleWalletPage({
             </div>
 
             {/* Sticky Header - Full Width */}
-            <div className="w-full shrink-0 relative z-50">
-                <div className="w-full px-6 md:px-12 pt-8 h-24 flex items-center justify-between safe-top">
+            <div className="w-full shrink-0 relative z-50 safe-top">
+                <div className="w-full px-4 md:px-12 h-16 md:h-24 md:pt-8 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => fundingType ? setFundingType(null) : onBack()} 
@@ -240,10 +240,10 @@ export function CircleWalletPage({
             </div>
 
             {/* Main Content - Full Width */}
-            <div className="flex-1 w-full px-6 md:px-12 py-8 flex flex-col lg:flex-row gap-16 overflow-y-auto no-scrollbar items-start justify-start relative z-10">
+            <div className="flex-1 w-full px-4 md:px-12 py-4 md:py-8 flex flex-col lg:flex-row gap-16 overflow-y-auto no-scrollbar items-start justify-start relative z-10">
                 
                 {/* LEFT SIDE: WALLETS & PRIMARY ACTIONS */}
-                <div className={`flex flex-col gap-4 md:gap-8 w-full lg:max-w-md shrink-0 transition-all duration-500 -mt-10 md:mt-0`}>
+                <div className={`flex flex-col gap-4 md:gap-8 w-full lg:max-w-md shrink-0 transition-all duration-500 mt-2 md:mt-0`}>
                     {/* Swipeable Wallet Card */}
                     <div className="relative h-[220px] md:h-[260px] w-full mt-4 md:mt-0 group">
                         {/* Static Navigation Buttons (Shifted Outside) - Hidden on Mobile */}
