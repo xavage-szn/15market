@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@circle-fin/adapter-ethers-v6": "^1.8.1",
+    "@circle-fin/bridge-kit": "^1.10.1",
     "@coral-xyz/anchor": "^0.32.1",
     "@cosmjs/amino": "^0.38.1",
     "@cosmjs/proto-signing": "^0.38.1",
@@ -19,7 +21,6 @@
     "@phosphor-icons/webcomponents": "^2.1.4",
     "@privy-io/react-auth": "^3.24.0",
     "@privy-io/wagmi": "^4.0.7",
-    "permissionless": "^0.2.47",
     "@pythnetwork/client": "^2.22.1",
     "@pythnetwork/pyth-solana-receiver": "^0.13.0",
     "@radix-ui/react-label": "^2.1.8",
@@ -46,6 +47,7 @@
     "lucide-react": "^0.555.0",
     "otpauth": "^9.4.1",
     "otplib": "^13.1.0",
+    "permissionless": "^0.2.47",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
