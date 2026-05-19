@@ -35,9 +35,9 @@ const TOKEN_MESSENGER_ABI = [
 ];
 
 const GATEWAY_ADDRESSES = {
-    'mon': '0x0000000000000000000000000000000000000000', 
-    'avax': '0x0000000000000000000000000000000000000000',
-    'eth': '0x0000000000000000000000000000000000000000'
+    'mon': '0x094604E6bA1E98756b0de29a9E2285Ead0c443Fd', 
+    'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0',
+    'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5'
 };
 
 const GATEWAY_ABI = [
@@ -416,25 +416,17 @@ export function CircleWalletPage({
                 }
 
                 if (notify) notify("Initiating CCTP Bridge (Forwarding)...", "pending");
-                const messengerContract = new ethers.Contract(tokenMessengerAddr, TOKEN_MESSENGER_ABI, signer);
+                const messengerContract = new ethers.Contract(tokenMessengerAddr, [
+                    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)"
+                ], signer);
                 const destBytes32 = ethers.zeroPadValue(sessionAddress || address, 32); 
                 const destDomain = 5; // Arc testnet spoofed CCTP domain
 
-                // Forwarding Service HookData: magic bytes ("cctp-forward") + version (0) + length of additional data (0)
-                const forwardingHookData = "0x636374702d666f72776172640000000000000000000000000000000000000000";
-                const destinationCaller = ethers.ZeroHash;
-                const maxFee = 0n; // Set max fee (sponsored/handled on destination by relayer)
-                const minFinalityThreshold = 2000; // Standard Finality
-
-                const tx = await messengerContract.depositForBurnWithHook(
+                const tx = await messengerContract.depositForBurn(
                     val, 
                     destDomain, 
                     destBytes32, 
-                    usdcAddr,
-                    destinationCaller,
-                    maxFee,
-                    minFinalityThreshold,
-                    forwardingHookData
+                    usdcAddr
                 );
                 txHash = tx.hash;
                 tx.wait().catch(() => {}); // Wait in the background silently

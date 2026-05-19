@@ -4,8 +4,6 @@ import { X, ChevronDown, ArrowRight, Zap, Wallet, Info, RefreshCw, Check, ArrowD
 import { SUPPORTED_TOKENS } from '../tokens';
 import { KEEPER_URL_ARC } from '../constants';
 import * as ethers from 'ethers';
-import { BridgeKit } from '@circle-fin/bridge-kit';
-import { createEthersAdapterFromProvider } from '@circle-fin/adapter-ethers-v6';
 
 const GATEWAY_ABI = [
     "function fundWithNative(bytes32 tradingWallet, uint256 minUsdcOut) external payable",
@@ -201,45 +199,37 @@ export function UnifiedFundingModal({
                 const minUsdc = ethers.parseUnits((parseFloat(quote.estimatedUsdc) * 0.99).toFixed(6), 6); // 1% slippage
                 tx = await gateway.fundWithNative(tradingWalletBytes32, minUsdc, { value: val });
             } else {
-                // PURE BRIDGING VIA CIRCLE'S BRIDGE KIT & ETHERS V6 ADAPTER!
-                notify("Initializing Bridge Kit...", "pending");
-                
-                // 1. Create an Ethers v6 Adapter from the user's browser provider
-                const adapter = await createEthersAdapterFromProvider({
-                    provider: ethProvider
-                });
-
-                // 2. Map frontend chain identifiers to Bridge Kit chain names
-                const bridgeKitChains = {
-                    'avax': 'Avalanche_Fuji',
-                    'eth': 'Ethereum_Sepolia',
-                    'mon': 'Monad_Testnet'
-                };
-                const fromChainName = bridgeKitChains[selectedToken.id] || 'Avalanche_Fuji';
-
-                // 3. Initialize the Bridge Kit
-                const kit = new BridgeKit();
-
-                notify("Initiating CCTP Bridge via Bridge Kit...", "pending");
-
-                // 4. Trigger the cross-chain transfer!
-                // Using Circle's Orbit relayer (useForwarder: true) so it mints automatically
-                const result = await kit.bridge({
-                    from: { adapter, chain: fromChainName },
-                    to: {
-                        recipientAddress: sessionAddress,
-                        chain: 'Arc_Testnet',
-                        useForwarder: true
-                    },
-                    amount: amount
-                });
-
-                if (result.state === 'error') {
-                    throw new Error(result.error?.message || "Bridge Kit transfer failed");
+                // PURE DIRECT CANONICAL CCTP (No packaging overhead, 100% robust browser execution!)
+                const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
+                if (!tokenMessengerAddr || tokenMessengerAddr === ethers.ZeroAddress) {
+                    throw new Error(`CCTP TokenMessenger not configured for ${selectedToken.name}`);
                 }
 
-                // Bridge Kit returns transactionHash inside result
-                tx = { hash: result.transactionHash || result.steps?.[0]?.data?.transactionHash };
+                const usdcContract = new ethers.Contract(usdcAddr, ERC20_ABI, signer);
+                const decimals = await usdcContract.decimals().catch(() => 6);
+                const val = ethers.parseUnits(amount, decimals);
+                
+                // 1. Approve Circle's canonical TokenMessenger to spend our USDC
+                const allowance = await usdcContract.allowance(address, tokenMessengerAddr).catch(() => 0n);
+                if (allowance < val) {
+                    notify("Approving USDC for CCTP...", "pending");
+                    const appTx = await usdcContract.approve(tokenMessengerAddr, ethers.MaxUint256);
+                    await appTx.wait();
+                }
+
+                // 2. Call depositForBurn directly on Circle's canonical TokenMessenger contract!
+                notify("Initiating CCTP Bridge...", "pending");
+                const messenger = new ethers.Contract(tokenMessengerAddr, [
+                    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)"
+                ], signer);
+
+                const destDomain = 5; // Arc testnet spoofed CCTP domain
+                tx = await messenger.depositForBurn(
+                    val,
+                    destDomain,
+                    tradingWalletBytes32, // sessionAddress padded to 32 bytes
+                    usdcAddr
+                );
             }
 
             notify("Transaction Sent! Registering with relayer...", "pending");
@@ -261,9 +251,7 @@ export function UnifiedFundingModal({
                 console.error("[CCTP] Relayer register failed:", e);
             });
 
-            if (tx && typeof tx.wait === 'function') {
-                tx.wait().catch(() => {}); // Wait in the background silently
-            }
+            tx.wait().catch(() => {}); // Wait in the background silently
 
             notify(`Success! ${quote.estimatedUsdc} USDC will arrive in Trading Wallet shortly!`, "success");
             if (onSuccess) onSuccess();
