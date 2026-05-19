@@ -128,7 +128,7 @@ class CircleService {
                 idempotencyKey: crypto.randomUUID(),
                 entitySecretCiphertext: ciphertext,
                 accountType: 'SCA', // Smart Contract Account or EOA
-                blockchains: ['POLY-AMOY'], // Default to Polygon Amoy for testing, or use config
+                blockchains: ['MATIC-AMOY'], // Default to Polygon Amoy for testing, or use config
                 walletSetId: this.walletSetId,
                 count: 1
             });
