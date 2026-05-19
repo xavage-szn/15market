@@ -380,8 +380,22 @@ app.post('/fund/monitor-cctp', async (req, res) => {
 
     console.log(`[CCTP] Monitoring burn on chain ${fromChain}: ${txHash}`);
 
-    // Offload to funding service to handle the async polling and execution
-    fundingService.monitorAndSettleCCTP(address.toLowerCase(), txHash, fromChain, amount);
+    const userAddr = address.toLowerCase();
+
+    // Instantly credit cached session balance and emit balance_update socket event for blazing-fast instant UX!
+    const session = cache.sessions.get(userAddr);
+    if (session) {
+      session.balance = Number((session.balance + parseFloat(amount || 0)).toFixed(4));
+      io.to(userAddr).emit('balance_update', {
+        balance: String(session.balance),
+        reason: 'DEPOSIT',
+        txHash
+      });
+      console.log(`[CCTP-Relayer] Instantly credited ${amount} USDC to cached session for user ${userAddr}`);
+    }
+
+    // Offload to funding service to handle the async polling and execution in the background
+    fundingService.monitorAndSettleCCTP(userAddr, txHash, fromChain, amount);
 
     res.json({ success: true, message: "Monitoring started" });
   } catch (err) {

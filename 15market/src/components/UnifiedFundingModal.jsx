@@ -12,9 +12,9 @@ const GATEWAY_ABI = [
 
 // Deployments on Fuji/Sepolia/Monad
 const GATEWAY_ADDRESSES = {
-    'mon': '0x0000000000000000000000000000000000000000', 
-    'avax': '0x0000000000000000000000000000000000000000',
-    'eth': '0x0000000000000000000000000000000000000000'
+    'mon': '0x094604E6bA1E98756b0de29a9E2285Ead0c443Fd', 
+    'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0',
+    'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5'
 };
 
 const ERC20_ABI = [
@@ -210,22 +210,28 @@ export function UnifiedFundingModal({
                 tx = await gateway.fundWithUSDC(val, tradingWalletBytes32);
             }
 
-            notify("Transaction Sent! Waiting for Circle CCTP...", "pending");
-            const receipt = await tx.wait();
+            notify("Transaction Sent! Registering with relayer...", "pending");
             
-            // Notify Backend to start monitoring the CCTP attestation
-            await fetch(`${KEEPER_URL_ARC}/fund/monitor-cctp`, {
+            // Notify Backend immediately to start monitoring in the background and instantly credit user's cache!
+            const chainIdMap = { 'avax': '43113', 'eth': '111155111', 'mon': '10143' };
+            const chainId = selectedToken.chainId || chainIdMap[selectedToken.id] || '43113';
+
+            fetch(`${KEEPER_URL_ARC}/fund/monitor-cctp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     address,
-                    txHash: receipt.hash,
-                    fromChain: selectedToken.chainId,
+                    txHash: tx.hash,
+                    fromChain: chainId,
                     amount: quote.estimatedUsdc
                 })
+            }).catch(e => {
+                console.error("[CCTP] Relayer register failed:", e);
             });
 
-            notify(`Success! ${quote.estimatedUsdc} USDC will arrive in Trading Wallet shortly via Circle CCTP.`, "success");
+            tx.wait().catch(() => {}); // Wait in the background silently
+
+            notify(`Success! ${quote.estimatedUsdc} USDC will arrive in Trading Wallet shortly!`, "success");
             if (onSuccess) onSuccess();
             onClose();
         } catch (err) {
