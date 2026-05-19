@@ -1,15 +1,43 @@
 const Redis = require('ioredis');
 
 // Ensure we don't block startup but sync as soon as possible
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// Configured to retry connecting every 30 seconds if offline, with offline queue disabled to prevent clog
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+    retryStrategy: (times) => {
+        console.warn(`[Redis] Connection failed or lost. Retrying in 30 seconds... (Attempt ${times})`);
+        return 30000; // 30 seconds
+    }
+});
+
+// Suppress unhandled connection error events to prevent Node crash loops
+redis.on('error', (err) => {
+    // Only log if it's not a connection timeout/unreachable event to keep console clean
+    if (!err.message.includes('Stream isn\'t writeable') && !err.message.includes('ENOTFOUND')) {
+        console.error('[Redis-Error]', err.message);
+    }
+});
 
 class ProfileService {
     constructor() {
         this.profiles = {};
         this.load();
-        
-        // Sync to Redis periodically instead of blocking
-        setInterval(() => this.save(), 5000);
+
+        // When Redis is fully authenticated and ready to execute commands
+        redis.on('ready', async () => {
+            console.log('[Redis] Connected and ready to execute commands on Redis Cloud!');
+            if (Object.keys(this.profiles).length === 0) {
+                console.log('[Redis] Local cache is empty. Fetching profiles from Redis Cloud...');
+                await this.load();
+            } else {
+                console.log('[Redis] Syncing local profiles up to Redis Cloud...');
+                await this.save();
+            }
+        });
+
+        // Sync to Redis periodically in background
+        setInterval(() => this.save(), 10000);
     }
 
     async load() {
@@ -22,18 +50,17 @@ class ProfileService {
                 console.log(`[Profiles] No existing profiles found in Redis. Starting fresh.`);
             }
         } catch (e) {
-            console.error("Failed to load profiles from Redis:", e);
+            console.error("Failed to load profiles from Redis:", e.message);
         }
     }
 
     async save() {
         try {
-            // Only save if there are profiles to prevent overwriting with empty
             if (Object.keys(this.profiles).length > 0) {
                 await redis.set('15market_profiles_db', JSON.stringify(this.profiles));
             }
         } catch (e) {
-            console.error("Failed to save profiles to Redis:", e);
+            console.error("Failed to save profiles to Redis:", e.message);
         }
     }
 
@@ -61,7 +88,7 @@ class ProfileService {
         if (!this.profiles[addr].trades) {
             this.profiles[addr].trades = [];
         }
-        
+
         // Ensure trade has correct status and winning flag
         const record = {
             ...trade,
@@ -72,7 +99,7 @@ class ProfileService {
         // Limit to 100 trades and prevent duplicates
         const tradeId = String(record.betId || record.id);
         const exists = this.profiles[addr].trades.some(t => String(t.betId || t.id) === tradeId);
-        
+
         if (!exists) {
             this.profiles[addr].trades.unshift(record);
             if (this.profiles[addr].trades.length > 100) {
@@ -83,7 +110,7 @@ class ProfileService {
             const idx = this.profiles[addr].trades.findIndex(t => String(t.betId || t.id) === tradeId);
             this.profiles[addr].trades[idx] = { ...this.profiles[addr].trades[idx], ...record };
         }
-        
+
         this.profiles[addr].updatedAt = Date.now();
         this.save();
         return record;
@@ -101,7 +128,7 @@ class ProfileService {
             ...profile.trades[tradeIdx],
             ...updates
         };
-        
+
         profile.updatedAt = Date.now();
         this.save();
         return true;
@@ -116,7 +143,7 @@ class ProfileService {
         const trades = this.getHistory(address);
         let totalWins = 0;
         let totalVolume = 0;
-        
+
         trades.forEach(t => {
             if (t.won || t.status === 'WON') totalWins++;
             totalVolume += parseFloat(t.amount || 0);
@@ -142,24 +169,24 @@ class ProfileService {
         for (const addr in this.profiles) {
             const history = this.profiles[addr].trades || [];
             totalTrades += history.length;
-            
+
             for (const trade of history) {
                 const amt = parseFloat(trade.amount || 0);
                 const fee = parseFloat(trade.fee || 0);
                 if (String(trade.direction).toUpperCase().includes("UP") || trade.direction === 1) bulls++;
                 else bears++;
-                
+
                 totalStake += amt;
                 vol += amt;
                 totalRevenue += fee;
                 if (trade.won || trade.status === 'WON') totalWins++;
-                
+
                 allTrades.push(trade);
             }
         }
 
         const total = bulls + bears;
-        
+
         allTrades.sort((a, b) => (b.timestamp || b.settledAt || 0) - (a.timestamp || a.settledAt || 0));
 
         return {

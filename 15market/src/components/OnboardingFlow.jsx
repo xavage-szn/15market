@@ -76,7 +76,7 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSes
                                     Welcome to 15market
                                 </h2>
                                 <p className={`text-sm ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'} font-medium leading-relaxed`}>
-                                    The decentralized momentum driven prediction market. 
+                                    The decentralized real time prediction market. 
                                     Let's get your identity set up before you start trading.
                                 </p>
                                 <button 
@@ -231,12 +231,7 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSes
                     </AnimatePresence>
                 </div>
 
-                <div className={`p-6 border-t ${isLight ? 'bg-gray-50 border-gray-100' : 'bg-white/[0.02] border-white/5'} flex items-center justify-center gap-8`}>
-                    <div className="flex items-center gap-2">
-                        <Shield size={14} className="text-[#3CB371]" />
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>Secured by Arc</span>
-                    </div>
-                </div>
+                {/* Removed Secured by Arc footer */}
             </motion.div>
         </div>
     );

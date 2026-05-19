@@ -6,7 +6,7 @@ export const SUPPORTED_TOKENS = [
         icon: '/monad.png',
         chainId: 10143, 
         address: '0x0000000000000000000000000000000000000000', // Native
-        usdcAddress: '0x0000000000000000000000000000000000000000', // Placeholder
+        usdcAddress: '0x534b2f3A21130d7a60830c2Df862319e593943A3', // Monad USDC
         decimals: 18,
     },
     {

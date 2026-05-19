@@ -565,11 +565,12 @@ export default function UserApp() {
 
         // 1. Database User Verification (SILENT)
         const profileRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
+        const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
 
         if (profileRes && profileRes.ok) {
           const pData = await profileRes.json();
           setUserProfile(pData);
-          if (!pData.username) {
+          if (!pData.username && !localOnboarded) {
             setShowOnboarding(true);
             localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
           } else {
@@ -577,10 +578,12 @@ export default function UserApp() {
             localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
           }
         } else {
-          // Force onboarding if profile missing or 404
-          setUserProfile({ address: addr, isInitial: true });
-          setShowOnboarding(true);
-          localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
+          // Do NOT force onboarding if they are already onboarded locally!
+          if (localOnboarded) {
+            setShowOnboarding(false);
+          } else {
+            setShowOnboarding(true);
+          }
         }
 
         // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
@@ -1075,7 +1078,9 @@ export default function UserApp() {
     if (!address) return;
     try {
       // STEALTH: Pre-check returning user status via hint
-      const hint = localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`);
+      // STEALTH: Pre-check returning user status via hint and canonical onboarding flag
+      const canonicalOnboarded = localStorage.getItem(`15market_onboarded_${address.toLowerCase()}`) === "true";
+      const hint = localStorage.getItem(`15market_profile_exists_${address.toLowerCase()}`) || (canonicalOnboarded ? "true" : null);
 
       const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
       if (res.ok) {
@@ -1083,12 +1088,14 @@ export default function UserApp() {
         if (data && !data.error) {
           setUserProfile(data);
 
-          if (!data.username) {
+          if (!data.username && !canonicalOnboarded) {
             setShowOnboarding(true);
             localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+            localStorage.removeItem(`15market_onboarded_${address.toLowerCase()}`);
           } else {
             setShowOnboarding(false);
             localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+            localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, "true");
           }
 
           // Persistent History Sync: Merge backend profile trades into UI history
@@ -1102,8 +1109,13 @@ export default function UserApp() {
         }
       } else if (res.status === 404) {
         // Profile wiped or never existed
-        setShowOnboarding(true);
-        localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+        if (canonicalOnboarded || hint === "true") {
+          setShowOnboarding(false);
+        } else {
+          setShowOnboarding(true);
+          localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
+          localStorage.removeItem(`15market_onboarded_${address.toLowerCase()}`);
+        }
       }
     } catch (e) {
       console.error("Profile fetch error:", e);
@@ -2979,6 +2991,7 @@ export default function UserApp() {
               sessionBalance={sessionBalance}
               sessionAddress={evmSessionWallet?.address}
               wallets={wallets || []}
+              walletClient={walletClient}
               onWithdraw={handleWithdraw}
             />
           ) : (

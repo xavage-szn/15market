@@ -25,7 +25,16 @@ const circleService = require('./services/circleService');
 const fundingService = require('./services/fundingService');
 
 
-const redis = new Redis(config.REDIS_URL || 'redis://localhost:6379');
+const redis = new Redis(config.REDIS_URL || 'redis://localhost:6379', {
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+    retryStrategy: (times) => {
+        return 30000; // 30 seconds reconnect interval
+    }
+});
+
+// Suppress unhandled connection errors to prevent process crashes
+redis.on('error', (err) => {});
 
 // --- Setup Server ---
 const app = express();

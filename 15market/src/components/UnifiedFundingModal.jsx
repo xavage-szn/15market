@@ -176,8 +176,9 @@ export function UnifiedFundingModal({
         notify("Initiating Cross-Chain Funding...", "pending");
 
         try {
-            const provider = await evmWallet.getEthersProvider();
-            const signer = provider.getSigner();
+            const ethProvider = await evmWallet.getEthereumProvider();
+            const provider = new ethers.BrowserProvider(ethProvider);
+            const signer = await provider.getSigner();
             const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
             const usdcAddr = selectedToken.usdcAddress; // We should add this to tokens.js or config
             

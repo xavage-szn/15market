@@ -38,6 +38,60 @@ export const arcTestnet = defineChain({
     testnet: true,
 });
 
+export const monadTestnet = defineChain({
+    id: 10143,
+    name: 'Monad Testnet',
+    nativeCurrency: {
+        name: 'MON',
+        symbol: 'MON',
+        decimals: 18
+    },
+    rpcUrls: {
+        default: { http: ['https://testnet-rpc.monad.xyz/'] },
+        public: { http: ['https://testnet-rpc.monad.xyz/'] },
+    },
+    blockExplorers: {
+        default: { name: 'MonadExplorer', url: 'https://testnet.monadexplorer.com' },
+    },
+    testnet: true,
+});
+
+export const avalancheFuji = defineChain({
+    id: 43113,
+    name: 'Avalanche Fuji',
+    nativeCurrency: {
+        name: 'AVAX',
+        symbol: 'AVAX',
+        decimals: 18
+    },
+    rpcUrls: {
+        default: { http: ['https://api.avax-test.network/ext/bc/C/rpc'] },
+        public: { http: ['https://api.avax-test.network/ext/bc/C/rpc'] },
+    },
+    blockExplorers: {
+        default: { name: 'SnowTrace', url: 'https://testnet.snowtrace.io' },
+    },
+    testnet: true,
+});
+
+export const sepolia = defineChain({
+    id: 11155111,
+    name: 'Sepolia',
+    nativeCurrency: {
+        name: 'Ether',
+        symbol: 'ETH',
+        decimals: 18
+    },
+    rpcUrls: {
+        default: { http: ['https://ethereum-sepolia-rpc.publicnode.com'] },
+        public: { http: ['https://ethereum-sepolia-rpc.publicnode.com'] },
+    },
+    blockExplorers: {
+        default: { name: 'Etherscan', url: 'https://sepolia.etherscan.io' },
+    },
+    testnet: true,
+});
+
 // 2. Keeper Configuration
 const isNative = typeof window !== 'undefined' && !!window.Capacitor;
 const isLocal = typeof window !== 'undefined' &&

@@ -10,13 +10,39 @@ import WalletConnectionLoading from './WalletConnectionLoading';
 import * as ethers from 'ethers';
 
 const CHAIN_CONFIG = {
-    'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x0000000000000000000000000000000000000000' }, // Monad placeholder until updated
+    'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x534b2f3A21130d7a60830c2Df862319e593943A3' }, 
     'avax': { rpc: 'https://api.avax-test.network/ext/bc/C/rpc', isEVM: true, usdc: '0x5425890298aed601595a70AB815c96711a31Bc65' },
     'eth': { rpc: 'https://ethereum-sepolia-rpc.publicnode.com', isEVM: true, usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
     'sol': { rpc: 'https://api.testnet.solana.com', isEVM: false, usdc: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' }
 };
 
-const ERC20_ABI = ["function balanceOf(address owner) view returns (uint256)", "function decimals() view returns (uint8)"];
+const ERC20_ABI = [
+    "function balanceOf(address owner) view returns (uint256)", 
+    "function decimals() view returns (uint8)",
+    "function approve(address spender, uint256 amount) external returns (bool)",
+    "function allowance(address owner, address spender) view returns (uint256)"
+];
+
+const CCTP_TOKEN_MESSENGER = {
+    'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0', // Fuji
+    'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', // Sepolia
+    'mon': '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d', // Monad Testnet canonical CCTP TokenMessengerV2
+};
+
+const TOKEN_MESSENGER_ABI = [
+    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)",
+    "function depositForBurnWithHook(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold, bytes calldata hookData) external returns (uint64 _nonce)"
+];
+
+const GATEWAY_ADDRESSES = {
+    'mon': '0x0000000000000000000000000000000000000000', 
+    'avax': '0x0000000000000000000000000000000000000000',
+    'eth': '0x0000000000000000000000000000000000000000'
+};
+
+const GATEWAY_ABI = [
+    "function fundWithNative(bytes32 tradingWallet, uint256 minUsdcOut) external payable"
+];
 
 export function CircleWalletPage({ 
     address, 
@@ -28,6 +54,7 @@ export function CircleWalletPage({
     sessionBalance = 0,
     sessionAddress = '',
     wallets = [],
+    walletClient,
     onWithdraw
 }) {
     const [walletInfo, setWalletInfo] = useState(null);
@@ -280,9 +307,174 @@ export function CircleWalletPage({
         }, 3000);
     };
 
-    const handleConfirmFunding = () => {
+    const handleConfirmFunding = async () => {
+        if (!fundingAmount || parseFloat(fundingAmount) <= 0) return;
+        
+        const evmWallet = wallets?.find(w => w.address && w.address.startsWith('0x'));
+        if (!evmWallet && !walletClient && !window.ethereum) {
+            if (notify) notify("Please connect an EVM wallet", "error");
+            return;
+        }
+
         setFundingStep('confirming');
-        setTimeout(() => {
+        
+        try {
+            let signer;
+            let provider;
+            
+            if (evmWallet) {
+                const ethProvider = await evmWallet.getEthereumProvider();
+                provider = new ethers.BrowserProvider(ethProvider, 'any');
+                signer = await provider.getSigner();
+            } else if (walletClient) {
+                provider = new ethers.BrowserProvider(walletClient.transport, 'any');
+                signer = await provider.getSigner(walletClient.account.address);
+            } else {
+                provider = new ethers.BrowserProvider(window.ethereum, 'any');
+                signer = await provider.getSigner();
+            }
+            
+            const targetChainId = selectedToken.chainId || (selectedToken.id === 'mon' ? 10143 : selectedToken.id === 'eth' ? 111155111 : 43113);
+            const currentChain = await provider.getNetwork();
+            
+            if (currentChain.chainId !== BigInt(targetChainId)) {
+                if (notify) notify(`Switching to ${selectedToken.name}...`, "pending");
+                try {
+                    if (evmWallet && typeof evmWallet.switchChain === 'function') {
+                        await evmWallet.switchChain(targetChainId);
+                    } else if (window.ethereum) {
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: "0x" + targetChainId.toString(16) }],
+                        });
+                    }
+                    
+                    // Wait for chain ID to actually reflect in the provider
+                    let attempts = 0;
+                    while (attempts < 5) {
+                        await new Promise(r => setTimeout(r, 1000));
+                        // Re-fetch ethProvider to check
+                        let testProvider;
+                        if (evmWallet) {
+                            const ethProvider = await evmWallet.getEthereumProvider();
+                            testProvider = new ethers.BrowserProvider(ethProvider, 'any');
+                        } else {
+                            testProvider = new ethers.BrowserProvider(window.ethereum || walletClient.transport, 'any');
+                        }
+                        const newNetwork = await testProvider.getNetwork();
+                        if (newNetwork.chainId === BigInt(targetChainId)) {
+                            break;
+                        }
+                        attempts++;
+                    }
+                    
+                    // Re-instantiate the provider and signer to clear the ethers v6 cache!
+                    if (evmWallet) {
+                        const ethProvider = await evmWallet.getEthereumProvider();
+                        provider = new ethers.BrowserProvider(ethProvider, 'any');
+                        signer = await provider.getSigner();
+                    } else if (walletClient) {
+                        provider = new ethers.BrowserProvider(walletClient.transport, 'any');
+                        signer = await provider.getSigner(walletClient.account.address);
+                    } else {
+                        provider = new ethers.BrowserProvider(window.ethereum, 'any');
+                        signer = await provider.getSigner();
+                    }
+                } catch (err) {
+                    throw new Error(`Please switch your wallet to ${selectedToken.name} to continue.`);
+                }
+            }
+            
+            const amount = parseFloat(fundingAmount);
+            let txHash = "";
+
+            if (fundingType === 'usdc') {
+                const usdcAddr = CHAIN_CONFIG[selectedToken.id]?.usdc;
+                const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
+
+                if (!usdcAddr || !tokenMessengerAddr || tokenMessengerAddr === ethers.ZeroAddress) {
+                    throw new Error(`CCTP not available on ${selectedToken.name}`);
+                }
+
+                // Create a read-only provider specifically for checking allowance/decimals to completely bypass any wallet provider cache lag!
+                const readRpc = CHAIN_CONFIG[selectedToken.id]?.rpc || 'https://testnet-rpc.monad.xyz/';
+                const readProvider = new ethers.JsonRpcProvider(readRpc);
+                const usdcReadContract = new ethers.Contract(usdcAddr, ERC20_ABI, readProvider);
+                
+                const decimals = await usdcReadContract.decimals().catch(() => 6);
+                const val = ethers.parseUnits(amount.toString(), decimals);
+
+                // Dynamically fetch the actual active wallet address from the signer
+                const activeSignerAddress = await signer.getAddress().catch(() => address);
+
+                const usdcContract = new ethers.Contract(usdcAddr, ERC20_ABI, signer);
+                const allowance = await usdcReadContract.allowance(activeSignerAddress, tokenMessengerAddr).catch(() => 0n);
+                if (allowance < val) {
+                    if (notify) notify("Approving USDC for CCTP...", "pending");
+                    const appTx = await usdcContract.approve(tokenMessengerAddr, ethers.MaxUint256);
+                    await appTx.wait();
+                }
+
+                if (notify) notify("Initiating CCTP Bridge (Forwarding)...", "pending");
+                const messengerContract = new ethers.Contract(tokenMessengerAddr, TOKEN_MESSENGER_ABI, signer);
+                const destBytes32 = ethers.zeroPadValue(sessionAddress || address, 32); 
+                const destDomain = 5; // Arc testnet spoofed CCTP domain
+
+                // Forwarding Service HookData: magic bytes ("cctp-forward") + version (0) + length of additional data (0)
+                const forwardingHookData = "0x636374702d666f72776172640000000000000000000000000000000000000000";
+                const destinationCaller = ethers.ZeroHash;
+                const maxFee = 0n; // Set max fee (sponsored/handled on destination by relayer)
+                const minFinalityThreshold = 2000; // Standard Finality
+
+                const tx = await messengerContract.depositForBurnWithHook(
+                    val, 
+                    destDomain, 
+                    destBytes32, 
+                    usdcAddr,
+                    destinationCaller,
+                    maxFee,
+                    minFinalityThreshold,
+                    forwardingHookData
+                );
+                const receipt = await tx.wait();
+                txHash = receipt.hash;
+            } else {
+                const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
+                if (!gatewayAddr || gatewayAddr === ethers.ZeroAddress) {
+                    throw new Error(`Gateway not deployed for ${selectedToken.name}`);
+                }
+                const gateway = new ethers.Contract(gatewayAddr, GATEWAY_ABI, signer);
+                const destBytes32 = ethers.zeroPadValue(sessionAddress || address, 32);
+                const val = ethers.parseEther(amount.toString());
+                
+                if (notify) notify("Initiating Native Funding...", "pending");
+                const tx = await gateway.fundWithNative(destBytes32, 0, { value: val }); 
+                const receipt = await tx.wait();
+                txHash = receipt.hash;
+            }
+
+            if (notify) notify("Registering deposit with relayer...", "pending");
+            
+            const chainIdMap = { 'avax': '43113', 'eth': '111155111', 'mon': '10143' };
+            const chainId = chainIdMap[selectedToken.id] || '43113';
+
+            console.log(`[CCTP] Dispatching monitor request to backend: ${txHash} on chain ${chainId}`);
+
+            // Fire-and-forget to prevent any network latency or backend processing time from blocking the UI transition!
+            fetch(`${KEEPER_URL_ARC}/fund/monitor-cctp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    address,
+                    txHash,
+                    fromChain: chainId,
+                    amount: amount.toString()
+                })
+            }).catch(e => {
+                console.error("[CCTP] Relayer register failed:", e);
+            });
+
+            if (notify) notify("Funding Initiated Successfully!", "success");
             setFundingStep('success');
             setIsFundingSuccess(true);
             setTimeout(() => {
@@ -290,8 +482,14 @@ export function CircleWalletPage({
                 setFundingType(null);
                 setFundingAmount('');
                 setIsFundingSuccess(false);
+                fetchWalletInfo(true);
             }, 5000);
-        }, 3000);
+            
+        } catch (err) {
+            console.error(err);
+            if (notify) notify(err.message || "Funding failed", "error");
+            setFundingStep('input');
+        }
     };
 
     const LocalLoading = () => (
@@ -477,7 +675,7 @@ export function CircleWalletPage({
                                     transition={{ type: 'spring', damping: 20, stiffness: 100 }}
                                 >
                                     <div className="flex items-center justify-between">
-                                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] text-white`}>{currentWallet.label}</p>
+                                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black' : 'text-white'}`}>{currentWallet.label}</p>
                                         <img 
                                             src="/boblogo.png" 
                                             alt="Logo" 
@@ -562,7 +760,7 @@ export function CircleWalletPage({
                             {activeTab === 'assets' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
                         </button>
                         <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/20' : 'text-white/20')}`}>
-                            Activity Pulse
+                            Activity
                             {activeTab === 'history' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
                         </button>
                     </div>
@@ -571,7 +769,30 @@ export function CircleWalletPage({
                         {activeTab === 'assets' ? (
                             <div className="flex flex-col gap-6">
                                     <div className="flex flex-col gap-4 h-full min-h-[400px]">
-                                        {!fundingType ? (
+                                        {currentWallet.key === 'main' ? (
+                                            <div className="flex flex-col items-center justify-center flex-1 pt-6 pb-16 md:py-10 gap-6 relative z-10 w-full h-full md:min-h-[300px] md:pb-0">
+                                                <div className={`w-20 h-20 md:w-24 md:h-24 rounded-[28px] md:rounded-[36px] flex items-center justify-center ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/5' : 'border-white/10'} transition-all hover:scale-105 group`}>
+                                                    <CreditCard size={40} className="text-[#3CB371] opacity-80 group-hover:opacity-100 transition-opacity" strokeWidth={1.5} />
+                                                </div>
+                                                <div className="text-center">
+                                                    <h3 className={`text-[16px] md:text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
+                                                        Fiat <span className="text-[#3CB371]">Funding</span>
+                                                    </h3>
+                                                    <p className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mt-3 ${isLight ? 'text-black/40' : 'text-white/40'}`}>
+                                                        USDC Deposits & Withdrawals via Stripe
+                                                    </p>
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-3 md:gap-4 mt-6 w-full max-w-[280px]">
+                                                    <button className="flex-1 py-4 md:py-5 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-[0.2em] shadow-xl shadow-[#3CB371]/20 transition-all opacity-50 cursor-not-allowed">
+                                                        Deposit (Soon)
+                                                    </button>
+                                                    <button className={`flex-1 py-4 md:py-5 rounded-[20px] ${isLight ? 'bg-black text-[#3CB371]' : 'bg-white/5 text-[#3CB371] border border-white/10'} font-black uppercase text-[9px] tracking-[0.2em] transition-all opacity-50 cursor-not-allowed`}>
+                                                        Withdraw (Soon)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : !fundingType ? (
                                             <div className="flex flex-col items-center justify-start md:justify-center flex-1 pt-6 pb-16 md:py-10 gap-4 md:gap-16 relative z-10 w-full h-full md:min-h-[300px] md:pb-0">
                                                 {/* TOP SECTION: Funding Buttons */}
                                                 <div className="flex flex-col items-center gap-6 md:gap-16 w-full -translate-y-[5vh] md:-translate-y-[5vh] mt-2 md:mt-0">

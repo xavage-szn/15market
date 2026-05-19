@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet, Bell } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import CampaignLeaderboardPane from "./CampaignLeaderboardPane";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -56,6 +56,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const [enrolling, setEnrolling] = useState(false);
     const [enrollments, setEnrollments] = useState({});
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -242,15 +243,16 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     };
 
     const chartData = useMemo(() => {
-        return stats.recentTrades
+        if (!transactionHistory) return [];
+        return [...transactionHistory]
             .slice(0, 20)
             .reverse()
             .map((t, i) => ({
                 name: i,
-                amount: parseFloat(t.amount),
-                type: (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? 1 : -1
+                amount: parseFloat(t.amount || 0),
+                type: t.type === "DEPOSIT" ? 1 : -1
             }));
-    }, [stats.recentTrades]);
+    }, [transactionHistory]);
 
 
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
@@ -272,8 +274,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
             )}
             {/* Fixed header — never grows */}
             <div className={`flex-none ${isSmallScreen ? 'bg-transparent border-transparent shadow-none' : (isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5')} border-b backdrop-blur-xl safe-top`}>
-                <div className={`max-w-[1600px] mx-auto flex items-center ${isSmallScreen ? 'h-16 px-4' : 'px-8 py-4'}`}>
-                    <div className="flex items-center justify-between">
+                <div className={`max-w-[1600px] mx-auto flex items-center w-full ${isSmallScreen ? 'h-16 px-4' : 'px-8 py-4'}`}>
+                    <div className="flex items-center justify-between w-full">
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={onBack}
@@ -287,7 +289,24 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                 </h1>
                             </div>
                         </div>
-                        <div className="flex items-center gap-4 text-right"></div>
+                        <div className="flex items-center gap-2 md:gap-4 text-right">
+                            <button
+                                onClick={() => setIsNotificationsOpen(true)}
+                                className={`p-2 md:p-2.5 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all`}
+                                title="Notifications"
+                            >
+                                <Bell size={isSmallScreen ? 14 : 16} className={isLight ? "text-[#0a261a]/60" : "text-white/60"} />
+                            </button>
+                            {onOpenCircleWallet && (
+                                <button
+                                    onClick={() => onOpenCircleWallet(null)}
+                                    className={`p-2 md:p-2.5 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all`}
+                                    title={isSmallScreen ? "Circle Wallet" : "Access Transfer Hub"}
+                                >
+                                    <Wallet size={isSmallScreen ? 14 : 16} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -335,26 +354,6 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             accept="image/jpeg,image/jpg,image/png,image/gif"
                                             onChange={handleAvatarUpload}
                                         />
-                                        {/* Circle Wallet Access Icon — desktop shortcut to transfer hub */}
-                                        {!isSmallScreen && onOpenCircleWallet && (
-                                            <button
-                                                onClick={() => onOpenCircleWallet(null)}
-                                                className={`p-2 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all mr-1`}
-                                                title="Access Transfer Hub"
-                                            >
-                                                <Wallet size={14} />
-                                            </button>
-                                        )}
-                                        {/* Circle Wallet Access Icon — mobile shortcut */}
-                                        {isSmallScreen && onOpenCircleWallet && (
-                                            <button
-                                                onClick={() => onOpenCircleWallet(null)}
-                                                className={`p-2 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all`}
-                                                title="Circle Wallet"
-                                            >
-                                                <Wallet size={14} />
-                                            </button>
-                                        )}
                                         <button 
                                             onClick={() => setModalConfig({
                                                 title: "Profile Settings",
@@ -486,12 +485,11 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                 </div>
                             </div>
 
-                            {/* Activity Pulse Chart - Desktop Only */}
+                            {/* Activity Chart - Desktop Only */}
                             {!isSmallScreen && (
                             <div className={`hidden lg:flex flex-1 min-h-0 ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
                                 <div className="flex justify-between items-center mb-3">
-                                    <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity Pulse</h3>
-                                    <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
+                                    <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity</h3>
                                 </div>
                                 <div className="flex-1 w-full min-h-0">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -732,6 +730,39 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                     </div>
             </div>
 
+
+            {/* Notifications Modal */}
+            <AnimatePresence>
+                {isNotificationsOpen && (
+                    <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className={`w-full max-w-md ${isLight ? 'bg-[#b4d9c7] border-[#3CB371]/40 shadow-2xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
+                        >
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
+                            <div className="relative z-10 flex flex-col items-center text-center">
+                                <div className="w-16 h-16 rounded-2xl bg-[#3CB371]/10 flex items-center justify-center mb-6">
+                                    <Bell size={32} className="text-[#3CB371]" />
+                                </div>
+                                <h3 className={`text-2xl font-black ${isLight ? 'text-gray-900' : 'text-white'} mb-2 tracking-tight uppercase`}>
+                                    Notifications
+                                </h3>
+                                <p className={`text-sm font-medium ${isLight ? 'text-gray-500' : 'text-white/50'} mb-8 whitespace-pre-line leading-relaxed`}>
+                                    Coming soon we will add functionality.
+                                </p>
+                                <button
+                                    onClick={() => setIsNotificationsOpen(false)}
+                                    className={`w-full py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all`}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {modalConfig && (
                 <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
