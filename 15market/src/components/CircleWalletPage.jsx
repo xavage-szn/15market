@@ -436,8 +436,8 @@ export function CircleWalletPage({
                     minFinalityThreshold,
                     forwardingHookData
                 );
-                const receipt = await tx.wait();
-                txHash = receipt.hash;
+                txHash = tx.hash;
+                tx.wait().catch(() => {}); // Wait in the background silently
             } else {
                 const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
                 if (!gatewayAddr || gatewayAddr === ethers.ZeroAddress) {
@@ -449,8 +449,8 @@ export function CircleWalletPage({
                 
                 if (notify) notify("Initiating Native Funding...", "pending");
                 const tx = await gateway.fundWithNative(destBytes32, 0, { value: val }); 
-                const receipt = await tx.wait();
-                txHash = receipt.hash;
+                txHash = tx.hash;
+                tx.wait().catch(() => {}); // Wait in the background silently
             }
 
             if (notify) notify("Registering deposit with relayer...", "pending");
