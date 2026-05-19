@@ -31,6 +31,12 @@ const TESTNET_RPCS = {
     'sol': 'https://api.devnet.solana.com'
 };
 
+const CCTP_TOKEN_MESSENGER = {
+    'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0', // Fuji
+    'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', // Sepolia
+    'mon': '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d', // Monad Testnet
+};
+
 export function UnifiedFundingModal({ 
     isOpen, 
     onClose, 
@@ -179,35 +185,51 @@ export function UnifiedFundingModal({
             const ethProvider = await evmWallet.getEthereumProvider();
             const provider = new ethers.BrowserProvider(ethProvider);
             const signer = await provider.getSigner();
-            const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
             const usdcAddr = selectedToken.usdcAddress; // We should add this to tokens.js or config
-            
-            if (!gatewayAddr || gatewayAddr === ethers.ZeroAddress) {
-                throw new Error(`Funding Gateway not yet deployed on ${selectedToken.name} Testnet`);
-            }
-
-            const gateway = new ethers.Contract(gatewayAddr, GATEWAY_ABI, signer);
             const tradingWalletBytes32 = ethers.zeroPadValue(sessionAddress, 32);
 
             let tx;
             if (fundingMode === 'native') {
+                const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
+                if (!gatewayAddr || gatewayAddr === ethers.ZeroAddress) {
+                    throw new Error(`Funding Gateway not yet deployed on ${selectedToken.name} Testnet`);
+                }
+                const gateway = new ethers.Contract(gatewayAddr, GATEWAY_ABI, signer);
                 const val = ethers.parseEther(amount);
                 const minUsdc = ethers.parseUnits((parseFloat(quote.estimatedUsdc) * 0.99).toFixed(6), 6); // 1% slippage
                 tx = await gateway.fundWithNative(tradingWalletBytes32, minUsdc, { value: val });
             } else {
-                // USDC Funding
+                // PURE DIRECT CCTP (No gateway contract needed!)
+                const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
+                if (!tokenMessengerAddr || tokenMessengerAddr === ethers.ZeroAddress) {
+                    throw new Error(`CCTP TokenMessenger not configured for ${selectedToken.name}`);
+                }
+
                 const usdcContract = new ethers.Contract(usdcAddr, ERC20_ABI, signer);
-                const val = ethers.parseUnits(amount, 6);
+                const decimals = await usdcContract.decimals().catch(() => 6);
+                const val = ethers.parseUnits(amount, decimals);
                 
-                // Check allowance
-                const allowance = await usdcContract.allowance(address, gatewayAddr);
+                // 1. Approve Circle's canonical TokenMessenger to spend our USDC
+                const allowance = await usdcContract.allowance(address, tokenMessengerAddr).catch(() => 0n);
                 if (allowance < val) {
-                    notify("Approving USDC...", "pending");
-                    const appTx = await usdcContract.approve(gatewayAddr, ethers.MaxUint256);
+                    notify("Approving USDC for CCTP...", "pending");
+                    const appTx = await usdcContract.approve(tokenMessengerAddr, ethers.MaxUint256);
                     await appTx.wait();
                 }
 
-                tx = await gateway.fundWithUSDC(val, tradingWalletBytes32);
+                // 2. Call depositForBurn directly on Circle's canonical TokenMessenger contract!
+                notify("Initiating CCTP Bridge...", "pending");
+                const messenger = new ethers.Contract(tokenMessengerAddr, [
+                    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)"
+                ], signer);
+
+                const destDomain = 5; // Arc testnet spoofed CCTP domain
+                tx = await messenger.depositForBurn(
+                    val,
+                    destDomain,
+                    tradingWalletBytes32, // sessionAddress padded to 32 bytes
+                    usdcAddr
+                );
             }
 
             notify("Transaction Sent! Registering with relayer...", "pending");
