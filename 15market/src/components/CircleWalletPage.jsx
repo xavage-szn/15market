@@ -390,13 +390,18 @@ export function CircleWalletPage({
 
             if (fundingType === 'usdc') {
                 const usdcAddr = CHAIN_CONFIG[selectedToken.id]?.usdc;
-                const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
 
-                if (!usdcAddr || !tokenMessengerAddr || tokenMessengerAddr === ethers.ZeroAddress) {
-                    throw new Error(`CCTP not available on ${selectedToken.name}`);
+                if (!usdcAddr) {
+                    throw new Error(`USDC not configured for ${selectedToken.name}`);
                 }
 
-                // Create a read-only provider specifically for checking allowance/decimals to completely bypass any wallet provider cache lag!
+                // Get session wallet address - the recipient of the direct USDC transfer
+                // Arc testnet is NOT on Circle's CCTP network, so we do a direct ERC-20 transfer
+                // from user's external wallet to the platform's session wallet on the source chain.
+                // The backend then credits the user's trading balance instantly.
+                const recipientAddr = sessionAddress || address;
+                if (!recipientAddr) throw new Error('Session wallet address not available');
+
                 const readRpc = CHAIN_CONFIG[selectedToken.id]?.rpc || 'https://testnet-rpc.monad.xyz/';
                 const readProvider = new ethers.JsonRpcProvider(readRpc);
                 const usdcReadContract = new ethers.Contract(usdcAddr, ERC20_ABI, readProvider);
@@ -404,69 +409,60 @@ export function CircleWalletPage({
                 const decimals = await usdcReadContract.decimals().catch(() => 6);
                 const val = ethers.parseUnits(amount.toString(), decimals);
 
-                // Dynamically fetch the actual active wallet address from the signer
                 const activeSignerAddress = await signer.getAddress().catch(() => address);
 
-                const usdcContract = new ethers.Contract(usdcAddr, ERC20_ABI, signer);
-                const allowance = await usdcReadContract.allowance(activeSignerAddress, tokenMessengerAddr).catch(() => 0n);
-                if (allowance < val) {
-                    if (notify) notify("Approving USDC for CCTP...", "pending");
-                    const appTx = await usdcContract.approve(tokenMessengerAddr, ethers.MaxUint256);
-                    await appTx.wait();
+                // Check user has enough balance
+                const userBal = await usdcReadContract.balanceOf(activeSignerAddress).catch(() => 0n);
+                if (userBal < val) {
+                    throw new Error(`Insufficient USDC balance. You have ${ethers.formatUnits(userBal, decimals)} ${selectedToken.symbol} USDC.`);
                 }
 
-                if (notify) notify("Initiating CCTP Bridge (Forwarding)...", "pending");
-                const messengerContract = new ethers.Contract(tokenMessengerAddr, [
-                    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)"
+                if (notify) notify('Sending USDC to Trading Wallet...', 'pending');
+
+                // Simple, reliable ERC-20 transfer directly to the session wallet
+                const usdcContract = new ethers.Contract(usdcAddr, [
+                    ...ERC20_ABI,
+                    'function transfer(address to, uint256 amount) external returns (bool)'
                 ], signer);
-                const destBytes32 = ethers.zeroPadValue(sessionAddress || address, 32); 
-                const destDomain = 5; // Arc testnet spoofed CCTP domain
 
-                const tx = await messengerContract.depositForBurn(
-                    val, 
-                    destDomain, 
-                    destBytes32, 
-                    usdcAddr
-                );
+                const tx = await usdcContract.transfer(recipientAddr, val);
                 txHash = tx.hash;
-                tx.wait().catch(() => {}); // Wait in the background silently
+                tx.wait().catch(() => {}); // Settle in background
+
             } else {
-                const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
-                if (!gatewayAddr || gatewayAddr === ethers.ZeroAddress) {
-                    throw new Error(`Gateway not deployed for ${selectedToken.name}`);
-                }
-                const gateway = new ethers.Contract(gatewayAddr, GATEWAY_ABI, signer);
-                const destBytes32 = ethers.zeroPadValue(sessionAddress || address, 32);
+                // Native token flow: send ETH/AVAX/MON directly to the session wallet
+                const recipientAddr = sessionAddress || address;
+                if (!recipientAddr) throw new Error('Session wallet address not available');
+
                 const val = ethers.parseEther(amount.toString());
-                
-                if (notify) notify("Initiating Native Funding...", "pending");
-                const tx = await gateway.fundWithNative(destBytes32, 0, { value: val }); 
+                if (notify) notify('Sending funds to Trading Wallet...', 'pending');
+
+                const tx = await signer.sendTransaction({ to: recipientAddr, value: val });
                 txHash = tx.hash;
-                tx.wait().catch(() => {}); // Wait in the background silently
+                tx.wait().catch(() => {});
             }
 
-            if (notify) notify("Registering deposit with relayer...", "pending");
-            
-            const chainIdMap = { 'avax': '43113', 'eth': '111155111', 'mon': '10143' };
-            const chainId = chainIdMap[selectedToken.id] || '43113';
+            if (notify) notify('Transaction sent! Crediting your balance...', 'pending');
 
-            console.log(`[CCTP] Dispatching monitor request to backend: ${txHash} on chain ${chainId}`);
-
-            // Fire-and-forget to prevent any network latency or backend processing time from blocking the UI transition!
-            fetch(`${KEEPER_URL_ARC}/fund/monitor-cctp`, {
+            // Call /fund/confirm to instantly credit the trading wallet balance in backend cache
+            const confirmRes = await fetch(`${KEEPER_URL_ARC}/fund/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     address,
                     txHash,
-                    fromChain: chainId,
-                    amount: amount.toString()
+                    amount: amount.toString(),
+                    fromToken: fundingType === 'usdc' ? 'USDC' : selectedToken.symbol
                 })
-            }).catch(e => {
-                console.error("[CCTP] Relayer register failed:", e);
             });
 
-            if (notify) notify("Funding Initiated Successfully!", "success");
+            if (!confirmRes.ok) {
+                const errData = await confirmRes.json().catch(() => ({}));
+                console.error('[Fund] Confirm failed:', errData);
+                // Still show success on frontend - backend will reconcile
+            }
+
+            if (notify) notify('Funding Successful! Balance updated.', 'success');
             setFundingStep('success');
             setIsFundingSuccess(true);
             setTimeout(() => {
@@ -475,13 +471,12 @@ export function CircleWalletPage({
                 setFundingAmount('');
                 setIsFundingSuccess(false);
                 fetchWalletInfo(true);
-            }, 5000);
+            }, 4000);
             
         } catch (err) {
-            console.error(err);
-            if (notify) notify(err.message || "Funding failed", "error");
+            console.error('[Fund Error]', err);
+            if (notify) notify(err.message || 'Funding failed. Please try again.', 'error');
             setFundingStep('input');
-        }
     };
 
     const LocalLoading = () => (

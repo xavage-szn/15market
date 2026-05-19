@@ -5,37 +5,61 @@ import { SUPPORTED_TOKENS } from '../tokens';
 import { KEEPER_URL_ARC } from '../constants';
 import * as ethers from 'ethers';
 
-const GATEWAY_ABI = [
-    "function fundWithNative(bytes32 tradingWallet, uint256 minUsdcOut) external payable",
-    "function fundWithUSDC(uint256 amount, bytes32 tradingWallet) external"
-];
-
-// Deployments on Fuji/Sepolia/Monad
-const GATEWAY_ADDRESSES = {
-    'mon': '0x094604E6bA1E98756b0de29a9E2285Ead0c443Fd', 
-    'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0',
-    'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5'
+// ─── CCTP V1 TESTNET CHAIN CONFIG ────────────────────────────────────────────
+// Official Circle docs: https://developers.circle.com/stablecoin/docs/cctp-contract-addresses
+// Domain IDs: Eth Sepolia=0, Fuji=1, OP Sepolia=2, Arb Sepolia=3, Solana=5, Base Sepolia=6, Polygon Amoy=7
+const CCTP_CHAIN_CONFIG = {
+    'eth': {
+        name: 'Ethereum Sepolia',
+        chainId: 111155111,
+        domain: 0,
+        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
+        usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+        rpc: 'https://ethereum-sepolia-rpc.publicnode.com',
+        // When burning FROM Eth Sepolia, mint ON Avalanche Fuji (domain 1)
+        destDomain: 1,
+        destChainId: '43113'
+    },
+    'avax': {
+        name: 'Avalanche Fuji',
+        chainId: 43113,
+        domain: 1,
+        tokenMessenger: '0xeb08f243E5d3FCFF26A9E38Ae5520A669f4019d0',
+        usdc: '0x5425890298aed601595a70AB815c96711a31Bc65',
+        rpc: 'https://api.avax-test.network/ext/bc/C/rpc',
+        // When burning FROM Fuji, mint ON Eth Sepolia (domain 0)
+        destDomain: 0,
+        destChainId: '111155111'
+    },
+    'base': {
+        name: 'Base Sepolia',
+        chainId: 84532,
+        domain: 6,
+        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
+        usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+        rpc: 'https://sepolia.base.org',
+        // When burning FROM Base Sepolia, mint ON Eth Sepolia (domain 0)
+        destDomain: 0,
+        destChainId: '111155111'
+    },
+    'op': {
+        name: 'OP Sepolia',
+        chainId: 11155420,
+        domain: 2,
+        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
+        usdc: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7',
+        rpc: 'https://sepolia.optimism.io',
+        destDomain: 0,
+        destChainId: '111155111'
+    }
 };
 
 const ERC20_ABI = [
-    "function approve(address spender, uint256 amount) external returns (bool)",
-    "function allowance(address owner, address spender) view returns (uint256)",
-    "function balanceOf(address account) view returns (uint256)",
-    "function decimals() view returns (uint8)"
+    'function approve(address spender, uint256 amount) external returns (bool)',
+    'function allowance(address owner, address spender) view returns (uint256)',
+    'function balanceOf(address account) view returns (uint256)',
+    'function decimals() view returns (uint8)',
 ];
-
-const TESTNET_RPCS = {
-    'eth': 'https://rpc.ankr.com/eth_sepolia',
-    'avax': 'https://api.avax-test.network/ext/bc/C/rpc',
-    'mon': 'https://testnet-rpc.monad.xyz',
-    'sol': 'https://api.devnet.solana.com'
-};
-
-const CCTP_TOKEN_MESSENGER = {
-    'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0', // Fuji
-    'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', // Sepolia
-    'mon': '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d', // Monad Testnet
-};
 
 export function UnifiedFundingModal({ 
     isOpen, 
@@ -179,90 +203,149 @@ export function UnifiedFundingModal({
         if (!amount || !quote || !evmWallet) return;
 
         setIsConfirming(true);
-        notify("Initiating Cross-Chain Funding...", "pending");
+        notify('Initiating Deposit...', 'pending');
 
         try {
             const ethProvider = await evmWallet.getEthereumProvider();
-            const provider = new ethers.BrowserProvider(ethProvider);
+            const provider = new ethers.BrowserProvider(ethProvider, 'any');
             const signer = await provider.getSigner();
-            const usdcAddr = selectedToken.usdcAddress; // We should add this to tokens.js or config
-            const tradingWalletBytes32 = ethers.zeroPadValue(sessionAddress, 32);
 
-            let tx;
-            if (fundingMode === 'native') {
-                const gatewayAddr = GATEWAY_ADDRESSES[selectedToken.id];
-                if (!gatewayAddr || gatewayAddr === ethers.ZeroAddress) {
-                    throw new Error(`Funding Gateway not yet deployed on ${selectedToken.name} Testnet`);
+            if (!sessionAddress) throw new Error('Session wallet not initialized. Please retry.');
+
+            const network = await provider.getNetwork();
+            const currentChainId = Number(network.chainId);
+            let txHash;
+            let fromChainId;
+            let destChainId;
+
+            if (fundingMode === 'stables') {
+                // Identify which CCTP chain config matches the user's current chain
+                const cctpCfg = Object.values(CCTP_CHAIN_CONFIG).find(c => c.chainId === currentChainId);
+
+                if (cctpCfg) {
+                    // ── REAL CCTP FLOW ──────────────────────────────────────────
+                    // Use Circle's official depositForBurn with a real destination domain
+                    const usdcContract = new ethers.Contract(cctpCfg.usdc, ERC20_ABI, signer);
+                    const decimals = await usdcContract.decimals().catch(() => 6);
+                    const val = ethers.parseUnits(amount, decimals);
+
+                    // Check balance
+                    const signerAddr = await signer.getAddress();
+                    const userBal = await usdcContract.balanceOf(signerAddr).catch(() => 0n);
+                    if (userBal < val) {
+                        throw new Error(`Insufficient USDC. You have ${ethers.formatUnits(userBal, decimals)} USDC on ${cctpCfg.name}.`);
+                    }
+
+                    // Approve TokenMessenger to spend USDC
+                    const allowance = await usdcContract.allowance(signerAddr, cctpCfg.tokenMessenger).catch(() => 0n);
+                    if (allowance < val) {
+                        notify('Approving USDC for Circle CCTP...', 'pending');
+                        const appTx = await usdcContract.approve(cctpCfg.tokenMessenger, ethers.MaxUint256);
+                        await appTx.wait();
+                    }
+
+                    // Burn USDC via Circle's official TokenMessenger → mint on destination chain
+                    // Recipient is sessionAddress (same EOA on all EVM chains)
+                    notify(`Burning USDC on ${cctpCfg.name} via Circle CCTP...`, 'pending');
+                    const messenger = new ethers.Contract(cctpCfg.tokenMessenger, [
+                        'function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)'
+                    ], signer);
+
+                    const mintRecipientBytes32 = ethers.zeroPadValue(sessionAddress, 32);
+                    const tx = await messenger.depositForBurn(
+                        val,
+                        cctpCfg.destDomain,   // Real Circle CCTP destination domain
+                        mintRecipientBytes32,  // session wallet receives USDC on dest chain
+                        cctpCfg.usdc
+                    );
+                    txHash = tx.hash;
+                    fromChainId = String(cctpCfg.chainId);
+                    destChainId = cctpCfg.destChainId;
+                    tx.wait().catch(() => {});
+
+                    notify('USDC burned! Waiting for Circle attestation & relay...', 'pending');
+
+                    // Tell backend to relay: poll IRIS, call receiveMessage on destination, credit balance
+                    fetch(`${KEEPER_URL_ARC}/fund/monitor-cctp`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            address,
+                            txHash,
+                            fromChain: fromChainId,
+                            destChain: destChainId,
+                            amount: quote.estimatedUsdc
+                        })
+                    }).catch(e => console.error('[CCTP] Monitor register failed:', e));
+
+                    notify(`Success! ${quote.estimatedUsdc} USDC is being relayed to your Trading Wallet!`, 'success');
+
+                } else {
+                    // ── FALLBACK: Direct ERC-20 transfer (for non-CCTP chains like Monad) ──
+                    // Look up USDC by chain ID or token ID
+                    const usdcByChain = {
+                        10143: '0x534b2f3A21130d7a60830c2Df862319e593943A3', // Monad testnet
+                    };
+                    const usdcAddr = usdcByChain[currentChainId] || selectedToken?.usdcAddress;
+                    if (!usdcAddr) throw new Error(`USDC not found for chain ${currentChainId}. Please switch to Ethereum Sepolia or Avalanche Fuji.`);
+
+                    const usdcContract = new ethers.Contract(usdcAddr, ERC20_ABI, signer);
+                    const decimals = await usdcContract.decimals().catch(() => 6);
+                    const val = ethers.parseUnits(amount, decimals);
+
+                    const signerAddr = await signer.getAddress();
+                    const userBal = await usdcContract.balanceOf(signerAddr).catch(() => 0n);
+                    if (userBal < val) {
+                        throw new Error(`Insufficient USDC. You have ${ethers.formatUnits(userBal, decimals)} USDC.`);
+                    }
+
+                    notify('Sending USDC to Trading Wallet...', 'pending');
+                    const usdcWithTransfer = new ethers.Contract(usdcAddr, [
+                        ...ERC20_ABI,
+                        'function transfer(address to, uint256 amount) external returns (bool)'
+                    ], signer);
+                    const tx = await usdcWithTransfer.transfer(sessionAddress, val);
+                    txHash = tx.hash;
+                    tx.wait().catch(() => {});
+
+                    // Instantly credit via /fund/confirm since it's same-chain
+                    await fetch(`${KEEPER_URL_ARC}/fund/confirm`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address, txHash, amount: quote.estimatedUsdc, fromToken: 'USDC' })
+                    }).catch(e => console.warn('[Fund] Confirm error:', e));
+
+                    notify(`Success! ${quote.estimatedUsdc} USDC added to Trading Wallet!`, 'success');
                 }
-                const gateway = new ethers.Contract(gatewayAddr, GATEWAY_ABI, signer);
-                const val = ethers.parseEther(amount);
-                const minUsdc = ethers.parseUnits((parseFloat(quote.estimatedUsdc) * 0.99).toFixed(6), 6); // 1% slippage
-                tx = await gateway.fundWithNative(tradingWalletBytes32, minUsdc, { value: val });
+
             } else {
-                // PURE DIRECT CANONICAL CCTP (No packaging overhead, 100% robust browser execution!)
-                const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
-                if (!tokenMessengerAddr || tokenMessengerAddr === ethers.ZeroAddress) {
-                    throw new Error(`CCTP TokenMessenger not configured for ${selectedToken.name}`);
-                }
+                // ── NATIVE TOKEN: Direct transfer to session wallet ────────────
+                const val = ethers.parseEther(amount);
+                notify(`Sending ${selectedToken.symbol}...`, 'pending');
+                const tx = await signer.sendTransaction({ to: sessionAddress, value: val });
+                txHash = tx.hash;
+                tx.wait().catch(() => {});
 
-                const usdcContract = new ethers.Contract(usdcAddr, ERC20_ABI, signer);
-                const decimals = await usdcContract.decimals().catch(() => 6);
-                const val = ethers.parseUnits(amount, decimals);
-                
-                // 1. Approve Circle's canonical TokenMessenger to spend our USDC
-                const allowance = await usdcContract.allowance(address, tokenMessengerAddr).catch(() => 0n);
-                if (allowance < val) {
-                    notify("Approving USDC for CCTP...", "pending");
-                    const appTx = await usdcContract.approve(tokenMessengerAddr, ethers.MaxUint256);
-                    await appTx.wait();
-                }
+                await fetch(`${KEEPER_URL_ARC}/fund/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address, txHash, amount: quote.estimatedUsdc, fromToken: selectedToken.symbol })
+                }).catch(e => console.warn('[Fund] Confirm error:', e));
 
-                // 2. Call depositForBurn directly on Circle's canonical TokenMessenger contract!
-                notify("Initiating CCTP Bridge...", "pending");
-                const messenger = new ethers.Contract(tokenMessengerAddr, [
-                    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)"
-                ], signer);
-
-                const destDomain = 5; // Arc testnet spoofed CCTP domain
-                tx = await messenger.depositForBurn(
-                    val,
-                    destDomain,
-                    tradingWalletBytes32, // sessionAddress padded to 32 bytes
-                    usdcAddr
-                );
+                notify(`Success! ${quote.estimatedUsdc} USDC credited to Trading Wallet!`, 'success');
             }
 
-            notify("Transaction Sent! Registering with relayer...", "pending");
-            
-            // Notify Backend immediately to start monitoring in the background and instantly credit user's cache!
-            const chainIdMap = { 'avax': '43113', 'eth': '111155111', 'mon': '10143' };
-            const chainId = selectedToken.chainId || chainIdMap[selectedToken.id] || '43113';
-
-            fetch(`${KEEPER_URL_ARC}/fund/monitor-cctp`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    address,
-                    txHash: tx.hash,
-                    fromChain: chainId,
-                    amount: quote.estimatedUsdc
-                })
-            }).catch(e => {
-                console.error("[CCTP] Relayer register failed:", e);
-            });
-
-            tx.wait().catch(() => {}); // Wait in the background silently
-
-            notify(`Success! ${quote.estimatedUsdc} USDC will arrive in Trading Wallet shortly!`, "success");
             if (onSuccess) onSuccess();
             onClose();
         } catch (err) {
-            console.error("Funding Error:", err);
-            notify(err.message || "Funding failed", "error");
+            console.error('Funding Error:', err);
+            notify(err.message || 'Funding failed. Please try again.', 'error');
         } finally {
             setIsConfirming(false);
         }
     };
+
+
 
     if (!isOpen) return null;
 

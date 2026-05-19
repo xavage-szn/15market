@@ -375,14 +375,15 @@ app.post('/fund/confirm', async (req, res) => {
  */
 app.post('/fund/monitor-cctp', async (req, res) => {
   try {
-    const { address, txHash, fromChain, amount } = req.body;
-    if (!txHash || !fromChain) return res.status(400).json({ error: "Missing CCTP details" });
+    const { address, txHash, fromChain, destChain, amount } = req.body;
+    if (!txHash || !fromChain) return res.status(400).json({ error: 'Missing CCTP details' });
 
-    console.log(`[CCTP] Monitoring burn on chain ${fromChain}: ${txHash}`);
+    console.log(`[CCTP] Burn registered: chain ${fromChain} → ${destChain || 'auto'} | TX: ${txHash}`);
 
     const userAddr = address.toLowerCase();
 
-    // Instantly credit cached session balance and emit balance_update socket event for blazing-fast instant UX!
+    // Instantly credit cached session balance and emit real-time socket event for immediate UX feedback
+    // (The actual on-chain USDC mint will follow asynchronously via IRIS attestation + receiveMessage)
     const session = cache.sessions.get(userAddr);
     if (session) {
       session.balance = Number((session.balance + parseFloat(amount || 0)).toFixed(4));
@@ -391,17 +392,21 @@ app.post('/fund/monitor-cctp', async (req, res) => {
         reason: 'DEPOSIT',
         txHash
       });
-      console.log(`[CCTP-Relayer] Instantly credited ${amount} USDC to cached session for user ${userAddr}`);
+      console.log(`[CCTP-Relayer] Instantly credited ${amount} USDC to ${userAddr} (optimistic)`);
+    } else {
+      console.warn(`[CCTP-Relayer] No active session for ${userAddr} — balance will sync on next poll`);
     }
 
-    // Offload to funding service to handle the async polling and execution in the background
-    fundingService.monitorAndSettleCCTP(userAddr, txHash, fromChain, amount);
+    // Offload full CCTP relay to background: poll IRIS, call receiveMessage on dest chain, finalize credit
+    fundingService.monitorAndSettleCCTP(userAddr, txHash, fromChain, amount, destChain);
 
-    res.json({ success: true, message: "Monitoring started" });
+    res.json({ success: true, message: 'CCTP relay started. Balance pre-credited.' });
   } catch (err) {
+    console.error('[monitor-cctp] Error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 // ─── SESSION WALLET ROUTES (Embedded EOA) ─────────────────────────────────────
