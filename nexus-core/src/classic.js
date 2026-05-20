@@ -362,8 +362,19 @@ class ClassicEngine {
 
   async ensureOperatorFunded() {
     try {
-      const bal = parseFloat(await rpc.getBalance(rpc.wallet.address));
+      const balStr = await rpc.getBalance(rpc.wallet.address);
+      if (balStr === null || balStr === "0") return; // If 0 from timeout, skip
+
+      const bal = parseFloat(balStr);
       if (bal < 5) { // Minimum gas threshold
+        // Check treasury balance
+        const tBalStr = await rpc.getBalance(config.TREASURY_ADDRESS);
+        const treasuryBal = parseFloat(tBalStr || "0");
+        if (treasuryBal < 20) {
+           console.log(`⚠️ [GasTank] Treasury low (${treasuryBal} ARC). Cannot refill Operator.`);
+           return;
+        }
+
         console.log(`⚠️ [GasTank] Low (${bal} ARC). Refilling 20 ARC...`);
         const tx = await this.treasuryContract.withdraw(ethers.parseUnits("20", 18), { gasLimit: 150000 });
         await tx.wait();

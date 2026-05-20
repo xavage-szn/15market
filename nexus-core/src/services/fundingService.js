@@ -4,78 +4,80 @@ const { ethers } = require('ethers');
 const config = require('../config');
 const profiles = require('../profiles');
 
-// Circle IRIS Attestation API (testnet sandbox)
-const IRIS_API_URL = 'https://iris-api-sandbox.circle.com/v1/attestations';
+// Circle IRIS Attestation API V2 (testnet sandbox)
+// V2 endpoint: GET /v2/messages/{sourceDomain}?transactionHash={txHash}
+// Returns: { messages: [{ status, message, attestation }] }
+const IRIS_API_BASE = 'https://iris-api-sandbox.circle.com';
 
 /**
- * CCTP V1 Testnet: Complete chain routing table
- * Source chain burns USDC → destination chain mints USDC.
- * The destination chain must be different from the source.
- * All MessageTransmitter addresses from Circle's official docs.
+ * CCTP V2 Testnet Chain Config
+ * All cross-chain USDC deposits are routed to Arc Testnet (Domain 26).
+ * Source chains burn USDC via their TokenMessenger.
+ * Recipient is the session wallet address on Arc.
  *
- * Domains: Eth Sepolia=0, Fuji=1, OP Sepolia=2, Arb Sepolia=3, Solana Devnet=5, Base Sepolia=6, Polygon Amoy=7
+ * IMPORTANT: All addresses are CCTP V2 testnet addresses.
+ * TokenMessenger  V2: 0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA (all chains)
+ * MessageTransmitter V2: 0xE737e5CEBEEBa77EFE34D4aa090756590b1CE275 (all chains)
  */
 const CCTP_CHAINS = {
-    // Ethereum Sepolia (domain 0) → bridges TO Avalanche Fuji (domain 1)
-    '111155111': {
+    // Ethereum Sepolia (domain 0)
+    '11155111': {
         name: 'Ethereum Sepolia',
         domain: 0,
         rpc: 'https://ethereum-sepolia-rpc.publicnode.com',
-        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
-        messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
-        usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-        // Default destination when sending FROM this chain
-        defaultDest: '43113'
+        tokenMessenger: '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa',
+        messageTransmitter: '0xe737e5cebeeba77efe34d4aa090756590b1ce275',
+        usdc: '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238',
+        defaultDest: '5042002'
     },
-    // Avalanche Fuji (domain 1) → bridges TO Ethereum Sepolia (domain 0)
+    // Avalanche Fuji (domain 1)
     '43113': {
         name: 'Avalanche Fuji',
         domain: 1,
         rpc: 'https://api.avax-test.network/ext/bc/C/rpc',
-        tokenMessenger: '0xeb08f243E5d3FCFF26A9E38Ae5520A669f4019d0',
-        messageTransmitter: '0xa9fB1b3009DCb79E2fe346c16a604B8Fa8aE0a79',
-        usdc: '0x5425890298aed601595a70AB815c96711a31Bc65',
-        defaultDest: '111155111'
+        tokenMessenger: '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa',
+        messageTransmitter: '0xe737e5cebeeba77efe34d4aa090756590b1ce275',
+        usdc: '0x5425890298aed601595a70ab815c96711a31bc65',
+        defaultDest: '5042002'
     },
-    // OP Sepolia (domain 2) → bridges TO Ethereum Sepolia (domain 0)
+    // OP Sepolia (domain 2)
     '11155420': {
         name: 'OP Sepolia',
         domain: 2,
         rpc: 'https://sepolia.optimism.io',
-        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
-        messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
-        usdc: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7',
-        defaultDest: '111155111'
+        tokenMessenger: '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa',
+        messageTransmitter: '0xe737e5cebeeba77efe34d4aa090756590b1ce275',
+        usdc: '0x5fd84259d66cd46123540766be93dfe6d43130d7',
+        defaultDest: '5042002'
     },
-    // Arbitrum Sepolia (domain 3) → bridges TO Ethereum Sepolia (domain 0)
-    '421614': {
-        name: 'Arbitrum Sepolia',
-        domain: 3,
-        rpc: 'https://sepolia-rollup.arbitrum.io/rpc',
-        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
-        messageTransmitter: '0xaCF1ceeF35caAc005e15888dDb8A3515C41B4872',
-        usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-        defaultDest: '111155111'
-    },
-    // Base Sepolia (domain 6) → bridges TO Ethereum Sepolia (domain 0)
+    // Base Sepolia (domain 6)
     '84532': {
         name: 'Base Sepolia',
         domain: 6,
         rpc: 'https://sepolia.base.org',
-        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
-        messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
-        usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-        defaultDest: '111155111'
+        tokenMessenger: '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa',
+        messageTransmitter: '0xe737e5cebeeba77efe34d4aa090756590b1ce275',
+        usdc: '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+        defaultDest: '5042002'
     },
-    // Polygon Amoy (domain 7) → bridges TO Ethereum Sepolia (domain 0)
-    '80002': {
-        name: 'Polygon Amoy',
-        domain: 7,
-        rpc: 'https://rpc-amoy.polygon.technology',
-        tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
-        messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
-        usdc: '0x41e94eb019c0762f9bfcf9fb1e58725bfb0e7582',
-        defaultDest: '111155111'
+    // Monad Testnet (domain 15)
+    '10143': {
+        name: 'Monad Testnet',
+        domain: 15,
+        rpc: 'https://testnet-rpc.monad.xyz/',
+        tokenMessenger: '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa',
+        messageTransmitter: '0xe737e5cebeeba77efe34d4aa090756590b1ce275',
+        usdc: '0x534b2f3a21130d7a60830c2df862319e593943a3',
+        defaultDest: '5042002'
+    },
+    // Destination Arc testnet (domain 26)
+    '5042002': {
+        name: 'Arc Testnet',
+        domain: 26,
+        rpc: 'https://rpc.testnet.arc.network',
+        tokenMessenger: '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa',
+        messageTransmitter: '0xe737e5cebeeba77efe34d4aa090756590b1ce275',
+        usdc: '0x3600000000000000000000000000000000000000'
     }
 };
 
@@ -88,11 +90,11 @@ class FundingService {
         this.spread = 0.005;    // 0.5% exchange rate spread
         this.fundingFee = 0.01; // 1% platform funding fee
 
-        // Pre-warm relayer wallets for each destination chain
+        // Pre-warm relayer wallets for destination chains (specifically Arc Testnet)
         this.destWallets = {};
         this.destProviders = {};
         try {
-            const pk = process.env.RELAYER_PRIVATE_KEY || process.env.SESSION_MASTER_SECRET;
+            const pk = process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.SESSION_MASTER_SECRET;
             if (pk) {
                 const normalizedPk = pk.startsWith('0x') ? pk : `0x${pk}`;
                 for (const [chainId, chainCfg] of Object.entries(CCTP_CHAINS)) {
@@ -100,7 +102,7 @@ class FundingService {
                     this.destProviders[chainId] = p;
                     this.destWallets[chainId] = new ethers.Wallet(normalizedPk, p);
                 }
-                const sampleAddr = Object.values(this.destWallets)[0]?.address;
+                const sampleAddr = this.destWallets['5042002']?.address || Object.values(this.destWallets)[0]?.address;
                 console.log(`[CCTP-Relayer] Warmed up for ${Object.keys(CCTP_CHAINS).length} chains. Relayer: ${sampleAddr}`);
             } else {
                 console.warn('[CCTP-Relayer] No RELAYER_PRIVATE_KEY found. Auto-relay will be skipped.');
@@ -118,23 +120,211 @@ class FundingService {
         const price = mockPrices[fromToken.toUpperCase()] || 1;
         const rawUsdc = amount * price;
         const fee = rawUsdc * this.fundingFee;
-        const estimatedUsdc = (rawUsdc - fee).toFixed(2);
         return { estimatedUsdc, fee: fee.toFixed(2), price };
+    }
+
+    /**
+     * Estimates the gas fee in USDC for an EIP-2612 permit + bridge flow.
+     */
+    async getPermitBridgeQuote(sourceChain, amount) {
+        const chainIdMap = {
+            'mon': '10143',
+            'avax': '43113',
+            'eth': '11155111'
+        };
+        const chainId = chainIdMap[sourceChain.toLowerCase()] || sourceChain;
+        const chainCfg = CCTP_CHAINS[chainId];
+        if (!chainCfg) throw new Error(`Unsupported source chain: ${sourceChain}`);
+
+        const provider = this.destProviders[chainId] || new ethers.JsonRpcProvider(chainCfg.rpc);
+        const relayerWallet = this.destWallets[chainId];
+        const relayerAddress = relayerWallet ? relayerWallet.address : '0x0000000000000000000000000000000000000000';
+
+        // 1. Fetch current gas price dynamically
+        let gasPrice = 50000000000n; // Default 50 Gwei
+        try {
+            const feeData = await provider.getFeeData();
+            if (feeData && feeData.gasPrice) {
+                gasPrice = feeData.gasPrice;
+            }
+        } catch (e) {
+            console.warn(`[getPermitBridgeQuote] Failed to get gas price, using default 50 Gwei: ${e.message}`);
+        }
+
+        // 2. Compute native token gas cost
+        // Estimate 300,000 gas units for permit + transferFrom + depositForBurn on source
+        const gasUsed = 300000n;
+        const nativeGasCostWei = gasUsed * gasPrice;
+        const nativeGasCostEth = parseFloat(ethers.formatEther(nativeGasCostWei));
+
+        // 3. Convert to USDC
+        const nativePrices = {
+            '10143': 2.5,     // MON
+            '43113': 35.0,    // AVAX
+            '11155111': 3500.0 // ETH
+        };
+        const nativePrice = nativePrices[chainId] || 1.0;
+        const rawGasFeeUsdc = nativeGasCostEth * nativePrice;
+
+        // Apply 1.3x safety buffer + 0.05 USDC minimum floor to cover relayer overhead
+        let gasFeesUsdc = rawGasFeeUsdc * 1.3;
+        if (gasFeesUsdc < 0.05) {
+            gasFeesUsdc = 0.05;
+        }
+        gasFeesUsdc = parseFloat(gasFeesUsdc.toFixed(4));
+
+        const netAmount = parseFloat((amount - gasFeesUsdc).toFixed(4));
+        const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour deadline
+
+        return {
+            relayerAddress,
+            gasFeesUsdc,
+            netAmount,
+            deadline
+        };
+    }
+
+    /**
+     * Executes the EIP-2612 permit-based cross-chain bridge transaction flow.
+     */
+    async executePermitBridge(userAddr, sourceChain, amount, userAddress, permit, destMintRecipient) {
+        const chainIdMap = {
+            'mon': '10143',
+            'avax': '43113',
+            'eth': '11155111'
+        };
+        const chainId = chainIdMap[sourceChain.toLowerCase()] || sourceChain;
+        const chainCfg = CCTP_CHAINS[chainId];
+        if (!chainCfg) throw new Error(`Unsupported source chain: ${sourceChain}`);
+
+        const relayerWallet = this.destWallets[chainId];
+        if (!relayerWallet) throw new Error(`No relayer configured for chain ${sourceChain}`);
+
+        console.log(`[Permit-Bridge] Initiating for user ${userAddr} from ${chainCfg.name}. Amount: ${amount} USDC`);
+
+        // Compute quote again on-chain for fee logic
+        const quote = await this.getPermitBridgeQuote(sourceChain, amount);
+        if (quote.netAmount <= 0) {
+            throw new Error(`Amount of ${amount} USDC too small to cover gas fees of ${quote.gasFeesUsdc} USDC`);
+        }
+
+        const amountRaw = BigInt(Math.round(amount * 1e6));
+        const netAmountRaw = BigInt(Math.round(quote.netAmount * 1e6));
+
+        const usdcAbi = [
+            'function nonces(address owner) external view returns (uint256)',
+            'function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external',
+            'function transferFrom(address from, address to, uint256 value) external returns (bool)',
+            'function allowance(address owner, address spender) external view returns (uint256)'
+        ];
+        const usdcContract = new ethers.Contract(chainCfg.usdc, usdcAbi, relayerWallet);
+
+        // Step 1: Submit permit transaction (if signature is provided and not already approved)
+        if (permit && permit.v !== undefined) {
+            try {
+                const currentAllowance = await usdcContract.allowance(userAddress, relayerWallet.address);
+                if (currentAllowance < amountRaw) {
+                    console.log(`[Permit-Bridge] Submitting EIP-2612 permit for ${userAddress} spender ${relayerWallet.address}...`);
+                    const txPermit = await usdcContract.permit(
+                        userAddress,
+                        relayerWallet.address,
+                        amountRaw,
+                        permit.deadline,
+                        permit.v,
+                        permit.r,
+                        permit.s
+                    );
+                    await txPermit.wait();
+                    console.log(`[Permit-Bridge] Permit transaction success: ${txPermit.hash}`);
+                } else {
+                    console.log(`[Permit-Bridge] Existing allowance ${ethers.formatUnits(currentAllowance, 6)} is sufficient. Skipping permit.`);
+                }
+            } catch (e) {
+                console.warn(`[Permit-Bridge] Permit failed/skipped (may already be set): ${e.message}`);
+            }
+        }
+
+        // Step-2: Transfer USDC from user's wallet to the relayer
+        console.log(`[Permit-Bridge] Calling transferFrom for ${amount} USDC from ${userAddress} to relayer...`);
+        const txTransfer = await usdcContract.transferFrom(userAddress, relayerWallet.address, amountRaw);
+        await txTransfer.wait();
+        console.log(`[Permit-Bridge] transferFrom transaction success: ${txTransfer.hash}`);
+
+        // Step 3: Approve CCTP TokenMessenger to spend the USDC on behalf of the relayer
+        const usdcStandardAbi = [
+            'function approve(address spender, uint256 value) external returns (bool)',
+            'function allowance(address owner, address spender) external view returns (uint256)'
+        ];
+        const usdcWithStandardAbi = new ethers.Contract(chainCfg.usdc, usdcStandardAbi, relayerWallet);
+        const tokenMessengerAllowance = await usdcWithStandardAbi.allowance(relayerWallet.address, chainCfg.tokenMessenger);
+        if (tokenMessengerAllowance < netAmountRaw) {
+            console.log(`[Permit-Bridge] Approving CCTP TokenMessenger (${chainCfg.tokenMessenger}) for ${quote.netAmount} USDC...`);
+            const txApprove = await usdcWithStandardAbi.approve(chainCfg.tokenMessenger, netAmountRaw);
+            await txApprove.wait();
+        }
+
+        // Step 4: Burn USDC via CCTP TokenMessenger
+        console.log(`[Permit-Bridge] Calling depositForBurn for ${quote.netAmount} USDC recipient ${destMintRecipient}...`);
+        const tokenMessengerAbi = [
+            'function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 hookData, uint256 maxFee, uint32 finalityThreshold) external returns (uint64)'
+        ];
+        const tokenMessenger = new ethers.Contract(chainCfg.tokenMessenger, tokenMessengerAbi, relayerWallet);
+        const recipientBytes32 = ethers.zeroPadValue(destMintRecipient, 32);
+        
+        const destDomain = 26; // Arc Testnet CCTP domain is always 26
+        const BYTES32_ZERO = '0x0000000000000000000000000000000000000000000000000000000000000000';
+        const txBurn = await tokenMessenger.depositForBurn(
+            netAmountRaw,
+            destDomain,
+            recipientBytes32,
+            chainCfg.usdc,
+            BYTES32_ZERO,
+            0n,
+            2000
+        );
+        const burnReceipt = await txBurn.wait();
+        console.log(`[Permit-Bridge] depositForBurn transaction success: ${txBurn.hash}`);
+
+        // Step 5: Start asynchronous monitoring of CCTP burn and settlement on Arc Testnet
+        this.monitorAndSettleCCTP(userAddr, txBurn.hash, chainId, quote.netAmount, '5042002');
+
+        return {
+            success: true,
+            txHash: txBurn.hash,
+            netAmount: quote.netAmount
+        };
+    }
+
+
+    deriveSessionAddress(userAddr) {
+        const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+        const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr.toLowerCase());
+        const privateKey = ethers.keccak256(entropy);
+        const wallet = new ethers.Wallet(privateKey);
+        return wallet.address;
     }
 
     /**
      * Credits a user's platform trading balance (in-memory + DB).
      */
-    async creditTradingWallet(userAddr, amount, txHash, walletAddress) {
+    async creditTradingWallet(userAddr, amount, txHash) {
         const amountNum = parseFloat(amount);
         if (isNaN(amountNum) || amountNum <= 0) return { success: false, error: 'Invalid amount' };
 
-        console.log(`[FundingService] Crediting ${amountNum} USDC to ${userAddr} (tx: ${txHash})`);
+        const addr = userAddr.toLowerCase();
+        console.log(`[FundingService] Crediting ${amountNum} USDC to ${addr} (tx: ${txHash})`);
+
+        // We don't need to trigger on-chain transfer from relayer because CCTP 
+        // or frontend already transferred the actual tokens.
 
         try {
-            await profiles.creditBalance(userAddr, amountNum, txHash);
+            const cache = require('../cache');
+            const session = cache.sessions.get(addr);
+            if (session) {
+                session.balance = Number((session.balance + amountNum).toFixed(4));
+            }
         } catch (e) {
-            console.warn(`[FundingService] Profile credit error (non-fatal): ${e.message}`);
+            console.warn(`[FundingService] Cache credit error (non-fatal): ${e.message}`);
         }
 
         return { success: true, credited: amountNum, txHash };
@@ -150,9 +340,9 @@ class FundingService {
      *
      * @param {string} userAddr       - User's platform address
      * @param {string} txHash         - Burn transaction hash on source chain
-     * @param {string} fromChainId    - Source chain ID (e.g. '111155111' for Sepolia)
+     * @param {string} fromChainId    - Source chain ID (e.g. '11155111' for Sepolia)
      * @param {string} amount         - USDC amount credited to user
-     * @param {string} destChainId    - Destination chain ID (optional, auto-resolved from CCTP_CHAINS)
+     * @param {string} destChainId    - Destination chain ID (always '5042002' for Arc CCTP)
      */
     async monitorAndSettleCCTP(userAddr, txHash, fromChainId, amount, destChainId) {
         const sourceConfig = CCTP_CHAINS[fromChainId];
@@ -161,8 +351,8 @@ class FundingService {
             return;
         }
 
-        // Resolve destination chain — use override if provided, otherwise use the default
-        const destId = destChainId || sourceConfig.defaultDest;
+        // Resolve destination chain — default to Arc testnet (5042002)
+        const destId = destChainId || sourceConfig.defaultDest || '5042002';
         const destConfig = CCTP_CHAINS[destId];
         if (!destConfig) {
             console.error(`[CCTP-Relayer] Unsupported destination chain: ${destId}`);
@@ -207,20 +397,23 @@ class FundingService {
             }
 
             const messageBytes = ethers.AbiCoder.defaultAbiCoder().decode(['bytes'], log.data)[0];
-            const messageHash = ethers.keccak256(messageBytes);
-            console.log(`[CCTP-Relayer] Message Hash: ${messageHash}. Polling IRIS...`);
+            console.log(`[CCTP-Relayer] Message extracted (${messageBytes.length} bytes). Polling IRIS V2 API...`);
 
-            // Step 3: Poll Circle IRIS Attestation API until complete
-            let attestation = null;
+            // Step 3: Poll Circle IRIS V2 Attestation API
+            // Endpoint: GET /v2/messages/{sourceDomain}?transactionHash={txHash}
+            // Arc Testnet (domain 26) IS fully supported — the old bypass was wrong.
+            const irisUrl = `${IRIS_API_BASE}/v2/messages/${sourceConfig.domain}?transactionHash=${txHash}`;
+            let messageData = null; // { message, attestation }
             for (let i = 0; i < 72; i++) { // 72 × 10s = 12 minutes max
                 try {
-                    const irisRes = await axios.get(`${IRIS_API_URL}/${messageHash}`);
-                    if (irisRes.data?.status === 'complete' && irisRes.data?.attestation) {
-                        attestation = irisRes.data.attestation;
+                    const irisRes = await axios.get(irisUrl);
+                    const msg = irisRes.data?.messages?.[0];
+                    if (msg?.status === 'complete' && msg?.attestation && msg?.message) {
+                        messageData = { message: msg.message, attestation: msg.attestation };
                         console.log(`[CCTP-Relayer] Attestation received after ${i * 10}s`);
                         break;
                     }
-                    console.log(`[CCTP-Relayer] IRIS status: ${irisRes.data?.status || 'pending'} (attempt ${i + 1}/72)`);
+                    console.log(`[CCTP-Relayer] IRIS status: ${msg?.status || 'pending'} (attempt ${i + 1}/72)`);
                 } catch (e) {
                     if (e.response?.status !== 404) {
                         console.warn(`[CCTP-Relayer] IRIS API error: ${e.message}`);
@@ -229,15 +422,16 @@ class FundingService {
                 await new Promise(r => setTimeout(r, 10000));
             }
 
-            if (!attestation) {
-                console.error('[CCTP-Relayer] Attestation timeout after 12 minutes');
+            if (!messageData) {
+                console.error('[CCTP-Relayer] Attestation timeout after 12 minutes. The burn may not be attested by Circle IRIS.');
+                console.error('[CCTP-Relayer] Check: was the burn done via the CCTP V2 TokenMessenger (0x8FE6...DAA)?');
                 return;
             }
 
             // Step 4: Call receiveMessage on the DESTINATION chain's MessageTransmitter
             const relayerWallet = this.destWallets[destId];
             if (!relayerWallet) {
-                console.error(`[CCTP-Relayer] No relayer wallet for destination chain ${destId}`);
+                console.error(`[CCTP-Relayer] No relayer wallet configured for destination chain ${destId}`);
                 return;
             }
 
@@ -251,13 +445,13 @@ class FundingService {
             );
 
             console.log(`[CCTP-Relayer] Calling receiveMessage on ${destConfig.name} (${destConfig.messageTransmitter})`);
-            const mintTx = await transmitter.receiveMessage(messageBytes, attestation);
+            const mintTx = await transmitter.receiveMessage(messageData.message, messageData.attestation);
             const mintReceipt = await mintTx.wait();
 
             console.log(`[CCTP-Relayer] ✅ USDC minted on ${destConfig.name}! TX: ${mintTx.hash}`);
 
-            // Step 5: Credit the user's platform trading balance
-            await this.creditTradingWallet(userAddr, amount, mintTx.hash, userAddr);
+            // Step 5: Credit the user's platform trading balance (on-chain mint confirmed)
+            await this.creditTradingWallet(userAddr, amount, mintTx.hash);
 
         } catch (err) {
             console.error(`[CCTP-Relayer] Settlement failed:`, err.message);

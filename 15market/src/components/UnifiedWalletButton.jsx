@@ -97,14 +97,14 @@ export function UnifiedWalletButton({ theme }) {
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg relative"
                     style={{ backgroundColor: currentColor }}
                 >
-                    {(address?.slice(0, 1) || user?.wallet?.address?.slice(0, 1) || 'W')}
+                    {(user?.wallet?.address?.slice(0, 1) || address?.slice(0, 1) || 'W')}
                 </div>
                 {isSmartWalletReady && (
                     <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full border border-[#0D0D0D] shadow-sm" title="Smart Wallet Active"></div>
                 )}
             </div>
             <span className={`text-xs font-black font-mono hidden lg:block ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                {address ? `${address.slice(0, 4)}...${address.slice(-4)}` : (user?.wallet?.address ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}` : 'Connected')}
+                {user?.wallet?.address ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}` : (address ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Connected')}
             </span>
         </button>
     );

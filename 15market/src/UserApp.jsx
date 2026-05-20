@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
 import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useTradingWallet } from './hooks/useTradingWallet';
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { RoundsTradeScroller } from "./components/RoundsTradeScroller";
 import { ProfileModal } from "./components/ProfileModal";
@@ -278,12 +279,16 @@ export default function UserApp() {
   const { user, authenticated } = usePrivy();
   const { wallets } = useWallets();
 
-  // Authoritative address derivation: Wagmi first, then Privy embedded wallet
+  // Smart wallet (ERC-4337 via Pimlico) — used for CCTP source-chain gas
+  const { smartWalletAddress, isSmartWalletReady } = useTradingWallet();
+
+  // Authoritative address derivation: Prioritize Wagmi (External), then Smart Wallet, then EOA
   const address = useMemo(() => {
     if (wagmiAddress) return wagmiAddress;
+    if (smartWalletAddress) return smartWalletAddress;
     if (user?.wallet?.address) return user.wallet.address;
     return null;
-  }, [wagmiAddress, user]);
+  }, [smartWalletAddress, wagmiAddress, user]);
 
   const embeddedWallet = useMemo(() => {
     if (!wallets || !Array.isArray(wallets)) return null;
@@ -744,12 +749,12 @@ export default function UserApp() {
     }
   }, [userProfile, showOnboarding]);
 
-  // Auto-switch to Arc Testnet if wallet is on the wrong network
+  // Auto-switch to Arc Testnet if wallet is on the wrong network (unless bridging)
   useEffect(() => {
-    if (isConnected && connectedChainId && connectedChainId !== ARC_CHAIN_ID) {
+    if (view !== 'circle_wallet' && isConnected && connectedChainId && connectedChainId !== ARC_CHAIN_ID) {
       switchChain?.({ chainId: ARC_CHAIN_ID });
     }
-  }, [isConnected, connectedChainId, switchChain]);
+  }, [isConnected, connectedChainId, switchChain, view]);
 
   const [evmBalance, setEvmBalance] = useState("0");
   const [pendingStakes, setPendingStakes] = useState({}); // Tracking hash -> amount
@@ -2980,6 +2985,7 @@ export default function UserApp() {
           ) : view === "circle_wallet" ? (
             <CircleWalletPage
               address={address}
+              wagmiAddress={wagmiAddress}
               isLight={theme === 'light'}
               notify={notify}
               onBack={() => {
@@ -2992,7 +2998,10 @@ export default function UserApp() {
               sessionAddress={evmSessionWallet?.address}
               wallets={wallets || []}
               walletClient={walletClient}
+              switchChainAsync={switchChainAsync}
+              smartWalletAddress={smartWalletAddress}
               onWithdraw={handleWithdraw}
+              triggerGlobalRefresh={triggerGlobalRefresh}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">

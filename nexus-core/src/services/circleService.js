@@ -196,8 +196,32 @@ class CircleService {
                 amount: balanceVal
             }];
         }
-        const data = await this.request('GET', `/wallets/${walletId}/balances`);
-        return data.tokenBalances || [];
+        
+        try {
+            const data = await this.request('GET', `/wallets/${walletId}/balances`);
+            return data.tokenBalances || [];
+        } catch (err) {
+            console.warn(`[Circle] getBalance failed: ${err.message}. Falling back to session balance from Arc.`);
+            const address = walletId.includes('-') ? walletId.split('-')[1] : walletId;
+            let balanceVal = '0.00';
+            try {
+                const arcRpcUrl = (config.RPCS && config.RPCS[0]) || 'https://rpc.testnet.arc.network';
+                const provider = new ethers.JsonRpcProvider(arcRpcUrl);
+                const balWei = await provider.getBalance(address);
+                balanceVal = ethers.formatEther(balWei);
+            } catch (e) {}
+            return [{
+                token: {
+                    id: 'usdc-token-id',
+                    symbol: 'USDC',
+                    name: 'USD Coin',
+                    decimals: 6,
+                    blockchain: 'ARC-TESTNET-FALLBACK',
+                    tokenAddress: '0x0000000000000000000000000000000000000000'
+                },
+                amount: balanceVal
+            }];
+        }
     }
 
     /**
@@ -218,20 +242,25 @@ class CircleService {
         }
         console.log(`[Circle] Initiating transfer from ${walletId} to ${destinationAddress}`);
         
-        console.log(`[Circle-Debug] Generating valid RSA ciphertext for token transfer...`);
-        const ciphertext = await this.getCiphertext();
+        try {
+            console.log(`[Circle-Debug] Generating valid RSA ciphertext for token transfer...`);
+            const ciphertext = await this.getCiphertext();
 
-        const response = await this.request('POST', '/developer/transactions/transfer', {
-            idempotencyKey: crypto.randomUUID(),
-            entitySecretCiphertext: ciphertext,
-            walletId,
-            destinationAddress,
-            amounts: [String(amount)], // Must be array of strings
-            tokenId,
-            feeLevel: 'MEDIUM'
-        });
+            const response = await this.request('POST', '/developer/transactions/transfer', {
+                idempotencyKey: crypto.randomUUID(),
+                entitySecretCiphertext: ciphertext,
+                walletId,
+                destinationAddress,
+                amounts: [String(amount)], // Must be array of strings
+                tokenId,
+                feeLevel: 'MEDIUM'
+            });
 
-        return response;
+            return response;
+        } catch (err) {
+            console.error(`[Circle] transfer failed: ${err.message}`);
+            throw err;
+        }
     }
 
     /**
@@ -242,8 +271,13 @@ class CircleService {
         if (String(walletId).startsWith('mock-') || String(walletId).startsWith('session-')) {
             return [];
         }
-        const data = await this.request('GET', `/transactions?walletIds=${walletId}`);
-        return data.transactions || [];
+        try {
+            const data = await this.request('GET', `/transactions?walletIds=${walletId}`);
+            return data.transactions || [];
+        } catch (err) {
+            console.warn(`[Circle] getTransactions failed: ${err.message}`);
+            return [];
+        }
     }
 }
 

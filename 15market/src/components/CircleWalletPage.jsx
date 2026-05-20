@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Shield, Zap, Send, ArrowDownLeft, Copy, ExternalLink, RefreshCw, X, Check, ArrowLeft, History, Wallet, Globe, Info, ChevronDown, Download, Save, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { KEEPER_URL_ARC } from '../constants';
@@ -8,34 +8,54 @@ import { toPng } from 'html-to-image';
 import { UnifiedFundingModal } from './UnifiedFundingModal';
 import WalletConnectionLoading from './WalletConnectionLoading';
 import * as ethers from 'ethers';
+import { useWallets } from '@privy-io/react-auth';
+import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 
 const CHAIN_CONFIG = {
-    'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x534b2f3A21130d7a60830c2Df862319e593943A3' }, 
+    'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x534b2f3A21130d7a60830c2Df862319e593943A3', paymasterSupported: false },
     'avax': { rpc: 'https://api.avax-test.network/ext/bc/C/rpc', isEVM: true, usdc: '0x5425890298aed601595a70AB815c96711a31Bc65' },
     'eth': { rpc: 'https://ethereum-sepolia-rpc.publicnode.com', isEVM: true, usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
     'sol': { rpc: 'https://api.testnet.solana.com', isEVM: false, usdc: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' }
 };
 
 const ERC20_ABI = [
-    "function balanceOf(address owner) view returns (uint256)", 
+    "function balanceOf(address owner) view returns (uint256)",
     "function decimals() view returns (uint8)",
     "function approve(address spender, uint256 amount) external returns (bool)",
     "function allowance(address owner, address spender) view returns (uint256)"
 ];
 
+// CCTP V2 TokenMessenger — same address on all supported testnet chains
+const CCTP_V2_TOKEN_MESSENGER = '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA';
 const CCTP_TOKEN_MESSENGER = {
-    'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0', // Fuji
-    'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', // Sepolia
-    'mon': '0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d', // Monad Testnet canonical CCTP TokenMessengerV2
+    'mon':  CCTP_V2_TOKEN_MESSENGER, // Monad Testnet (domain 15)
+    'avax': CCTP_V2_TOKEN_MESSENGER, // Fuji (domain 1)
+    'eth':  CCTP_V2_TOKEN_MESSENGER, // Sepolia (domain 0)
+    'base': CCTP_V2_TOKEN_MESSENGER, // Base Sepolia (domain 6)
+    'op':   CCTP_V2_TOKEN_MESSENGER, // OP Sepolia (domain 2)
 };
 
+// CCTP V2 source domain IDs per chain token key
+const CCTP_SOURCE_DOMAIN = {
+    'mon':  15, // Monad Testnet
+    'eth':   0, // Ethereum Sepolia
+    'avax':  1, // Avalanche Fuji
+    'base':  6, // Base Sepolia
+    'op':    2, // OP Sepolia
+};
+
+// Arc Testnet CCTP V2 MessageTransmitter (destination for all bridges)
+const ARC_TESTNET_TRANSMITTER = '0xe737e5cebeeba77efe34d4aa090756590b1ce275';
+const ARC_TESTNET_CHAIN_ID    = 5042002;
+const IRIS_API_V2_BASE        = 'https://iris-api-sandbox.circle.com';
+
 const TOKEN_MESSENGER_ABI = [
-    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken) external returns (uint64 _nonce)",
+    "function depositForBurn(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 hookData, uint256 maxFee, uint32 finalityThreshold) external returns (uint64)",
     "function depositForBurnWithHook(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, uint256 maxFee, uint32 minFinalityThreshold, bytes calldata hookData) external returns (uint64 _nonce)"
 ];
 
 const GATEWAY_ADDRESSES = {
-    'mon': '0x094604E6bA1E98756b0de29a9E2285Ead0c443Fd', 
+    'mon': '0x094604E6bA1E98756b0de29a9E2285Ead0c443Fd',
     'avax': '0xeb08f243e5d3fcff26a9e38ae5520a669f4019d0',
     'eth': '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5'
 };
@@ -44,25 +64,36 @@ const GATEWAY_ABI = [
     "function fundWithNative(bytes32 tradingWallet, uint256 minUsdcOut) external payable"
 ];
 
-export function CircleWalletPage({ 
-    address, 
-    isLight, 
-    notify, 
-    onBack, 
-    initialMode, 
-    evmBalance = '0', 
+export function CircleWalletPage({
+    address,
+    wagmiAddress,
+    isLight,
+    notify,
+    onBack,
+    initialMode,
+    evmBalance = '0',
     sessionBalance = 0,
     sessionAddress = '',
     wallets = [],
     walletClient,
-    onWithdraw
+    smartWalletAddress, // ERC-4337 smart wallet — pays gas in USDC via Pimlico
+    switchChainAsync,
+    onWithdraw,
+    triggerGlobalRefresh
 }) {
+    // Authoritative Main Wallet (EVM external wallet if connected, otherwise Privy embedded wallet)
+    const mainWalletObj = wallets?.find(w => w.address && w.address.startsWith('0x') && w.walletClientType !== 'privy')
+        || wallets?.find(w => w.address && w.address.startsWith('0x'));
+    const mainWalletAddress = address;
+    const fundingSourceAddress = address || wagmiAddress || mainWalletObj?.address;
+
     const [walletInfo, setWalletInfo] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [multiChainBalances, setMultiChainBalances] = useState({});
     const [isFetchingBalances, setIsFetchingBalances] = useState(false);
-    
+    const [mainWalletArcBalance, setMainWalletArcBalance] = useState(0);
+
     // UI State
     const [activeWalletIdx, setActiveWalletIdx] = useState(0); // 0: Trading, 1: Main
     const [activeTokenIdx, setActiveTokenIdx] = useState(0); // For Main Wallet token funding
@@ -73,13 +104,21 @@ export function CircleWalletPage({
     const [fundingStep, setFundingStep] = useState('selection'); // selection, loading, input, confirming, success
     const [fundingAmount, setFundingAmount] = useState('');
     const [isFundingSuccess, setIsFundingSuccess] = useState(false);
-    
+
+    const { client: smartWalletClient } = useSmartWallets();
+
+    // ────────────────────────────────────────────────────────
+    // EFFECTS
+    // ────────────────────────────────────────────────────────
+    const [cctpStep, setCctpStep] = useState(0); // 0=idle 1=approving 2=burning 3=attesting 4=minting
+    const [cctpLogs, setCctpLogs] = useState([]);
+
     // Form State
     const [sendAmount, setSendAmount] = useState("");
     const [destAddress, setDestAddress] = useState("");
     const [isSending, setIsSending] = useState(false);
     const [qrCodeData, setQrCodeData] = useState("");
-    const [activeTab, setActiveTab] = useState('assets'); 
+    const [activeTab, setActiveTab] = useState('assets');
     const [isDownloading, setIsDownloading] = useState(false);
     const [copied, setCopied] = useState(false);
     const [showDesktopFunding, setShowDesktopFunding] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024);
@@ -92,18 +131,41 @@ export function CircleWalletPage({
         if (notify) notify("Address Copied!", "success");
     };
 
+    const fetchMainWalletArcBalance = async () => {
+        if (!mainWalletAddress) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/balance/${mainWalletAddress}`);
+            if (res.ok) {
+                const data = await res.json();
+                setMainWalletArcBalance(parseFloat(data.balance || 0));
+            } else {
+                const provider = new ethers.JsonRpcProvider('https://rpc.testnet.arc.network');
+                const bal = await provider.getBalance(mainWalletAddress).catch(() => 0n);
+                setMainWalletArcBalance(parseFloat(ethers.formatEther(bal)));
+            }
+        } catch (e) {
+            console.error("Failed to fetch main wallet Arc balance:", e);
+        }
+    };
+
+    useEffect(() => {
+        fetchMainWalletArcBalance();
+        const interval = setInterval(fetchMainWalletArcBalance, 10000);
+        return () => clearInterval(interval);
+    }, [mainWalletAddress]);
+
     const walletOptions = [
-        { 
-            key: 'trading', 
-            label: 'Trading Wallet', 
-            bal: parseFloat(sessionBalance || 0), 
-            address: sessionAddress || walletInfo?.wallet?.address 
+        {
+            key: 'trading',
+            label: 'Trading Wallet',
+            bal: parseFloat(sessionBalance || 0),
+            address: sessionAddress || walletInfo?.wallet?.address
         },
-        { 
-            key: 'main', 
-            label: 'Main Wallet', 
-            bal: parseFloat(evmBalance || 0), 
-            address: address 
+        {
+            key: 'main',
+            label: 'Main Wallet',
+            bal: mainWalletArcBalance,
+            address: mainWalletAddress
         }
     ];
 
@@ -133,71 +195,68 @@ export function CircleWalletPage({
         fetchWalletInfo();
     }, [address]);
 
-    useEffect(() => {
-        if (!address) return;
+    const fetchAllBalances = useCallback(async () => {
+        if (!fundingSourceAddress) return;
+        setIsFetchingBalances(true);
+        const newBalances = {};
 
-        let isMounted = true;
-        const fetchAllBalances = async () => {
-            setIsFetchingBalances(true);
-            const newBalances = { ...multiChainBalances };
-            
-            // Extract solana address if present in privy wallets
-            const solWallet = wallets?.find(w => w.address && !w.address.startsWith('0x'));
-            const solAddress = solWallet?.address || null;
+        // Extract solana address if present in privy wallets
+        const solWallet = wallets?.find(w => w.address && !w.address.startsWith('0x'));
+        const solAddress = solWallet?.address || null;
 
-            const promises = SUPPORTED_TOKENS.map(async (token) => {
-                const config = CHAIN_CONFIG[token.id];
-                if (!config) return;
-                
-                newBalances[token.id] = { native: 0, usdc: 0 };
+        const promises = SUPPORTED_TOKENS.map(async (token) => {
+            const config = CHAIN_CONFIG[token.id];
+            if (!config) return;
 
-                try {
-                    if (config.isEVM) {
-                        const provider = new ethers.JsonRpcProvider(config.rpc);
-                        
-                        // Native
-                        const nativeBal = await provider.getBalance(address).catch(() => 0n);
-                        newBalances[token.id].native = parseFloat(ethers.formatEther(nativeBal));
-                        
-                        // USDC
-                        if (config.usdc && config.usdc !== '0x0000000000000000000000000000000000000000') {
-                            const contract = new ethers.Contract(config.usdc, ERC20_ABI, provider);
-                            const usdcBal = await contract.balanceOf(address).catch(() => 0n);
-                            const decimals = await contract.decimals().catch(() => 6);
-                            newBalances[token.id].usdc = parseFloat(ethers.formatUnits(usdcBal, decimals));
-                        }
-                    } else if (token.id === 'sol' && solAddress) {
-                        // Solana Native
-                        const bodyNative = { jsonrpc: "2.0", id: 1, method: "getBalance", params: [solAddress] };
-                        const resNative = await fetch(config.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyNative) });
-                        const dataNative = await resNative.json();
-                        newBalances[token.id].native = (dataNative.result?.value || 0) / 1e9;
+            newBalances[token.id] = { native: 0, usdc: 0 };
 
-                        // Solana USDC
-                        const bodyUsdc = { jsonrpc: "2.0", id: 1, method: "getTokenAccountsByOwner", params: [solAddress, { mint: config.usdc }, { encoding: "jsonParsed" }] };
-                        const resUsdc = await fetch(config.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyUsdc) });
-                        const dataUsdc = await resUsdc.json();
-                        newBalances[token.id].usdc = dataUsdc.result?.value?.[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
+            try {
+                if (config.isEVM) {
+                    const provider = new ethers.JsonRpcProvider(config.rpc);
+
+                    // Native
+                    const nativeBal = await provider.getBalance(fundingSourceAddress).catch(() => 0n);
+                    newBalances[token.id].native = parseFloat(ethers.formatEther(nativeBal));
+
+                    // USDC
+                    if (config.usdc && config.usdc !== '0x0000000000000000000000000000000000000000') {
+                        const contract = new ethers.Contract(config.usdc, ERC20_ABI, provider);
+                        const usdcBal = await contract.balanceOf(fundingSourceAddress).catch(() => 0n);
+                        const decimals = await contract.decimals().catch(() => 6);
+                        newBalances[token.id].usdc = parseFloat(ethers.formatUnits(usdcBal, decimals));
                     }
-                } catch (e) {
-                    console.warn(`Failed to fetch balance for ${token.id}`, e);
+                } else if (token.id === 'sol' && solAddress) {
+                    // Solana Native
+                    const bodyNative = { jsonrpc: "2.0", id: 1, method: "getBalance", params: [solAddress] };
+                    const resNative = await fetch(config.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyNative) });
+                    const dataNative = await resNative.json();
+                    newBalances[token.id].native = (dataNative.result?.value || 0) / 1e9;
+
+                    // Solana USDC
+                    const bodyUsdc = { jsonrpc: "2.0", id: 1, method: "getTokenAccountsByOwner", params: [solAddress, { mint: config.usdc }, { encoding: "jsonParsed" }] };
+                    const resUsdc = await fetch(config.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyUsdc) });
+                    const dataUsdc = await resUsdc.json();
+                    newBalances[token.id].usdc = dataUsdc.result?.value?.[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
                 }
-            });
-
-            await Promise.allSettled(promises);
-            if (isMounted) {
-                setMultiChainBalances(newBalances);
-                setIsFetchingBalances(false);
+            } catch (e) {
+                console.warn(`Failed to fetch balance for ${token.id}`, e);
             }
-        };
+        });
 
-        fetchAllBalances();
-        return () => { isMounted = false; };
-    }, [address, wallets]);
+        await Promise.allSettled(promises);
+        setMultiChainBalances(newBalances);
+        setIsFetchingBalances(false);
+    }, [fundingSourceAddress, wallets]);
+
+    useEffect(() => {
+        if (fundingSourceAddress) {
+            fetchAllBalances();
+        }
+    }, [fundingSourceAddress, fetchAllBalances]);
 
     useEffect(() => {
         const receiveAddr = currentWallet.key === 'trading' && walletInfo?.wallet?.address ? walletInfo.wallet.address : address;
-        
+
         if (receiveAddr && showReceiveModal) {
             QRCode.toDataURL(receiveAddr, {
                 width: 400,
@@ -267,7 +326,7 @@ export function CircleWalletPage({
                 notify("Confirming transaction...", "pending");
                 const txHash = await activeWallet.sendTransaction({
                     to: destAddress,
-                    value: BigInt(Math.floor(amt * 1e18)).toString(), 
+                    value: BigInt(Math.floor(amt * 1e18)).toString(),
                 });
 
                 if (txHash) {
@@ -300,6 +359,13 @@ export function CircleWalletPage({
         }
     };
 
+    // Helper: add a timestamped entry to the CCTP live log
+    const addCctpLog = (msg) => {
+        const now = new Date();
+        const ts = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setCctpLogs(prev => [...prev, `[${ts}] ${msg}`]);
+    };
+
     const startFundingFlow = () => {
         setFundingStep('loading');
         setTimeout(() => {
@@ -309,84 +375,30 @@ export function CircleWalletPage({
 
     const handleConfirmFunding = async () => {
         if (!fundingAmount || parseFloat(fundingAmount) <= 0) return;
-        
-        const evmWallet = wallets?.find(w => w.address && w.address.startsWith('0x'));
-        if (!evmWallet && !walletClient && !window.ethereum) {
-            if (notify) notify("Please connect an EVM wallet", "error");
-            return;
-        }
 
         setFundingStep('confirming');
-        
+        setCctpStep(0);
+        setCctpLogs([]);
+
         try {
-            let signer;
-            let provider;
-            
-            if (evmWallet) {
-                const ethProvider = await evmWallet.getEthereumProvider();
-                provider = new ethers.BrowserProvider(ethProvider, 'any');
-                signer = await provider.getSigner();
-            } else if (walletClient) {
-                provider = new ethers.BrowserProvider(walletClient.transport, 'any');
-                signer = await provider.getSigner(walletClient.account.address);
-            } else {
-                provider = new ethers.BrowserProvider(window.ethereum, 'any');
-                signer = await provider.getSigner();
-            }
-            
-            const targetChainId = selectedToken.chainId || (selectedToken.id === 'mon' ? 10143 : selectedToken.id === 'eth' ? 111155111 : 43113);
-            const currentChain = await provider.getNetwork();
-            
-            if (currentChain.chainId !== BigInt(targetChainId)) {
-                if (notify) notify(`Switching to ${selectedToken.name}...`, "pending");
-                try {
-                    if (evmWallet && typeof evmWallet.switchChain === 'function') {
-                        await evmWallet.switchChain(targetChainId);
-                    } else if (window.ethereum) {
-                        await window.ethereum.request({
-                            method: 'wallet_switchEthereumChain',
-                            params: [{ chainId: "0x" + targetChainId.toString(16) }],
-                        });
-                    }
-                    
-                    // Wait for chain ID to actually reflect in the provider
-                    let attempts = 0;
-                    while (attempts < 5) {
-                        await new Promise(r => setTimeout(r, 1000));
-                        // Re-fetch ethProvider to check
-                        let testProvider;
-                        if (evmWallet) {
-                            const ethProvider = await evmWallet.getEthereumProvider();
-                            testProvider = new ethers.BrowserProvider(ethProvider, 'any');
-                        } else {
-                            testProvider = new ethers.BrowserProvider(window.ethereum || walletClient.transport, 'any');
-                        }
-                        const newNetwork = await testProvider.getNetwork();
-                        if (newNetwork.chainId === BigInt(targetChainId)) {
-                            break;
-                        }
-                        attempts++;
-                    }
-                    
-                    // Re-instantiate the provider and signer to clear the ethers v6 cache!
-                    if (evmWallet) {
-                        const ethProvider = await evmWallet.getEthereumProvider();
-                        provider = new ethers.BrowserProvider(ethProvider, 'any');
-                        signer = await provider.getSigner();
-                    } else if (walletClient) {
-                        provider = new ethers.BrowserProvider(walletClient.transport, 'any');
-                        signer = await provider.getSigner(walletClient.account.address);
-                    } else {
-                        provider = new ethers.BrowserProvider(window.ethereum, 'any');
-                        signer = await provider.getSigner();
-                    }
-                } catch (err) {
-                    throw new Error(`Please switch your wallet to ${selectedToken.name} to continue.`);
-                }
-            }
-            
             const amount = parseFloat(fundingAmount);
             let txHash = "";
+            let isCCTP = false;
+
+            // Source chain config
+            const targetChainId = selectedToken.chainId ||
+                (selectedToken.id === 'mon' ? 10143 :
+                    selectedToken.id === 'eth' ? 11155111 :
+                        selectedToken.id === 'base' ? 84532 :
+                            selectedToken.id === 'op' ? 11155420 : 43113);
+
+            // ── Read-only provider for balance/allowance/receipt checks ──────────
+            const readRpc = CHAIN_CONFIG[selectedToken.id]?.rpc || 'https://testnet-rpc.monad.xyz/';
+            const readProvider = new ethers.JsonRpcProvider(readRpc);
+
+            // ── Effective signing address: smart wallet > EOA ────────────────────
+            const signingAddress = fundingSourceAddress;
+            if (!signingAddress) throw new Error('No wallet connected. Please log in.');
 
             if (fundingType === 'usdc') {
                 const usdcAddr = CHAIN_CONFIG[selectedToken.id]?.usdc;
@@ -395,75 +407,326 @@ export function CircleWalletPage({
                     throw new Error(`USDC not configured for ${selectedToken.name}`);
                 }
 
-                // Get session wallet address - the recipient of the direct USDC transfer
-                // Arc testnet is NOT on Circle's CCTP network, so we do a direct ERC-20 transfer
-                // from user's external wallet to the platform's session wallet on the source chain.
-                // The backend then credits the user's trading balance instantly.
                 const recipientAddr = sessionAddress || address;
                 if (!recipientAddr) throw new Error('Session wallet address not available');
 
-                const readRpc = CHAIN_CONFIG[selectedToken.id]?.rpc || 'https://testnet-rpc.monad.xyz/';
-                const readProvider = new ethers.JsonRpcProvider(readRpc);
+                const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
                 const usdcReadContract = new ethers.Contract(usdcAddr, ERC20_ABI, readProvider);
-                
+
                 const decimals = await usdcReadContract.decimals().catch(() => 6);
-                const val = ethers.parseUnits(amount.toString(), decimals);
+                let val = ethers.parseUnits(amount.toString(), decimals);
+                let approveVal = val;
+                let burnVal = val;
 
-                const activeSignerAddress = await signer.getAddress().catch(() => address);
+                // Only use ERC-4337 smart wallet on chains with Pimlico paymaster configured on Privy dashboard.
+                // Monad Testnet has no paymaster — fall back to EOA signer path.
+                const chainPaymasterSupported = CHAIN_CONFIG[selectedToken.id]?.paymasterSupported !== false;
+                const isSmartWallet = signingAddress === smartWalletAddress && chainPaymasterSupported;
 
-                // Check user has enough balance
-                const userBal = await usdcReadContract.balanceOf(activeSignerAddress).catch(() => 0n);
-                if (userBal < val) {
-                    throw new Error(`Insufficient USDC balance. You have ${ethers.formatUnits(userBal, decimals)} ${selectedToken.symbol} USDC.`);
+                if (isSmartWallet) {
+                    addCctpLog("Estimating CCTP transaction gas fees in USDC...");
+
+                    const nativeSymbol = selectedToken.symbol || 'MON';
+
+                    // Helper to estimate gas fee in USDC
+                    const estimateStepGasUsdc = async (txData, toAddress) => {
+                        try {
+                            const gasEstimate = await readProvider.estimateGas({
+                                to: toAddress,
+                                data: txData,
+                                from: signingAddress
+                            }).catch(() => 150000n);
+
+                            const feeData = await readProvider.getFeeData();
+                            const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 25000000000n;
+                            const nativeFee = gasEstimate * gasPrice;
+                            const nativeFeeEth = parseFloat(ethers.formatEther(nativeFee));
+
+                            const prices = { 'ETH': 3500, 'AVAX': 35, 'MON': 2.5, 'SOL': 150 };
+                            const price = prices[nativeSymbol.toUpperCase()] || 1.0;
+                            return nativeFeeEth * price * 1.3; // 1.3x buffer for paymaster markups
+                        } catch (e) {
+                            return 0.1; // fallback
+                        }
+                    };
+
+                    // 1. Estimate Approve Gas
+                    const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
+                    const approveDataEst = new ethers.Interface([
+                        'function approve(address spender, uint256 amount) returns (bool)'
+                    ]).encodeFunctionData('approve', [tokenMessengerAddr, val]);
+                    const approveGasUsdc = await estimateStepGasUsdc(approveDataEst, usdcAddr);
+                    addCctpLog(`Approve gas estimated: ${approveGasUsdc.toFixed(4)} USDC`);
+
+                    // 2. Estimate Burn Gas
+                    const recipientBytes32 = ethers.zeroPadValue(recipientAddr, 32);
+                    const BYTES32_ZERO = "0x0000000000000000000000000000000000000000000000000000000000000000";
+                    const burnDataEst = new ethers.Interface(TOKEN_MESSENGER_ABI)
+                        .encodeFunctionData('depositForBurn', [
+                            val,
+                            26, // Arc Testnet destination domain
+                            recipientBytes32,
+                            usdcAddr,
+                            BYTES32_ZERO, // hookData
+                            0n, // maxFee
+                            2000 // standard finalityThreshold
+                        ]);
+                    const burnGasUsdc = await estimateStepGasUsdc(burnDataEst, tokenMessengerAddr);
+                    addCctpLog(`Burn gas estimated: ${burnGasUsdc.toFixed(4)} USDC`);
+
+                    // 3. Estimate Mint Gas on Arc Testnet
+                    const mintGasUsdc = await (async () => {
+                        try {
+                            const destReadProvider = new ethers.JsonRpcProvider('https://rpc.testnet.arc.network');
+                            const transmitterInterface = new ethers.Interface([
+                                'function receiveMessage(bytes calldata message, bytes calldata attestation) external returns (bool)'
+                            ]);
+                            const dummyData = transmitterInterface.encodeFunctionData('receiveMessage', [
+                                "0x" + "00".repeat(300),
+                                "0x" + "00".repeat(65)
+                            ]);
+                            const gasEstimate = await destReadProvider.estimateGas({
+                                to: ARC_TESTNET_TRANSMITTER,
+                                data: dummyData,
+                                from: signingAddress
+                            }).catch(() => 200000n);
+                            const feeData = await destReadProvider.getFeeData();
+                            const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 25000000000n;
+                            const feeWei = gasEstimate * gasPrice;
+                            return parseFloat(ethers.formatEther(feeWei)) * 1.3;
+                        } catch (e) {
+                            return 0.1;
+                        }
+                    })();
+                    addCctpLog(`Mint gas estimated: ${mintGasUsdc.toFixed(4)} USDC`);
+
+                    const totalGasUsdc = approveGasUsdc + burnGasUsdc + mintGasUsdc;
+                    addCctpLog(`Total estimated gas for all stages: ${totalGasUsdc.toFixed(4)} USDC`);
+
+                    if (amount <= totalGasUsdc) {
+                        throw new Error(`Transfer amount is too small to cover CCTP gas fees. Estimated gas required is ${totalGasUsdc.toFixed(4)} USDC.`);
+                    }
+
+                    // Calculate adjusted values to subtract gas fees from the amount being sent
+                    const burnAmountAdjusted = amount - approveGasUsdc - burnGasUsdc;
+                    burnVal = ethers.parseUnits(burnAmountAdjusted.toFixed(decimals), decimals);
+                    approveVal = burnVal;
+
+                    addCctpLog(`Adjusting transfer: sending ${amount} USDC, burning ${burnAmountAdjusted.toFixed(4)} USDC (${(approveGasUsdc + burnGasUsdc).toFixed(4)} USDC deducted for source-chain gas)`);
                 }
 
-                if (notify) notify('Sending USDC to Trading Wallet...', 'pending');
+                // Check smart wallet USDC balance on the source chain
+                const userBal = await usdcReadContract.balanceOf(signingAddress).catch(() => 0n);
+                if (userBal < val) {
+                    throw new Error(`Insufficient USDC balance. Wallet has ${ethers.formatUnits(userBal, decimals)} ${selectedToken.symbol} USDC on ${selectedToken.name}. Please fund address: ${signingAddress.slice(0,10)}...`);
+                }
 
-                // Simple, reliable ERC-20 transfer directly to the session wallet
-                const usdcContract = new ethers.Contract(usdcAddr, [
-                    ...ERC20_ABI,
-                    'function transfer(address to, uint256 amount) external returns (bool)'
-                ], signer);
+                // ── Transaction Sender Abstraction ──────────────────────────────────
+                let sendTx;
 
-                const tx = await usdcContract.transfer(recipientAddr, val);
-                txHash = tx.hash;
-                tx.wait().catch(() => {}); // Settle in background
+                if (isSmartWallet) {
+                    if (!smartWalletClient) throw new Error("Smart wallet client not initialized");
+                    if (smartWalletClient.switchChain) {
+                        await smartWalletClient.switchChain({ id: targetChainId });
+                    }
+                    sendTx = async (txParams, options) => {
+                        // Inject paymasterContext to pay gas with USDC via Pimlico
+                        const requestParams = {
+                            ...txParams,
+                            paymasterContext: { token: usdcAddr }
+                        };
+                        return await smartWalletClient.sendTransaction(requestParams, options);
+                    };
+                } else {
+                    // EOA path — Privy embedded wallet signs directly (no paymaster/ERC-4337).
+                    // For Monad (paymasterSupported:false), we must look up the Privy EOA wallet
+                    // by walletClientType, NOT by address (signingAddress may be smart wallet addr).
+                    const eoaWallet = wallets?.find(w => w.walletClientType === 'privy')
+                        || wallets?.find(w => w.address?.toLowerCase() === signingAddress?.toLowerCase());
+                    if (!eoaWallet) throw new Error('Wallet not found. Please reconnect.');
+
+                    sendTx = async (txParams) => {
+                        await eoaWallet.switchChain(targetChainId);
+                        const ethProvider = await eoaWallet.getEthereumProvider();
+                        const provider = new ethers.BrowserProvider(ethProvider, 'any');
+                        const signer = await provider.getSigner();
+                        const tx = await signer.sendTransaction({
+                            to: txParams.to,
+                            data: txParams.data,
+                            value: txParams.value !== undefined ? txParams.value : 0n
+                        });
+                        return tx.hash;
+                    };
+                }
+
+                if (tokenMessengerAddr) {
+                    isCCTP = true;
+
+                    const cctpCfg = {
+                        id: selectedToken.id,
+                        name: selectedToken.name,
+                        chainId: targetChainId,
+                        usdc: usdcAddr
+                    };
+
+                    const eoaWallet = wallets?.find(w => w.walletClientType === 'privy')
+                        || wallets?.find(w => w.address?.toLowerCase() === address?.toLowerCase());
+                    if (!eoaWallet) throw new Error('No EOA wallet found. Please reconnect.');
+
+                    addCctpLog(`Switching wallet to ${cctpCfg.name}...`);
+                    await eoaWallet.switchChain(cctpCfg.chainId);
+
+                    const ethProvider = await eoaWallet.getEthereumProvider();
+                    const provider = new ethers.BrowserProvider(ethProvider, 'any');
+                    const signer = await provider.getSigner();
+                    const signingAddress = await signer.getAddress();
+
+                    addCctpLog(`Fetching Gas Tank permit quote...`);
+                    const quoteRes = await fetch(`${KEEPER_URL_ARC}/fund/bridge-quote?sourceChain=${cctpCfg.id}&amount=${amount}`);
+                    const quoteData = await quoteRes.json();
+                    if (!quoteData.success) {
+                        throw new Error(quoteData.error || "Failed to fetch permit quote");
+                    }
+
+                    const usdcReadContract = new ethers.Contract(cctpCfg.usdc, [
+                        'function nonces(address owner) view returns (uint256)',
+                        'function decimals() view returns (uint8)',
+                        'function balanceOf(address owner) view returns (uint256)'
+                    ], readProvider);
+
+                    const decimals = await usdcReadContract.decimals().catch(() => 6);
+                    const val = ethers.parseUnits(amount.toString(), decimals);
+                    const userBal = await usdcReadContract.balanceOf(signingAddress).catch(() => 0n);
+                    if (userBal < val) {
+                        throw new Error(`Insufficient USDC balance. You have ${ethers.formatUnits(userBal, decimals)} USDC on ${cctpCfg.name}.`);
+                    }
+
+                    const nonce = await usdcReadContract.nonces(signingAddress);
+
+                    addCctpLog(`Please sign the Gasless deposit permit in your wallet...`);
+                    const domain = {
+                        name: 'USDC',
+                        version: '2',
+                        chainId: cctpCfg.chainId,
+                        verifyingContract: cctpCfg.usdc
+                    };
+
+                    const types = {
+                        Permit: [
+                            { name: 'owner', type: 'address' },
+                            { name: 'spender', type: 'address' },
+                            { name: 'value', type: 'uint256' },
+                            { name: 'nonce', type: 'uint256' },
+                            { name: 'deadline', type: 'uint256' }
+                        ]
+                    };
+
+                    const spender = quoteData.relayerAddress;
+                    const deadline = quoteData.deadline;
+
+                    const value = {
+                        owner: signingAddress,
+                        spender: spender,
+                        value: val,
+                        nonce: nonce,
+                        deadline: deadline
+                    };
+
+                    const signature = await signer.signTypedData(domain, types, value);
+                    const sig = ethers.Signature.from(signature);
+
+                    addCctpLog(`Submitting deposit to Gas Tank...`);
+                    const body = {
+                        address: address, // user identity
+                        sourceChain: cctpCfg.id,
+                        amount: amount,
+                        userAddress: signingAddress,
+                        permit: {
+                            v: sig.v,
+                            r: sig.r,
+                            s: sig.s,
+                            deadline: deadline,
+                            nonce: Number(nonce)
+                        },
+                        destMintRecipient: recipientAddr
+                    };
+
+                    const res = await fetch(`${KEEPER_URL_ARC}/fund/permit-bridge`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const resData = await res.json();
+                    if (!resData.success) {
+                        throw new Error(resData.error || 'Gas Tank submission failed');
+                    }
+
+                    addCctpLog(`✅ Gasless deposit registered!`);
+                    addCctpLog(`Gas Fees: ${quoteData.gasFeesUsdc} USDC deducted`);
+                    addCctpLog(`Net Amount Bridged: ${resData.netAmount} USDC`);
+                    addCctpLog(`USDC will arrive in ~2 mins.`);
+                    isCCTP = true;
+                } else {
+                    // --- Fallback: Direct ERC-20 transfer ---
+                    if (notify) notify('Sending USDC to Trading Wallet...', 'pending');
+
+                    const transferData = new ethers.Interface([
+                        'function transfer(address to, uint256 amount) returns (bool)'
+                    ]).encodeFunctionData('transfer', [recipientAddr, val]);
+
+                    const transferHash = await sendTx({
+                        to: usdcAddr,
+                        data: transferData,
+                        value: 0n,
+                        chainId: targetChainId
+                    }, {
+                        uiOptions: { description: `Transfer USDC` }
+                    });
+                    txHash = transferHash;
+                    await readProvider.waitForTransaction(transferHash, 1, 60000);
+                }
 
             } else {
-                // Native token flow: send ETH/AVAX/MON directly to the session wallet
-                const recipientAddr = sessionAddress || address;
-                if (!recipientAddr) throw new Error('Session wallet address not available');
-
-                const val = ethers.parseEther(amount.toString());
-                if (notify) notify('Sending funds to Trading Wallet...', 'pending');
-
-                const tx = await signer.sendTransaction({ to: recipientAddr, value: val });
-                txHash = tx.hash;
-                tx.wait().catch(() => {});
+                // Native token path: not supported via smart wallet on source chains
+                // Smart wallet users should always bridge via USDC (the gasless path)
+                throw new Error('Native token transfers are not supported. Please use USDC bridging.');
             }
 
-            if (notify) notify('Transaction sent! Crediting your balance...', 'pending');
+            if (!isCCTP) {
+                if (notify) notify('Transaction sent! Crediting your balance...', 'pending');
 
-            // Call /fund/confirm to instantly credit the trading wallet balance in backend cache
-            const confirmRes = await fetch(`${KEEPER_URL_ARC}/fund/confirm`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    address,
-                    txHash,
-                    amount: amount.toString(),
-                    fromToken: fundingType === 'usdc' ? 'USDC' : selectedToken.symbol
-                })
-            });
+                // Call /fund/confirm to instantly credit the trading wallet balance in backend cache
+                const confirmRes = await fetch(`${KEEPER_URL_ARC}/fund/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address,
+                        txHash,
+                        amount: amount.toString(),
+                        fromToken: fundingType === 'usdc' ? 'USDC' : selectedToken.symbol
+                    })
+                });
 
-            if (!confirmRes.ok) {
-                const errData = await confirmRes.json().catch(() => ({}));
-                console.error('[Fund] Confirm failed:', errData);
-                // Still show success on frontend - backend will reconcile
+                if (!confirmRes.ok) {
+                    const errData = await confirmRes.json().catch(() => ({}));
+                    console.error('[Fund] Confirm failed:', errData);
+                }
             }
 
-            if (notify) notify('Funding Successful! Balance updated.', 'success');
+            // Only show success toast for non-CCTP paths; CCTP uses the in-panel log
+            if (isCCTP) {
+                addCctpLog('✅ Deposit complete! Balance updated.');
+            } else {
+                if (notify) notify('Funding Successful! Balance updated.', 'success');
+            }
+            // Trigger local multichain balance fetch and parent global refresh immediately on success
+            fetchAllBalances();
+            if (triggerGlobalRefresh) {
+                triggerGlobalRefresh(true);
+            }
+
             setFundingStep('success');
+
             setIsFundingSuccess(true);
             setTimeout(() => {
                 setFundingStep('selection');
@@ -471,20 +734,25 @@ export function CircleWalletPage({
                 setFundingAmount('');
                 setIsFundingSuccess(false);
                 fetchWalletInfo(true);
+                fetchAllBalances();
+                if (triggerGlobalRefresh) {
+                    triggerGlobalRefresh(true);
+                }
             }, 4000);
-            
+
         } catch (err) {
             console.error('[Fund Error]', err);
             if (notify) notify(err.message || 'Funding failed. Please try again.', 'error');
             setFundingStep('input');
+        }
     };
 
     const LocalLoading = () => (
         <div className="flex flex-col items-center justify-center gap-6 h-full py-12">
-            <img 
-                src={isLight ? "/goblogo.png" : "/gowlogo.png"} 
-                className="h-16 w-auto animate-pulse" 
-                alt="Logo" 
+            <img
+                src={isLight ? "/goblogo.png" : "/gowlogo.png"}
+                className="h-16 w-auto animate-pulse"
+                alt="Logo"
             />
             <div className="flex flex-col gap-3 w-32">
                 <div className={`h-[1px] w-full ${isLight ? 'bg-black/10' : 'bg-[#3CB371]/30'}`} />
@@ -496,265 +764,271 @@ export function CircleWalletPage({
 
     return (
         <>
-        <AnimatePresence>
-            {isLoading && (
-                <WalletConnectionLoading 
-                    theme={isLight ? 'light' : 'dark'} 
-                    onFinish={() => setIsLoading(false)} 
-                />
-            )}
-        </AnimatePresence>
+            <AnimatePresence>
+                {isLoading && (
+                    <WalletConnectionLoading
+                        theme={isLight ? 'light' : 'dark'}
+                        onFinish={() => setIsLoading(false)}
+                    />
+                )}
+            </AnimatePresence>
 
-        <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className={`absolute inset-0 z-[100] ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
-            style={{ fontFamily: '"Comfortaa", cursive' }}
-        >
-            {/* Full-page Standard Carbon-Fibre Texture */}
-            <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.05] mix-blend-screen'}`} />
-            
-            {/* Immersive Ambiance (Global Glows) */}
-            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-                <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
-                <div className={`absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
-            </div>
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className={`absolute inset-0 z-[100] ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
+                style={{ fontFamily: '"Comfortaa", cursive' }}
+            >
+                {/* Full-page Standard Carbon-Fibre Texture */}
+                <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.05] mix-blend-screen'}`} />
 
-            {/* Sticky Header - Full Width */}
-            <div className="w-full shrink-0 relative z-50 safe-top">
-                <div className="w-full px-4 md:px-12 h-16 md:h-24 md:pt-8 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <button 
-                            onClick={() => fundingType ? setFundingType(null) : onBack()} 
-                            className={`p-3 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/80' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all hover:scale-110 active:scale-95`}
-                        >
-                            <ArrowLeft size={20} />
-                        </button>
-                        <div>
-                            <h2 className={`text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black/80' : 'text-white'} leading-none`}>
-                                {fundingType ? 'Select Source' : 'Transfer Hub'}
-                            </h2>
-                            <p className={`text-[9px] font-bold uppercase tracking-[0.3em] text-[#3CB371] mt-1`}>
-                                {fundingType ? 'Choose how to add funds' : 'Swipe to Switch Wallets'}
-                            </p>
-                        </div>
-                    </div>
-                    <button onClick={() => fetchWalletInfo(true)} className={`p-3 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/80' : 'bg-white/5 hover:bg-white/10 text-white'} ${isRefreshing ? 'animate-spin' : ''}`}>
-                        <RefreshCw size={20} />
-                    </button>
+                {/* Immersive Ambiance (Global Glows) */}
+                <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                    <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
+                    <div className={`absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
                 </div>
-            </div>
 
-            {/* Main Content - Full Width */}
-            <div className="flex-1 w-full px-4 md:px-12 py-4 md:py-8 flex flex-col lg:flex-row gap-16 overflow-y-auto no-scrollbar items-start justify-start relative z-10">
-                
-                {/* LEFT SIDE: WALLETS & PRIMARY ACTIONS */}
-                <div className={`flex flex-col gap-4 md:gap-8 w-full lg:max-w-md shrink-0 transition-all duration-500 mt-2 md:mt-0`}>
-                    {/* Swipeable Wallet Card */}
-                    <div className="relative h-[220px] md:h-[260px] w-full mt-4 md:mt-0 group">
-                        {/* Static Navigation Buttons (Shifted Outside) - Hidden on Mobile */}
-                        <button 
-                            onClick={() => handleSwipeWallet('right')}
-                            className="hidden md:block absolute left-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
-                        >
-                            <ChevronLeft size={32} strokeWidth={2.5} />
-                        </button>
-                        <button 
-                            onClick={() => handleSwipeWallet('left')}
-                            className="hidden md:block absolute right-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
-                        >
-                            <ChevronRight size={32} strokeWidth={2.5} />
-                        </button>
-
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={activeWalletIdx}
-                                drag="x"
-                                dragConstraints={{ left: 0, right: 0 }}
-                                onDragEnd={(e, info) => {
-                                    if (info.offset.x < -100) handleSwipeWallet('left');
-                                    else if (info.offset.x > 100) handleSwipeWallet('right');
-                                }}
-                                initial={{ opacity: 0, scale: 0.9, x: 100 }}
-                                animate={{ opacity: 1, scale: 1, x: 0 }}
-                                exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                                className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#3CB371] ${isLight ? 'shadow-[0_60px_120px_rgba(0,0,0,0.5)]' : 'shadow-[0_40px_100px_rgba(60,179,113,0.35)]'} border border-white/20`}
+                {/* Sticky Header - Full Width */}
+                <div className="w-full shrink-0 relative z-50 safe-top">
+                    <div className="w-full px-4 md:px-12 h-16 md:h-24 md:pt-8 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => fundingType ? setFundingType(null) : onBack()}
+                                className={`p-3 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/80' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all hover:scale-110 active:scale-95`}
                             >
-                                {/* Immersive Nature-Series Layer (Behind Texture) */}
-                                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                                    {/* Complex Topographic Texture */}
-                                    <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                        <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.15" />
-                                        <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.15" />
-                                        <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.15" />
-                                        <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.15" />
-                                    </svg>
+                                <ArrowLeft size={20} />
+                            </button>
+                            <div>
+                                <h2 className={`text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black/80' : 'text-white'} leading-none`}>
+                                    {fundingType ? 'Select Source' : 'Transfer Hub'}
+                                </h2>
+                                <p className={`text-[9px] font-bold uppercase tracking-[0.3em] text-[#3CB371] mt-1`}>
+                                    {fundingType ? 'Choose how to add funds' : 'Swipe to Switch Wallets'}
+                                </p>
+                            </div>
+                        </div>
+                        <button onClick={() => {
+                            fetchWalletInfo(true);
+                            fetchAllBalances();
+                            if (triggerGlobalRefresh) {
+                                triggerGlobalRefresh(true);
+                            }
+                        }} className={`p-3 rounded-full ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/80' : 'bg-white/5 hover:bg-white/10 text-white'} ${isRefreshing ? 'animate-spin' : ''}`}>
+                            <RefreshCw size={20} />
+                        </button>
+                    </div>
+                </div>
 
-                                    {/* Winding Road Path */}
-                                    <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-40" viewBox="0 0 200 100" preserveAspectRatio="none">
-                                        <path 
-                                            d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
-                                            fill="none" 
-                                            stroke="white" 
-                                            strokeWidth="10" 
-                                            className="opacity-10"
-                                        />
-                                        <path 
-                                            d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" 
-                                            fill="none" 
-                                            stroke="white" 
-                                            strokeWidth="0.6" 
-                                            strokeDasharray="4 6" 
-                                            className="opacity-30"
-                                        />
-                                    </svg>
-                                    
-                                    {/* Pine Tree Silhouettes */}
-                                    <div className="absolute bottom-[15%] right-[12%] flex items-end gap-1 opacity-30">
-                                        <svg width="20" height="28" viewBox="0 0 24 32" fill="white">
-                                            <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
-                                        </svg>
-                                        <svg width="14" height="20" viewBox="0 0 24 32" fill="white" className="opacity-60">
-                                            <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
-                                        </svg>
-                                    </div>
+                {/* Main Content - Full Width */}
+                <div className="flex-1 w-full px-4 md:px-12 py-4 md:py-8 flex flex-col lg:flex-row gap-16 overflow-y-auto no-scrollbar items-start justify-start relative z-10">
 
-                                    {/* Geometric Icons (Plus/Cross) */}
-                                    <div className="absolute top-[20%] left-[45%] opacity-20">
-                                        <div className="relative w-3 h-3">
-                                            <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white" />
-                                            <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white" />
-                                        </div>
-                                    </div>
-                                    <div className="absolute bottom-[30%] left-[20%] opacity-10 grid grid-cols-2 gap-2">
-                                        <div className="w-1 h-1 rounded-full bg-white" />
-                                        <div className="w-1 h-1 rounded-full bg-white" />
-                                    </div>
-                                </div>
+                    {/* LEFT SIDE: WALLETS & PRIMARY ACTIONS */}
+                    <div className={`flex flex-col gap-4 md:gap-8 w-full lg:max-w-md shrink-0 transition-all duration-500 mt-2 md:mt-0`}>
+                        {/* Swipeable Wallet Card */}
+                        <div className="relative h-[220px] md:h-[260px] w-full mt-4 md:mt-0 group">
+                            {/* Static Navigation Buttons (Shifted Outside) - Hidden on Mobile */}
+                            <button
+                                onClick={() => handleSwipeWallet('right')}
+                                className="hidden md:block absolute left-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
+                            >
+                                <ChevronLeft size={32} strokeWidth={2.5} />
+                            </button>
+                            <button
+                                onClick={() => handleSwipeWallet('left')}
+                                className="hidden md:block absolute right-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
+                            >
+                                <ChevronRight size={32} strokeWidth={2.5} />
+                            </button>
 
-                                {/* Platform Standard Texture Layer (On Top) */}
-                                <div className="absolute inset-0 z-0">
-                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#2E8B57_0%,transparent_60%)] opacity-60" />
-                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,#1E5D3B_0%,transparent_60%)] opacity-40" />
-                                    <div 
-                                        className="absolute inset-0 opacity-[0.07] mix-blend-overlay"
-                                        style={{ 
-                                            backgroundImage: `url('https://www.transparenttextures.com/patterns/carbon-fibre.png')`
-                                        }} 
-                                    />
-                                    {/* Subtle Glass Ripple */}
-                                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent opacity-30" />
-                                </div>
-
-                                {/* Credit Card Chip (Metallic Gold) - Moved to Right */}
-                                <div className="absolute top-1/2 right-10 -translate-y-1/2 w-14 h-11 rounded-xl bg-gradient-to-br from-[#E6BE8A] via-[#C5A059] to-[#8B7355] shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-black/20 z-10">
-                                    <div className="absolute inset-0 grid grid-cols-2 grid-rows-3 gap-[1.5px] p-2.5 opacity-30">
-                                        {[...Array(6)].map((_, i) => (
-                                            <div key={i} className="border border-black/40 rounded-[3px]" />
-                                        ))}
-                                    </div>
-                                    <div className="absolute top-1/2 left-0 w-full h-[1px] bg-black/20" />
-                                </div>
-
-                                <motion.div className="flex-1 flex flex-col justify-between relative z-20"
-                                    animate={{ y: '-15%' }}
-                                    transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={activeWalletIdx}
+                                    drag="x"
+                                    dragConstraints={{ left: 0, right: 0 }}
+                                    onDragEnd={(e, info) => {
+                                        if (info.offset.x < -100) handleSwipeWallet('left');
+                                        else if (info.offset.x > 100) handleSwipeWallet('right');
+                                    }}
+                                    initial={{ opacity: 0, scale: 0.9, x: 100 }}
+                                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, x: -100 }}
+                                    className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#3CB371] ${isLight ? 'shadow-[0_60px_120px_rgba(0,0,0,0.5)]' : 'shadow-[0_40px_100px_rgba(60,179,113,0.35)]'} border border-white/20`}
                                 >
-                                    <div className="flex items-center justify-between">
-                                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black' : 'text-white'}`}>{currentWallet.label}</p>
-                                        <img 
-                                            src="/boblogo.png" 
-                                            alt="Logo" 
-                                            className="h-16 md:h-20 object-contain brightness-0 invert mix-blend-overlay opacity-80" 
-                                        />
-                                    </div>
+                                    {/* Immersive Nature-Series Layer (Behind Texture) */}
+                                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                                        {/* Complex Topographic Texture */}
+                                        <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                            <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.15" />
+                                            <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.15" />
+                                            <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.15" />
+                                            <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.15" />
+                                        </svg>
 
-                                    {/* Card Number (Wallet Address) */}
-                                    <div className="py-2">
-                                        <div className="flex items-center gap-3 group/copy cursor-pointer" onClick={(e) => { e.stopPropagation(); handleCopy(currentWallet.address); }}>
-                                            <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
-                                                {currentWallet.address 
-                                                    ? `${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)}`.toUpperCase()
-                                                    : "xxxx...xxxx"}
-                                            </p>
-                                            <div className="p-1.5 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
-                                                {copied ? <Check size={14} className="text-[#3CB371]" /> : <Copy size={14} className="text-white/40" />}
+                                        {/* Winding Road Path */}
+                                        <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-40" viewBox="0 0 200 100" preserveAspectRatio="none">
+                                            <path
+                                                d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80"
+                                                fill="none"
+                                                stroke="white"
+                                                strokeWidth="10"
+                                                className="opacity-10"
+                                            />
+                                            <path
+                                                d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80"
+                                                fill="none"
+                                                stroke="white"
+                                                strokeWidth="0.6"
+                                                strokeDasharray="4 6"
+                                                className="opacity-30"
+                                            />
+                                        </svg>
+
+                                        {/* Pine Tree Silhouettes */}
+                                        <div className="absolute bottom-[15%] right-[12%] flex items-end gap-1 opacity-30">
+                                            <svg width="20" height="28" viewBox="0 0 24 32" fill="white">
+                                                <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                            </svg>
+                                            <svg width="14" height="20" viewBox="0 0 24 32" fill="white" className="opacity-60">
+                                                <path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" />
+                                            </svg>
+                                        </div>
+
+                                        {/* Geometric Icons (Plus/Cross) */}
+                                        <div className="absolute top-[20%] left-[45%] opacity-20">
+                                            <div className="relative w-3 h-3">
+                                                <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white" />
+                                                <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white" />
                                             </div>
                                         </div>
-                                        <div className="flex gap-1.5 mt-4">
-                                            {walletOptions.map((_, i) => (
-                                                <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeWalletIdx === i ? 'w-4 bg-white' : 'bg-white/10'}`} />
+                                        <div className="absolute bottom-[30%] left-[20%] opacity-10 grid grid-cols-2 gap-2">
+                                            <div className="w-1 h-1 rounded-full bg-white" />
+                                            <div className="w-1 h-1 rounded-full bg-white" />
+                                        </div>
+                                    </div>
+
+                                    {/* Platform Standard Texture Layer (On Top) */}
+                                    <div className="absolute inset-0 z-0">
+                                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#2E8B57_0%,transparent_60%)] opacity-60" />
+                                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,#1E5D3B_0%,transparent_60%)] opacity-40" />
+                                        <div
+                                            className="absolute inset-0 opacity-[0.07] mix-blend-overlay"
+                                            style={{
+                                                backgroundImage: `url('https://www.transparenttextures.com/patterns/carbon-fibre.png')`
+                                            }}
+                                        />
+                                        {/* Subtle Glass Ripple */}
+                                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent opacity-30" />
+                                    </div>
+
+                                    {/* Credit Card Chip (Metallic Gold) - Moved to Right */}
+                                    <div className="absolute top-1/2 right-10 -translate-y-1/2 w-14 h-11 rounded-xl bg-gradient-to-br from-[#E6BE8A] via-[#C5A059] to-[#8B7355] shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-black/20 z-10">
+                                        <div className="absolute inset-0 grid grid-cols-2 grid-rows-3 gap-[1.5px] p-2.5 opacity-30">
+                                            {[...Array(6)].map((_, i) => (
+                                                <div key={i} className="border border-black/40 rounded-[3px]" />
                                             ))}
                                         </div>
+                                        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-black/20" />
                                     </div>
 
-                                    <div className="flex items-end justify-between relative">
-                                        <div>
-                                            <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-white`}>Available Balance</p>
-                                            <h1 className={`text-4xl md:text-5xl font-black tracking-tighter text-white flex items-baseline gap-2`}>
-                                                {currentWallet.bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                <span className="text-xl text-white/60">USDC</span>
-                                            </h1>
+                                    <motion.div className="flex-1 flex flex-col justify-between relative z-20"
+                                        animate={{ y: '-15%' }}
+                                        transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black' : 'text-white'}`}>{currentWallet.label}</p>
+                                            <img
+                                                src="/boblogo.png"
+                                                alt="Logo"
+                                                className="h-16 md:h-20 object-contain brightness-0 invert mix-blend-overlay opacity-80"
+                                            />
                                         </div>
 
-                                    </div>
+                                        {/* Card Number (Wallet Address) */}
+                                        <div className="py-2">
+                                            <div className="flex items-center gap-3 group/copy cursor-pointer" onClick={(e) => { e.stopPropagation(); handleCopy(currentWallet.address); }}>
+                                                <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
+                                                    {currentWallet.address
+                                                        ? `${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)}`.toUpperCase()
+                                                        : "xxxx...xxxx"}
+                                                </p>
+                                                <div className="p-1.5 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
+                                                    {copied ? <Check size={14} className="text-[#3CB371]" /> : <Copy size={14} className="text-white/40" />}
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-1.5 mt-4">
+                                                {walletOptions.map((_, i) => (
+                                                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeWalletIdx === i ? 'w-4 bg-white' : 'bg-white/10'}`} />
+                                                ))}
+                                            </div>
+                                        </div>
 
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <Shield size={10} className="text-white opacity-40" />
-                                        <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>
-                                            Secured
-                                        </p>
-                                    </div>
+                                        <div className="flex items-end justify-between relative">
+                                            <div>
+                                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-white`}>Available Balance</p>
+                                                <h1 className={`text-4xl md:text-5xl font-black tracking-tighter text-white flex items-baseline gap-2`}>
+                                                    {currentWallet.bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                    <span className="text-xl text-white/60">USDC</span>
+                                                </h1>
+                                            </div>
+
+                                        </div>
+
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <Shield size={10} className="text-white opacity-40" />
+                                            <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>
+                                                Secured
+                                            </p>
+                                        </div>
+                                    </motion.div>
                                 </motion.div>
-                            </motion.div>
-                        </AnimatePresence>
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Primary Actions */}
+                        <div className="grid grid-cols-2 gap-3 md:gap-4 shrink-0 relative z-20">
+                            <button
+                                onClick={() => setShowSendModal(true)}
+                                className="flex items-center justify-center gap-2 md:gap-3 bg-[#3CB371] text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
+                            >
+                                <Send size={16} /> Send
+                            </button>
+                            <button
+                                onClick={() => setShowReceiveModal(true)}
+                                className={`flex items-center justify-center gap-2 md:gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-[#3CB371] font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
+                            >
+                                <ArrowDownLeft size={16} className="text-[#3CB371]" /> Receive
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Primary Actions */}
-                    <div className="grid grid-cols-2 gap-3 md:gap-4 shrink-0 relative z-20">
-                        <button 
-                            onClick={() => setShowSendModal(true)}
-                            className="flex items-center justify-center gap-2 md:gap-3 bg-[#3CB371] text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
-                        >
-                            <Send size={16} /> Send
-                        </button>
-                        <button 
-                            onClick={() => setShowReceiveModal(true)}
-                            className={`flex items-center justify-center gap-2 md:gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-[#3CB371] font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
-                        >
-                            <ArrowDownLeft size={16} className="text-[#3CB371]" /> Receive
-                        </button>
-                    </div>
-                </div>
+                    {/* VERTICAL DIVIDER (Desktop Only) */}
+                    <motion.div
+                        initial={{ opacity: 0, scaleY: 0 }}
+                        animate={{ opacity: 1, scaleY: 1 }}
+                        className={`hidden lg:block w-[2px] rounded-full self-stretch my-4 bg-[#3CB371]/40`}
+                    />
 
-                {/* VERTICAL DIVIDER (Desktop Only) */}
-                <motion.div 
-                    initial={{ opacity: 0, scaleY: 0 }}
-                    animate={{ opacity: 1, scaleY: 1 }}
-                    className={`hidden lg:block w-[2px] rounded-full self-stretch my-4 bg-[#3CB371]/40`}
-                />
+                    {/* RIGHT SIDE: ASSETS & FUNDING (Visible on Mobile & Desktop) */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-visible md:overflow-hidden -mt-12 md:mt-0"
+                    >
+                        <div className="flex items-center gap-8 mb-6 border-b border-white/5 shrink-0">
+                            <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/20' : 'text-white/20')}`}>
+                                Assets & Funding
+                                {activeTab === 'assets' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
+                            </button>
+                            <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/20' : 'text-white/20')}`}>
+                                Activity
+                                {activeTab === 'history' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
+                            </button>
+                        </div>
 
-                {/* RIGHT SIDE: ASSETS & FUNDING (Visible on Mobile & Desktop) */}
-                <motion.div 
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="flex-1 flex flex-col min-h-0 h-full w-full max-w-2xl overflow-visible md:overflow-hidden -mt-12 md:mt-0"
-                >
-                    <div className="flex items-center gap-8 mb-6 border-b border-white/5 shrink-0">
-                        <button onClick={() => setActiveTab('assets')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'assets' ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/20' : 'text-white/20')}`}>
-                            Assets & Funding
-                            {activeTab === 'assets' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
-                        </button>
-                        <button onClick={() => setActiveTab('history')} className={`pb-4 text-xs font-black uppercase tracking-[0.2em] transition-all relative ${activeTab === 'history' ? (isLight ? 'text-black' : 'text-white') : (isLight ? 'text-black/20' : 'text-white/20')}`}>
-                            Activity
-                            {activeTab === 'history' && <motion.div layoutId="tab-underline" className={`absolute bottom-0 left-0 right-0 h-[2.5px] ${isLight ? 'bg-black' : 'bg-white'}`} />}
-                        </button>
-                    </div>
-
-                    <div className={`flex-1 overflow-visible md:overflow-hidden custom-scrollbar pr-2 pb-20`}>
-                        {activeTab === 'assets' ? (
-                            <div className="flex flex-col gap-6">
+                        <div className={`flex-1 overflow-visible md:overflow-hidden custom-scrollbar pr-2 pb-20`}>
+                            {activeTab === 'assets' ? (
+                                <div className="flex flex-col gap-6">
                                     <div className="flex flex-col gap-4 h-full min-h-[400px]">
                                         {currentWallet.key === 'main' ? (
                                             <div className="flex flex-col items-center justify-center flex-1 pt-6 pb-16 md:py-10 gap-6 relative z-10 w-full h-full md:min-h-[300px] md:pb-0">
@@ -769,7 +1043,7 @@ export function CircleWalletPage({
                                                         USDC Deposits & Withdrawals via Stripe
                                                     </p>
                                                 </div>
-                                                
+
                                                 <div className="flex items-center gap-3 md:gap-4 mt-6 w-full max-w-[280px]">
                                                     <button className="flex-1 py-4 md:py-5 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-[0.2em] shadow-xl shadow-[#3CB371]/20 transition-all opacity-50 cursor-not-allowed">
                                                         Deposit (Soon)
@@ -784,30 +1058,30 @@ export function CircleWalletPage({
                                                 {/* TOP SECTION: Funding Buttons */}
                                                 <div className="flex flex-col items-center gap-6 md:gap-16 w-full -translate-y-[5vh] md:-translate-y-[5vh] mt-2 md:mt-0">
                                                     <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-[0.3em] ${isLight ? 'text-black/40' : 'text-white/40'} mt-1 md:mt-0`}>Select Funding Type</h3>
-                                                    
+
                                                     <div className="flex items-center justify-center gap-6 md:gap-16 w-full -mt-3 md:mt-0">
-                                                        <button 
-                                                        onClick={() => setFundingType('native')}
-                                                        className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
-                                                    >
-                                                        <Globe size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
-                                                        <div className="text-center">
-                                                            <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>Native Tokens</p>
-                                                        </div>
-                                                    </button>
-                                                    {/* Divider Line */}
-                                                <div className={`w-[2px] h-16 md:h-24 bg-[#3CB371]/40 mx-2 md:mx-12 rounded-full`}></div>
- 
-                                                    <button 
-                                                        onClick={() => setFundingType('usdc')}
-                                                        className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
-                                                    >
-                                                        <Shield size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
-                                                        <div className="center">
-                                                            <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>USDC</p>
-                                                        </div>
-                                                    </button>
-                                                </div>
+                                                        <button
+                                                            onClick={() => setFundingType('native')}
+                                                            className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
+                                                        >
+                                                            <Globe size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
+                                                            <div className="text-center">
+                                                                <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>Native Tokens</p>
+                                                            </div>
+                                                        </button>
+                                                        {/* Divider Line */}
+                                                        <div className={`w-[2px] h-16 md:h-24 bg-[#3CB371]/40 mx-2 md:mx-12 rounded-full`}></div>
+
+                                                        <button
+                                                            onClick={() => setFundingType('usdc')}
+                                                            className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
+                                                        >
+                                                            <Shield size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
+                                                            <div className="center">
+                                                                <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>USDC</p>
+                                                            </div>
+                                                        </button>
+                                                    </div>
                                                 </div>
 
                                                 {/* BOTTOM SECTION: Logos and Powered By */}
@@ -815,61 +1089,61 @@ export function CircleWalletPage({
                                                     {/* Infinite Scrolling Asset Marquee - Enabled on Mobile & Desktop */}
                                                     <div className="block w-full max-w-5xl mx-auto md:mt-8 overflow-hidden relative [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)] z-0 translate-y-[2vh] md:translate-y-0">
                                                         <motion.div
-                                                        animate={{ x: ["0%", "-50%"] }}
-                                                        transition={{ ease: "linear", duration: 25, repeat: Infinity }}
-                                                        className="flex items-center w-max"
-                                                    >
-                                                        {/* Duplicate exactly TWICE for seamless -50% loop */}
-                                                        {[...Array(2)].map((_, groupIdx) => (
-                                                            <div key={groupIdx} className="flex items-center">
-                                                                {/* To make it long enough, repeat the tokens within each half */}
-                                                                {[...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS].map((token, i) => (
-                                                                    <div key={`${groupIdx}-${i}`} className="flex items-center justify-center w-12 md:w-24">
-                                                                        <img 
-                                                                            src={token.icon} 
-                                                                            alt={token.name} 
-                                                                            className="w-5 h-5 md:w-10 md:h-10 object-contain opacity-30 brightness-0 md:brightness-100 grayscale transition-all drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
-                                                                        />
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ))}
-                                                    </motion.div>
-                                                </div>
-
-                                                {/* Powered By Badge */}
-                                                <div className="flex items-center justify-center gap-2 md:gap-3 relative md:-mt-6 opacity-60 hover:opacity-100 transition-opacity duration-500 z-20 translate-y-[2vh] md:translate-y-0">
-                                                    <span className={`relative z-30 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Powered by</span>
-                                                    <div className="flex items-center gap-1.5 md:gap-2.5 relative z-30">
-                                                        <img 
-                                                            src="/circle.png" 
-                                                            alt="Circle" 
-                                                            className="h-5 md:h-10 object-contain drop-shadow-[0_0_10px_rgba(60,179,113,0.3)] relative z-30"
-                                                            style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
-                                                        />
-                                                        <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
-                                                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                                                                <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
-                                                                <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
-                                                            </svg>
-                                                        </div>
-                                                        <span className="relative z-30 text-[9px] md:text-xs font-black tracking-widest text-[#3CB371]">CCTP</span>
-                                                        <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
-                                                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                                                                <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
-                                                                <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3"/>
-                                                            </svg>
-                                                        </div>
-                                                        <span className={`relative z-30 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>GATEWAY</span>
+                                                            animate={{ x: ["0%", "-50%"] }}
+                                                            transition={{ ease: "linear", duration: 25, repeat: Infinity }}
+                                                            className="flex items-center w-max"
+                                                        >
+                                                            {/* Duplicate exactly TWICE for seamless -50% loop */}
+                                                            {[...Array(2)].map((_, groupIdx) => (
+                                                                <div key={groupIdx} className="flex items-center">
+                                                                    {/* To make it long enough, repeat the tokens within each half */}
+                                                                    {[...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS, ...SUPPORTED_TOKENS].map((token, i) => (
+                                                                        <div key={`${groupIdx}-${i}`} className="flex items-center justify-center w-12 md:w-24">
+                                                                            <img
+                                                                                src={token.icon}
+                                                                                alt={token.name}
+                                                                                className="w-5 h-5 md:w-10 md:h-10 object-contain opacity-30 brightness-0 md:brightness-100 grayscale transition-all drop-shadow-[0_4px_8px_rgba(0,0,0,0.15)]"
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ))}
+                                                        </motion.div>
                                                     </div>
-                                                </div>
+
+                                                    {/* Powered By Badge */}
+                                                    <div className="flex items-center justify-center gap-2 md:gap-3 relative md:-mt-6 opacity-60 hover:opacity-100 transition-opacity duration-500 z-20 translate-y-[2vh] md:translate-y-0">
+                                                        <span className={`relative z-30 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Powered by</span>
+                                                        <div className="flex items-center gap-1.5 md:gap-2.5 relative z-30">
+                                                            <img
+                                                                src="/circle.png"
+                                                                alt="Circle"
+                                                                className="h-5 md:h-10 object-contain drop-shadow-[0_0_10px_rgba(60,179,113,0.3)] relative z-30"
+                                                                style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
+                                                            />
+                                                            <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
+                                                                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                                                    <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+                                                                    <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+                                                                </svg>
+                                                            </div>
+                                                            <span className="relative z-30 text-[9px] md:text-xs font-black tracking-widest text-[#3CB371]">CCTP</span>
+                                                            <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
+                                                                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                                                    <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+                                                                    <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+                                                                </svg>
+                                                            </div>
+                                                            <span className={`relative z-30 text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>GATEWAY</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ) : (
                                             <>
                                                 <div className={`flex flex-col gap-4 relative z-10`}>
                                                     <div className="flex items-center justify-between mb-4">
-                                                        <button 
+                                                        <button
                                                             onClick={() => setFundingType(null)}
                                                             className={`p-2.5 rounded-full border transition-all ${isLight ? 'bg-white/50 border-black/10 text-black/60 hover:text-black hover:bg-black/5' : 'bg-black/50 border-white/10 text-white/60 hover:text-white hover:bg-white/5'}`}
                                                         >
@@ -885,225 +1159,264 @@ export function CircleWalletPage({
                                                         </div>
                                                     </div>
 
-                                            <AnimatePresence mode="wait">
-                                                {fundingStep === 'selection' ? (
-                                                    <motion.div 
-                                                        key="selection"
-                                                        initial={{ opacity: 0 }}
-                                                        animate={{ opacity: 1 }}
-                                                        exit={{ opacity: 0 }}
-                                                        className="w-full h-full flex flex-col"
-                                                    >
-                                                        {/* MOBILE SIDE-BY-SIDE VIEW (Scroll-free) */}
-                                                        <div className="flex md:hidden flex-row flex-nowrap items-center justify-between w-full h-[280px] -mt-12 gap-0 relative overflow-visible">
-                                                            {/* Big Swipeable Logo Area (60%) */}
-                                                            <div className="relative w-[60%] h-full flex items-center justify-center overflow-visible group/token z-10">
-                                                                <button onClick={() => handleSwipeToken('right')} className="absolute left-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronLeft size={20} /></button>
-                                                                <button onClick={() => handleSwipeToken('left')} className="absolute right-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronRight size={20} /></button>
-
-                                                                <AnimatePresence mode="wait">
-                                                                    <motion.div
-                                                                        key={activeTokenIdx}
-                                                                        drag="x"
-                                                                        dragConstraints={{ left: 0, right: 0 }}
-                                                                        onDragEnd={(e, info) => {
-                                                                            if (info.offset.x < -30) handleSwipeToken('left');
-                                                                            else if (info.offset.x > 30) handleSwipeToken('right');
-                                                                        }}
-                                                                        initial={{ opacity: 0, scale: 0.8 }}
-                                                                        animate={{ opacity: 1, scale: 1 }}
-                                                                        exit={{ opacity: 0, scale: 0.8 }}
-                                                                        className="absolute inset-0 flex flex-col items-center justify-center"
-                                                                    >
-                                                                        <div className="relative w-full h-full flex items-center justify-center">
-                                                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-44 h-44 pointer-events-none z-0">
-                                                                                <img 
-                                                                                    src={selectedToken.icon} 
-                                                                                    className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(60,179,113,0.3)]" 
-                                                                                    style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
-                                                                                    alt={selectedToken.symbol} 
-                                                                                />
-                                                                                {fundingType === 'usdc' && (
-                                                                                    <img 
-                                                                                        src="/circlewhite.png" 
-                                                                                        className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${
-                                                                                            selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' :
-                                                                                            selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' :
-                                                                                            selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' :
-                                                                                            selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
-                                                                                            'top-[50%] left-[50%] w-[20%] h-[20%]'
-                                                                                        }`}
-                                                                                        style={{ filter: 'brightness(0) invert(1)' }}
-                                                                                        alt="USDC" 
-                                                                                    />
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="relative z-10 -translate-y-[3vh]">
-                                                                                <p className="text-xl md:text-2xl font-black tracking-tighter text-white drop-shadow-xl text-center">
-                                                                                    {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                    </motion.div>
-                                                                </AnimatePresence>
-                                                            </div>
-
-                                                            <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
-
-                                                            <div className="w-[38%] flex flex-col gap-1.5 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
-                                                                <div className="flex flex-col items-center opacity-80">
-                                                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
-                                                                    <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                                        {fundingType === 'usdc' ? 
-                                                                            (currentWallet.key === 'trading' ? currentWallet.bal.toFixed(2) : (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)) 
-                                                                            : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
-                                                                    </span>
-                                                                </div>
-                                                                <button 
-                                                                    onClick={startFundingFlow}
-                                                                    className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
-                                                                >
-                                                                    Fund {selectedToken.symbol}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* DESKTOP CAROUSEL */}
-                                                        <div className="hidden md:flex relative h-[280px] w-full items-center justify-center overflow-hidden group/token">
-                                                            <button onClick={() => handleSwipeToken('right')} className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronLeft size={36} strokeWidth={2.5} /></button>
-                                                            <button onClick={() => handleSwipeToken('left')} className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronRight size={36} strokeWidth={2.5} /></button>
-
-                                                            <AnimatePresence mode="wait">
-                                                                <motion.div
-                                                                    key={activeTokenIdx}
-                                                                    initial={{ opacity: 0, scale: 0.8 }}
-                                                                    animate={{ opacity: 1, scale: 1 }}
-                                                                    exit={{ opacity: 0, scale: 0.8 }}
-                                                                    className="absolute inset-0 flex flex-col items-center justify-center"
-                                                                >
-                                                                    <div className="flex items-center justify-center relative w-full h-full">
-                                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-64 h-64 pointer-events-none z-0">
-                                                                            <img 
-                                                                                src={selectedToken.icon} 
-                                                                                className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)]" 
-                                                                                style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
-                                                                                alt={selectedToken.symbol} 
-                                                                            />
-                                                                            {fundingType === 'usdc' && (
-                                                                                <img src="/circlewhite.png" className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' : selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' : selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' : selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' : 'top-[50%] left-[50%] w-[20%] h-[20%]'}`} style={{ filter: 'brightness(0) invert(1)' }} alt="USDC" />
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="relative z-10 flex flex-col items-center justify-center translate-y-10">
-                                                                            <p className="text-5xl font-black tracking-tighter text-white drop-shadow-2xl">
-                                                                                {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
-                                                                            </p>
-                                                                        </div>
-                                                                    </div>
-                                                                </motion.div>
-                                                            </AnimatePresence>
-                                                        </div>
-
-                                                        <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
-                                                            <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
-                                                                <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
-                                                                <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                                    {fundingType === 'usdc' ? 
-                                                                        (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2) 
-                                                                        : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
-                                                                </span>
-                                                            </div>
-                                                            <button 
-                                                                onClick={startFundingFlow}
-                                                                className="w-auto px-10 py-4 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[11px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20 -translate-y-[7.5vh]"
+                                                    <AnimatePresence mode="wait">
+                                                        {fundingStep === 'selection' ? (
+                                                            <motion.div
+                                                                key="selection"
+                                                                initial={{ opacity: 0 }}
+                                                                animate={{ opacity: 1 }}
+                                                                exit={{ opacity: 0 }}
+                                                                className="w-full h-full flex flex-col"
                                                             >
-                                                                Fund {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
-                                                            </button>
-                                                        </div>
-                                                    </motion.div>
-                                                ) : fundingStep === 'loading' || fundingStep === 'confirming' ? (
-                                                    <motion.div 
-                                                        key="loading"
-                                                        initial={{ opacity: 0 }}
-                                                        animate={{ opacity: 1 }}
-                                                        exit={{ opacity: 0 }}
-                                                        className="w-full h-full flex items-center justify-center"
-                                                    >
-                                                        <LocalLoading />
-                                                    </motion.div>
-                                                ) : fundingStep === 'input' ? (
-                                                    <motion.div 
-                                                        key="input"
-                                                        initial={{ opacity: 0, y: 20 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        exit={{ opacity: 0, y: -20 }}
-                                                        className="w-full h-full flex flex-col items-center justify-center gap-8 py-8"
-                                                    >
-                                                        <div className="flex flex-col items-center gap-2">
-                                                            <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Enter Amount</span>
-                                                            <div className="relative group">
-                                                                <input 
-                                                                    type="number"
-                                                                    placeholder="0.00"
-                                                                    value={fundingAmount}
-                                                                    onChange={(e) => setFundingAmount(e.target.value)}
-                                                                    className={`w-48 bg-transparent border-b-2 border-[#3CB371]/20 focus:border-[#3CB371] transition-all text-center text-4xl font-black py-4 outline-none text-white`}
-                                                                />
-                                                                <span className="absolute right-0 bottom-4 text-[10px] font-black text-[#3CB371] uppercase">{fundingType === 'usdc' ? 'USDC' : selectedToken.symbol}</span>
-                                                            </div>
-                                                        </div>
-                                                        <button 
-                                                            onClick={handleConfirmFunding}
-                                                            disabled={!fundingAmount}
-                                                            className={`px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all ${!fundingAmount ? 'bg-white/5 text-white/20' : 'bg-[#3CB371] text-white shadow-xl shadow-[#3CB371]/20 hover:scale-105 active:scale-95'}`}
-                                                        >
-                                                            Confirm Deposit
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => setFundingStep('selection')}
-                                                            className="text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                    </motion.div>
-                                                ) : fundingStep === 'success' ? (
-                                                    <motion.div 
-                                                        key="success"
-                                                        initial={{ opacity: 0, scale: 0.9 }}
-                                                        animate={{ opacity: 1, scale: 1 }}
-                                                        className="w-full h-full flex flex-col items-center justify-center gap-6 py-12"
-                                                    >
-                                                        <div className="w-20 h-20 rounded-full bg-[#3CB371]/20 flex items-center justify-center">
-                                                            <Check size={40} className="text-[#3CB371]" />
-                                                        </div>
-                                                        <div className="text-center">
-                                                            <h3 className="text-2xl font-black uppercase tracking-tighter text-white">Congratulations!</h3>
-                                                            <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-2">Transaction successfully initiated.</p>
-                                                        </div>
-                                                    </motion.div>
-                                                ) : null}
-                                            </AnimatePresence>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-4">
-                                {walletInfo?.transactions?.map((tx, i) => (
-                                    <div key={i} className={`p-8 rounded-[40px] border ${isLight ? 'bg-[#C2D1C9] border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex items-center justify-between transition-all hover:scale-[1.01]`}>
-                                        <div className="flex items-center gap-5">
-                                            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${tx.type === 'OUTGOING' ? 'bg-orange-500/10 text-orange-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
-                                                {tx.type === 'OUTGOING' ? <Send size={24} /> : <ArrowDownLeft size={24} />}
-                                            </div>
-                                            <div>
-                                                <p className={`text-sm font-black uppercase tracking-wider text-white`}>{tx.type}</p>
-                                                <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest text-white">{new Date(tx.createDate).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
-                                        <p className={`text-xl font-black text-white`}>
-                                            {tx.type === 'OUTGOING' ? '-' : '+'}{tx.amounts?.[0] || '0.00'}
-                                        </p>
+                                                                {/* MOBILE SIDE-BY-SIDE VIEW (Scroll-free) */}
+                                                                <div className="flex md:hidden flex-row flex-nowrap items-center justify-between w-full h-[280px] -mt-12 gap-0 relative overflow-visible">
+                                                                    {/* Big Swipeable Logo Area (60%) */}
+                                                                    <div className="relative w-[60%] h-full flex items-center justify-center overflow-visible group/token z-10">
+                                                                        <button onClick={() => handleSwipeToken('right')} className="absolute left-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronLeft size={20} /></button>
+                                                                        <button onClick={() => handleSwipeToken('left')} className="absolute right-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronRight size={20} /></button>
+
+                                                                        <AnimatePresence mode="wait">
+                                                                            <motion.div
+                                                                                key={activeTokenIdx}
+                                                                                drag="x"
+                                                                                dragConstraints={{ left: 0, right: 0 }}
+                                                                                onDragEnd={(e, info) => {
+                                                                                    if (info.offset.x < -30) handleSwipeToken('left');
+                                                                                    else if (info.offset.x > 30) handleSwipeToken('right');
+                                                                                }}
+                                                                                initial={{ opacity: 0, scale: 0.8 }}
+                                                                                animate={{ opacity: 1, scale: 1 }}
+                                                                                exit={{ opacity: 0, scale: 0.8 }}
+                                                                                className="absolute inset-0 flex flex-col items-center justify-center"
+                                                                            >
+                                                                                <div className="relative w-full h-full flex items-center justify-center">
+                                                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-44 h-44 pointer-events-none z-0">
+                                                                                        <img
+                                                                                            src={selectedToken.icon}
+                                                                                            className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(60,179,113,0.3)]"
+                                                                                            style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                                            alt={selectedToken.symbol}
+                                                                                        />
+                                                                                        {fundingType === 'usdc' && (
+                                                                                            <img
+                                                                                                src="/circlewhite.png"
+                                                                                                className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' :
+                                                                                                    selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' :
+                                                                                                        selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' :
+                                                                                                            selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
+                                                                                                                'top-[50%] left-[50%] w-[20%] h-[20%]'
+                                                                                                    }`}
+                                                                                                style={{ filter: 'brightness(0) invert(1)' }}
+                                                                                                alt="USDC"
+                                                                                            />
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="relative z-10 -translate-y-[3vh]">
+                                                                                        <p className="text-xl md:text-2xl font-black tracking-tighter text-white drop-shadow-xl text-center">
+                                                                                            {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        </AnimatePresence>
+                                                                    </div>
+
+                                                                    <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
+
+                                                                    <div className="w-[38%] flex flex-col gap-1.5 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
+                                                                        <div className="flex flex-col items-center opacity-80">
+                                                                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                                            <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                                                {fundingType === 'usdc' ?
+                                                                                    (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)
+                                                                                    : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={startFundingFlow}
+                                                                            className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
+                                                                        >
+                                                                            Fund {selectedToken.symbol}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* DESKTOP CAROUSEL */}
+                                                                <div className="hidden md:flex relative h-[280px] w-full items-center justify-center overflow-hidden group/token">
+                                                                    <button onClick={() => handleSwipeToken('right')} className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronLeft size={36} strokeWidth={2.5} /></button>
+                                                                    <button onClick={() => handleSwipeToken('left')} className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronRight size={36} strokeWidth={2.5} /></button>
+
+                                                                    <AnimatePresence mode="wait">
+                                                                        <motion.div
+                                                                            key={activeTokenIdx}
+                                                                            initial={{ opacity: 0, scale: 0.8 }}
+                                                                            animate={{ opacity: 1, scale: 1 }}
+                                                                            exit={{ opacity: 0, scale: 0.8 }}
+                                                                            className="absolute inset-0 flex flex-col items-center justify-center"
+                                                                        >
+                                                                            <div className="flex items-center justify-center relative w-full h-full">
+                                                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-64 h-64 pointer-events-none z-0">
+                                                                                    <img
+                                                                                        src={selectedToken.icon}
+                                                                                        className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)]"
+                                                                                        style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                                        alt={selectedToken.symbol}
+                                                                                    />
+                                                                                    {fundingType === 'usdc' && (
+                                                                                        <img src="/circlewhite.png" className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' : selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' : selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' : selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' : 'top-[50%] left-[50%] w-[20%] h-[20%]'}`} style={{ filter: 'brightness(0) invert(1)' }} alt="USDC" />
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="relative z-10 flex flex-col items-center justify-center translate-y-10">
+                                                                                    <p className="text-5xl font-black tracking-tighter text-white drop-shadow-2xl">
+                                                                                        {fundingType === 'native' ? selectedToken.symbol : `${selectedToken.symbol}-USDC`}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    </AnimatePresence>
+                                                                </div>
+
+                                                                <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
+                                                                    <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
+                                                                        <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                                        <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                                            {fundingType === 'usdc' ?
+                                                                                (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)
+                                                                                : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={startFundingFlow}
+                                                                        className="w-auto px-10 py-4 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[11px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20 -translate-y-[7.5vh]"
+                                                                    >
+                                                                        Fund {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
+                                                                    </button>
+                                                                </div>
+                                                            </motion.div>
+                                                        ) : fundingStep === 'loading' ? (
+                                                            <motion.div
+                                                                key="loading"
+                                                                initial={{ opacity: 0 }}
+                                                                animate={{ opacity: 1 }}
+                                                                exit={{ opacity: 0 }}
+                                                                className="w-full h-full flex items-center justify-center"
+                                                            >
+                                                                <LocalLoading />
+                                                            </motion.div>
+                                                        ) : fundingStep === 'confirming' ? (
+                                                            <motion.div
+                                                                key="confirming"
+                                                                initial={{ opacity: 0, x: -20 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                                exit={{ opacity: 0 }}
+                                                                className="w-full h-full flex flex-col items-start justify-start gap-4 py-4 px-2"
+                                                            >
+                                                                {/* Step markers */}
+                                                                <div className="flex items-center gap-0 w-full">
+                                                                    {[{n:1,label:'Approval'},{n:2,label:'Burn'},{n:3,label:'Attestation'},{n:4,label:'Mint'}].map(({n, label}, i, arr) => (
+                                                                        <React.Fragment key={n}>
+                                                                            <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-500 ${
+                                                                                    cctpStep > n ? 'bg-[#3CB371] text-white scale-105' :
+                                                                                    cctpStep === n ? 'bg-[#3CB371] text-white ring-2 ring-[#3CB371]/40 animate-pulse' :
+                                                                                    'bg-white/10 text-white/30'
+                                                                                }`}>{n}</div>
+                                                                                <span className={`text-[9px] font-black uppercase tracking-wider transition-colors ${
+                                                                                    cctpStep >= n ? 'text-[#3CB371]' : 'text-white/30'
+                                                                                }`}>{label}</span>
+                                                                            </div>
+                                                                            {i < arr.length - 1 && (
+                                                                                <div className={`flex-1 h-[1.5px] mb-4 transition-all duration-700 ${
+                                                                                    cctpStep > n ? 'bg-[#3CB371]' : 'bg-white/10'
+                                                                                }`} />
+                                                                            )}
+                                                                        </React.Fragment>
+                                                                    ))}
+                                                                </div>
+
+                                                                {/* Live log */}
+                                                                <div className="w-full flex-1 p-1 overflow-y-auto" style={{minHeight:'120px', maxHeight:'180px', fontFamily:'monospace'}}>
+                                                                    {cctpLogs.length === 0 ? (
+                                                                        <p className={`text-[10px] ${isLight ? 'text-black/30' : 'text-white/30'}`}>Initialising...</p>
+                                                                    ) : cctpLogs.map((log, i) => (
+                                                                        <p key={i} className={`text-[10px] leading-5 break-all ${isLight ? 'text-black/80' : 'text-white/70'}`}>{log}</p>
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        ) : fundingStep === 'input' ? (
+                                                            <motion.div
+                                                                key="input"
+                                                                initial={{ opacity: 0, y: 20 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -20 }}
+                                                                className="w-full h-full flex flex-col items-center justify-center gap-8 py-8"
+                                                            >
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Enter Amount</span>
+                                                                    <div className="relative group">
+                                                                        <input
+                                                                            type="number"
+                                                                            placeholder="0.00"
+                                                                            value={fundingAmount}
+                                                                            onChange={(e) => setFundingAmount(e.target.value)}
+                                                                            className={`w-48 bg-transparent border-b-2 border-[#3CB371]/20 focus:border-[#3CB371] transition-all text-center text-4xl font-black py-4 outline-none text-white`}
+                                                                        />
+                                                                        <span className="absolute right-0 bottom-4 text-[10px] font-black text-[#3CB371] uppercase">{fundingType === 'usdc' ? 'USDC' : selectedToken.symbol}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={handleConfirmFunding}
+                                                                    disabled={!fundingAmount}
+                                                                    className={`px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all ${!fundingAmount ? 'bg-white/5 text-white/20' : 'bg-[#3CB371] text-white shadow-xl shadow-[#3CB371]/20 hover:scale-105 active:scale-95'}`}
+                                                                >
+                                                                    Confirm Deposit
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setFundingStep('selection')}
+                                                                    className="text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100"
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                            </motion.div>
+                                                        ) : fundingStep === 'success' ? (
+                                                            <motion.div
+                                                                key="success"
+                                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                                animate={{ opacity: 1, scale: 1 }}
+                                                                className="w-full h-full flex flex-col items-center justify-center gap-6 py-12"
+                                                            >
+                                                                <div className="w-20 h-20 rounded-full bg-[#3CB371]/20 flex items-center justify-center">
+                                                                    <Check size={40} className="text-[#3CB371]" />
+                                                                </div>
+                                                                <div className="text-center">
+                                                                    <h3 className="text-2xl font-black uppercase tracking-tighter text-white">Congratulations!</h3>
+                                                                    <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-2">Transaction successfully initiated.</p>
+                                                                </div>
+                                                            </motion.div>
+                                                        ) : null}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-4">
+                                    {walletInfo?.transactions?.map((tx, i) => (
+                                        <div key={i} className={`p-8 rounded-[40px] border ${isLight ? 'bg-[#C2D1C9] border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex items-center justify-between transition-all hover:scale-[1.01]`}>
+                                            <div className="flex items-center gap-5">
+                                                <div className={`w-14 h-14 rounded-full flex items-center justify-center ${tx.type === 'OUTGOING' ? 'bg-orange-500/10 text-orange-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
+                                                    {tx.type === 'OUTGOING' ? <Send size={24} /> : <ArrowDownLeft size={24} />}
+                                                </div>
+                                                <div>
+                                                    <p className={`text-sm font-black uppercase tracking-wider text-white`}>{tx.type}</p>
+                                                    <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest text-white">{new Date(tx.createDate).toLocaleDateString()}</p>
+                                                </div>
+                                            </div>
+                                            <p className={`text-xl font-black text-white`}>
+                                                {tx.type === 'OUTGOING' ? '-' : '+'}{tx.amounts?.[0] || '0.00'}
+                                            </p>
+                                        </div>
                                     ))}
                                 </div>
                             )}
@@ -1111,110 +1424,111 @@ export function CircleWalletPage({
                     </motion.div>
                 </div>
 
-            {/* Modals Integrated */}
-            <AnimatePresence>
-                {showSendModal && (
-                    <div className="fixed inset-0 z-[400] flex items-end md:items-center justify-center p-0 md:p-6">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSendModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-                        <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-[#CFDCD5] border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} max-h-[92dvh] overflow-y-auto`}>
-                            <div className="flex items-center justify-between mb-8">
-                                <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Send Assets</h3>
-                                <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
-                            </div>
-                            
-                            <div className="flex flex-col gap-6">
-                                <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-[#3CB371]/20`}>
-                                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Source Wallet</p>
-                                    <p className={`text-sm font-black uppercase text-white`}>{currentWallet.label}</p>
+                {/* Modals Integrated */}
+                <AnimatePresence>
+                    {showSendModal && (
+                        <div className="fixed inset-0 z-[400] flex items-end md:items-center justify-center p-0 md:p-6">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSendModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+                            <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-[#CFDCD5] border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} max-h-[92dvh] overflow-y-auto`}>
+                                <div className="flex items-center justify-between mb-8">
+                                    <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Send Assets</h3>
+                                    <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
                                 </div>
 
-                                <div>
-                                    <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-2`}>Recipient Address</label>
-                                    <input type="text" placeholder="0x..." value={destAddress} onChange={(e) => setDestAddress(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-sm font-bold transition-all`} />
-                                </div>
-
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Amount (USDC)</label>
-                                        <button onClick={() => setSendAmount(currentWallet.bal.toFixed(4))} className="text-[10px] font-black text-[#3CB371] uppercase hover:underline">Max Available</button>
+                                <div className="flex flex-col gap-6">
+                                    <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-[#3CB371]/20`}>
+                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Source Wallet</p>
+                                        <p className={`text-sm font-black uppercase text-white`}>{currentWallet.label}</p>
                                     </div>
-                                    <input type="number" placeholder="0.00" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-3xl font-black transition-all`} />
+
+                                    <div>
+                                        <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-2`}>Recipient Address</label>
+                                        <input type="text" placeholder="0x..." value={destAddress} onChange={(e) => setDestAddress(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-sm font-bold transition-all`} />
+                                    </div>
+
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Amount (USDC)</label>
+                                            <button onClick={() => setSendAmount(currentWallet.bal.toFixed(4))} className="text-[10px] font-black text-[#3CB371] uppercase hover:underline">Max Available</button>
+                                        </div>
+                                        <input type="number" placeholder="0.00" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-3xl font-black transition-all`} />
+                                    </div>
+
+                                    <button onClick={handleSend} disabled={isSending} className="w-full bg-[#3CB371] text-black font-black py-6 rounded-[28px] uppercase tracking-widest mt-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#3CB371]/20">
+                                        {isSending ? 'Processing...' : 'Confirm Transfer'}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+
+                    {showReceiveModal && (
+                        <div className="fixed inset-0 z-[400] flex items-end md:items-center justify-center p-0 md:p-6">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowReceiveModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+                            <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-[#CFDCD5] border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} flex flex-col items-center max-h-[92dvh] overflow-y-auto`}>
+                                <div className="flex items-center justify-between w-full mb-8">
+                                    <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Receive</h3>
+                                    <button onClick={() => setShowReceiveModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
                                 </div>
 
-                                <button onClick={handleSend} disabled={isSending} className="w-full bg-[#3CB371] text-black font-black py-6 rounded-[28px] uppercase tracking-widest mt-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#3CB371]/20">
-                                    {isSending ? 'Processing...' : 'Confirm Transfer'}
-                                </button>
-                            </div>
-                        </motion.div>
+                                <div className="p-4 rounded-3xl bg-white mb-8 shadow-2xl relative group overflow-hidden">
+                                    {qrCodeData ? (
+                                        <>
+                                            <img src={qrCodeData} alt="QR Code" className="w-56 h-56" />
+                                            <button onClick={handleDownloadQR} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all backdrop-blur-[2px]">
+                                                <Download size={32} className="text-[#3CB371] mb-2" />
+                                                <span className="text-[10px] font-black uppercase text-white tracking-widest">Download QR</span>
+                                            </button>
+                                        </>
+                                    ) : <RefreshCw size={32} className="animate-spin text-black/10" />}
+                                </div>
+
+                                <div className={`w-full p-6 rounded-3xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-dashed text-center mb-8`}>
+                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-3 opacity-40 text-white`}>Deposit to {currentWallet.label}</p>
+                                    <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 w-full">
+                                    <button onClick={() => { navigator.clipboard.writeText(currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address); notify("Copied!", "success"); }} className={`flex items-center justify-center gap-3 bg-[#3CB371] text-white font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
+                                        <Copy size={16} /> Copy
+                                    </button>
+                                    <button onClick={handleDownloadQR} className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/10' : 'border-white/10'} font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
+                                        <Save size={16} /> Save
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                <UnifiedFundingModal
+                    isOpen={showUnifiedFunding}
+                    onClose={() => setShowUnifiedFunding(false)}
+                    isLight={isLight}
+                    notify={notify}
+                    address={address}
+                    sessionAddress={sessionAddress}
+                    wallets={wallets}
+                    smartWalletAddress={smartWalletAddress}
+                    initialToken={selectedToken}
+                    fundingType={fundingType}
+                    onSuccess={() => fetchWalletInfo(true)}
+                />
+
+                {/* Hidden Capture Container (QR) */}
+                <div id="qr-capture-container" className="fixed left-[-9999px] top-[-9999px] w-[400px] p-10 flex flex-col items-center justify-center gap-6"
+                    style={{ backgroundColor: isLight ? '#ffffff' : '#0a0a0a' }}>
+                    <img src={isLight ? "https://15market.com/goblogo.png" : "https://15market.com/gowlogo.png"} className="h-12 w-auto mb-2" alt="Logo" />
+                    <p className={`text-sm italic font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>15market.com</p>
+                    <div className={`p-4 rounded-3xl bg-white shadow-xl`}>
+                        <img src={qrCodeData} alt="QR" className="w-64 h-64" />
                     </div>
-                )}
-
-                {showReceiveModal && (
-                    <div className="fixed inset-0 z-[400] flex items-end md:items-center justify-center p-0 md:p-6">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowReceiveModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-                        <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className={`w-full md:max-w-md relative z-10 p-6 md:p-8 rounded-t-[40px] md:rounded-[40px] border-t md:border ${isLight ? 'bg-[#CFDCD5] border-black/5' : 'bg-[#0D0D0D] border-white/5 shadow-2xl'} flex flex-col items-center max-h-[92dvh] overflow-y-auto`}>
-                            <div className="flex items-center justify-between w-full mb-8">
-                                <h3 className={`text-2xl font-black uppercase tracking-tighter text-white`}>Receive</h3>
-                                <button onClick={() => setShowReceiveModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
-                            </div>
-
-                            <div className="p-4 rounded-3xl bg-white mb-8 shadow-2xl relative group overflow-hidden">
-                                {qrCodeData ? (
-                                    <>
-                                        <img src={qrCodeData} alt="QR Code" className="w-56 h-56" />
-                                        <button onClick={handleDownloadQR} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all backdrop-blur-[2px]">
-                                            <Download size={32} className="text-[#3CB371] mb-2" />
-                                            <span className="text-[10px] font-black uppercase text-white tracking-widest">Download QR</span>
-                                        </button>
-                                    </>
-                                ) : <RefreshCw size={32} className="animate-spin text-black/10" />}
-                            </div>
-
-                            <div className={`w-full p-6 rounded-3xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-dashed text-center mb-8`}>
-                                <p className={`text-[10px] font-black uppercase tracking-widest mb-3 opacity-40 text-white`}>Deposit to {currentWallet.label}</p>
-                                <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 w-full">
-                                <button onClick={() => { navigator.clipboard.writeText(currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address); notify("Copied!", "success"); }} className={`flex items-center justify-center gap-3 bg-[#3CB371] text-white font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
-                                    <Copy size={16} /> Copy
-                                </button>
-                                <button onClick={handleDownloadQR} className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/10' : 'border-white/10'} font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
-                                    <Save size={16} /> Save
-                                </button>
-                            </div>
-                        </motion.div>
+                    <div className="text-center">
+                        <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-white/40`}>Address ({currentWallet.label})</p>
+                        <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
                     </div>
-                )}
-            </AnimatePresence>
-
-            <UnifiedFundingModal 
-                isOpen={showUnifiedFunding}
-                onClose={() => setShowUnifiedFunding(false)}
-                isLight={isLight}
-                notify={notify}
-                address={address}
-                sessionAddress={sessionAddress}
-                wallets={wallets}
-                initialToken={selectedToken}
-                fundingType={fundingType}
-                onSuccess={() => fetchWalletInfo(true)}
-            />
-
-            {/* Hidden Capture Container (QR) */}
-            <div id="qr-capture-container" className="fixed left-[-9999px] top-[-9999px] w-[400px] p-10 flex flex-col items-center justify-center gap-6"
-                style={{ backgroundColor: isLight ? '#ffffff' : '#0a0a0a' }}>
-                <img src={isLight ? "https://15market.com/goblogo.png" : "https://15market.com/gowlogo.png"} className="h-12 w-auto mb-2" alt="Logo" />
-                <p className={`text-sm italic font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>15market.com</p>
-                <div className={`p-4 rounded-3xl bg-white shadow-xl`}>
-                    <img src={qrCodeData} alt="QR" className="w-64 h-64" />
                 </div>
-                <div className="text-center">
-                    <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-white/40`}>Address ({currentWallet.label})</p>
-                    <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
-                </div>
-            </div>
-        </motion.div>
+            </motion.div>
         </>
     );
 }

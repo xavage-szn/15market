@@ -26,10 +26,8 @@ const fundingService = require('./services/fundingService');
 
 
 const redis = new Redis(config.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: 1,
-    enableOfflineQueue: false,
     retryStrategy: (times) => {
-        return 30000; // 30 seconds reconnect interval
+        return Math.min(times * 1000, 30000); // progressive reconnect up to 30s
     }
 });
 
@@ -342,26 +340,34 @@ app.post('/fund/confirm', async (req, res) => {
     const userAddr = address.toLowerCase();
     const sessionWallet = deriveSessionWallet(userAddr);
 
-    // Get final quote to calculate credit amount
-    const quote = await fundingService.getQuote(fromToken || 'USDC', parseFloat(amount));
+    // Frontend already sent the final estimated amount. We use it directly.
+    const finalAmount = parseFloat(amount);
     
     const result = await fundingService.creditTradingWallet(
         userAddr, 
-        parseFloat(quote.estimatedUsdc), 
+        finalAmount, 
         txHash, 
         sessionWallet.address
     );
 
     // Update session balance in cache (optimistic sync)
-    const session = cache.sessions.get(userAddr);
-    if (session) {
-      session.balance = Number((session.balance + parseFloat(quote.estimatedUsdc)).toFixed(4));
-      io.to(userAddr).emit('balance_update', {
-        balance: String(session.balance),
-        reason: 'DEPOSIT',
-        txHash
+    let session = cache.sessions.get(userAddr);
+    if (!session) {
+      session = cache.getOrCreateSession(userAddr, { 
+        balance: 0,
+        identityKey: userAddr,
+        walletAddress: userAddr,
+        sessionAddress: sessionWallet.address
       });
     }
+    
+    // We don't double add here because creditTradingWallet already adds it, 
+    // BUT we need to ensure socket emission. Actually, let's just emit.
+    io.to(userAddr).emit('balance_update', {
+      balance: String(session.balance),
+      reason: 'DEPOSIT',
+      txHash
+    });
 
     res.json({ success: true, ...result });
   } catch (err) {
@@ -406,6 +412,88 @@ app.post('/fund/monitor-cctp', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * GET /fund/bridge-quote
+ * Returns estimated gas fee in USDC and net amount to receive for a given source chain and amount.
+ */
+app.get('/fund/bridge-quote', async (req, res) => {
+  try {
+    const { sourceChain, amount } = req.query;
+    if (!sourceChain || !amount) {
+      return res.status(400).json({ error: "Missing sourceChain or amount" });
+    }
+    const quote = await fundingService.getPermitBridgeQuote(sourceChain, parseFloat(amount));
+    res.json({ success: true, ...quote });
+  } catch (err) {
+    console.error('[bridge-quote] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /fund/permit-bridge
+ * Executes EIP-2612 permit + bridge flow where the backend Gas Tank pays the gas.
+ */
+app.post('/fund/permit-bridge', async (req, res) => {
+  try {
+    const { address, sourceChain, amount, userAddress, permit, destMintRecipient } = req.body;
+    if (!address || !sourceChain || !amount || !userAddress || !destMintRecipient) {
+      return res.status(400).json({ error: "Missing required permit bridge parameters" });
+    }
+    const userAddr = address.toLowerCase();
+
+    const result = await fundingService.executePermitBridge(
+      userAddr,
+      sourceChain,
+      parseFloat(amount),
+      userAddress,
+      permit,
+      destMintRecipient
+    );
+
+    // Instantly credit cached session balance and emit real-time socket event for immediate UX feedback
+    const session = cache.sessions.get(userAddr);
+    if (session) {
+      session.balance = Number((session.balance + result.netAmount).toFixed(4));
+      io.to(userAddr).emit('balance_update', {
+        balance: String(session.balance),
+        reason: 'DEPOSIT',
+        txHash: result.txHash
+      });
+      console.log(`[CCTP-GasTank] Optimistically credited ${result.netAmount} USDC to ${userAddr}`);
+    }
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[permit-bridge] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /fund/gas-tank
+ * Returns the status and native balances of the Gas Tank relayer wallets across networks.
+ */
+app.get('/fund/gas-tank', async (req, res) => {
+  try {
+    const status = {};
+    for (const [id, provider] of Object.entries(fundingService.destProviders)) {
+      const wallet = fundingService.destWallets[id];
+      if (wallet) {
+        const bal = await provider.getBalance(wallet.address);
+        status[id] = {
+          address: wallet.address,
+          balance: ethers.formatEther(bal)
+        };
+      }
+    }
+    res.json({ success: true, chains: status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 

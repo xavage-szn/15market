@@ -1,27 +1,45 @@
-import { usePrivy } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth';
 import { useAccount } from 'wagmi';
+import { useMemo } from 'react';
 
 /**
- * useTradingWallet (V2 - Simplified)
- * 
- * Reverted to standard wallet interactions. 
- * Smart Wallet (AA) logic is temporarily disabled to resolve Privy initialization conflicts.
+ * useTradingWallet
+ *
+ * Detects the Privy ERC-4337 smart wallet (backed by Pimlico paymaster)
+ * alongside the standard EOA embedded wallet.
+ *
+ * Architecture:
+ *   eoaWallet.address   → Platform identity + session wallet seed (UNCHANGED)
+ *   smartWallet.address → CCTP executor on source chains (Monad/Fuji/Sepolia)
+ *
+ * The smart wallet pays gas in USDC via the Pimlico paymaster configured
+ * on the Privy dashboard. No native tokens (MON, AVAX, ETH) needed.
  */
 export function useTradingWallet() {
-    const { user } = usePrivy();
+    const { wallets } = useWallets();
     const { address: wagmiAddress } = useAccount();
 
-    const executeTrade = async (transactionRequest) => {
-        // Fallback to standard flow if needed, but UserApp handles this now.
-        console.warn("executeTrade called on V2 simplified hook. Please use standard walletClient.");
-        return null;
-    };
+    // Privy ERC-4337 smart wallet — walletClientType is 'smart_wallet' in v3
+    const smartWallet = useMemo(() => {
+        if (!wallets || !Array.isArray(wallets)) return null;
+        return wallets.find(w =>
+            w.walletClientType === 'smart_wallet' ||
+            w.walletClientType === 'kernel' ||
+            w.walletClientType === 'safe'
+        ) || null;
+    }, [wallets]);
+
+    // Privy embedded EOA wallet — still the user's platform identity
+    const eoaWallet = useMemo(() => {
+        if (!wallets || !Array.isArray(wallets)) return null;
+        return wallets.find(w => w.walletClientType === 'privy') || null;
+    }, [wallets]);
 
     return {
-        client: null,
-        executeTrade,
-        isSmartWalletReady: false,
-        smartWalletAddress: null,
-        mainWalletAddress: wagmiAddress || user?.wallet?.address || null
+        smartWallet,
+        smartWalletAddress: smartWallet?.address || null,
+        eoaWallet,
+        isSmartWalletReady: !!(smartWallet?.address),
+        mainWalletAddress: wagmiAddress || eoaWallet?.address || null,
     };
 }

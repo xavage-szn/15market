@@ -8,6 +8,7 @@ if (typeof window !== 'undefined') {
 import React, { Component } from 'react';
 import ReactDOM from 'react-dom/client';
 import { PrivyProvider } from '@privy-io/react-auth';
+import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
 import { WagmiProvider } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -42,6 +43,11 @@ function Root() {
             createOnLogin: 'all-users',
             requireUserPasswordOnCreate: false,
           },
+          // Smart wallets — paymaster URL is configured on Privy dashboard (Pimlico)
+          // This enables ERC-4337 smart accounts so users pay gas in USDC on source chains
+          smartWallets: {
+            enabled: true,
+          },
           appearance: {
             theme: 'dark',
             accentColor: '#3CB371',
@@ -50,11 +56,13 @@ function Root() {
           },
         }}
       >
-        <QueryClientProvider client={queryClient}>
-          <WagmiProvider config={config}>
-            <App />
-          </WagmiProvider>
-        </QueryClientProvider>
+        <SmartWalletsProvider>
+          <QueryClientProvider client={queryClient}>
+            <WagmiProvider config={config}>
+              <App />
+            </WagmiProvider>
+          </QueryClientProvider>
+        </SmartWalletsProvider>
       </PrivyProvider>
     </ErrorBoundary>
   );
