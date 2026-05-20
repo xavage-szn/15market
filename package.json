@@ -15,7 +15,9 @@
         "start:admin": "cd 15market-admin && npm run dev",
         "start:ui": "cd 15market && npm run dev",
         "render:build:backend": "cd nexus-core && npm install",
-        "render:start:backend": "cd nexus-core && node src/index.js"
+        "render:start:backend": "cd nexus-core && node src/index.js",
+        "render:install": "npm install --legacy-peer-deps",
+        "render:build": "npm run render:install && npm run build"
     },
     "devDependencies": {
         "concurrently": "^9.1.2",
