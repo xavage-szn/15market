@@ -449,20 +449,19 @@ app.post('/fund/permit-bridge', async (req, res) => {
       parseFloat(amount),
       userAddress,
       permit,
-      destMintRecipient
+      destMintRecipient,
+      io  // Pass socket.io so CCTP completion can push live balance update
     );
 
-    // Instantly credit cached session balance and emit real-time socket event for immediate UX feedback
-    const session = cache.sessions.get(userAddr);
-    if (session) {
-      session.balance = Number((session.balance + result.netAmount).toFixed(4));
-      io.to(userAddr).emit('balance_update', {
-        balance: String(session.balance),
-        reason: 'DEPOSIT',
-        txHash: result.txHash
-      });
-      console.log(`[CCTP-GasTank] Optimistically credited ${result.netAmount} USDC to ${userAddr}`);
-    }
+    // Optimistic credit: immediately update cache + profile + emit socket balance_update
+    // This gives instant UX feedback before CCTP relay finishes (~2 min)
+    const creditResult = await fundingService.creditTradingWallet(userAddr, result.netAmount, result.txHash);
+    io.to(userAddr).emit('balance_update', {
+      balance: String(creditResult.newBalance || result.netAmount),
+      reason: 'DEPOSIT',
+      txHash: result.txHash
+    });
+    console.log(`[CCTP-GasTank] Optimistically credited ${result.netAmount} USDC to ${userAddr} (new balance: ${creditResult.newBalance})`);
 
     res.json({ success: true, ...result });
   } catch (err) {
@@ -558,31 +557,58 @@ app.get('/session/balance/:address', async (req, res) => {
   try {
     const userAddr = req.params.address.toLowerCase();
     const sessionWallet = deriveSessionWallet(userAddr);
-    const balWei = await provider.getBalance(sessionWallet.address);
-    const balance = ethers.formatEther(balWei);
+    
+    // Read the true USDC ERC-20 balance on Arc Testnet, NOT the native ARC balance
+    const usdcAddr = '0x3600000000000000000000000000000000000000';
+    const usdcAbi = ['function balanceOf(address) view returns (uint256)'];
+    const usdcContract = new ethers.Contract(usdcAddr, usdcAbi, provider);
+    
+    // We add a short timeout so this doesn't hang the UI if the RPC is lagging
+    const balPromise = usdcContract.balanceOf(sessionWallet.address);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), 5000));
+    
+    const balRaw = await Promise.race([balPromise, timeoutPromise]);
+    const onChainBal = parseFloat(ethers.formatUnits(balRaw, 6)); // USDC has 6 decimals
 
     // Also sync in-process session balance with protection
     const session = cache.sessions.get(userAddr);
-    const onChainBal = parseFloat(balance);
     if (session) {
       const timeSinceWin = Date.now() - (session.lastWinAt || 0);
+      // Sync the cache with on-chain IF on-chain is higher (e.g., a direct USDC transfer was received)
+      // or if it's been a while since the last trade win (to let DB sync).
       if (onChainBal > session.balance || timeSinceWin > 45000) {
         session.balance = onChainBal;
+        profiles.upsert(userAddr, { balance: onChainBal }); // Ensure it persists
       }
+    } else {
+        // Create session if missing so UI gets it
+        cache.getOrCreateSession(userAddr, {
+            identityKey: userAddr,
+            walletAddress: userAddr,
+            sessionAddress: sessionWallet.address,
+            balance: onChainBal
+        });
+        profiles.upsert(userAddr, { balance: onChainBal });
     }
 
     res.json({ 
       success: true, 
       balance: String(session ? session.balance : onChainBal), 
       sessionAddress: sessionWallet.address, 
-      source: 'eoa-onchain-synced' 
+      source: 'usdc-onchain-synced' 
     });
   } catch (err) {
     console.error('[session/balance] error:', err.message);
-    // If RPC fails, return the cached in-memory balance as fallback
-    const session = cache.sessions.get(req.params.address.toLowerCase());
-    if (session) return res.json({ success: true, balance: String(session.balance), source: 'in-process-fallback' });
-    res.status(500).json({ error: "Balance fetch failed" });
+    // If RPC fails or times out, return the cached profile/in-memory balance as fallback
+    const userAddr = req.params.address.toLowerCase();
+    const session = cache.sessions.get(userAddr);
+    const profile = profiles.get(userAddr);
+    
+    let fallbackBal = 0;
+    if (session) fallbackBal = session.balance;
+    else if (profile) fallbackBal = profile.balance;
+    
+    res.json({ success: true, balance: String(fallbackBal || 0), source: 'in-process-fallback' });
   }
 });
 

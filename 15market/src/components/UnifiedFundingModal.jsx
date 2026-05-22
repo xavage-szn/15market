@@ -32,6 +32,7 @@ const CCTP_CHAIN_CONFIG = {
         tokenMessenger: '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA',
         usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
         rpc: 'https://ethereum-sepolia-rpc.publicnode.com',
+        permitName: 'USDC',
         destDomain: 26,
         destChainId: '5042002'
     },
@@ -41,7 +42,8 @@ const CCTP_CHAIN_CONFIG = {
         domain: 1,
         tokenMessenger: '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA',
         usdc: '0x5425890298aed601595a70AB815c96711a31Bc65',
-        rpc: 'https://api.avax-test.network/ext/bc/C/rpc',
+        rpc: 'https://avalanche-fuji-c-chain-rpc.publicnode.com',
+        permitName: 'USD Coin',
         destDomain: 26,
         destChainId: '5042002'
     },
@@ -52,6 +54,7 @@ const CCTP_CHAIN_CONFIG = {
         tokenMessenger: '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA',
         usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
         rpc: 'https://sepolia.base.org',
+        permitName: 'USDC',
         destDomain: 26,
         destChainId: '5042002'
     },
@@ -62,6 +65,7 @@ const CCTP_CHAIN_CONFIG = {
         tokenMessenger: '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA',
         usdc: '0x5fd84259d66Cd46123540766Be93DFE6D43130D7',
         rpc: 'https://sepolia.optimism.io',
+        permitName: 'USDC',
         destDomain: 26,
         destChainId: '5042002'
     }
@@ -74,7 +78,7 @@ const IRIS_V2_BASE = 'https://iris-api-sandbox.circle.com';
 
 const TESTNET_RPCS = {
     'mon': 'https://testnet-rpc.monad.xyz/',
-    'avax': 'https://api.avax-test.network/ext/bc/C/rpc',
+    'avax': 'https://avalanche-fuji-c-chain-rpc.publicnode.com',
     'eth': 'https://ethereum-sepolia-rpc.publicnode.com',
     'sol': 'https://api.testnet.solana.com'
 };
@@ -293,7 +297,7 @@ export function UnifiedFundingModal({
                 const nonce = await usdcContract.nonces(signingAddress);
 
                 const domain = {
-                    name: 'USDC',
+                    name: cctpCfg.permitName,
                     version: '2',
                     chainId: cctpCfg.chainId,
                     verifyingContract: cctpCfg.usdc

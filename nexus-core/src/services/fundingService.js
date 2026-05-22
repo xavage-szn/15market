@@ -34,7 +34,7 @@ const CCTP_CHAINS = {
     '43113': {
         name: 'Avalanche Fuji',
         domain: 1,
-        rpc: 'https://api.avax-test.network/ext/bc/C/rpc',
+        rpc: 'https://avalanche-fuji-c-chain-rpc.publicnode.com',
         tokenMessenger: '0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa',
         messageTransmitter: '0xe737e5cebeeba77efe34d4aa090756590b1ce275',
         usdc: '0x5425890298aed601595a70ab815c96711a31bc65',
@@ -187,7 +187,7 @@ class FundingService {
     /**
      * Executes the EIP-2612 permit-based cross-chain bridge transaction flow.
      */
-    async executePermitBridge(userAddr, sourceChain, amount, userAddress, permit, destMintRecipient) {
+    async executePermitBridge(userAddr, sourceChain, amount, userAddress, permit, destMintRecipient, io) {
         const chainIdMap = {
             'mon': '10143',
             'avax': '43113',
@@ -221,26 +221,22 @@ class FundingService {
 
         // Step 1: Submit permit transaction (if signature is provided and not already approved)
         if (permit && permit.v !== undefined) {
-            try {
-                const currentAllowance = await usdcContract.allowance(userAddress, relayerWallet.address);
-                if (currentAllowance < amountRaw) {
-                    console.log(`[Permit-Bridge] Submitting EIP-2612 permit for ${userAddress} spender ${relayerWallet.address}...`);
-                    const txPermit = await usdcContract.permit(
-                        userAddress,
-                        relayerWallet.address,
-                        amountRaw,
-                        permit.deadline,
-                        permit.v,
-                        permit.r,
-                        permit.s
-                    );
-                    await txPermit.wait();
-                    console.log(`[Permit-Bridge] Permit transaction success: ${txPermit.hash}`);
-                } else {
-                    console.log(`[Permit-Bridge] Existing allowance ${ethers.formatUnits(currentAllowance, 6)} is sufficient. Skipping permit.`);
-                }
-            } catch (e) {
-                console.warn(`[Permit-Bridge] Permit failed/skipped (may already be set): ${e.message}`);
+            const currentAllowance = await usdcContract.allowance(userAddress, relayerWallet.address);
+            if (currentAllowance < amountRaw) {
+                console.log(`[Permit-Bridge] Submitting EIP-2612 permit for ${userAddress} spender ${relayerWallet.address}...`);
+                const txPermit = await usdcContract.permit(
+                    userAddress,
+                    relayerWallet.address,
+                    amountRaw,
+                    permit.deadline,
+                    permit.v,
+                    permit.r,
+                    permit.s
+                );
+                await txPermit.wait(1);
+                console.log(`[Permit-Bridge] Permit transaction success: ${txPermit.hash}`);
+            } else {
+                console.log(`[Permit-Bridge] Existing allowance ${ethers.formatUnits(currentAllowance, 6)} is sufficient. Skipping permit.`);
             }
         }
 
@@ -286,7 +282,7 @@ class FundingService {
         console.log(`[Permit-Bridge] depositForBurn transaction success: ${txBurn.hash}`);
 
         // Step 5: Start asynchronous monitoring of CCTP burn and settlement on Arc Testnet
-        this.monitorAndSettleCCTP(userAddr, txBurn.hash, chainId, quote.netAmount, '5042002');
+        this.monitorAndSettleCCTP(userAddr, txBurn.hash, chainId, quote.netAmount, '5042002', io);
 
         return {
             success: true,
@@ -314,20 +310,46 @@ class FundingService {
         const addr = userAddr.toLowerCase();
         console.log(`[FundingService] Crediting ${amountNum} USDC to ${addr} (tx: ${txHash})`);
 
-        // We don't need to trigger on-chain transfer from relayer because CCTP 
-        // or frontend already transferred the actual tokens.
+        let newBalance = amountNum;
 
         try {
             const cache = require('../cache');
-            const session = cache.sessions.get(addr);
+            const profiles = require('../profiles');
+
+            // 1. Update in-memory session cache (for live balance display)
+            let session = cache.sessions.get(addr);
             if (session) {
                 session.balance = Number((session.balance + amountNum).toFixed(4));
+                newBalance = session.balance;
+                console.log(`[FundingService] Session cache updated: ${addr} → ${newBalance} USDC`);
+            } else {
+                session = cache.getOrCreateSession(addr, {
+                    identityKey: addr,
+                    walletAddress: addr,
+                    sessionAddress: addr,
+                    balance: amountNum
+                });
+                console.log(`[FundingService] New session created for ${addr} with ${amountNum} USDC`);
             }
+
+            // 2. Persist to profiles store (survives server restarts + Redis sync)
+            try {
+                const existing = profiles.get(addr);
+                const currentBal = parseFloat(existing?.balance || 0);
+                newBalance = Number((currentBal + amountNum).toFixed(4));
+                profiles.upsert(addr, { balance: newBalance });
+                // Also sync session cache to match persisted value
+                if (session) session.balance = newBalance;
+                console.log(`[FundingService] Profile persisted: ${addr} → ${newBalance} USDC`);
+            } catch (profileErr) {
+                console.warn(`[FundingService] Profile upsert failed (non-fatal): ${profileErr.message}`);
+            }
+
         } catch (e) {
-            console.warn(`[FundingService] Cache credit error (non-fatal): ${e.message}`);
+            console.warn(`[FundingService] Credit error (non-fatal): ${e.message}`);
         }
 
-        return { success: true, credited: amountNum, txHash };
+        return { success: true, credited: amountNum, newBalance, txHash };
     }
 
     async distributeFees(amount) {
@@ -344,7 +366,7 @@ class FundingService {
      * @param {string} amount         - USDC amount credited to user
      * @param {string} destChainId    - Destination chain ID (always '5042002' for Arc CCTP)
      */
-    async monitorAndSettleCCTP(userAddr, txHash, fromChainId, amount, destChainId) {
+    async monitorAndSettleCCTP(userAddr, txHash, fromChainId, amount, destChainId, io) {
         const sourceConfig = CCTP_CHAINS[fromChainId];
         if (!sourceConfig) {
             console.error(`[CCTP-Relayer] Unsupported source chain: ${fromChainId}`);
@@ -451,7 +473,17 @@ class FundingService {
             console.log(`[CCTP-Relayer] ✅ USDC minted on ${destConfig.name}! TX: ${mintTx.hash}`);
 
             // Step 5: Credit the user's platform trading balance (on-chain mint confirmed)
-            await this.creditTradingWallet(userAddr, amount, mintTx.hash);
+            const creditResult = await this.creditTradingWallet(userAddr, amount, mintTx.hash);
+
+            // Push live socket update to user confirming final on-chain settlement
+            if (io) {
+                io.to(userAddr).emit('balance_update', {
+                    balance: String(creditResult.newBalance || amount),
+                    reason: 'DEPOSIT_CONFIRMED',
+                    txHash: mintTx.hash
+                });
+                console.log(`[CCTP-Relayer] Socket balance_update emitted to ${userAddr}: ${creditResult.newBalance} USDC`);
+            }
 
         } catch (err) {
             console.error(`[CCTP-Relayer] Settlement failed:`, err.message);

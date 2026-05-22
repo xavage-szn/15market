@@ -12,9 +12,9 @@ import { useWallets } from '@privy-io/react-auth';
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 
 const CHAIN_CONFIG = {
-    'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x534b2f3A21130d7a60830c2Df862319e593943A3', paymasterSupported: false },
-    'avax': { rpc: 'https://api.avax-test.network/ext/bc/C/rpc', isEVM: true, usdc: '0x5425890298aed601595a70AB815c96711a31Bc65' },
-    'eth': { rpc: 'https://ethereum-sepolia-rpc.publicnode.com', isEVM: true, usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
+    'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x534b2f3A21130d7a60830c2Df862319e593943A3', paymasterSupported: false, permitName: 'USDC' },
+    'avax': { rpc: 'https://avalanche-fuji-c-chain-rpc.publicnode.com', isEVM: true, usdc: '0x5425890298aed601595a70AB815c96711a31Bc65', permitName: 'USD Coin' },
+    'eth': { rpc: 'https://ethereum-sepolia-rpc.publicnode.com', isEVM: true, usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', permitName: 'USDC' },
     'sol': { rpc: 'https://api.testnet.solana.com', isEVM: false, usdc: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' }
 };
 
@@ -605,7 +605,7 @@ export function CircleWalletPage({
 
                     addCctpLog(`Please sign the Gasless deposit permit in your wallet...`);
                     const domain = {
-                        name: 'USDC',
+                        name: CHAIN_CONFIG[selectedToken.id]?.permitName || 'USDC',
                         version: '2',
                         chainId: cctpCfg.chainId,
                         verifyingContract: cctpCfg.usdc
