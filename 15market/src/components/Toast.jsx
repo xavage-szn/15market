@@ -13,7 +13,7 @@ function Toast({ message, type = 'success', onClose, onClick }) {
     }, [onClose, type]);
 
     const colors = {
-        success: { bg: 'bg-[#3CB371]/10', border: 'border-[#3CB371]/50', icon: 'text-[#3CB371]', label: 'Success', Icon: CheckCircle },
+        success: { bg: 'bg-[#249C6C]/10', border: 'border-[#249C6C]/50', icon: 'text-[#249C6C]', label: 'Success', Icon: CheckCircle },
         error: { bg: 'bg-[#FF7F50]/10', border: 'border-[#FF7F50]/50', icon: 'text-[#FF7F50]', label: 'Error', Icon: XCircle },
         pending: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', icon: 'text-blue-400', label: 'Processing', Icon: Loader2 },
         info: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', icon: 'text-blue-400', label: 'Info', Icon: Info }

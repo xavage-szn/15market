@@ -6,7 +6,7 @@ import LiveStreamingChart from './LiveStreamingChart';
 export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [] }) {
     const isDark = theme !== 'light';
     const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#b5d3c7]/95';
-    const controlBorder = isDark ? 'border-white/10' : 'border-[#3CB371]/25';
+    const controlBorder = isDark ? 'border-white/10' : 'border-[#249C6C]/25';
     const controlText = isDark ? 'text-white' : 'text-[#0a261a]';
     const controlTextDim = isDark ? 'text-white/40' : 'text-[#0a261a]/60';
 
@@ -158,8 +158,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     >
                         <div className="flex flex-col items-center gap-4">
                             <div className="relative">
-                                <Loader2 size={48} className="text-[#3CB371] animate-spin opacity-60" />
-                                <div className="absolute inset-0 blur-2xl bg-[#3CB371]/10 animate-pulse" />
+                                <Loader2 size={48} className="text-[#249C6C] animate-spin opacity-60" />
+                                <div className="absolute inset-0 blur-2xl bg-[#249C6C]/10 animate-pulse" />
                             </div>
                         </div>
                     </motion.div>
@@ -176,11 +176,11 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
                             className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${result.won
-                                    ? 'bg-[#3CB371]/20 border-[#3CB371]/30'
+                                    ? 'bg-[#249C6C]/20 border-[#249C6C]/30'
                                     : 'bg-[#FF4444]/20 border-[#FF4444]/30'
                                 }`}
                         >
-                            <div className={`w-2 h-2 rounded-full ${!result.expired ? 'animate-pulse' : ''} ${result.won ? 'bg-[#3CB371]' : 'bg-[#FF4444]'}`} />
+                            <div className={`w-2 h-2 rounded-full ${!result.expired ? 'animate-pulse' : ''} ${result.won ? 'bg-[#249C6C]' : 'bg-[#FF4444]'}`} />
                             <span className={`text-[10px] font-black uppercase ${isDark ? 'text-white' : 'text-[#0a261a]'} tracking-widest`}>
                                 {result.won ? `+$${(result.amount * 1.95).toFixed(2)}` : `-$${result.amount}`}
                             </span>
@@ -203,7 +203,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                             </span>
                             {window.innerWidth >= 768 && (
                                 <div className="flex items-center gap-1">
-                                    <div className="w-1 h-1 rounded-full bg-[#3CB371] animate-pulse" />
+                                    <div className="w-1 h-1 rounded-full bg-[#249C6C] animate-pulse" />
                                     <span className="text-[7px] font-bold opacity-30 uppercase tracking-widest">Live</span>
                                 </div>
                             )}
@@ -225,7 +225,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                                     <button 
                                         key={t.id} 
                                         onClick={() => onAssetSwitch(t)} 
-                                        className={`flex items-center justify-between px-2.5 py-2 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#3CB371] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}
+                                        className={`flex items-center justify-between px-2.5 py-2 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#249C6C] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}
                                     >
                                         <div className="flex flex-col items-start leading-tight">
                                             <span className="text-[9px] md:text-xs font-black uppercase tracking-widest">{t.symbol}</span>

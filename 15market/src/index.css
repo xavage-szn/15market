@@ -25,12 +25,8 @@
 
 html,
 body {
-  background-color: #050505 !important;
-  background-image:
-    url('https://www.transparenttextures.com/patterns/carbon-fibre.png'),
-    radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.02) 1px, transparent 0);
-  background-size: auto, 32px 32px;
-  background-attachment: fixed !important;
+  background-color: #000000 !important;
+  background-image: none !important;
   overscroll-behavior: none !important;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -44,10 +40,10 @@ body {
 
 /* Base Neon Glow Variables */
 :root {
-  --primary-color: #3CB371;
-  --primary-glow: rgba(60, 179, 113, 0.6);
-  --primary-glow-strong: rgba(60, 179, 113, 0.8);
-  --primary-glow-subtle: rgba(60, 179, 113, 0.4);
+  --primary-color: #249C6C;
+  --primary-glow: rgba(36, 156, 108, 0.6);
+  --primary-glow-strong: rgba(36, 156, 108, 0.8);
+  --primary-glow-subtle: rgba(36, 156, 108, 0.4);
   --glass-bg: rgba(15, 15, 15, 0.85);
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.06);
@@ -55,10 +51,10 @@ body {
 }
 
 .theme-arc {
-  --primary-color: #3CB371;
-  --primary-glow: rgba(60, 179, 113, 0.6);
-  --primary-glow-strong: rgba(60, 179, 113, 0.8);
-  --primary-glow-subtle: rgba(60, 179, 113, 0.4);
+  --primary-color: #249C6C;
+  --primary-glow: rgba(36, 156, 108, 0.6);
+  --primary-glow-strong: rgba(36, 156, 108, 0.8);
+  --primary-glow-subtle: rgba(36, 156, 108, 0.4);
 }
 
 /* Premium Typography */
@@ -222,10 +218,10 @@ body.light {
 }
 
 .light {
-  --primary-color: #3CB371;
-  --primary-glow: rgba(60, 179, 113, 0.2);
-  --primary-glow-strong: rgba(60, 179, 113, 0.4);
-  --primary-glow-subtle: rgba(60, 179, 113, 0.1);
+  --primary-color: #249C6C;
+  --primary-glow: rgba(36, 156, 108, 0.2);
+  --primary-glow-strong: rgba(36, 156, 108, 0.4);
+  --primary-glow-subtle: rgba(36, 156, 108, 0.1);
   --glass-bg: rgba(207, 220, 213, 0.95);
   --glass-border: rgba(60, 110, 80, 0.2);
   --glass-highlight: rgba(255, 255, 255, 0.3);
@@ -261,7 +257,7 @@ body.light {
   background: rgba(226, 239, 234, 0.90) !important;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(60, 179, 113, 0.1) !important;
+  border-bottom: 1px solid rgba(36, 156, 108, 0.1) !important;
 }
 
 .light ::-webkit-scrollbar {
@@ -275,16 +271,16 @@ body.light {
 }
 
 /* Light Mode Button Enhancements */
-.light button[style*="#3CB371"],
-.light .bg-\[#3CB371\] {
+.light button[style*="#249C6C"],
+.light .bg-\[#249C6C\] {
   box-shadow:
     0 4px 14px rgba(42, 157, 92, 0.30),
     0 0 0 1px rgba(0, 0, 0, 0.15) inset !important; /* Added outline */
   border: 1px solid rgba(0, 0, 0, 0.1) !important;
 }
 
-.light button[style*="#3CB371"]:hover,
-.light .bg-\[#3CB371\]:hover {
+.light button[style*="#249C6C"]:hover,
+.light .bg-\[#249C6C\]:hover {
   box-shadow:
     0 6px 20px rgba(42, 157, 92, 0.40),
     0 0 0 1px rgba(0, 0, 0, 0.25) inset !important;
@@ -313,9 +309,9 @@ body.light {
 }
 
 /* Preserve Brand Green Text */
-.light [style*="color: #3CB371"],
-.light .text-\[#3CB371\] {
-  color: #2a9d5c !important;
+.light [style*="color: #249C6C"],
+.light .text-\[#249C6C\] {
+  color: #1D845A !important;
 }
 
 /* Light Mode Borders */
@@ -430,7 +426,7 @@ body.light {
 
 /* Force branded green text for Rounds button in Light Mode */
 .light .rounds-confirm-text {
-  color: #3CB371 !important;
+  color: #249C6C !important;
 }
 
 .light .text-black\/80 {
@@ -446,13 +442,13 @@ input[type="range"] {
 }
 
 input[type="range"]::-webkit-slider-track {
-  background: rgba(60, 179, 113, 0.2);
+  background: rgba(36, 156, 108, 0.2);
   height: 6px;
   border-radius: 3px;
 }
 
 input[type="range"]::-moz-range-track {
-  background: rgba(60, 179, 113, 0.2);
+  background: rgba(36, 156, 108, 0.2);
   height: 6px;
   border-radius: 3px;
 }
@@ -463,9 +459,9 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #3CB371;
+  background: #249C6C;
   cursor: pointer;
-  box-shadow: 0 0 15px rgba(60, 179, 113, 0.6);
+  box-shadow: 0 0 15px rgba(36, 156, 108, 0.6);
   border: 2px solid white;
   margin-top: -6px;
 }
@@ -474,20 +470,20 @@ input[type="range"]::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #3CB371;
+  background: #249C6C;
   cursor: pointer;
   border: none;
-  box-shadow: 0 0 10px rgba(60, 179, 113, 0.5);
+  box-shadow: 0 0 10px rgba(36, 156, 108, 0.5);
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  background: #48c97f;
-  box-shadow: 0 0 15px rgba(60, 179, 113, 0.7);
+  background: #2EC47C;
+  box-shadow: 0 0 15px rgba(36, 156, 108, 0.7);
 }
 
 input[type="range"]::-moz-range-thumb:hover {
-  background: #48c97f;
-  box-shadow: 0 0 15px rgba(60, 179, 113, 0.7);
+  background: #2EC47C;
+  box-shadow: 0 0 15px rgba(36, 156, 108, 0.7);
 }
 
 .wallet-adapter-modal-wrapper {
@@ -497,15 +493,15 @@ input[type="range"]::-moz-range-thumb:hover {
 /* Force Para Modal Branding */
 .para-modal-container,
 .para-modal {
-  --para-accent-color: #3CB371 !important;
-  --para-brand-color: #3CB371 !important;
+  --para-accent-color: #249C6C !important;
+  --para-brand-color: #249C6C !important;
   font-family: 'Inter', sans-serif !important;
 }
 
 
 
 .para-button-primary {
-  background-color: #3CB371 !important;
+  background-color: #249C6C !important;
   color: white !important;
   font-weight: 900 !important;
   text-transform: uppercase !important;
@@ -523,8 +519,8 @@ input[type="range"]::-moz-range-thumb:hover {
 
 /* Refined Minimal Ticker for V2 */
 .ticker-v2 {
-  border-top: 1px solid #3CB371;
-  border-bottom: 1px solid #3CB371;
+  border-top: 1px solid #249C6C;
+  border-bottom: 1px solid #249C6C;
   position: relative;
 }
 
@@ -535,7 +531,7 @@ input[type="range"]::-moz-range-thumb:hover {
   left: 0;
   right: 0;
   height: 1px;
-  background: rgba(60, 179, 113, 0.3);
+  background: rgba(36, 156, 108, 0.3);
   z-index: 10;
 }
 
@@ -559,7 +555,7 @@ input[type="range"]::-moz-range-thumb:hover {
 }
 
 .zigzag-outline {
-  box-shadow: inset 0 2px 0 0 #3cb371, inset 0 -2px 0 0 #3cb371;
+  box-shadow: inset 0 2px 0 0 #249C6C, inset 0 -2px 0 0 #249C6C;
 }
 
 .scalloped-ticker-border {
@@ -573,7 +569,7 @@ input[type="range"]::-moz-range-thumb:hover {
   left: 0;
   right: 0;
   height: 6px;
-  background-image: radial-gradient(circle at 6px 0, transparent 6px, #3CB371 6px);
+  background-image: radial-gradient(circle at 6px 0, transparent 6px, #249C6C 6px);
   background-size: 12px 6px;
   z-index: 10;
 }
@@ -630,17 +626,17 @@ input[type="range"]::-moz-range-thumb:hover {
   --privy-color-foreground-2: #888888 !important;
   --privy-color-foreground-3: #555555 !important;
   --privy-color-background-2: #111111 !important;
-  --privy-color-accent: #3CB371 !important;
-  --privy-color-accent-light: rgba(60, 179, 113, 0.1) !important;
-  --privy-color-success: #3CB371 !important;
+  --privy-color-accent: #249C6C !important;
+  --privy-color-accent-light: rgba(36, 156, 108, 0.1) !important;
+  --privy-color-success: #249C6C !important;
   --privy-color-error: #FF7F50 !important;
 }
 
 /* 
 div[id^="privy-dialog"] {
   background: #050505 !important;
-  border: 1px solid rgba(60, 179, 113, 0.3) !important;
-  box-shadow: 0 0 50px rgba(60, 179, 113, 0.15), inset 0 0 20px rgba(60, 179, 113, 0.05) !important;
+  border: 1px solid rgba(36, 156, 108, 0.3) !important;
+  box-shadow: 0 0 50px rgba(36, 156, 108, 0.15), inset 0 0 20px rgba(36, 156, 108, 0.05) !important;
   border-radius: 24px !important;
   backdrop-filter: blur(20px) !important;
 }

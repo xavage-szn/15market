@@ -58,12 +58,12 @@ function TradeHistoryComponent({
                         {paginatedTrades.map((t) => {
                             const isRounds = t.type === 'rounds';
                             const side = (t.direction === "UP" || t.direction === 1 || String(t.direction) === "1") ? "LONG" : "SHORT";
-                            const sideColor = side === "LONG" ? '#3CB371' : '#FF7F50';
+                            const sideColor = side === "LONG" ? '#249C6C' : '#FF7F50';
 
                             return (
                                 <div key={t.id} className={`flex flex-row items-center justify-between p-2 lg:p-4 rounded-xl border transition-all group ${isLight
-                                    ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm hover:shadow-md'
-                                    : 'bg-black/40 border-white/10 hover:border-[#3CB371]/30'}`}>
+                                    ? 'bg-[#C2D1C9] border-[#249C6C]/35 shadow-sm hover:shadow-md'
+                                    : 'bg-black/40 border-white/10 hover:border-[#249C6C]/30'}`}>
                                     <div className="flex items-center gap-2 lg:gap-4">
                                         <div className="relative">
                                             <div className="font-bold px-2 py-0.5 lg:px-3 lg:py-1 rounded-md text-[9px] lg:text-sm" style={{
@@ -73,7 +73,7 @@ function TradeHistoryComponent({
                                                 {side}
                                             </div>
                                             {isRounds && (
-                                                <div className="absolute -top-2 -left-1 bg-[#3CB371] text-white text-[5px] font-black px-1 rounded uppercase tracking-tighter">Round</div>
+                                                <div className="absolute -top-2 -left-1 bg-[#249C6C] text-white text-[5px] font-black px-1 rounded uppercase tracking-tighter">Round</div>
                                             )}
                                         </div>
                                         <div className="flex flex-col">
@@ -93,7 +93,7 @@ function TradeHistoryComponent({
                                         <div className={`text-[8px] font-mono hidden lg:block ${isLight ? 'text-[#0a261a]/30' : 'text-white/20'}`}>{t.timestamp}</div>
 
                                         <div
-                                            className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all flex items-center gap-1 lg:gap-2 ${t.status === "WON" || t.status === "PAID" ? "bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/30" :
+                                            className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all flex items-center gap-1 lg:gap-2 ${t.status === "WON" || t.status === "PAID" ? "bg-[#249C6C]/10 text-[#249C6C] border border-[#249C6C]/30" :
                                                 t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
                                                     (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                                 }`}
@@ -109,7 +109,7 @@ function TradeHistoryComponent({
                                                     )}
                                                     {t.status === "PAID" && (
                                                         <div className="flex items-center gap-1">
-                                                            <CheckCircle2 size={10} className="text-[#3CB371]" />
+                                                            <CheckCircle2 size={10} className="text-[#249C6C]" />
                                                             <span className="text-[6px] opacity-80 uppercase">Paid</span>
                                                         </div>
                                                     )}
@@ -138,7 +138,7 @@ function TradeHistoryComponent({
                                                     setSelectedPnLTrade(t);
                                                     setIsPnLOpen(true);
                                                 }}
-                                                className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#3CB371]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#3CB371]'}`}
+                                                className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#249C6C]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#249C6C]'}`}
                                                 title="Share Receipt"
                                             >
                                                 <Share2 size={16} />
@@ -154,14 +154,14 @@ function TradeHistoryComponent({
                                 <button
                                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                                     disabled={currentPage === 1}
-                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 ${isLight ? 'bg-[#3CB371]/10 text-[#0a261a]/60 hover:bg-[#3CB371]/20' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 ${isLight ? 'bg-[#249C6C]/10 text-[#0a261a]/60 hover:bg-[#249C6C]/20' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
                                 >
                                     Prev
                                 </button>
                                 <button
                                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                                     disabled={currentPage === totalPages}
-                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 ${isLight ? 'bg-[#3CB371]/10 text-[#0a261a]/60 hover:bg-[#3CB371]/20' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30 ${isLight ? 'bg-[#249C6C]/10 text-[#0a261a]/60 hover:bg-[#249C6C]/20' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
                                 >
                                     Next
                                 </button>

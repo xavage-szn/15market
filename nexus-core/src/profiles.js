@@ -76,7 +76,7 @@ class ProfileService {
             address: addr,
             updatedAt: Date.now()
         };
-        this.save();
+        this.save().catch(e => console.warn('[Profiles] Background save failed:', e.message));
         return this.profiles[addr];
     }
 
@@ -112,7 +112,7 @@ class ProfileService {
         }
 
         this.profiles[addr].updatedAt = Date.now();
-        this.save();
+        this.save().catch(e => console.warn('[Profiles] Background save failed:', e.message));
         return record;
     }
 
@@ -130,7 +130,7 @@ class ProfileService {
         };
 
         profile.updatedAt = Date.now();
-        this.save();
+        this.save().catch(e => console.warn('[Profiles] Background save failed:', e.message));
         return true;
     }
 

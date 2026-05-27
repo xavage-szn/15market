@@ -1,4 +1,4 @@
-Ôªøimport { useEffect, useState, useCallback, useRef, useMemo, Component } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, Component } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
@@ -66,7 +66,7 @@ class ErrorBoundary extends Component {
           </div>
           <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">Platform Interrupted</h1>
           <p className="text-xs text-white/40 mb-8 max-w-xs">{this.state.error?.message || "An unexpected error occurred in the UI layer."}</p>
-          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#3CB371] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
+          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#249C6C] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
         </div>
       );
     }
@@ -94,9 +94,9 @@ const PortraitPrompt = ({ theme }) => (
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1 }}
         className="relative"
       >
-        <div className="w-32 h-20 rounded-2xl border-4 border-[#3CB371]/30 flex items-center justify-center">
-          <div className="w-1 h-8 rounded-full bg-[#3CB371]/20 absolute -right-1" />
-          <div className="w-2 h-2 rounded-full bg-[#3CB371]/20 absolute left-4" />
+        <div className="w-32 h-20 rounded-2xl border-4 border-[#249C6C]/30 flex items-center justify-center">
+          <div className="w-1 h-8 rounded-full bg-[#249C6C]/20 absolute -right-1" />
+          <div className="w-2 h-2 rounded-full bg-[#249C6C]/20 absolute left-4" />
         </div>
       </motion.div>
       <motion.div
@@ -104,21 +104,21 @@ const PortraitPrompt = ({ theme }) => (
         transition={{ duration: 2, repeat: Infinity }}
         className="absolute -top-8 left-1/2 -translate-x-1/2"
       >
-        <RotateCw className="w-8 h-8 text-[#3CB371]" />
+        <RotateCw className="w-8 h-8 text-[#249C6C]" />
       </motion.div>
     </div>
 
-    <h2 className="text-3xl font-black text-[#3CB371] uppercase tracking-tighter mb-4">
+    <h2 className="text-3xl font-black text-[#249C6C] uppercase tracking-tighter mb-4">
       Rotate Your Device
     </h2>
     <p className="text-white/40 text-sm font-medium max-w-xs leading-relaxed"
       style={{ color: theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>
-      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#3CB371] font-bold">Landscape</span> to access the Precision V2 Terminal.
+      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#249C6C] font-bold">Landscape</span> to access the Precision V2 Terminal.
     </p>
 
-    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#3CB371]/10 border border-[#3CB371]/20">
-      <Maximize2 className="w-4 h-4 text-[#3CB371]" />
-      <span className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Desktop Mode Optimization</span>
+    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#249C6C]/10 border border-[#249C6C]/20">
+      <Maximize2 className="w-4 h-4 text-[#249C6C]" />
+      <span className="text-[10px] font-black uppercase tracking-widest text-[#249C6C]">Desktop Mode Optimization</span>
     </div>
   </motion.div>
 );
@@ -145,7 +145,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-gradient-to-br from-[#1B5E3C]/95 to-[#0D2B1D]/95 shadow-[0_-10px_40px_rgba(27,94,60,0.4)] border-white/10'
-          : 'bg-gradient-to-br from-[#E2EFEA]/98 to-[#D9E9E2]/98 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-[#3CB371]/30'}
+          : 'bg-gradient-to-br from-[#E2EFEA]/98 to-[#D9E9E2]/98 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-[#249C6C]/30'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -159,7 +159,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
-          <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />
+          <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />
           
           <div className="flex items-center justify-center gap-3 w-full">
             <History size={14} className={isDark ? "text-white" : "text-[#0a261a]"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
@@ -187,27 +187,27 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                   key={trade.id}
                   className={`
                     p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#cce3d7] border-[#3CB371]/20 shadow-sm'}
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-[#cce3d7] border-[#249C6C]/20 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className={`
                         text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter
-                        ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
+                        ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
                       `}>
                         {trade.direction}
                       </div>
                       <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>{trade.symbol || 'BTC'}</span>
                     </div>
-                    <span className={`text-xs font-black ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                    <span className={`text-xs font-black ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
                       {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="text-[10px] opacity-40">
-                      ${Number(trade.entryPrice).toFixed(2)} Œì√á√≥ {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      ${Number(trade.entryPrice).toFixed(2)} G«Û {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -456,7 +456,7 @@ export default function UserApp() {
   const [roundsTradeHistory, setRoundsTradeHistory] = useState(() => loadLocalTrades(address, true, 'rounds'));
   const [activeRounds, setActiveRounds] = useState(() => loadLocalTrades(address, false, 'rounds'));
 
-  // Rounds chart state Œì√á√∂ populated by RoundsTerminal via onRoundPhaseChange
+  // Rounds chart state G«ˆ populated by RoundsTerminal via onRoundPhaseChange
   const [roundsChartState, setRoundsChartState] = useState(null);
   const [platformSettings, setPlatformSettings] = useState(() => {
     try {
@@ -699,7 +699,7 @@ export default function UserApp() {
   const [sessionMode, setSessionMode] = useState(true);
   const [evmSessionWallet, setEvmSessionWallet] = useState(null);
   const [sessionBalance, setSessionBalance] = useState(0);
-  // Ref that always mirrors sessionBalance Œì√á√∂ used by async callbacks to avoid stale closures
+  // Ref that always mirrors sessionBalance G«ˆ used by async callbacks to avoid stale closures
   const sessionBalanceRef = useRef(0);
   const [refillAmount, setRefillAmount] = useState("0.1");
   const [isSessionSynced, setIsSessionSynced] = useState(() => localStorage.getItem("15market_session_synced") === "true");
@@ -723,10 +723,10 @@ export default function UserApp() {
   const lastPriceUpdateRef = useRef(Date.now());
   const priceHistoryRef = useRef([]);
   const lastOptimisticActionTime = useRef(0);
-  // ‚â°∆í√∂√Ü RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
+  // =Éˆ∆ RESULT LOCK: Once a trade expires and the frontend resolves it, its outcome is stored here.
   // The reconciler will NEVER downgrade a locked result, preventing glitches.
-  const lockedResults = useRef(new Map()); // tradeId Œì√•√Ü { status, settlementPrice }
-  // ‚â°∆í√π√¶‚à©‚ïï√Ö REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
+  const lockedResults = useRef(new Map()); // tradeId GÂ∆ { status, settlementPrice }
+  // =É˘Ên+≈ REMOVED TRADES: IDs of trades that have been fully removed from activeTrades.
   // Prevents the reconciler from re-inserting them from backend data.
   const removedTradeIds = useRef(new Set());
   const cleanupTimers = useRef({});
@@ -918,7 +918,7 @@ export default function UserApp() {
 
       const backendActive = backendAll.filter(t => {
         const tid = String(t.id || t.tx || t.nonce);
-        // ‚â°∆í√π√¶‚à©‚ïï√Ö Never re-insert trades that have been fully removed from active view
+        // =É˘Ên+≈ Never re-insert trades that have been fully removed from active view
         if (removedTradeIds.current.has(tid)) return false;
         return ["PENDING", "RESOLVING"].includes(t.status);
       }).map(t => {
@@ -939,7 +939,7 @@ export default function UserApp() {
         const btId = String(bt.id || bt.tx || bt.nonce);
         const local = prev.find(p => String(p.id || p.tx || p.nonce) === btId);
 
-        // ‚â°∆í√∂√Ü CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
+        // =Éˆ∆ CHECK LOCKED RESULT: If we resolved this trade locally at expiry, NEVER let
         // the backend revert it to PENDING/RESOLVING. The local lock is ground truth.
         const locked = lockedResults.current.get(btId);
         if (locked) {
@@ -1108,7 +1108,7 @@ export default function UserApp() {
     if (address) triggerGlobalRefresh(true);
   }, [address, triggerGlobalRefresh]);
 
-  // Periodic session balance refresh (every 12s) Œì√á√∂ catches cases where
+  // Periodic session balance refresh (every 12s) G«ˆ catches cases where
   // socket balance_update events are missed and no other trigger fires.
   useEffect(() => {
     if (!address) return;
@@ -1231,7 +1231,7 @@ export default function UserApp() {
     };
   }, [address, notify, triggerGlobalRefresh]);
   
-  // ‚â°∆í√∂√Ü Result Lock Synchronizer: Propagation of local locks to state
+  // =Éˆ∆ Result Lock Synchronizer: Propagation of local locks to state
   useEffect(() => {
     const lockSyncInterval = setInterval(() => {
       if (lockedResults.current.size === 0) return;
@@ -1344,7 +1344,7 @@ export default function UserApp() {
     return null;
   }, [isConnected, address]);
 
-  const GREEN = "#3CB371";
+  const GREEN = "#249C6C";
   const CORAL = "#FF4444";
 
   useEffect(() => {
@@ -1454,7 +1454,7 @@ export default function UserApp() {
       
       let txHash;
 
-      // Œì√∂√áŒì√∂√áŒì√∂√á ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) Œì√∂√áŒì√∂√áŒì√∂√á
+      // Gˆ«Gˆ«Gˆ« ROUNDS P2P (REAL CONTRACT & SESSION SUPPORT) Gˆ«Gˆ«Gˆ«
       if (activeType === 'rounds') {
         const roundId = params.roundId || params.poolId;
         const dirVal = (activeDirection === "UP" ? 1 : 0);
@@ -1534,7 +1534,7 @@ export default function UserApp() {
         return;
       }
 
-      // Œì√∂√áŒì√∂√áŒì√∂√á CLASSIC TRADING Œì√á√∂ EMBEDDED WALLET MODEL Œì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√á
+      // Gˆ«Gˆ«Gˆ« CLASSIC TRADING G«ˆ EMBEDDED WALLET MODEL Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«
       // Step 1: Frontend calls /session/execute
       // Step 2: Backend derivations session wallet and sends stake to treasury on-chain
       // Step 3: Backend returns the txHash and registers the trade
@@ -1601,7 +1601,7 @@ export default function UserApp() {
             return;
           }
 
-          // Œì¬£√† Trade Active (On-chain stake moved)
+          // G£‡ Trade Active (On-chain stake moved)
           const confirmedTradeId = data.tradeId || tradeId;
           const txHash = data.txHash;
           
@@ -1620,14 +1620,14 @@ export default function UserApp() {
             setSessionBalance(parseFloat(data.newBalance));
           }
 
-          notify('Trade Active Œì¬£√¥', 'success');
+          notify('Trade Active G£Ù', 'success');
         } catch (err) {
           clearTimeout(timeoutId);
           console.error('[Trade] Execution error:', err.message);
           setSessionBalance(prev => prev + amtNum);
           setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
           setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(err.name === 'AbortError' ? 'Œì√ú√≠ Network Congested Œì√á√∂ Trade Cancelled' : err.message, 'error');
+          notify(err.name === 'AbortError' ? 'G‹Ì Network Congested G«ˆ Trade Cancelled' : err.message, 'error');
         }
       };
 
@@ -1665,7 +1665,7 @@ export default function UserApp() {
     };
 
     fetchTradeHistory();
-    // 30s fallback poll Œì√á√∂ socket events handle instant updates now
+    // 30s fallback poll G«ˆ socket events handle instant updates now
     const interval = setInterval(fetchTradeHistory, 30000);
     return () => clearInterval(interval);
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
@@ -1749,7 +1749,7 @@ export default function UserApp() {
 
 
 
-  // Œì√∂√áŒì√∂√áŒì√∂√á UNIFIED PRICE CONSUMPTION Œì√∂√áŒì√∂√áŒì√∂√á
+  // Gˆ«Gˆ«Gˆ« UNIFIED PRICE CONSUMPTION Gˆ«Gˆ«Gˆ«
   // Uses the dedicated price-frontend service for ultra-low-latency streaming.
   const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, ts: {} });
   const [streamStatus, setStreamStatus] = useState('connecting');
@@ -1823,7 +1823,7 @@ export default function UserApp() {
     return () => clearInterval(pulseLoop);
   }, [activeMarket]);
 
-  // Œì√∂√áŒì√∂√áŒì√∂√á SOCKET.IO: Trade events + Backend-Authoritative Settlement Œì√∂√áŒì√∂√áŒì√∂√á
+  // Gˆ«Gˆ«Gˆ« SOCKET.IO: Trade events + Backend-Authoritative Settlement Gˆ«Gˆ«Gˆ«
   useEffect(() => {
     socketService.connect();
 
@@ -1832,7 +1832,7 @@ export default function UserApp() {
       localStorage.setItem('15market_citadel_settings', JSON.stringify(newSettings));
     });
 
-    // Œì√∂√áŒì√∂√á BACKEND-AUTHORITATIVE SETTLEMENT Œì√∂√áŒì√∂√á
+    // Gˆ«Gˆ« BACKEND-AUTHORITATIVE SETTLEMENT Gˆ«Gˆ«
     // The backend is the ONLY source of truth for trade results.
     const unbindSettled = socketService.on('trade_settled', (data) => {
       if (!data?.betId && !data?.id) return;
@@ -1884,7 +1884,7 @@ export default function UserApp() {
       });
 
       if (data.won) {
-        notify(`‚â°∆í√Ö√• Trade WON! +$${payout}`, 'success');
+        notify(`=É≈Â Trade WON! +$${payout}`, 'success');
       } else {
         notify('Trade LOST.', 'error');
       }
@@ -1903,7 +1903,7 @@ export default function UserApp() {
     };
   }, [notify, updateEvmSessionBal, refetchEvmBalance, address, evmSessionWallet]);
 
-  // Œì√∂√áŒì√∂√á Backend-Authoritative Trade Ticks Œì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√áŒì√∂√á
+  // Gˆ«Gˆ« Backend-Authoritative Trade Ticks Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«Gˆ«
   // The backend TradeMonitor emits trade_tick every second per active trade.
   // We use these to drive the countdown and live price in ActiveTradesSidebar.
   useEffect(() => {
@@ -2266,7 +2266,7 @@ export default function UserApp() {
       if (tid && !cleanupTimers.current[tid]) {
         // Start a removal timer ONLY if one doesn't exist for this specific trade
         cleanupTimers.current[tid] = setTimeout(() => {
-          // ‚â°∆í√π√¶‚à©‚ïï√Ö Mark as permanently removed so the reconciler never re-adds it
+          // =É˘Ên+≈ Mark as permanently removed so the reconciler never re-adds it
           removedTradeIds.current.add(String(tid));
           setActiveTrades(prev => prev.filter(t => (t.id || t.tx || t.nonce) !== tid));
           delete cleanupTimers.current[tid];
@@ -2291,7 +2291,7 @@ export default function UserApp() {
 
 
 
-  // Arc Settlement Listener Œì√á√∂ with dedup to prevent double-crediting
+  // Arc Settlement Listener G«ˆ with dedup to prevent double-crediting
   const processedSettlements = useRef(new Set());
   const creditedPayouts = useRef(new Set()); // Track which betIds have had balance credited
 
@@ -2310,7 +2310,7 @@ export default function UserApp() {
           if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
             const betId = id.toString();
 
-            // ‚â°∆í¬¢√¶ DEDUP: Skip if we already processed this exact settlement event
+            // =É¢Ê DEDUP: Skip if we already processed this exact settlement event
             const eventKey = `${betId}_${log.transactionHash}`;
             if (processedSettlements.current.has(eventKey)) {
               return;
@@ -2347,7 +2347,7 @@ export default function UserApp() {
             if (won) {
               const payoutNum = parseFloat(formattedPayout);
 
-              // ‚â°∆í√∂√ë DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
+              // =Éˆ— DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
               // Check activeTradesRef to see if the trade already has balanceApplied
               const existingTrade = activeTradesRef.current.find(t =>
                 (t.id && t.id.toString() === betId) || (t.nonce && t.nonce.toString() === betId)
@@ -2467,7 +2467,7 @@ export default function UserApp() {
       }
 
       if (!walletClient) {
-        notify("Wallet client not ready Œì√á√∂ please reconnect your wallet", "error");
+        notify("Wallet client not ready G«ˆ please reconnect your wallet", "error");
         return;
       }
 
@@ -2647,7 +2647,7 @@ export default function UserApp() {
         } else {
           throw new Error("No wallet available to sign");
         }
-        console.log("Œì¬£√† [WITHDRAW] User authorized");
+        console.log("G£‡ [WITHDRAW] User authorized");
       } catch (sigErr) {
         if (sigErr.code === 4001 || sigErr.message?.includes('rejected') || sigErr.message?.includes('denied')) {
           notify("Withdrawal cancelled by user", "error");
@@ -2680,7 +2680,7 @@ export default function UserApp() {
         });
       } catch (fetchErr) {
         if (fetchErr.name === 'AbortError') {
-          throw new Error("Network timeout Œì√á√∂ Arc RPC may be congested. Try again in a moment.");
+          throw new Error("Network timeout G«ˆ Arc RPC may be congested. Try again in a moment.");
         }
         throw fetchErr;
       } finally {
@@ -2777,16 +2777,16 @@ export default function UserApp() {
           <header className={`w-full max-w-[1600px] px-2 md:px-6 flex items-center justify-between mb-0 relative z-50 ${isSmallScreen ? 'py-0 h-[48px]' : 'py-1 lg:py-0'}`}>
             <div className="flex items-center transition-all duration-500 h-full"
               style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
+              <img src="/logo.png" alt="logo" className={`${isSmallScreen ? 'h-[64px] -my-[8px] ml-1' : 'h-[54px] lg:h-[72px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all ${theme === 'light' ? 'invert hue-rotate-180' : ''}`} />
             </div>
 
 
 
             <div className="hidden lg:flex items-center gap-3 px-2 py-1">
               {/* Branded Game Mode Switcher - Large Screens */}
-              <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
+              <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
                 <motion.div
-                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
+                  className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#2EC47C] to-[#14472C] shadow-[0_0_20px_rgba(36, 156, 108,0.4)]"
                   initial={false}
                   animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -2820,9 +2820,9 @@ export default function UserApp() {
 
             <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
               {/* Branded Game Mode Switcher - Mobile */}
-              <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
+              <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'}`}>
                 <motion.div
-                  className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
+                  className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#2EC47C] to-[#14472C]"
                   initial={false}
                   animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -2856,8 +2856,8 @@ export default function UserApp() {
 
           {/* Global V2 Architectural Separator (Runs across the screen) */}
           <div className={`w-full flex flex-col relative z-[60] ${isSmallScreen ? '-mt-[2px] mb-[2px] gap-[2px]' : '-mt-1 md:mt-0 mb-[2px] md:mb-[4px]'}`}>
-            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.3)]" />
-            <div className="w-full h-[1.5px] bg-[#3CB371] shadow-[0_0_20px_rgba(60,179,113,0.4)]" />
+            <div className="w-full h-[1.5px] bg-[#249C6C] shadow-[0_0_15px_rgba(36, 156, 108,0.3)]" />
+            <div className="w-full h-[1.5px] bg-[#249C6C] shadow-[0_0_20px_rgba(36, 156, 108,0.4)]" />
             {isSmallScreen && (
               <div className="w-full mt-[2px]">
                 <GlobalTradeScroller theme={theme} />
@@ -2905,17 +2905,17 @@ export default function UserApp() {
                       style={{
                         background: isSmallScreen 
                           ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)') 
-                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
+                          : (theme === 'light' ? 'rgba(36, 156, 108, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
                         boxShadow: isSmallScreen
                           ? (theme === 'light' 
-                            ? '0 15px 45px -10px rgba(60,179,113,0.08), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(60,179,113,0.1)' 
-                            : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)')
+                            ? '0 15px 45px -10px rgba(36, 156, 108,0.08), inset 0 5px 35px rgba(255,255,255,0.95), inset 0 -4px 20px rgba(36, 156, 108,0.1)' 
+                            : '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(36, 156, 108,0.05), inset 0 2px 4px rgba(255,255,255,0.05)')
                           : (theme === 'light'
-                            ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(60, 179, 113, 0.05)'
+                            ? '0 10px 40px rgba(0, 0, 0, 0.04), inset 0 0 40px rgba(36, 156, 108, 0.05)'
                             : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
                         borderColor: isSmallScreen
-                          ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
-                          : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
+                          ? (theme === 'light' ? 'rgba(36, 156, 108, 0.35)' : 'rgba(255, 255, 255, 0.05)')
+                          : (theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : `${GREEN}15`)
                       }}>
                       <div className="flex-1 w-full h-full flex relative">
                         {/* Chart Area */}
@@ -2934,8 +2934,8 @@ export default function UserApp() {
                         </div>
 
                         {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
-                        <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
-                          <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                        <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#249C6C]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                          <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#249C6C]/10' : 'text-white/40 border-white/5'}`}>
                             Order Book
                           </div>
                           <div className="flex-1 overflow-hidden p-2">
@@ -2956,7 +2956,7 @@ export default function UserApp() {
                       <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'}`}`}
                         style={{
                           background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
-                          borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)')
+                          borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : 'rgba(255,255,255,0.05)')
                         }}>
                         {gameMode === 'rounds' ? (
                           <RoundsTerminal
@@ -2999,7 +2999,7 @@ export default function UserApp() {
                         <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'} flex flex-col`}
                           style={{
                             background: theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)',
-                            borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)'
+                            borderColor: theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : 'rgba(255,255,255,0.05)'
                           }}>
                           <div className="flex flex-col h-full min-h-0">
                             <LiveExecution
@@ -3038,7 +3038,7 @@ export default function UserApp() {
                               exit={{ height: 0, opacity: 0 }}
                               className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
                                   platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
-                                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
+                                    platformSettings.bannerLevel === 'success' ? 'bg-[#249C6C]/10 border-[#249C6C]/20' :
                                       'bg-blue-500/10 border-blue-500/20'
                                 }`}
                             >
@@ -3046,12 +3046,12 @@ export default function UserApp() {
                                 <div className="flex items-center gap-3">
                                   <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
                                       platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
+                                        platformSettings.bannerLevel === 'success' ? 'bg-[#249C6C]' :
                                           'bg-blue-500'
                                     }`} />
                                   <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
                                       platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
+                                        platformSettings.bannerLevel === 'success' ? 'text-[#249C6C]' :
                                           'text-blue-500'
                                     }`}>
                                     {platformSettings.systemBanner}
@@ -3067,7 +3067,7 @@ export default function UserApp() {
                         <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
                           style={{
                             background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
-                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)')
+                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)')
                           }}>
                           <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
                             {gameMode === 'rounds' ? (
@@ -3107,12 +3107,12 @@ export default function UserApp() {
                           </div>
                         </div>
 
-                        {/* Active Trade / Controls Box Œì√á√∂ hidden in Rounds */}
+                        {/* Active Trade / Controls Box G«ˆ hidden in Rounds */}
                         {gameMode !== 'rounds' && (
                           <div className={`flex-1 min-h-[160px] md:min-h-0 rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                             style={{
                               background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'
+                              borderColor: theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)'
                             }}>
                             <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
                               <LiveExecution
@@ -3193,7 +3193,7 @@ export default function UserApp() {
               <div className="flex items-center gap-2">
                 <Activity size={10} className="text-white animate-pulse" />
                 <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
-                  Disconnected Œì√á√≥ Internet Connection Lost
+                  Disconnected G«Û Internet Connection Lost
                 </span>
               </div>
             </div>
@@ -3208,12 +3208,12 @@ export default function UserApp() {
               height: ['auto', 'auto', 'auto', 0]
             }}
             transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
-            className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
+            className="fixed top-0 left-0 w-full z-[199999] bg-[#249C6C]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
           >
             <div className="flex items-center justify-center gap-3 py-1.5 px-4">
               <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
                 <CheckCircle size={10} />
-                Network Reconnected Œì√á√≥ System Online
+                Network Reconnected G«Û System Online
               </span>
             </div>
           </motion.div>
@@ -3225,7 +3225,7 @@ export default function UserApp() {
         <div className="flex items-center gap-4 pointer-events-auto">
           <img src="/logo.png" alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
           <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-            ‚î¨‚åê 2026 15market
+            -¨ 2026 15market
           </span>
         </div>
         <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
@@ -3272,8 +3272,8 @@ export default function UserApp() {
       {/* OVERLAY: Maintenance Mode */}
       {platformSettings.maintenanceMode && (
         <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
-          <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
-            <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
+          <div className="w-24 h-24 bg-[#249C6C]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#249C6C]/20">
+            <Settings className="text-[#249C6C] w-12 h-12 animate-spin-slow" />
           </div>
           <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
             Under Maintenance

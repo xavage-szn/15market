@@ -24,7 +24,7 @@ function LiveStreamingChartComponent({ theme, symbol }) {
     const debugProbeRef = useRef({ badPriceTs: 0, emptyDrawTs: 0 });
 
     const isLight = theme === 'light';
-    const GREEN = '#3CB371';
+    const GREEN = '#249C6C';
 
     // Listen for price updates from both primary and fallback streams
     useEffect(() => {
@@ -180,43 +180,46 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             const liveX = getX(nowPx);
             const liveY = toY(latestPriceVal);
 
-            // Cache Gradient
-            if (!gradRef.current || lastHRef.current !== H || lastThemeRef.current !== theme) {
-                const fillGrad = ctx.createLinearGradient(0, 0, 0, H);
-                fillGrad.addColorStop(0, isLight ? 'rgba(60, 179, 113, 0.3)' : `${GREEN}33`);
-                fillGrad.addColorStop(1, 'transparent');
-                gradRef.current = fillGrad;
-                lastHRef.current = H;
-                lastThemeRef.current = theme;
-            }
-
             // Smooth clipping: Always start the line slightly off-screen to the left
             const startX = -20;
             const startY = toY(history[firstIdx].p);
 
-            // FILL
+            // CLIP + GRADIENT FILL TECHNIQUE
+            // Step 1: Define the exact line shape as a clip region (follows the signal precisely)
+            ctx.save();
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             for (let i = firstIdx + 1; i <= lastIdx; i++) {
                 ctx.lineTo(getX(history[i].t), toY(history[i].p));
             }
-            ctx.lineTo(liveX, liveY);
-            ctx.lineTo(liveX, H + 20);
+            ctx.lineTo(liveX, liveY);   // Up to the live signal point
+            ctx.lineTo(liveX, H + 20);  // Straight down — no slant, no crossing
             ctx.lineTo(startX, H + 20);
             ctx.closePath();
-            ctx.fillStyle = gradRef.current;
-            ctx.fill();
+            ctx.clip(); // Lock drawing to inside the line shape
+
+            // Step 2: Paint a purely horizontal gradient inside the clip
+            // Strong green at the back (left), fully transparent at the signal point (right)
+            // The clip ensures it never bleeds outside the line shape
+            const fillGrad = ctx.createLinearGradient(0, 0, liveX, 0);
+            fillGrad.addColorStop(0,    isLight ? 'rgba(36, 156, 108, 0.40)' : `${GREEN}44`);
+            fillGrad.addColorStop(0.50, isLight ? 'rgba(36, 156, 108, 0.20)' : `${GREEN}22`);
+            fillGrad.addColorStop(0.80, isLight ? 'rgba(36, 156, 108, 0.06)' : `${GREEN}0A`);
+            fillGrad.addColorStop(1.00, 'rgba(0,0,0,0)');
+            ctx.fillStyle = fillGrad;
+            ctx.fillRect(startX, 0, liveX - startX + 2, H + 20); // Fill the whole clip area
+            ctx.restore(); // Release the clip
 
             // STROKE WITH INTENSE SHADOW
             ctx.beginPath();
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
             ctx.lineWidth = 3;
-            ctx.strokeStyle = isLight ? '#2d8a57' : GREEN;
+            ctx.strokeStyle = isLight ? '#1D7A52' : GREEN;
             
             // Add depth shadow to the line itself
             ctx.shadowBlur = 15;
-            ctx.shadowColor = isLight ? 'rgba(30,90,56,0.5)' : 'rgba(60,179,113,0.6)';
+            ctx.shadowColor = isLight ? 'rgba(30,90,56,0.5)' : 'rgba(36, 156, 108,0.6)';
             
             ctx.moveTo(startX, startY);
             for (let i = firstIdx + 1; i <= lastIdx; i++) {
@@ -237,7 +240,7 @@ function LiveStreamingChartComponent({ theme, symbol }) {
 
             // BADGE
             const labelH = 20;
-            ctx.fillStyle = isLight ? '#2d8a57' : GREEN;
+            ctx.fillStyle = isLight ? '#1D7A52' : GREEN;
             ctx.beginPath();
             ctx.roundRect(liveX + 8, liveY - labelH/2, labelW, labelH, 4);
             ctx.fill();
@@ -245,31 +248,31 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.textBaseline = 'middle';
             ctx.fillText(latestPriceValStr, liveX + 16, liveY);
 
-            // WIDE AMBIENT BACKGROUND GLOW (New request: ambient light under signal point)
-            const ambientGlow = ctx.createRadialGradient(liveX, liveY, 0, liveX, liveY, isMobile ? 120 : 180);
-            ambientGlow.addColorStop(0, isLight ? 'rgba(60, 179, 113, 0.15)' : 'rgba(60, 179, 113, 0.2)');
-            ambientGlow.addColorStop(0.5, isLight ? 'rgba(60, 179, 113, 0.05)' : 'rgba(60, 179, 113, 0.08)');
+            // TIGHT AMBIENT GLOW — very close around the signal point
+            const ambientGlow = ctx.createRadialGradient(liveX, liveY, 0, liveX, liveY, isMobile ? 30 : 40);
+            ambientGlow.addColorStop(0, isLight ? 'rgba(36, 156, 108, 0.20)' : 'rgba(36, 156, 108, 0.25)');
+            ambientGlow.addColorStop(0.6, isLight ? 'rgba(36, 156, 108, 0.06)' : 'rgba(36, 156, 108, 0.10)');
             ambientGlow.addColorStop(1, 'transparent');
             ctx.fillStyle = ambientGlow;
             ctx.globalCompositeOperation = 'screen';
-            ctx.fillRect(0, 0, W, H);
+            ctx.fillRect(liveX - 40, liveY - 40, 80, 80);
             ctx.globalCompositeOperation = 'source-over';
 
-            // ULTRA-INTENSE SIGNAL GLOW (Behind the point)
-            const pulseSize = Math.sin(nowPx / 150) * 5;
-            const glowSize = 25 + pulseSize;
-            
-            const signalGlow = ctx.createRadialGradient(liveX, liveY, 2, liveX, liveY, glowSize);
-            signalGlow.addColorStop(0, isLight ? 'rgba(45, 138, 87, 0.8)' : `${GREEN}aa`);
-            signalGlow.addColorStop(0.5, isLight ? 'rgba(45, 138, 87, 0.3)' : `${GREEN}40`);
+            // TIGHT SIGNAL GLOW — stays very close to the dot
+            const pulseSize = Math.sin(nowPx / 150) * 2;
+            const glowSize = 10 + pulseSize;
+
+            const signalGlow = ctx.createRadialGradient(liveX, liveY, 1, liveX, liveY, glowSize);
+            signalGlow.addColorStop(0, isLight ? 'rgba(45, 138, 87, 0.9)' : `${GREEN}bb`);
+            signalGlow.addColorStop(0.5, isLight ? 'rgba(45, 138, 87, 0.3)' : `${GREEN}30`);
             signalGlow.addColorStop(1, 'transparent');
-            
+
             ctx.beginPath();
             ctx.arc(liveX, liveY, glowSize, 0, Math.PI * 2);
             ctx.fillStyle = signalGlow;
             ctx.fill();
 
-            // Core point (Clean, no shadow to 'fade out' the glow at the point)
+            // Core point
             ctx.beginPath();
             ctx.arc(liveX, liveY, 4.5, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
@@ -277,8 +280,8 @@ function LiveStreamingChartComponent({ theme, symbol }) {
 
             // Precision Outer Ring (Subtle)
             ctx.beginPath();
-            ctx.arc(liveX, liveY, 7 + (pulseSize * 0.5), 0, Math.PI * 2);
-            ctx.strokeStyle = isLight ? 'rgba(45, 138, 87, 0.3)' : `${GREEN}40`;
+            ctx.arc(liveX, liveY, 6.5 + (pulseSize * 0.3), 0, Math.PI * 2);
+            ctx.strokeStyle = isLight ? 'rgba(45, 138, 87, 0.25)' : `${GREEN}35`;
             ctx.lineWidth = 1;
             ctx.stroke();
 

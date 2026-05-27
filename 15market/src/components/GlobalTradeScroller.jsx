@@ -18,7 +18,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
     const lastFetchRef = useRef(0);
 
     const isLight = theme === 'light';
-    const WIN_COLOR = "#3CB371"; // Green
+    const WIN_COLOR = "#249C6C"; // Green
     const LOSS_COLOR = "#FF7F50"; // Coral/Red
 
     const truncate = (str) => str ? `${str.slice(0, 4)}...${str.slice(-4)}` : "";
@@ -195,7 +195,7 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
     const v1Bg = isLight ? 'bg-white zigzag-ticker shadow-sm' : 'bg-[#0a0a0a] zigzag-ticker zigzag-outline';
     const v1TextClass = isLight ? 'text-[#0a261a]' : 'text-white';
     const switchEffectBg = isLight 
-        ? 'bg-[#3CB371] shadow-lg border-[#3CB371]/20' 
+        ? 'bg-[#249C6C] shadow-lg border-[#249C6C]/20' 
         : 'bg-gradient-to-br from-[#1B5E3C] to-[#0D2B1D] shadow-[0_0_40px_rgba(27,94,60,0.5)] border-white/5';
 
     return (

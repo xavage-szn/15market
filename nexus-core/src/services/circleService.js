@@ -38,7 +38,11 @@ class CircleService {
         }
 
         try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+            options.signal = controller.signal;
             const response = await fetch(url, options);
+            clearTimeout(id);
             const data = await response.json();
             if (!response.ok) {
                 console.error(`[Circle] API Error (${response.status}):`, data);

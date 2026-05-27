@@ -20,7 +20,7 @@ export function UnifiedWalletButton({ theme }) {
         }
     }, [isConnected, connectedChainId, switchChain]);
 
-    const currentColor = '#3CB371';
+    const currentColor = '#249C6C';
 
     // Open Privy login flow
     const onConnect = () => {
@@ -70,8 +70,8 @@ export function UnifiedWalletButton({ theme }) {
                 id="connect-wallet-btn"
                 className="px-4 lg:px-8 py-2.5 lg:py-3 font-black uppercase text-[10px] lg:text-xs tracking-[0.2em] rounded-full transition-all active:scale-95 text-white relative overflow-hidden group shadow-xl"
                 style={{
-                    backgroundColor: '#3CB371',
-                    boxShadow: `0 0 20px #3CB37150`,
+                    backgroundColor: '#249C6C',
+                    boxShadow: `0 0 20px #249C6C50`,
                 }}
             >
                 <span className="relative z-10 flex items-center gap-2">

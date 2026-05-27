@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, Timer, Trophy, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const GREEN_COLOR = "#3CB371"; // WON is Green
+const GREEN_COLOR = "#249C6C"; // WON is Green
 const RED_COLOR = "#FF7F50";   // LOST is Coral
 
 // Smoothly interpolates the backend-authoritative timeLeft
@@ -28,7 +28,7 @@ function TradeCountdown({ timeLeft, isDark }) {
 
     return (
         <div className={`flex items-center justify-center gap-1.5 mt-2 pt-2 border-t ${isDark ? 'border-white/5' : 'border-[#0f2618]/5'}`}>
-            <Timer size={10} className="text-[#3CB371] animate-pulse" />
+            <Timer size={10} className="text-[#249C6C] animate-pulse" />
             <span className={`text-[10px] font-mono font-black tabular-nums tracking-tighter ${isDark ? 'text-white/80' : 'text-[#0f2618]/80'}`}>
                 {displayTime.toFixed(1)}s
             </span>
@@ -41,18 +41,18 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
     const isDark = theme !== 'light';
 
     return (
-        <div className={`w-full h-full flex flex-col overflow-hidden ${isDark ? 'bg-transparent' : 'coral-green-gradient-light'}`}
+        <div className={`w-full h-full flex flex-col overflow-hidden ${isDark ? 'bg-transparent' : 'coral-green-gradient-light'}`} style={{ fontFamily: '"Comfortaa", cursive' }}
         >
-            <div className={`px-4 py-2.5 flex items-center justify-between border-b ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-[#3CB371]/10 bg-white/20'}`}>
+            <div className={`px-4 py-2.5 flex items-center justify-between border-b ${isDark ? 'border-white/5 bg-white/[0.02]' : 'border-[#249C6C]/10 bg-white/20'}`}>
                 <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] shadow-[0_0_10px_#3CB371]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#249C6C] shadow-[0_0_10px_#249C6C]" />
                     <span className={`text-[9px] uppercase font-black tracking-[0.3em] ${isDark ? 'text-white/40' : 'text-[#0f2618]/40'}`}>
                         Engines
                     </span>
                 </div>
                 {activeTrades.length > 0 && (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#3CB371]/10 border border-[#3CB371]/20">
-                        <span className="text-[8px] font-black text-[#3CB371]">{activeTrades.length} ACTIVE</span>
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#249C6C]/10 border border-[#249C6C]/20">
+                        <span className="text-[8px] font-black text-[#249C6C]">{activeTrades.length} ACTIVE</span>
                     </div>
                 )}
             </div>
@@ -112,14 +112,14 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                         }
                                     }}
                                     className={`relative p-3 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
-                                        ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#f0f9f4] border-[#3CB371]/10 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
+                                        ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-[#f0f9f4] border-[#249C6C]/10 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
                                     `}
                                 >
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2">
-                                            <div className={`p-1.5 rounded-lg ${isLong ? 'bg-[#3CB371]/10' : 'bg-[#FF7F50]/10'}`}>
+                                            <div className={`p-1.5 rounded-lg ${isLong ? 'bg-[#249C6C]/10' : 'bg-[#FF7F50]/10'}`}>
                                                 {isLong
-                                                    ? <ArrowUp size={12} color="#3CB371" strokeWidth={3} />
+                                                    ? <ArrowUp size={12} color="#249C6C" strokeWidth={3} />
                                                     : <ArrowDown size={12} color="#FF7F50" strokeWidth={3} />
                                                 }
                                             </div>
@@ -175,14 +175,14 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                     <TradeCountdown timeLeft={trade.timeLeft} isDark={isDark} />
 
                                     {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST' || trade.status === 'PAID') && (
-                                        <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#3CB371]/10'} flex flex-col items-center justify-center rounded-xl border`}>
+                                        <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#249C6C]/10'} flex flex-col items-center justify-center rounded-xl border`}>
                                             {(trade.status === 'WON' || trade.status === 'PAID') && (
-                                                <div className="flex flex-col items-center text-[#3CB371] scale-90">
+                                                <div className="flex flex-col items-center text-[#249C6C] scale-90">
                                                     <Trophy size={20} />
                                                     <span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span>
                                                     {trade.status === 'WON' && (
                                                         <div className="flex items-center gap-1.5 mt-0.5">
-                                                            <div className="w-2 h-2 rounded-full border border-[#3CB371] border-t-transparent animate-spin" />
+                                                            <div className="w-2 h-2 rounded-full border border-[#249C6C] border-t-transparent animate-spin" />
                                                             <span className="text-[7px] font-bold uppercase opacity-60 animate-pulse">Payout Pending</span>
                                                         </div>
                                                     )}
@@ -194,8 +194,8 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                             {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#FF7F50] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
                                             {trade.status === 'RESOLVING' && (
                                                 <div className="flex flex-col items-center gap-2">
-                                                    <div className="w-4 h-4 rounded-full border-2 border-[#3CB371] border-t-transparent animate-spin" />
-                                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3CB371] animate-pulse">Syncing</span>
+                                                    <div className="w-4 h-4 rounded-full border-2 border-[#249C6C] border-t-transparent animate-spin" />
+                                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#249C6C] animate-pulse">Syncing</span>
                                                 </div>
                                             )}
                                         </div>

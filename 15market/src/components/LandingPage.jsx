@@ -13,7 +13,7 @@ const XLogo = () => (
 );
 
 const LandingBackground = ({ theme }) => {
-    const isLight = theme === 'light';
+    const isLight = false; // Always dark!
     const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 });
 
     useEffect(() => {
@@ -56,14 +56,14 @@ const RisingBalance = () => {
 };
 
 export function LandingPage({ theme, onToggle, onDocs }) {
-    const isLight = theme === 'light';
+    const isLight = false; // Always dark!
     const [currentTextIndex, setCurrentTextIndex] = useState(0);
     const [displayText, setDisplayText] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const phrases = [
-        "access high frequency markets",
+        "real time binary markets",
         "trade the trend in real time",
         "earn profits"
     ];
@@ -201,11 +201,11 @@ export function LandingPage({ theme, onToggle, onDocs }) {
                     </h1>
                 </div>
                 <p className={`text-[10px] sm:text-xs uppercase tracking-widest max-w-lg mx-auto opacity-75 font-semibold leading-relaxed ${isLight ? 'text-black/60' : 'text-white/50'}`}>
-                    High-frequency decentralized prediction engine. Set round duration, stakes, prediction direction, and execute in under 45ms.
+                    High-frequency real-time binary markets prediction engine. Predict direction, set stakes, and execute rounds in under 45ms.
                 </p>
 
                 <div className="mt-2 hover:scale-[1.03] transition-transform duration-500">
-                    <UnifiedWalletButton theme={theme} />
+                    <UnifiedWalletButton theme="dark" />
                 </div>
             </header>
 
@@ -215,7 +215,7 @@ export function LandingPage({ theme, onToggle, onDocs }) {
                 {/* 1. MacBook Pro Mockup (Desktop side only) */}
                 <div className="hidden lg:flex flex-1 w-full max-w-[800px] flex-col items-center">
                     {/* Screen Outer Bezel */}
-                    <div className="w-full aspect-[16/10] bg-[#121212] rounded-t-[20px] p-2 border-[2px] border-[#333] shadow-[0_25px_60px_rgba(0,0,0,0.55)] flex flex-col relative overflow-hidden">
+                    <div className="w-full aspect-[16/9] bg-[#121212] rounded-t-[20px] p-2 border-[2px] border-[#333] shadow-[0_25px_60px_rgba(0,0,0,0.55)] flex flex-col relative overflow-hidden">
                         
                         {/* Screen Content Box */}
                         <div className="flex-1 bg-[#050505] rounded-[6px] overflow-hidden relative">
@@ -229,7 +229,7 @@ export function LandingPage({ theme, onToggle, onDocs }) {
                             <img 
                                 src="/deskto.png" 
                                 alt="15market Desktop Terminal" 
-                                className="w-full h-full object-cover bg-[#050505] scale-[1.15] -translate-y-3"
+                                className="w-full h-full object-cover bg-[#050505]"
                             />
                         </div>
 
@@ -246,7 +246,7 @@ export function LandingPage({ theme, onToggle, onDocs }) {
                 {/* 2. iPhone 15 Pro with Dynamic Island Mockup (Mobile side only) */}
                 <div className="flex lg:hidden w-[260px] flex-col items-center">
                     {/* iPhone Frame */}
-                    <div className="w-full aspect-[9/18.5] bg-[#0c0c0c] rounded-[44px] p-2.5 border-[2px] border-[#2a2a2a] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col relative overflow-hidden">
+                    <div className="w-full aspect-[9/11] bg-[#0c0c0c] rounded-[44px] p-2.5 border-[2px] border-[#2a2a2a] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col relative overflow-hidden">
                         
                         {/* iPhone Screen Box */}
                         <div className="flex-1 bg-[#050505] rounded-[36px] overflow-hidden relative">
@@ -258,7 +258,7 @@ export function LandingPage({ theme, onToggle, onDocs }) {
                             <img 
                                 src="/mobile.png" 
                                 alt="15market Mobile View" 
-                                className="w-full h-full object-contain bg-[#050505]"
+                                className="w-full h-full object-cover bg-[#050505]"
                             />
                         </div>
 

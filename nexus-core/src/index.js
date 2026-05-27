@@ -23,6 +23,22 @@ const { ethers } = require('ethers');
 const Redis = require('ioredis');
 const circleService = require('./services/circleService');
 const fundingService = require('./services/fundingService');
+const notificationService = require('./services/notificationService');
+
+// --- DYNAMICALLY DERIVED SOLANA RELAYER ADDRESS ---
+let derivedSolanaRelayerAddress = '11111111111111111111111111111111'; // default fallback
+if (config.SOL_GAS_TANK_KEY) {
+  try {
+    const bs58 = require('bs58');
+    const { Keypair } = require('@solana/web3.js');
+    const dec = bs58.default ? bs58.default.decode : bs58.decode;
+    const kp = Keypair.fromSecretKey(dec(config.SOL_GAS_TANK_KEY));
+    derivedSolanaRelayerAddress = kp.publicKey.toString();
+    console.log('[Solana] Derived relayer address from env key:', derivedSolanaRelayerAddress);
+  } catch (err) {
+    console.error('[Solana] Failed to derive relayer address from SOL_GAS_TANK_KEY:', err.message);
+  }
+}
 
 
 const redis = new Redis(config.REDIS_URL || 'redis://localhost:6379', {
@@ -38,6 +54,8 @@ redis.on('error', (err) => {});
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
+notificationService.init(io);
+
 
 app.use(cors());
 app.use(express.json());
@@ -388,6 +406,14 @@ app.post('/fund/monitor-cctp', async (req, res) => {
 
     const userAddr = address.toLowerCase();
 
+    // Trigger CCTP Initiated notification
+    notificationService.notifyUser(
+        userAddr,
+        "CCTP Bridge Initiated",
+        `Bridging ${amount} USDC via CCTP from source chain to Arc Testnet. Attestation polling started.`,
+        "info"
+    );
+
     // Instantly credit cached session balance and emit real-time socket event for immediate UX feedback
     // (The actual on-chain USDC mint will follow asynchronously via IRIS attestation + receiveMessage)
     const session = cache.sessions.get(userAddr);
@@ -565,7 +591,7 @@ app.get('/session/balance/:address', async (req, res) => {
     
     // We add a short timeout so this doesn't hang the UI if the RPC is lagging
     const balPromise = usdcContract.balanceOf(sessionWallet.address);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), 5000));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), 10000));
     
     const balRaw = await Promise.race([balPromise, timeoutPromise]);
     const onChainBal = parseFloat(ethers.formatUnits(balRaw, 6)); // USDC has 6 decimals
@@ -623,6 +649,263 @@ app.get('/session/address/:address', (req, res) => {
     res.json({ success: true, sessionAddress: sessionWallet.address });
   } catch (err) {
     res.status(500).json({ error: "Failed to derive session address" });
+  }
+});
+
+// --- SOLANA PERMANENT WALLET ENDPOINTS ---
+app.post('/solana/stash-key', (req, res) => {
+  const { address, privKey, pubKey } = req.body;
+  if (!address || !privKey || !pubKey) return res.status(400).json({ error: "Missing data" });
+  
+  profiles.upsert(address.toLowerCase(), {
+    solanaWallet: { pubKey, privKey }
+  });
+  res.json({ success: true });
+});
+
+app.get('/solana/retrieve-key/:address', (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  const profile = profiles.get(addr);
+  const privKey = profile?.solanaWallet?.privKey;
+  if (!privKey) return res.status(404).json({ error: "Key not found" });
+  res.json({ success: true, privKey });
+});
+
+app.get('/solana/address/:address', (req, res) => {
+  const addr = req.params.address.toLowerCase();
+  const profile = profiles.get(addr);
+  res.json({ 
+    success: true, 
+    address: profile?.solanaWallet?.pubKey || null 
+  });
+});
+
+app.post('/solana/clear', (req, res) => {
+  const { address } = req.body;
+  if (!address) return res.status(400).json({ error: "Missing address" });
+  
+  const addr = address.toLowerCase();
+  const profile = profiles.get(addr);
+  if (profile && profile.solanaWallet) {
+    delete profile.solanaWallet;
+    profiles.upsert(addr, {});
+    console.log(`[Solana] Permanent Solana wallet cleared for ${addr}`);
+  }
+  res.json({ success: true });
+});
+
+app.get('/solana/config', (req, res) => {
+  res.json({ relayerAddress: derivedSolanaRelayerAddress });
+});
+
+/**
+ * POST /solana/fund
+ *
+ * Receives a serialized signed Solana transaction from the frontend,
+ * broadcasts it on Devnet, verifies the USDC transfer, and credits
+ * the user's Arc trading wallet balance.
+ *
+ * Body: { address, signedTx (base64), amount, fromAddress }
+ */
+app.post('/solana/fund', async (req, res) => {
+  const { address, signedTxBase64, amount, fromAddress } = req.body;
+  if (!address || !amount) return res.status(400).json({ error: 'Missing required fields' });
+
+  try {
+    const userAddr = address.toLowerCase();
+    const amtNum = parseFloat(amount);
+    if (isNaN(amtNum) || amtNum <= 0) return res.status(400).json({ error: 'Invalid amount' });
+
+    let txSignature = null;
+
+    if (signedTxBase64) {
+      // Pre-signed transaction from user (e.g. Phantom/Solflare linked wallets)
+      const { Connection, Transaction, Keypair } = require('@solana/web3.js');
+      const connection = new Connection(config.SOL_DEVNET_RPC, 'confirmed');
+
+      try {
+        const txBytes = Buffer.from(signedTxBase64, 'base64');
+        const tx = Transaction.from(txBytes);
+
+        // Sign the transaction with the relayer's gas tank key to pay for fees
+        if (config.SOL_GAS_TANK_KEY) {
+          const bs58 = require('bs58');
+          const dec = bs58.default ? bs58.default.decode : bs58.decode;
+          const relayerKeypair = Keypair.fromSecretKey(dec(config.SOL_GAS_TANK_KEY));
+          tx.partialSign(relayerKeypair);
+        }
+
+        txSignature = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed'
+        });
+        await connection.confirmTransaction(txSignature, 'confirmed');
+        console.log(`[Solana/Fund] Pre-signed Tx confirmed: ${txSignature}`);
+      } catch (broadcastErr) {
+        console.error('[Solana/Fund] Pre-signed broadcast error:', broadcastErr.message);
+        let logsMsg = '';
+        if (broadcastErr.logs) {
+          logsMsg = ' | Logs: ' + JSON.stringify(broadcastErr.logs);
+        } else if (typeof broadcastErr.getLogs === 'function') {
+          try {
+            const logs = await broadcastErr.getLogs();
+            logsMsg = ' | Logs: ' + JSON.stringify(logs);
+          } catch (logErr) {
+            console.error('Failed to get transaction logs:', logErr);
+          }
+        }
+        return res.status(500).json({ error: 'Transaction broadcast failed: ' + broadcastErr.message + logsMsg });
+      }
+    } else {
+      // Backend signs transaction using stashed key from Redis
+      console.log(`[Solana/Fund] Initiating backend-signed transaction for user: ${userAddr}`);
+      const { Connection, Transaction, Keypair, PublicKey, TransactionInstruction } = require('@solana/web3.js');
+      
+      const profile = profiles.get(userAddr);
+      const userSolWallet = profile?.solanaWallet;
+      if (!userSolWallet || !userSolWallet.privKey || !userSolWallet.pubKey) {
+        return res.status(404).json({ error: 'No stashed Solana wallet found for this user. Please generate one.' });
+      }
+
+      if (!config.SOL_GAS_TANK_KEY) {
+        return res.status(500).json({ error: 'Relayer gas tank key is not configured.' });
+      }
+
+      const bs58 = require('bs58');
+      const dec = bs58.default ? bs58.default.decode : bs58.decode;
+
+      const userKeypair = Keypair.fromSecretKey(dec(userSolWallet.privKey));
+      const fromPubkey = userKeypair.publicKey;
+      const relayerKeypair = Keypair.fromSecretKey(dec(config.SOL_GAS_TANK_KEY));
+      const relayerPubkey = relayerKeypair.publicKey;
+
+      const connection = new Connection(config.SOL_DEVNET_RPC, 'confirmed');
+      const usdcMint = new PublicKey(config.SOL_DEVNET_USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+
+      // Find Associated Token Accounts (ATA)
+      const getATA = (owner) => {
+        return PublicKey.findProgramAddressSync(
+          [
+            owner.toBuffer(),
+            new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
+            usdcMint.toBuffer()
+          ],
+          new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+        )[0];
+      };
+
+      const fromAta = getATA(fromPubkey);
+      const toAta = getATA(relayerPubkey);
+
+      // Verify user USDC balance
+      const tokenInfo = await connection.getTokenAccountBalance(fromAta).catch(() => null);
+      const userBal = tokenInfo ? parseFloat(tokenInfo.value.uiAmount) : 0;
+      if (userBal < amtNum) {
+        return res.status(400).json({ error: `Insufficient USDC. Wallet has ${userBal.toFixed(2)} USDC on Solana Devnet.` });
+      }
+
+      const { blockhash } = await connection.getLatestBlockhash();
+
+      // Build Transaction
+      const tx = new Transaction({
+        recentBlockhash: blockhash,
+        feePayer: relayerPubkey
+      });
+
+      // Check if relayer ATA exists, if not prepend create instruction
+      const toAtaInfo = await connection.getAccountInfo(toAta);
+      if (!toAtaInfo) {
+        const { createAssociatedTokenAccountInstruction } = require('@solana/spl-token');
+        tx.add(createAssociatedTokenAccountInstruction(
+          relayerPubkey, // payer
+          toAta, // ata
+          relayerPubkey, // owner
+          usdcMint // mint
+        ));
+      }
+
+      // Transfer instruction data layout: [3, ...amount as 8-byte uint64]
+      const txData = Buffer.alloc(9);
+      txData.writeUInt8(3, 0);
+      txData.writeBigUInt64LE(BigInt(Math.round(amtNum * 1_000_000)), 1);
+
+      tx.add(new TransactionInstruction({
+        keys: [
+          { pubkey: fromAta, isSigner: false, isWritable: true },
+          { pubkey: toAta, isSigner: false, isWritable: true },
+          { pubkey: fromPubkey, isSigner: true, isWritable: false }
+        ],
+        programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        data: txData
+      }));
+
+      // Sign with both user deposit key and relayer fee-payer key
+      tx.sign(userKeypair, relayerKeypair);
+
+      try {
+        txSignature = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed'
+        });
+        await connection.confirmTransaction(txSignature, 'confirmed');
+        console.log(`[Solana/Fund] Backend-signed Tx confirmed: ${txSignature}`);
+      } catch (broadcastErr) {
+        console.error('[Solana/Fund] Backend broadcast error:', broadcastErr.message);
+        let logsMsg = '';
+        if (broadcastErr.logs) {
+          logsMsg = ' | Logs: ' + JSON.stringify(broadcastErr.logs);
+        } else if (typeof broadcastErr.getLogs === 'function') {
+          try {
+            const logs = await broadcastErr.getLogs();
+            logsMsg = ' | Logs: ' + JSON.stringify(logs);
+          } catch (logErr) {
+            console.error('Failed to get transaction logs:', logErr);
+          }
+        }
+        return res.status(500).json({ error: 'Transaction broadcast failed: ' + broadcastErr.message + logsMsg });
+      }
+    }
+
+    // Credit the user's Arc trading balance
+    const session = cache.sessions.get(userAddr);
+    if (session) {
+      session.balance = (session.balance || 0) + amtNum;
+      cache.sessions.set(userAddr, session);
+    }
+    profiles.upsert(userAddr, { balance: (profiles.get(userAddr)?.balance || 0) + amtNum });
+
+    // TRANSFER REAL TEST USDC ON ARC TESTNET
+    try {
+      const destRelayerWallet = fundingService.destWallets['5042002']; // Arc Testnet Relayer
+      if (destRelayerWallet) {
+        const sessionWallet = deriveSessionWallet(userAddr);
+        const usdcAbi = ['function transfer(address to, uint256 value) external returns (bool)'];
+        // Arc Testnet USDC is 0x3600000000000000000000000000000000000000
+        const arcUsdc = new ethers.Contract('0x3600000000000000000000000000000000000000', usdcAbi, destRelayerWallet);
+        const amountWei = ethers.parseUnits(amtNum.toString(), 6);
+        console.log(`[Solana/Fund] Transferring ${amtNum} real USDC on Arc Testnet to ${sessionWallet.address}...`);
+        
+        // Execute transfer without waiting for confirmation to keep API fast
+        arcUsdc.transfer(sessionWallet.address, amountWei).then(tx => {
+            console.log(`[Solana/Fund] Real USDC transferred on Arc Testnet! TX: ${tx.hash}`);
+        }).catch(err => {
+            console.error(`[Solana/Fund] Background Arc transfer failed:`, err.message);
+        });
+      }
+    } catch (arcErr) {
+      console.error('[Solana/Fund] Failed to initiate real USDC transfer on Arc:', arcErr.message);
+    }
+
+    console.log(`[Solana/Fund] Credited ${amtNum} USDC to ${userAddr} | tx: ${txSignature}`);
+    res.json({
+      success: true,
+      txSignature,
+      netAmount: amtNum,
+      newBalance: session?.balance || amtNum
+    });
+  } catch (err) {
+    console.error('[Solana/Fund] Error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -714,7 +997,9 @@ app.post('/session/cashout', async (req, res) => {
       }
     } else if (destination && destination.toLowerCase() !== address.toLowerCase()) {
       // For external transfers, we REQUIRE a signature for safety
-      return res.status(401).json({ error: "Signature required for external transfers" });
+      if (destination.toLowerCase() !== config.FEE_COLLECTOR.toLowerCase()) {
+        return res.status(401).json({ error: "Signature required for external transfers" });
+      }
     }
     // Note: Internal withdrawals (to main wallet) could potentially be less strict if needed,
     // but we've implemented signatures in the frontend now.
@@ -799,6 +1084,14 @@ app.post('/session/cashout', async (req, res) => {
       reason: 'CASHOUT',
       txHash: tx.hash
     });
+
+    // Trigger notification and email
+    notificationService.notifyUser(
+        userAddr,
+        "Withdrawal Successful",
+        `Successfully withdrew ${ethers.formatEther(sendAmount)} USDC to ${targetAddr}.`,
+        "success"
+    );
 
     res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sendAmount) });
   } catch (err) {
@@ -933,6 +1226,20 @@ app.post('/profiles', (req, res) => {
 
 app.patch('/profiles/:address', (req, res) => {
   const addr = req.params.address.toLowerCase();
+
+  // If a new tradingWallet is set, trigger notification & email
+  if (req.body.tradingWallet) {
+    const oldProfile = profiles.get(addr);
+    if (!oldProfile || oldProfile.tradingWallet !== req.body.tradingWallet) {
+      notificationService.notifyUser(
+        addr,
+        "Trading Wallet Regenerated",
+        `Your EVM Session wallet was regenerated. New session address: ${req.body.tradingWallet}`,
+        "warning"
+      );
+    }
+  }
+
   const profile = profiles.upsert(addr, req.body);
   res.json({ success: true, profile });
 });
@@ -1265,8 +1572,18 @@ app.post('/enroll', (req, res) => {
   const existing = campaignEnrollments[campaignId].find(e => e.address.toLowerCase() === address.toLowerCase());
   if (!existing) {
      campaignEnrollments[campaignId].push({ address, enrolledAt: Date.now() });
+
+     // Send campaign signup notification and email
+     const activeCampaign = activeCampaigns.find(c => c.id === campaignId);
+     const campaignTitle = activeCampaign ? activeCampaign.title : 'Campaign';
+     notificationService.notifyUser(
+         address,
+         "Campaign Enrolled",
+         `You have successfully signed up for the campaign: "${campaignTitle}".`,
+         "success"
+     );
   }
-  
+
   res.json({ success: true, enrolled: true });
 });
 

@@ -26,17 +26,17 @@ const LCD_COUNTER_STYLE = `
       0 0 10px rgba(61,255,143,0.18),
       inset 0 0 8px rgba(0,0,0,0.85);
     color: #3dff8f;
-    text-shadow: 0 0 6px #00ff41, 0 0 14px #3CB371;
+    text-shadow: 0 0 6px #00ff41, 0 0 14px #249C6C;
   }
 
   /* Light theme — muted green counter */
   .lcd-counter-light {
     background: #f0faf4;
-    border: 1px solid #3CB371;
+    border: 1px solid #249C6C;
     border-radius: 3px;
     box-shadow:
-      0 0 0 1px rgba(60,179,113,0.25),
-      inset 0 0 4px rgba(60,179,113,0.06);
+      0 0 0 1px rgba(36, 156, 108,0.25),
+      inset 0 0 4px rgba(36, 156, 108,0.06);
     color: #1a6b3c;
     text-shadow: none;
   }
@@ -44,13 +44,13 @@ const LCD_COUNTER_STYLE = `
   /* Live indicator dot — dark */
   .lcd-live-dot-dark {
     background: #3dff8f;
-    box-shadow: 0 0 6px #00ff41, 0 0 14px #3CB371;
+    box-shadow: 0 0 6px #00ff41, 0 0 14px #249C6C;
   }
 
   /* Live indicator dot — light */
   .lcd-live-dot-light {
-    background: #3CB371;
-    box-shadow: 0 0 5px rgba(60,179,113,0.55);
+    background: #249C6C;
+    box-shadow: 0 0 5px rgba(36, 156, 108,0.55);
   }
 
   /* Blink for dot */
@@ -120,7 +120,7 @@ function LiveExecutionComponent({
     }, [activeTrades.length]);
 
     return (
-        <div className="flex flex-col gap-1 relative min-h-0 h-full">
+        <div className="flex flex-col gap-1 relative min-h-0 h-full" style={{ fontFamily: '"Comfortaa", cursive' }}>
             <style>{LCD_COUNTER_STYLE}</style>
             <div className="flex items-center justify-between px-2 flex-none">
                 <div className="flex items-center gap-1.5">
@@ -148,7 +148,7 @@ function LiveExecutionComponent({
                 </div>
                 {/* ── LCD Digital Active Counter ── */}
                 {activeTrades.length > 0 && (
-                    <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black ${isLight ? 'bg-[#3CB371] text-white shadow-sm' : 'bg-[#3CB371] text-black shadow-[0_0_10px_rgba(61,255,143,0.3)]'}`}>
+                    <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black ${isLight ? 'bg-[#249C6C] text-white shadow-sm' : 'bg-[#249C6C] text-black shadow-[0_0_10px_rgba(61,255,143,0.3)]'}`}>
                         {activeTrades.length}
                     </div>
                 )}
@@ -254,12 +254,12 @@ function LiveExecutionComponent({
                                             return (
                                                 <div
                                                     className={`rounded-[16px] p-2 md:p-3 flex flex-col relative transition-all duration-500 border-2 ${!isExpanded && activeTrades.length === 1 ? 'h-full flex-1' : 'h-auto'} ${isLight
-                                                        ? 'bg-[#C2D1C9] backdrop-blur-xl border-[#3CB371]/35 shadow-sm hover:shadow-md'
+                                                        ? 'bg-[#C2D1C9] backdrop-blur-xl border-[#249C6C]/35 shadow-sm hover:shadow-md'
                                                         : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
                                                     style={displayFinal ? {
-                                                        borderColor: (instantStatus === "WON") ? 'rgba(60, 179, 113, 0.5)' : 'rgba(255, 127, 80, 0.5)',
+                                                        borderColor: (instantStatus === "WON") ? 'rgba(36, 156, 108, 0.5)' : 'rgba(255, 127, 80, 0.5)',
                                                         boxShadow: (instantStatus === "WON")
-                                                            ? `inset 0 0 30px rgba(60, 179, 113, 0.05), 0 5px 30px ${isLight ? 'rgba(60, 179, 113, 0.04)' : 'rgba(60, 179, 113, 0.1)'}`
+                                                            ? `inset 0 0 30px rgba(36, 156, 108, 0.05), 0 5px 30px ${isLight ? 'rgba(36, 156, 108, 0.04)' : 'rgba(36, 156, 108, 0.1)'}`
                                                             : `inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px ${isLight ? 'rgba(255, 127, 80, 0.04)' : 'rgba(255, 127, 80, 0.1)'}`
                                                     } : {}}
                                                 >
@@ -267,8 +267,8 @@ function LiveExecutionComponent({
                                                     <div className="flex items-center justify-between mb-0 px-0.5">
                                                         <div className="flex items-center gap-1.5">
                                                             <div className={`w-1 h-1 rounded-full ${displayFinal
-                                                                ? ((instantStatus === "WON") ? 'bg-[#3CB371]' : 'bg-[#FF7F50]')
-                                                                : (liveWinning ? 'bg-[#3CB371] animate-pulse shadow-[0_0_8px_#3CB371]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
+                                                                ? ((instantStatus === "WON") ? 'bg-[#249C6C]' : 'bg-[#FF7F50]')
+                                                                : (liveWinning ? 'bg-[#249C6C] animate-pulse shadow-[0_0_8px_#249C6C]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
                                                             <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
                                                                 {displayFinal ? instantStatus : (trade.confirmed === false ? "Verifying" : "Live")}
                                                             </span>
@@ -276,7 +276,7 @@ function LiveExecutionComponent({
                                                         {isFinal && (
                                                             <button
                                                                 onClick={() => removeTrade(trade.id)}
-                                                                className={`p-1 rounded-full transition-colors ${isLight ? 'bg-[#3CB371]/10 hover:bg-[#3CB371]/20 text-[#0a261a]/40' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}
+                                                                className={`p-1 rounded-full transition-colors ${isLight ? 'bg-[#249C6C]/10 hover:bg-[#249C6C]/20 text-[#0a261a]/40' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}
                                                             >
                                                                 <X size={10} />
                                                             </button>
@@ -286,11 +286,11 @@ function LiveExecutionComponent({
                                                     {/* Central Hero Countdown - Tighter vertical scaling */}
                                                     {!displayFinal ? (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-1 md:py-2">
-                                                            <div className={`text-xl md:text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-[#0a261a] opacity-80' : 'text-[#3CB371] drop-shadow-[0_0_15px_rgba(60,179,113,0.5)]'}`}>
+                                                            <div className={`text-xl md:text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-[#0a261a] opacity-80' : 'text-[#249C6C] drop-shadow-[0_0_15px_rgba(36, 156, 108,0.5)]'}`}>
                                                                 {displayTimeLeft}<span className="text-[10px] md:text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
                                                             </div>
-                                                            <div className="mt-0 px-1 py-0.5 rounded-full border border-[#3CB371]/10 bg-[#3CB371]/5 scale-75 md:scale-90">
-                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
+                                                            <div className="mt-0 px-1 py-0.5 rounded-full border border-[#249C6C]/10 bg-[#249C6C]/5 scale-75 md:scale-90">
+                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#249C6C]" : "text-[#FF7F50]"}`}>
                                                                     {liveWinning ? "WINNING" : "LOSING"}
                                                                 </span>
                                                             </div>
@@ -298,18 +298,18 @@ function LiveExecutionComponent({
                                                     ) : (
                                                         <div className="flex-1 flex flex-col items-center justify-center py-1">
                                                             <div className={`text-[10px] font-black uppercase tracking-widest ${
-                                                                (instantStatus === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'
+                                                                (instantStatus === "WON") ? 'text-[#249C6C]' : 'text-[#FF7F50]'
                                                             }`}>
                                                                 { (instantStatus === "WON") ? "Trade Won" : "Trade Lost" }
                                                             </div>
                                                             <div className="flex items-center gap-1.5 mt-0.5">
-                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#249C6C]' : 'text-[#FF7F50]'}`}>
                                                                     {(instantStatus === "WON" || trade.status === "WON") ? `+$${Number(trade.payout || potentialProfit).toFixed(2)}` : "0.00"}
                                                                 </span>
                                                                 {isPayoutPending && (
                                                                     <div className="flex items-center gap-1 mt-1">
-                                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-ping" />
-                                                                        <span className="text-[6px] font-black uppercase tracking-widest text-[#3CB371]/60">Payout Pending</span>
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#249C6C] animate-ping" />
+                                                                        <span className="text-[6px] font-black uppercase tracking-widest text-[#249C6C]/60">Payout Pending</span>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -355,7 +355,7 @@ function LiveExecutionComponent({
                                         onClick={() => setIsExpanded(true)}
                                         className={`w-full mt-1 py-1.5 px-2 rounded-full border flex items-center justify-center gap-1.5 transition-all hover:scale-[0.99] active:scale-95 ${isLight ? 'bg-black/5 border-black/10 text-black/50' : 'bg-white/5 border-white/10 text-white/40'}`}
                                     >
-                                        <div className="w-1 h-1 rounded-full bg-[#3CB371] animate-pulse" />
+                                        <div className="w-1 h-1 rounded-full bg-[#249C6C] animate-pulse" />
                                         <span className="text-[7px] font-black uppercase tracking-widest">
                                             +{othersCount} more
                                         </span>

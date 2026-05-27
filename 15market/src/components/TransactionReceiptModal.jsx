@@ -56,11 +56,11 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                         style={{
                             minHeight: 'min(520px, 90vh)',
                             clipPath: 'polygon(0% 0%, 30% 0%, 35% 5%, 65% 5%, 70% 0%, 100% 0%, 100% 97%, 98.5% 100%, 97% 97%, 95.5% 100%, 94% 97%, 92.5% 100%, 91% 97%, 89.5% 100%, 88% 97%, 86.5% 100%, 85% 97%, 83.5% 100%, 82% 97%, 80.5% 100%, 79% 97%, 77.5% 100%, 76% 97%, 74.5% 100%, 73% 97%, 71.5% 100%, 70% 97%, 68.5% 100%, 67% 97%, 65.5% 100%, 64% 97%, 62.5% 100%, 61% 97%, 59.5% 100%, 58% 97%, 56.5% 100%, 55% 97%, 53.5% 100%, 52% 97%, 50.5% 100%, 49% 97%, 47.5% 100%, 46% 97%, 44.5% 100%, 43% 97%, 41.5% 100%, 40% 97%, 38.5% 100%, 37% 97%, 35.5% 100%, 34% 97%, 32.5% 100%, 31% 97%, 29.5% 100%, 28% 97%, 26.5% 100%, 25% 97%, 23.5% 100%, 22% 97%, 20.5% 100%, 19% 97%, 17.5% 100%, 16% 97%, 14.5% 100%, 13% 97%, 11.5% 100%, 10% 97%, 8.5% 100%, 7% 97%, 5.5% 100%, 4% 97%, 2.5% 100%, 1% 97%, 0% 100%)',
-                            border: '2px solid #3CB371',
+                            border: '2px solid #249C6C',
                         }}
                     >
                         {/* Green Border Simulation (since clip-path clips actual borders) */}
-                        <div className="absolute inset-0 pointer-events-none" style={{ border: '4px solid #3CB371', opacity: 0.8, clipPath: 'inherit' }} />
+                        <div className="absolute inset-0 pointer-events-none" style={{ border: '4px solid #249C6C', opacity: 0.8, clipPath: 'inherit' }} />
 
                         <div
                             className="absolute inset-0 pointer-events-none select-none overflow-hidden"
@@ -108,7 +108,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                 <div className="flex justify-between items-end border-b border-black/5 pb-1.5">
                                     <div className="flex flex-col">
                                         <span className="text-[9px] opacity-40 font-black tracking-tighter uppercase">{transaction.type === 'rounds' ? 'P2P_ROUND_TYPE' : 'TRANSACTION_TYPE'}</span>
-                                        <span className={`text-base font-black tracking-tighter ${transaction.type === 'rounds' ? 'text-[#3CB371]' : (isDeposit ? 'text-[#3CB371]' : 'text-orange-600')}`}>
+                                        <span className={`text-base font-black tracking-tighter ${transaction.type === 'rounds' ? 'text-[#249C6C]' : (isDeposit ? 'text-[#249C6C]' : 'text-orange-600')}`}>
                                             {transaction.type === 'rounds' ? 'LIVE_ROUNDS_ENTRY' : transaction.type}
                                         </span>
                                     </div>
@@ -138,7 +138,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                         </div>
                                         <div className="flex flex-col items-end">
                                             <span className="text-[8px] opacity-40 font-black tracking-tighter uppercase">DIRECTION</span>
-                                            <span className={`text-xs font-black ${transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'text-[#3CB371]' : 'text-[#FF7F50]'}`}>
+                                            <span className={`text-xs font-black ${transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'text-[#249C6C]' : 'text-[#FF7F50]'}`}>
                                                 {transaction.direction === 'UP' || transaction.direction === 1 || String(transaction.direction) === '1' ? 'LONG' : 'SHORT'}
                                             </span>
                                         </div>

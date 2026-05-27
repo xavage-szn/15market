@@ -127,24 +127,24 @@ function CampaignPage({ address, network, theme }) {
         <div className={`min-h-screen p-6 font-sans ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#0d0d0d]'} relative overflow-hidden transition-colors duration-500`}>
             {/* Background elements for premium look */}
             <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#3CB371] opacity-[0.03] blur-[100px] rounded-full" />
-                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#3CB371] opacity-[0.03] blur-[100px] rounded-full" />
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#249C6C] opacity-[0.03] blur-[100px] rounded-full" />
+                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#249C6C] opacity-[0.03] blur-[100px] rounded-full" />
             </div>
 
             {/* Header */}
             <div className="max-w-7xl mx-auto mb-8 relative z-10">
                 <button
                     onClick={() => navigate(-1)}
-                    className={`${isLight ? 'bg-white/50 border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'} border px-6 py-2 rounded-xl transition-all text-xs font-black uppercase tracking-widest`}
+                    className={`${isLight ? 'bg-white/50 border-[#249C6C]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'} border px-6 py-2 rounded-xl transition-all text-xs font-black uppercase tracking-widest`}
                 >
                     ← Back to Trading
                 </button>
             </div>
 
             {/* Campaign Hero */}
-            <div className={`max-w-7xl mx-auto mb-12 relative z-10 ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border !rounded-[40px] p-8 md:p-14 overflow-hidden shadow-2xl`}>
+            <div className={`max-w-7xl mx-auto mb-12 relative z-10 ${isLight ? 'bg-white border-[#249C6C]/10' : 'bg-[#0d0d0d] border-white/5'} border !rounded-[40px] p-8 md:p-14 overflow-hidden shadow-2xl`}>
                 <div className={`absolute top-0 right-0 p-12 ${isLight ? 'opacity-[0.05]' : 'opacity-[0.03]'} pointer-events-none`}>
-                    <Trophy size={200} className={isLight ? 'text-[#3CB371]' : 'text-white'} />
+                    <Trophy size={200} className={isLight ? 'text-[#249C6C]' : 'text-white'} />
                 </div>
 
                 <div className="flex flex-col md:flex-row items-center gap-8 mb-10 relative z-20">
@@ -155,8 +155,8 @@ function CampaignPage({ address, network, theme }) {
                         <h1 className={`text-4xl md:text-6xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} tracking-tighter mb-3 uppercase`}>
                             {campaign.title}
                         </h1>
-                        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${isActive ? 'bg-[#3CB371]/20 border-[#3CB371]/30 text-[#3CB371]' : hasEnded ? 'bg-red-500/20 border-red-500/30 text-red-500' : 'bg-yellow-500/20 border-yellow-500/30 text-yellow-500'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-[#3CB371] animate-pulse' : 'bg-current'}`} />
+                        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${isActive ? 'bg-[#249C6C]/20 border-[#249C6C]/30 text-[#249C6C]' : hasEnded ? 'bg-red-500/20 border-red-500/30 text-red-500' : 'bg-yellow-500/20 border-yellow-500/30 text-yellow-500'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-[#249C6C] animate-pulse' : 'bg-current'}`} />
                             {isActive ? 'Live Now' : hasEnded ? 'Ended' : 'Upcoming'}
                         </div>
                     </div>
@@ -171,7 +171,7 @@ function CampaignPage({ address, network, theme }) {
                     <StatBox icon={<Gift />} label="Prize Pool" value={campaign.prize || 'TBA'} color="text-yellow-500" theme={theme} />
                     <StatBox icon={<Clock />} label="Time Left" value={timeRemaining} color="text-blue-400" theme={theme} />
                     <StatBox icon={<Users />} label="Participants" value={leaderboard.length} color="text-purple-400" theme={theme} />
-                    <StatBox icon={<Target />} label="Network" value={campaign.network === 'general' ? 'ALL' : campaign.network} color="text-[#3CB371]" isNetwork theme={theme} />
+                    <StatBox icon={<Target />} label="Network" value={campaign.network === 'general' ? 'ALL' : campaign.network} color="text-[#249C6C]" isNetwork theme={theme} />
                 </div>
 
                 {/* Enrollment Button */}
@@ -180,8 +180,8 @@ function CampaignPage({ address, network, theme }) {
                         onClick={handleEnroll}
                         disabled={isEnrolled || enrolling || !address}
                         className={`w-full py-6 rounded-[24px] text-xl font-black tracking-widest uppercase transition-all relative z-20 overflow-hidden group ${isEnrolled
-                            ? 'bg-[#3CB371]/10 text-[#3CB371] border border-[#3CB371]/20'
-                            : (isLight ? 'bg-[#3CB371] text-white shadow-[0_20px_50px_rgba(60,179,113,0.3)]' : 'bg-white text-black shadow-[0_20px_50px_rgba(255,255,255,0.1)]') + ' hover:scale-[1.01] active:scale-[0.99]'}`}
+                            ? 'bg-[#249C6C]/10 text-[#249C6C] border border-[#249C6C]/20'
+                            : (isLight ? 'bg-[#249C6C] text-white shadow-[0_20px_50px_rgba(36, 156, 108,0.3)]' : 'bg-white text-black shadow-[0_20px_50px_rgba(255,255,255,0.1)]') + ' hover:scale-[1.01] active:scale-[0.99]'}`}
                     >
                         {!address ? 'Connect Wallet to Enroll' :
                             isEnrolled ? 'Enrolled & Active' :
@@ -193,7 +193,7 @@ function CampaignPage({ address, network, theme }) {
 
             {/* Campaign Details - Grid */}
             <div className="max-w-7xl mx-auto mb-12 grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                <div className={`${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} !rounded-3xl p-8 border shadow-xl`}>
+                <div className={`${isLight ? 'bg-white border-[#249C6C]/10' : 'bg-[#0d0d0d] border-white/5'} !rounded-3xl p-8 border shadow-xl`}>
                     <h2 className={`text-xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} flex items-center gap-3 mb-6 uppercase tracking-tight`}>
                         <Award className="text-yellow-500" />
                         Campaign Rules
@@ -218,7 +218,7 @@ function CampaignPage({ address, network, theme }) {
                     </ul>
                 </div>
 
-                <div className={`${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} !rounded-3xl p-8 border shadow-xl`}>
+                <div className={`${isLight ? 'bg-white border-[#249C6C]/10' : 'bg-[#0d0d0d] border-white/5'} !rounded-3xl p-8 border shadow-xl`}>
                     <h2 className={`text-xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} flex items-center gap-3 mb-6 uppercase tracking-tight`}>
                         <Calendar className="text-blue-400" />
                         Timeline
@@ -237,14 +237,14 @@ function CampaignPage({ address, network, theme }) {
             </div>
 
             {/* Leaderboard Table */}
-            <div className={`max-w-7xl mx-auto mb-20 ${isLight ? 'bg-white border-[#3CB371]/10' : 'bg-[#0d0d0d] border-white/5'} border !rounded-[32px] p-8 md:p-12 relative z-10 shadow-2xl`}>
+            <div className={`max-w-7xl mx-auto mb-20 ${isLight ? 'bg-white border-[#249C6C]/10' : 'bg-[#0d0d0d] border-white/5'} border !rounded-[32px] p-8 md:p-12 relative z-10 shadow-2xl`}>
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-10">
                     <h2 className={`text-3xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} flex items-center gap-4 uppercase tracking-tighter`}>
                         <TrendingUp className="text-yellow-500" />
                         Live Standings
                     </h2>
-                    <div className={`flex items-center gap-2 px-4 py-1.5 ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10' : 'bg-white/5 border-white/10'} rounded-full border`}>
-                        <span className="w-2 h-2 rounded-full bg-[#3CB371] animate-pulse" />
+                    <div className={`flex items-center gap-2 px-4 py-1.5 ${isLight ? 'bg-[#249C6C]/5 border-[#249C6C]/10' : 'bg-white/5 border-white/10'} rounded-full border`}>
+                        <span className="w-2 h-2 rounded-full bg-[#249C6C] animate-pulse" />
                         <span className={`text-[10px] font-black ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>Live Sync Enabled</span>
                     </div>
                 </div>
@@ -271,13 +271,13 @@ function CampaignPage({ address, network, theme }) {
                                     const rankColor = index === 0 ? 'text-yellow-500' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-600' : (isLight ? 'text-[#0a261a]/40' : 'text-white/40');
 
                                     return (
-                                        <tr key={entry.address} className={`group ${isCurrentUser ? (isLight ? 'bg-[#3CB371]/10' : 'bg-white/10') : (isLight ? 'hover:bg-[#3CB371]/5' : 'hover:bg-white/[0.03]')} transition-colors duration-300`}>
+                                        <tr key={entry.address} className={`group ${isCurrentUser ? (isLight ? 'bg-[#249C6C]/10' : 'bg-white/10') : (isLight ? 'hover:bg-[#249C6C]/5' : 'hover:bg-white/[0.03]')} transition-colors duration-300`}>
                                             <td className={`py-6 px-6 font-black text-2xl ${rankColor} rounded-l-[20px]`}>
                                                 {index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${index + 1}`}
                                             </td>
                                             <td className="py-6 px-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-xl ${isLight ? 'bg-[#3CB371]/5 border-[#3CB371]/10 text-[#0a261a]/40' : 'bg-white/5 border-white/10 text-white/40'} border flex items-center justify-center font-black text-xs`}>
+                                                    <div className={`w-10 h-10 rounded-xl ${isLight ? 'bg-[#249C6C]/5 border-[#249C6C]/10 text-[#0a261a]/40' : 'bg-white/5 border-white/10 text-white/40'} border flex items-center justify-center font-black text-xs`}>
                                                         {entry.address?.slice(0, 2)}
                                                     </div>
                                                     <div>
@@ -286,16 +286,16 @@ function CampaignPage({ address, network, theme }) {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="py-6 px-6 text-center font-black text-[#3CB371] text-lg">
+                                            <td className="py-6 px-6 text-center font-black text-[#249C6C] text-lg">
                                                 {entry.wins}
                                             </td>
                                             <td className="py-6 px-6 text-center">
                                                 <div className="inline-flex flex-col items-center">
-                                                    <span className={`text-sm font-black ${entry.winRate >= 50 ? 'text-[#3CB371]' : 'text-red-500'}`}>{entry.winRate.toFixed(1)}%</span>
+                                                    <span className={`text-sm font-black ${entry.winRate >= 50 ? 'text-[#249C6C]' : 'text-red-500'}`}>{entry.winRate.toFixed(1)}%</span>
                                                     <span className={`text-[8px] font-black ${isLight ? 'text-[#0a261a]/20' : 'text-white/20'} uppercase`}>{entry.trades} TRADES</span>
                                                 </div>
                                             </td>
-                                            <td className={`py-6 px-6 text-right font-black text-lg rounded-r-[20px] ${entry.pnl >= 0 ? 'text-[#3CB371]' : 'text-red-500'}`}>
+                                            <td className={`py-6 px-6 text-right font-black text-lg rounded-r-[20px] ${entry.pnl >= 0 ? 'text-[#249C6C]' : 'text-red-500'}`}>
                                                 {entry.pnl >= 0 ? '+' : ''}${entry.pnl.toFixed(2)}
                                             </td>
                                         </tr>
@@ -317,7 +317,7 @@ function CampaignPage({ address, network, theme }) {
 function StatBox({ icon, label, value, color, isNetwork, theme }) {
     const isLight = theme === 'light';
     return (
-        <div className={`${isLight ? 'bg-white border-[#3CB371]/10 shadow-lg' : 'bg-[#0d0d0d] border-white/5'} border p-6 rounded-[24px] relative overflow-hidden group`}>
+        <div className={`${isLight ? 'bg-white border-[#249C6C]/10 shadow-lg' : 'bg-[#0d0d0d] border-white/5'} border p-6 rounded-[24px] relative overflow-hidden group`}>
             <div className="absolute top-0 right-0 p-4 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
                 {React.cloneElement(icon, { size: 40 })}
             </div>

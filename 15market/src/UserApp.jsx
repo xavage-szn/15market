@@ -3005,6 +3005,7 @@ export default function UserApp() {
             <DocsPage
               theme={theme}
               onBack={() => setView("dashboard")}
+              onToggleTheme={toggleTheme}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">

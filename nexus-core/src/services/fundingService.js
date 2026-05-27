@@ -3,6 +3,7 @@ const axios = require('axios');
 const { ethers } = require('ethers');
 const config = require('../config');
 const profiles = require('../profiles');
+const notificationService = require('./notificationService');
 
 // Circle IRIS Attestation API V2 (testnet sandbox)
 // V2 endpoint: GET /v2/messages/{sourceDomain}?transactionHash={txHash}
@@ -202,6 +203,14 @@ class FundingService {
 
         console.log(`[Permit-Bridge] Initiating for user ${userAddr} from ${chainCfg.name}. Amount: ${amount} USDC`);
 
+        // Trigger CCTP Initiated notification
+        notificationService.notifyUser(
+            userAddr,
+            "CCTP Bridge Initiated",
+            `Started bridging ${amount} USDC from ${chainCfg.name} to Arc Testnet. Gas fees paid by platform gas relayer.`,
+            "info"
+        );
+
         // Compute quote again on-chain for fee logic
         const quote = await this.getPermitBridgeQuote(sourceChain, amount);
         if (quote.netAmount <= 0) {
@@ -242,9 +251,21 @@ class FundingService {
 
         // Step-2: Transfer USDC from user's wallet to the relayer
         console.log(`[Permit-Bridge] Calling transferFrom for ${amount} USDC from ${userAddress} to relayer...`);
-        const txTransfer = await usdcContract.transferFrom(userAddress, relayerWallet.address, amountRaw);
-        await txTransfer.wait();
-        console.log(`[Permit-Bridge] transferFrom transaction success: ${txTransfer.hash}`);
+        let txTransfer;
+        let transferRetries = 3;
+        while (transferRetries > 0) {
+            try {
+                txTransfer = await usdcContract.transferFrom(userAddress, relayerWallet.address, amountRaw);
+                await txTransfer.wait();
+                console.log(`[Permit-Bridge] transferFrom transaction success: ${txTransfer.hash}`);
+                break;
+            } catch (err) {
+                console.error(`[Permit-Bridge] transferFrom error: ${err.message}. Retries left: ${transferRetries - 1}`);
+                transferRetries--;
+                if (transferRetries === 0) throw err;
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
 
         // Step 3: Approve CCTP TokenMessenger to spend the USDC on behalf of the relayer
         const usdcStandardAbi = [
@@ -255,8 +276,20 @@ class FundingService {
         const tokenMessengerAllowance = await usdcWithStandardAbi.allowance(relayerWallet.address, chainCfg.tokenMessenger);
         if (tokenMessengerAllowance < netAmountRaw) {
             console.log(`[Permit-Bridge] Approving CCTP TokenMessenger (${chainCfg.tokenMessenger}) for ${quote.netAmount} USDC...`);
-            const txApprove = await usdcWithStandardAbi.approve(chainCfg.tokenMessenger, netAmountRaw);
-            await txApprove.wait();
+            let txApprove;
+            let approveRetries = 3;
+            while (approveRetries > 0) {
+                try {
+                    txApprove = await usdcWithStandardAbi.approve(chainCfg.tokenMessenger, netAmountRaw);
+                    await txApprove.wait();
+                    break;
+                } catch (err) {
+                    console.error(`[Permit-Bridge] approve error: ${err.message}. Retries left: ${approveRetries - 1}`);
+                    approveRetries--;
+                    if (approveRetries === 0) throw err;
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
         }
 
         // Step 4: Burn USDC via CCTP TokenMessenger
@@ -269,17 +302,29 @@ class FundingService {
         
         const destDomain = 26; // Arc Testnet CCTP domain is always 26
         const BYTES32_ZERO = '0x0000000000000000000000000000000000000000000000000000000000000000';
-        const txBurn = await tokenMessenger.depositForBurn(
-            netAmountRaw,
-            destDomain,
-            recipientBytes32,
-            chainCfg.usdc,
-            BYTES32_ZERO,
-            0n,
-            2000
-        );
-        const burnReceipt = await txBurn.wait();
-        console.log(`[Permit-Bridge] depositForBurn transaction success: ${txBurn.hash}`);
+        let txBurn, burnReceipt;
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                txBurn = await tokenMessenger.depositForBurn(
+                    netAmountRaw,
+                    destDomain,
+                    recipientBytes32,
+                    chainCfg.usdc,
+                    BYTES32_ZERO,
+                    0n,
+                    2000
+                );
+                burnReceipt = await txBurn.wait();
+                console.log(`[Permit-Bridge] depositForBurn transaction success: ${txBurn.hash}`);
+                break;
+            } catch (err) {
+                console.error(`[Permit-Bridge] depositForBurn error: ${err.message}. Retries left: ${retries - 1}`);
+                retries--;
+                if (retries === 0) throw err;
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
 
         // Step 5: Start asynchronous monitoring of CCTP burn and settlement on Arc Testnet
         this.monitorAndSettleCCTP(userAddr, txBurn.hash, chainId, quote.netAmount, '5042002', io);
@@ -474,6 +519,14 @@ class FundingService {
 
             // Step 5: Credit the user's platform trading balance (on-chain mint confirmed)
             const creditResult = await this.creditTradingWallet(userAddr, amount, mintTx.hash);
+
+            // Trigger CCTP Bridge Confirmed notification
+            notificationService.notifyUser(
+                userAddr,
+                "CCTP Bridge Confirmed",
+                `Successfully settled ${amount} USDC on Arc Testnet via CCTP bridge. Your trading wallet has been credited!`,
+                "success"
+            );
 
             // Push live socket update to user confirming final on-chain settlement
             if (io) {

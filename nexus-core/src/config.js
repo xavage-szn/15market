@@ -42,4 +42,10 @@ module.exports = {
   // Auto-Signer
   FACTORY_ADDRESS: process.env.ARC_FACTORY_ADDRESS || '0x0000000000000000000000000000000000000000',
   TREASURY_ADDRESS: process.env.TREASURY_ADDRESS || '0x0000000000000000000000000000000000000000',
+  FEE_COLLECTOR: process.env.FEE_COLLECTOR || '0xf6d5A5eC5e404DeD248f5474f12E7c620cf0E9CB',
+
+  // Solana
+  SOL_GAS_TANK_KEY: process.env.SOL_GAS_TANK_KEY || null,  // bs58 private key — set when available
+  SOL_DEVNET_RPC: process.env.SOL_DEVNET_RPC || 'https://api.devnet.solana.com',
+  SOL_DEVNET_USDC_MINT: process.env.SOL_DEVNET_USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
 };

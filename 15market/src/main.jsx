@@ -50,7 +50,7 @@ function Root() {
           },
           appearance: {
             theme: 'dark',
-            accentColor: '#3CB371',
+            accentColor: '#249C6C',
             logo: 'https://www.15market.online/gowlogo.png',
             walletList: ['metamask', 'rabby', 'okx_wallet', 'detected_ethereum_wallets', 'wallet_connect'],
           },
