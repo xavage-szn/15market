@@ -8,14 +8,14 @@ import { toPng } from 'html-to-image';
 import { UnifiedFundingModal } from './UnifiedFundingModal';
 import WalletConnectionLoading from './WalletConnectionLoading';
 import * as ethers from 'ethers';
-import { useWallets } from '@privy-io/react-auth';
+import { useWallets, usePrivy, useCreateWallet, useLinkAccount } from '@privy-io/react-auth';
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 
 const CHAIN_CONFIG = {
     'mon': { rpc: 'https://testnet-rpc.monad.xyz/', isEVM: true, usdc: '0x534b2f3A21130d7a60830c2Df862319e593943A3', paymasterSupported: false, permitName: 'USDC' },
     'avax': { rpc: 'https://avalanche-fuji-c-chain-rpc.publicnode.com', isEVM: true, usdc: '0x5425890298aed601595a70AB815c96711a31Bc65', permitName: 'USD Coin' },
     'eth': { rpc: 'https://ethereum-sepolia-rpc.publicnode.com', isEVM: true, usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', permitName: 'USDC' },
-    'sol': { rpc: 'https://api.testnet.solana.com', isEVM: false, usdc: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' }
+    'sol': { rpc: 'https://api.devnet.solana.com', isEVM: false, usdc: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' }
 };
 
 const ERC20_ABI = [
@@ -86,6 +86,91 @@ export function CircleWalletPage({
         || wallets?.find(w => w.address && w.address.startsWith('0x'));
     const mainWalletAddress = address;
     const fundingSourceAddress = address || wagmiAddress || mainWalletObj?.address;
+
+    // Solana wallet detection
+    usePrivy(); // keep Privy context active
+    const { createWallet } = useCreateWallet();
+    const { linkWallet } = useLinkAccount({
+        onSuccess: () => { if (notify) notify('Solana wallet linked!', 'success'); }
+    });
+    // Keep generatedSolWalletPub in state, synced with backend
+    const [generatedSolWalletPub, setGeneratedSolWalletPub] = useState(() => {
+        return localStorage.getItem(`15market_solana_deposit_pub_${fundingSourceAddress}`) || null;
+    });
+
+    useEffect(() => {
+        if (!fundingSourceAddress) {
+            setGeneratedSolWalletPub(null);
+            return;
+        }
+
+        // Immediately sync state with whatever is cached for this specific address
+        const cached = localStorage.getItem(`15market_solana_deposit_pub_${fundingSourceAddress}`);
+        setGeneratedSolWalletPub(cached || null);
+
+        const fetchPermanentSolAddress = async () => {
+            try {
+                const res = await fetch(`${KEEPER_URL_ARC}/solana/address/${fundingSourceAddress}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.address) {
+                        setGeneratedSolWalletPub(data.address);
+                        localStorage.setItem(`15market_solana_deposit_pub_${fundingSourceAddress}`, data.address);
+                    } else {
+                        setGeneratedSolWalletPub(null);
+                        localStorage.removeItem(`15market_solana_deposit_pub_${fundingSourceAddress}`);
+                    }
+                }
+            } catch (err) {
+                console.warn("Failed to fetch permanent Solana wallet:", err);
+            }
+        };
+        fetchPermanentSolAddress();
+    }, [fundingSourceAddress]);
+
+    const solanaWallet = wallets?.find(w => w.address && !w.address.startsWith('0x'));
+    // If pubKey is present, we assume the backend has the private key stashed.
+    const hasSolWallet = !!solanaWallet || !!generatedSolWalletPub;
+    const [isCreatingSolWallet, setIsCreatingSolWallet] = useState(false);
+
+    const handleGenerateSolWallet = async () => {
+        setIsCreatingSolWallet(true);
+        try {
+            const { Keypair } = await import('@solana/web3.js');
+            const bs58 = (await import('bs58')).default;
+            const newKeypair = Keypair.generate();
+            const privKey = bs58.encode(newKeypair.secretKey);
+            const pubKey = newKeypair.publicKey.toString();
+            
+            // Stash private key and public key in backend profiles db
+            const res = await fetch(`${KEEPER_URL_ARC}/solana/stash-key`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: fundingSourceAddress, privKey, pubKey })
+            });
+            if (!res.ok) throw new Error("Failed to stash key in secure cache");
+
+            // Store public key locally and in state
+            localStorage.setItem(`15market_solana_deposit_pub_${fundingSourceAddress}`, pubKey);
+            setGeneratedSolWalletPub(pubKey);
+            localStorage.removeItem(`15market_solana_deposit_${fundingSourceAddress}`); // clean up old local keys if any
+            
+            setIsCreatingSolWallet(false);
+            if (notify) notify('Solana deposit wallet generated!', 'success');
+        } catch (e) {
+            console.error(e);
+            if (notify) notify(e.message || 'Failed to create Solana deposit wallet', 'error');
+            setIsCreatingSolWallet(false);
+        }
+    };
+
+    const handleLinkSolWallet = () => {
+        try {
+            linkWallet();
+        } catch (e) {
+            if (notify) notify(e.message || 'Failed to open wallet linker', 'error');
+        }
+    };
 
     const [walletInfo, setWalletInfo] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -166,8 +251,14 @@ export function CircleWalletPage({
             label: 'Main Wallet',
             bal: mainWalletArcBalance,
             address: mainWalletAddress
+        },
+        {
+            key: 'solana',
+            label: 'Solana Wallet',
+            bal: multiChainBalances['sol']?.usdc || 0,
+            address: wallets?.find(w => w.address && !w.address.startsWith('0x'))?.address || ''
         }
-    ];
+    ].filter(w => w.key !== 'solana' || w.address);
 
     const currentWallet = walletOptions[activeWalletIdx];
     const selectedToken = SUPPORTED_TOKENS[activeTokenIdx];
@@ -200,9 +291,10 @@ export function CircleWalletPage({
         setIsFetchingBalances(true);
         const newBalances = {};
 
-        // Extract solana address if present in privy wallets
+        // Extract solana address — prefer Privy-linked wallet, fall back to generated deposit wallet
         const solWallet = wallets?.find(w => w.address && !w.address.startsWith('0x'));
-        const solAddress = solWallet?.address || null;
+        const _generatedPub = localStorage.getItem(`15market_solana_deposit_pub_${fundingSourceAddress}`);
+        const solAddress = solWallet?.address || _generatedPub || null;
 
         const promises = SUPPORTED_TOKENS.map(async (token) => {
             const config = CHAIN_CONFIG[token.id];
@@ -246,7 +338,7 @@ export function CircleWalletPage({
         await Promise.allSettled(promises);
         setMultiChainBalances(newBalances);
         setIsFetchingBalances(false);
-    }, [fundingSourceAddress, wallets]);
+    }, [fundingSourceAddress, wallets, generatedSolWalletPub]);
 
     useEffect(() => {
         if (fundingSourceAddress) {
@@ -255,44 +347,477 @@ export function CircleWalletPage({
     }, [fundingSourceAddress, fetchAllBalances]);
 
     useEffect(() => {
-        const receiveAddr = currentWallet.key === 'trading' && walletInfo?.wallet?.address ? walletInfo.wallet.address : address;
+        // [ignoring loop detection]
+        let receiveAddr = '';
+        if (currentWallet.key === 'trading') {
+            receiveAddr = sessionAddress || walletInfo?.wallet?.address || '';
+        } else if (currentWallet.key === 'main') {
+            receiveAddr = mainWalletAddress || address || '';
+        } else {
+            receiveAddr = currentWallet.address || '';
+        }
 
         if (receiveAddr && showReceiveModal) {
-            QRCode.toDataURL(receiveAddr, {
-                width: 400,
-                margin: 2,
-                color: {
-                    dark: '#FFFFFF',
-                    light: '#000000',
-                },
-            }, (err, url) => {
-                if (err) console.error(err);
-                setQrCodeData(url);
-            });
+            try {
+                const qr = QRCode.create(receiveAddr, { errorCorrectionLevel: 'H' });
+                const { size } = qr.modules;
+
+                const canvas = document.createElement('canvas');
+                const scale = 4; // High-res export
+                const padding = 28;
+                const cellSize = 12;
+                const qrSize = size * cellSize;
+                const totalSize = qrSize + padding * 2;
+
+                canvas.width = totalSize * scale;
+                canvas.height = totalSize * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.scale(scale, scale);
+
+                // Rounded Rect Helper
+                const drawRoundRect = (x, y, w, h, r) => {
+                    ctx.beginPath();
+                    if (ctx.roundRect) {
+                        ctx.roundRect(x, y, w, h, r);
+                    } else {
+                        ctx.moveTo(x + r, y);
+                        ctx.lineTo(x + w - r, y);
+                        ctx.arcTo(x + w, y, x + w, y + r, r);
+                        ctx.lineTo(x + w, y + h - r);
+                        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+                        ctx.lineTo(x + r, y + h);
+                        ctx.arcTo(x, y + h, x, y + h - r, r);
+                        ctx.lineTo(x, y + r);
+                        ctx.arcTo(x, y, x + r, y, r);
+                        ctx.closePath();
+                    }
+                };
+
+                // Clear/draw white rounded QR container background
+                ctx.fillStyle = '#FFFFFF';
+                drawRoundRect(0, 0, totalSize, totalSize, 28);
+                ctx.fill();
+
+                // Helper to check if pixel is dark
+                const isDark = (r, c) => {
+                    if (r < 0 || r >= size || c < 0 || c >= size) return false;
+                    return qr.modules.get(r, c) === 1;
+                };
+
+                // Check if index is in the 7x7 corner finder areas
+                const isFinder = (r, c) => {
+                    if (r < 7 && c < 7) return true; // Top-Left
+                    if (r < 7 && c >= size - 7) return true; // Top-Right
+                    if (r >= size - 7 && c < 7) return true; // Bottom-Left
+                    return false;
+                };
+
+                // Center logo clearing (5x5 modules in center)
+                const cStart = Math.floor(size / 2) - 2;
+                const cEnd = Math.floor(size / 2) + 2;
+                const isCenter = (r, c) => {
+                    return r >= cStart && r <= cEnd && c >= cStart && c <= cEnd;
+                };
+
+                // Draw Custom Leaf/Teardrop Eye Outer & Inner Finder
+                const drawLeafEye = (startX, startY, corner) => {
+                    const eyeSize = 7 * cellSize;
+                    const r = eyeSize * 0.45;
+
+                    // 1. Draw Outer Eye (Green)
+                    ctx.fillStyle = '#249C6C';
+                    ctx.beginPath();
+                    if (corner === 'tl') ctx.moveTo(startX, startY);
+                    else ctx.moveTo(startX + r, startY);
+
+                    if (corner === 'tr') ctx.lineTo(startX + eyeSize, startY);
+                    else {
+                        ctx.lineTo(startX + eyeSize - r, startY);
+                        ctx.arcTo(startX + eyeSize, startY, startX + eyeSize, startY + r, r);
+                    }
+
+                    ctx.lineTo(startX + eyeSize, startY + eyeSize - r);
+                    ctx.arcTo(startX + eyeSize, startY + eyeSize, startX + eyeSize - r, startY + eyeSize, r);
+
+                    if (corner === 'bl') ctx.lineTo(startX, startY + eyeSize);
+                    else {
+                        ctx.lineTo(startX + r, startY + eyeSize);
+                        ctx.arcTo(startX, startY + eyeSize, startX, startY + eyeSize - r, r);
+                    }
+
+                    if (corner === 'tl') ctx.lineTo(startX, startY);
+                    else {
+                        ctx.lineTo(startX, startY + r);
+                        ctx.arcTo(startX, startY, startX + r, startY, r);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 2. Clear Inner Frame
+                    ctx.fillStyle = '#FFFFFF';
+                    const gap = cellSize;
+                    const innerSize = 5 * cellSize;
+                    const ir = innerSize * 0.45;
+                    ctx.beginPath();
+
+                    if (corner === 'tl') ctx.moveTo(startX + gap, startY + gap);
+                    else ctx.moveTo(startX + gap + ir, startY + gap);
+
+                    if (corner === 'tr') ctx.lineTo(startX + gap + innerSize, startY + gap);
+                    else {
+                        ctx.lineTo(startX + gap + innerSize - ir, startY + gap);
+                        ctx.arcTo(startX + gap + innerSize, startY + gap, startX + gap + innerSize, startY + gap + ir, ir);
+                    }
+
+                    ctx.lineTo(startX + gap + innerSize, startY + gap + innerSize - ir);
+                    ctx.arcTo(startX + gap + innerSize, startY + gap + innerSize, startX + gap + innerSize - ir, startY + gap + innerSize, ir);
+
+                    if (corner === 'bl') ctx.lineTo(startX + gap, startY + gap + innerSize);
+                    else {
+                        ctx.lineTo(startX + gap + ir, startY + gap + innerSize);
+                        ctx.arcTo(startX + gap, startY + gap + innerSize, startX + gap, startY + gap + innerSize - ir, ir);
+                    }
+
+                    if (corner === 'tl') ctx.lineTo(startX + gap, startY + gap);
+                    else {
+                        ctx.lineTo(startX + gap, startY + gap + ir);
+                        ctx.arcTo(startX + gap, startY + gap, startX + gap + ir, startY + gap, ir);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 3. Draw Center Bullet (Black, Rounded Rect)
+                    ctx.fillStyle = '#0F0F0F';
+                    drawRoundRect(startX + cellSize * 2, startY + cellSize * 2, cellSize * 3, cellSize * 3, cellSize * 0.9);
+                    ctx.fill();
+                };
+
+                // Draw Finder eyes
+                drawLeafEye(padding, padding, 'tl');
+                drawLeafEye(padding + (size - 7) * cellSize, padding, 'tr');
+                drawLeafEye(padding, padding + (size - 7) * cellSize, 'bl');
+
+                // Draw Body Cells
+                ctx.fillStyle = '#0F0F0F';
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        if (isFinder(r, c) || isCenter(r, c)) continue;
+
+                        if (isDark(r, c)) {
+                            const x = padding + c * cellSize;
+                            const y = padding + r * cellSize;
+
+                            // Neighbors
+                            const T = isDark(r - 1, c);
+                            const B = isDark(r + 1, c);
+                            const L = isDark(r, c - 1);
+                            const R = isDark(r, c + 1);
+
+                            // Smooth corner rounding algorithm
+                            const rad = cellSize / 2;
+                            const tl = (!T && !L) ? rad : 0;
+                            const tr = (!T && !R) ? rad : 0;
+                            const br = (!B && !R) ? rad : 0;
+                            const bl = (!B && !L) ? rad : 0;
+
+                            ctx.beginPath();
+                            ctx.moveTo(x + tl, y);
+                            ctx.lineTo(x + cellSize - tr, y);
+                            ctx.arcTo(x + cellSize, y, x + cellSize, y + tr, tr);
+                            ctx.lineTo(x + cellSize, y + cellSize - br);
+                            ctx.arcTo(x + cellSize, y + cellSize, x + cellSize - br, y + cellSize, br);
+                            ctx.lineTo(x + bl, y + cellSize);
+                            ctx.arcTo(x, y + cellSize, x, y + cellSize - bl, bl);
+                            ctx.lineTo(x, y + tl);
+                            ctx.arcTo(x, y, x + tl, y, tl);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                    }
+                }
+
+                // Load Logo image into the center
+                const logo = new Image();
+                logo.onload = () => {
+                    // Increased logo size by another 150% (height increased from 52 to 78)
+                    const logoH = 78;
+                    const logoW = (logo.naturalWidth / logo.naturalHeight) * logoH;
+
+                    // Center Coordinates
+                    const midX = padding + qrSize / 2;
+                    const midY = padding + qrSize / 2;
+
+                    // Dynamically sized rounded white backdrop badge for the logo
+                    const badgeW = logoW + 28;
+                    const badgeH = logoH + 20;
+                    ctx.fillStyle = '#FFFFFF';
+                    drawRoundRect(midX - badgeW / 2, midY - badgeH / 2, badgeW, badgeH, 16);
+                    ctx.fill();
+
+                    // Draw Logo Image
+                    ctx.drawImage(
+                        logo,
+                        midX - logoW / 2,
+                        midY - logoH / 2,
+                        logoW,
+                        logoH
+                    );
+
+                    // Output Base64 Image
+                    setQrCodeData(canvas.toDataURL('image/png'));
+                };
+
+                logo.onerror = () => {
+                    // Fallback to text logo if image fails to load
+                    const logoH = 78;
+                    const logoW = 180; // safe fallback width for text
+
+                    const midX = padding + qrSize / 2;
+                    const midY = padding + qrSize / 2;
+
+                    const badgeW = logoW + 28;
+                    const badgeH = logoH + 20;
+
+                    ctx.fillStyle = '#FFFFFF';
+                    drawRoundRect(midX - badgeW / 2, midY - badgeH / 2, badgeW, badgeH, 16);
+                    ctx.fill();
+
+                    // Beautiful styled brand text (150% larger)
+                    ctx.font = 'bold 26px "Inter", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // "15" in green, "market" in black
+                    ctx.fillStyle = '#249C6C';
+                    ctx.fillText('15', midX - 32, midY);
+                    ctx.fillStyle = '#0F0F0F';
+                    ctx.fillText('market', midX + 24, midY);
+
+                    setQrCodeData(canvas.toDataURL('image/png'));
+                };
+
+                // Use the dark logo since background is pure white
+                logo.src = '/goblogo.png';
+            } catch (err) {
+                console.error('Failed to generate premium styled QR:', err);
+            }
         }
-    }, [walletInfo, showReceiveModal, isLight, currentWallet, address]);
+    }, [walletInfo, showReceiveModal, currentWallet, address, sessionAddress, mainWalletAddress]);
 
     const handleDownloadQR = async () => {
-        const captureElement = document.getElementById('qr-capture-container');
-        if (!captureElement) return;
-
+        if (!qrCodeData) return;
         setIsDownloading(true);
-        notify("Generating Image...", "pending");
-
         try {
-            await new Promise(r => setTimeout(r, 100));
-            const dataUrl = await toPng(captureElement, {
-                pixelRatio: 3,
-                backgroundColor: isLight ? '#ffffff' : '#0a0a0a',
-                cacheBust: true,
-                skipAutoScale: true,
+            const W = 600;
+            const H = 840;
+            const SCALE = 2; // Retina quality export
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = W * SCALE;
+            canvas.height = H * SCALE;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(SCALE, SCALE);
+
+            // Rounded rectangle helper
+            const drawRoundRect = (x, y, w, h, r) => {
+                ctx.beginPath();
+                if (ctx.roundRect) {
+                    ctx.roundRect(x, y, w, h, r);
+                } else {
+                    ctx.moveTo(x + r, y);
+                    ctx.lineTo(x + w - r, y);
+                    ctx.arcTo(x + w, y, x + w, y + r, r);
+                    ctx.lineTo(x + w, y + h - r);
+                    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+                    ctx.lineTo(x + r, y + h);
+                    ctx.arcTo(x, y + h, x, y + h - r, r);
+                    ctx.lineTo(x, y + r);
+                    ctx.arcTo(x, y, x + r, y, r);
+                    ctx.closePath();
+                }
+            };
+
+            // ── BACKGROUND (PURE WHITE) ───────────────────────────
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, W, H);
+
+            // ── PREMIUM GEOMETRIC GREEN MARGIN ART (Vividly styled left/right framing) ────
+            const greens = [
+                'rgba(36, 156, 108, 0.08)',  // light green
+                'rgba(36, 156, 108, 0.16)',  // medium vivid green
+                'rgba(26, 117, 81, 0.12)',   // deep sage green
+                'rgba(164, 219, 194, 0.25)', // pale pastel green
+                'rgba(36, 156, 108, 0.35)'   // bold branding green
+            ];
+
+            // --- LEFT MARGIN ART WORK ---
+            // Bold vertical block on left edge
+            ctx.fillStyle = greens[3];
+            drawRoundRect(-20, 40, 70, 360, 20);
+            ctx.fill();
+
+            // Intersecting deep green bar
+            ctx.fillStyle = greens[2];
+            ctx.save();
+            ctx.rotate(-8 * Math.PI / 180);
+            ctx.fillRect(-10, 160, 90, 180);
+            ctx.restore();
+
+            // Horizontal stripe patterns crossing left edge
+            ctx.strokeStyle = 'rgba(36, 156, 108, 0.28)';
+            ctx.lineWidth = 3;
+            const drawLeftParallel = (x, y, count, length, spacing) => {
+                ctx.beginPath();
+                for (let i = 0; i < count; i++) {
+                    ctx.moveTo(x, y + i * spacing);
+                    ctx.lineTo(x + length, y + i * spacing);
+                }
+                ctx.stroke();
+            };
+            drawLeftParallel(0, 100, 6, 80, 8);
+            drawLeftParallel(0, 520, 8, 90, 7);
+
+            // Bold dot grid on left edge
+            ctx.fillStyle = greens[4];
+            const drawDotGrid = (xStart, yStart, rows, cols, spacing) => {
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        ctx.beginPath();
+                        ctx.arc(xStart + c * spacing, yStart + r * spacing, 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            };
+            drawDotGrid(15, 340, 8, 4, 12);
+            drawDotGrid(20, 680, 6, 5, 10);
+
+            // --- RIGHT MARGIN ART WORK ---
+            // Tilted bold green panel in top right
+            ctx.fillStyle = greens[1];
+            ctx.save();
+            ctx.rotate(12 * Math.PI / 180);
+            ctx.fillRect(490, -180, 120, 300);
+            ctx.restore();
+
+            // Sage vertical capsule along right edge
+            ctx.fillStyle = greens[2];
+            drawRoundRect(W - 45, 320, 60, 280, 16);
+            ctx.fill();
+
+            // Pastel accent rectangle in bottom right
+            ctx.fillStyle = greens[3];
+            ctx.save();
+            ctx.rotate(-15 * Math.PI / 180);
+            ctx.fillRect(W - 120, 720, 160, 140);
+            ctx.restore();
+
+            // Parallel stripes crossing right edge
+            ctx.strokeStyle = 'rgba(36, 156, 108, 0.32)';
+            ctx.lineWidth = 3;
+            const drawRightParallel = (x, y, count, length, spacing) => {
+                ctx.beginPath();
+                for (let i = 0; i < count; i++) {
+                    ctx.moveTo(x, y + i * spacing);
+                    ctx.lineTo(x + length, y + i * spacing);
+                }
+                ctx.stroke();
+            };
+            drawRightParallel(W - 70, 220, 5, 70, 9);
+            drawRightParallel(W - 80, 610, 6, 80, 8);
+
+            // Dot grid on right edge
+            drawDotGrid(W - 60, 120, 5, 4, 12);
+            drawDotGrid(W - 70, 480, 7, 5, 11);
+
+            // ── GENERAL BACKGROUND FILL (Soft diagonal lines behind QR) ──
+            ctx.strokeStyle = 'rgba(36, 156, 108, 0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 0; i < W; i += 24) {
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i + H, H);
+            }
+            ctx.stroke();
+
+            // ── HEADER SECTION (LOGO) ──────────────────────────────
+            const logoImg = new Image();
+            await new Promise((res, rej) => {
+                logoImg.onload = res;
+                logoImg.onerror = rej;
+                logoImg.src = '/goblogo.png'; // Authority dark logo for white page card
             });
-            const link = document.createElement('a');
-            link.download = `15market-qr-${currentWallet.key}.png`;
-            link.href = dataUrl;
-            link.click();
-            notify("QR Code Saved!", "success");
+            const logoH = 54;
+            const logoW = (logoImg.naturalWidth / logoImg.naturalHeight) * logoH;
+            ctx.drawImage(logoImg, (W - logoW) / 2, 54, logoW, logoH);
+
+            // Subtle divider line
+            ctx.strokeStyle = 'rgba(36, 156, 108, 0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(60, 134); ctx.lineTo(W - 60, 134); ctx.stroke();
+
+            // ── QR CODE DISPLAY ───────────────────────────────────
+            const qrImg = new Image();
+            await new Promise(res => { qrImg.onload = res; qrImg.src = qrCodeData; });
+
+            const qrSize = 340;
+            const qrX = (W - qrSize) / 2;
+            const qrY = 166;
+            const qrR = 24;
+
+            // Rounded container with a soft glowing green border/shadow for QR
+            ctx.strokeStyle = 'rgba(36, 156, 108, 0.20)';
+            ctx.lineWidth = 3;
+            drawRoundRect(qrX - 4, qrY - 4, qrSize + 8, qrSize + 8, qrR + 2);
+            ctx.stroke();
+
+            // Draw QR code clipped to rounded rectangle
+            ctx.save();
+            drawRoundRect(qrX, qrY, qrSize, qrSize, qrR);
+            ctx.clip();
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+            ctx.restore();
+
+            // ── WALLET ADDRESS ────────────────────────────────────
+            const addrLabelY = qrY + qrSize + 46;
+            ctx.fillStyle = 'rgba(15, 15, 15, 0.45)';
+            ctx.font = 'bold 10px "Courier New", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('DEPOSIT ADDRESS (' + currentWallet.label.toUpperCase() + ')', W / 2, addrLabelY);
+
+            const addr = currentWallet.key === 'trading'
+                ? (sessionAddress || walletInfo?.wallet?.address || '')
+                : (mainWalletAddress || address || '');
+
+            ctx.fillStyle = '#0F0F0F';
+            ctx.font = 'bold 12px "Courier New", monospace';
+            const chunk = 36;
+            const addrLines = [];
+            for (let i = 0; i < addr.length; i += chunk) addrLines.push(addr.slice(i, i + chunk));
+            addrLines.forEach((line, i) => ctx.fillText(line, W / 2, addrLabelY + 20 + i * 16));
+
+            // ── WEBSITE URL IN ITALICS ────────────────────────────
+            const footerY = H - 64;
+            ctx.strokeStyle = 'rgba(36, 156, 108, 0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(60, footerY); ctx.lineTo(W - 60, footerY); ctx.stroke();
+
+            ctx.fillStyle = '#249C6C';
+            ctx.font = 'italic bold 13px "Courier New", monospace';
+            ctx.fillText('15market.com', W / 2, footerY + 26);
+
+            // ── EXPORT AND TRIGGER DOWNLOAD ────────────────────────
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = `15market-qr-${currentWallet.key}.png`;
+                link.href = url;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }, 'image/png');
+
+            notify("QR Card Saved!", "success");
         } catch (err) {
+            console.error('Branded card export error:', err);
             notify("Failed to save image", "error");
         } finally {
             setIsDownloading(false);
@@ -385,36 +910,150 @@ export function CircleWalletPage({
             let txHash = "";
             let isCCTP = false;
 
-            // Source chain config
-            const targetChainId = selectedToken.chainId ||
-                (selectedToken.id === 'mon' ? 10143 :
-                    selectedToken.id === 'eth' ? 11155111 :
-                        selectedToken.id === 'base' ? 84532 :
-                            selectedToken.id === 'op' ? 11155420 : 43113);
+            if (selectedToken.id === 'sol') {
+                const generatedSolWalletPub = localStorage.getItem(`15market_solana_deposit_pub_${fundingSourceAddress}`);
+                const solWallet = wallets?.find(w => w.address && !w.address.startsWith('0x'));
 
-            // ── Read-only provider for balance/allowance/receipt checks ──────────
-            const readRpc = CHAIN_CONFIG[selectedToken.id]?.rpc || 'https://testnet-rpc.monad.xyz/';
-            const readProvider = new ethers.JsonRpcProvider(readRpc);
+                if (!solWallet && !generatedSolWalletPub) throw new Error('No Solana wallet found. Please generate or link one first.');
 
-            // ── Effective signing address: smart wallet > EOA ────────────────────
-            const signingAddress = fundingSourceAddress;
-            if (!signingAddress) throw new Error('No wallet connected. Please log in.');
-
-            if (fundingType === 'usdc') {
-                const usdcAddr = CHAIN_CONFIG[selectedToken.id]?.usdc;
-
-                if (!usdcAddr) {
-                    throw new Error(`USDC not configured for ${selectedToken.name}`);
+                if (fundingType !== 'usdc') {
+                    throw new Error('Native SOL deposits to Arc are not supported yet. Please use USDC.');
                 }
 
-                const recipientAddr = sessionAddress || address;
-                if (!recipientAddr) throw new Error('Session wallet address not available');
+                addCctpLog('Preparing Solana USDC transfer...');
 
-                const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
-                const usdcReadContract = new ethers.Contract(usdcAddr, ERC20_ABI, readProvider);
+                const { Connection, PublicKey: PK, Transaction } = await import('@solana/web3.js');
+                const { getAssociatedTokenAddress: getATA, createTransferInstruction: createTransfer } = await import('@solana/spl-token');
 
-                const decimals = await usdcReadContract.decimals().catch(() => 6);
-                let val = ethers.parseUnits(amount.toString(), decimals);
+                const connection = new Connection(CHAIN_CONFIG['sol'].rpc, 'confirmed');
+                const usdcMint = new PK(CHAIN_CONFIG['sol'].usdc);
+
+                let fromPubkey;
+
+                if (solWallet) {
+                    fromPubkey = new PK(solWallet.address);
+                } else {
+                    fromPubkey = new PK(generatedSolWalletPub);
+                }
+
+                // The backend relayer's Solana address — receives USDC from user
+                addCctpLog('Fetching Solana relayer configuration...');
+                const configRes = await fetch(`${KEEPER_URL_ARC}/solana/config`);
+                if (!configRes.ok) throw new Error("Failed to fetch Solana relayer address");
+                const configData = await configRes.json();
+                const RELAYER_SOL_ADDR = configData.relayerAddress;
+                
+                const toPubkey = new PK(RELAYER_SOL_ADDR);
+
+                // Check user balance
+                const fromAta = await getATA(usdcMint, fromPubkey);
+                const tokenInfo = await connection.getTokenAccountBalance(fromAta).catch(() => null);
+                const userBal = tokenInfo ? parseFloat(tokenInfo.value.uiAmount) : 0;
+                if (userBal < amount) {
+                    throw new Error(`Insufficient USDC. Wallet has ${userBal.toFixed(2)} USDC on Solana Devnet.`);
+                }
+
+                addCctpLog(`Wallet balance: ${userBal.toFixed(2)} USDC`);
+
+                let signedTxBase64 = null;
+
+                if (solWallet) {
+                    addCctpLog('Building transfer transaction...');
+                    const toAta = await getATA(usdcMint, toPubkey);
+                    const { blockhash } = await connection.getLatestBlockhash();
+
+                    const tx = new Transaction({
+                        recentBlockhash: blockhash,
+                        feePayer: toPubkey
+                    });
+
+                    // Check if relayer ATA exists, if not prepend create instruction
+                    const toAtaInfo = await connection.getAccountInfo(toAta);
+                    if (!toAtaInfo) {
+                        const { createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
+                        tx.add(createAssociatedTokenAccountInstruction(
+                            toPubkey, // payer
+                            toAta,
+                            toPubkey, // owner
+                            usdcMint
+                        ));
+                    }
+
+                    tx.add(createTransfer(
+                        fromAta,
+                        toAta,
+                        fromPubkey,
+                        Math.round(amount * 1_000_000) // 6 decimals
+                    ));
+
+                    addCctpLog('Awaiting wallet signature...');
+                    try {
+                        const signedTx = await solWallet.signTransaction(tx);
+                        // signedTx is returned as a Transaction object or serialized buffer
+                        const serialized = typeof signedTx.serialize === 'function' 
+                            ? signedTx.serialize({ requireAllSignatures: false }) 
+                            : signedTx;
+                        signedTxBase64 = Buffer.from(serialized).toString('base64');
+                    } catch (err) {
+                        throw new Error('Wallet signing rejected: ' + (err.message || err));
+                    }
+                } else {
+                    addCctpLog('Initiating secure backend-signed transfer...');
+                }
+
+                addCctpLog('Broadcasting transaction via gas relayer...');
+                const fundRes = await fetch(`${KEEPER_URL_ARC}/solana/fund`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        address: fundingSourceAddress, 
+                        signedTxBase64, 
+                        amount: amount.toString(),
+                        fromAddress: fromPubkey.toString()
+                    })
+                });
+                
+                const fundData = await fundRes.json();
+                if (!fundRes.ok || !fundData.success) {
+                    throw new Error(fundData.error || 'Failed to process Solana deposit');
+                }
+
+                addCctpLog(`✅ Transaction confirmed: ${(fundData.txSignature || '').slice(0, 8)}...`);
+                addCctpLog(`✅ Arc balance credited: +${amount} USDC`);
+                isCCTP = true;
+                
+            } else {
+                // EVM LOGIC
+                // Source chain config
+                const targetChainId = selectedToken.chainId ||
+                    (selectedToken.id === 'mon' ? 10143 :
+                        selectedToken.id === 'eth' ? 11155111 :
+                            selectedToken.id === 'base' ? 84532 :
+                                selectedToken.id === 'op' ? 11155420 : 43113);
+
+                // ── Read-only provider for balance/allowance/receipt checks ──────────
+                const readRpc = CHAIN_CONFIG[selectedToken.id]?.rpc || 'https://testnet-rpc.monad.xyz/';
+                const readProvider = new ethers.JsonRpcProvider(readRpc);
+
+                // ── Effective signing address: smart wallet > EOA ────────────────────
+                const signingAddress = fundingSourceAddress;
+                if (!signingAddress) throw new Error('No wallet connected. Please log in.');
+
+                if (fundingType === 'usdc') {
+                    const usdcAddr = CHAIN_CONFIG[selectedToken.id]?.usdc;
+
+                    if (!usdcAddr) {
+                        throw new Error(`USDC not configured for ${selectedToken.name}`);
+                    }
+
+                    const recipientAddr = sessionAddress || address;
+                    if (!recipientAddr) throw new Error('Session wallet address not available');
+
+                    const tokenMessengerAddr = CCTP_TOKEN_MESSENGER[selectedToken.id];
+                    const usdcReadContract = new ethers.Contract(usdcAddr, ERC20_ABI, readProvider);
+
+                    const decimals = await usdcReadContract.decimals().catch(() => 6);
+                    let val = ethers.parseUnits(amount.toString(), decimals);
                 let approveVal = val;
                 let burnVal = val;
 
@@ -691,6 +1330,7 @@ export function CircleWalletPage({
                 // Smart wallet users should always bridge via USDC (the gasless path)
                 throw new Error('Native token transfers are not supported. Please use USDC bridging.');
             }
+            } // Close EVM LOGIC block
 
             if (!isCCTP) {
                 if (notify) notify('Transaction sent! Crediting your balance...', 'pending');
@@ -755,10 +1395,10 @@ export function CircleWalletPage({
                 alt="Logo"
             />
             <div className="flex flex-col gap-3 w-32">
-                <div className={`h-[1px] w-full ${isLight ? 'bg-black/10' : 'bg-[#3CB371]/30'}`} />
-                <div className={`h-[1px] w-full ${isLight ? 'bg-black/10' : 'bg-[#3CB371]/30'}`} />
+                <div className={`h-[1px] w-full ${isLight ? 'bg-black/10' : 'bg-[#249C6C]/30'}`} />
+                <div className={`h-[1px] w-full ${isLight ? 'bg-black/10' : 'bg-[#249C6C]/30'}`} />
             </div>
-            <div className="w-8 h-8 border-2 border-[#3CB371]/20 border-t-[#3CB371] rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-[#249C6C]/20 border-t-[#249C6C] rounded-full animate-spin" />
         </div>
     );
 
@@ -781,12 +1421,12 @@ export function CircleWalletPage({
                 style={{ fontFamily: '"Comfortaa", cursive' }}
             >
                 {/* Full-page Standard Carbon-Fibre Texture */}
-                <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.05] mix-blend-screen'}`} />
+                <div className="fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
 
                 {/* Immersive Ambiance (Global Glows) */}
                 <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-                    <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
-                    <div className={`absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#3CB371]/5' : 'bg-[#3CB371]/10'} blur-[120px] rounded-full`} />
+                    <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#249C6C]/5' : 'bg-[#249C6C]/10'} blur-[120px] rounded-full`} />
+                    <div className={`absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] ${isLight ? 'bg-[#249C6C]/5' : 'bg-[#249C6C]/10'} blur-[120px] rounded-full`} />
                 </div>
 
                 {/* Sticky Header - Full Width */}
@@ -803,7 +1443,7 @@ export function CircleWalletPage({
                                 <h2 className={`text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black/80' : 'text-white'} leading-none`}>
                                     {fundingType ? 'Select Source' : 'Transfer Hub'}
                                 </h2>
-                                <p className={`text-[9px] font-bold uppercase tracking-[0.3em] text-[#3CB371] mt-1`}>
+                                <p className={`text-[9px] font-bold uppercase tracking-[0.3em] text-[#249C6C] mt-1`}>
                                     {fundingType ? 'Choose how to add funds' : 'Swipe to Switch Wallets'}
                                 </p>
                             </div>
@@ -830,13 +1470,13 @@ export function CircleWalletPage({
                             {/* Static Navigation Buttons (Shifted Outside) - Hidden on Mobile */}
                             <button
                                 onClick={() => handleSwipeWallet('right')}
-                                className="hidden md:block absolute left-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
+                                className="hidden md:block absolute left-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#249C6C]"
                             >
                                 <ChevronLeft size={32} strokeWidth={2.5} />
                             </button>
                             <button
                                 onClick={() => handleSwipeWallet('left')}
-                                className="hidden md:block absolute right-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"
+                                className="hidden md:block absolute right-[-45px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#249C6C]"
                             >
                                 <ChevronRight size={32} strokeWidth={2.5} />
                             </button>
@@ -853,7 +1493,7 @@ export function CircleWalletPage({
                                     initial={{ opacity: 0, scale: 0.9, x: 100 }}
                                     animate={{ opacity: 1, scale: 1, x: 0 }}
                                     exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                                    className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#3CB371] ${isLight ? 'shadow-[0_60px_120px_rgba(0,0,0,0.5)]' : 'shadow-[0_40px_100px_rgba(60,179,113,0.35)]'} border border-white/20`}
+                                    className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#249C6C] ${isLight ? 'shadow-[0_60px_120px_rgba(0,0,0,0.5)]' : 'shadow-[0_40px_100px_rgba(36, 156, 108,0.35)]'} border border-white/20`}
                                 >
                                     {/* Immersive Nature-Series Layer (Behind Texture) */}
                                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -953,7 +1593,7 @@ export function CircleWalletPage({
                                                         : "xxxx...xxxx"}
                                                 </p>
                                                 <div className="p-1.5 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
-                                                    {copied ? <Check size={14} className="text-[#3CB371]" /> : <Copy size={14} className="text-white/40" />}
+                                                    {copied ? <Check size={14} className="text-[#249C6C]" /> : <Copy size={14} className="text-white/40" />}
                                                 </div>
                                             </div>
                                             <div className="flex gap-1.5 mt-4">
@@ -989,15 +1629,15 @@ export function CircleWalletPage({
                         <div className="grid grid-cols-2 gap-3 md:gap-4 shrink-0 relative z-20">
                             <button
                                 onClick={() => setShowSendModal(true)}
-                                className="flex items-center justify-center gap-2 md:gap-3 bg-[#3CB371] text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20"
+                                className="flex items-center justify-center gap-2 md:gap-3 bg-[#249C6C] text-white font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#249C6C]/20"
                             >
                                 <Send size={16} /> Send
                             </button>
                             <button
                                 onClick={() => setShowReceiveModal(true)}
-                                className={`flex items-center justify-center gap-2 md:gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-[#3CB371] font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
+                                className={`flex items-center justify-center gap-2 md:gap-3 ${isLight ? 'bg-black' : 'bg-white/10 border border-white/10'} text-[#249C6C] font-black py-4 md:py-6 rounded-[20px] md:rounded-[28px] text-[10px] md:text-sm uppercase tracking-widest active:scale-[0.95] transition-all shadow-2xl shadow-black/20`}
                             >
-                                <ArrowDownLeft size={16} className="text-[#3CB371]" /> Receive
+                                <ArrowDownLeft size={16} className="text-[#249C6C]" /> Receive
                             </button>
                         </div>
                     </div>
@@ -1006,7 +1646,7 @@ export function CircleWalletPage({
                     <motion.div
                         initial={{ opacity: 0, scaleY: 0 }}
                         animate={{ opacity: 1, scaleY: 1 }}
-                        className={`hidden lg:block w-[2px] rounded-full self-stretch my-4 bg-[#3CB371]/40`}
+                        className={`hidden lg:block w-[2px] rounded-full self-stretch my-4 bg-[#249C6C]/40`}
                     />
 
                     {/* RIGHT SIDE: ASSETS & FUNDING (Visible on Mobile & Desktop) */}
@@ -1033,11 +1673,11 @@ export function CircleWalletPage({
                                         {currentWallet.key === 'main' ? (
                                             <div className="flex flex-col items-center justify-center flex-1 pt-6 pb-16 md:py-10 gap-6 relative z-10 w-full h-full md:min-h-[300px] md:pb-0">
                                                 <div className={`w-20 h-20 md:w-24 md:h-24 rounded-[28px] md:rounded-[36px] flex items-center justify-center ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/5' : 'border-white/10'} transition-all hover:scale-105 group`}>
-                                                    <CreditCard size={40} className="text-[#3CB371] opacity-80 group-hover:opacity-100 transition-opacity" strokeWidth={1.5} />
+                                                    <CreditCard size={40} className="text-[#249C6C] opacity-80 group-hover:opacity-100 transition-opacity" strokeWidth={1.5} />
                                                 </div>
                                                 <div className="text-center">
                                                     <h3 className={`text-[16px] md:text-xl font-black uppercase tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
-                                                        Fiat <span className="text-[#3CB371]">Funding</span>
+                                                        Fiat <span className="text-[#249C6C]">Funding</span>
                                                     </h3>
                                                     <p className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] mt-3 ${isLight ? 'text-black/40' : 'text-white/40'}`}>
                                                         USDC Deposits & Withdrawals via Stripe
@@ -1045,10 +1685,10 @@ export function CircleWalletPage({
                                                 </div>
 
                                                 <div className="flex items-center gap-3 md:gap-4 mt-6 w-full max-w-[280px]">
-                                                    <button className="flex-1 py-4 md:py-5 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-[0.2em] shadow-xl shadow-[#3CB371]/20 transition-all opacity-50 cursor-not-allowed">
+                                                    <button className="flex-1 py-4 md:py-5 rounded-[20px] bg-[#249C6C] text-white font-black uppercase text-[9px] tracking-[0.2em] shadow-xl shadow-[#249C6C]/20 transition-all opacity-50 cursor-not-allowed">
                                                         Deposit (Soon)
                                                     </button>
-                                                    <button className={`flex-1 py-4 md:py-5 rounded-[20px] ${isLight ? 'bg-black text-[#3CB371]' : 'bg-white/5 text-[#3CB371] border border-white/10'} font-black uppercase text-[9px] tracking-[0.2em] transition-all opacity-50 cursor-not-allowed`}>
+                                                    <button className={`flex-1 py-4 md:py-5 rounded-[20px] ${isLight ? 'bg-black text-[#249C6C]' : 'bg-white/5 text-[#249C6C] border border-white/10'} font-black uppercase text-[9px] tracking-[0.2em] transition-all opacity-50 cursor-not-allowed`}>
                                                         Withdraw (Soon)
                                                     </button>
                                                 </div>
@@ -1064,21 +1704,26 @@ export function CircleWalletPage({
                                                             onClick={() => setFundingType('native')}
                                                             className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
                                                         >
-                                                            <Globe size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
+                                                            <Globe size={32} strokeWidth={1.5} className="transition-all text-white/70 group-hover:text-[#249C6C]" />
                                                             <div className="text-center">
-                                                                <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>Native Tokens</p>
+                                                                <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#249C6C]' : 'text-white/60 group-hover:text-[#249C6C]'}`}>Native Tokens</p>
                                                             </div>
                                                         </button>
                                                         {/* Divider Line */}
-                                                        <div className={`w-[2px] h-16 md:h-24 bg-[#3CB371]/40 mx-2 md:mx-12 rounded-full`}></div>
+                                                        <div className={`w-[2px] h-16 md:h-24 bg-[#249C6C]/40 mx-2 md:mx-12 rounded-full`}></div>
 
                                                         <button
                                                             onClick={() => setFundingType('usdc')}
                                                             className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
                                                         >
-                                                            <Shield size={32} md:size={48} strokeWidth={1.5} className={`transition-all ${isLight ? 'text-black/30 group-hover:text-[#3CB371]' : 'text-white/40 group-hover:text-[#3CB371]'}`} />
-                                                            <div className="center">
-                                                                <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#3CB371]' : 'text-white/60 group-hover:text-[#3CB371]'}`}>USDC</p>
+                                                            <div className="relative flex items-center justify-center">
+                                                                <img
+                                                                    src="/usdc.png"
+                                                                    alt="USDC Logo"
+                                                                    className="w-[3.3rem] h-[3.3rem] md:w-[4.95rem] md:h-[4.95rem] object-contain transition-all opacity-70 group-hover:opacity-100 -translate-y-[2vh]"
+                                                                    style={{ filter: 'brightness(0) invert(1)' }}
+                                                                />
+                                                                <p className={`absolute bottom-0 left-1/2 -translate-x-1/2 text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap ${isLight ? 'text-black/60 group-hover:text-[#249C6C]' : 'text-white/60 group-hover:text-[#249C6C]'}`}>USDC</p>
                                                             </div>
                                                         </button>
                                                     </div>
@@ -1118,7 +1763,7 @@ export function CircleWalletPage({
                                                             <img
                                                                 src="/circle.png"
                                                                 alt="Circle"
-                                                                className="h-5 md:h-10 object-contain drop-shadow-[0_0_10px_rgba(60,179,113,0.3)] relative z-30"
+                                                                className="h-5 md:h-10 object-contain drop-shadow-[0_0_10px_rgba(36, 156, 108,0.3)] relative z-30"
                                                                 style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
                                                             />
                                                             <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
@@ -1127,7 +1772,7 @@ export function CircleWalletPage({
                                                                     <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
                                                                 </svg>
                                                             </div>
-                                                            <span className="relative z-30 text-[9px] md:text-xs font-black tracking-widest text-[#3CB371]">CCTP</span>
+                                                            <span className="relative z-30 text-[9px] md:text-xs font-black tracking-widest text-[#249C6C]">CCTP</span>
                                                             <div className={`relative z-30 text-white opacity-40 scale-75 md:scale-100`}>
                                                                 <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                                                     <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
@@ -1154,7 +1799,7 @@ export function CircleWalletPage({
                                                         </h3>
                                                         <div className="flex gap-1.5">
                                                             {SUPPORTED_TOKENS.map((_, i) => (
-                                                                <div key={i} className={`w-1.5 h-1.5 rounded-full ${activeTokenIdx === i ? 'bg-[#3CB371]' : 'bg-white/10'}`} />
+                                                                <div key={i} className={`w-1.5 h-1.5 rounded-full ${activeTokenIdx === i ? 'bg-[#249C6C]' : 'bg-white/10'}`} />
                                                             ))}
                                                         </div>
                                                     </div>
@@ -1172,8 +1817,8 @@ export function CircleWalletPage({
                                                                 <div className="flex md:hidden flex-row flex-nowrap items-center justify-between w-full h-[280px] -mt-12 gap-0 relative overflow-visible">
                                                                     {/* Big Swipeable Logo Area (60%) */}
                                                                     <div className="relative w-[60%] h-full flex items-center justify-center overflow-visible group/token z-10">
-                                                                        <button onClick={() => handleSwipeToken('right')} className="absolute left-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronLeft size={20} /></button>
-                                                                        <button onClick={() => handleSwipeToken('left')} className="absolute right-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#3CB371]"><ChevronRight size={20} /></button>
+                                                                        <button onClick={() => handleSwipeToken('right')} className="absolute left-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#249C6C]"><ChevronLeft size={20} /></button>
+                                                                        <button onClick={() => handleSwipeToken('left')} className="absolute right-1 top-[22%] -translate-y-1/2 z-20 p-1.5 text-[#249C6C]"><ChevronRight size={20} /></button>
 
                                                                         <AnimatePresence mode="wait">
                                                                             <motion.div
@@ -1193,8 +1838,8 @@ export function CircleWalletPage({
                                                                                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-44 h-44 pointer-events-none z-0">
                                                                                         <img
                                                                                             src={selectedToken.icon}
-                                                                                            className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(60,179,113,0.3)]"
-                                                                                            style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                                            className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(36, 156, 108,0.3)]"
+                                                                                            style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
                                                                                             alt={selectedToken.symbol}
                                                                                         />
                                                                                         {fundingType === 'usdc' && (
@@ -1221,30 +1866,72 @@ export function CircleWalletPage({
                                                                         </AnimatePresence>
                                                                     </div>
 
-                                                                    <div className="w-[1.5px] h-24 bg-[#3CB371]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
+                                                                    <div className="w-[1.5px] h-24 bg-[#249C6C]/40 rounded-full shrink-0 relative z-30 -translate-y-[10vh]" />
 
-                                                                    <div className="w-[38%] flex flex-col gap-1.5 items-center justify-center px-2 relative z-30 -translate-y-[10vh]">
-                                                                        <div className="flex flex-col items-center opacity-80">
-                                                                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
-                                                                            <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                                                {fundingType === 'usdc' ?
-                                                                                    (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)
-                                                                                    : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
-                                                                            </span>
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={startFundingFlow}
-                                                                            className="w-full py-3.5 rounded-full bg-[#3CB371] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#3CB371]/20 flex items-center justify-center text-center"
-                                                                        >
-                                                                            Fund {selectedToken.symbol}
-                                                                        </button>
+                                                                    <div className="w-[38%] flex flex-col gap-1.5 items-center justify-center px-2 relative z-30 -translate-y-[8vh]">
+                                                                        {selectedToken.id === 'sol' && !hasSolWallet ? (
+                                                                            /* SOL — no wallet yet: show Generate + Link side-by-side */
+                                                                            <div className="flex flex-col gap-1.5 w-full">
+                                                                                <button
+                                                                                    id="generate-sol-wallet-btn"
+                                                                                    onClick={handleGenerateSolWallet}
+                                                                                    disabled={isCreatingSolWallet}
+                                                                                    className="w-full py-3 rounded-full bg-gradient-to-r from-[#9945FF] to-[#14F195] text-black font-black uppercase text-[8px] tracking-widest hover:opacity-90 active:scale-[0.95] transition-all shadow-lg disabled:opacity-60 flex items-center justify-center gap-1"
+                                                                                >
+                                                                                    {isCreatingSolWallet ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
+                                                                                    {isCreatingSolWallet ? 'Creating...' : 'Generate'}
+                                                                                </button>
+                                                                                <button
+                                                                                    id="link-sol-wallet-btn"
+                                                                                    onClick={handleLinkSolWallet}
+                                                                                    className="w-full py-3 rounded-full border border-[#9945FF]/60 text-[#9945FF] font-black uppercase text-[8px] tracking-widest hover:bg-[#9945FF]/10 active:scale-[0.95] transition-all flex items-center justify-center gap-1"
+                                                                                >
+                                                                                    <Wallet size={10} /> Link Wallet
+                                                                                </button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            /* Normal: show balance + Fund button */
+                                                                            <>
+                                                                                <div className="flex flex-col items-center opacity-80 -translate-y-[2vh]">
+                                                                                    {selectedToken.id === 'sol' && !solanaWallet && generatedSolWalletPub ? (
+                                                                                        <div className="flex flex-col items-center mb-1">
+                                                                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Deposit Address</span>
+                                                                                            <div 
+                                                                                                onClick={() => {
+                                                                                                    navigator.clipboard.writeText(generatedSolWalletPub);
+                                                                                                    if (notify) notify('Deposit Address Copied!', 'success');
+                                                                                                }}
+                                                                                                className="flex items-center gap-1 cursor-pointer hover:opacity-80 active:scale-95 transition-all mt-0.5"
+                                                                                            >
+                                                                                                <span className={`text-[9px] font-mono font-bold ${isLight ? 'text-black' : 'text-white'}`}>
+                                                                                                    {generatedSolWalletPub.slice(0, 4)}...{generatedSolWalletPub.slice(-4)}
+                                                                                                </span>
+                                                                                                <Copy size={8} className={isLight ? 'text-black' : 'text-white'} />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ) : null}
+                                                                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                                                    <span className={`text-[13px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                                                        {fundingType === 'usdc' ?
+                                                                                            (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)
+                                                                                            : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <button
+                                                                                    onClick={startFundingFlow}
+                                                                                    className="w-full py-3.5 rounded-full bg-[#249C6C] text-white font-black uppercase text-[9px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-xl shadow-[#249C6C]/20 flex items-center justify-center text-center"
+                                                                                >
+                                                                                    Fund {selectedToken.symbol}
+                                                                                </button>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </div>
 
                                                                 {/* DESKTOP CAROUSEL */}
                                                                 <div className="hidden md:flex relative h-[280px] w-full items-center justify-center overflow-hidden group/token">
-                                                                    <button onClick={() => handleSwipeToken('right')} className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronLeft size={36} strokeWidth={2.5} /></button>
-                                                                    <button onClick={() => handleSwipeToken('left')} className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#3CB371]"><ChevronRight size={36} strokeWidth={2.5} /></button>
+                                                                    <button onClick={() => handleSwipeToken('right')} className="absolute left-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#249C6C]"><ChevronLeft size={36} strokeWidth={2.5} /></button>
+                                                                    <button onClick={() => handleSwipeToken('left')} className="absolute right-[-20px] top-1/2 -translate-y-1/2 z-20 p-2 transition-all active:scale-90 text-[#249C6C]"><ChevronRight size={36} strokeWidth={2.5} /></button>
 
                                                                     <AnimatePresence mode="wait">
                                                                         <motion.div
@@ -1258,8 +1945,8 @@ export function CircleWalletPage({
                                                                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[70%] w-64 h-64 pointer-events-none z-0">
                                                                                     <img
                                                                                         src={selectedToken.icon}
-                                                                                        className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(60,179,113,0.5)]"
-                                                                                        style={{ filter: isLight ? 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' : 'none' }}
+                                                                                        className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(36, 156, 108,0.5)]"
+                                                                                        style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
                                                                                         alt={selectedToken.symbol}
                                                                                     />
                                                                                     {fundingType === 'usdc' && (
@@ -1276,21 +1963,63 @@ export function CircleWalletPage({
                                                                     </AnimatePresence>
                                                                 </div>
 
-                                                                <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-6">
-                                                                    <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
-                                                                        <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
-                                                                        <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
-                                                                            {fundingType === 'usdc' ?
-                                                                                (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)
-                                                                                : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
-                                                                        </span>
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={startFundingFlow}
-                                                                        className="w-auto px-10 py-4 rounded-[20px] bg-[#3CB371] text-white font-black uppercase text-[11px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#3CB371]/20 -translate-y-[7.5vh]"
-                                                                    >
-                                                                        Fund {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
-                                                                    </button>
+                                                                <div className="hidden md:flex relative z-20 -translate-y-[30%] flex flex-col items-center gap-4">
+                                                                    {selectedToken.id === 'sol' && !hasSolWallet ? (
+                                                                        /* SOL — no wallet yet: two side-by-side buttons under the logo */
+                                                                        <div className="flex gap-3 -translate-y-[5.5vh]">
+                                                                            <button
+                                                                                id="generate-sol-wallet-btn-desktop"
+                                                                                onClick={handleGenerateSolWallet}
+                                                                                disabled={isCreatingSolWallet}
+                                                                                className="px-5 py-3.5 rounded-[16px] bg-gradient-to-r from-[#9945FF] to-[#14F195] text-black font-black uppercase text-[10px] tracking-widest hover:opacity-90 active:scale-[0.97] transition-all shadow-xl shadow-[#9945FF]/25 disabled:opacity-60 flex items-center gap-2"
+                                                                            >
+                                                                                {isCreatingSolWallet ? <RefreshCw size={13} className="animate-spin" /> : <Zap size={13} />}
+                                                                                {isCreatingSolWallet ? 'Creating...' : 'Generate Wallet'}
+                                                                            </button>
+                                                                            <button
+                                                                                id="link-sol-wallet-btn-desktop"
+                                                                                onClick={handleLinkSolWallet}
+                                                                                className="px-5 py-3.5 rounded-[16px] border-2 border-[#9945FF]/60 text-[#9945FF] font-black uppercase text-[10px] tracking-widest hover:bg-[#9945FF]/10 active:scale-[0.97] transition-all flex items-center gap-2"
+                                                                            >
+                                                                                <Wallet size={13} /> Link Wallet
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        /* Normal: balance + Fund button */
+                                                                        <>
+                                                                            <div className="flex flex-col items-center opacity-80 -mb-2 -translate-y-[5vh]">
+                                                                                {selectedToken.id === 'sol' && !solanaWallet && generatedSolWalletPub ? (
+                                                                                    <div className="flex flex-col items-center mb-2">
+                                                                                        <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Deposit Address</span>
+                                                                                        <div 
+                                                                                            onClick={() => {
+                                                                                                navigator.clipboard.writeText(generatedSolWalletPub);
+                                                                                                if (notify) notify('Deposit Address Copied!', 'success');
+                                                                                            }}
+                                                                                            className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 active:scale-95 transition-all mt-1"
+                                                                                        >
+                                                                                            <span className={`text-[11px] font-mono font-bold ${isLight ? 'text-black' : 'text-white'}`}>
+                                                                                                {generatedSolWalletPub.slice(0, 6)}...{generatedSolWalletPub.slice(-4)}
+                                                                                            </span>
+                                                                                            <Copy size={10} className={isLight ? 'text-black' : 'text-white'} />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : null}
+                                                                                <span className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-black/50' : 'text-white/50'}`}>Available</span>
+                                                                                <span className={`text-[15px] font-black tracking-wider ${isLight ? 'text-black/80' : 'text-white/90'}`}>
+                                                                                    {fundingType === 'usdc' ?
+                                                                                        (multiChainBalances[selectedToken.id]?.usdc || 0).toFixed(2)
+                                                                                        : (multiChainBalances[selectedToken.id]?.native || 0).toFixed(4)} {fundingType === 'native' ? selectedToken.symbol : 'USDC'}
+                                                                                </span>
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={startFundingFlow}
+                                                                                className="w-auto px-10 py-4 rounded-[20px] bg-[#249C6C] text-white font-black uppercase text-[11px] tracking-widest hover:scale-[1.02] active:scale-[0.95] transition-all shadow-2xl shadow-[#249C6C]/20 -translate-y-[5.5vh]"
+                                                                            >
+                                                                                Fund {fundingType === 'native' ? selectedToken.name : `${selectedToken.name} USDC`}
+                                                                            </button>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                             </motion.div>
                                                         ) : fundingStep === 'loading' ? (
@@ -1317,17 +2046,17 @@ export function CircleWalletPage({
                                                                         <React.Fragment key={n}>
                                                                             <div className="flex flex-col items-center gap-1 flex-shrink-0">
                                                                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-500 ${
-                                                                                    cctpStep > n ? 'bg-[#3CB371] text-white scale-105' :
-                                                                                    cctpStep === n ? 'bg-[#3CB371] text-white ring-2 ring-[#3CB371]/40 animate-pulse' :
+                                                                                    cctpStep > n ? 'bg-[#249C6C] text-white scale-105' :
+                                                                                    cctpStep === n ? 'bg-[#249C6C] text-white ring-2 ring-[#249C6C]/40 animate-pulse' :
                                                                                     'bg-white/10 text-white/30'
                                                                                 }`}>{n}</div>
                                                                                 <span className={`text-[9px] font-black uppercase tracking-wider transition-colors ${
-                                                                                    cctpStep >= n ? 'text-[#3CB371]' : 'text-white/30'
+                                                                                    cctpStep >= n ? 'text-[#249C6C]' : 'text-white/30'
                                                                                 }`}>{label}</span>
                                                                             </div>
                                                                             {i < arr.length - 1 && (
                                                                                 <div className={`flex-1 h-[1.5px] mb-4 transition-all duration-700 ${
-                                                                                    cctpStep > n ? 'bg-[#3CB371]' : 'bg-white/10'
+                                                                                    cctpStep > n ? 'bg-[#249C6C]' : 'bg-white/10'
                                                                                 }`} />
                                                                             )}
                                                                         </React.Fragment>
@@ -1359,15 +2088,15 @@ export function CircleWalletPage({
                                                                             placeholder="0.00"
                                                                             value={fundingAmount}
                                                                             onChange={(e) => setFundingAmount(e.target.value)}
-                                                                            className={`w-48 bg-transparent border-b-2 border-[#3CB371]/20 focus:border-[#3CB371] transition-all text-center text-4xl font-black py-4 outline-none text-white`}
+                                                                            className={`w-48 bg-transparent border-b-2 border-[#249C6C]/20 focus:border-[#249C6C] transition-all text-center text-4xl font-black py-4 outline-none text-white`}
                                                                         />
-                                                                        <span className="absolute right-0 bottom-4 text-[10px] font-black text-[#3CB371] uppercase">{fundingType === 'usdc' ? 'USDC' : selectedToken.symbol}</span>
+                                                                        <span className="absolute right-0 bottom-4 text-[10px] font-black text-[#249C6C] uppercase">{fundingType === 'usdc' ? 'USDC' : selectedToken.symbol}</span>
                                                                     </div>
                                                                 </div>
                                                                 <button
                                                                     onClick={handleConfirmFunding}
                                                                     disabled={!fundingAmount}
-                                                                    className={`px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all ${!fundingAmount ? 'bg-white/5 text-white/20' : 'bg-[#3CB371] text-white shadow-xl shadow-[#3CB371]/20 hover:scale-105 active:scale-95'}`}
+                                                                    className={`px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all ${!fundingAmount ? 'bg-white/5 text-white/20' : 'bg-[#249C6C] text-white shadow-xl shadow-[#249C6C]/20 hover:scale-105 active:scale-95'}`}
                                                                 >
                                                                     Confirm Deposit
                                                                 </button>
@@ -1385,8 +2114,8 @@ export function CircleWalletPage({
                                                                 animate={{ opacity: 1, scale: 1 }}
                                                                 className="w-full h-full flex flex-col items-center justify-center gap-6 py-12"
                                                             >
-                                                                <div className="w-20 h-20 rounded-full bg-[#3CB371]/20 flex items-center justify-center">
-                                                                    <Check size={40} className="text-[#3CB371]" />
+                                                                <div className="w-20 h-20 rounded-full bg-[#249C6C]/20 flex items-center justify-center">
+                                                                    <Check size={40} className="text-[#249C6C]" />
                                                                 </div>
                                                                 <div className="text-center">
                                                                     <h3 className="text-2xl font-black uppercase tracking-tighter text-white">Congratulations!</h3>
@@ -1405,7 +2134,7 @@ export function CircleWalletPage({
                                     {walletInfo?.transactions?.map((tx, i) => (
                                         <div key={i} className={`p-8 rounded-[40px] border ${isLight ? 'bg-[#C2D1C9] border-black/5 shadow-sm' : 'bg-[#111] border-white/5'} flex items-center justify-between transition-all hover:scale-[1.01]`}>
                                             <div className="flex items-center gap-5">
-                                                <div className={`w-14 h-14 rounded-full flex items-center justify-center ${tx.type === 'OUTGOING' ? 'bg-orange-500/10 text-orange-500' : 'bg-[#3CB371]/10 text-[#3CB371]'}`}>
+                                                <div className={`w-14 h-14 rounded-full flex items-center justify-center ${tx.type === 'OUTGOING' ? 'bg-orange-500/10 text-orange-500' : 'bg-[#249C6C]/10 text-[#249C6C]'}`}>
                                                     {tx.type === 'OUTGOING' ? <Send size={24} /> : <ArrowDownLeft size={24} />}
                                                 </div>
                                                 <div>
@@ -1436,25 +2165,25 @@ export function CircleWalletPage({
                                 </div>
 
                                 <div className="flex flex-col gap-6">
-                                    <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-[#3CB371]/20`}>
+                                    <div className={`p-4 rounded-2xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border-2 border-[#249C6C]/20`}>
                                         <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Source Wallet</p>
                                         <p className={`text-sm font-black uppercase text-white`}>{currentWallet.label}</p>
                                     </div>
 
                                     <div>
                                         <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'} block mb-2`}>Recipient Address</label>
-                                        <input type="text" placeholder="0x..." value={destAddress} onChange={(e) => setDestAddress(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-sm font-bold transition-all`} />
+                                        <input type="text" placeholder="0x..." value={destAddress} onChange={(e) => setDestAddress(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#249C6C]/30 outline-none text-sm font-bold transition-all`} />
                                     </div>
 
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
                                             <label className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Amount (USDC)</label>
-                                            <button onClick={() => setSendAmount(currentWallet.bal.toFixed(4))} className="text-[10px] font-black text-[#3CB371] uppercase hover:underline">Max Available</button>
+                                            <button onClick={() => setSendAmount(currentWallet.bal.toFixed(4))} className="text-[10px] font-black text-[#249C6C] uppercase hover:underline">Max Available</button>
                                         </div>
-                                        <input type="number" placeholder="0.00" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#3CB371]/30 outline-none text-3xl font-black transition-all`} />
+                                        <input type="number" placeholder="0.00" value={sendAmount} onChange={(e) => setSendAmount(e.target.value)} className={`w-full py-5 px-6 rounded-2xl ${isLight ? 'bg-black/5 text-black' : 'bg-white/5 text-white'} border-2 border-transparent focus:border-[#249C6C]/30 outline-none text-3xl font-black transition-all`} />
                                     </div>
 
-                                    <button onClick={handleSend} disabled={isSending} className="w-full bg-[#3CB371] text-black font-black py-6 rounded-[28px] uppercase tracking-widest mt-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#3CB371]/20">
+                                    <button onClick={handleSend} disabled={isSending} className="w-full bg-[#249C6C] text-black font-black py-6 rounded-[28px] uppercase tracking-widest mt-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#249C6C]/20">
                                         {isSending ? 'Processing...' : 'Confirm Transfer'}
                                     </button>
                                 </div>
@@ -1471,25 +2200,29 @@ export function CircleWalletPage({
                                     <button onClick={() => setShowReceiveModal(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X size={24} /></button>
                                 </div>
 
-                                <div className="p-4 rounded-3xl bg-white mb-8 shadow-2xl relative group overflow-hidden">
+                                <div className="p-4 rounded-3xl bg-white mb-8 shadow-2xl relative group overflow-hidden flex items-center justify-center">
                                     {qrCodeData ? (
                                         <>
-                                            <img src={qrCodeData} alt="QR Code" className="w-56 h-56" />
+                                            <img src={qrCodeData} alt="QR Code" className="w-56 h-56 block" />
                                             <button onClick={handleDownloadQR} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all backdrop-blur-[2px]">
-                                                <Download size={32} className="text-[#3CB371] mb-2" />
+                                                <Download size={32} className="text-[#249C6C] mb-2" />
                                                 <span className="text-[10px] font-black uppercase text-white tracking-widest">Download QR</span>
                                             </button>
                                         </>
-                                    ) : <RefreshCw size={32} className="animate-spin text-black/10" />}
+                                    ) : <div className="w-56 h-56 flex items-center justify-center"><RefreshCw size={32} className="animate-spin text-black/10" /></div>}
                                 </div>
 
                                 <div className={`w-full p-6 rounded-3xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-dashed text-center mb-8`}>
-                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-3 opacity-40 text-white`}>Deposit to {currentWallet.label}</p>
-                                    <p className={`text-xs font-black font-mono break-all text-white`}>{currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address}</p>
+                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-3 opacity-40 ${isLight ? 'text-black' : 'text-white'}`}>Deposit to {currentWallet.label}</p>
+                                    <p className={`text-xs font-black font-mono break-all ${isLight ? 'text-black' : 'text-white'}`}>
+                                        {currentWallet.key === 'trading'
+                                            ? (sessionAddress || walletInfo?.wallet?.address || '—')
+                                            : (mainWalletAddress || address || '—')}
+                                    </p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3 w-full">
-                                    <button onClick={() => { navigator.clipboard.writeText(currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address); notify("Copied!", "success"); }} className={`flex items-center justify-center gap-3 bg-[#3CB371] text-white font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
+                                    <button onClick={() => { navigator.clipboard.writeText(currentWallet.key === 'trading' ? walletInfo?.wallet?.address : address); notify("Copied!", "success"); }} className={`flex items-center justify-center gap-3 bg-[#249C6C] text-white font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
                                         <Copy size={16} /> Copy
                                     </button>
                                     <button onClick={handleDownloadQR} className={`flex items-center justify-center gap-3 ${isLight ? 'bg-black/5' : 'bg-white/5'} border ${isLight ? 'border-black/10' : 'border-white/10'} font-black py-5 rounded-[24px] text-[11px] uppercase tracking-widest transition-all`}>
@@ -1519,7 +2252,7 @@ export function CircleWalletPage({
                 <div id="qr-capture-container" className="fixed left-[-9999px] top-[-9999px] w-[400px] p-10 flex flex-col items-center justify-center gap-6"
                     style={{ backgroundColor: isLight ? '#ffffff' : '#0a0a0a' }}>
                     <img src={isLight ? "https://15market.com/goblogo.png" : "https://15market.com/gowlogo.png"} className="h-12 w-auto mb-2" alt="Logo" />
-                    <p className={`text-sm italic font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-[#3CB371]'}`}>15market.com</p>
+                    <p className={`text-sm italic font-black uppercase tracking-widest ${isLight ? 'text-black' : 'text-[#249C6C]'}`}>15market.com</p>
                     <div className={`p-4 rounded-3xl bg-white shadow-xl`}>
                         <img src={qrCodeData} alt="QR" className="w-64 h-64" />
                     </div>

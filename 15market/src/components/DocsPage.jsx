@@ -1,128 +1,182 @@
-import React from 'react';
-import { ExternalLink, BookOpen, Wallet, Droplets, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+    BookOpen, ArrowLeft, BarChart2, Wallet, 
+    Zap, HelpCircle, Compass, Sparkles, Send
+} from "lucide-react";
+import { 
+    RenderIntro, RenderTrading, RenderNavbar, 
+    RenderWallets, RenderHistory, RenderFAQ 
+} from "./DocsSections";
 
-export function DocsPage({ theme }) {
-  const isLight = theme === 'light';
-  
-  return (
-    <div className={`w-full min-h-screen ${isLight ? 'bg-[#f0f9f4] text-black' : 'bg-[#050505] text-white'} overflow-y-auto pb-24`}>
-      <div className="max-w-4xl mx-auto px-4 py-8 md:py-12">
-        <div className="flex items-center gap-3 mb-8">
-          <BookOpen className="text-[#3CB371] w-8 h-8" />
-          <h1 className="text-3xl font-black uppercase tracking-tighter">Documentation & Guides</h1>
+const SECTIONS = [
+    { id: "intro",   title: "Introduction",            icon: Compass },
+    { id: "trading", title: "Trading & Chart Widget",   icon: BarChart2 },
+    { id: "nav",     title: "Dashboard Navigation",    icon: Send },
+    { id: "wallets", title: "Wallets & Transfer Hub",  icon: Wallet },
+    { id: "history", title: "Ledgers & History",       icon: Zap },
+    { id: "faq",     title: "Platform FAQ",            icon: HelpCircle },
+];
+
+export function DocsPage({ onBack, theme = "dark" }) {
+    const isLight = theme === "light";
+    const [activeIdx, setActiveIdx] = useState(0);
+    const contentRef = useRef(null);
+    const scrollLock = useRef(false);
+
+    // Simulator state (kept at parent to preserve on tab switches)
+    const [simDir, setSimDir]         = useState("up");
+    const [simDur, setSimDur]         = useState(5);
+    const [simAmt, setSimAmt]         = useState(10);
+    const [simRunning, setSimRunning] = useState(false);
+    const [simResult, setSimResult]   = useState(null);
+    const [simCountdown, setSimCd]    = useState(0);
+    const [simTicks, setSimTicks]     = useState([]);
+
+    // Wheel scroll -> change chapter
+    useEffect(() => {
+        const el = contentRef.current;
+        if (!el) return;
+        const handler = (e) => {
+            if (scrollLock.current) return;
+            scrollLock.current = true;
+            if (e.deltaY > 0) setActiveIdx(i => Math.min(i + 1, SECTIONS.length - 1));
+            else              setActiveIdx(i => Math.max(i - 1, 0));
+            setTimeout(() => { scrollLock.current = false; }, 600);
+        };
+        el.addEventListener("wheel", handler, { passive: true });
+        return () => el.removeEventListener("wheel", handler);
+    }, []);
+
+    const startSim = () => {
+        if (simRunning) return;
+        setSimRunning(true); setSimResult(null);
+        let price = 64250; const start = price;
+        const steps = (simDur * 1000) / 400; let step = 0;
+        const ticks = [{ price }]; setSimTicks([...ticks]);
+        const iv = setInterval(() => {
+            step++;
+            setSimCd(Math.ceil(simDur * (1 - step / steps)));
+            price = parseFloat((price + (Math.random() - 0.48) * 9).toFixed(2));
+            ticks.push({ price }); setSimTicks([...ticks]);
+            if (step >= steps) {
+                clearInterval(iv);
+                const won = (simDir === "up" && price >= start) || (simDir === "down" && price < start);
+                const mult = simDur === 5 ? 2.90 : simDur === 10 ? 2.40 : 1.90;
+                const profit = won ? (simAmt * mult - simAmt).toFixed(2) : (-simAmt).toFixed(2);
+                setSimResult({ won, profit }); setSimRunning(false);
+            }
+        }, 400);
+    };
+
+    const gl = isLight
+        ? "bg-white/45 border-black/8 backdrop-blur-xl"
+        : "bg-white/[0.04] border-white/[0.06] backdrop-blur-xl";
+    const body = isLight ? "text-black/75" : "text-white/65";
+    const muted = isLight ? "text-black/45" : "text-white/40";
+
+    return (
+        <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? "bg-[#CFDCD5] text-black" : "bg-black text-white"}`}
+             style={{ fontFamily: '"Comfortaa", cursive' }}>
+            <style>{`.no-sb::-webkit-scrollbar{display:none}.no-sb{-ms-overflow-style:none;scrollbar-width:none}`}</style>
+
+            {/* Glows */}
+            <div className="pointer-events-none absolute top-0 right-0 w-96 h-96 rounded-full bg-[#249C6C]/10 blur-[100px]" />
+            <div className="pointer-events-none absolute bottom-0 left-0 w-72 h-72 rounded-full bg-[#249C6C]/6 blur-[80px]" />
+
+            {/* HEADER */}
+            <div className="flex-none flex items-center gap-4 px-5 md:px-10 pt-5 pb-2 relative z-10">
+                <button onClick={onBack} className={`w-10 h-10 rounded-2xl border flex items-center justify-center hover:-translate-x-1 transition-transform ${isLight ? "bg-white border-white text-black shadow-md" : "bg-white/5 border-white/5 text-white"}`}>
+                    <ArrowLeft size={16} />
+                </button>
+                <div>
+                    <div className="flex items-center gap-2">
+                        <BookOpen size={18} className="text-[#249C6C]" />
+                        <h1 className={`text-lg font-black uppercase tracking-widest ${isLight ? "text-[#0f2618]" : "text-white"}`}>Platform Documentation</h1>
+                    </div>
+                    <p className={`text-[10px] font-semibold uppercase tracking-widest ${muted}`}>Complete interactive guide · scroll content to change chapter</p>
+                </div>
+            </div>
+
+            {/* Mobile top tabs (clean flow, never overlaps) */}
+            <div className="md:hidden flex-none flex gap-2 overflow-x-auto no-sb px-5 pb-3">
+                {SECTIONS.map((s, i) => (
+                    <button key={s.id} onClick={() => setActiveIdx(i)}
+                        className={`flex-none px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${i === activeIdx ? "bg-[#249C6C] text-white shadow-md" : isLight ? "bg-black/5 text-black/60 hover:bg-black/10" : "bg-white/5 text-white/50 hover:bg-white/10"}`}>
+                        {s.title}
+                    </button>
+                ))}
+            </div>
+
+            {/* BODY */}
+            <div className="flex flex-1 gap-4 px-5 md:px-10 pb-5 min-h-0 relative z-10">
+
+                {/* SIDEBAR */}
+                <div className="w-64 flex-none flex flex-col gap-3 overflow-y-auto no-sb hidden md:flex">
+                    <div className={`rounded-[24px] border p-4 flex flex-col gap-1 ${gl}`}>
+                        <div className="text-[9px] font-black uppercase tracking-widest text-[#249C6C] mb-2 px-2">Chapters</div>
+                        {SECTIONS.map((s, i) => {
+                            const Icon = s.icon;
+                            const active = i === activeIdx;
+                            return (
+                                <button key={s.id} onClick={() => setActiveIdx(i)}
+                                    className={`w-full px-4 py-2.5 rounded-2xl border border-transparent flex items-center gap-3 text-left transition-all text-xs font-bold uppercase tracking-wide
+                                        ${active ? (isLight ? "bg-[#249C6C] text-white shadow translate-x-1" : "bg-[#249C6C]/20 text-[#34D399] border-[#249C6C]/40 translate-x-1") : isLight ? "hover:bg-black/5 text-black/70" : "hover:bg-white/5 text-white/60"}`}
+                                >
+                                    <Icon size={14} className={active ? "text-inherit" : "text-[#249C6C]"} />
+                                    {s.title}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className={`rounded-[24px] border p-4 flex flex-col gap-2 relative overflow-hidden ${gl}`}>
+                        <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-[#249C6C]/10 rounded-full blur-xl" />
+                        <div className="flex items-center gap-2 text-[#249C6C]"><Sparkles size={14} /><span className="text-[9px] font-black uppercase tracking-wider">Sub-45ms Execution</span></div>
+                        <p className={`text-[11px] leading-relaxed ${body}`}>Session signers authorize trades silently in memory, bypassing browser popup latency entirely.</p>
+                    </div>
+                </div>
+
+                {/* CONTENT — wheel scroll changes chapter */}
+                <div ref={contentRef} className={`flex-1 rounded-[28px] border overflow-hidden relative ${gl}`}>
+                    <AnimatePresence mode="wait">
+                        <motion.div key={activeIdx}
+                            initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -18 }}
+                            transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+                            className="absolute inset-0 p-5 md:p-8 flex flex-col gap-4 overflow-y-auto no-sb pt-5 md:pt-8"
+                        >
+                            {/* Section heading — no icon box */}
+                            <div>
+                                <h2 className={`text-base md:text-lg font-black uppercase tracking-wider ${isLight ? "text-[#0f2618]" : "text-white"}`}>
+                                    {SECTIONS[activeIdx].title}
+                                </h2>
+                                <div className="w-10 h-0.5 bg-[#249C6C] mt-1 rounded-full" />
+                            </div>
+
+                            {activeIdx === 0 && <RenderIntro isLight={isLight} body={body} />}
+                            
+                            {activeIdx === 1 && (
+                                <RenderTrading 
+                                    isLight={isLight} body={body} muted={muted}
+                                    simDir={simDir} setSimDir={setSimDir}
+                                    simDur={simDur} setSimDur={setSimDur}
+                                    simAmt={simAmt} setSimAmt={setSimAmt}
+                                    simRunning={simRunning} simCountdown={simCountdown}
+                                    simTicks={simTicks} simResult={simResult}
+                                    startSim={startSim}
+                                />
+                            )}
+                            
+                            {activeIdx === 2 && <RenderNavbar isLight={isLight} body={body} />}
+                            
+                            {activeIdx === 3 && <RenderWallets isLight={isLight} body={body} />}
+                            
+                            {activeIdx === 4 && <RenderHistory isLight={isLight} body={body} />}
+                            
+                            {activeIdx === 5 && <RenderFAQ isLight={isLight} body={body} />}
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
+            </div>
         </div>
-
-        <div className="space-y-8">
-          {/* Getting Started Section */}
-          <motion.section 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`p-6 rounded-[24px] border ${isLight ? 'bg-white border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/20'}`}
-          >
-            <h2 className="text-xl font-black uppercase tracking-widest text-[#3CB371] mb-4">Getting Started with 15Market</h2>
-            <p className={`mb-4 ${isLight ? 'text-black/80' : 'text-white/80'}`}>
-              Welcome to 15Market, the fastest decentralized binary options trading platform. 
-              Here you can trade price movements of top assets with ultra-low latency.
-            </p>
-            <ul className={`list-disc list-inside space-y-2 ${isLight ? 'text-black/70' : 'text-white/70'}`}>
-              <li>Connect your Web3 wallet (Metamask, Rabby, etc.)</li>
-              <li>Ensure you are on the Arc Testnet</li>
-              <li>Fund your trading session to get started</li>
-              <li>Predict if the price will go UP or DOWN within the chosen timeframe</li>
-            </ul>
-          </motion.section>
-
-          {/* Onboarding Section */}
-          <motion.section 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className={`p-6 rounded-[24px] border ${isLight ? 'bg-white border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/20'}`}
-          >
-            <h2 className="text-xl font-black uppercase tracking-widest text-[#3CB371] mb-4">How to Onboard</h2>
-            <p className={`mb-4 ${isLight ? 'text-black/80' : 'text-white/80'}`}>
-              When you first connect, a secure Smart Contract Wallet (Session Wallet) is automatically generated for you. 
-              This wallet allows for 1-click trading without needing to sign every transaction with your main wallet.
-            </p>
-            <div className={`p-4 rounded-xl ${isLight ? 'bg-black/5' : 'bg-white/5'} border border-transparent`}>
-              <h3 className="font-bold mb-2">Steps:</h3>
-              <ol className={`list-decimal list-inside space-y-2 ${isLight ? 'text-black/70' : 'text-white/70'}`}>
-                <li>Click "Connect Wallet" at the top right.</li>
-                <li>Approve the connection and the automatic network switch to Arc Testnet.</li>
-                <li>Your Session Wallet is generated seamlessly in the background.</li>
-                <li>You can link your X (Twitter) profile in the Profile settings to customize your avatar.</li>
-              </ol>
-            </div>
-          </motion.section>
-
-          {/* Funding Section */}
-          <motion.section 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={`p-6 rounded-[24px] border ${isLight ? 'bg-white border-[#3CB371]/20' : 'bg-[#0D0D0D] border-[#3CB371]/20'}`}
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <Wallet className="text-[#3CB371]" />
-              <h2 className="text-xl font-black uppercase tracking-widest text-[#3CB371]">How to Fund Your Wallet</h2>
-            </div>
-            <p className={`mb-4 ${isLight ? 'text-black/80' : 'text-white/80'}`}>
-              To trade, your Session Wallet needs USDC on the Arc Testnet. There are two main ways to fund it:
-            </p>
-            
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className={`p-4 rounded-xl ${isLight ? 'bg-[#3CB371]/10' : 'bg-[#3CB371]/5'} border border-[#3CB371]/30`}>
-                <h3 className="font-black uppercase mb-2">Option 1: Direct Deposit</h3>
-                <p className={`text-sm ${isLight ? 'text-black/70' : 'text-white/70'}`}>
-                  Use the "Deposit" button in the Dashboard or Wallet drawer. This will prompt your main wallet to send USDC directly to your Session Wallet.
-                </p>
-              </div>
-              
-              <div className={`p-4 rounded-xl ${isLight ? 'bg-[#3CB371]/10' : 'bg-[#3CB371]/5'} border border-[#3CB371]/30`}>
-                <h3 className="font-black uppercase mb-2">Option 2: Manual Transfer</h3>
-                <p className={`text-sm ${isLight ? 'text-black/70' : 'text-white/70'}`}>
-                  Copy your EOA Session Wallet address from the Dashboard and manually send USDC to it from your main wallet or any exchange.
-                </p>
-              </div>
-            </div>
-          </motion.section>
-
-          {/* Faucet Section */}
-          <motion.section 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className={`p-6 rounded-[24px] border ${isLight ? 'bg-gradient-to-r from-[#3CB371]/20 to-transparent border-[#3CB371]/40' : 'bg-gradient-to-r from-[#3CB371]/10 to-[#0D0D0D] border-[#3CB371]/40'}`}
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <Droplets className="text-[#3CB371]" />
-              <h2 className="text-xl font-black uppercase tracking-widest text-[#3CB371]">Getting USDC from Circle Faucet</h2>
-            </div>
-            <p className={`mb-4 ${isLight ? 'text-black/80' : 'text-white/80'}`}>
-              Since we operate on a testnet, you can get free test USDC to trade with directly from the official Circle Faucet.
-            </p>
-            
-            <ol className={`list-decimal list-inside space-y-3 mb-6 ${isLight ? 'text-black/70' : 'text-white/70'}`}>
-              <li>Visit the Circle Faucet using the link below.</li>
-              <li>Select your network (ensure it corresponds to Arc or its base layer if applicable).</li>
-              <li>Enter your Main Wallet address (or Session Wallet address).</li>
-              <li>Click "Send USDC" and wait for the confirmation.</li>
-              <li>Once received, you can use the Deposit feature to move it to your Session Wallet.</li>
-            </ol>
-
-            <a 
-              href="https://faucet.circle.com/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className={`inline-flex items-center gap-2 px-6 py-3 rounded-full font-black uppercase tracking-widest transition-all ${isLight ? 'bg-[#3CB371] text-white hover:brightness-110' : 'bg-[#3CB371] text-black hover:bg-white hover:text-black'}`}
-            >
-              Access Circle Faucet <ExternalLink size={16} />
-            </a>
-          </motion.section>
-
-        </div>
-      </div>
-    </div>
-  );
+    );
 }

@@ -1,17 +1,164 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet, Bell } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet, Bell, Megaphone, Calendar, ChevronDown, ChevronUp, Smile, Coins, RefreshCcw, BookOpen } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import CampaignLeaderboardPane from "./CampaignLeaderboardPane";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine } from 'recharts';
 import { LatencyMeter } from "./LatencyMeter";
 import ArcABI from "../abi/ArcPrediction.json";
 import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN_TOKEN } from "../constants";
 import { socketService } from "../utils/socket";
 import { parseEther } from "viem";
 import GlobalLoader from "./GlobalLoader";
+import { useCreateWallet } from '@privy-io/react-auth';
+
+// ─── Animate-UI Style: Framer Motion Animated Icon Wrappers ──────────────────
+// Each icon has a unique, semantically-appropriate looping micro-animation.
+// Inspired by animate-ui.com's approach of wrapping Lucide icons with Framer Motion.
+
+const AnimatedBook = ({ size = 16, className = '' }) => (
+    <motion.div
+        animate={{ scale: [1, 1.12, 0.96, 1.04, 1], rotate: [0, -6, 6, -3, 0] }}
+        transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 3.5, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <BookOpen size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedBell = ({ size = 16, className = '' }) => (
+    <motion.div
+        animate={{ rotate: [0, 18, -18, 12, -12, 6, -6, 0], y: [0, -1, 0] }}
+        transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 3.5, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex', transformOrigin: 'top center' }}
+    >
+        <Bell size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedTrophy = ({ size = 16, className = '' }) => (
+    <motion.div
+        initial={{ y: 0, scale: 1 }}
+        animate={{ y: [0, -4, 0, -2, 0], scale: [1, 1.08, 1, 1.04, 1] }}
+        transition={{ duration: 2.2, repeat: 0, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Trophy size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedSend = ({ size = 15, className = '' }) => (
+    <motion.div
+        initial={{ x: 0, y: 0, rotate: 0 }}
+        animate={{ x: [0, 3, 0, -1, 0], y: [0, -3, 0, 1, 0], rotate: [0, 5, 0] }}
+        transition={{ duration: 2.0, repeat: 0, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Send size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedSettings = ({ size = 13, className = '' }) => (
+    <motion.div
+        animate={{ rotate: [0, 60, 120, 180, 240, 300, 360] }}
+        transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Settings size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedBarChart = ({ size = 14, className = '' }) => (
+    <motion.div
+        animate={{ scaleY: [1, 1.3, 0.85, 1.15, 1], scaleX: [1, 0.95, 1.05, 0.98, 1] }}
+        transition={{ duration: 2.0, repeat: Infinity, repeatDelay: 1.5, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex', transformOrigin: 'bottom' }}
+    >
+        <BarChart2 size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedSmile = ({ size = 14, className = '' }) => (
+    <motion.div
+        animate={{ y: [0, -4, 0], rotate: [0, 8, -8, 0], scale: [1, 1.12, 1] }}
+        transition={{ duration: 2.6, repeat: Infinity, repeatDelay: 2.4, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Smile size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedTarget = ({ size = 14, className = '' }) => (
+    <motion.div
+        animate={{ rotate: [0, 360] }}
+        transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Target size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedCoins = ({ size = 14, className = '' }) => (
+    <motion.div
+        animate={{ y: [0, -5, 0, -2, 0], rotate: [0, -8, 8, 0], scale: [1, 1.1, 1] }}
+        transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 2.2, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Coins size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedTrendingUp = ({ size = 14, className = '' }) => (
+    <motion.div
+        animate={{ x: [0, 3, 0], y: [0, -3, 0], scale: [1, 1.1, 1] }}
+        transition={{ duration: 2.0, repeat: Infinity, repeatDelay: 2.5, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <TrendingUp size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedRefresh = ({ size = 12, className = '' }) => (
+    <motion.div
+        animate={{ rotate: [0, 360] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <RefreshCcw size={size} className={className} />
+    </motion.div>
+);
+const AnimatedZap = ({ size = 14, className = '' }) => (
+    <motion.div
+        animate={{ scale: [1, 1.3, 0.9, 1.2, 1], opacity: [1, 0.7, 1, 0.85, 1], rotate: [0, -8, 8, -4, 0] }}
+        transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2.0, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Zap size={size} className={className} />
+    </motion.div>
+);
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Count-up animation hook — animates a number from 0 to target on change
+function useCountUp(target, duration = 1400) {
+    const [value, setValue] = useState(0);
+    useEffect(() => {
+        if (target === 0 || target == null) { setValue(0); return; }
+        let startTime = null;
+        let rafId;
+        const animate = (ts) => {
+            if (!startTime) startTime = ts;
+            const p = Math.min((ts - startTime) / duration, 1);
+            const eased = 1 - Math.pow(1 - p, 4);
+            setValue(target * eased);
+            if (p < 1) { rafId = requestAnimationFrame(animate); }
+        };
+        rafId = requestAnimationFrame(animate);
+        return () => { if (rafId) cancelAnimationFrame(rafId); };
+    }, [target]);
+    return value;
+}
 
 export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onDeposit, onWithdraw, treasuryBalance,
     autoSignerFees,
@@ -25,10 +172,15 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     onViewReceipt,
     uiVersion,
     setUiVersion,
-    onOpenCircleWallet
+    onOpenCircleWallet,
+    onCampaign,
+    onTransferHub,
+    onDocs
 }) {
     const isLight = theme === 'light';
     const { isConnected, address } = useAccount();
+    const { createWallet } = useCreateWallet();
+    const [selectedWallet, setSelectedWallet] = useState('trading');
 
     const [stats, setStats] = useState({
         userWinRate: 0,
@@ -57,11 +209,35 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const [enrollments, setEnrollments] = useState({});
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [newUsername, setNewUsername] = useState("");
+    const [notifications, setNotifications] = useState([]);
+
+    const handleClearNotifications = async () => {
+        setNotifications([]);
+        if (address) {
+            try {
+                await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notifications: [] })
+                });
+            } catch (e) {
+                console.error("Failed to clear notifications:", e);
+            }
+        }
+    };
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
     const fileInputRef = React.useRef(null);
+
+    // Count-up animated display values for premium feel
+    const animWinRate   = useCountUp(parseFloat(stats.userWinRate) || 0);
+    const animSentiment = useCountUp(stats.marketSentiment || 0);
+    const animVolume    = useCountUp(parseFloat(stats.marketTotalVol) || 0);
+    const animAvgStake  = useCountUp(parseFloat(stats.marketAvgStake) || 0);
 
     const handleAvatarUpload = (e) => {
         const file = e.target.files[0];
@@ -131,6 +307,25 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
         return () => clearInterval(interval);
     }, [address]);
 
+    // Listen to live notifications from Socket.io for instant feedback
+    useEffect(() => {
+        if (!address) return;
+        
+        const handleNotif = (notif) => {
+            console.log("[DashboardPage] New socket notification received:", notif);
+            setNotifications(prev => [notif, ...prev]);
+            
+            // Trigger a beautiful notification toast alert
+            setToast(`🔔 ${notif.title}: ${notif.message}`);
+        };
+
+        socketService.on('notification', handleNotif);
+        
+        return () => {
+            socketService.off('notification', handleNotif);
+        };
+    }, [address]);
+
     const fetchMetrics = async () => {
         try {
             // AUTHORITATIVE BACKEND METRICS
@@ -138,13 +333,23 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                 const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data && data.stats) {
-                        setStats(prev => ({
-                            ...prev,
-                            userWinRate: data.stats.totalTrades > 0 ? ((data.stats.totalWins / data.stats.totalTrades) * 100).toFixed(1) : 0,
-                            userTotalTrades: data.stats.totalTrades || 0,
-                            userTotalWins: data.stats.totalWins || 0
-                        }));
+                    if (data) {
+                        if (data.stats) {
+                            setStats(prev => ({
+                                ...prev,
+                                userWinRate: data.stats.totalTrades > 0 ? ((data.stats.totalWins / data.stats.totalTrades) * 100).toFixed(1) : 0,
+                                userTotalTrades: data.stats.totalTrades || 0,
+                                userTotalWins: data.stats.totalWins || 0
+                            }));
+                        }
+                        // Populate trade history for PnL graph
+                        if (Array.isArray(data.trades)) {
+                            setUserHistory(data.trades);
+                        }
+                        // Populate notifications
+                        if (Array.isArray(data.notifications)) {
+                            setNotifications(data.notifications);
+                        }
                     }
                 }
             }
@@ -242,520 +447,550 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
         } catch (e) {} finally { setEnrolling(false); }
     };
 
-    const chartData = useMemo(() => {
-        if (!transactionHistory) return [];
-        return [...transactionHistory]
-            .slice(0, 20)
-            .reverse()
-            .map((t, i) => ({
-                name: i,
-                amount: parseFloat(t.amount || 0),
-                type: t.type === "DEPOSIT" ? 1 : -1
-            }));
-    }, [transactionHistory]);
+    // Cumulative PnL stats derived from authoritative backend trade history
+    const pnlStats = useMemo(() => {
+        const trades = [...userHistory]
+            .filter(t => t && (t.status || t.won !== undefined))
+            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
+        let cumulative = 0;
+        let allTimeProfit = 0;
+        let allTimeLoss = 0;
+        const chartPoints = [{ i: 0, pnl: 0, pnlPos: 0, pnlNeg: 0 }];
+
+        trades.forEach((t, index) => {
+            const isWon = t.status?.toUpperCase() === 'WON' || t.status?.toUpperCase() === 'SUCCESS' || t.won === true;
+            const amt = parseFloat(t.amount || 0);
+            const duration = t.duration || 15;
+            const multiplier = duration === 5 ? 2.90 : duration === 10 ? 2.40 : 1.90;
+            const payout = t.payout ? parseFloat(t.payout) : (amt * multiplier);
+            if (isWon) {
+                const netProfit = payout - amt;
+                cumulative += netProfit;
+                allTimeProfit += netProfit;
+            } else {
+                cumulative -= amt;
+                allTimeLoss += amt;
+            }
+            const pv = parseFloat(cumulative.toFixed(4));
+            chartPoints.push({ i: index + 1, pnl: pv, pnlPos: Math.max(pv, 0), pnlNeg: Math.min(pv, 0) });
+        });
+
+        const maxAbs = Math.max(...chartPoints.map(d => Math.abs(d.pnl)), 0.1);
+        const netPnl = allTimeProfit - allTimeLoss;
+        // Use demo data if user has no trades yet
+        const finalChartData = chartPoints.length > 1 ? chartPoints
+            : [{ i:0,pnl:0,pnlPos:0,pnlNeg:0 },{ i:1,pnl:0.8,pnlPos:0.8,pnlNeg:0 },{ i:2,pnl:-0.3,pnlPos:0,pnlNeg:-0.3 },{ i:3,pnl:1.5,pnlPos:1.5,pnlNeg:0 },{ i:4,pnl:0.9,pnlPos:0.9,pnlNeg:0 },{ i:5,pnl:2.1,pnlPos:2.1,pnlNeg:0 }];
+        const finalMaxAbs = chartPoints.length > 1 ? maxAbs
+            : Math.max(...finalChartData.map(d => Math.abs(d.pnl)), 0.1);
+        const pValues = finalChartData.map(d => d.pnl);
+        const maxVal = Math.max(...pValues, 0.001);
+        const minVal = Math.min(...pValues, -0.001);
+        return { chartData: finalChartData, maxAbs: finalMaxAbs, allTimeProfit, allTimeLoss, netPnl, maxVal, minVal, hasTrades: chartPoints.length > 1 };
+    }, [userHistory]);
+
+    const animNetPnl = useCountUp(pnlStats.netPnl || 0);
+
+    const maxVal = pnlStats.maxVal;
+    const minVal = pnlStats.minVal;
+    let strokeOffset = 0.5;
+    if (maxVal > 0 && minVal < 0) {
+        strokeOffset = maxVal / (maxVal - minVal);
+    } else if (maxVal <= 0) {
+        strokeOffset = 0;
+    } else if (minVal >= 0) {
+        strokeOffset = 1;
+    }
+    const strokeOffsetPercent = `${strokeOffset * 100}%`;
 
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`h-[100dvh] w-full flex flex-col overflow-hidden relative ${isLight ? 'bg-[#b4d9c7] text-[#0a261a]' : 'bg-transparent text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
-            {/* Full-page Background Texture */}
-            <div className={`fixed inset-0 pointer-events-none z-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'opacity-[0.07] mix-blend-multiply' : 'opacity-[0.04] mix-blend-screen'}`} />
-            {!isSmallScreen && hasActiveCampaign && (
-                <CampaignLeaderboardPane 
-                    isOpen={isLeaderboardOpen} 
-                    onToggle={() => setIsLeaderboardOpen(!isLeaderboardOpen)} 
-                    leaderboard={activeCampaignLeaderboard} 
-                    theme={theme} 
-                    address={address} 
-                    truncate={truncate} 
-                    isSmallScreen={isSmallScreen} 
-                />
-            )}
-            {/* Fixed header — never grows */}
-            <div className={`flex-none ${isSmallScreen ? 'bg-transparent border-transparent shadow-none' : (isLight ? 'bg-[#b4d9c7]/90 border-[#3CB371]/35 shadow-sm' : 'bg-[#0d0d0d] border-white/5')} border-b backdrop-blur-xl safe-top`}>
-                <div className={`max-w-[1600px] mx-auto flex items-center w-full ${isSmallScreen ? 'h-16 px-4' : 'px-8 py-4'}`}>
-                    <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={onBack}
-                                className={`p-2 md:p-2.5 rounded-full ${isLight ? 'bg-[#3CB371]/5 hover:bg-[#3CB371]/10 border-[#3CB371]/10 text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 border-white/5 text-white'} border transition-colors group px-4 md:px-5`}
-                            >
-                                <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-                            </button>
-                            <div>
-                                <h1 className="text-lg md:text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                                    Dashboard
-                                </h1>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2 md:gap-4 text-right">
-                            <button
-                                onClick={() => setIsNotificationsOpen(true)}
-                                className={`p-2 md:p-2.5 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all`}
-                                title="Notifications"
-                            >
-                                <Bell size={isSmallScreen ? 14 : 16} className={isLight ? "text-[#0a261a]/60" : "text-white/60"} />
-                            </button>
-                            {onOpenCircleWallet && (
-                                <button
-                                    onClick={() => onOpenCircleWallet(null)}
-                                    className={`p-2 md:p-2.5 rounded-xl border ${isLight ? 'bg-[#3CB371]/10 border-[#3CB371]/30 text-[#0a261a]' : 'bg-[#3CB371]/10 border-[#3CB371]/20 text-[#3CB371]'} hover:scale-110 active:scale-95 transition-all`}
-                                    title={isSmallScreen ? "Circle Wallet" : "Access Transfer Hub"}
-                                >
-                                    <Wallet size={isSmallScreen ? 14 : 16} />
-                                </button>
-                            )}
-                        </div>
+        <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'text-black bg-[#CFDCD5]' : 'text-white bg-black'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+            <style>{`
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                .db-card { background: ${isLight ? 'rgba(207,220,213,0.7)' : 'rgba(10,10,10,0.8)'}; border: 1px solid ${isLight ? 'rgba(36, 156, 108,0.15)' : 'rgba(255,255,255,0.06)'}; border-radius: 24px; margin: 0 2px; filter: drop-shadow(${isLight ? '0 2px 4px rgba(0,0,0,0.10)' : '0 2px 4px rgba(0,0,0,0.4)'}); }
+                .db-card-alt { background: ${isLight ? 'rgba(207,220,213,0.65)' : 'rgba(10,10,10,0.75)'}; border: 1px solid ${isLight ? 'rgba(36, 156, 108,0.12)' : 'rgba(255,255,255,0.05)'}; border-radius: 24px; margin: 0 2px; filter: drop-shadow(${isLight ? '0 2px 4px rgba(0,0,0,0.10)' : '0 2px 4px rgba(0,0,0,0.4)'}); }
+                @keyframes breathe { 0%,100%{box-shadow:0 0 20px rgba(36, 156, 108,0.3)} 50%{box-shadow:0 0 40px rgba(36, 156, 108,0.6)} }
+            `}</style>
+
+            <div className={`absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
+
+            {/* HEADER */}
+            <div className="flex items-center justify-between px-4 md:px-10 pt-5 pb-0 flex-none relative z-10">
+                <div className="flex items-center gap-4">
+                    <button onClick={onBack} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5' : 'bg-white/5 border-white/5 hover:bg-white/10'} rounded-2xl border flex items-center justify-center hover:-translate-x-1 transition-transform ${isLight ? 'text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]' : 'text-white shadow-[0_2px_8px_rgba(0,0,0,0.4)]'}`}>
+                        <ArrowLeft size={16} />
+                    </button>
+                    <div>
+                        <h1 className={`text-xl font-bold uppercase tracking-widest ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Dashboard</h1>
+                        <p className={`text-[10px] font-semibold uppercase tracking-widest ${isLight ? 'text-[#0f2618]/50' : 'text-white/40'}`}>Overview of your portfolio and activity</p>
                     </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button onClick={onDocs} title="Platform Documentation" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                        <AnimatedBook size={16} className="text-[#249C6C]"/>
+                    </button>
+                    <button onClick={onCampaign} title="Campaign" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                        <AnimatedTrophy size={16} className="text-[#249C6C]"/>
+                    </button>
+                    <button onClick={onTransferHub || (() => onOpenCircleWallet?.(null))} title="Transfer Hub" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                        <AnimatedSend size={15} className={isLight ? 'text-black/80' : 'text-white/80'}/>
+                    </button>
+                    <button onClick={() => setIsNotificationsOpen(true)} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`} title="Notifications">
+                        <AnimatedBell size={16} className={isLight ? 'text-black/80' : 'text-white/80'}/>
+                        <motion.span
+                            className="absolute top-2 right-2 w-2 h-2 bg-[#249C6C] rounded-full"
+                            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+                            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                        />
+                    </button>
+                    <input ref={fileInputRef} type="file" className="hidden" accept="image/jpeg,image/jpg,image/png,image/gif" onChange={handleAvatarUpload}/>
                 </div>
             </div>
 
-            {/* Scrollable content area — absorbs all remaining height, never pushes past screen */}
-            <div 
-                className="flex-1 min-h-0 overflow-hidden p-4 md:p-6 lg:p-8 flex flex-col gap-6 transition-all duration-500"
-                style={!isSmallScreen && hasActiveCampaign ? { paddingRight: isLeaderboardOpen ? '234px' : '52px' } : {}}
-            >
-                    {/* Unified Grid Layout - 3 Column: Controls | Transactions | Analytics+Chat */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0 overflow-hidden">
+            {/* MAIN BODY */}
+            {isSmallScreen ? (
+                /* MOBILE PORTRAIT: vertical stacked layout */
+                <div className="flex flex-1 gap-3 px-4 py-2 min-h-0 relative z-10 flex-col overflow-hidden">
 
-                        {/* COL 1: Profile + Auto-Signer + Activity (lg:col-span-4) */}
-                        <div className="lg:col-span-4 flex flex-col gap-5 min-h-0">
-                            {/* Profile & Auto-Signer Compact Card */}
-                            <div className={`p-5 border rounded-[28px] ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} flex flex-col gap-5`}>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <button 
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className="group relative w-10 h-10 rounded-full bg-gradient-to-br from-[#3CB371] to-black p-[1px] hover:scale-105 active:scale-95 transition-all overflow-hidden"
-                                        >
-                                            <div className={`w-full h-full rounded-full ${isLight ? 'bg-[#C2D1C9]' : 'bg-[#050505]'} flex items-center justify-center overflow-hidden`}>
-                                                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
-                                                    <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <User size={20} className={isLight ? 'text-[#3CB371]/40' : 'text-white/50'} />
-                                                )}
-                                            </div>
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <span className="text-white text-xs font-black">+</span>
-                                            </div>
-                                        </button>
-                                        <div>
-                                            <h2 className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} leading-tight`}>{userProfile?.username || "Trader"}</h2>
-                                            <div className={`text-[8px] font-mono uppercase tracking-widest opacity-40`}>{truncate(address)}</div>
+                    {/* TRADING WALLET */}
+                    <div className="flex-none">
+                        <div className={`w-full rounded-[24px] p-4 flex flex-col gap-3 relative overflow-hidden ${isLight ? 'bg-[#CFDCD5] border-[#249C6C]/20' : 'bg-[#0a0a0a] border-white/5'}`} style={{ filter: isLight ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
+
+                            {/* Profile Row */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => fileInputRef.current?.click()} className={`w-8 h-8 rounded-full flex-none flex items-center justify-center overflow-hidden border-2 border-[#249C6C]/40 ${isLight ? 'bg-[#249C6C]/10' : 'bg-white/5'} hover:scale-105 transition-all`}>
+                                        {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                                            <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="avatar" className="w-full h-full object-cover"/>
+                                        ) : (
+                                            <User size={14} className={isLight ? 'text-[#249C6C]/70' : 'text-white/50'}/>
+                                        )}
+                                    </button>
+                                    <div>
+                                        <div className={`text-xs font-black leading-tight ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{userProfile?.username || 'Trader'}</div>
+                                        <div onClick={() => { if (address) { navigator.clipboard.writeText(address); setToast('Copied!'); setTimeout(() => setToast(null), 2000); }}}
+                                            className={`text-[7px] font-mono cursor-pointer hover:opacity-100 transition-opacity ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
+                                            {address ? `${address.slice(0,6)}...${address.slice(-4)}` : '---'}
                                         </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="file"
-                                            ref={fileInputRef}
-                                            className="hidden"
-                                            accept="image/jpeg,image/jpg,image/png,image/gif"
-                                            onChange={handleAvatarUpload}
-                                        />
-                                        <button 
-                                            onClick={() => setModalConfig({
-                                                title: "Profile Settings",
-                                                message: "Choose an action to update your profile identity.",
-                                                type: "confirm",
-                                                confirmText: "Change Name",
-                                                onConfirm: () => {
-                                                    setPromptValue("");
-                                                    setPromptConfig({
-                                                        title: "Edit Username",
-                                                        placeholder: "New Username",
-                                                        onConfirm: async (newName) => {
-                                                            try {
-                                                                const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
-                                                                    method: 'PATCH',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ username: newName })
-                                                                });
-                                                                if (res.ok) {
-                                                                    setToast("Username Updated!");
-                                                                    setTimeout(() => window.location.reload(), 1000);
-                                                                }
-                                                            } catch (e) {
-                                                                setToast("Update Failed");
-                                                            }
-                                                        }
-                                                    });
-                                                },
-                                                footer: (
-                                                    <button 
-                                                        onClick={() => {
-                                                            setModalConfig(null);
-                                                            fileInputRef.current.click();
-                                                        }}
-                                                        className="w-full mt-2 py-4 bg-white/5 border border-white/10 text-white text-xs font-black uppercase tracking-widest rounded-full hover:bg-white/10 transition-all"
-                                                    >
-                                                        Upload Avatar
-                                                    </button>
-                                                )
-                                            })}
-                                            className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'} hover:scale-110 active:scale-95 transition-all`}
-                                        >
-                                            <Settings size={14} className="opacity-40" />
-                                        </button>
                                     </div>
                                 </div>
+                                <button onClick={() => { setNewUsername(userProfile?.username || ''); setIsSettingsOpen(true); }}
+                                    className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#249C6C]/20 hover:bg-white/60' : 'bg-white/5 border-white/10 hover:bg-white/10'} transition-all`}>
+                                    <AnimatedSettings size={12} className={isLight ? 'text-[#0a261a]/50' : 'text-white/40'}/>
+                                </button>
+                            </div>
 
-                                <div className="h-px bg-white/5 w-full" />
+                            <div className={`w-full h-px ${isLight ? 'bg-black/5' : 'bg-white/5'}`}/>
 
-                                {/* Trading Wallet Control Section */}
+                            {/* Trading Wallet Row */}
+                            <div className="flex items-start justify-between">
                                 <div>
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h4 className={`text-[9px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>Trading Wallet</h4>
-                                            <div 
-                                                onClick={() => {
-                                                    if (evmSessionWallet?.address) {
-                                                        navigator.clipboard.writeText(evmSessionWallet.address);
-                                                        setToast("Address Copied!");
-                                                        setTimeout(() => setToast(null), 2000);
-                                                    } else if (!isSignerInitializing && address) {
-                                                        onRetryInit?.();
-                                                    }
-                                                }}
-                                                className={`text-[8px] font-mono opacity-40 hover:opacity-100 cursor-pointer transition-all mt-1 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
-                                            >
-                                                {evmSessionWallet?.address ? truncate(evmSessionWallet.address) : (isSignerInitializing ? "Syncing..." : (address ? "Not Ready (Retry)" : "Connect Wallet"))}
-                                                {evmSessionWallet?.address && <Copy size={8} />}
+                                    <div className={`text-[7px] font-black uppercase tracking-[0.2em] mb-0.5 ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>Trading Wallet</div>
+                                    <div onClick={() => { if (evmSessionWallet?.address) { navigator.clipboard.writeText(evmSessionWallet.address); setToast('Address Copied!'); setTimeout(() => setToast(null), 2000); } else if (!isSignerInitializing && address) { onRetryInit?.(); } }}
+                                        className={`text-[7px] font-mono cursor-pointer hover:opacity-100 transition-opacity flex items-center gap-1 mt-0.5 ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
+                                        {evmSessionWallet?.address ? `${evmSessionWallet.address.slice(0,6)}...${evmSessionWallet.address.slice(-4)}` : (isSignerInitializing ? 'Syncing...' : (address ? 'Not Ready (Retry)' : 'Connect Wallet'))}
+                                        {evmSessionWallet?.address && <Copy size={7}/>}
+                                    </div>
+                                </div>
+                                <div className="text-base font-black text-[#249C6C] tabular-nums">${parseFloat(sessionBalance || 0).toFixed(2)}</div>
+                            </div>
+
+                            {/* Main Wallet Balance */}
+                            <div className={`rounded-xl border px-3 py-2 flex items-center justify-between ${isLight ? 'bg-white/40 border-[#249C6C]/20' : 'bg-white/5 border-white/10'}`} style={{ boxShadow: isLight ? '0 1px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)' : '0 1px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+                                <div>
+                                    <div className={`text-[6px] font-black uppercase tracking-widest mb-0.5 ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>Main Wallet Balance</div>
+                                    <div onClick={() => { if (address) { navigator.clipboard.writeText(address); setToast('Copied!'); setTimeout(() => setToast(null), 2000); }}}
+                                        className={`text-[8px] font-mono cursor-pointer hover:opacity-100 transition-all flex items-center gap-1 ${isLight ? 'text-[#0a261a]/60' : 'text-white/50'}`}>
+                                        {address ? `${address.slice(0,6)}...${address.slice(-4)}` : '---'}
+                                        {address && <Copy size={7}/>}
+                                    </div>
+                                </div>
+                                <div className={`text-xs font-black tabular-nums ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>${parseFloat(evmBalance || 0).toFixed(2)}</div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="grid grid-cols-2 gap-2 mt-auto" style={{ filter: 'drop-shadow(0 4px 12px rgba(36, 156, 108,0.15))' }}>
+                                <button onClick={() => { setPromptValue(""); setPromptConfig({ title: "Deposit to Trading Wallet", placeholder: "USDC Amount", onConfirm: (val) => onDeposit(parseFloat(val)) }); }}
+                                    className={`py-2 ${isLight ? 'bg-[#249C6C] text-white' : 'bg-[#249C6C] text-white'} text-[8px] font-black uppercase tracking-[0.2em] rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-lg`}>Deposit</button>
+                                <button onClick={() => { setPromptValue(""); setPromptConfig({ title: "Withdraw to Main Wallet", placeholder: "Amount", onConfirm: (val) => onWithdraw(val) }); }}
+                                    className={`py-2 text-[8px] font-black uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all border ${isLight ? 'bg-white/40 border-[#249C6C]/20 text-[#0a261a] hover:bg-white/60' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>Withdraw</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* LINE UNDER WALLET */}
+                    <div className="flex-none relative">
+                        <div className="w-full h-px bg-gradient-to-r from-transparent via-[#249C6C]/40 to-transparent"/>
+                    </div>
+
+                    {/* USER METRICS */}
+                    <div className="flex-none">
+                        <div className="grid grid-cols-4 gap-2">
+                            {/* 24H Volume */}
+                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
+                                <div className="flex items-center gap-1">
+                                    <BarChart2 size={10} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Volume</span>
+                                </div>
+                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.marketTotalVol}</div>
+                                <div className="text-[6px] font-bold text-[#249C6C] mt-0.5 truncate">+12.4%</div>
+                            </div>
+
+                            {/* Sentiment */}
+                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
+                                <div className="flex items-center gap-1">
+                                    <Smile size={10} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Sent.</span>
+                                </div>
+                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.marketSentiment}%</div>
+                                <div className="text-[6px] font-bold text-[#249C6C] mt-0.5 truncate uppercase">{stats.sentiment || 'Neutral'}</div>
+                            </div>
+
+                            {/* Win Rate */}
+                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
+                                <div className="flex items-center gap-1">
+                                    <AnimatedZap size={10} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Win Rate</span>
+                                </div>
+                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.userWinRate}%</div>
+                                <div className={`text-[6px] font-bold ${isLight ? 'text-black/40' : 'text-white/40'} mt-0.5 truncate`}>Neutral</div>
+                            </div>
+
+                            {/* Avg Stake */}
+                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
+                                <div className="flex items-center gap-1">
+                                    <AnimatedCoins size={10} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Avg Stake</span>
+                                </div>
+                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.marketAvgStake}</div>
+                                <div className="text-[6px] font-bold text-[#249C6C] mt-0.5 truncate">+8.1%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* TRANSACTION HISTORY */}
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        {/* Transactions */}
+                        <div className="db-card-alt p-4 flex flex-col flex-1 min-h-0">
+                            <div className="flex items-center justify-between mb-3 flex-none">
+                                <div className="flex items-center gap-2">
+                                    <AnimatedRefresh size={12} className="text-[#249C6C]"/>
+                                    <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>Transactions</span>
+                                </div>
+                                <button className={`text-[8px] font-bold ${isLight ? 'text-black/50 hover:text-black' : 'text-white/40 hover:text-white'} flex items-center gap-1 uppercase tracking-widest transition-colors`}>View all<ChevronRight size={10}/></button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3">
+                                {(!transactionHistory||transactionHistory.length===0) ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center opacity-30 text-center gap-2">
+                                        <AnimatedRefresh size={16} className={isLight ? 'text-black/20' : 'text-white/20'}/>
+                                        <div className={`text-[8px] font-bold uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>No recent activity</div>
+                                    </div>
+                                ) : transactionHistory.slice(0, 10).map((tx,i) => (
+                                    <div key={tx.id||i} className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center ${tx.type==="DEPOSIT"?"bg-[#249C6C]/15 text-[#249C6C]":"bg-[#FF7F50]/15 text-[#FF7F50]"}`}>
+                                                {tx.type==="DEPOSIT"?<ArrowUp size={10}/>:<ArrowDown size={10}/>}
+                                            </div>
+                                            <div>
+                                                <div className={`text-[10px] font-bold ${isLight ? 'text-black' : 'text-white'}`}>{tx.type==="DEPOSIT"?"Deposit":"Withdrawal"}</div>
+                                                <div className={`text-[7px] font-semibold mt-0.5 ${isLight ? 'text-black/50' : 'text-white/40'}`}>{new Date(tx.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="text-xl font-black text-[#3CB371] tabular-nums">${(parseFloat(sessionBalance || 0)).toFixed(2)}</div>
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <div className="px-1.5 py-0.5 bg-[#249C6C]/10 text-[#249C6C] text-[6px] font-black tracking-widest rounded-md uppercase">COMPLETED</div>
+                                            <div className={`text-[10px] font-bold tabular-nums ${tx.type==="DEPOSIT"?"text-[#249C6C]":"text-[#FF7F50]"}`}>{tx.type==="DEPOSIT"?"+":"-"}{parseFloat(tx.amount).toFixed(2)}</div>
                                         </div>
                                     </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                /* DESKTOP: original side-by-side layout */
+                <div className="flex flex-1 gap-10 px-10 py-5 min-h-0 relative z-10 max-w-[1600px] mx-auto w-full">
 
-                                    {/* Main Wallet Source */}
-                                    <div className={`mb-4 p-3 rounded-2xl border ${isLight ? 'bg-white/40 border-[#3CB371]/20' : 'bg-white/5 border-white/10'}`}>
-                                        <div className="flex justify-between items-center">
-                                            <div className="flex flex-col">
-                                                <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>Main Wallet Balance</span>
-                                                <div 
-                                                    onClick={() => {
-                                                        if (address) {
-                                                            navigator.clipboard.writeText(address);
-                                                            setToast("Address Copied!");
-                                                            setTimeout(() => setToast(null), 2000);
-                                                        }
-                                                    }}
-                                                    className={`text-[9px] font-mono font-bold opacity-60 hover:opacity-100 cursor-pointer transition-all mt-0.5 flex items-center gap-1 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}
-                                                >
-                                                    {truncate(address)}
-                                                    {address && <Copy size={8} />}
-                                                </div>
-                                            </div>
-                                            <div className={`text-sm font-black ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>
-                                                ${(parseFloat(evmBalance || 0)).toFixed(2)}
-                                            </div>
+                    {/* LEFT: Wallet Card Column */}
+                    <div className="w-[380px] flex-none flex flex-col justify-center min-h-0 gap-6">
+
+                        {/* WALLET CARD */}
+                        <div className={`w-full rounded-[40px] p-8 flex flex-col gap-5 relative overflow-hidden ${isLight ? 'bg-[#CFDCD5] border-[#249C6C]/20' : 'bg-[#0a0a0a] border-white/5'}`} style={{ minHeight: '280px', margin: '0 2px', filter: isLight ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
+
+                            {/* Profile Row */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => fileInputRef.current?.click()} className={`w-9 h-9 rounded-full flex-none flex items-center justify-center overflow-hidden border-2 border-[#249C6C]/40 ${isLight ? 'bg-[#249C6C]/10' : 'bg-white/5'} hover:scale-105 transition-all`}>
+                                        {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                                            <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="avatar" className="w-full h-full object-cover"/>
+                                        ) : (
+                                            <User size={16} className={isLight ? 'text-[#249C6C]/70' : 'text-white/50'}/>
+                                        )}
+                                    </button>
+                                    <div>
+                                        <div className={`text-sm font-black leading-tight ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{userProfile?.username || 'Trader'}</div>
+                                        <div onClick={() => { if (address) { navigator.clipboard.writeText(address); setToast('Copied!'); setTimeout(() => setToast(null), 2000); }}}
+                                            className={`text-[8px] font-mono cursor-pointer hover:opacity-100 transition-opacity ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
+                                            {address ? `${address.slice(0,6)}...${address.slice(-4)}` : '---'}
                                         </div>
                                     </div>
+                                </div>
+                                <button onClick={() => { setNewUsername(userProfile?.username || ''); setIsSettingsOpen(true); }}
+                                    className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#249C6C]/20 hover:bg-white/60' : 'bg-white/5 border-white/10 hover:bg-white/10'} transition-all`}>
+                                    <AnimatedSettings size={13} className={isLight ? 'text-[#0a261a]/50' : 'text-white/40'}/>
+                                </button>
+                            </div>
 
-                                    <div className="grid grid-cols-2 gap-2.5">
-                                        <button onClick={() => {
-                                            setPromptValue("");
-                                            setPromptConfig({
-                                                title: "Deposit to Trading Wallet",
-                                                placeholder: "USDC Amount from Main",
-                                                onConfirm: (val) => onDeposit(parseFloat(val)),
-                                                footer: (
-                                                    <div className="text-center">
-                                                        <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#3CB371] uppercase tracking-widest font-black underline hover:text-[#3CB371]/80">Faucet ↗</a>
-                                                    </div>
-                                                )
-                                            });
-                                        }} className="py-3 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-[#3CB371]/20">
-                                            Deposit
-                                        </button>
-                                        <button onClick={() => {
-                                            setPromptValue("");
-                                            setPromptConfig({
-                                                title: "Withdraw to Main Wallet",
-                                                placeholder: "Withdraw Amount",
-                                                onConfirm: (val) => onWithdraw(val)
-                                            });
-                                        }} className={`py-3 ${isLight ? 'bg-white/40 border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white'} border text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 active:scale-95 transition-all`}>
-                                            Withdraw
-                                        </button>
+                            <div className={`w-full h-px ${isLight ? 'bg-black/5' : 'bg-white/5'}`}/>
+
+                            {/* Trading Wallet Row */}
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <div className={`text-[8px] font-black uppercase tracking-[0.2em] mb-1 ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>Trading Wallet</div>
+                                    <div onClick={() => { if (evmSessionWallet?.address) { navigator.clipboard.writeText(evmSessionWallet.address); setToast('Address Copied!'); setTimeout(() => setToast(null), 2000); } else if (!isSignerInitializing && address) { onRetryInit?.(); } }}
+                                        className={`text-[8px] font-mono cursor-pointer hover:opacity-100 transition-opacity flex items-center gap-1 mt-0.5 ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
+                                        {evmSessionWallet?.address ? `${evmSessionWallet.address.slice(0,6)}...${evmSessionWallet.address.slice(-4)}` : (isSignerInitializing ? 'Syncing...' : (address ? 'Not Ready (Retry)' : 'Connect Wallet'))}
+                                        {evmSessionWallet?.address && <Copy size={8}/>}
                                     </div>
+                                </div>
+                                <div className="text-xl font-black text-[#249C6C] tabular-nums">${parseFloat(sessionBalance || 0).toFixed(2)}</div>
+                            </div>
 
+                            {/* Main Wallet Balance Panel */}
+                            <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between ${isLight ? 'bg-white/40 border-[#249C6C]/20' : 'bg-white/5 border-white/10'}`} style={{ boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)' : '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+                                <div>
+                                    <div className={`text-[7px] font-black uppercase tracking-widest mb-1 ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>Main Wallet Balance</div>
+                                    <div onClick={() => { if (address) { navigator.clipboard.writeText(address); setToast('Copied!'); setTimeout(() => setToast(null), 2000); }}}
+                                        className={`text-[9px] font-mono cursor-pointer hover:opacity-100 transition-all flex items-center gap-1 ${isLight ? 'text-[#0a261a]/60' : 'text-white/50'}`}>
+                                        {address ? `${address.slice(0,6)}...${address.slice(-4)}` : '---'}
+                                        {address && <Copy size={8}/>}
+                                    </div>
+                                </div>
+                                <div className={`text-sm font-black tabular-nums ${isLight ? 'text-[#0a261a]' : 'text-white/90'}`}>${parseFloat(evmBalance || 0).toFixed(2)}</div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="grid grid-cols-2 gap-3 mt-auto" style={{ filter: 'drop-shadow(0 4px 12px rgba(36, 156, 108,0.15))' }}>
+                                <button onClick={() => { setPromptValue(""); setPromptConfig({ title: "Deposit to Trading Wallet", placeholder: "USDC Amount", onConfirm: (val) => onDeposit(parseFloat(val)) }); }}
+                                    className={`py-3 ${isLight ? 'bg-[#249C6C] text-white' : 'bg-[#249C6C] text-white'} text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg`}>Deposit</button>
+                                <button onClick={() => { setPromptValue(""); setPromptConfig({ title: "Withdraw to Main Wallet", placeholder: "Amount", onConfirm: (val) => onWithdraw(val) }); }}
+                                    className={`py-3 text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl active:scale-95 transition-all border ${isLight ? 'bg-white/40 border-[#249C6C]/20 text-[#0a261a] hover:bg-white/60' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>Withdraw</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* DIVIDER */}
+                    <div className="w-px mx-4 flex-none self-stretch relative">
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#249C6C]/20 to-transparent"/>
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[2px] h-12 bg-[#249C6C] rounded-full" style={{animation:'breathe 2s ease-in-out infinite'}}/>
+                    </div>
+
+                    {/* RIGHT: Stats & Panels */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-4 py-1">
+                        {/* 2x2 Stats */}
+                        <div className="grid grid-cols-2 gap-4 flex-none">
+                            {/* 24H Volume */}
+                            <div className="db-card p-5 relative overflow-hidden group flex flex-col justify-between">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <AnimatedBarChart size={14} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>24H Volume</span>
+                                </div>
+                                <div className={`text-3xl font-bold ${isLight ? 'text-black' : 'text-white'} mb-1.5 tracking-tight tabular-nums`}>{animVolume.toFixed(2)}</div>
+                                <div className="flex items-center gap-1.5 text-[9px] font-bold"><span className="text-[#249C6C] flex items-center gap-0.5"><ChevronUp size={10}/>+12.4%</span><span className={isLight ? 'text-black/30' : 'text-white/20'}>vs yesterday</span></div>
+                                <div className="absolute right-0 bottom-3 w-[110px] h-[45px] opacity-20">
+                                    <svg viewBox="0 0 100 50" className="w-full h-full"><path d="M0,50 L15,38 L30,42 L45,22 L60,28 L75,8 L90,12 L100,0 L100,50 Z" fill="#249C6C" opacity="0.3"/><path d="M0,50 L15,38 L30,42 L45,22 L60,28 L75,8 L90,12 L100,0" fill="none" stroke="#249C6C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                                 </div>
                             </div>
 
-                            {/* Activity Chart - Desktop Only */}
-                            {!isSmallScreen && (
-                            <div className={`hidden lg:flex flex-1 min-h-0 ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 overflow-hidden flex-col`}>
-                                <div className="flex justify-between items-center mb-3">
-                                    <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Activity</h3>
+                            {/* Sentiment */}
+                            <div className="db-card p-5 relative overflow-hidden flex flex-col justify-between">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <AnimatedSmile size={14} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>Sentiment</span>
                                 </div>
-                                <div className="flex-1 w-full min-h-0">
+                                <div className={`text-3xl font-bold ${isLight ? 'text-black' : 'text-white'} mb-1.5 tracking-tight tabular-nums`}>{animSentiment.toFixed(0)}%</div>
+                                <div className="text-[9px] font-bold text-[#249C6C] uppercase tracking-widest">{stats.sentiment || 'Neutral'}</div>
+                                <div className="absolute right-6 top-1/2 -translate-y-1/2 w-[60px] h-[60px]">
+                                    <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
+                                        <circle cx="32" cy="32" r="26" fill="none" stroke={isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'} strokeWidth="6"/>
+                                        <circle cx="32" cy="32" r="26" fill="none" stroke="#249C6C" strokeWidth="6" strokeLinecap="round" strokeDasharray="163.4" strokeDashoffset={163.4-(163.4*Math.min(animSentiment,100)/100)}/>
+                                    </svg>
+                                    <div className={`absolute inset-0 flex items-center justify-center text-[11px] font-bold ${isLight ? 'text-black' : 'text-white'}`} style={{transform:'rotate(0deg)'}}>{animSentiment.toFixed(0)}%</div>
+                                </div>
+                            </div>
+
+                            {/* Win Rate */}
+                            <div className="db-card p-5 relative overflow-hidden group flex flex-col justify-between">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <AnimatedZap size={14} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>Win Rate</span>
+                                </div>
+                                <div className={`text-3xl font-bold ${isLight ? 'text-black' : 'text-white'} mb-1.5 tracking-tight tabular-nums`}>{animWinRate.toFixed(1)}%</div>
+                                <div className="flex items-center gap-1.5 text-[9px] font-bold"><div className={`w-1.5 h-1.5 rounded-full ${isLight ? 'bg-black/20' : 'bg-white/30'}`}/><span className={isLight ? 'text-black/40' : 'text-white/40'}>Neutral</span></div>
+                                <div className="absolute right-0 bottom-3 w-[110px] h-[45px] opacity-20">
+                                    <svg viewBox="0 0 100 50" className="w-full h-full"><path d="M0,50 L20,38 L40,44 L60,22 L80,28 L100,10 L100,50 Z" fill="#249C6C" opacity="0.3"/><path d="M0,50 L20,38 L40,44 L60,22 L80,28 L100,10" fill="none" stroke="#249C6C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </div>
+                            </div>
+
+                            {/* Avg Stake */}
+                            <div className="db-card p-5 relative overflow-hidden group flex flex-col justify-between">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <AnimatedCoins size={14} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>Avg Stake</span>
+                                </div>
+                                <div className={`text-3xl font-bold ${isLight ? 'text-black' : 'text-white'} mb-1.5 tracking-tight tabular-nums`}>{animAvgStake.toFixed(2)}</div>
+                                <div className="flex items-center gap-1.5 text-[9px] font-bold"><span className="text-[#249C6C] flex items-center gap-0.5"><ChevronUp size={10}/>+8.1%</span><span className={isLight ? 'text-black/30' : 'text-white/20'}>vs yesterday</span></div>
+                                <div className="absolute right-0 bottom-3 w-[110px] h-[45px] opacity-20">
+                                    <svg viewBox="0 0 100 50" className="w-full h-full"><path d="M0,50 L15,44 L30,32 L45,28 L60,38 L75,14 L90,18 L100,0 L100,50 Z" fill="#249C6C" opacity="0.3"/><path d="M0,50 L15,44 L30,32 L45,28 L60,38 L75,14 L90,18 L100,0" fill="none" stroke="#249C6C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bottom Row: Activity Pulse + Transactions */}
+                        <div className="grid grid-cols-2 gap-4 flex-1 min-h-0 pb-1">
+                            {/* PnL Graph */}
+                            <div className="db-card p-5 flex flex-col min-h-0">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <AnimatedTrendingUp size={14} className="text-[#249C6C]"/>
+                                        <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>P&amp;L Graph</span>
+                                    </div>
+                                </div>
+                                {/* Chart — symmetric domain means y=0 is always at exactly 50% height, so gradient split is always 50% */}
+                                <div className="flex-1 min-h-0 -mx-2">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={chartData}>
+                                        {/* Two separate Area fills: green only above zero, red only below zero */}
+                                        <AreaChart data={pnlStats.chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                                             <defs>
-                                                <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#3CB371" stopOpacity={0.2} />
-                                                    <stop offset="95%" stopColor="#3CB371" stopOpacity={0} />
+                                                <linearGradient id="pnlLineStroke" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#249C6C" />
+                                                    <stop offset={strokeOffsetPercent} stopColor="#249C6C" />
+                                                    <stop offset={strokeOffsetPercent} stopColor="#FF6B6B" />
+                                                    <stop offset="100%" stopColor="#FF6B6B" />
                                                 </linearGradient>
                                             </defs>
-                                            <XAxis dataKey="name" hide />
-                                            <YAxis hide domain={['auto', 'auto']} />
-                                            <Area type="monotone" dataKey="amount" stroke="#3CB371" fillOpacity={1} fill="url(#colorAmt)" strokeWidth={2} />
+                                            <XAxis dataKey="i" hide />
+                                            <YAxis domain={[-pnlStats.maxAbs * 1.2, pnlStats.maxAbs * 1.2]} hide />
+                                            <Tooltip
+                                                contentStyle={{ background: isLight ? 'rgba(207,220,213,0.95)' : 'rgba(10,10,10,0.9)', border: 'none', borderRadius: 8, fontSize: 9, fontWeight: 700 }}
+                                                formatter={(v) => [`${v >= 0 ? '+' : ''}${parseFloat(v).toFixed(4)} USDC`, 'PnL']}
+                                                labelFormatter={() => ''}
+                                            />
+                                            <ReferenceLine y={0} stroke={isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'} strokeWidth={1.5} strokeDasharray="3 3"/>
+                                            {/* Stroke line only, colored by gradient based on top/bottom half */}
+                                            <Area type="monotone" dataKey="pnl" stroke="url(#pnlLineStroke)" strokeWidth={2.5} fill="none" dot={false} activeDot={{ r: 3, strokeWidth: 0, fill: pnlStats.netPnl >= 0 ? '#249C6C' : '#FF6B6B' }} baseValue={0}/>
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
-                            </div>
-                            )}
-                        </div>
-
-                        {/* COL 2: Transaction Matrix - Desktop Only */}
-                        {!isSmallScreen && (
-                        <div className="hidden lg:flex lg:col-span-3 flex-col gap-5 min-h-0 overflow-hidden">
-                            <div className={`flex-1 min-h-0 overflow-hidden ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] p-5 flex flex-col`}>
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className={`text-[9px] font-black uppercase tracking-[0.3em] opacity-40`}>Transactions</h3>
-                                    <div className="flex items-center gap-1.5">
-                                        <button
-                                            disabled={currentPage === 1}
-                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                            className={`p-1 rounded-lg border ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
-                                        >
-                                            <ArrowLeft size={10} />
-                                        </button>
-                                        <span className="text-[8px] font-black opacity-30 uppercase tabular-nums">{currentPage}/{Math.max(1, Math.ceil((transactionHistory?.length || 0) / 5))}</span>
-                                        <button
-                                            disabled={currentPage >= Math.ceil((transactionHistory?.length || 0) / 5)}
-                                            onClick={() => setCurrentPage(prev => prev + 1)}
-                                            className={`p-1 rounded-lg border ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20' : 'bg-black/40 border-white/10'} disabled:opacity-20 hover:border-[#3CB371]/40 transition-all`}
-                                        >
-                                            <ArrowRight size={10} />
-                                        </button>
-                                    </div>
+                                {/* Big bold P&L value positioned in the lower right */}
+                                <div className="flex items-center justify-between mt-1">
+                                    <div />
+                                    <span className={`text-3xl font-black tabular-nums leading-none ${pnlStats.netPnl >= 0 ? 'text-[#249C6C]' : 'text-[#FF6B6B]'}`} style={{ fontFamily: '"Comfortaa", cursive', fontWeight: 900 }}>
+                                        {pnlStats.netPnl >= 0 ? '+' : ''}{animNetPnl.toFixed(2)}
+                                        <span className="text-xs font-bold ml-1 opacity-60">USDC</span>
+                                    </span>
                                 </div>
+                            </div>
 
-                                <div className="flex-1 overflow-hidden flex flex-col gap-2">
-                                    {!transactionHistory || transactionHistory.length === 0 ? (
-                                        <div className={`flex-1 flex items-center justify-center ${isLight ? 'text-[#0a261a]/20' : 'text-white/10'} text-[9px] uppercase font-black text-center`}>No transactions<br />recognized</div>
-                                    ) : transactionHistory.slice((currentPage - 1) * 5, currentPage * 5).map((tx, i) => (
-                                        <div key={tx.id || i} className={`p-3 ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/15' : 'bg-white/[0.03] border-white/5'} border rounded-2xl flex flex-col gap-1 transition-all hover:border-[#3CB371]/40`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`p-1 rounded-lg ${tx.type === "DEPOSIT" ? "bg-[#3CB371]/20 text-[#3CB371]" : "bg-[#FF7F50]/20 text-[#FF7F50]"}`}>
-                                                        {tx.type === "DEPOSIT" ? <ArrowDown size={10} /> : <ArrowUp size={10} />}
-                                                    </div>
-                                                    <div className="text-[9px] font-black uppercase">{tx.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}</div>
+                            {/* Transactions */}
+                            <div className="db-card-alt p-5 flex flex-col min-h-0">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <AnimatedRefresh size={14} className="text-[#249C6C]"/>
+                                        <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>Transactions</span>
+                                    </div>
+                                    <button className={`text-[9px] font-bold ${isLight ? 'text-black/50 hover:text-black' : 'text-white/40 hover:text-white'} flex items-center gap-1 uppercase tracking-widest transition-colors`}>View all<ChevronRight size={12}/></button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-4">
+                                    {(!transactionHistory||transactionHistory.length===0) ? (
+                                        <div className="flex-1 flex flex-col items-center justify-center opacity-30 text-center gap-2">
+                                            <AnimatedRefresh size={20} className={isLight ? 'text-black/20' : 'text-white/20'}/>
+                                            <div className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>No recent activity</div>
+                                        </div>
+                                    ) : transactionHistory.slice(0,5).map((tx,i) => (
+                                        <div key={tx.id||i} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.type==="DEPOSIT"?"bg-[#249C6C]/15 text-[#249C6C]":"bg-[#FF7F50]/15 text-[#FF7F50]"}`}>
+                                                    {tx.type==="DEPOSIT"?<ArrowUp size={12}/>:<ArrowDown size={12}/>}
                                                 </div>
-                                                <div className={`text-[10px] font-black ${tx.type === "DEPOSIT" ? "text-[#3CB371]" : "text-[#FF7F50]"}`}>
-                                                    {tx.type === "DEPOSIT" ? '+' : '-'}{tx.amount}
+                                                <div>
+                                                    <div className={`text-[11px] font-bold ${isLight ? 'text-black' : 'text-white'}`}>{tx.type==="DEPOSIT"?"Deposit":"Withdrawal"}</div>
+                                                    <div className={`text-[8px] font-semibold mt-0.5 ${isLight ? 'text-black/50' : 'text-white/40'}`}>{new Date(tx.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center justify-between">
-                                                <div className={`text-[7px] opacity-30 font-bold uppercase`}>{new Date(tx.timestamp).toLocaleDateString()}</div>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <div className="px-2 py-0.5 bg-[#249C6C]/10 text-[#249C6C] text-[7px] font-black tracking-widest rounded-md uppercase">COMPLETED</div>
+                                                <div className={`text-[11px] font-bold tabular-nums ${tx.type==="DEPOSIT"?"text-[#249C6C]":"text-[#FF7F50]"}`}>{tx.type==="DEPOSIT"?"+":"-"}{parseFloat(tx.amount).toFixed(2)}</div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </div>
-                        )}
-
-                        {/* COL 3: Analytics Stats + Community Chat (lg:col-span-5) */}
-                        <div className={`lg:col-span-5 flex flex-col gap-5 min-h-0 overflow-hidden ${isSmallScreen ? 'relative' : ''}`}>
-                            {isSmallScreen && hasActiveCampaign && (
-                                <CampaignLeaderboardPane 
-                                    isOpen={isLeaderboardOpen} 
-                                    onToggle={() => setIsLeaderboardOpen(!isLeaderboardOpen)} 
-                                    leaderboard={activeCampaignLeaderboard} 
-                                    theme={theme} 
-                                    address={address} 
-                                    truncate={truncate} 
-                                    isSmallScreen={isSmallScreen} 
-                                />
-                            )}
-                            {/* Analytics Quick Stats */}
-                            <div className="grid grid-cols-2 gap-3 flex-none">
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'}`}>
-                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">24h Volume</div>
-                                    <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketTotalVol}</div>
-                                    <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
-                                </div>
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
-                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Sentiment</div>
-                                    <div className="text-base font-black text-[#3CB371]">{stats.marketSentiment}%</div>
-                                    <div className="text-[7px] opacity-20 uppercase font-bold">Bullish</div>
-                                </div>
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
-                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Win Rate</div>
-                                    <div className="text-base font-black text-[#FF7F50]">{stats.userWinRate}%</div>
-                                    <div className="text-[7px] opacity-20 uppercase font-bold">Efficiency</div>
-                                </div>
-                                <div className={`p-3 border rounded-2xl ${isLight ? 'bg-[#d4e6dc] border-[#3CB371]/20' : 'bg-[#111] border-white/5'}`}>
-                                    <div className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-1">Avg Stake</div>
-                                    <div className={`text-base font-black ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{stats.marketAvgStake}</div>
-                                    <div className="text-[7px] opacity-20 uppercase font-bold">USDC</div>
-                                </div>
-                            </div>
-
-                            {/* Dynamic Campaigns Section - Replaces Generic Chat on Mobile/Dashboard context */}
-                            <div className={`flex-1 ${isLight ? 'bg-[#C2D1C9] border-[#3CB371]/35 shadow-sm' : 'bg-[#111] border-white/5'} border rounded-[28px] overflow-hidden flex flex-col min-h-0`}>
-                                <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Trophy size={14} className="text-[#3CB371]" />
-                                        <h3 className={`text-[9px] font-black uppercase tracking-widest opacity-40`}>Campaigns</h3>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-[#3CB371] animate-pulse" />
-                                        <span className="text-[8px] text-[#3CB371] font-bold uppercase tracking-widest">LIVE EVENT</span>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex-1 overflow-y-auto no-scrollbar p-3 flex flex-col gap-3">
-                                    {/* Campaign Selector / List */}
-                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                                        {campaigns.length === 0 ? (
-                                            <div className="text-[8px] font-black opacity-20 uppercase py-2">No active campaigns</div>
-                                        ) : campaigns.map(c => {
-                                            const isUpcoming = Date.now() < c.startTime;
-                                            const canJoin = isUpcoming;
-                                            const isJoined = enrollments[c.id];
-                                            const isSelected = selectedCampaignId === c.id;
-
-                                            return (
-                                                <button 
-                                                    key={c.id}
-                                                    onClick={() => setSelectedCampaignId(c.id)}
-                                                    className={`shrink-0 px-4 py-2 rounded-xl border transition-all flex flex-col gap-1 min-w-[120px]
-                                                        ${isSelected ? 'bg-[#3CB371]/20 border-[#3CB371]/40 shadow-sm' : 'bg-white/5 border-white/5 opacity-60 hover:opacity-100'}
-                                                    `}
-                                                >
-                                                    <span className="text-[9px] font-black uppercase truncate w-full text-left">{c.title}</span>
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <span className={`text-[7px] font-black uppercase ${isUpcoming ? 'text-amber-500' : 'text-[#3CB371]'}`}>
-                                                            {isUpcoming ? 'Upcoming' : 'Active'}
-                                                        </span>
-                                                        {isJoined && <Check size={10} className="text-[#3CB371]" />}
-                                                    </div>
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-
-                                    {/* Campaign Details / Leaderboard Area */}
-                                    {selectedCampaignId ? (
-                                        <div className={`flex-1 flex flex-col min-h-0 rounded-2xl p-4 gap-4 ${isLight ? 'bg-[#d4e6dc]' : 'bg-black/20'}`}>
-                                            {/* Header */}
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <div className="text-[8px] font-black opacity-40 uppercase tracking-widest">Prize Pool</div>
-                                                    <div className="text-sm font-black text-[#3CB371]">{campaigns.find(c => c.id === selectedCampaignId)?.prize || 'USDC Entry'}</div>
-                                                </div>
-                                                {!enrollments[selectedCampaignId] ? (
-                                                    <button 
-                                                        disabled={enrolling || Date.now() >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0)}
-                                                        onClick={() => handleEnroll(selectedCampaignId)}
-                                                        className="px-5 py-2 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:brightness-110 active:scale-95 disabled:opacity-30"
-                                                    >
-                                                        {Date.now() >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0) ? 'Entry Ended' : (enrolling ? 'Joining...' : 'Enroll Now')}
-                                                    </button>
-                                                ) : (
-                                                    <div className="px-4 py-1.5 bg-[#3CB371]/20 text-[#3CB371] text-[8px] font-black uppercase tracking-widest rounded-xl border border-[#3CB371]/20">Joined</div>
-                                                )}
-                                            </div>
-
-                                            {/* Campaign Progress / Report */}
-                                            <div className="flex-1 flex flex-col gap-3 min-h-0">
-                                                <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                                                    <div className="text-[8px] font-black opacity-40 uppercase tracking-widest">Your Campaign Progress</div>
-                                                </div>
-                                                
-                                                <div className="flex flex-col gap-3 overflow-y-auto no-scrollbar pb-2">
-                                                    {/* Stats Grid */}
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div className={`p-3 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
-                                                            <div className="text-[7px] font-black uppercase tracking-widest opacity-40 mb-1">Start Date</div>
-                                                            <div className={`text-[10px] font-bold ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                                                                {new Date(campaigns.find(c => c.id === selectedCampaignId)?.startTime || Date.now()).toLocaleDateString()}
-                                                            </div>
-                                                        </div>
-                                                        <div className={`p-3 rounded-xl border ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
-                                                            <div className="text-[7px] font-black uppercase tracking-widest opacity-40 mb-1">End Date</div>
-                                                            <div className={`text-[10px] font-bold ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                                                                {new Date(campaigns.find(c => c.id === selectedCampaignId)?.endTime || (Date.now() + 86400000 * 7)).toLocaleDateString()}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    {enrollments[selectedCampaignId] ? (
-                                                        <div className={`p-3 rounded-xl border flex flex-col gap-2 ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-[#3CB371]/10 border-[#3CB371]/20'}`}>
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Your Current Rank</span>
-                                                                <span className="text-sm font-black text-[#3CB371]">
-                                                                    {activeCampaignLeaderboard.findIndex(e => e.address.toLowerCase() === address?.toLowerCase()) > -1 
-                                                                        ? `#${activeCampaignLeaderboard.findIndex(e => e.address.toLowerCase() === address?.toLowerCase()) + 1}`
-                                                                        : '-'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-60">Eligible Wins</span>
-                                                                <span className="text-sm font-black text-[#3CB371]">
-                                                                    {activeCampaignLeaderboard.find(e => e.address.toLowerCase() === address?.toLowerCase())?.wins || '0'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center justify-between border-t border-[#3CB371]/10 pt-2 mt-1">
-                                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-60">First Entry</span>
-                                                                <span className={`text-[10px] font-bold ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                                                                    {userProfile?.trades?.find(t => t.timestamp >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0))?.timestamp 
-                                                                        ? new Date(userProfile.trades.find(t => t.timestamp >= (campaigns.find(c => c.id === selectedCampaignId)?.startTime || 0)).timestamp).toLocaleDateString() 
-                                                                        : 'Pending'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className={`p-4 rounded-xl border flex flex-col items-center text-center gap-1 ${isLight ? 'bg-white/40 border-[#3CB371]/10' : 'bg-white/5 border-white/5'}`}>
-                                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-40">Not Enrolled</span>
-                                                            <span className="text-[8px] opacity-30 font-medium">Join the campaign to track your progress and compete.</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 flex items-center justify-center opacity-20 text-[9px] font-black uppercase">Select a campaign to view standing</div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
                     </div>
-            </div>
-
+                </div>
+            )}
 
             {/* Notifications Modal */}
             <AnimatePresence>
                 {isNotificationsOpen && (
-                    <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className={`w-full max-w-md ${isLight ? 'bg-[#b4d9c7] border-[#3CB371]/40 shadow-2xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
-                        >
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
-                            <div className="relative z-10 flex flex-col items-center text-center">
-                                <div className="w-16 h-16 rounded-2xl bg-[#3CB371]/10 flex items-center justify-center mb-6">
-                                    <Bell size={32} className="text-[#3CB371]" />
-                                </div>
-                                <h3 className={`text-2xl font-black ${isLight ? 'text-gray-900' : 'text-white'} mb-2 tracking-tight uppercase`}>
-                                    Notifications
-                                </h3>
-                                <p className={`text-sm font-medium ${isLight ? 'text-gray-500' : 'text-white/50'} mb-8 whitespace-pre-line leading-relaxed`}>
-                                    Coming soon we will add functionality.
-                                </p>
-                                <button
-                                    onClick={() => setIsNotificationsOpen(false)}
-                                    className={`w-full py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all`}
-                                >
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
+                        <motion.div initial={{opacity:0,scale:0.9,y:20}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.9,y:20}}
+                            className={`w-full max-w-md ${isLight ? 'bg-white border-[#e2ece5]' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-8 flex flex-col`}>
+                            <div className="flex flex-col items-center text-center mb-4">
+                                <div className={`w-14 h-14 rounded-2xl ${isLight ? 'bg-[#eef5f1]' : 'bg-white/5'} flex items-center justify-center mb-4`}><AnimatedBell size={28} className="text-[#249C6C]"/></div>
+                                <h3 className={`text-2xl font-black ${isLight ? 'text-[#133a2a]' : 'text-white'} uppercase font-comfortaa`}>Notifications</h3>
+                            </div>
+                            
+                            {/* Scrollable Notification List */}
+                            <div className="flex-1 max-h-[300px] overflow-y-auto pr-1 mb-6 flex flex-col gap-3 custom-scrollbar">
+                                {notifications.length === 0 ? (
+                                    <div className="py-12 text-center flex flex-col items-center justify-center">
+                                        <AlertCircle size={36} className={`${isLight ? 'text-[#133a2a]/20' : 'text-white/20'} mb-2`} />
+                                        <p className={`text-xs font-semibold uppercase tracking-widest ${isLight ? 'text-[#133a2a]/30' : 'text-white/30'}`}>No notifications yet.</p>
+                                    </div>
+                                ) : (
+                                    notifications.map((notif) => {
+                                        const typeColors = {
+                                            success: 'border-[#249C6C]/20 bg-[#249C6C]/5 text-[#249C6C]',
+                                            warning: 'border-amber-500/20 bg-amber-500/5 text-amber-500',
+                                            info: 'border-sky-500/20 bg-sky-500/5 text-sky-500',
+                                            error: 'border-rose-500/20 bg-rose-500/5 text-rose-500'
+                                        };
+                                        const colorClass = typeColors[notif.type] || typeColors.info;
+                                        
+                                        return (
+                                            <div key={notif.id} className={`p-4 rounded-2xl border ${isLight ? 'bg-[#f8fbf9] border-[#e2ece5]' : 'bg-white/[0.02] border-white/5'} flex gap-3 items-start transition-all`}>
+                                                <div className={`p-2 rounded-xl border ${colorClass.split(' ').slice(0, 2).join(' ')} flex-shrink-0 mt-0.5`}>
+                                                    {notif.type === 'success' && <Check size={14} className="text-[#249C6C]"/>}
+                                                    {notif.type === 'warning' && <AlertCircle size={14} className="text-amber-500"/>}
+                                                    {notif.type === 'info' && <Bell size={14} className="text-sky-500"/>}
+                                                    {notif.type === 'error' && <AlertCircle size={14} className="text-rose-500"/>}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between items-center gap-2 mb-1">
+                                                        <span className={`text-xs font-black uppercase tracking-wider ${isLight ? 'text-[#133a2a]' : 'text-white'}`}>{notif.title}</span>
+                                                        <span className={`text-[9px] font-medium ${isLight ? 'text-[#133a2a]/40' : 'text-white/40'} tabular-nums`}>
+                                                            {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                    <p className={`text-[11px] font-medium leading-relaxed ${isLight ? 'text-[#133a2a]/60' : 'text-white/60'}`}>{notif.message}</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                {notifications.length > 0 && (
+                                    <button onClick={handleClearNotifications} className={`w-full py-3.5 ${isLight ? 'bg-[#eef5f1] hover:bg-[#e2ece5] text-[#133a2a]' : 'bg-white/5 hover:bg-white/10 text-white'} text-[10px] font-black uppercase tracking-widest rounded-full transition-all`}>
+                                        Clear All
+                                    </button>
+                                )}
+                                <button onClick={() => setIsNotificationsOpen(false)} className="w-full py-4 bg-[#249C6C] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 transition-all shadow-[0_4px_16px_rgba(36,156,108,0.25)]">
                                     Close
                                 </button>
                             </div>
@@ -764,114 +999,125 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                 )}
             </AnimatePresence>
 
-            {modalConfig && (
-                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-[#b4d9c7] border-[#3CB371]/40 shadow-2xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
-                    >
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
-                        <div className="relative z-10 flex flex-col items-center text-center">
-                            <div className="w-16 h-16 rounded-2xl bg-[#3CB371]/10 flex items-center justify-center mb-6">
-                                {modalConfig.type === 'alert' ? (
-                                    <AlertCircle size={32} className="text-[#3CB371]" />
-                                ) : (
-                                    <Zap size={32} className="text-[#3CB371]" />
-                                )}
-                            </div>
-                            <h3 className={`text-2xl font-black ${isLight ? 'text-gray-900' : 'text-white'} mb-2 tracking-tight uppercase`}>
-                                {modalConfig.title}
-                            </h3>
-                            <p className={`text-sm font-medium ${isLight ? 'text-gray-500' : 'text-white/50'} mb-8 whitespace-pre-line leading-relaxed`}>
-                                {modalConfig.message}
-                            </p>
-                            <div className="grid grid-cols-2 gap-4 w-full">
-                                {modalConfig.type === 'confirm' && (
-                                    <button
-                                        onClick={() => setModalConfig(null)}
-                                        className={`py-4 ${isLight ? 'bg-[#cce0d5] hover:bg-[#bed9ce] border-[#3CB371]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-full transition-all`}
-                                    >
-                                        Cancel
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => {
-                                        if (modalConfig.onConfirm) modalConfig.onConfirm();
-                                        setModalConfig(null);
-                                    }}
-                                    className={`py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all ${modalConfig.type === 'alert' ? 'col-span-2' : ''}`}
-                                >
-                                    {modalConfig.confirmText || "OK"}
+            {isSettingsOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
+                    <motion.div initial={{opacity:0,scale:0.9,y:20}} animate={{opacity:1,scale:1,y:0}}
+                        className={`w-full max-w-md ${isLight ? 'bg-white border-[#e2ece5]' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-8`}>
+                        <div className="flex flex-col">
+                            <h3 className={`text-2xl font-black ${isLight ? 'text-[#133a2a]' : 'text-white'} mb-6 uppercase text-center`}>Settings</h3>
+
+                            <div className="mb-6">
+                                <label className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-[#133a2a]/50' : 'text-white/50'} mb-2 block`}>Username</label>
+                                <input type="text" autoFocus placeholder="Enter username" value={newUsername}
+                                    onChange={(e) => setNewUsername(e.target.value)}
+                                    className={`w-full ${isLight ? 'bg-[#f0f6f2] border-[#e2ece5] text-[#133a2a] placeholder:text-[#133a2a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/30'} border rounded-2xl py-4 px-6 font-bold text-center focus:border-[#249C6C]/50 outline-none transition-all mb-4`}/>
+                                <button onClick={async () => {
+                                    if (!newUsername.trim() || !address) return;
+                                    try {
+                                        const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ username: newUsername.trim() })
+                                        });
+                                        if (res.ok) {
+                                            setToast("Username Updated!");
+                                            setTimeout(() => window.location.reload(), 1000);
+                                        } else {
+                                            const data = await res.json();
+                                            setToast(data.error || "Update Failed");
+                                        }
+                                    } catch (e) {
+                                        setToast("Update Failed");
+                                    }
+                                }} className="w-full py-4 bg-[#249C6C] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 transition-all mb-6">
+                                    Save Username
                                 </button>
                             </div>
+
+                            <div className={`w-full h-px ${isLight ? 'bg-black/5' : 'bg-white/10'} mb-6`}/>
+
+                            <div className="mb-6">
+                                <label className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-[#133a2a]/50' : 'text-white/50'} mb-2 block`}>Trading Wallet</label>
+                                <button onClick={async () => {
+                                    try {
+                                        const wallet = await createWallet();
+                                        if (wallet?.address) {
+                                            const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                                                method: 'PATCH',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ tradingWallet: wallet.address })
+                                            });
+                                            if (res.ok) {
+                                                setToast("Trading Wallet Regenerated!");
+                                                setTimeout(() => window.location.reload(), 1000);
+                                            }
+                                        }
+                                    } catch (e) {
+                                        setToast("Failed to regenerate wallet");
+                                    }
+                                }} className={`w-full py-4 ${isLight ? 'bg-[#133a2a] hover:bg-[#1a4a37]' : 'bg-white/10 hover:bg-white/20'} text-white text-xs font-black uppercase tracking-widest rounded-full transition-all`}>
+                                    Regenerate Trading Wallet
+                                </button>
+                            </div>
+
+                            <button onClick={() => setIsSettingsOpen(false)}
+                                className={`w-full py-4 ${isLight ? 'bg-[#eef5f1] text-[#133a2a] hover:bg-[#e2ece5]' : 'bg-white/10 text-white hover:bg-white/20'} text-xs font-black uppercase tracking-widest rounded-full transition-all`}>
+                                Close
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {modalConfig && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
+                    <motion.div initial={{opacity:0,scale:0.9,y:20}} animate={{opacity:1,scale:1,y:0}}
+                        className={`w-full max-w-md ${isLight ? 'bg-white border-[#e2ece5]' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-8`}>
+                        <div className="flex flex-col items-center text-center">
+                            <div className={`w-16 h-16 rounded-2xl ${isLight ? 'bg-[#eef5f1]' : 'bg-white/5'} flex items-center justify-center mb-6`}>
+                                {modalConfig.type==='alert'?<AlertCircle size={32} className="text-[#249C6C]"/>:<Zap size={32} className="text-[#249C6C]"/>}
+                            </div>
+                            <h3 className={`text-2xl font-black ${isLight ? 'text-[#133a2a]' : 'text-white'} mb-2 uppercase`}>{modalConfig.title}</h3>
+                            <p className={`text-sm font-medium ${isLight ? 'text-[#133a2a]/50' : 'text-white/50'} mb-8 whitespace-pre-line`}>{modalConfig.message}</p>
+                            <div className="grid grid-cols-2 gap-4 w-full">
+                                {modalConfig.type==='confirm' && (
+                                    <button onClick={() => setModalConfig(null)} className={`py-4 ${isLight ? 'bg-[#eef5f1] text-[#133a2a] hover:bg-[#e2ece5]' : 'bg-white/10 text-white hover:bg-white/20'} text-xs font-black uppercase tracking-widest rounded-full transition-all`}>Cancel</button>
+                                )}
+                                <button onClick={() => { if(modalConfig.onConfirm) modalConfig.onConfirm(); setModalConfig(null); }}
+                                    className={`py-4 ${isLight ? 'bg-[#133a2a] hover:bg-[#1a4a37]' : 'bg-white/10 hover:bg-white/20'} text-white text-xs font-black uppercase tracking-widest rounded-full transition-all ${modalConfig.type==='alert'?'col-span-2':''}`}>
+                                    {modalConfig.confirmText||"OK"}
+                                </button>
+                            </div>
+                            {modalConfig.footer && <div className="mt-6 w-full">{modalConfig.footer}</div>}
                         </div>
                     </motion.div>
                 </div>
             )}
 
             {promptConfig && (
-                <div className={`fixed inset-0 z-[200] flex items-center justify-center px-4 ${isLight ? 'bg-[#0a261a]/20' : 'bg-black/60'} backdrop-blur-sm`}>
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className={`w-full max-w-md ${isLight ? 'bg-[#b4d9c7] border-[#3CB371]/40 shadow-2xl' : 'bg-[#0a0a0a] border-white/10 shadow-2xl'} border rounded-[32px] p-8 relative overflow-hidden`}
-                    >
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#3CB371]/10 blur-[80px] pointer-events-none" />
-                        <div className="relative z-10">
-                            <h3 className={`text-2xl font-black ${isLight ? 'text-[#0a261a]' : 'text-white'} mb-6 tracking-tight uppercase text-center`}>
-                                {promptConfig.title}
-                            </h3>
-                            <div className="mb-8 relative">
-                                <input
-                                    type={promptConfig.inputType || "text"}
-                                    autoFocus
-                                    placeholder={promptConfig.placeholder}
-                                    value={promptValue}
-                                    onChange={(e) => setPromptValue(e.target.value)}
-                                    className={`w-full ${isLight ? 'bg-[#cce0d5] border-[#3CB371]/20 text-[#0a261a] placeholder:text-[#0a261a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/10'} border rounded-2xl py-4 px-6 font-black text-center focus:border-[#3CB371]/50 outline-none transition-all`}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            promptConfig.onConfirm(promptValue);
-                                            setPromptConfig(null);
-                                        }
-                                    }}
-                                />
-                            </div>
+                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
+                    <motion.div initial={{opacity:0,scale:0.9,y:20}} animate={{opacity:1,scale:1,y:0}}
+                        className={`w-full max-w-md ${isLight ? 'bg-white border-[#e2ece5]' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-8`}>
+                        <div className="flex flex-col">
+                            <h3 className={`text-2xl font-black ${isLight ? 'text-[#133a2a]' : 'text-white'} mb-6 uppercase text-center`}>{promptConfig.title}</h3>
+                            <input type={promptConfig.inputType||"text"} autoFocus placeholder={promptConfig.placeholder} value={promptValue}
+                                onChange={(e) => setPromptValue(e.target.value)}
+                                className={`w-full ${isLight ? 'bg-[#f0f6f2] border-[#e2ece5] text-[#133a2a] placeholder:text-[#133a2a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/30'} border rounded-2xl py-4 px-6 font-bold text-center focus:border-[#249C6C]/50 outline-none transition-all mb-6`}
+                                onKeyDown={(e) => { if(e.key==='Enter'){promptConfig.onConfirm(promptValue);setPromptConfig(null);} }}/>
                             <div className="grid grid-cols-2 gap-4 w-full">
-                                <button
-                                    onClick={() => {
-                                        setPromptConfig(null);
-                                        setPromptValue("");
-                                    }}
-                                    className={`py-4 ${isLight ? 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'} border text-xs font-black uppercase tracking-widest rounded-full transition-all font-sans`}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        promptConfig.onConfirm(promptValue);
-                                        setPromptConfig(null);
-                                        setPromptValue("");
-                                    }}
-                                    className="py-4 bg-[#3CB371] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all font-sans"
-                                >
-                                    Confirm
-                                </button>
+                                <button onClick={() => {setPromptConfig(null);setPromptValue("");}} className={`py-4 ${isLight ? 'bg-[#eef5f1] text-[#133a2a] hover:bg-[#e2ece5]' : 'bg-white/10 text-white hover:bg-white/20'} text-xs font-black uppercase tracking-widest rounded-full transition-all`}>Cancel</button>
+                                <button onClick={() => {promptConfig.onConfirm(promptValue);setPromptConfig(null);setPromptValue("");}} className={`py-4 ${isLight ? 'bg-[#133a2a] hover:bg-[#1a4a37]' : 'bg-white/10 hover:bg-white/20'} text-white text-xs font-black uppercase tracking-widest rounded-full transition-all`}>Confirm</button>
                             </div>
                             {promptConfig.footer && <div className="mt-6 w-full">{promptConfig.footer}</div>}
                         </div>
                     </motion.div>
                 </div>
             )}
+
             {toast && (
                 <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[300]">
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 20 }}
-                        className="bg-[#3CB371] text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black uppercase tracking-widest border border-white/20"
-                    >
+                    <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} exit={{opacity:0,y:20}}
+                        className="bg-[#133a2a] text-white px-6 py-3 rounded-2xl shadow-2xl text-xs font-black uppercase tracking-widest">
                         {toast}
                     </motion.div>
                 </div>
@@ -880,30 +1126,4 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     );
 };
 
-const NavTab = React.memo(({ active, id, label, icon, onClick, isLight }) => {
-    return (
-        <button
-            onClick={() => onClick(id)}
-            className={`flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${active === id
-                ? 'bg-[#3CB371] text-white shadow-lg'
-                : `${isLight ? 'text-[#0a261a]/40 hover:text-[#0a261a] hover:bg-[#3CB371]/5' : 'text-white/40 hover:text-white hover:bg-white/5'}`
-                }`}
-        >
-            {icon}
-            {label}
-        </button>
-    );
-});
 
-const StatCard = React.memo(({ label, value, sub, icon, highlight, isLight, compact }) => {
-    return (
-        <div className={`${compact ? 'p-3 md:p-4' : 'p-4 md:p-6'} rounded-[24px] border ${highlight ? 'bg-[#FF7F50]/10 border-[#FF7F50]/30 shadow-lg' : `${isLight ? 'bg-[#f8fdfb] border-[#3CB371]/10' : 'bg-[#111] border-white/5'}`}`}>
-            <div className="flex justify-between items-start mb-2 md:mb-4">
-                <div className={`text-[7px] md:text-[9px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'}`}>{label}</div>
-                <div className={`p-1.5 ${isLight ? 'bg-[#3CB371]/5' : 'bg-white/5'} rounded-lg`}>{icon}</div>
-            </div>
-            <div className={`${compact ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'} font-black mb-1 tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{value}</div>
-            <div className={`text-[7px] md:text-[9px] font-bold ${isLight ? 'text-[#0a261a]/20' : 'text-white/20'} uppercase`}>{sub}</div>
-        </div>
-    );
-});

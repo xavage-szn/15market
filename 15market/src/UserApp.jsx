@@ -26,6 +26,7 @@ import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 import { CircleWalletPage } from "./components/CircleWalletPage";
+import { DocsPage } from "./components/DocsPage";
 
 import MessagingSystem from "./components/MessagingSystem";
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
@@ -71,7 +72,7 @@ class ErrorBoundary extends Component {
           </div>
           <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">Platform Interrupted</h1>
           <p className="text-xs text-white/40 mb-8 max-w-xs">{this.state.error?.message || "An unexpected error occurred in the UI layer."}</p>
-          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#3CB371] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
+          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#249C6C] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
         </div>
       );
     }
@@ -99,9 +100,9 @@ const PortraitPrompt = ({ theme }) => (
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1 }}
         className="relative"
       >
-        <div className="w-32 h-20 rounded-2xl border-4 border-[#3CB371]/30 flex items-center justify-center">
-          <div className="w-1 h-8 rounded-full bg-[#3CB371]/20 absolute -right-1" />
-          <div className="w-2 h-2 rounded-full bg-[#3CB371]/20 absolute left-4" />
+        <div className="w-32 h-20 rounded-2xl border-4 border-[#249C6C]/30 flex items-center justify-center">
+          <div className="w-1 h-8 rounded-full bg-[#249C6C]/20 absolute -right-1" />
+          <div className="w-2 h-2 rounded-full bg-[#249C6C]/20 absolute left-4" />
         </div>
       </motion.div>
       <motion.div
@@ -109,21 +110,21 @@ const PortraitPrompt = ({ theme }) => (
         transition={{ duration: 2, repeat: Infinity }}
         className="absolute -top-8 left-1/2 -translate-x-1/2"
       >
-        <RotateCw className="w-8 h-8 text-[#3CB371]" />
+        <RotateCw className="w-8 h-8 text-[#249C6C]" />
       </motion.div>
     </div>
 
-    <h2 className="text-3xl font-black text-[#3CB371] uppercase tracking-tighter mb-4">
+    <h2 className="text-3xl font-black text-[#249C6C] uppercase tracking-tighter mb-4">
       Rotate Your Device
     </h2>
     <p className="text-white/40 text-sm font-medium max-w-xs leading-relaxed"
       style={{ color: theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>
-      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#3CB371] font-bold">Landscape</span> to access the Precision V2 Terminal.
+      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#249C6C] font-bold">Landscape</span> to access the Precision V2 Terminal.
     </p>
 
-    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#3CB371]/10 border border-[#3CB371]/20">
-      <Maximize2 className="w-4 h-4 text-[#3CB371]" />
-      <span className="text-[10px] font-black uppercase tracking-widest text-[#3CB371]">Desktop Mode Optimization</span>
+    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#249C6C]/10 border border-[#249C6C]/20">
+      <Maximize2 className="w-4 h-4 text-[#249C6C]" />
+      <span className="text-[10px] font-black uppercase tracking-widest text-[#249C6C]">Desktop Mode Optimization</span>
     </div>
   </motion.div>
 );
@@ -138,11 +139,11 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
     <motion.div
       initial={false}
       animate={{
-        y: isOpen ? 0 : 'calc(100% - 32px - 2vh)',
+        y: isOpen ? 0 : 'calc(100% - 48px + 1%)',
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
       className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '340px' }}
+      style={{ height: '480px' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
@@ -150,21 +151,21 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
-          : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#3CB371]'}
+          : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
           onClick={onToggle}
           className={`
-            w-full h-8 flex items-center justify-center cursor-pointer 
+            w-full h-12 flex items-center justify-center cursor-pointer 
             transition-all duration-300 relative shrink-0
             ${isDark
               ? 'bg-white/5 border-b border-white/5'
-              : 'bg-[#3CB371] border-b border-[#3CB371]/20'}
+              : 'bg-[#249C6C] border-b border-[#249C6C]/20'}
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
-          {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#48c97f] to-transparent opacity-90" />}
+          {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
 
           <div className="flex items-center justify-center gap-3 w-full">
             <History size={14} className={isDark ? "text-white" : "text-white"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
@@ -193,14 +194,14 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                   key={trade.id}
                   className={`
                     p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/40 border-[#3CB371]/20 shadow-sm'}
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/40 border-[#249C6C]/20 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className={`
                         text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter
-                        ${trade.direction === 'UP' ? 'bg-[#3CB371]/20 text-[#3CB371]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
+                        ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
                       `}>
                         {trade.direction === 'UP' ? 'LONG' : (trade.direction === 'DOWN' ? 'SHORT' : trade.direction)}
                       </div>
@@ -209,7 +210,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                       </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className={`text-xs font-black uppercase ${isWin ? 'text-[#3CB371]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                      <span className={`text-xs font-black uppercase ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
                         {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                       </span>
                       {isWin && (trade.payoutSettled || trade.status === 'PAID') && (
@@ -227,7 +228,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
-                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#3CB371]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#3CB371]/5'}`}
+                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
                       >
                         <Share2 size={12} />
                       </button>
@@ -235,7 +236,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                         href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#3CB371]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#3CB371]/5'}`}
+                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
                       >
                         <ExternalLink size={12} />
                       </a>
@@ -1443,7 +1444,7 @@ export default function UserApp() {
     return null;
   }, [isConnected, address]);
 
-  const GREEN = "#3CB371";
+  const GREEN = "#249C6C";
   const CORAL = "#FF4444";
 
   useEffect(() => {
@@ -2921,13 +2922,9 @@ export default function UserApp() {
 
 
   return (
-    <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full text-current selection:bg-[#3CB371]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative`}>
-      {/* Sitewide Background Texture - HIGH VISIBILITY BRANDED GREEN */}
-      <div className={`fixed inset-0 pointer-events-none z-0 
-        ${theme === 'light'
-          ? "bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.08] mix-blend-multiply"
-          : 'opacity-0'}`}
-      />
+    <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full text-current selection:bg-[#249C6C]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'}`}>
+      <div className={`fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
+
       <AnimatePresence>
         {isConnected && address && !isAppReady && (
           <motion.div
@@ -2981,6 +2978,7 @@ export default function UserApp() {
                 setCircleWalletMode(initialMode);
                 setView("circle_wallet");
               }}
+              onDocs={() => setView("docs")}
             />
           ) : view === "circle_wallet" ? (
             <CircleWalletPage
@@ -3003,6 +3001,11 @@ export default function UserApp() {
               onWithdraw={handleWithdraw}
               triggerGlobalRefresh={triggerGlobalRefresh}
             />
+          ) : view === "docs" ? (
+            <DocsPage
+              theme={theme}
+              onBack={() => setView("dashboard")}
+            />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
@@ -3010,14 +3013,14 @@ export default function UserApp() {
                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 2px)' } : {}}>
                 <div className="flex items-center transition-all duration-500 h-full"
                   style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-14' : 'h-12 lg:h-14'} w-auto drop-shadow-[0_0_50px_rgba(60,179,113,0.3)] transition-all`} />
+                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[84px]' : 'h-[72px] lg:h-[84px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all`} />
                 </div>
 
                 <div className="hidden lg:flex items-center gap-3 px-2 py-1">
                   {/* Branded Game Mode Switcher - Large Screens */}
-                  <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
+                  <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
                     <motion.div
-                      className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#48c97f] to-[#1e5a38] shadow-[0_0_20px_rgba(60,179,113,0.4)]"
+                      className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#2EC47C] to-[#14472C] shadow-[0_0_20px_rgba(36, 156, 108,0.4)]"
                       initial={false}
                       animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -3050,9 +3053,9 @@ export default function UserApp() {
 
                 <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
                   {/* Branded Game Mode Switcher - Mobile */}
-                  <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#3CB371]/20' : 'bg-black/40 border-white/5'}`}>
+                  <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'}`}>
                     <motion.div
-                      className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#48c97f] to-[#1e5a38]"
+                      className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#2EC47C] to-[#14472C]"
                       initial={false}
                       animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -3091,17 +3094,17 @@ export default function UserApp() {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#3CB371]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#3CB371]/5 to-yellow-500/10 border-white/5'}`}
+                    className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#249C6C]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#249C6C]/5 to-yellow-500/10 border-white/5'}`}
                   >
                     <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
-                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#3CB371]'}`}>
+                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#249C6C]'}`}>
                           {winnerBanner.text || "New Winner Leaderboard is Live!"}
                         </span>
                       </div>
                       {winnerBanner.cta && (
-                        <button className="px-3 py-0.5 md:py-1 bg-[#3CB371] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
+                        <button className="px-3 py-0.5 md:py-1 bg-[#249C6C] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
                           {winnerBanner.cta}
                         </button>
                       )}
@@ -3113,7 +3116,7 @@ export default function UserApp() {
               {/* DESKTOP-ONLY: Weighted Green Line Separator (LOCKED POSITION) */}
               {!isSmallScreen && (
                 <div className="w-full flex flex-col relative z-[170] -mt-2 md:mt-0 lg:-mt-4 mb-2">
-                  <div className="w-full h-[2px] bg-[#3CB371] shadow-[0_0_15px_rgba(60,179,113,0.6)]" />
+                  <div className="w-full h-[2px] bg-[#249C6C] shadow-[0_0_15px_rgba(36, 156, 108,0.6)]" />
                 </div>
               )}
 
@@ -3160,22 +3163,22 @@ export default function UserApp() {
                       {/* Chart Container Wrapper for Shadow - PREVENTS CLIPPING */}
                       <div className="flex-1 w-full flex flex-col relative z-0"
                         style={{
-                          filter: theme === 'light' ? 'drop-shadow(0 30px 60px rgba(0,0,0,0.18))' : 'none'
+                          filter: theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
                         }}>
                         {/* CHART CONTAINER (LOCKED DESKTOP HEIGHT: lg:min-h-[470px]) */}
                         <div className={`${isSmallScreen ? 'flex-grow h-full' : 'flex-[2] min-h-[280px]'} lg:min-h-[470px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
                           style={{
                             background: isSmallScreen
                               ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)')
-                              : (theme === 'light' ? 'rgba(60, 179, 113, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
+                              : (theme === 'light' ? 'rgba(36, 156, 108, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
                             boxShadow: theme === 'light'
                               ? 'none'
                               : (isSmallScreen
-                                ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(60,179,113,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
+                                ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(36, 156, 108,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
                                 : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
                             borderColor: isSmallScreen
-                              ? (theme === 'light' ? 'rgba(60, 179, 113, 0.35)' : 'rgba(255, 255, 255, 0.05)')
-                              : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : `${GREEN}15`)
+                              ? (theme === 'light' ? 'rgba(36, 156, 108, 0.35)' : 'rgba(255, 255, 255, 0.05)')
+                              : (theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : `${GREEN}15`)
                           }}>
                           {isSmallScreen ? (
                             <CustomChart
@@ -3207,8 +3210,8 @@ export default function UserApp() {
                               </div>
 
                               {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
-                              <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#3CB371]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
-                                <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#3CB371]/10' : 'text-white/40 border-white/5'}`}>
+                              <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#249C6C]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
+                                <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#249C6C]/10' : 'text-white/40 border-white/5'}`}>
                                   Order Book
                                 </div>
                                 <div className="flex-1 overflow-hidden p-2">
@@ -3231,7 +3234,8 @@ export default function UserApp() {
                         <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
                           style={{
                             background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
-                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)')
+                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : 'rgba(255,255,255,0.05)'),
+                            filter: gameMode === 'rounds' ? 'none' : (theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))')
                           }}>
                           {gameMode === 'rounds' ? (
                             <RoundsTerminal
@@ -3268,13 +3272,14 @@ export default function UserApp() {
                             />
                           )}
                         </div>
-
+ 
                         {/* ACTIVE EXECUTION - Hidden entirely in Rounds mode */}
                         {(gameMode !== 'rounds') && (
                           <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'} flex flex-col`}
                             style={{
                               background: theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)',
-                              borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.15)' : 'rgba(255,255,255,0.05)'
+                              borderColor: theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : 'rgba(255,255,255,0.05)',
+                              filter: theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
                             }}>
                             <div className="flex flex-col h-full min-h-0">
                               <LiveExecution
@@ -3301,7 +3306,7 @@ export default function UserApp() {
                                 exit={{ height: 0, opacity: 0 }}
                                 className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
                                   platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
-                                    platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]/10 border-[#3CB371]/20' :
+                                    platformSettings.bannerLevel === 'success' ? 'bg-[#249C6C]/10 border-[#249C6C]/20' :
                                       'bg-blue-500/10 border-blue-500/20'
                                   }`}
                               >
@@ -3309,12 +3314,12 @@ export default function UserApp() {
                                   <div className="flex items-center gap-3">
                                     <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
                                       platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'bg-[#3CB371]' :
+                                        platformSettings.bannerLevel === 'success' ? 'bg-[#249C6C]' :
                                           'bg-blue-500'
                                       }`} />
                                     <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
                                       platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'text-[#3CB371]' :
+                                        platformSettings.bannerLevel === 'success' ? 'text-[#249C6C]' :
                                           'text-blue-500'
                                       }`}>
                                       {platformSettings.systemBanner}
@@ -3330,8 +3335,8 @@ export default function UserApp() {
                           <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
                             style={{
                               background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
-                              borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)'),
-                              boxShadow: (theme === 'light' && gameMode !== 'rounds') ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
+                              borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)'),
+                              filter: gameMode === 'rounds' ? 'none' : (theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))')
                             }}>
                             <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
                               {gameMode === 'rounds' ? (
@@ -3376,8 +3381,8 @@ export default function UserApp() {
                             <div className={`flex-1 min-h-[160px] md:min-h-0 lg:min-h-[200px] rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                               style={{
                                 background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                                borderColor: theme === 'light' ? 'rgba(60, 179, 113, 0.18)' : 'rgba(255,255,255,0.05)',
-                                boxShadow: theme === 'light' ? '0 35px 70px -15px rgba(0, 0, 0, 0.22), 0 10px 20px -10px rgba(0, 0, 0, 0.1)' : 'none'
+                                borderColor: theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)',
+                                filter: theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
                               }}>
                               <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
                                 <LiveExecution
@@ -3481,7 +3486,7 @@ export default function UserApp() {
                   height: ['auto', 'auto', 'auto', 0]
                 }}
                 transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
-                className="fixed top-0 left-0 w-full z-[199999] bg-[#3CB371]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
+                className="fixed top-0 left-0 w-full z-[199999] bg-[#249C6C]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
               >
                 <div className="flex items-center justify-center gap-3 py-1.5 px-4">
                   <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
@@ -3546,8 +3551,8 @@ export default function UserApp() {
           {/* OVERLAY: Maintenance Mode */}
           {platformSettings.maintenanceMode && (
             <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
-              <div className="w-24 h-24 bg-[#3CB371]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#3CB371]/20">
-                <Settings className="text-[#3CB371] w-12 h-12 animate-spin-slow" />
+              <div className="w-24 h-24 bg-[#249C6C]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#249C6C]/20">
+                <Settings className="text-[#249C6C] w-12 h-12 animate-spin-slow" />
               </div>
               <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
                 Under Maintenance
