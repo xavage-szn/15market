@@ -3006,6 +3006,7 @@ export default function UserApp() {
               theme={theme}
               onBack={() => setView("dashboard")}
               onToggleTheme={toggleTheme}
+              isSmallScreen={isSmallScreen}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
@@ -3544,6 +3545,7 @@ export default function UserApp() {
                   theme={theme} 
                   onToggle={toggleTheme} 
                   onDocs={() => setView("docs")} 
+                  isSmallScreen={isSmallScreen}
                 />
               </motion.div>
             )}

@@ -55,7 +55,7 @@ const RisingBalance = () => {
     );
 };
 
-export function LandingPage({ theme, onToggle, onDocs }) {
+export function LandingPage({ theme, onToggle, onDocs, isSmallScreen }) {
     const isLight = false; // Always dark!
     const [currentTextIndex, setCurrentTextIndex] = useState(0);
     const [displayText, setDisplayText] = useState("");
@@ -102,7 +102,8 @@ export function LandingPage({ theme, onToggle, onDocs }) {
             <LandingBackground theme={theme} />
 
             {/* TOP NAVIGATION BAR */}
-            <nav className="w-full relative z-50 flex items-center justify-between px-6 md:px-10 h-20 max-w-7xl mx-auto">
+            <nav className="w-full relative z-50 flex items-center justify-between px-6 md:px-10 max-w-7xl mx-auto pt-2 md:pt-0 pb-2 md:pb-0 h-auto md:h-20"
+                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)', height: 'auto' } : {}}>
                 <div className="flex items-center gap-2">
                     <img
                         src={isLight ? "/goblogo.png" : "/gowlogo.png"}

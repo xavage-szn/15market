@@ -4,6 +4,7 @@ import {
     BookOpen, ArrowLeft, BarChart2, Wallet, 
     Zap, HelpCircle, Compass, Sparkles, Send
 } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 import { 
     RenderIntro, RenderTrading, RenderNavbar, 
     RenderWallets, RenderHistory, RenderFAQ 
@@ -18,7 +19,7 @@ const SECTIONS = [
     { id: "faq",     title: "Platform FAQ",            icon: HelpCircle },
 ];
 
-export function DocsPage({ onBack, theme = "dark", onToggleTheme }) {
+export function DocsPage({ onBack, theme = "dark", onToggleTheme, isSmallScreen }) {
     const isLight = theme === "light";
     const [activeIdx, setActiveIdx] = useState(0);
     const contentRef = useRef(null);
@@ -85,40 +86,20 @@ export function DocsPage({ onBack, theme = "dark", onToggleTheme }) {
             <div className="pointer-events-none absolute bottom-0 left-0 w-72 h-72 rounded-full bg-[#249C6C]/6 blur-[80px]" />
 
             {/* HEADER */}
-            <div className="flex-none flex items-center justify-between px-5 md:px-10 pt-5 pb-2 relative z-10 w-full">
+            <div className="flex-none flex items-center justify-between px-5 md:px-10 pb-2 relative z-10 w-full"
+                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : { paddingTop: '1.25rem' }}>
                 <div className="flex items-center gap-4">
                     <button onClick={onBack} className={`w-10 h-10 rounded-2xl border flex items-center justify-center hover:-translate-x-1 transition-transform ${isLight ? "bg-white border-white text-black shadow-md" : "bg-white/5 border-white/5 text-white"}`}>
                         <ArrowLeft size={16} />
                     </button>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <BookOpen size={18} className="text-[#249C6C]" />
-                            <h1 className={`text-lg font-black uppercase tracking-widest ${isLight ? "text-[#0f2618]" : "text-white"}`}>Platform Documentation</h1>
-                        </div>
-                        <p className={`text-[10px] font-semibold uppercase tracking-widest ${muted}`}>Complete interactive guide · scroll content to change chapter</p>
+                    <div className="flex items-center gap-2">
+                        <BookOpen size={18} className="text-[#249C6C]" />
+                        <h1 className={`text-lg font-black uppercase tracking-widest ${isLight ? "text-[#0f2618]" : "text-white"}`}>Platform Documentation</h1>
                     </div>
                 </div>
 
-                {/* Theme Switcher Toggle */}
-                <button
-                    onClick={onToggleTheme}
-                    className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${
-                        isLight 
-                            ? "bg-white border-black/10 text-black shadow-md hover:bg-black/5" 
-                            : "bg-white/5 border-white/5 text-white hover:bg-white/10"
-                    }`}
-                    title={isLight ? "Switch to Dark Mode" : "Switch to Light Mode"}
-                >
-                    {isLight ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-black">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
-                        </svg>
-                    ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-yellow-400">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m0 13.5V21M9.75 15.75a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.75 12h2.25m13.5 0h2.25M5.636 5.636l1.591 1.591m10.142 10.142l1.59 1.59M18.364 5.636l-1.591 1.591m-10.142 10.142l-1.59 1.59" />
-                        </svg>
-                    )}
-                </button>
+                {/* Theme Switcher — matches platform ThemeToggle */}
+                <ThemeToggle theme={theme} onToggle={onToggleTheme} />
             </div>
 
             {/* Mobile top tabs (clean flow, never overlaps) */}

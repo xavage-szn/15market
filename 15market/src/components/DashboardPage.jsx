@@ -518,15 +518,13 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
             <div className={`absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
 
             {/* HEADER */}
-            <div className="flex items-center justify-between px-4 md:px-10 pt-5 pb-0 flex-none relative z-10">
+            <div className="flex items-center justify-between px-4 md:px-10 pb-0 flex-none relative z-10 w-full"
+                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : { paddingTop: '1.25rem' }}>
                 <div className="flex items-center gap-4">
                     <button onClick={onBack} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5' : 'bg-white/5 border-white/5 hover:bg-white/10'} rounded-2xl border flex items-center justify-center hover:-translate-x-1 transition-transform ${isLight ? 'text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]' : 'text-white shadow-[0_2px_8px_rgba(0,0,0,0.4)]'}`}>
                         <ArrowLeft size={16} />
                     </button>
-                    <div>
-                        <h1 className={`text-xl font-bold uppercase tracking-widest ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Dashboard</h1>
-                        <p className={`text-[10px] font-semibold uppercase tracking-widest ${isLight ? 'text-[#0f2618]/50' : 'text-white/40'}`}>Overview of your portfolio and activity</p>
-                    </div>
+                    <h1 className={`text-xl font-bold uppercase tracking-widest ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Dashboard</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={onDocs} title="Platform Documentation" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
@@ -553,7 +551,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
             {/* MAIN BODY */}
             {isSmallScreen ? (
                 /* MOBILE PORTRAIT: vertical stacked layout */
-                <div className="flex flex-1 gap-3 px-4 py-2 min-h-0 relative z-10 flex-col overflow-hidden">
+                <div className="flex flex-1 gap-3 px-4 py-2 min-h-0 relative z-10 flex-col overflow-y-auto no-scrollbar pb-6">
 
                     {/* TRADING WALLET */}
                     <div className="flex-none">
@@ -626,47 +624,94 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                         <div className="w-full h-px bg-gradient-to-r from-transparent via-[#249C6C]/40 to-transparent"/>
                     </div>
 
-                    {/* USER METRICS */}
+                    {/* USER METRICS (Rearranged 2x2 Grid) */}
                     <div className="flex-none">
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                             {/* 24H Volume */}
-                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
-                                <div className="flex items-center gap-1">
-                                    <BarChart2 size={10} className="text-[#249C6C] flex-none"/>
-                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Volume</span>
+                            <div className="db-card p-3.5 flex flex-col justify-between min-h-[72px] relative overflow-hidden">
+                                <div className="flex items-center gap-1.5">
+                                    <BarChart2 size={12} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Volume</span>
                                 </div>
-                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.marketTotalVol}</div>
-                                <div className="text-[6px] font-bold text-[#249C6C] mt-0.5 truncate">+12.4%</div>
+                                <div className="flex items-baseline justify-between mt-1">
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.marketTotalVol}</div>
+                                    <div className="text-[8px] font-bold text-[#249C6C] truncate">+12.4%</div>
+                                </div>
                             </div>
 
                             {/* Sentiment */}
-                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
-                                <div className="flex items-center gap-1">
-                                    <Smile size={10} className="text-[#249C6C] flex-none"/>
-                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Sent.</span>
+                            <div className="db-card p-3.5 flex flex-col justify-between min-h-[72px] relative overflow-hidden">
+                                <div className="flex items-center gap-1.5">
+                                    <Smile size={12} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Sent.</span>
                                 </div>
-                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.marketSentiment}%</div>
-                                <div className="text-[6px] font-bold text-[#249C6C] mt-0.5 truncate uppercase">{stats.sentiment || 'Neutral'}</div>
+                                <div className="flex items-baseline justify-between mt-1">
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.marketSentiment}%</div>
+                                    <div className="text-[8px] font-bold text-[#249C6C] truncate uppercase">{stats.sentiment || 'Neutral'}</div>
+                                </div>
                             </div>
 
                             {/* Win Rate */}
-                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
-                                <div className="flex items-center gap-1">
-                                    <AnimatedZap size={10} className="text-[#249C6C] flex-none"/>
-                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Win Rate</span>
+                            <div className="db-card p-3.5 flex flex-col justify-between min-h-[72px] relative overflow-hidden">
+                                <div className="flex items-center gap-1.5">
+                                    <AnimatedZap size={12} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Win Rate</span>
                                 </div>
-                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.userWinRate}%</div>
-                                <div className={`text-[6px] font-bold ${isLight ? 'text-black/40' : 'text-white/40'} mt-0.5 truncate`}>Neutral</div>
+                                <div className="flex items-baseline justify-between mt-1">
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.userWinRate}%</div>
+                                    <div className={`text-[8px] font-bold ${isLight ? 'text-black/40' : 'text-white/40'} truncate`}>Neutral</div>
+                                </div>
                             </div>
 
                             {/* Avg Stake */}
-                            <div className="db-card p-2 flex flex-col justify-between min-h-[64px] relative overflow-hidden">
-                                <div className="flex items-center gap-1">
-                                    <AnimatedCoins size={10} className="text-[#249C6C] flex-none"/>
-                                    <span className={`text-[6px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-wider truncate`}>Avg Stake</span>
+                            <div className="db-card p-3.5 flex flex-col justify-between min-h-[72px] relative overflow-hidden">
+                                <div className="flex items-center gap-1.5">
+                                    <AnimatedCoins size={12} className="text-[#249C6C] flex-none"/>
+                                    <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Avg Stake</span>
                                 </div>
-                                <div className={`text-xs font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate mt-1`}>{stats.marketAvgStake}</div>
-                                <div className="text-[6px] font-bold text-[#249C6C] mt-0.5 truncate">+8.1%</div>
+                                <div className="flex items-baseline justify-between mt-1">
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.marketAvgStake}</div>
+                                    <div className="text-[8px] font-bold text-[#249C6C] truncate">+8.1%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* PROFIT & LOSS GRAPH */}
+                    <div className="flex-none">
+                        <div className="db-card p-4 flex flex-col h-[160px] relative overflow-hidden">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <AnimatedTrendingUp size={12} className="text-[#249C6C]"/>
+                                    <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>P&amp;L</span>
+                                </div>
+                                <span className={`text-xl font-black tabular-nums leading-none ${pnlStats.netPnl >= 0 ? 'text-[#249C6C]' : 'text-[#FF6B6B]'}`} style={{ fontFamily: '"Comfortaa", cursive', fontWeight: 900 }}>
+                                    {pnlStats.netPnl >= 0 ? '+' : ''}{animNetPnl.toFixed(2)}
+                                    <span className="text-[10px] font-bold ml-1 opacity-60">USDC</span>
+                                </span>
+                            </div>
+                            <div className="flex-1 min-h-0 -mx-2">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={pnlStats.chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="pnlLineStrokeMobile" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#249C6C" />
+                                                <stop offset={strokeOffsetPercent} stopColor="#249C6C" />
+                                                <stop offset={strokeOffsetPercent} stopColor="#FF6B6B" />
+                                                <stop offset="100%" stopColor="#FF6B6B" />
+                                            </linearGradient>
+                                        </defs>
+                                        <XAxis dataKey="i" hide />
+                                        <YAxis domain={[-pnlStats.maxAbs * 1.2, pnlStats.maxAbs * 1.2]} hide />
+                                        <Tooltip
+                                            contentStyle={{ background: isLight ? 'rgba(207,220,213,0.95)' : 'rgba(10,10,10,0.9)', border: 'none', borderRadius: 8, fontSize: 8, fontWeight: 700 }}
+                                            formatter={(v) => [`${v >= 0 ? '+' : ''}${parseFloat(v).toFixed(4)} USDC`, 'PnL']}
+                                            labelFormatter={() => ''}
+                                        />
+                                        <ReferenceLine y={0} stroke={isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'} strokeWidth={1} strokeDasharray="3 3"/>
+                                        <Area type="monotone" dataKey="pnl" stroke="url(#pnlLineStrokeMobile)" strokeWidth={2} fill="none" dot={false} activeDot={{ r: 2.5, strokeWidth: 0, fill: pnlStats.netPnl >= 0 ? '#249C6C' : '#FF6B6B' }} baseValue={0}/>
+                                    </AreaChart>
+                                </ResponsiveContainer>
                             </div>
                         </div>
                     </div>
@@ -855,7 +900,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
                                         <AnimatedTrendingUp size={14} className="text-[#249C6C]"/>
-                                        <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>P&amp;L Graph</span>
+                                        <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>P&amp;L</span>
                                     </div>
                                 </div>
                                 {/* Chart — symmetric domain means y=0 is always at exactly 50% height, so gradient split is always 50% */}
