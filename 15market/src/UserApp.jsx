@@ -3532,14 +3532,18 @@ export default function UserApp() {
 
           {/* OVERLAY: Landing Page (Not Connected) */}
           <AnimatePresence>
-            {!authenticated && (
+            {!authenticated && view !== "docs" && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-[100]"
               >
-                <LandingPage theme={theme} onToggle={toggleTheme} />
+                <LandingPage 
+                  theme={theme} 
+                  onToggle={toggleTheme} 
+                  onDocs={() => setView("docs")} 
+                />
               </motion.div>
             )}
           </AnimatePresence>

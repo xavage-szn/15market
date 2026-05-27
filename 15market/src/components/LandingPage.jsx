@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UnifiedWalletButton } from "./UnifiedWalletButton";
-import { ThemeToggle } from "./ThemeToggle";
+import { 
+    BookOpen, Monitor, Smartphone, TrendingUp, TrendingDown, Clock, 
+    Menu, X, ChevronDown, ArrowUpRight
+} from "lucide-react";
+
+const XLogo = () => (
+    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+);
 
 const LandingBackground = ({ theme }) => {
     const isLight = theme === 'light';
@@ -18,23 +27,17 @@ const LandingBackground = ({ theme }) => {
     return (
         <div className={`absolute inset-0 overflow-hidden z-0 pointer-events-none ${isLight ? 'bg-[#f0f8f4]' : 'bg-[#050505]'} transition-colors duration-500`}>
             {/* Mouse Follow Glow */}
-            <motion.div
-                animate={{
-                    x: mousePos.x - 200,
-                    y: mousePos.y - 200,
-                }}
-                transition={{ type: "spring", damping: 50, stiffness: 100, mass: 0.5 }}
-                className="absolute w-[400px] h-[400px] rounded-full blur-[80px] opacity-[0.35] pointer-events-none"
+            <div
+                className="absolute w-[450px] h-[450px] rounded-full blur-[100px] opacity-[0.25] pointer-events-none transition-all duration-300"
                 style={{
-                    background: `radial-gradient(circle, #3CB371 0%, transparent 70%)`,
+                    left: mousePos.x - 225,
+                    top: mousePos.y - 225,
+                    background: `radial-gradient(circle, #249C6C 0%, transparent 70%)`,
                 }}
             />
-
-            {/* Cinematic Vignette & Grain */}
-            <div className={`absolute inset-0 ${isLight ? 'bg-radial-vignette-light' : 'bg-radial-vignette'} pointer-events-none`} />
-            <div 
-                className="absolute inset-0 opacity-[0.07] pointer-events-none mix-blend-screen bg-[#3CB371] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" 
-            />
+            {/* Cinematic Background Glows */}
+            <div className="absolute top-[20%] right-[10%] w-[350px] h-[350px] rounded-full bg-[#249C6C]/10 blur-[100px] pointer-events-none" />
+            <div className="absolute bottom-[10%] left-[5%] w-[300px] h-[300px] rounded-full bg-[#249C6C]/5 blur-[90px] pointer-events-none" />
         </div>
     );
 };
@@ -42,26 +45,23 @@ const LandingBackground = ({ theme }) => {
 const RisingBalance = () => {
     const [val, setVal] = useState(15.00);
     useEffect(() => {
-        const i = setInterval(() => setVal(v => v + Math.random() * 0.15), 100);
+        const i = setInterval(() => setVal(v => v + Math.random() * 0.15), 120);
         return () => clearInterval(i);
     }, []);
     return (
-        <motion.span 
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="ml-3 sm:ml-6 text-white bg-[#3CB371] px-3 py-1 rounded-lg shadow-[0_0_20px_rgba(60,179,113,0.4)]"
-        >
+        <span className="ml-3 sm:ml-4 text-white bg-[#249C6C] px-3 py-0.5 text-sm sm:text-base rounded-full shadow-[0_0_15px_rgba(36,156,108,0.4)] inline-block align-middle font-bold">
             ${val.toFixed(2)}
-        </motion.span>
+        </span>
     );
 };
 
-export function LandingPage({ theme, onToggle }) {
+export function LandingPage({ theme, onToggle, onDocs }) {
     const isLight = theme === 'light';
     const [currentTextIndex, setCurrentTextIndex] = useState(0);
     const [displayText, setDisplayText] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);
-    
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
     const phrases = [
         "access high frequency markets",
         "trade the trend in real time",
@@ -76,7 +76,7 @@ export function LandingPage({ theme, onToggle }) {
             if (displayText.length < currentPhrase.length) {
                 timer = setTimeout(() => {
                     setDisplayText(currentPhrase.substring(0, displayText.length + 1));
-                }, 80);
+                }, 60);
             } else {
                 timer = setTimeout(() => setIsDeleting(true), 2500);
             }
@@ -84,83 +84,190 @@ export function LandingPage({ theme, onToggle }) {
             if (displayText.length > 0) {
                 timer = setTimeout(() => {
                     setDisplayText(currentPhrase.substring(0, displayText.length - 1));
-                }, 40);
+                }, 30);
             } else {
                 setIsDeleting(false);
                 setCurrentTextIndex((prev) => (prev + 1) % phrases.length);
             }
         }
-        
         return () => clearTimeout(timer);
     }, [displayText, isDeleting, currentTextIndex]);
 
+    const cardBg = isLight 
+        ? "bg-white/60 border-black/[0.06] backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.03)]" 
+        : "bg-white/[0.03] border-white/[0.05] backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.3)]";
+
     return (
-        <div className={`min-h-screen w-screen ${isLight ? 'text-[#0a261a]' : 'text-white'} overflow-hidden font-sans relative flex flex-col items-center selection:bg-[#3CB371]/30 transition-colors duration-500`}>
+        <div className={`min-h-screen w-screen ${isLight ? 'text-[#0a261a]' : 'text-white'} overflow-y-auto no-scrollbar font-sans relative flex flex-col items-center selection:bg-[#249C6C]/30 pb-16`} style={{ fontFamily: '"Comfortaa", cursive' }}>
             <LandingBackground theme={theme} />
 
-            {/* Top Navigation - Minimal */}
-            <nav className="w-full relative z-50 flex items-center justify-between px-6 h-20 md:h-28 lg:h-32 max-w-7xl mx-auto safe-top">
-                <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8 }}
-                >
+            {/* TOP NAVIGATION BAR */}
+            <nav className="w-full relative z-50 flex items-center justify-between px-6 md:px-10 h-20 max-w-7xl mx-auto">
+                <div className="flex items-center gap-2">
                     <img
                         src={isLight ? "/goblogo.png" : "/gowlogo.png"}
                         alt="15market"
-                        className={`h-20 md:h-28 lg:h-32 w-auto drop-shadow-[0_0_30px_rgba(60,179,113,0.4)]`}
+                        className="h-14 w-auto drop-shadow-[0_0_20px_rgba(36,156,108,0.3)]"
                     />
-                </motion.div>
+                </div>
 
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.8, delay: 0.2 }}
-                    className="flex items-center gap-4"
-                >
-                    {/* Theme Toggle removed from landing per request */}
-                </motion.div>
+                {/* Desktop Action Menu */}
+                <div className="hidden md:flex items-center gap-3">
+                    <button 
+                        onClick={onDocs}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 border transition-all ${
+                            isLight 
+                                ? 'bg-white border-black/5 hover:bg-black/5 text-[#0a261a]' 
+                                : 'bg-white/5 border-white/5 hover:bg-white/10 text-white'
+                        }`}
+                    >
+                        <BookOpen size={13} className="text-[#249C6C]" />
+                        <span>Docs</span>
+                    </button>
+                    <a 
+                        href="https://x.com/15_markets"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 border transition-all ${
+                            isLight 
+                                ? 'bg-white border-black/5 hover:bg-black/5 text-[#0a261a]' 
+                                : 'bg-white/5 border-white/5 hover:bg-white/10 text-white'
+                        }`}
+                    >
+                        <XLogo />
+                        <span>Contact</span>
+                    </a>
+                </div>
+
+                {/* Mobile Dropdown Menu Trigger */}
+                <div className="md:hidden relative z-50">
+                    <button 
+                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        className={`p-2.5 rounded-xl border transition-all ${
+                            isLight 
+                                ? 'bg-white border-black/5 hover:bg-black/5 text-[#0a261a]' 
+                                : 'bg-white/5 border-white/5 hover:bg-white/10 text-white'
+                        }`}
+                    >
+                        {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
+                    </button>
+
+                    {/* Mobile Dropdown Panel */}
+                    <AnimatePresence>
+                        {mobileMenuOpen && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                transition={{ duration: 0.15 }}
+                                className={`absolute right-0 mt-2 w-44 rounded-2xl border p-2 flex flex-col gap-1 z-50 ${cardBg}`}
+                            >
+                                <button 
+                                    onClick={() => { setMobileMenuOpen(false); onDocs(); }}
+                                    className={`w-full px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-2 text-left transition-colors ${
+                                        isLight ? 'hover:bg-black/5' : 'hover:bg-white/5'
+                                    }`}
+                                >
+                                    <BookOpen size={12} className="text-[#249C6C]" />
+                                    <span>Docs</span>
+                                </button>
+                                <a 
+                                    href="https://x.com/15_markets"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`w-full px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-2 text-left transition-colors ${
+                                        isLight ? 'hover:bg-black/5' : 'hover:bg-white/5'
+                                    }`}
+                                >
+                                    <XLogo />
+                                    <span>Contact Us</span>
+                                </a>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </nav>
 
-            {/* Centered Hero */}
-            <main className="flex-1 flex flex-col items-center justify-center text-center px-6 relative z-10 -mt-16">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-                    className="flex flex-col items-center gap-6 md:gap-12"
-                >
-                    <div className="h-[120px] sm:h-[180px] md:h-[240px] flex items-center justify-center">
-                        <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-8xl font-black tracking-tighter leading-tight uppercase max-w-5xl">
-                            <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#3CB371] to-[#2d8a57] inline-block filter drop-shadow-[0_0_20px_rgba(60,179,113,0.3)]">
-                                {displayText}
-                            </span>
-                            {currentTextIndex === 2 && displayText === "earn profits" && <RisingBalance />}
-                            <motion.span
-                                animate={{ opacity: [1, 0] }}
-                                transition={{ duration: 0.6, repeat: Infinity, ease: "linear" }}
-                                className="inline-block w-[2px] h-[0.8em] bg-[#3CB371] ml-2 -mb-1"
-                            />
-                        </h1>
-                    </div>
+            {/* HERO INTRODUCTION */}
+            <header className="w-full max-w-5xl mx-auto text-center px-6 pt-8 pb-6 relative z-10 flex flex-col items-center gap-4">
+                <div className="h-[70px] sm:h-[90px] flex items-center justify-center">
+                    <h1 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight uppercase leading-snug">
+                        <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#249C6C] to-[#1D7A52] inline-block filter drop-shadow-[0_0_15px_rgba(36,156,108,0.25)]">
+                            {displayText}
+                        </span>
+                        {currentTextIndex === 2 && displayText === "earn profits" && <RisingBalance />}
+                        <span className="inline-block w-[1.5px] h-[0.75em] bg-[#249C6C] ml-1.5 animate-pulse" />
+                    </h1>
+                </div>
+                <p className={`text-[10px] sm:text-xs uppercase tracking-widest max-w-lg mx-auto opacity-75 font-semibold leading-relaxed ${isLight ? 'text-black/60' : 'text-white/50'}`}>
+                    High-frequency decentralized prediction engine. Set round duration, stakes, prediction direction, and execute in under 45ms.
+                </p>
 
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5, duration: 1 }}
-                        className="flex flex-col items-center gap-12 relative"
-                    >
-                        {/* Removed Arrow Animation as requested */}
+                <div className="mt-2 hover:scale-[1.03] transition-transform duration-500">
+                    <UnifiedWalletButton theme={theme} />
+                </div>
+            </header>
 
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="scale-110 relative z-10 hover:scale-[1.15] transition-transform duration-700">
-                                <UnifiedWalletButton theme={theme} />
+            {/* SCREEN MOCKUPS SECTION (Desktop Macbook and Mobile iPhone side-by-side) */}
+            <section className="w-full max-w-7xl mx-auto px-6 mt-8 relative z-10 flex flex-col lg:flex-row gap-8 items-center justify-center">
+                
+                {/* 1. MacBook Pro Mockup (Desktop side only) */}
+                <div className="hidden lg:flex flex-1 w-full max-w-[800px] flex-col items-center">
+                    {/* Screen Outer Bezel */}
+                    <div className="w-full aspect-[16/10] bg-[#121212] rounded-t-[20px] p-2 border-[2px] border-[#333] shadow-[0_25px_60px_rgba(0,0,0,0.55)] flex flex-col relative overflow-hidden">
+                        
+                        {/* Screen Content Box */}
+                        <div className="flex-1 bg-[#050505] rounded-[6px] overflow-hidden relative">
+                            {/* MacBook Screen Notch */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-3 bg-black rounded-b-[4px] z-20 flex items-center justify-center gap-1.5 border-b border-x border-white/5">
+                                {/* Camera lens */}
+                                <span className="w-1 h-1 rounded-full bg-[#111]" />
+                                {/* Green indicator light */}
+                                <span className="w-[1.5px] h-[1.5px] rounded-full bg-green-500/80 animate-pulse" />
                             </div>
+                            <img 
+                                src="/deskto.png" 
+                                alt="15market Desktop Terminal" 
+                                className="w-full h-full object-cover bg-[#050505] scale-[1.15] -translate-y-3"
+                            />
                         </div>
-                    </motion.div>
-                </motion.div>
-            </main>
 
+                        {/* Webcam Notch */}
+                        <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-12 h-1 bg-black rounded-b-sm z-30 border-b border-x border-[#222]" />
+                    </div>
+                    {/* Keyboard Lower Deck */}
+                    <div className="w-[114%] h-2.5 bg-[#444] rounded-b-[4px] relative shadow-[0_10px_20px_rgba(0,0,0,0.3)]">
+                        {/* Keyboard indent notch */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1 bg-[#222] rounded-b-sm" />
+                    </div>
+                </div>
+
+                {/* 2. iPhone 15 Pro with Dynamic Island Mockup (Mobile side only) */}
+                <div className="flex lg:hidden w-[260px] flex-col items-center">
+                    {/* iPhone Frame */}
+                    <div className="w-full aspect-[9/18.5] bg-[#0c0c0c] rounded-[44px] p-2.5 border-[2px] border-[#2a2a2a] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col relative overflow-hidden">
+                        
+                        {/* iPhone Screen Box */}
+                        <div className="flex-1 bg-[#050505] rounded-[36px] overflow-hidden relative">
+                            {/* DYNAMIC ISLAND pill */}
+                            <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-20 h-4 bg-black rounded-full z-30 flex items-center justify-end px-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#111] mr-1" />
+                                <span className="w-1 h-1 rounded-full bg-[#249C6C]/60" />
+                            </div>
+                            <img 
+                                src="/mobile.png" 
+                                alt="15market Mobile View" 
+                                className="w-full h-full object-contain bg-[#050505]"
+                            />
+                        </div>
+
+                        {/* Speaker line */}
+                        <div className="absolute top-[3px] left-1/2 -translate-x-1/2 w-10 h-0.5 bg-[#222] rounded-full z-30" />
+                    </div>
+                </div>
+
+            </section>
         </div>
     );
 }
