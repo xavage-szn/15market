@@ -63,9 +63,9 @@ export function LandingPage({ theme, onToggle, onDocs }) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const phrases = [
-        "real time binary markets",
+        "real time binary prediction market",
         "trade the trend in real time",
-        "earn profits"
+        "earn profits in seconds"
     ];
 
     useEffect(() => {
@@ -196,12 +196,12 @@ export function LandingPage({ theme, onToggle, onDocs }) {
                         <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#249C6C] to-[#1D7A52] inline-block filter drop-shadow-[0_0_15px_rgba(36,156,108,0.25)]">
                             {displayText}
                         </span>
-                        {currentTextIndex === 2 && displayText === "earn profits" && <RisingBalance />}
                         <span className="inline-block w-[1.5px] h-[0.75em] bg-[#249C6C] ml-1.5 animate-pulse" />
                     </h1>
                 </div>
                 <p className={`text-[10px] sm:text-xs uppercase tracking-widest max-w-lg mx-auto opacity-75 font-semibold leading-relaxed ${isLight ? 'text-black/60' : 'text-white/50'}`}>
-                    High-frequency real-time binary markets prediction engine. Predict direction, set stakes, and execute rounds in under 45ms.
+                    15market is a decentralized binary prediction market.<br />
+                    Pick your direction, set your stake, set the duration of the trade and let the market decide in seconds.
                 </p>
 
                 <div className="mt-2 hover:scale-[1.03] transition-transform duration-500">
@@ -213,7 +213,14 @@ export function LandingPage({ theme, onToggle, onDocs }) {
             <section className="w-full max-w-7xl mx-auto px-6 mt-8 relative z-10 flex flex-col lg:flex-row gap-8 items-center justify-center">
                 
                 {/* 1. MacBook Pro Mockup (Desktop side only) */}
-                <div className="hidden lg:flex flex-1 w-full max-w-[800px] flex-col items-center">
+                <div className="hidden lg:flex flex-1 w-full max-w-[800px] flex-col items-center relative">
+                    {/* Mascot positioned with hand resting on the MacBook screen */}
+                    <img 
+                        src="/mascot.png" 
+                        alt="Mascot" 
+                        className="absolute right-[-231px] top-[-76px] h-[432px] z-30 pointer-events-none select-none"
+                        style={{ filter: 'drop-shadow(0 28px 24px rgba(0,0,0,0.75)) drop-shadow(0 8px 40px rgba(36,156,108,0.22)) drop-shadow(-4px 0 20px rgba(0,0,0,0.5))' }}
+                    />
                     {/* Screen Outer Bezel */}
                     <div className="w-full aspect-[16/9] bg-[#121212] rounded-t-[20px] p-2 border-[2px] border-[#333] shadow-[0_25px_60px_rgba(0,0,0,0.55)] flex flex-col relative overflow-hidden">
                         
@@ -244,27 +251,12 @@ export function LandingPage({ theme, onToggle, onDocs }) {
                 </div>
 
                 {/* 2. iPhone 15 Pro with Dynamic Island Mockup (Mobile side only) */}
-                <div className="flex lg:hidden w-[260px] flex-col items-center">
-                    {/* iPhone Frame */}
-                    <div className="w-full aspect-[9/11] bg-[#0c0c0c] rounded-[44px] p-2.5 border-[2px] border-[#2a2a2a] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col relative overflow-hidden">
-                        
-                        {/* iPhone Screen Box */}
-                        <div className="flex-1 bg-[#050505] rounded-[36px] overflow-hidden relative">
-                            {/* DYNAMIC ISLAND pill */}
-                            <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-20 h-4 bg-black rounded-full z-30 flex items-center justify-end px-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#111] mr-1" />
-                                <span className="w-1 h-1 rounded-full bg-[#249C6C]/60" />
-                            </div>
-                            <img 
-                                src="/mobile.png" 
-                                alt="15market Mobile View" 
-                                className="w-full h-full object-cover bg-[#050505]"
-                            />
-                        </div>
-
-                        {/* Speaker line */}
-                        <div className="absolute top-[3px] left-1/2 -translate-x-1/2 w-10 h-0.5 bg-[#222] rounded-full z-30" />
-                    </div>
+                <div className="flex lg:hidden w-[280px] flex-col items-center translate-y-[19px] relative z-10">
+                    <img 
+                        src="/mobilemock.png" 
+                        alt="15market Mobile View" 
+                        className="w-full h-auto drop-shadow-[0_25px_60px_rgba(0,0,0,0.8)]"
+                    />
                 </div>
 
             </section>

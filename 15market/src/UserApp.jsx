@@ -143,7 +143,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
       className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '480px' }}
+      style={{ height: '300px' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
@@ -3011,10 +3011,10 @@ export default function UserApp() {
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
               <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-[160] safe-top ${isSmallScreen ? 'h-auto py-1' : 'h-20 lg:h-24'}`}
-                style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 2px)' } : {}}>
+                style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : {}}>
                 <div className="flex items-center transition-all duration-500 h-full"
                   style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[84px]' : 'h-[72px] lg:h-[84px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all`} />
+                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[48px]' : 'h-[72px] lg:h-[84px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all`} />
                 </div>
 
                 <div className="hidden lg:flex items-center gap-3 px-2 py-1">
