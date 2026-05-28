@@ -3499,43 +3499,33 @@ const performStealthChecks = useCallback(async (addr) => {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0, y: -40 }}
+                transition={{ duration: 0.4 }}
                 className="fixed top-0 left-0 w-full z-[200000] pointer-events-none"
                 style={{ height: '120px' }}
               >
-                {/* Red ambient gradient from top */}
                 <div className="absolute top-0 left-0 w-full h-full"
                   style={{
                     background: 'linear-gradient(180deg, rgba(220,38,38,0.4) 0%, rgba(220,38,38,0.15) 40%, rgba(220,38,38,0.05) 70%, transparent 100%)',
                   }}
                 />
-                <div className="relative flex items-start justify-center pt-3">
-                  <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-600/20 backdrop-blur-sm border border-red-500/20">
-                    <Activity size={10} className="text-red-400 animate-pulse" />
-                    <span className="text-[9px] font-black text-red-400 uppercase tracking-[0.3em]">
-                      Disconnected • Internet Connection Lost
-                    </span>
-                  </div>
-                </div>
               </motion.div>
             )}
 
             {isOnline && navigator.onLine && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{
-                  opacity: [0, 1, 1, 0],
-                  height: ['auto', 'auto', 'auto', 0]
-                }}
-                transition={{ duration: 3, times: [0, 0.1, 0.9, 1] }}
-                className="fixed top-0 left-0 w-full z-[199999] bg-[#249C6C]/90 backdrop-blur-xl border-b border-white/10 overflow-hidden"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: [0, 1, 1, 0], y: [0, 0, 0, -40] }}
+                transition={{ duration: 2.5, times: [0, 0.1, 0.5, 1] }}
+                exit={{ opacity: 0, y: -60 }}
+                className="fixed top-0 left-0 w-full z-[200000] pointer-events-none"
+                style={{ height: '120px' }}
               >
-                <div className="flex items-center justify-center gap-3 py-1.5 px-4">
-                  <span className="text-[9px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
-                    <CheckCircle size={10} />
-                    Network Reconnected • System Online
-                  </span>
-                </div>
+                <div className="absolute top-0 left-0 w-full h-full"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(36,156,108,0.4) 0%, rgba(36,156,108,0.15) 40%, rgba(36,156,108,0.05) 70%, transparent 100%)',
+                  }}
+                />
               </motion.div>
             )}
           </AnimatePresence>
