@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo, Component } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, Component, Suspense, lazy } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useWalletClient, useSwitchChain } from "wagmi";
@@ -6,15 +6,6 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useTradingWallet } from './hooks/useTradingWallet';
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { RoundsTradeScroller } from "./components/RoundsTradeScroller";
-import { ProfileModal } from "./components/ProfileModal";
-import { PnLModal } from "./components/PnLModal";
-import { TransactionReceiptModal } from "./components/TransactionReceiptModal";
-import {
-  MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
-  Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
-  History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp,
-  Maximize2, RotateCw, Layers
-} from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { parseEther, parseUnits, formatUnits, encodeFunctionData } from "viem";
 // Solana imports removed
@@ -28,7 +19,14 @@ import { DashboardPage } from "./components/DashboardPage";
 import { CircleWalletPage } from "./components/CircleWalletPage";
 import { DocsPage } from "./components/DocsPage";
 
-import MessagingSystem from "./components/MessagingSystem";
+// Lazy load conditionally rendered components
+const ProfileModal = lazy(() => import("./components/ProfileModal"));
+const PnLModal = lazy(() => import("./components/PnLModal"));
+const TransactionReceiptModal = lazy(() => import("./components/TransactionReceiptModal"));
+const OnboardingFlow = lazy(() => import("./components/OnboardingFlow"));
+const MessagingSystem = lazy(() => import("./components/MessagingSystem"));
+const RoundsAccessGate = lazy(() => import("./components/RoundsAccessGate"));
+
 import { ARC_CONTRACT_ADDRESS, ARC_USDC_ADDRESS, KEEPER_URL, KEEPER_URL_ARC, KEEPER_URL_ROUNDS, ADMIN_TOKEN, ARC_RPC, ARC_RPC_BACKUP, ARC_CHAIN_ID, ARC_ROUNDS_CONTRACT_ADDRESS } from "./constants";
 
 
@@ -41,17 +39,10 @@ import { UnifiedWalletButton } from "./components/UnifiedWalletButton";
 import { OrderBook } from "./components/OrderBook";
 import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
 import { MascotLoader } from "./components/MascotLoader";
-import CustomChart from './components/CustomChart';
-import Toast from "./components/Toast";
-import { ThemeToggle } from "./components/ThemeToggle";
-import SideHistoryPane from "./components/SideHistoryPane";
-import WalletConnectionLoading from "./components/WalletConnectionLoading";
-import GlobalLoader from "./components/GlobalLoader";
+import { GlobalLoader } from "./components/GlobalLoader";
 
 import { RoundsTerminal } from "./components/RoundsTerminal";
 // Rounds chart logic merged into LiveStreamingChart/CustomChart for performance
-import RoundsAccessGate from "./components/RoundsAccessGate";
-import { OnboardingFlow } from "./components/OnboardingFlow";
 import { socketService } from './utils/socket';
 import { priceSocketService } from './utils/priceSocket';
 
@@ -533,132 +524,169 @@ export default function UserApp() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [hasRoundsAccess, setHasRoundsAccess] = useState(null); // null = unknown, true/false = verified
 
-  const performStealthChecks = useCallback(async (addr) => {
+const performStealthChecks = useCallback(async (addr) => {
     if (!addr) return;
 
     setIsGlobalLoading(true);
     setGlobalLoadingProgress(0);
     setIsOffline(!navigator.onLine);
 
+    // Adaptive timeout based on network conditions
+    const getTimeout = () => {
+        // Try to get network information if available
+        if (navigator.connection && navigator.connection.effectiveType) {
+            switch (navigator.connection.effectiveType) {
+                case 'slow-2g':
+                    return 8000; // 8 seconds for slow 2G
+                case '2g':
+                    return 6000; // 6 seconds for 2G
+                case '3g':
+                    return 4000; // 4 seconds for 3G
+                default:
+                    return 3000; // 3 seconds for 4G or better
+            }
+        }
+        return 3000; // Default 3 seconds
+    };
+
     const progressInterval = setInterval(() => {
-      setGlobalLoadingProgress(prev => {
-        if (prev < 90) return prev + (Math.random() * 10);
-        return prev;
-      });
+        setGlobalLoadingProgress(prev => {
+            if (prev < 90) return prev + (Math.random() * 10);
+            return prev;
+        });
     }, 100);
 
     const runChecks = async () => {
-      try {
-        if (!navigator.onLine) {
-          setIsOffline(true);
-          return false;
+        try {
+            if (!navigator.onLine) {
+                setIsOffline(true);
+                return false;
+            }
+            setIsOffline(false);
+
+            // Timeout helper to prevent infinite loading if backend hangs
+            const fetchWithTimeout = async (url, options = {}) => {
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), getTimeout());
+                try {
+                    const res = await fetch(url, { ...options, signal: controller.signal });
+                    clearTimeout(id);
+                    return res;
+                } catch (e) {
+                    clearTimeout(id);
+                    throw e;
+                }
+            };
+
+            // Run checks in parallel to reduce total time
+            const [profileRes, sessionRes, roundsRes] = await Promise.all([
+                fetchWithTimeout(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null),
+                fetchWithTimeout(`${KEEPER_URL_ARC}/session/init`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: addr.toLowerCase() })
+                }).catch(() => null),
+                fetchWithTimeout(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => ({ ok: false }))
+            ]);
+
+            // Process profile result
+            const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
+            if (profileRes && profileRes.ok) {
+                const pData = await profileRes.json();
+                setUserProfile(pData);
+                if (!pData.username && !localOnboarded) {
+                    setShowOnboarding(true);
+                    localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
+                } else {
+                    setShowOnboarding(false);
+                    localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+                }
+            } else {
+                // Do NOT force onboarding if they are already onboarded locally!
+                if (localOnboarded) {
+                    setShowOnboarding(false);
+                } else {
+                    setShowOnboarding(true);
+                }
+            }
+
+            // Process session result
+            if (sessionRes && sessionRes.ok) {
+                const sData = await sessionRes.json();
+                setSessionBalance(parseFloat(sData.balance || 0));
+            }
+
+            // Process rounds result
+            if (roundsRes && roundsRes.ok) {
+                const rData = await roundsRes.json();
+                setHasRoundsAccess(rData.authorized === true);
+            } else {
+                setHasRoundsAccess(false); // Resolve to false if server is unreachable
+            }
+
+            return true;
+        } catch (e) {
+            console.warn("[StealthChecks] Attempt failed:", e.message);
+            return false;
         }
-        setIsOffline(false);
-
-        // Timeout helper to prevent infinite loading if backend hangs
-        const fetchWithTimeout = async (url, options = {}) => {
-          const controller = new AbortController();
-          const id = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout
-          try {
-            const res = await fetch(url, { ...options, signal: controller.signal });
-            clearTimeout(id);
-            return res;
-          } catch (e) {
-            clearTimeout(id);
-            throw e;
-          }
-        };
-
-        // 1. Database User Verification (SILENT)
-        const profileRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/profiles/${addr.toLowerCase()}`).catch(() => null);
-        const localOnboarded = localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true';
-
-        if (profileRes && profileRes.ok) {
-          const pData = await profileRes.json();
-          setUserProfile(pData);
-          if (!pData.username && !localOnboarded) {
-            setShowOnboarding(true);
-            localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
-          } else {
-            setShowOnboarding(false);
-            localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
-          }
-        } else {
-          // Do NOT force onboarding if they are already onboarded locally!
-          if (localOnboarded) {
-            setShowOnboarding(false);
-          } else {
-            setShowOnboarding(true);
-          }
-        }
-
-        // 2. Authoritative Session Sync (Ensures balance is live & non-mock)
-        const sessionRes = await fetchWithTimeout(`${KEEPER_URL_ARC}/session/init`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: addr.toLowerCase() })
-        }).catch(() => null);
-
-        if (sessionRes && sessionRes.ok) {
-          const sData = await sessionRes.json();
-          setSessionBalance(parseFloat(sData.balance || 0));
-        }
-
-        // 3. Rounds Access Check
-        const roundsRes = await fetchWithTimeout(`${KEEPER_URL_ROUNDS}/access/check/${addr.toLowerCase()}`).catch(() => ({ ok: false }));
-        if (roundsRes && roundsRes.ok) {
-          const rData = await roundsRes.json();
-          setHasRoundsAccess(rData.authorized === true);
-        } else {
-          setHasRoundsAccess(false); // Resolve to false if server is unreachable
-        }
-
-        return true;
-      } catch (e) {
-        console.warn("[StealthChecks] Attempt failed:", e.message);
-        return false;
-      }
     };
 
-    // Retry loop if offline or network fail
+    // Retry loop with exponential backoff for poor networks
     let success = await runChecks();
-    if (!success) {
-      const retryInterval = setInterval(async () => {
+    let retryCount = 0;
+    const maxRetries = navigator.onLine ? 3 : 0; // Fewer retries if initially offline
+    
+    while (!success && retryCount < maxRetries) {
+        retryCount++;
+        // Exponential backoff: 1s, 2s, 4s, etc. but cap at 10s
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
         if (navigator.onLine) {
-          success = await runChecks();
-          if (success) clearInterval(retryInterval);
+            success = await runChecks();
+            if (success) break;
         } else {
-          setIsOffline(true);
+            setIsOffline(true);
         }
-      }, 3000);
-
-      // We don't block the UI forever if it's already cached
-      if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
-        setTimeout(() => { if (!success) setIsGlobalLoading(false); }, 10000);
-      }
     }
 
-    // Wrap up: Instant delivery
+    // We don't block the UI forever if it's already cached
+    if (!success && localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
+        // Allow UI to show sooner for returning users
+        setTimeout(() => {
+            clearInterval(progressInterval);
+            setIsGlobalLoading(false);
+        }, 3000); // Show UI after 3 seconds max for returning users
+        return;
+    }
+
+    // Wrap up: Delivery with reasonable timeout
     const startTime = Date.now();
     const finish = () => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 1200 - elapsed);
-      setTimeout(() => {
-        clearInterval(progressInterval);
-        setGlobalLoadingProgress(100);
-        setIsGlobalLoading(false);
-      }, remaining);
+        const elapsed = Date.now() - startTime;
+        // Reduce max wait time for poor networks
+        const maxWait = navigator.connection && navigator.connection.effectiveType === 'slow-2g' ? 8000 : 5000;
+        const remaining = Math.max(0, maxWait - elapsed);
+        setTimeout(() => {
+            clearInterval(progressInterval);
+            setGlobalLoadingProgress(100);
+            setIsGlobalLoading(false);
+        }, remaining);
     };
 
     if (success) {
-      finish();
-    } else {
-      // If still failing after initial wait, but we have local proof, let them in
-      if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
         finish();
-      }
+    } else {
+        // If still failing after retries, but we have local proof, let them in sooner
+        if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
+            finish();
+        } else {
+            // For new users with persistent issues, show UI after reasonable timeout
+            setTimeout(finish, 5000); // 5 second max wait
+        }
     }
-  }, [address]);
+}, [address]);
 
   // Trigger stealth checks when wallet connects or changes
   useEffect(() => {
@@ -3124,12 +3152,14 @@ export default function UserApp() {
 
               {/* MAIN CONTENT CONTAINER (LOCKED DESKTOP MARGIN: lg:mt-2) */}
               <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 h-full lg:mt-2 relative z-10`}>
-                <RoundsAccessGate
-                  theme={theme}
-                  active={gameMode === 'rounds'}
-                  verified={hasRoundsAccess}
-                  onUnlock={handleRoundsUnlock}
-                >
+                 <Suspense fallback={<div className="h-[200px] flex items-center justify-center animate-pulse">Loading Rounds Access...</div>}>
+                   <RoundsAccessGate
+                     theme={theme}
+                     active={gameMode === 'rounds'}
+                     verified={hasRoundsAccess}
+                     onUnlock={handleRoundsUnlock}
+                   />
+                 </Suspense>
                   {/* MOBILE FULL-WIDTH SCROLLER (Matching Desktop Design) */}
                   {isSmallScreen && (
                     <div className="h-7 mb-1.5 overflow-hidden relative z-[50]" style={{ width: '105vw', marginLeft: '-8px', transform: 'translateX(3%)' }}>
@@ -3419,24 +3449,27 @@ export default function UserApp() {
 
 
 
-          <ProfileModal
-            isOpen={isProfileOpen}
-            onClose={() => setIsProfileOpen(false)}
-            wallet={wallet}
-            evmSessionWallet={evmSessionWallet}
-            userProfile={userProfile}
-            isSignerInitializing={isSignerInitializing}
-            onRetryInit={initializeSessionWallet}
-            sessionBalance={sessionBalance}
-            evmBalance={evmBalance}
-            onDeposit={handleDeposit}
-            onWithdraw={handleWithdraw}
-            transactionHistory={transactionHistory}
-            onViewReceipt={(tx) => {
-              setSelectedTransaction(tx);
-              setIsTransactionReceiptOpen(true);
-            }}
-            notify={notify}
+           <Suspense fallback={<div className="h-[400px] flex items-center justify-center animate-pulse">Loading Profile...</div>}>
+             <ProfileModal
+               isOpen={isProfileOpen}
+               onClose={() => setIsProfileOpen(false)}
+               wallet={wallet}
+               evmSessionWallet={evmSessionWallet}
+               userProfile={userProfile}
+               isSignerInitializing={isSignerInitializing}
+               onRetryInit={initializeSessionWallet}
+               sessionBalance={sessionBalance}
+               evmBalance={evmBalance}
+               onDeposit={handleDeposit}
+               onWithdraw={handleWithdraw}
+               transactionHistory={transactionHistory}
+               onViewReceipt={(tx) => {
+                 setSelectedTransaction(tx);
+                 setIsTransactionReceiptOpen(true);
+               }}
+               notify={notify}
+             />
+           </Suspense>
             theme={theme}
             onUpdate={() => performStealthChecks(address)}
             onOpenCircleWallet={(mode) => {
@@ -3445,7 +3478,9 @@ export default function UserApp() {
               setView("circle_wallet");
             }}
           />
-          <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
+           <Suspense fallback={<div className="h-[400px] flex items-center justify-center animate-pulse">Loading PnL Details...</div>}>
+             <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
+           </Suspense>
 
 
 
@@ -3512,25 +3547,29 @@ export default function UserApp() {
               Built by 15labs
             </span>
           </footer>
-          <TransactionReceiptModal
-            isOpen={isTransactionReceiptOpen}
-            onClose={() => setIsTransactionReceiptOpen(false)}
-            transaction={selectedTransaction}
-          />
+           <Suspense fallback={<div className="h-[400px] flex items-center justify-center animate-pulse">Loading Transaction Details...</div>}>
+             <TransactionReceiptModal
+               isOpen={isTransactionReceiptOpen}
+               onClose={() => setIsTransactionReceiptOpen(false)}
+               transaction={selectedTransaction}
+             />
+           </Suspense>
 
 
-          {/* Onboarding Flow for new users */}
-          {showOnboarding && address && !isGlobalLoading && (
-            <OnboardingFlow
-              address={address}
-              theme={theme}
-              evmSessionWallet={evmSessionWallet}
-              onComplete={(profile) => {
-                setShowOnboarding(false);
-                performStealthChecks(address); // Final refresh
-              }}
-            />
-          )}
+           {/* Onboarding Flow for new users */}
+           {showOnboarding && address && !isGlobalLoading && (
+             <Suspense fallback={<div className="h-[500px] flex items-center justify-center animate-pulse">Loading Onboarding...</div>}>
+               <OnboardingFlow
+                 address={address}
+                 theme={theme}
+                 evmSessionWallet={evmSessionWallet}
+                 onComplete={(profile) => {
+                   setShowOnboarding(false);
+                   performStealthChecks(address); // Final refresh
+                 }}
+               />
+             </Suspense>
+           )}
 
           {/* OVERLAY: Landing Page (Not Connected) */}
           <AnimatePresence>

@@ -510,23 +510,28 @@ export function UnifiedFundingModal({
                                                     if (info.offset.x < -50) handleSwipeToken('left');
                                                     else if (info.offset.x > 50) handleSwipeToken('right');
                                                 }}
-                                                initial={{ opacity: 0, scale: 0.8, x: 50 }}
-                                                animate={{ opacity: 1, scale: 1, x: 0 }}
-                                                exit={{ opacity: 0, scale: 0.8, x: -50 }}
-                                                className="absolute inset-0 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing"
+                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.9 }}
+                                                className="w-full flex items-center justify-between px-4"
                                             >
-                                                <div className="flex items-center justify-center mb-4">
+                                                <div className="flex flex-col items-center">
                                                     <TokenLogoInfused token={selectedToken} isLight={isLight} mode={fundingMode} />
+                                                    <span className={`mt-2 text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>{selectedToken.symbol}</span>
                                                 </div>
-                                                <p className={`text-xl font-black tracking-tighter ${isLight ? 'text-black' : 'text-white'}`}>
-                                                    {fundingMode === 'stables' ? `${selectedToken.symbol}USDC` : selectedToken.symbol}
-                                                </p>
-                                                <p className="text-[10px] font-bold text-[#249C6C] uppercase tracking-[0.2em]">
-                                                    {balances[`${selectedToken.id}_${fundingMode}`]?.toFixed(2) || '0.00'} Available
-                                                </p>
+                                                <ArrowRightLeft size={20} className="text-[#249C6C] mx-4" />
+                                                <div className="flex flex-col items-center">
+                                                    <div className="w-12 h-12 rounded-full bg-[#249C6C]/20 flex items-center justify-center">
+                                                        <span className="text-[10px] font-black text-[#249C6C]">USDC</span>
+                                                    </div>
+                                                    <span className={`mt-2 text-[10px] font-black ${isLight ? 'text-black' : 'text-white'}`}>Vault</span>
+                                                </div>
                                             </motion.div>
                                         </AnimatePresence>
                                     </div>
+                                    <p className="text-[10px] text-center font-bold text-[#249C6C] uppercase tracking-[0.2em]">
+                                        {balances[`${selectedToken.id}_${fundingMode}`]?.toFixed(2) || '0.00'} Available
+                                    </p>
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -586,15 +591,10 @@ export function UnifiedFundingModal({
                     {/* Action Button */}
                     <button 
                         onClick={handleFunding}
-                        disabled={!quote || isConfirming}
-                        className={`w-full py-6 rounded-[28px] font-black uppercase tracking-[0.2em] text-sm transition-all shadow-xl ${(!quote || isConfirming) ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-[#249C6C] text-black hover:scale-[1.02] active:scale-[0.98] shadow-[#249C6C]/20'}`}
+                        disabled={true}
+                        className={`w-full py-6 rounded-[28px] font-black uppercase tracking-[0.2em] text-sm transition-all shadow-xl bg-[#249C6C] text-black hover:scale-[1.02] active:scale-[0.98] shadow-[#249C6C]/20`}
                     >
-                        {isConfirming ? (
-                            <div className="flex items-center justify-center gap-3">
-                                <RefreshCw className="animate-spin" size={18} />
-                                Bridging Assets...
-                            </div>
-                        ) : quote ? `Fund ${quote.estimatedUsdc} USDC` : 'Enter Amount'}
+                        Confirm
                     </button>
                 </div>
             </motion.div>

@@ -9,12 +9,27 @@ class PriceSocketService {
         this.eventSource = null;
         this.listeners = new Set();
         this.isConnecting = false;
+        this.failedReconnects = 0;
+        this.pollingInterval = null;
         this.hermesUrl = "https://hermes.pyth.network/v2/updates/price/stream";
     }
 
     connect() {
         if (this.eventSource || this.isConnecting) return;
         this.isConnecting = true;
+
+        // Adaptive reconnect delay based on network conditions
+        const getReconnectDelay = () => {
+            if (navigator.connection && navigator.connection.effectiveType) {
+                switch (navigator.connection.effectiveType) {
+                    case 'slow-2g': return 15000;
+                    case '2g': return 10000;
+                    case '3g': return 5000;
+                    default: return 2000;
+                }
+            }
+            return 2000;
+        };
 
         const ids = Object.keys(PYTH_IDS).map(id => `ids[]=${id}`).join('&');
         const url = `${this.hermesUrl}?${ids}`;
@@ -49,12 +64,50 @@ class PriceSocketService {
                 console.warn("[PriceStream] Direct Link Stalled, Reconnecting...");
                 this.eventSource.close();
                 this.eventSource = null;
-                setTimeout(() => this.connect(), 2000);
+                const delay = getReconnectDelay();
+                const maxRetriesReached = this.failedReconnects >= 5;
+                if (maxRetriesReached) {
+                    // After 5 failed attempts, use long polling (more conservative)
+                    this.reconnectWithPolling(delay);
+                } else {
+                    this.failedReconnects = (this.failedReconnects || 0) + 1;
+                    setTimeout(() => this.connect(), delay);
+                }
             };
         } catch (e) {
             this.isConnecting = false;
             console.error("[PriceStream] Setup Failed:", e);
         }
+    }
+
+    reconnectWithPolling(delay) {
+        // Fallback: Poll the price endpoint at longer intervals instead of SSE
+        console.log("[PriceStream] Falling back to polling mode");
+        this.pollingInterval = setInterval(() => {
+            this.fallbackPoll();
+        }, Math.max(delay, 30000));
+    }
+
+    async fallbackPoll() {
+        try {
+            const ids = Object.keys(PYTH_IDS).join(',');
+            const url = `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${ids}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.parsed) {
+                    data.parsed.forEach(p => {
+                        const id = p.id.startsWith('0x') ? p.id.toLowerCase() : `0x${p.id.toLowerCase()}`;
+                        const key = PYTH_IDS[id];
+                        if (key) {
+                            const price = parseFloat(p.price.price) * Math.pow(10, p.price.expo);
+                            const ts = p.price.publish_time * 1000;
+                            this.listeners.forEach(cb => cb({ key, price, ts }));
+                        }
+                    });
+                }
+            }
+        } catch (e) {}
     }
 
     on(event, callback) {
