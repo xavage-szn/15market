@@ -6,6 +6,12 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useTradingWallet } from './hooks/useTradingWallet';
 import { GlobalTradeScroller } from "./components/GlobalTradeScroller";
 import { RoundsTradeScroller } from "./components/RoundsTradeScroller";
+import {
+  MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
+  Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
+  History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp,
+  Maximize2, RotateCw, Layers
+} from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { parseEther, parseUnits, formatUnits, encodeFunctionData } from "viem";
 // Solana imports removed
@@ -39,7 +45,12 @@ import { UnifiedWalletButton } from "./components/UnifiedWalletButton";
 import { OrderBook } from "./components/OrderBook";
 import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
 import { MascotLoader } from "./components/MascotLoader";
-import { GlobalLoader } from "./components/GlobalLoader";
+import CustomChart from './components/CustomChart';
+import Toast from "./components/Toast";
+import { ThemeToggle } from "./components/ThemeToggle";
+import SideHistoryPane from "./components/SideHistoryPane";
+import WalletConnectionLoading from "./components/WalletConnectionLoading";
+import GlobalLoader from "./components/GlobalLoader";
 
 import { RoundsTerminal } from "./components/RoundsTerminal";
 // Rounds chart logic merged into LiveStreamingChart/CustomChart for performance
@@ -3486,15 +3497,22 @@ const performStealthChecks = useCallback(async (addr) => {
           <AnimatePresence>
             {!isOnline && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="fixed top-0 left-0 w-full z-[200000] bg-red-600/90 backdrop-blur-xl border-b border-white/10"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed top-0 left-0 w-full z-[200000] pointer-events-none"
+                style={{ height: '120px' }}
               >
-                <div className="flex items-center justify-center gap-3 py-1.5 px-4 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <Activity size={10} className="text-white animate-pulse" />
-                    <span className="text-[9px] font-black text-white uppercase tracking-[0.3em]">
+                {/* Red ambient gradient from top */}
+                <div className="absolute top-0 left-0 w-full h-full"
+                  style={{
+                    background: 'linear-gradient(180deg, rgba(220,38,38,0.4) 0%, rgba(220,38,38,0.15) 40%, rgba(220,38,38,0.05) 70%, transparent 100%)',
+                  }}
+                />
+                <div className="relative flex items-start justify-center pt-3">
+                  <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-600/20 backdrop-blur-sm border border-red-500/20">
+                    <Activity size={10} className="text-red-400 animate-pulse" />
+                    <span className="text-[9px] font-black text-red-400 uppercase tracking-[0.3em]">
                       Disconnected • Internet Connection Lost
                     </span>
                   </div>
