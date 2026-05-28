@@ -3152,14 +3152,13 @@ const performStealthChecks = useCallback(async (addr) => {
 
               {/* MAIN CONTENT CONTAINER (LOCKED DESKTOP MARGIN: lg:mt-2) */}
               <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 h-full lg:mt-2 relative z-10`}>
-                 <Suspense fallback={<div className="h-[200px] flex items-center justify-center animate-pulse">Loading Rounds Access...</div>}>
-                   <RoundsAccessGate
-                     theme={theme}
-                     active={gameMode === 'rounds'}
-                     verified={hasRoundsAccess}
-                     onUnlock={handleRoundsUnlock}
-                   />
-                 </Suspense>
+                <Suspense fallback={<div className="h-[200px] flex items-center justify-center animate-pulse">Loading Rounds Access...</div>}>
+                  <RoundsAccessGate
+                    theme={theme}
+                    active={gameMode === 'rounds'}
+                    verified={hasRoundsAccess}
+                    onUnlock={handleRoundsUnlock}
+                  >
                   {/* MOBILE FULL-WIDTH SCROLLER (Matching Desktop Design) */}
                   {isSmallScreen && (
                     <div className="h-7 mb-1.5 overflow-hidden relative z-[50]" style={{ width: '105vw', marginLeft: '-8px', transform: 'translateX(3%)' }}>
@@ -3439,8 +3438,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
                 </RoundsAccessGate>
-
-
+                </Suspense>
 
               </div>
             </div>
@@ -3469,19 +3467,8 @@ const performStealthChecks = useCallback(async (addr) => {
                }}
                notify={notify}
              />
-           </Suspense>
-            theme={theme}
-            onUpdate={() => performStealthChecks(address)}
-            onOpenCircleWallet={(mode) => {
-              setIsProfileOpen(false);
-              setCircleWalletMode(mode);
-              setView("circle_wallet");
-            }}
-          />
-           <Suspense fallback={<div className="h-[400px] flex items-center justify-center animate-pulse">Loading PnL Details...</div>}>
-             <PnLModal isOpen={isPnLOpen} onClose={() => setIsPnLOpen(false)} trade={selectedPnLTrade} theme={theme} />
-           </Suspense>
-
+            </Suspense>
+           
 
 
           <AnimatePresence>
