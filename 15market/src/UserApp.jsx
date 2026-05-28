@@ -24,6 +24,7 @@ import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 import { CircleWalletPage } from "./components/CircleWalletPage";
 import { DocsPage } from "./components/DocsPage";
+import CampaignsHub from "./components/CampaignsHub";
 
 // Lazy load conditionally rendered components
 const ProfileModal = lazy(() => import("./components/ProfileModal").then(m => ({ default: m.ProfileModal })));
@@ -3018,6 +3019,7 @@ const performStealthChecks = useCallback(async (addr) => {
                 setView("circle_wallet");
               }}
               onDocs={() => setView("docs")}
+              onCampaign={() => setView("campaigns")}
             />
           ) : view === "circle_wallet" ? (
             <CircleWalletPage
@@ -3039,6 +3041,15 @@ const performStealthChecks = useCallback(async (addr) => {
               smartWalletAddress={smartWalletAddress}
               onWithdraw={handleWithdraw}
               triggerGlobalRefresh={triggerGlobalRefresh}
+            />
+          ) : view === "campaigns" ? (
+            <CampaignsHub
+              campaigns={campaigns}
+              enrollments={enrollments}
+              address={address}
+              theme={theme}
+              onBack={() => setView("dashboard")}
+              handleEnroll={handleEnroll}
             />
           ) : view === "docs" ? (
             <DocsPage
