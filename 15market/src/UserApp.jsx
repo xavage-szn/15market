@@ -26,10 +26,10 @@ import { CircleWalletPage } from "./components/CircleWalletPage";
 import { DocsPage } from "./components/DocsPage";
 
 // Lazy load conditionally rendered components
-const ProfileModal = lazy(() => import("./components/ProfileModal"));
-const PnLModal = lazy(() => import("./components/PnLModal"));
-const TransactionReceiptModal = lazy(() => import("./components/TransactionReceiptModal"));
-const OnboardingFlow = lazy(() => import("./components/OnboardingFlow"));
+const ProfileModal = lazy(() => import("./components/ProfileModal").then(m => ({ default: m.ProfileModal })));
+const PnLModal = lazy(() => import("./components/PnLModal").then(m => ({ default: m.PnLModal })));
+const TransactionReceiptModal = lazy(() => import("./components/TransactionReceiptModal").then(m => ({ default: m.TransactionReceiptModal })));
+const OnboardingFlow = lazy(() => import("./components/OnboardingFlow").then(m => ({ default: m.OnboardingFlow })));
 const MessagingSystem = lazy(() => import("./components/MessagingSystem"));
 const RoundsAccessGate = lazy(() => import("./components/RoundsAccessGate"));
 
