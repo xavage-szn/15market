@@ -1,0 +1,41 @@
+node_modules/
+.git/
+.github/
+.env*
+
+# Mobile builds (not needed for web deploy)
+ios/
+android/
+*.apk
+*.aab
+*.ipa
+
+# Contracts & deployment scripts
+contracts/
+contracts-deploy/
+contracts-hardhat/
+
+# Backend (not needed for frontend deploy)
+nexus-core/
+backend/
+
+# Build artifacts
+dist/
+build/
+out/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Large assets not needed at build time
+**/*.psd
+**/*.ai
+**/*.sketch
+
+# Solana artifacts
+sol_prediction/
