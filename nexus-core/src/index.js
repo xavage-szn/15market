@@ -311,7 +311,7 @@ app.post('/auth/discord', async (req, res) => {
       redirect_uri: process.env.DISCORD_OAUTH_URL ? new URL(process.env.DISCORD_OAUTH_URL).searchParams.get('redirect_uri') : 'https://15market.online'
     });
 
-    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+    const tokenRes = await fetch('https://discord.com/api/v10/oauth2/token', {
       method: 'POST',
       body: params,
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -322,7 +322,7 @@ app.post('/auth/discord', async (req, res) => {
       return res.status(400).json({ error: tokenData.error_description || tokenData.error });
     }
 
-    const userRes = await fetch('https://discord.com/api/users/@me', {
+    const userRes = await fetch('https://discord.com/api/v10/users/@me', {
       headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
     });
     const userData = await userRes.json();
