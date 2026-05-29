@@ -253,6 +253,29 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
         }
     }, [address, user, userProfile?.email]);
 
+    // Handle Discord OAuth Callback
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        
+        if (code && address) {
+            fetch(`${KEEPER_URL_ARC}/auth/discord`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, address })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    setToast("Discord Linked Successfully!");
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            })
+            .catch(e => console.error('Failed to link discord:', e));
+        }
+    }, [address]);
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
@@ -1267,19 +1290,30 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                         </svg>
                                         <div>
                                             <div className={`text-[10px] font-bold ${isLight ? 'text-[#133a2a]' : 'text-white'}`}>Discord</div>
-                                            {user?.discord ? (
-                                                <div className="text-[8px] font-mono text-[#249C6C] font-bold">@{user.discord.username}</div>
+                                            {userProfile?.discord ? (
+                                                <div className="text-[8px] font-mono text-[#249C6C] font-bold">@{userProfile.discord.username}</div>
                                             ) : (
                                                 <div className={`text-[8px] font-medium ${isLight ? 'text-[#133a2a]/40' : 'text-white/40'}`}>Not Linked</div>
                                             )}
                                         </div>
                                     </div>
-                                    {!user?.discord ? (
-                                        <button onClick={() => linkDiscord()} className={`py-2 px-4 rounded-full text-[9px] font-black uppercase tracking-widest transition-all bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110`}>
+                                    {!userProfile?.discord ? (
+                                        <button onClick={() => {
+                                            window.location.href = "https://discord.com/oauth2/authorize?client_id=1509759894348369980&response_type=code&redirect_uri=https%3A%2F%2F15market.online&scope=connections+identify";
+                                        }} className={`py-2 px-4 rounded-full text-[9px] font-black uppercase tracking-widest transition-all bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110`}>
                                             Link
                                         </button>
                                     ) : (
-                                        <button onClick={() => unlinkDiscord(user.discord.subject)} className={`py-2 px-4 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border ${isLight ? 'bg-white/40 border-[#249C6C]/20 text-[#133a2a] hover:bg-white' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
+                                        <button onClick={async () => {
+                                            try {
+                                                await fetch(`${KEEPER_URL_ARC}/auth/discord/unlink`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ address })
+                                                });
+                                                window.location.reload();
+                                            } catch (e) {}
+                                        }} className={`py-2 px-4 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border ${isLight ? 'bg-white/40 border-[#249C6C]/20 text-[#133a2a] hover:bg-white' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}>
                                             Unlink
                                         </button>
                                     )}

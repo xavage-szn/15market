@@ -298,6 +298,65 @@ io.on('connection', (socket) => {
 // API Routes
 // ============================================================
 
+app.post('/auth/discord', async (req, res) => {
+  try {
+    const { code, address } = req.body;
+    if (!code || !address) return res.status(400).json({ error: 'Missing code or address' });
+
+    const params = new URLSearchParams({
+      client_id: process.env.DISCORD_CLIENT_ID,
+      client_secret: process.env.DISCORD_CLIENT_SECRET,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: process.env.DISCORD_OAUTH_URL ? new URL(process.env.DISCORD_OAUTH_URL).searchParams.get('redirect_uri') : 'https://15market.online'
+    });
+
+    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      body: params,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const tokenData = await tokenRes.json();
+
+    if (tokenData.error) {
+      return res.status(400).json({ error: tokenData.error_description || tokenData.error });
+    }
+
+    const userRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+    });
+    const userData = await userRes.json();
+
+    if (!userData.id) {
+        return res.status(400).json({ error: 'Failed to fetch Discord profile' });
+    }
+
+    const profile = profiles.get(address.toLowerCase()) || { address: address.toLowerCase(), trades: [] };
+    profile.discord = {
+      id: userData.id,
+      username: userData.username
+    };
+    profiles.upsert(address.toLowerCase(), profile);
+
+    res.json({ success: true, discord: profile.discord });
+  } catch (e) {
+    console.error('[Discord Auth Error]', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/auth/discord/unlink', (req, res) => {
+  const { address } = req.body;
+  if (!address) return res.status(400).json({ error: 'Missing address' });
+  
+  const profile = profiles.get(address.toLowerCase());
+  if (profile) {
+    delete profile.discord;
+    profiles.upsert(address.toLowerCase(), profile);
+  }
+  res.json({ success: true });
+});
+
 app.get('/time', (req, res) => {
   res.json({ timestamp: Date.now() });
 });
