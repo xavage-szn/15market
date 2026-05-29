@@ -33,6 +33,11 @@ export function Stamp({ status, size = 'md', isWon: forcedIsWon }) {
                 src={imgSrc} 
                 alt={isWon ? "WON" : "LOST"} 
                 className="w-full h-full object-contain opacity-95 drop-shadow-sm"
+                style={{
+                    filter: isWon
+                        ? "invert(50%) sepia(85%) saturate(300%) hue-rotate(100deg) brightness(80%) contrast(90%) drop-shadow(0 4px 15px rgba(36, 156, 108, 0.4))"
+                        : "invert(20%) sepia(90%) saturate(400%) hue-rotate(340deg) brightness(60%) contrast(150%) drop-shadow(0 4px 15px rgba(139, 0, 0, 0.4))"
+                }}
             />
         </div>
     );

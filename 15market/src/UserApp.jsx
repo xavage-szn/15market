@@ -135,7 +135,7 @@ const PortraitPrompt = ({ theme }) => (
 /**
  * Mobile Bottom History Pane for V2 (Slide-up drawer style)
  */
-const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSelectedPnLTrade, setIsPnLOpen, userProfile }) => {
+const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onViewReceipt, userProfile }) => {
   const isDark = theme !== 'light';
 
   return (
@@ -230,7 +230,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, setSel
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
+                        onClick={() => onViewReceipt(trade)}
                         className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
                       >
                         <Share2 size={12} />
@@ -368,7 +368,7 @@ export default function UserApp() {
   const [amount, setAmount] = useState("");
   const [sliderValue, setSliderValue] = useState(0);
   // const [balance, setBalance] = useState(0); // Removed in favor of evmBalance/sessionBalance logic
-  const [direction, setDirection] = useState(null);
+  const [direction, setDirection] = useState("DOWN");
   const loadLocalTrades = (userAddress, isHistory, type = 'classic') => {
     try {
       if (!userAddress) return [];
@@ -3065,7 +3065,7 @@ const performStealthChecks = useCallback(async (addr) => {
                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : {}}>
                 <div className="flex items-center transition-all duration-500 h-full"
                   style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[48px]' : 'h-[72px] lg:h-[84px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all`} />
+                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[64px]' : 'h-[72px] lg:h-[84px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all`} />
                 </div>
 
                 <div className="hidden lg:flex items-center gap-3 px-2 py-1">
@@ -3201,8 +3201,7 @@ const performStealthChecks = useCallback(async (addr) => {
                           onToggle={() => setShowSideHistory(!showSideHistory)}
                           tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                           theme={theme}
-                          setSelectedPnLTrade={setSelectedPnLTrade}
-                          setIsPnLOpen={setIsPnLOpen}
+                          onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
                         />
                       )}
 

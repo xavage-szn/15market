@@ -25,24 +25,20 @@ export default function CampaignsHub({ campaigns, enrollments, address, theme, o
   };
 
   return (
-    <div className={`w-full flex-1 flex flex-col ${isLight ? "bg-[#f0f9f4]" : "bg-[#050505]"}`}>
-      {/* Background glow */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#249C6C] opacity-[0.03] blur-[100px] rounded-full" />
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#249C6C] opacity-[0.03] blur-[100px] rounded-full" />
+    <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'text-black bg-[#CFDCD5]' : 'text-white bg-black'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+      <div className={`absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
+
+      {/* HEADER */}
+      <div className="flex items-center justify-between px-4 md:px-10 pb-0 flex-none relative z-10 w-full" style={{ paddingTop: '1.25rem' }}>
+          <div className="flex items-center gap-4">
+              <button onClick={onBack} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5' : 'bg-white/5 border-white/5 hover:bg-white/10'} rounded-2xl border flex items-center justify-center hover:-translate-x-1 transition-transform ${isLight ? 'text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]' : 'text-white shadow-[0_2px_8px_rgba(0,0,0,0.4)]'}`}>
+                  <ArrowLeft size={16} />
+              </button>
+              <h1 className={`text-xl font-bold uppercase tracking-widest ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Campaigns</h1>
+          </div>
       </div>
 
-      <div className="relative z-10 max-w-5xl mx-auto w-full px-4 md:px-8 py-8 flex flex-col flex-1">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <button onClick={onBack} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-xs font-black uppercase tracking-widest transition-all ${isLight ? "bg-white border-[#249C6C]/20 text-[#0a261a] hover:bg-[#249C6C]/5" : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10"}`}>
-            <ArrowLeft size={14} /> Back
-          </button>
-          <div className="flex items-center gap-3">
-            <Trophy size={20} className="text-yellow-500" />
-            <span className={`text-lg font-black uppercase tracking-tight ${isLight ? "text-[#0a261a]" : "text-white"}`}>Campaigns</span>
-          </div>
-        </div>
+      <div className="relative z-10 max-w-5xl mx-auto w-full px-4 md:px-8 py-8 flex flex-col flex-1 overflow-y-auto no-scrollbar">
 
         {enrolledActive ? (
           /* State 1: Active enrolled campaign */

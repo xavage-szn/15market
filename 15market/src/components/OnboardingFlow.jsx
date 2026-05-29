@@ -53,7 +53,7 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSes
 
 
     return (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl" style={{ fontFamily: '"Comfortaa", cursive' }}>
             <motion.div 
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -202,7 +202,7 @@ export const OnboardingFlow = ({ address, onComplete, theme, userProfile, evmSes
                                             <h4 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>Main Wallet</h4>
                                         </div>
                                         <p className={`text-sm font-mono font-bold ${isLight ? 'text-[#0a261a]/80' : 'text-white/80'} break-all`}>
-                                            {address}
+                                            {username} <span className="opacity-50">({address.slice(0, 6)}...{address.slice(-4)})</span>
                                         </p>
                                         <p className={`text-[9px] font-bold mt-2 ${isLight ? 'text-[#0a261a]/40' : 'text-white/40'} uppercase tracking-widest`}>Connected via Privy / Web3</p>
                                     </div>

@@ -7,8 +7,7 @@ const SideHistoryPane = ({
     onToggle,
     tradeHistory,
     theme,
-    setSelectedPnLTrade,
-    setIsPnLOpen
+    onViewReceipt
 }) => {
     const isDark = theme !== 'light';
 
@@ -64,16 +63,18 @@ const SideHistoryPane = ({
                             className={`flex-1 flex flex-col overflow-hidden py-6 pr-4 pl-2 ${!isDark ? 'bg-[#c8eadd]' : ''}`}
                         >
                             <div className="flex items-center justify-between mb-6 px-2">
-                                <h2 className={`text-lg font-bold uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}
-                                    style={{ fontFamily: '"Comfortaa", cursive' }}>
-                                    Trade History
-                                </h2>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#249C6C]/10 text-[#249C6C] border border-[#249C6C]/20 uppercase tracking-widest">
-                                    {tradeHistory.length} Trades
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    <h2 className={`text-lg font-bold uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}
+                                        style={{ fontFamily: '"Comfortaa", cursive' }}>
+                                        Trade History
+                                    </h2>
+                                    <span className="flex items-center justify-center w-6 h-6 text-[10px] font-bold rounded-full bg-[#249C6C]/10 text-[#249C6C] border border-[#249C6C]/20">
+                                        {tradeHistory.length}
+                                    </span>
+                                </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-2">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pt-1 pb-4 flex flex-col gap-2">
                                 {tradeHistory.length === 0 ? (
                                     <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isDark ? 'text-white' : 'text-[#0f2618]'}`}>
                                         <History size={48} className="mb-4" />
@@ -88,7 +89,7 @@ const SideHistoryPane = ({
                                             <div
                                                 key={trade.id}
                                                 className={`
-                                                    p-3 rounded-[22px] border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
+                                                    p-3 rounded-[22px] border transition-all hover:-translate-y-0.5 active:scale-[0.98] group/item
                                                     ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-white/40 border-[#249C6C]/20 shadow-[0_4px_15px_rgba(0,0,0,0.02)]'}
                                                 `}
                                             >
@@ -129,11 +130,8 @@ const SideHistoryPane = ({
 
                                                     <div className="flex items-center gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
                                                         <button
-                                                            onClick={() => {
-                                                                setSelectedPnLTrade(trade);
-                                                                setIsPnLOpen(true);
-                                                            }}
-                                                            className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 hover:bg-[#249C6C]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
+                                                            onClick={() => onViewReceipt(trade)}
+                                                            className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 hover:bg-[#249C6C]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
                                                         >
                                                             <Share2 size={12} />
                                                         </button>
@@ -141,7 +139,7 @@ const SideHistoryPane = ({
                                                             href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 hover:bg-[#249C6C]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
+                                                            className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 hover:bg-[#249C6C]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
                                                         >
                                                             <ExternalLink size={12} />
                                                         </a>

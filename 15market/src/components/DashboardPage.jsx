@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { toPng } from 'html-to-image';
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet, Bell, Megaphone, Calendar, ChevronDown, ChevronUp, Smile, Coins, RefreshCcw, BookOpen } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet, Bell, Megaphone, Calendar, ChevronDown, ChevronUp, Smile, Coins, RefreshCcw, BookOpen, Share2, Mail, Download, X, Menu } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import CampaignLeaderboardPane from "./CampaignLeaderboardPane";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine } from 'recharts';
@@ -12,7 +13,7 @@ import { KEEPER_URL_ARC, ARC_CONTRACT_ADDRESS, ARC_RPC, KEEPER_URL_ROUNDS, ADMIN
 import { socketService } from "../utils/socket";
 import { parseEther } from "viem";
 import GlobalLoader from "./GlobalLoader";
-import { useCreateWallet } from '@privy-io/react-auth';
+import { useCreateWallet, usePrivy } from '@privy-io/react-auth';
 
 // ─── Animate-UI Style: Framer Motion Animated Icon Wrappers ──────────────────
 // Each icon has a unique, semantically-appropriate looping micro-animation.
@@ -180,6 +181,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const isLight = theme === 'light';
     const { isConnected, address } = useAccount();
     const { createWallet } = useCreateWallet();
+    const { user, linkDiscord } = usePrivy();
     const [selectedWallet, setSelectedWallet] = useState('trading');
 
     const [stats, setStats] = useState({
@@ -211,7 +213,12 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [newUsername, setNewUsername] = useState("");
+    const [isEditingUsername, setIsEditingUsername] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [notifications, setNotifications] = useState([]);
+    const [isProfileCardOpen, setIsProfileCardOpen] = useState(false);
+    const [linkedEmail, setLinkedEmail] = useState(userProfile?.email || '');
+    const [isSavingEmail, setIsSavingEmail] = useState(false);
 
     const handleClearNotifications = async () => {
         setNotifications([]);
@@ -228,16 +235,70 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
         }
     };
 
+    // Auto-sync Privy email/google email to backend profile if not already set
+    useEffect(() => {
+        if (address && user && !userProfile?.email) {
+            const emailToLink = user?.email?.address || user?.google?.email;
+            if (emailToLink) {
+                fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailToLink })
+                }).then(res => {
+                    if (res.ok) {
+                        setLinkedEmail(emailToLink);
+                    }
+                }).catch(e => console.error('Failed to auto-link email:', e));
+            }
+        }
+    }, [address, user, userProfile?.email]);
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
     const fileInputRef = React.useRef(null);
+    const profileCardRef = useRef(null);
+
+    // Derived stats computed strictly from active/settled user history for per-user accuracy
+    const derivedStats = useMemo(() => {
+        const totalTrades = userHistory.length;
+        const totalWins = userHistory.filter(t => t.won || t.status === 'WON' || t.status?.toUpperCase() === 'SUCCESS').length;
+        const winRate = totalTrades > 0 ? ((totalWins / totalTrades) * 100) : 0;
+
+        // Sentiment: User's own bet directions (UP vs DOWN)
+        const bulls = userHistory.filter(t => {
+            const dirStr = String(t.direction || '').toUpperCase();
+            return dirStr.includes("UP") || t.direction === 1 || String(t.direction) === '1';
+        }).length;
+        const bears = totalTrades - bulls;
+        const sentimentRatio = totalTrades > 0 ? Math.round((bulls / totalTrades) * 100) : 50;
+        const sentimentText = totalTrades > 0 ? (bulls > bears ? 'BULLISH' : bulls < bears ? 'BEARISH' : 'NEUTRAL') : 'NEUTRAL';
+
+        // 24H Volume
+        const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        const trades24h = userHistory.filter(t => (t.timestamp || t.createdAt || Date.now()) >= oneDayAgo);
+        const volume24h = trades24h.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+        const totalVolume = userHistory.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+        // Average Stake
+        const avgStake = totalTrades > 0 ? (totalVolume / totalTrades) : 0;
+
+        return {
+            winRate,
+            sentimentRatio,
+            sentimentText,
+            volume24h,
+            avgStake,
+            totalTrades,
+            totalWins
+        };
+    }, [userHistory]);
 
     // Count-up animated display values for premium feel
-    const animWinRate   = useCountUp(parseFloat(stats.userWinRate) || 0);
-    const animSentiment = useCountUp(stats.marketSentiment || 0);
-    const animVolume    = useCountUp(parseFloat(stats.marketTotalVol) || 0);
-    const animAvgStake  = useCountUp(parseFloat(stats.marketAvgStake) || 0);
+    const animWinRate   = useCountUp(derivedStats.winRate);
+    const animSentiment = useCountUp(derivedStats.sentimentRatio);
+    const animVolume    = useCountUp(derivedStats.volume24h);
+    const animAvgStake  = useCountUp(derivedStats.avgStake);
 
     const handleAvatarUpload = (e) => {
         const file = e.target.files[0];
@@ -453,7 +514,6 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
             .filter(t => t && (t.status || t.won !== undefined))
             .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
-        let cumulative = 0;
         let allTimeProfit = 0;
         let allTimeLoss = 0;
         const chartPoints = [{ i: 0, pnl: 0, pnlPos: 0, pnlNeg: 0 }];
@@ -464,29 +524,29 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
             const duration = t.duration || 15;
             const multiplier = duration === 5 ? 2.90 : duration === 10 ? 2.40 : 1.90;
             const payout = t.payout ? parseFloat(t.payout) : (amt * multiplier);
+            let pv = 0;
             if (isWon) {
                 const netProfit = payout - amt;
-                cumulative += netProfit;
+                pv = parseFloat(netProfit.toFixed(4));
                 allTimeProfit += netProfit;
             } else {
-                cumulative -= amt;
+                pv = parseFloat((-amt).toFixed(4));
                 allTimeLoss += amt;
             }
-            const pv = parseFloat(cumulative.toFixed(4));
             chartPoints.push({ i: index + 1, pnl: pv, pnlPos: Math.max(pv, 0), pnlNeg: Math.min(pv, 0) });
         });
 
-        const maxAbs = Math.max(...chartPoints.map(d => Math.abs(d.pnl)), 0.1);
+        const hasTrades = chartPoints.length > 1;
+        // Keep the absolute range to at least 5.0 to avoid small fluctuations spreading radically
+        const maxAbs = Math.max(...chartPoints.map(d => Math.abs(d.pnl)), 5.0);
         const netPnl = allTimeProfit - allTimeLoss;
-        // Use demo data if user has no trades yet
-        const finalChartData = chartPoints.length > 1 ? chartPoints
-            : [{ i:0,pnl:0,pnlPos:0,pnlNeg:0 },{ i:1,pnl:0.8,pnlPos:0.8,pnlNeg:0 },{ i:2,pnl:-0.3,pnlPos:0,pnlNeg:-0.3 },{ i:3,pnl:1.5,pnlPos:1.5,pnlNeg:0 },{ i:4,pnl:0.9,pnlPos:0.9,pnlNeg:0 },{ i:5,pnl:2.1,pnlPos:2.1,pnlNeg:0 }];
-        const finalMaxAbs = chartPoints.length > 1 ? maxAbs
-            : Math.max(...finalChartData.map(d => Math.abs(d.pnl)), 0.1);
+
+        const finalChartData = hasTrades ? chartPoints : [{ i: 0, pnl: 0, pnlPos: 0, pnlNeg: 0 }, { i: 1, pnl: 0, pnlPos: 0, pnlNeg: 0 }];
+        const finalMaxAbs = hasTrades ? maxAbs : 5.0;
         const pValues = finalChartData.map(d => d.pnl);
         const maxVal = Math.max(...pValues, 0.001);
         const minVal = Math.min(...pValues, -0.001);
-        return { chartData: finalChartData, maxAbs: finalMaxAbs, allTimeProfit, allTimeLoss, netPnl, maxVal, minVal, hasTrades: chartPoints.length > 1 };
+        return { chartData: finalChartData, maxAbs: finalMaxAbs, allTimeProfit, allTimeLoss, netPnl, maxVal, minVal, hasTrades };
     }, [userHistory]);
 
     const animNetPnl = useCountUp(pnlStats.netPnl || 0);
@@ -526,26 +586,44 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                     </button>
                     <h1 className={`text-xl font-bold uppercase tracking-widest ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Dashboard</h1>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={onDocs} title="Platform Documentation" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
-                        <AnimatedBook size={16} className="text-[#249C6C]"/>
-                    </button>
-                    <button onClick={onCampaign} title="Campaign" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
-                        <AnimatedTrophy size={16} className="text-[#249C6C]"/>
-                    </button>
-                    <button onClick={onTransferHub || (() => onOpenCircleWallet?.(null))} title="Transfer Hub" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
-                        <AnimatedSend size={15} className={isLight ? 'text-black/80' : 'text-white/80'}/>
-                    </button>
-                    <button onClick={() => setIsNotificationsOpen(true)} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`} title="Notifications">
-                        <AnimatedBell size={16} className={isLight ? 'text-black/80' : 'text-white/80'}/>
-                        <motion.span
-                            className="absolute top-2 right-2 w-2 h-2 bg-[#249C6C] rounded-full"
-                            animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
-                            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-                        />
-                    </button>
-                    <input ref={fileInputRef} type="file" className="hidden" accept="image/jpeg,image/jpg,image/png,image/gif" onChange={handleAvatarUpload}/>
-                </div>
+                {isSmallScreen ? (
+                    <div className="relative">
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                            <Menu size={16} className={isLight ? 'text-black/80' : 'text-white/80'} />
+                            <motion.span
+                                className="absolute top-2 right-2 w-2 h-2 bg-[#249C6C] rounded-full"
+                                animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+                                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                            />
+                        </button>
+                        <input ref={fileInputRef} type="file" className="hidden" accept="image/jpeg,image/jpg,image/png,image/gif" onChange={handleAvatarUpload}/>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-3">
+                        <button onClick={onDocs} title="Platform Documentation" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                            <AnimatedBook size={16} className="text-[#249C6C]"/>
+                        </button>
+                        <button onClick={onCampaign} title="Campaign" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                            <AnimatedTrophy size={16} className="text-[#249C6C]"/>
+                        </button>
+                        <button onClick={onTransferHub || (() => onOpenCircleWallet?.(null))} title="Transfer Hub" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                            <AnimatedSend size={15} className={isLight ? 'text-black/80' : 'text-white/80'}/>
+                        </button>
+                        <button onClick={() => setIsNotificationsOpen(true)} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`} title="Notifications">
+                            <AnimatedBell size={16} className={isLight ? 'text-black/80' : 'text-white/80'}/>
+                            <motion.span
+                                className="absolute top-2 right-2 w-2 h-2 bg-[#249C6C] rounded-full"
+                                animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+                                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                            />
+                        </button>
+                        <button onClick={() => { setNewUsername(userProfile?.username || ''); setLinkedEmail(userProfile?.email || ''); setIsSettingsOpen(true); }}
+                            className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`} title="Settings">
+                            <AnimatedSettings size={16} className={isLight ? 'text-black/80' : 'text-white/80'}/>
+                        </button>
+                        <input ref={fileInputRef} type="file" className="hidden" accept="image/jpeg,image/jpg,image/png,image/gif" onChange={handleAvatarUpload}/>
+                    </div>
+                )}
             </div>
 
             {/* MAIN BODY */}
@@ -575,9 +653,9 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                         </div>
                                     </div>
                                 </div>
-                                <button onClick={() => { setNewUsername(userProfile?.username || ''); setIsSettingsOpen(true); }}
+                                <button onClick={() => setIsProfileCardOpen(true)}
                                     className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#249C6C]/20 hover:bg-white/60' : 'bg-white/5 border-white/10 hover:bg-white/10'} transition-all`}>
-                                    <AnimatedSettings size={12} className={isLight ? 'text-[#0a261a]/50' : 'text-white/40'}/>
+                                    <Share2 size={12} className={isLight ? 'text-[#0a261a]/50' : 'text-white/40'}/>
                                 </button>
                             </div>
 
@@ -634,7 +712,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                     <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Volume</span>
                                 </div>
                                 <div className="flex items-baseline justify-between mt-1">
-                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.marketTotalVol}</div>
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{animVolume.toFixed(2)}</div>
                                     <div className="text-[8px] font-bold text-[#249C6C] truncate">+12.4%</div>
                                 </div>
                             </div>
@@ -646,8 +724,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                     <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Sent.</span>
                                 </div>
                                 <div className="flex items-baseline justify-between mt-1">
-                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.marketSentiment}%</div>
-                                    <div className="text-[8px] font-bold text-[#249C6C] truncate uppercase">{stats.sentiment || 'Neutral'}</div>
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{animSentiment.toFixed(0)}%</div>
+                                    <div className="text-[8px] font-bold text-[#249C6C] truncate uppercase">{derivedStats.sentimentText}</div>
                                 </div>
                             </div>
 
@@ -658,7 +736,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                     <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Win Rate</span>
                                 </div>
                                 <div className="flex items-baseline justify-between mt-1">
-                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.userWinRate}%</div>
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{animWinRate.toFixed(1)}%</div>
                                     <div className={`text-[8px] font-bold ${isLight ? 'text-black/40' : 'text-white/40'} truncate`}>Neutral</div>
                                 </div>
                             </div>
@@ -670,7 +748,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                     <span className={`text-[8px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest truncate`}>Avg Stake</span>
                                 </div>
                                 <div className="flex items-baseline justify-between mt-1">
-                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{stats.marketAvgStake}</div>
+                                    <div className={`text-sm font-black ${isLight ? 'text-black' : 'text-white'} tracking-tight truncate`}>{animAvgStake.toFixed(2)}</div>
                                     <div className="text-[8px] font-bold text-[#249C6C] truncate">+8.1%</div>
                                 </div>
                             </div>
@@ -709,7 +787,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             labelFormatter={() => ''}
                                         />
                                         <ReferenceLine y={0} stroke={isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'} strokeWidth={1} strokeDasharray="3 3"/>
-                                        <Area type="monotone" dataKey="pnl" stroke="url(#pnlLineStrokeMobile)" strokeWidth={2} fill="none" dot={false} activeDot={{ r: 2.5, strokeWidth: 0, fill: pnlStats.netPnl >= 0 ? '#249C6C' : '#FF6B6B' }} baseValue={0}/>
+                                        <Area type="monotone" dataKey="pnl" stroke="url(#pnlLineStrokeMobile)" strokeWidth={1.25} fill="none" dot={false} activeDot={{ r: 2.5, strokeWidth: 0, fill: pnlStats.netPnl >= 0 ? '#249C6C' : '#FF6B6B' }} baseValue={0}/>
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -782,10 +860,20 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                         </div>
                                     </div>
                                 </div>
-                                <button onClick={() => { setNewUsername(userProfile?.username || ''); setIsSettingsOpen(true); }}
-                                    className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#249C6C]/20 hover:bg-white/60' : 'bg-white/5 border-white/10 hover:bg-white/10'} transition-all`}>
-                                    <AnimatedSettings size={13} className={isLight ? 'text-[#0a261a]/50' : 'text-white/40'}/>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    {!user?.discord && (
+                                        <button onClick={() => linkDiscord()}
+                                            className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#249C6C]/20 hover:bg-white/60' : 'bg-white/5 border-white/10 hover:bg-white/10'} transition-all`} title="Link Discord">
+                                            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" className="text-[#249C6C]" style={{ filter: 'drop-shadow(0 0 4px rgba(36,156,108,0.5))' }}>
+                                                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                                            </svg>
+                                        </button>
+                                    )}
+                                    <button onClick={() => setIsProfileCardOpen(true)}
+                                        className={`p-2 rounded-xl border ${isLight ? 'bg-white/40 border-[#249C6C]/20 hover:bg-white/60' : 'bg-white/5 border-white/10 hover:bg-white/10'} transition-all`}>
+                                        <Share2 size={13} className={isLight ? 'text-[#0a261a]/50' : 'text-white/40'}/>
+                                    </button>
+                                </div>
                             </div>
 
                             <div className={`w-full h-px ${isLight ? 'bg-black/5' : 'bg-white/5'}`}/>
@@ -856,7 +944,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                     <span className={`text-[9px] font-bold ${isLight ? 'text-black/60' : 'text-white/40'} uppercase tracking-widest`}>Sentiment</span>
                                 </div>
                                 <div className={`text-3xl font-bold ${isLight ? 'text-black' : 'text-white'} mb-1.5 tracking-tight tabular-nums`}>{animSentiment.toFixed(0)}%</div>
-                                <div className="text-[9px] font-bold text-[#249C6C] uppercase tracking-widest">{stats.sentiment || 'Neutral'}</div>
+                                <div className="text-[9px] font-bold text-[#249C6C] uppercase tracking-widest">{derivedStats.sentimentText}</div>
                                 <div className="absolute right-6 top-1/2 -translate-y-1/2 w-[60px] h-[60px]">
                                     <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
                                         <circle cx="32" cy="32" r="26" fill="none" stroke={isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'} strokeWidth="6"/>
@@ -925,7 +1013,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                             />
                                             <ReferenceLine y={0} stroke={isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'} strokeWidth={1.5} strokeDasharray="3 3"/>
                                             {/* Stroke line only, colored by gradient based on top/bottom half */}
-                                            <Area type="monotone" dataKey="pnl" stroke="url(#pnlLineStroke)" strokeWidth={2.5} fill="none" dot={false} activeDot={{ r: 3, strokeWidth: 0, fill: pnlStats.netPnl >= 0 ? '#249C6C' : '#FF6B6B' }} baseValue={0}/>
+                                            <Area type="monotone" dataKey="pnl" stroke="url(#pnlLineStroke)" strokeWidth={1.25} fill="none" dot={false} activeDot={{ r: 3, strokeWidth: 0, fill: pnlStats.netPnl >= 0 ? '#249C6C' : '#FF6B6B' }} baseValue={0}/>
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -1047,41 +1135,65 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
             {isSettingsOpen && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
                     <motion.div initial={{opacity:0,scale:0.9,y:20}} animate={{opacity:1,scale:1,y:0}}
-                        className={`w-full max-w-md ${isLight ? 'bg-white border-[#e2ece5]' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-8`}>
-                        <div className="flex flex-col">
-                            <h3 className={`text-2xl font-black ${isLight ? 'text-[#133a2a]' : 'text-white'} mb-6 uppercase text-center`}>Settings</h3>
+                        className={`w-full max-w-md ${isLight ? 'bg-[#CFDCD5] border-[#249C6C]/20' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-6 max-h-[90vh] overflow-y-auto no-scrollbar relative overflow-hidden`}>
+                        {isLight && (
+                            <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+                        )}
+                        <div className="flex flex-col relative z-10">
+                            <h3 className={`text-xl font-black ${isLight ? 'text-[#133a2a]' : 'text-white'} mb-4 uppercase text-center`}>Settings</h3>
 
-                            <div className="mb-6">
+                            <div className="mb-4">
                                 <label className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-[#133a2a]/50' : 'text-white/50'} mb-2 block`}>Username</label>
-                                <input type="text" autoFocus placeholder="Enter username" value={newUsername}
-                                    onChange={(e) => setNewUsername(e.target.value)}
-                                    className={`w-full ${isLight ? 'bg-[#f0f6f2] border-[#e2ece5] text-[#133a2a] placeholder:text-[#133a2a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/30'} border rounded-2xl py-4 px-6 font-bold text-center focus:border-[#249C6C]/50 outline-none transition-all mb-4`}/>
-                                <button onClick={async () => {
-                                    if (!newUsername.trim() || !address) return;
-                                    try {
-                                        const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
-                                            method: 'PATCH',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ username: newUsername.trim() })
-                                        });
-                                        if (res.ok) {
-                                            setToast("Username Updated!");
-                                            setTimeout(() => window.location.reload(), 1000);
-                                        } else {
-                                            const data = await res.json();
-                                            setToast(data.error || "Update Failed");
-                                        }
-                                    } catch (e) {
-                                        setToast("Update Failed");
-                                    }
-                                }} className="w-full py-4 bg-[#249C6C] text-white text-xs font-black uppercase tracking-widest rounded-full hover:brightness-110 transition-all mb-6">
-                                    Save Username
-                                </button>
+                                {!isEditingUsername ? (
+                                    <div className="flex flex-col gap-2">
+                                        <div className={`w-full ${isLight ? 'bg-white/40 text-[#133a2a] border border-[#249C6C]/10' : 'bg-white/5 text-white'} rounded-2xl py-3 px-6 font-bold text-center`}>
+                                            {userProfile?.username || 'Trader'}
+                                        </div>
+                                        <button onClick={() => setIsEditingUsername(true)}
+                                            className={`w-full py-2.5 bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110 hover:shadow-[0_4px_16px_rgba(36,156,108,0.4)] text-[9px] font-black uppercase tracking-widest rounded-full transition-all`}>
+                                            Change
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-2">
+                                        <input type="text" autoFocus placeholder="Enter username" value={newUsername}
+                                            onChange={(e) => setNewUsername(e.target.value)}
+                                            className={`w-full ${isLight ? 'bg-white/60 border-[#249C6C]/20 text-[#133a2a] placeholder:text-[#133a2a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/30'} border rounded-2xl py-3 px-6 font-bold text-center focus:border-[#249C6C] outline-none transition-all`}/>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setIsEditingUsername(false)}
+                                                className={`flex-1 py-2.5 bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110 hover:shadow-[0_4px_16px_rgba(36,156,108,0.4)] text-[9px] font-black uppercase tracking-widest rounded-full transition-all`}>
+                                                Cancel
+                                            </button>
+                                            <button onClick={async () => {
+                                                if (!newUsername.trim() || !address) return;
+                                                try {
+                                                    const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                                                        method: 'PATCH',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ username: newUsername.trim() })
+                                                    });
+                                                    if (res.ok) {
+                                                        setToast("Username Updated!");
+                                                        setIsEditingUsername(false);
+                                                        setTimeout(() => window.location.reload(), 1000);
+                                                    } else {
+                                                        const data = await res.json();
+                                                        setToast(data.error || "Update Failed");
+                                                    }
+                                                } catch (e) {
+                                                    setToast("Update Failed");
+                                                }
+                                            }} className={`flex-1 py-2.5 bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110 hover:shadow-[0_4px_16px_rgba(36,156,108,0.4)] text-[9px] font-black uppercase tracking-widest rounded-full transition-all`}>
+                                                Save
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className={`w-full h-px ${isLight ? 'bg-black/5' : 'bg-white/10'} mb-6`}/>
+                            <div className={`w-full h-px ${isLight ? 'bg-black/5' : 'bg-white/10'} mb-4`}/>
 
-                            <div className="mb-6">
+                            <div className="mb-4">
                                 <label className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-[#133a2a]/50' : 'text-white/50'} mb-2 block`}>Trading Wallet</label>
                                 <button onClick={async () => {
                                     try {
@@ -1100,19 +1212,260 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                                     } catch (e) {
                                         setToast("Failed to regenerate wallet");
                                     }
-                                }} className={`w-full py-4 ${isLight ? 'bg-[#133a2a] hover:bg-[#1a4a37]' : 'bg-white/10 hover:bg-white/20'} text-white text-xs font-black uppercase tracking-widest rounded-full transition-all`}>
-                                    Regenerate Trading Wallet
+                                }} className={`w-full py-3 bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110 hover:shadow-[0_4px_16px_rgba(36,156,108,0.4)] text-[10px] font-black uppercase tracking-widest rounded-full transition-all`}>
+                                    Regenerate Wallet
+                                </button>
+                            </div>
+
+                            <div className={`w-full h-px ${isLight ? 'bg-black/5' : 'bg-white/10'} mb-4`}/>
+
+                            <div className="mb-4">
+                                <label className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-[#133a2a]/50' : 'text-white/50'} mb-1.5 block flex items-center gap-1.5`}>
+                                    <Mail size={10}/> Link Email (Notifications)
+                                </label>
+                                <p className={`text-[8px] font-medium mb-2 ${isLight ? 'text-[#133a2a]/40' : 'text-white/40'}`}>
+                                    Receive trade updates directly to your inbox.
+                                </p>
+                                <input type="email" placeholder="you@email.com" value={linkedEmail}
+                                    onChange={(e) => setLinkedEmail(e.target.value)}
+                                    disabled={!!userProfile?.email}
+                                    className={`w-full ${isLight ? 'bg-white/60 border-[#249C6C]/20 text-[#133a2a] placeholder:text-[#133a2a]/30' : 'bg-white/5 border-white/10 text-white placeholder:text-white/30'} border rounded-2xl py-3 px-6 font-bold text-center focus:border-[#249C6C] outline-none transition-all mb-2 disabled:opacity-70 disabled:cursor-not-allowed`}/>
+                                <button onClick={async () => {
+                                    if (!linkedEmail.trim() || !address) return;
+                                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(linkedEmail.trim())) {
+                                        setToast('Invalid email address');
+                                        return;
+                                    }
+                                    setIsSavingEmail(true);
+                                    try {
+                                        const res = await fetch(`${KEEPER_URL_ARC}/profiles/${address.toLowerCase()}`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ email: linkedEmail.trim() })
+                                        });
+                                        if (res.ok) {
+                                            setToast('Email Linked Successfully!');
+                                            setTimeout(() => window.location.reload(), 1000);
+                                        } else {
+                                            const data = await res.json();
+                                            setToast(data.error || 'Failed to link email');
+                                        }
+                                    } catch (e) {
+                                        setToast('Failed to link email');
+                                    } finally {
+                                        setIsSavingEmail(false);
+                                    }
+                                }} disabled={isSavingEmail || !!userProfile?.email}
+                                    className={`w-full py-3 bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110 hover:shadow-[0_4px_16px_rgba(36,156,108,0.4)] text-[10px] font-black uppercase tracking-widest rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed`}>
+                                    {isSavingEmail ? 'Linking...' : (userProfile?.email ? 'Email Linked' : 'Link Email')}
                                 </button>
                             </div>
 
                             <button onClick={() => setIsSettingsOpen(false)}
-                                className={`w-full py-4 ${isLight ? 'bg-[#eef5f1] text-[#133a2a] hover:bg-[#e2ece5]' : 'bg-white/10 text-white hover:bg-white/20'} text-xs font-black uppercase tracking-widest rounded-full transition-all`}>
+                                className={`w-full py-3 mt-2 bg-[#249C6C] text-white shadow-[0_4px_12px_rgba(0,0,0,0.25)] hover:brightness-110 hover:shadow-[0_4px_16px_rgba(36,156,108,0.4)] text-[10px] font-black uppercase tracking-widest rounded-full transition-all`}>
                                 Close
                             </button>
                         </div>
                     </motion.div>
                 </div>
             )}
+
+            {/* PROFILE CARD MODAL */}
+            <AnimatePresence>
+                {isProfileCardOpen && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-md cursor-pointer" onClick={() => setIsProfileCardOpen(false)}>
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="cursor-default flex flex-col items-center gap-4 w-full max-w-[560px]"
+                        >
+                            {/* The VISIBLE card (reacts to theme) */}
+                            <div className="w-full rounded-[28px] overflow-hidden relative" style={{ background: isLight ? '#eef5f1' : '#0a0a0a', fontFamily: '"Comfortaa", cursive', boxShadow: isLight ? '0 10px 40px rgba(0,0,0,0.1)' : 'none' }}>
+                                {/* Watermark pattern */}
+                                <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
+                                     style={{ backgroundImage: `url(${isLight ? '/goblogo.png' : '/gowlogo.png'})`, backgroundSize: '30px 30px', backgroundRepeat: 'repeat', transform: 'rotate(-15deg) scale(1.6)' }} />
+                                {/* Gradient glow top-right */}
+                                <div className="absolute top-0 right-0 w-40 h-40 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(36,156,108,0.15) 0%, transparent 70%)' }} />
+                                {/* Gradient glow bottom-left */}
+                                <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(36,156,108,0.08) 0%, transparent 70%)' }} />
+
+                                <div className="relative z-10 flex flex-row items-stretch p-6 gap-5">
+                                    {/* LEFT: Avatar + Identity */}
+                                    <div className="flex flex-col items-center justify-center gap-3 min-w-[120px]">
+                                        <div className="w-[72px] h-[72px] rounded-full flex items-center justify-center overflow-hidden border-[3px] border-[#249C6C]/60 shadow-[0_0_20px_rgba(36,156,108,0.3)]">
+                                            {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                                                <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="avatar" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full bg-[#249C6C]/15 flex items-center justify-center">
+                                                    <User size={30} className="text-[#249C6C]/60" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="text-center">
+                                            <h3 className={`text-sm font-black uppercase tracking-[0.15em] leading-tight ${isLight ? 'text-[#133a2a]' : 'text-white'}`}>
+                                                {userProfile?.username || 'Trader'}
+                                            </h3>
+                                            <p className={`text-[8px] font-mono mt-1 ${isLight ? 'text-[#133a2a]/40' : 'text-white/30'}`}>
+                                                {address ? `${address.slice(0,6)}...${address.slice(-4)}` : '---'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Vertical divider */}
+                                    <div className="w-px self-stretch bg-gradient-to-b from-transparent via-[#249C6C]/30 to-transparent flex-none" />
+
+                                    {/* RIGHT: Stats */}
+                                    <div className="flex-1 flex flex-col justify-between gap-2.5 min-w-0">
+                                        {/* Row 1: Win Rate + Trades */}
+                                        <div className="flex gap-2.5">
+                                            <div className={`flex-1 rounded-2xl p-3 ${isLight ? 'bg-black/[0.02] border border-black/[0.05]' : 'bg-white/[0.04] border border-white/[0.06]'}`}>
+                                                <div className={`text-[7px] font-black uppercase tracking-[0.2em] mb-1 ${isLight ? 'text-[#133a2a]/40' : 'text-white/30'}`}>Win Rate</div>
+                                                <div className="text-xl font-black text-[#249C6C] leading-none">{derivedStats.winRate.toFixed(1)}%</div>
+                                            </div>
+                                            <div className={`flex-1 rounded-2xl p-3 ${isLight ? 'bg-black/[0.02] border border-black/[0.05]' : 'bg-white/[0.04] border border-white/[0.06]'}`}>
+                                                <div className={`text-[7px] font-black uppercase tracking-[0.2em] mb-1 ${isLight ? 'text-[#133a2a]/40' : 'text-white/30'}`}>Trades</div>
+                                                <div className={`text-xl font-black leading-none ${isLight ? 'text-[#133a2a]' : 'text-white'}`}>{derivedStats.totalTrades}</div>
+                                            </div>
+                                        </div>
+                                        {/* Row 2: Wins + PnL */}
+                                        <div className="flex gap-2.5">
+                                            <div className={`flex-1 rounded-2xl p-3 ${isLight ? 'bg-black/[0.02] border border-black/[0.05]' : 'bg-white/[0.04] border border-white/[0.06]'}`}>
+                                                <div className={`text-[7px] font-black uppercase tracking-[0.2em] mb-1 ${isLight ? 'text-[#133a2a]/40' : 'text-white/30'}`}>Wins</div>
+                                                <div className="text-xl font-black text-[#249C6C] leading-none">{derivedStats.totalWins}</div>
+                                            </div>
+                                            <div className={`flex-1 rounded-2xl p-3 ${isLight ? 'bg-black/[0.02] border border-black/[0.05]' : 'bg-white/[0.04] border border-white/[0.06]'}`}>
+                                                <div className={`text-[7px] font-black uppercase tracking-[0.2em] mb-1 ${isLight ? 'text-[#133a2a]/40' : 'text-white/30'}`}>All-Time PnL</div>
+                                                <div className={`text-xl font-black leading-none ${pnlStats.netPnl >= 0 ? 'text-[#249C6C]' : 'text-[#FF6B6B]'}`}>
+                                                    {pnlStats.netPnl >= 0 ? '+' : ''}{pnlStats.netPnl.toFixed(2)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {/* Footer Bar */}
+                                        <div className="flex items-center justify-between mt-1">
+                                            <img src={isLight ? '/goblogo.png' : '/gowlogo.png'} alt="15market" className="h-5 w-auto opacity-60" />
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="w-1 h-1 rounded-full bg-[#249C6C] animate-pulse" />
+                                                <span className={`text-[7px] font-black uppercase tracking-[0.15em] ${isLight ? 'text-[#133a2a]/40' : 'text-white/25'}`}>ARC TESTNET</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* The HIDDEN export card (Always Carbon Black / gowlogo) */}
+                            <div className="absolute top-0 left-0 w-full overflow-hidden opacity-0 pointer-events-none -z-50 rounded-[28px]" style={{ width: '560px' }}>
+                                <div ref={profileCardRef} className="w-full rounded-[28px] overflow-hidden relative" style={{ background: '#0a0a0a', fontFamily: '"Comfortaa", cursive' }}>
+                                    {/* Watermark pattern */}
+                                    <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
+                                         style={{ backgroundImage: `url('/gowlogo.png')`, backgroundSize: '30px 30px', backgroundRepeat: 'repeat', transform: 'rotate(-15deg) scale(1.6)' }} />
+                                    {/* Gradient glow top-right */}
+                                    <div className="absolute top-0 right-0 w-40 h-40 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(36,156,108,0.15) 0%, transparent 70%)' }} />
+                                    {/* Gradient glow bottom-left */}
+                                    <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(36,156,108,0.08) 0%, transparent 70%)' }} />
+
+                                    <div className="relative z-10 flex flex-row items-stretch p-6 gap-5">
+                                        {/* LEFT: Avatar + Identity */}
+                                        <div className="flex flex-col items-center justify-center gap-3 min-w-[120px]">
+                                            <div className="w-[72px] h-[72px] rounded-full flex items-center justify-center overflow-hidden border-[3px] border-[#249C6C]/60 shadow-[0_0_20px_rgba(36,156,108,0.3)]">
+                                                {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                                                    <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="avatar" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full bg-[#249C6C]/15 flex items-center justify-center">
+                                                        <User size={30} className="text-[#249C6C]/60" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="text-center">
+                                                <h3 className="text-sm font-black uppercase tracking-[0.15em] text-white leading-tight">
+                                                    {userProfile?.username || 'Trader'}
+                                                </h3>
+                                                <p className="text-[8px] font-mono text-white/30 mt-1">
+                                                    {address ? `${address.slice(0,6)}...${address.slice(-4)}` : '---'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Vertical divider */}
+                                        <div className="w-px self-stretch bg-gradient-to-b from-transparent via-[#249C6C]/30 to-transparent flex-none" />
+
+                                        {/* RIGHT: Stats */}
+                                        <div className="flex-1 flex flex-col justify-between gap-2.5 min-w-0">
+                                            {/* Row 1: Win Rate + Trades */}
+                                            <div className="flex gap-2.5">
+                                                <div className="flex-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-3">
+                                                    <div className="text-[7px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">Win Rate</div>
+                                                    <div className="text-xl font-black text-[#249C6C] leading-none">{derivedStats.winRate.toFixed(1)}%</div>
+                                                </div>
+                                                <div className="flex-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-3">
+                                                    <div className="text-[7px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">Trades</div>
+                                                    <div className="text-xl font-black text-white leading-none">{derivedStats.totalTrades}</div>
+                                                </div>
+                                            </div>
+                                            {/* Row 2: Wins + PnL */}
+                                            <div className="flex gap-2.5">
+                                                <div className="flex-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-3">
+                                                    <div className="text-[7px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">Wins</div>
+                                                    <div className="text-xl font-black text-[#249C6C] leading-none">{derivedStats.totalWins}</div>
+                                                </div>
+                                                <div className="flex-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-3">
+                                                    <div className="text-[7px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">All-Time PnL</div>
+                                                    <div className={`text-xl font-black leading-none ${pnlStats.netPnl >= 0 ? 'text-[#249C6C]' : 'text-[#FF6B6B]'}`}>
+                                                        {pnlStats.netPnl >= 0 ? '+' : ''}{pnlStats.netPnl.toFixed(2)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {/* Footer Bar */}
+                                            <div className="flex items-center justify-between mt-1">
+                                                <img src="/gowlogo.png" alt="15market" className="h-5 w-auto opacity-60" />
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="w-1 h-1 rounded-full bg-[#249C6C] animate-pulse" />
+                                                    <span className="text-[7px] font-black uppercase tracking-[0.15em] text-white/25">ARC TESTNET</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action buttons (outside the card so they don't get saved) */}
+                            <div className="flex items-center gap-3 w-full">
+                                <button
+                                    onClick={async () => {
+                                        if (!profileCardRef.current) return;
+                                        try {
+                                            const dataUrl = await toPng(profileCardRef.current, {
+                                                cacheBust: true,
+                                                quality: 1,
+                                                pixelRatio: 3,
+                                                backgroundColor: '#0a0a0a'
+                                            });
+                                            const link = document.createElement('a');
+                                            link.download = `15market-${userProfile?.username || 'trader'}-card.png`;
+                                            link.href = dataUrl;
+                                            link.click();
+                                            setToast('Card Saved!');
+                                        } catch (err) {
+                                            console.error('Failed to save:', err);
+                                            setToast('Save Failed');
+                                        }
+                                    }}
+                                    className="flex-1 py-3.5 bg-[#249C6C] text-white text-[10px] font-black uppercase tracking-widest rounded-full hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_4px_20px_rgba(36,156,108,0.3)] flex items-center justify-center gap-2"
+                                >
+                                    <Download size={14} /> Save Card
+                                </button>
+                                <button
+                                    onClick={() => setIsProfileCardOpen(false)}
+                                    className={`flex-1 py-3.5 ${isLight ? 'bg-white/80 text-[#133a2a] hover:bg-white' : 'bg-white/10 text-white hover:bg-white/20'} text-[10px] font-black uppercase tracking-widest rounded-full transition-all flex items-center justify-center gap-2`}
+                                >
+                                    <X size={14} /> Close
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {modalConfig && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
@@ -1158,6 +1511,53 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                     </motion.div>
                 </div>
             )}
+
+            <AnimatePresence>
+                {isMobileMenuOpen && (
+                    <>
+                        {/* Dark Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998]"
+                        />
+                        {/* Side Drawer Menu */}
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className={`fixed top-0 right-0 w-[65%] max-w-[300px] h-full z-[9999] shadow-2xl flex flex-col gap-3 p-6 pt-24 ${isLight ? 'bg-[#CFDCD5] border-l border-[#249C6C]/20' : 'bg-[#0a0a0a] border-l border-white/10'} overflow-hidden`}
+                        >
+                            {isLight && (
+                                <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+                            )}
+                            
+                            <button onClick={() => setIsMobileMenuOpen(false)} className={`absolute top-6 right-6 p-2 rounded-xl border relative z-10 ${isLight ? 'bg-white/50 border-[#249C6C]/20 text-[#0a261a] shadow-sm hover:bg-white' : 'bg-white/5 border-white/10 text-white'}`}>
+                                <X size={16} />
+                            </button>
+
+                            <button onClick={() => { setIsMobileMenuOpen(false); onDocs(); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
+                                <BookOpen size={16} className="text-[#249C6C]"/> <span className="text-[10px] font-black uppercase tracking-widest">Docs</span>
+                            </button>
+                            <button onClick={() => { setIsMobileMenuOpen(false); onCampaign(); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
+                                <Trophy size={16} className="text-[#249C6C]"/> <span className="text-[10px] font-black uppercase tracking-widest">Campaign</span>
+                            </button>
+                            <button onClick={() => { setIsMobileMenuOpen(false); onTransferHub?.() || onOpenCircleWallet?.(null); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
+                                <Send size={16} className={isLight ? 'text-[#0a261a]/70' : 'text-white/70'}/> <span className="text-[10px] font-black uppercase tracking-widest">Transfer Hub</span>
+                            </button>
+                            <button onClick={() => { setIsMobileMenuOpen(false); setIsNotificationsOpen(true); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
+                                <Bell size={16} className={isLight ? 'text-[#0a261a]/70' : 'text-white/70'}/> <span className="text-[10px] font-black uppercase tracking-widest">Notifications</span>
+                            </button>
+                            <button onClick={() => { setIsMobileMenuOpen(false); setNewUsername(userProfile?.username || ''); setLinkedEmail(userProfile?.email || ''); setIsSettingsOpen(true); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
+                                <Settings size={16} className={isLight ? 'text-[#0a261a]/70' : 'text-white/70'}/> <span className="text-[10px] font-black uppercase tracking-widest">Settings</span>
+                            </button>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
 
             {toast && (
                 <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[300]">

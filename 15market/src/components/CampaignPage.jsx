@@ -124,22 +124,20 @@ function CampaignPage({ address, network, theme }) {
     const hasEnded = Date.now() >= campaign.endTime;
 
     return (
-        <div className={`min-h-screen p-6 font-sans ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#0d0d0d]'} relative overflow-hidden transition-colors duration-500`}>
-            {/* Background elements for premium look */}
-            <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#249C6C] opacity-[0.03] blur-[100px] rounded-full" />
-                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#249C6C] opacity-[0.03] blur-[100px] rounded-full" />
+        <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'text-black bg-[#CFDCD5]' : 'text-white bg-black'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+            <div className={`absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
+
+            {/* HEADER */}
+            <div className="flex items-center justify-between px-4 md:px-10 pb-0 flex-none relative z-10 w-full" style={{ paddingTop: '1.25rem' }}>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate(-1)} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5' : 'bg-white/5 border-white/5 hover:bg-white/10'} rounded-2xl border flex items-center justify-center hover:-translate-x-1 transition-transform ${isLight ? 'text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]' : 'text-white shadow-[0_2px_8px_rgba(0,0,0,0.4)]'}`}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h1 className={`text-xl font-bold uppercase tracking-widest ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Campaign</h1>
+                </div>
             </div>
 
-            {/* Header */}
-            <div className="max-w-7xl mx-auto mb-8 relative z-10">
-                <button
-                    onClick={() => navigate(-1)}
-                    className={`${isLight ? 'bg-white/50 border-[#249C6C]/20 text-[#0a261a]' : 'bg-white/5 border-white/10 text-white/60 hover:text-white'} border px-6 py-2 rounded-xl transition-all text-xs font-black uppercase tracking-widest`}
-                >
-                    ← Back to Trading
-                </button>
-            </div>
+            <div className="relative z-10 max-w-7xl mx-auto w-full px-4 md:px-8 py-8 flex flex-col flex-1 overflow-y-auto no-scrollbar">
 
             {/* Campaign Hero */}
             <div className={`max-w-7xl mx-auto mb-12 relative z-10 ${isLight ? 'bg-white border-[#249C6C]/10' : 'bg-[#0d0d0d] border-white/5'} border !rounded-[40px] p-8 md:p-14 overflow-hidden shadow-2xl`}>
@@ -305,6 +303,7 @@ function CampaignPage({ address, network, theme }) {
                         </table>
                     </div>
                 )}
+            </div>
             </div>
 
             <AnimatePresence>

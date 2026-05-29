@@ -3,6 +3,8 @@ import { useAccount, useDisconnect, useChainId, useSwitchChain } from 'wagmi';
 import { usePrivy } from '@privy-io/react-auth';
 import { ARC_CHAIN_ID } from '../constants';
 import { useTradingWallet } from '../hooks/useTradingWallet';
+import { X } from 'lucide-react';
+
 
 export function UnifiedWalletButton({ theme }) {
     const { address, isConnected } = useAccount();
@@ -93,19 +95,22 @@ export function UnifiedWalletButton({ theme }) {
                 cursor: 'pointer'
             }}
         >
-            <div className="relative">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg relative"
-                    style={{ backgroundColor: currentColor }}
-                >
-                    {(user?.wallet?.address?.slice(0, 1) || address?.slice(0, 1) || 'W')}
-                </div>
-                {isSmartWalletReady && (
-                    <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full border border-[#0D0D0D] shadow-sm" title="Smart Wallet Active"></div>
-                )}
-            </div>
-            <span className={`text-xs font-black font-mono hidden lg:block ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+            {isSmartWalletReady && (
+                <div className="w-2 h-2 bg-yellow-400 rounded-full border border-[#0D0D0D] shadow-sm shrink-0" title="Smart Wallet Active"></div>
+            )}
+            <span className={`hidden md:inline-block text-xs font-black font-mono ${theme === 'light' ? 'text-black' : 'text-white'}`}>
                 {user?.wallet?.address ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}` : (address ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Connected')}
             </span>
+            <div className={`flex items-center justify-center transition-all ${
+                theme === 'light'
+                    ? 'text-black/40 group-hover:text-red-500'
+                    : 'text-white/40 group-hover:text-red-500'
+            }`}>
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+                    <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+                </svg>
+            </div>
         </button>
     );
 }

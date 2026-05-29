@@ -1,10 +1,9 @@
 import React, { memo, useState, useMemo } from 'react';
-import { Lock, Share2, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Lock, Share2, Loader2, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
 
 function TradeHistoryComponent({
     tradeHistory,
-    setSelectedPnLTrade,
-    setIsPnLOpen,
+    onViewReceipt,
     theme,
     wallet
 }) {
@@ -123,27 +122,29 @@ function TradeHistoryComponent({
                                             ) : (
                                                 <span>{t.status}</span>
                                             )}
-
-                                            {t.tx && (
-                                                <a href={`https://testnet.arcscan.app/tx/${t.tx}`} target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 transition-opacity">
-                                                    ↗
-                                                </a>
-                                            )}
                                         </div>
 
-                                        {t.status !== "PENDING" && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    setSelectedPnLTrade(t);
-                                                    setIsPnLOpen(true);
-                                                }}
-                                                className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#249C6C]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#249C6C]'}`}
-                                                title="Share Receipt"
-                                            >
-                                                <Share2 size={16} />
-                                            </button>
-                                        )}
+                                        <div className="flex items-center gap-1.5 ml-2">
+                                            {t.tx && (
+                                                <a href={`https://testnet.arcscan.app/tx/${t.tx}`} target="_blank" rel="noopener noreferrer" 
+                                                   className={`p-1.5 lg:p-2 rounded-full transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-black' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white'}`}
+                                                   title="View Explorer">
+                                                    <ExternalLink size={14} />
+                                                </a>
+                                            )}
+                                            {t.status !== "PENDING" && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        onViewReceipt(t);
+                                                    }}
+                                                    className={`p-1.5 lg:p-2 rounded-full transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#249C6C]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#249C6C]'}`}
+                                                    title="Share Receipt"
+                                                >
+                                                    <Share2 size={14} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );

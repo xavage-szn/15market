@@ -56,7 +56,7 @@ function TradeTerminalComponent({
     );
 
     const renderLongShort = () => (
-        <div className={`relative flex items-center p-1 rounded-full border border-[#249C6C]/10 bg-white/5 backdrop-blur-3xl overflow-hidden pointer-events-auto`}>
+        <div className={`relative w-full flex items-center p-1 rounded-full border border-[#249C6C]/10 bg-white/5 backdrop-blur-3xl overflow-hidden pointer-events-auto`}>
             {/* Sliding Pill Background - Synchronized with Time Scroller geometry */}
             <motion.div
                 className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full shadow-lg transition-all`}
@@ -96,7 +96,7 @@ function TradeTerminalComponent({
                 </span>
             </div>
 
-            <div className="relative flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden">
+            <div className="relative w-full flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden">
                 {/* 3-way Sliding Pill Background */}
                 <motion.div
                     className="absolute top-0.5 bottom-0.5 w-[calc(33.33%-2px)] rounded-full bg-[#249C6C]"

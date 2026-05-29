@@ -1832,8 +1832,7 @@ export function CircleWalletPage({
                                                                 <img
                                                                     src="/usdc.png"
                                                                     alt="USDC Logo"
-                                                                    className="w-[3.3rem] h-[3.3rem] md:w-[4.95rem] md:h-[4.95rem] object-contain transition-all opacity-70 group-hover:opacity-100 -translate-y-[2vh]"
-                                                                    style={{ filter: 'brightness(0) invert(1)' }}
+                                                                    className={`w-[3.3rem] h-[3.3rem] md:w-[4.95rem] md:h-[4.95rem] object-contain transition-all opacity-70 group-hover:opacity-100 -translate-y-[2vh] ${isLight ? 'brightness-0' : 'brightness-0 invert'} group-hover:[filter:brightness(0)_saturate(100%)_invert(64%)_sepia(26%)_saturate(1028%)_hue-rotate(101deg)_brightness(88%)_contrast(82%)]`}
                                                                 />
                                                                 <p className={`absolute bottom-0 left-1/2 -translate-x-1/2 text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap ${isLight ? 'text-black/60 group-hover:text-[#249C6C]' : 'text-white/60 group-hover:text-[#249C6C]'}`}>USDC</p>
                                                             </div>
