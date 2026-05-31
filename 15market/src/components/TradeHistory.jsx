@@ -92,21 +92,21 @@ function TradeHistoryComponent({
                                         <div className={`text-[8px] font-mono hidden lg:block ${isLight ? 'text-[#0a261a]/30' : 'text-white/20'}`}>{t.timestamp}</div>
 
                                         <div
-                                            className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all flex items-center gap-1 lg:gap-2 ${t.status === "WON" || t.status === "PAID" ? "bg-[#249C6C]/10 text-[#249C6C] border border-[#249C6C]/30" :
+                                            className={`text-[9px] lg:text-sm font-black px-2 py-0.5 lg:px-4 lg:py-1 rounded-full transition-all flex items-center gap-1 lg:gap-2 ${t.status === "WON" || t.status === "PAID" || t.status === "SUCCESS" ? "bg-[#249C6C]/10 text-[#249C6C] border border-[#249C6C]/30" :
                                                 t.status === "LOST" ? "bg-[#FF7F50]/10 text-[#FF7F50] border border-[#FF7F50]/30" :
                                                     (isLight ? "bg-black/5 text-black/40" : "bg-white/5 text-white/40")
                                                 }`}
                                         >
-                                            {(t.status === "WON" || t.status === "PAID" || t.status === "PAYOUT_FAILED") ? (
+                                            {(t.status === "WON" || t.status === "PAID" || t.status === "SUCCESS" || t.status === "PAYOUT_FAILED") ? (
                                                 <div className="flex items-center gap-2">
                                                     <span>WON</span>
-                                                    {(t.payoutPending || t.status === "WON") && t.status !== "PAID" && t.status !== "PAYOUT_FAILED" && (
+                                                    {(t.payoutPending || t.status === "WON") && t.status !== "PAID" && t.status !== "SUCCESS" && t.status !== "PAYOUT_FAILED" && (
                                                         <div className="flex items-center gap-1">
                                                             <Loader2 size={10} className="animate-spin opacity-60" />
                                                             <span className="text-[6px] opacity-60 uppercase">Pending Payout</span>
                                                         </div>
                                                     )}
-                                                    {t.status === "PAID" && (
+                                                    {(t.status === "PAID" || t.status === "SUCCESS") && (
                                                         <div className="flex items-center gap-1">
                                                             <CheckCircle2 size={10} className="text-[#249C6C]" />
                                                             <span className="text-[6px] opacity-80 uppercase">Paid</span>
@@ -127,7 +127,7 @@ function TradeHistoryComponent({
                                         <div className="flex items-center gap-1.5 ml-2">
                                             {t.tx && (
                                                 <a href={`https://testnet.arcscan.app/tx/${t.tx}`} target="_blank" rel="noopener noreferrer" 
-                                                   className={`p-1.5 lg:p-2 rounded-full transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-black' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white'}`}
+                                                   className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-black' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white'}`}
                                                    title="View Explorer">
                                                     <ExternalLink size={14} />
                                                 </a>
@@ -138,7 +138,7 @@ function TradeHistoryComponent({
                                                         e.preventDefault();
                                                         onViewReceipt(t);
                                                     }}
-                                                    className={`p-1.5 lg:p-2 rounded-full transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#249C6C]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#249C6C]'}`}
+                                                    className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-[#249C6C]' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-[#249C6C]'}`}
                                                     title="Share Receipt"
                                                 >
                                                     <Share2 size={14} />

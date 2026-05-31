@@ -40,83 +40,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
         ];
     }, [activeMarket?.id]);
 
-    // --- Result Locking & Persistence ---
-    const [visibleResults, setVisibleResults] = useState([]);
-    const cleanupTimers = useRef({});
-
-    useEffect(() => {
-        const now = Date.now();
-        const newVisible = [];
-
-        activeTrades.forEach(trade => {
-            const tid = String(trade.id);
-            const entryPrice = parseFloat(trade.entryPrice);
-            const isCall = trade.direction === "UP" || trade.direction === "buy" || trade.direction === 1;
-            
-            const start = trade.startTime || (tid.length > 12 ? parseInt(tid) : now);
-            const duration = trade.duration || 15;
-            const expiry = trade.expiryMs || (start + (duration * 1000));
-            
-            // AUTHORITATIVE LOCK: Use backend status if available
-            const isSettled = ["WON", "LOST", "PAID"].includes(trade.status);
-            const isExpired = now >= expiry || isSettled;
-
-            let referencePrice;
-            let resultWon;
-
-            if (isSettled) {
-                resultWon = trade.status === "WON" || trade.status === "PAID";
-                referencePrice = parseFloat(trade.settlementPrice || trade.exitPrice || entryPrice);
-            } else if (isExpired) {
-                // LOCK at boundary: If we don't have a locked price yet, capture current.
-                if (!trade._lockedResult) {
-                    trade._lockedResult = {
-                        price: parseFloat(currentPrice),
-                        won: isCall ? parseFloat(currentPrice) > entryPrice : parseFloat(currentPrice) < entryPrice
-                    };
-                }
-                referencePrice = trade._lockedResult.price;
-                resultWon = trade._lockedResult.won;
-            } else {
-                referencePrice = parseFloat(currentPrice);
-                resultWon = isCall ? referencePrice > entryPrice : referencePrice < entryPrice;
-            }
-
-            const diff = Math.abs(referencePrice - entryPrice).toFixed(4);
-
-            if (!isExpired) {
-                newVisible.push({ id: tid, won: resultWon, diff, amount: trade.amount, expired: false });
-                if (cleanupTimers.current[tid]) {
-                    clearTimeout(cleanupTimers.current[tid]);
-                    delete cleanupTimers.current[tid];
-                }
-            } else {
-                if (!cleanupTimers.current[tid]) {
-                    cleanupTimers.current[tid] = setTimeout(() => {
-                        setVisibleResults(prev => prev.filter(r => r.id !== tid));
-                        delete cleanupTimers.current[tid];
-                    }, 5000);
-                    newVisible.push({ id: tid, won: resultWon, diff, amount: trade.amount, expired: true });
-                } else {
-                    const existing = visibleResults.find(r => r.id === tid);
-                    if (existing) newVisible.push(existing);
-                    else newVisible.push({ id: tid, won: resultWon, diff, amount: trade.amount, expired: true });
-                }
-            }
-        });
-
-        setVisibleResults(prev => {
-            const merged = [...newVisible];
-            prev.forEach(p => {
-                if (p.expired && !merged.find(m => m.id === p.id)) {
-                    if (cleanupTimers.current[p.id]) merged.push(p);
-                }
-            });
-            return merged.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-        });
-    }, [activeTrades, currentPrice]);
-
-    const tradeResults = visibleResults;
+    // Active trades are now rendered as entry markers directly on the canvas
 
 
     return (
@@ -144,6 +68,8 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     theme={theme}
                     symbol={symbol}
                     priceHistory={priceHistory}
+                    activeTrades={activeTrades}
+                    currentPrice={currentPrice}
                 />
             </div>
 
@@ -166,28 +92,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                 )}
             </AnimatePresence>
 
-            {/* Live Results Floating Overlay */}
-            <div className="absolute top-24 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
-                <AnimatePresence>
-                    {tradeResults.map((result) => (
-                        <motion.div
-                            key={result.id}
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 20 }}
-                            className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-xl ${result.won
-                                    ? 'bg-[#249C6C]/20 border-[#249C6C]/30'
-                                    : 'bg-[#FF4444]/20 border-[#FF4444]/30'
-                                }`}
-                        >
-                            <div className={`w-2 h-2 rounded-full ${!result.expired ? 'animate-pulse' : ''} ${result.won ? 'bg-[#249C6C]' : 'bg-[#FF4444]'}`} />
-                            <span className={`text-[10px] font-black uppercase ${isDark ? 'text-white' : 'text-[#0a261a]'} tracking-widest`}>
-                                {result.won ? `+$${(result.amount * 1.95).toFixed(2)}` : `-$${result.amount}`}
-                            </span>
-                        </motion.div>
-                    ))}
-                </AnimatePresence>
-            </div>
+
 
             {/* Top Controls */}
             <div className="absolute top-0 left-0 right-0 z-30 p-1 lg:p-4 pointer-events-none">

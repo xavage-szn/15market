@@ -5,62 +5,14 @@ import { Stamp } from './Stamp';
 import { KEEPER_URL_ARC } from '../constants';
 
 const LCD_COUNTER_STYLE = `
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
-
-  /* Shared LCD digit font */
-  .lcd-digit {
-    font-family: 'Share Tech Mono', 'Courier New', monospace !important;
-    -webkit-font-smoothing: none;
-    font-smooth: never;
-    letter-spacing: 0.06em;
-    text-rendering: geometricPrecision;
-  }
-
-  /* Dark theme — coral-green phosphor counter */
-  .lcd-counter-dark {
-    background: #060e06;
-    border: 1px solid #1e3d1e;
-    border-radius: 3px;
-    box-shadow:
-      0 0 0 1px #0a120a,
-      0 0 10px rgba(61,255,143,0.18),
-      inset 0 0 8px rgba(0,0,0,0.85);
-    color: #3dff8f;
-    text-shadow: 0 0 6px #00ff41, 0 0 14px #249C6C;
-  }
-
-  /* Light theme — muted green counter */
-  .lcd-counter-light {
-    background: #f0faf4;
-    border: 1px solid #249C6C;
-    border-radius: 3px;
-    box-shadow:
-      0 0 0 1px rgba(36, 156, 108,0.25),
-      inset 0 0 4px rgba(36, 156, 108,0.06);
-    color: #1a6b3c;
-    text-shadow: none;
-  }
-
-  /* Live indicator dot — dark */
-  .lcd-live-dot-dark {
-    background: #3dff8f;
-    box-shadow: 0 0 6px #00ff41, 0 0 14px #249C6C;
-  }
-
-  /* Live indicator dot — light */
-  .lcd-live-dot-light {
-    background: #249C6C;
-    box-shadow: 0 0 5px rgba(36, 156, 108,0.55);
-  }
-
-  /* Blink for dot */
-  .lcd-live-blink {
-    animation: lcd-live-blink-kf 1s step-end infinite;
-  }
-  @keyframes lcd-live-blink-kf {
-    0%,100% { opacity: 1; }
-    50%      { opacity: 0.2; }
-  }
+  .lcd-live-dot-dark { background: #3dff8f; box-shadow: 0 0 6px #00ff41, 0 0 14px #249C6C; }
+  .lcd-live-dot-light { background: #249C6C; box-shadow: 0 0 5px rgba(36,156,108,0.55); }
+  .lcd-live-blink { animation: lcd-live-blink-kf 1s step-end infinite; }
+  @keyframes lcd-live-blink-kf { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
+  @keyframes futuristic-sweep { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+  @keyframes futuristic-pulse { 0%,100%{opacity:0.15;transform:scale(1);} 50%{opacity:0.4;transform:scale(1.06);} }
+  .futuristic-sweep { animation: futuristic-sweep 3s linear infinite; }
+  .futuristic-pulse { animation: futuristic-pulse 2s ease-in-out infinite; }
 `;
 
 function LiveExecutionComponent({
@@ -122,246 +74,248 @@ function LiveExecutionComponent({
     return (
         <div className="flex flex-col gap-1 relative min-h-0 h-full" style={{ fontFamily: '"Comfortaa", cursive' }}>
             <style>{LCD_COUNTER_STYLE}</style>
-            <div className="flex items-center justify-between px-2 flex-none">
-                <div className="flex items-center gap-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full lcd-live-blink ${isLight ? 'lcd-live-dot-light' : 'lcd-live-dot-dark'}`} />
-                    {activeTrades.length === 0 && (
-                        <h4 className={`text-[9px] lg:text-xs font-black tracking-tighter uppercase ${isLight ? 'text-black/50' : 'text-white/40'}`}>
-                            ACTIVE TRADES
-                        </h4>
-                    )}
-                    {activeTrades.length > 1 && (
-                        <button
-                            onClick={() => setIsExpanded(!isExpanded)}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full transition-all duration-300 ${isLight ? 'bg-black/5 hover:bg-black/10' : 'bg-white/5 hover:bg-white/10'}`}
-                        >
-                            <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>
-                                {isExpanded ? 'Collapse' : 'Expand'}
-                            </span>
-                            <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
-                                    <path d="m6 9 6 6 6-6" />
-                                </svg>
-                            </div>
-                        </button>
-                    )}
-                </div>
-                {/* ── LCD Digital Active Counter ── */}
-                {activeTrades.length > 0 && (
-                    <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-black ${isLight ? 'bg-[#249C6C] text-white shadow-sm' : 'bg-[#249C6C] text-black shadow-[0_0_10px_rgba(61,255,143,0.3)]'}`}>
-                        {activeTrades.length}
-                    </div>
-                )}
+            <div className="flex items-center gap-1.5 px-2 flex-none">
+                <div className={`w-1.5 h-1.5 rounded-full lcd-live-blink ${activeTrades.length > 0 ? (isLight ? 'lcd-live-dot-light' : 'lcd-live-dot-dark') : 'opacity-20'}`} />
+                <h4 className={`text-[9px] lg:text-xs font-black tracking-tighter uppercase ${isLight ? 'text-black/50' : 'text-white/40'}`}>
+                    ACTIVE TRADES
+                </h4>
             </div>
 
-            <div className={`flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-1 min-h-0`}>
+            <div className={`flex-1 overflow-y-auto custom-scrollbar min-h-0`}>
                 {activeTrades.length > 0 ? (
                     (() => {
-                        // Sort: most recent first
                         const sorted = [...activeTrades].sort((a, b) => (b.startTime || b.id) - (a.startTime || a.id));
-                        const visibleTrades = isExpanded ? sorted : [sorted[0]];
-                        const othersCount = activeTrades.length - (isExpanded ? activeTrades.length : 1);
+                        const trade = sorted[0];
+                        const now = Date.now();
+                        const start = trade.startTime || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000)) || now;
+                        const duration = trade.duration || 30;
+                        const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
+                        const currentRawTime = (expiryMs - now) / 1000;
+                        const stableRawTime = Math.min(duration, Math.max(0, currentRawTime));
+
+                        if (lastTimeRef.current[trade.id] === undefined || stableRawTime < lastTimeRef.current[trade.id]) {
+                            lastTimeRef.current[trade.id] = stableRawTime;
+                        }
+                        const rawTimeLeft = lastTimeRef.current[trade.id];
+                        const displayTimeLeft = (trade.status !== "PENDING") ? "0.0" : (trade.timeLeft !== undefined ? trade.timeLeft.toFixed(1) : rawTimeLeft.toFixed(1));
+
+                        const timerExpired = (trade.timeLeft !== undefined ? trade.timeLeft <= 0 : rawTimeLeft <= 0);
+                        const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
+
+                        const entryPriceVal = parseFloat(trade.entryPrice);
+                        const amountVal = parseFloat(trade.amount);
+
+                        const isLocked = trade.won !== undefined;
+                        const isExpired = isLocked || trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.timeLeft !== undefined && trade.timeLeft <= 0);
+
+                        const currentPriceVal = (isLocked && trade.livePrice !== undefined)
+                            ? parseFloat(trade.livePrice)
+                            : (capturedResultsRef.current[trade.id] !== undefined
+                                ? parseFloat(capturedResultsRef.current[trade.id].exitPrice)
+                                : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || trade.entryPrice) : parseFloat(price)));
+
+                        const multiplier = trade.duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
+                        const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier * 0.99).toFixed(2) : "0.00";
+
+                        const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+
+                        const localWinCalc = (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
+                            ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
+                            : false);
+
+                        if (timerExpired && !isLocked && capturedResultsRef.current[trade.id] === undefined) {
+                            capturedResultsRef.current[trade.id] = {
+                                won: (trade.isWinning !== undefined ? trade.isWinning : localWinCalc),
+                                exitPrice: currentPriceVal
+                            };
+                        }
+
+                        const liveWinning = trade.won !== undefined
+                            ? trade.won
+                            : (capturedResultsRef.current[trade.id] !== undefined
+                                ? capturedResultsRef.current[trade.id].won
+                                : (trade.isWinning !== undefined
+                                    ? trade.isWinning
+                                    : localWinCalc));
+
+                        const showInstantResult = timerExpired && !isFinal;
+                        const instantStatus = showInstantResult
+                            ? (liveWinning ? "WON" : "LOST")
+                            : trade.status;
+
+                        const displayFinal = isFinal || showInstantResult;
+                        const isPayoutPending = (instantStatus === "WON" || trade.status === "WON") && !trade.chainConfirmed && !trade.payout;
+
+                        const formatTime = (ts) => {
+                            if (!ts) return '--';
+                            const d = new Date(ts);
+                            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        };
+
+                        const circR = 36;
+                        const outerR = circR + 6;
+                        const circ = 2 * Math.PI * circR;
+                        const outerCirc = 2 * Math.PI * outerR;
+                        const progress = Math.max(0, Math.min(1, rawTimeLeft / duration));
+                        const offset = circ * (1 - progress);
+                        const ringColor = liveWinning ? '#249C6C' : '#FF4D4D';
+                        const glowColor = liveWinning ? 'rgba(36,156,108,0.4)' : 'rgba(255,77,77,0.4)';
+                        const tickCount = 40;
 
                         return (
-                            <>
-                                {visibleTrades.map((visibleTrade, idx) => (
-                                    <motion.div
-                                        key={visibleTrade.id}
-                                        className={idx > 0 ? 'opacity-80 scale-95 origin-top transition-all hover:opacity-100 hover:scale-100' : ''}
-                                    >
+                            <motion.div
+                                key={trade.id}
+                                layout
+                                className="h-full"
+                            >
+                                <div
+                                    className={`rounded-[16px] p-2 md:p-3 flex flex-col items-center relative transition-all duration-500 border-2 h-full ${isLight
+                                        ? 'bg-[#C2D1C9] backdrop-blur-xl border-[#249C6C]/35 shadow-sm hover:shadow-md'
+                                        : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
+                                    style={displayFinal ? {
+                                        borderColor: (instantStatus === "WON") ? 'rgba(36, 156, 108, 0.5)' : 'rgba(255, 127, 80, 0.5)',
+                                        boxShadow: (instantStatus === "WON")
+                                            ? `inset 0 0 30px rgba(36, 156, 108, 0.05), 0 5px 30px ${isLight ? 'rgba(36, 156, 108, 0.04)' : 'rgba(36, 156, 108, 0.1)'}`
+                                            : `inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px ${isLight ? 'rgba(255, 127, 80, 0.04)' : 'rgba(255, 127, 80, 0.1)'}`
+                                    } : {}}
+                                >
+                                    {/* Status Header */}
+                                    <div className="flex items-center justify-between w-full mb-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${displayFinal
+                                                ? ((instantStatus === "WON") ? 'bg-[#249C6C]' : 'bg-[#FF7F50]')
+                                                : (liveWinning ? 'bg-[#249C6C] animate-pulse shadow-[0_0_8px_#249C6C]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
+                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
+                                                {displayFinal ? instantStatus : (trade.confirmed === false ? "Verifying" : "Live")}
+                                            </span>
+                                        </div>
+                                        {activeTrades.length > 0 && (
+                                            <div className={`flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-black ${isLight ? 'bg-[#249C6C] text-white shadow-sm' : 'bg-[#249C6C] text-black shadow-[0_0_10px_rgba(61,255,143,0.3)]'}`}>
+                                                {activeTrades.length}
+                                            </div>
+                                        )}
+                                    </div>
 
-                                        {(() => {
-                                            const trade = visibleTrade;
-                                            const now = Date.now();
-                                            const start = trade.startTime || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000)) || now;
-                                            const duration = trade.duration || 30;
-                                            const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
-                                            // STABLE TIMER: Ensure time left never exceeds duration and never increases
-                                            const currentRawTime = (expiryMs - now) / 1000;
-                                            const stableRawTime = Math.min(duration, Math.max(0, currentRawTime));
+                                    {!displayFinal ? (
+                                        <>
+                                            {/* Futuristic Countdown Circle — centered */}
+                                            <div className="flex items-center justify-center flex-shrink-0 my-1">
+                                                <div className="relative w-[90px] h-[90px] md:w-[100px] md:h-[100px]">
+                                                    {/* Ambient glow behind circle */}
+                                                    <div className="absolute inset-[-8px] rounded-full futuristic-pulse" style={{ background: `radial-gradient(circle, ${glowColor} 0%, transparent 70%)` }} />
 
-                                            // Lock the time so it only goes down
-                                            if (lastTimeRef.current[trade.id] === undefined || stableRawTime < lastTimeRef.current[trade.id]) {
-                                                lastTimeRef.current[trade.id] = stableRawTime;
-                                            }
-                                            const rawTimeLeft = lastTimeRef.current[trade.id];
-                                            const displayTimeLeft = (trade.status !== "PENDING") ? "0.0" : (trade.timeLeft !== undefined ? trade.timeLeft.toFixed(1) : rawTimeLeft.toFixed(1));
+                                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                                                        {/* Outer tick marks */}
+                                                        {Array.from({ length: tickCount }).map((_, i) => {
+                                                            const angle = (i / tickCount) * 360;
+                                                            const rad = (angle * Math.PI) / 180;
+                                                            const tickProgress = i / tickCount;
+                                                            const isActive = tickProgress <= progress;
+                                                            const x1 = 60 + Math.cos(rad) * (outerR + 4);
+                                                            const y1 = 60 + Math.sin(rad) * (outerR + 4);
+                                                            const x2 = 60 + Math.cos(rad) * (outerR + 7);
+                                                            const y2 = 60 + Math.sin(rad) * (outerR + 7);
+                                                            return (
+                                                                <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                                                                    stroke={isActive ? ringColor : (isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)')}
+                                                                    strokeWidth={i % 5 === 0 ? 2 : 1}
+                                                                    opacity={isActive ? 0.9 : 0.3}
+                                                                />
+                                                            );
+                                                        })}
 
-                                            const timerExpired = (trade.timeLeft !== undefined ? trade.timeLeft <= 0 : rawTimeLeft <= 0);
-                                            const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
+                                                        {/* Background track */}
+                                                        <circle cx="60" cy="60" r={circR} fill="none" stroke={isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)'} strokeWidth="5" />
 
-                                            const entryPriceVal = parseFloat(trade.entryPrice);
-                                            const amountVal = parseFloat(trade.amount);
-                                            
-                                            // Real-time status: Once expired or settled, we freeze the price at the backend's provided livePrice.
-                                            // While active, we ALWAYS use the global live price for zero-latency feedback.
-                                            const isLocked = trade.won !== undefined;
-                                            const isExpired = isLocked || trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.timeLeft !== undefined && trade.timeLeft <= 0);
-                                            
-                                            // Authority: If locked by backend, use backend's exit price (trade.livePrice).
-                                            // If expired but no backend price yet, we freeze at the last known backend tick price.
-                                            // CRITICAL: We NO LONGER fall back to the global 'price' once expired to prevent market watching.
-                                            const currentPriceVal = (isLocked && trade.livePrice !== undefined) 
-                                                ? parseFloat(trade.livePrice) 
-                                                : (capturedResultsRef.current[trade.id] !== undefined
-                                                    ? parseFloat(capturedResultsRef.current[trade.id].exitPrice)
-                                                    : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || trade.entryPrice) : parseFloat(price)));
+                                                        {/* Outer dashed ring */}
+                                                        <circle cx="60" cy="60" r={outerR} fill="none" stroke={ringColor} strokeWidth="1" opacity="0.15" strokeDasharray="3 5" />
 
-                                            const multiplier = trade.duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
-                                            const potentialProfit = !isNaN(amountVal) ? (amountVal * multiplier * 0.99).toFixed(2) : "0.00";
+                                                        {/* Main progress ring */}
+                                                        <circle cx="60" cy="60" r={circR} fill="none" stroke={ringColor} strokeWidth="5" strokeLinecap="round"
+                                                            strokeDasharray={circ} strokeDashoffset={offset}
+                                                            style={{
+                                                                transition: 'stroke-dashoffset 0.15s linear, stroke 0.4s ease',
+                                                                filter: `drop-shadow(0 0 10px ${ringColor}88)`,
+                                                            }}
+                                                        />
 
-                                            const isUpTrade = trade.direction === "buy" || trade.direction === "UP" || trade.direction === 1 || String(trade.direction) === "1";
+                                                        {/* Scanning sweep arc */}
+                                                        <circle cx="60" cy="60" r={circR - 5} fill="none" stroke={ringColor} strokeWidth="1.5" opacity="0.2"
+                                                            strokeDasharray={`${circ * 0.08} ${circ * 0.92}`}
+                                                            className="futuristic-sweep" style={{ transformOrigin: '60px 60px' }}
+                                                        />
+                                                    </svg>
 
-                                            // AUTHORITY CHAIN for live winning indicator:
-                                            // 1. trade.won: set by trade_settled (final).
-                                            // 2. trade.isWinning: set by backend trade_tick (authoritative live).
-                                            // 3. Local price comparison: fallback for active trades if tick is missing.
-                                            const localWinCalc = (!isNaN(currentPriceVal) && !isNaN(entryPriceVal)
-                                                                    ? (isUpTrade ? currentPriceVal > entryPriceVal : currentPriceVal < entryPriceVal)
-                                                                    : false);
-
-                                            // ── RESULT CAPTURE (GHOST LOCK) ──
-                                            // If the timer has expired but the backend hasn't sent the final 'won' status yet,
-                                            // we capture the current win state and freeze it to prevent flickering.
-                                            if (timerExpired && !isLocked && capturedResultsRef.current[trade.id] === undefined) {
-                                                capturedResultsRef.current[trade.id] = {
-                                                    won: (trade.isWinning !== undefined ? trade.isWinning : localWinCalc),
-                                                    exitPrice: currentPriceVal
-                                                };
-                                            }
-
-                                            const liveWinning = trade.won !== undefined
-                                                ? trade.won
-                                                : (capturedResultsRef.current[trade.id] !== undefined
-                                                    ? capturedResultsRef.current[trade.id].won
-                                                    : (trade.isWinning !== undefined 
-                                                        ? trade.isWinning 
-                                                        : localWinCalc));
-
-                                            // Seamless UI Transition: Flip to result card instantly when timer expires
-                                            const showInstantResult = timerExpired && !isFinal;
-                                            
-                                            // Real-time Display Status
-                                            const instantStatus = showInstantResult 
-                                                ? (liveWinning ? "WON" : "LOST") 
-                                                : trade.status;
-
-                                            const displayFinal = isFinal || showInstantResult;
-                                            
-                                            // Payout pending state: Trade is won but on-chain confirmation hasn't arrived
-                                            const isPayoutPending = (instantStatus === "WON" || trade.status === "WON") && !trade.chainConfirmed && !trade.payout;
-
-                                            return (
-                                                <div
-                                                    className={`rounded-[16px] p-2 md:p-3 flex flex-col relative transition-all duration-500 border-2 ${!isExpanded && activeTrades.length === 1 ? 'h-full flex-1' : 'h-auto'} ${isLight
-                                                        ? 'bg-[#C2D1C9] backdrop-blur-xl border-[#249C6C]/35 shadow-sm hover:shadow-md'
-                                                        : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
-                                                    style={displayFinal ? {
-                                                        borderColor: (instantStatus === "WON") ? 'rgba(36, 156, 108, 0.5)' : 'rgba(255, 127, 80, 0.5)',
-                                                        boxShadow: (instantStatus === "WON")
-                                                            ? `inset 0 0 30px rgba(36, 156, 108, 0.05), 0 5px 30px ${isLight ? 'rgba(36, 156, 108, 0.04)' : 'rgba(36, 156, 108, 0.1)'}`
-                                                            : `inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px ${isLight ? 'rgba(255, 127, 80, 0.04)' : 'rgba(255, 127, 80, 0.1)'}`
-                                                    } : {}}
-                                                >
-                                                    {/* Card Header - Ultra Compact */}
-                                                    <div className="flex items-center justify-between mb-0 px-0.5">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <div className={`w-1 h-1 rounded-full ${displayFinal
-                                                                ? ((instantStatus === "WON") ? 'bg-[#249C6C]' : 'bg-[#FF7F50]')
-                                                                : (liveWinning ? 'bg-[#249C6C] animate-pulse shadow-[0_0_8px_#249C6C]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
-                                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
-                                                                {displayFinal ? instantStatus : (trade.confirmed === false ? "Verifying" : "Live")}
-                                                            </span>
-                                                        </div>
-                                                        {isFinal && (
-                                                            <button
-                                                                onClick={() => removeTrade(trade.id)}
-                                                                className={`p-1 rounded-full transition-colors ${isLight ? 'bg-[#249C6C]/10 hover:bg-[#249C6C]/20 text-[#0a261a]/40' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}
-                                                            >
-                                                                <X size={10} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Central Hero Countdown - Tighter vertical scaling */}
-                                                    {!displayFinal ? (
-                                                        <div className="flex-1 flex flex-col items-center justify-center py-1 md:py-2">
-                                                            <div className={`text-xl md:text-2xl lg:text-4xl lcd-digit transition-all duration-300 ${isLight ? 'text-[#0a261a] opacity-80' : 'text-[#249C6C] drop-shadow-[0_0_15px_rgba(36, 156, 108,0.5)]'}`}>
-                                                                {displayTimeLeft}<span className="text-[10px] md:text-[12px] font-sans font-black italic opacity-40 ml-0.5">s</span>
-                                                            </div>
-                                                            <div className="mt-0 px-1 py-0.5 rounded-full border border-[#249C6C]/10 bg-[#249C6C]/5 scale-75 md:scale-90">
-                                                                <span className={`text-[6px] font-black uppercase tracking-[0.2em] ${liveWinning ? "text-[#249C6C]" : "text-[#FF7F50]"}`}>
-                                                                    {liveWinning ? "WINNING" : "LOSING"}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex-1 flex flex-col items-center justify-center py-1">
-                                                            <div className={`text-[10px] font-black uppercase tracking-widest ${
-                                                                (instantStatus === "WON") ? 'text-[#249C6C]' : 'text-[#FF7F50]'
-                                                            }`}>
-                                                                { (instantStatus === "WON") ? "Trade Won" : "Trade Lost" }
-                                                            </div>
-                                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                                <span className={`text-base lg:text-lg font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#249C6C]' : 'text-[#FF7F50]'}`}>
-                                                                    {(instantStatus === "WON" || trade.status === "WON") ? `+$${Number(trade.payout || potentialProfit).toFixed(2)}` : "0.00"}
-                                                                </span>
-                                                                {isPayoutPending && (
-                                                                    <div className="flex items-center gap-1 mt-1">
-                                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#249C6C] animate-ping" />
-                                                                        <span className="text-[6px] font-black uppercase tracking-widest text-[#249C6C]/60">Payout Pending</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Data Footer - Minimal Height */}
-                                                    <div className={`mt-auto pt-2 border-t flex items-end justify-between px-0.5 ${isLight ? 'border-black/5' : 'border-white/5'}`}>
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Entry</span>
-                                                                <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>
-                                                                    {!isNaN(entryPriceVal) ? `$${entryPriceVal.toFixed(2)}` : "..."}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <span className={`text-[6px] font-black uppercase tracking-widest opacity-30 ${isLight ? 'text-black' : 'text-white'}`}>Stake</span>
-                                                                <span className={`text-[8px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{Number(trade.amount).toFixed(2)}</span>
-                                                            </div>
-                                                        </div>
-
-                                                        {displayFinal && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedPnLTrade(trade);
-                                                                    setIsPnLOpen(true);
-                                                                }}
-                                                                title="Share Result"
-                                                                className={`p-1.5 rounded-full transition-all hover:scale-110 active:scale-95 border ${isLight ? 'bg-black/5 border-black/10 text-black hover:bg-black/10' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
-                                                            >
-                                                                <Share2 size={12} />
-                                                            </button>
-                                                        )}
+                                                    {/* Center content */}
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                        <span className={`text-lg md:text-xl font-black tabular-nums tracking-tight leading-none ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                                                            {displayTimeLeft}
+                                                        </span>
+                                                        <span className={`text-[5px] font-black uppercase tracking-[0.25em] mt-0.5 ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>sec</span>
                                                     </div>
                                                 </div>
-                                            );
-                                        })()}
-                                    </motion.div>
-                                ))}
+                                            </div>
 
-                                {othersCount > 0 && !isExpanded && (
-                                    <button
-                                        onClick={() => setIsExpanded(true)}
-                                        className={`w-full mt-1 py-1.5 px-2 rounded-full border flex items-center justify-center gap-1.5 transition-all hover:scale-[0.99] active:scale-95 ${isLight ? 'bg-black/5 border-black/10 text-black/50' : 'bg-white/5 border-white/10 text-white/40'}`}
-                                    >
-                                        <div className="w-1 h-1 rounded-full bg-[#249C6C] animate-pulse" />
-                                        <span className="text-[7px] font-black uppercase tracking-widest">
-                                            +{othersCount} more
-                                        </span>
-                                    </button>
-                                )}
-                            </>
+                                            {/* Win/Loss status label */}
+                                            <span className={`text-[7px] font-black uppercase tracking-[0.25em] mb-1 ${liveWinning ? "text-[#249C6C]" : "text-[#FF7F50]"}`}>
+                                                {liveWinning ? "WINNING" : "LOSING"}
+                                            </span>
+
+                                            {/* Trade Details — underneath */}
+                                            <div className="w-full grid grid-cols-2 gap-x-3 gap-y-1 mt-auto">
+                                                <div className="flex flex-col">
+                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Entry</span>
+                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{!isNaN(entryPriceVal) ? `$${entryPriceVal.toFixed(2)}` : "..."}</p>
+                                                </div>
+                                                <div className="flex flex-col items-end">
+                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Stake</span>
+                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>${Number(trade.amount).toFixed(2)}</p>
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Duration</span>
+                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{duration}s</p>
+                                                </div>
+                                                <div className="flex flex-col items-end">
+                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Started</span>
+                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{formatTime(trade.startTime)}</p>
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        /* Final Result View */
+                                        <div className="flex flex-col items-center justify-center flex-1 gap-1 py-2">
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${(instantStatus === "WON") ? 'text-[#249C6C]' : 'text-[#FF7F50]'}`}>
+                                                {(instantStatus === "WON") ? "Trade Won" : "Trade Lost"}
+                                            </span>
+                                            <span className={`text-base font-matrix tracking-widest ${(instantStatus === "WON" || trade.status === "WON") ? 'text-[#249C6C]' : 'text-[#FF7F50]'}`}>
+                                                {(instantStatus === "WON" || trade.status === "WON") ? `+$${Number(trade.payout || potentialProfit).toFixed(2)}` : "$0.00"}
+                                            </span>
+                                            {isPayoutPending && (
+                                                <div className="flex items-center gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-[#249C6C] animate-ping" />
+                                                    <span className="text-[6px] font-black uppercase tracking-widest text-[#249C6C]/60">Payout Pending</span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <button
+                                                    onClick={() => { setSelectedPnLTrade(trade); setIsPnLOpen(true); }}
+                                                    className={`p-2 rounded-full transition-all hover:scale-110 active:scale-95 border ${isLight ? 'bg-black/5 border-black/10 text-black hover:bg-black/10' : 'bg-white/5 border-white/10 text-white hover:bg-white/10'}`}
+                                                >
+                                                    <Share2 size={14} />
+                                                </button>
+                                                {isFinal && (
+                                                    <button
+                                                        onClick={() => removeTrade(trade.id)}
+                                                        className={`p-1 rounded-full transition-colors ${isLight ? 'bg-[#249C6C]/10 hover:bg-[#249C6C]/20 text-[#0a261a]/40' : 'bg-white/5 hover:bg-white/10 text-white/40'}`}
+                                                    >
+                                                        <X size={10} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                                </div>
+                            </motion.div>
                         );
                     })()
                 ) : (

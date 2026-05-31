@@ -1,56 +1,68 @@
 import React, { useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, XCircle, X, Loader2, Info } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Check, X } from 'lucide-react';
 
-function Toast({ message, type = 'success', onClose, onClick }) {
+function Toast({ message, type = 'success', onClose, onClick, isSmallScreen }) {
     useEffect(() => {
-        // Auto-close all toasts (pending after 4s — just indicates submission, not full confirmation)
-        const duration = type === 'pending' ? 4000 : 5000;
+        const duration = 3000;
         const timer = setTimeout(() => {
             onClose();
         }, duration);
         return () => clearTimeout(timer);
-    }, [onClose, type]);
+    }, [onClose]);
 
-    const colors = {
-        success: { bg: 'bg-[#249C6C]/10', border: 'border-[#249C6C]/50', icon: 'text-[#249C6C]', label: 'Success', Icon: CheckCircle },
-        error: { bg: 'bg-[#FF7F50]/10', border: 'border-[#FF7F50]/50', icon: 'text-[#FF7F50]', label: 'Error', Icon: XCircle },
-        pending: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', icon: 'text-blue-400', label: 'Processing', Icon: Loader2 },
-        info: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', icon: 'text-blue-400', label: 'Info', Icon: Info }
+    const palette = {
+        success: { bg: '#249C6C' },
+        error: { bg: '#FF4D4D' },
+        pending: { bg: '#249C6C' },
+        info: { bg: '#249C6C' },
     };
+    const config = palette[type] || palette.success;
+    const isSuccess = type === 'success';
 
-    const config = colors[type] || colors.success;
-    const { Icon } = config;
+    const bgColor = config.bg;
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            initial={{ x: '110%' }}
+            animate={{ x: '10%' }}
+            exit={{ x: '110%' }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className={`fixed right-0 z-[9999] overflow-hidden rounded-full ${isSmallScreen ? 'bottom-[9vh]' : 'bottom-6'}`}
             onClick={() => {
                 if (onClick) onClick();
-                // We don't auto-close on click here to allow the callback to handle it
             }}
-            className={`fixed bottom-6 right-6 z-[100] flex items-center gap-4 p-4 rounded-xl border ${config.border} ${config.bg} backdrop-blur-md shadow-2xl max-w-sm ${onClick ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
+            style={{
+                width: isSmallScreen ? 'calc(242px + 3.3vw)' : '242px',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
+            }}
         >
-            <div className={type === 'pending' ? 'animate-spin' : ''}>
-                <Icon className={config.icon} size={24} />
-            </div>
-            <div className="flex-1">
-                <h4 className={`font-bold text-sm ${config.icon} uppercase tracking-wider`}>
-                    {config.label}
-                </h4>
-                <p className="text-white/80 text-xs mt-1 leading-relaxed">
-                    {message}
-                </p>
-            </div>
-            {/* Always show close button so users can dismiss stuck toasts */}
-            <button
-                onClick={onClose}
-                className="p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+            <div
+                style={{
+                    backgroundColor: bgColor,
+                    color: '#FFFFFF',
+                    width: '330px',
+                }}
+                className={`flex items-center gap-3 py-3 lg:py-3.5 pl-5 pr-10 rounded-full ${onClick ? 'cursor-pointer' : ''}`}
             >
-                <X size={16} />
-            </button>
+                <motion.div
+                    key={isSuccess ? 'check' : 'x'}
+                    initial={{ scale: 0, rotate: -90 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.15 }}
+                    className="flex-shrink-0"
+                >
+                    {isSuccess ? (
+                        <Check size={18} strokeWidth={3} />
+                    ) : (
+                        <X size={18} strokeWidth={3} />
+                    )}
+                </motion.div>
+
+                <span style={{ fontFamily: '"Comfortaa", cursive' }} className="font-black text-[10px] lg:text-[11px] uppercase tracking-[0.3em] leading-tight whitespace-nowrap">
+                    {message}
+                </span>
+            </div>
         </motion.div>
     );
 };

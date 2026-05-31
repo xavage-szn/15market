@@ -29,7 +29,8 @@ export default function CampaignsHub({ campaigns, enrollments, address, theme, o
       <div className={`absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
 
       {/* HEADER */}
-      <div className="flex items-center justify-between px-4 md:px-10 pb-0 flex-none relative z-10 w-full" style={{ paddingTop: '1.25rem' }}>
+      <div className="flex items-center justify-between px-4 md:px-10 pb-0 flex-none relative z-10 w-full"
+           style={typeof window !== 'undefined' && window.innerWidth < 1024 ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : { paddingTop: '1.25rem' }}>
           <div className="flex items-center gap-4">
               <button onClick={onBack} className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5' : 'bg-white/5 border-white/5 hover:bg-white/10'} rounded-2xl border flex items-center justify-center hover:-translate-x-1 transition-transform ${isLight ? 'text-black shadow-[0_2px_8px_rgba(0,0,0,0.12)]' : 'text-white shadow-[0_2px_8px_rgba(0,0,0,0.4)]'}`}>
                   <ArrowLeft size={16} />

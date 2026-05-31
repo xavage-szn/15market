@@ -3497,6 +3497,7 @@ const performStealthChecks = useCallback(async (addr) => {
               <Toast
                 message={toast.message}
                 type={toast.type}
+                isSmallScreen={isSmallScreen}
                 onClose={closeToast}
                 onClick={toast.onClick}
               />

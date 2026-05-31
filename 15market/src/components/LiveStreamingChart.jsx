@@ -5,8 +5,9 @@ import { socketService } from '../utils/socket';
 /**
  * LiveStreamingChart — A specialized Canvas-based line chart for 1s timeframe.
  * HIGH PERFORMANCE: Optimized drawing routines to avoid lags and redundant allocations.
+ * Now includes trade entry markers with LIVE countdown badges rendered on canvas.
  */
-function LiveStreamingChartComponent({ theme, symbol }) {
+function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], currentPrice }) {
     const canvasRef = useRef(null);
     const priceHistoryRef = useRef([]);
     const rafRef = useRef(null);
@@ -22,6 +23,10 @@ function LiveStreamingChartComponent({ theme, symbol }) {
     const lastHRef = useRef(0);
     const lastThemeRef = useRef(theme);
     const debugProbeRef = useRef({ badPriceTs: 0, emptyDrawTs: 0 });
+
+    // Store activeTrades in ref so canvas draw loop sees latest
+    const activeTradesRef = useRef(activeTrades);
+    useEffect(() => { activeTradesRef.current = activeTrades; }, [activeTrades]);
 
     const isLight = theme === 'light';
     const GREEN = '#249C6C';
@@ -229,6 +234,187 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.stroke();
             ctx.shadowBlur = 0; // Reset for subsequent draws
 
+            // ═══════════════════════════════════════════════════
+            // ACTIVE TRADE ENTRY MARKERS — Dotted vertical lines + LIVE badge
+            // ═══════════════════════════════════════════════════
+            const trades = activeTradesRef.current;
+            if (trades && trades.length > 0) {
+                trades.forEach(trade => {
+                    const entryPrice = parseFloat(trade.entryPrice);
+                    if (isNaN(entryPrice)) return;
+
+                    const tid = String(trade.id);
+                    const start = trade.startTime || (tid.length > 12 ? parseInt(tid) : nowPx);
+                    const duration = trade.duration || 15;
+                    const expiry = trade.expiryMs || (start + (duration * 1000));
+                    const isSettled = ["WON", "LOST", "PAID"].includes(trade.status);
+                    const isExpired = nowPx >= expiry || isSettled;
+                    
+                    // Only draw markers for active (non-expired) trades
+                    if (isExpired) return;
+
+                    // Position the vertical line at the trade start time
+                    const entryX = getX(start);
+                    
+                    // Skip if entry line is off-screen
+                    if (entryX < -20 || entryX > W + 20) return;
+                    
+                    const entryY = toY(entryPrice);
+                    const remainingMs = Math.max(0, expiry - nowPx);
+                    const remainingSec = (remainingMs / 1000).toFixed(1);
+
+                    // ═══════════════════════════════════════
+                    // LIVE BADGE — Floating on the vertical line
+                    // (Computed first so the dotted line knows where the badge bottom is)
+                    // ═══════════════════════════════════════
+                    const badgeW = isMobile ? 68 : 78;
+                    const badgeH = isMobile ? 30 : 34;
+                    const badgeX = entryX - badgeW / 2;
+                    // Place badge at ~25% from top, but clamp to stay visible
+                    const rawBadgeY = H * 0.18;
+                    const badgeY = Math.max(8, Math.min(rawBadgeY, H - badgeH - 8));
+                    const lineTop = badgeY + badgeH; // bottom edge of badge
+                    const lineBottom = entryY;       // entry price on the signal line
+
+                    // ── Soft glow behind the vertical line (only between badge and entry) ──
+                    if (lineBottom > lineTop) {
+                        const lineGlow = ctx.createLinearGradient(entryX - 10, 0, entryX + 10, 0);
+                        lineGlow.addColorStop(0, 'transparent');
+                        lineGlow.addColorStop(0.5, isLight ? 'rgba(36,156,108,0.06)' : 'rgba(36,156,108,0.04)');
+                        lineGlow.addColorStop(1, 'transparent');
+                        ctx.fillStyle = lineGlow;
+                        ctx.fillRect(entryX - 10, lineTop, 20, lineBottom - lineTop);
+                    }
+
+                    // ── Thin dotted vertical line: badge bottom → entry price on signal ──
+                    if (lineBottom > lineTop) {
+                        ctx.save();
+                        ctx.setLineDash([3, 4]);
+                        ctx.strokeStyle = isLight ? 'rgba(36,156,108,0.45)' : 'rgba(36,156,108,0.35)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(entryX, lineTop);
+                        ctx.lineTo(entryX, lineBottom);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                        ctx.restore();
+                    }
+
+                    // ── Small dot marker at entry price on the signal line ──
+                    ctx.save();
+                    ctx.fillStyle = GREEN;
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = 'rgba(36,156,108,0.4)';
+                    ctx.beginPath();
+                    ctx.arc(entryX, entryY, 3.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    // White inner dot
+                    ctx.beginPath();
+                    ctx.arc(entryX, entryY, 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Badge background with glassmorphism
+                    ctx.save();
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = 'rgba(36,156,108,0.35)';
+                    
+                    // Outer glow ring
+                    const pulsePhase = Math.sin(nowPx / 600) * 0.5 + 0.5;
+                    ctx.strokeStyle = `rgba(36,156,108,${0.15 + pulsePhase * 0.15})`;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(badgeX - 2, badgeY - 2, badgeW + 4, badgeH + 4, 10);
+                    ctx.stroke();
+                    
+                    // Main badge fill
+                    ctx.fillStyle = isLight ? 'rgba(36,156,108,0.92)' : 'rgba(20,71,44,0.92)';
+                    ctx.beginPath();
+                    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 8);
+                    ctx.fill();
+                    
+                    // Subtle top highlight
+                    const highlightGrad = ctx.createLinearGradient(badgeX, badgeY, badgeX, badgeY + badgeH);
+                    highlightGrad.addColorStop(0, 'rgba(255,255,255,0.15)');
+                    highlightGrad.addColorStop(0.4, 'rgba(255,255,255,0.02)');
+                    highlightGrad.addColorStop(1, 'rgba(0,0,0,0.05)');
+                    ctx.fillStyle = highlightGrad;
+                    ctx.beginPath();
+                    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 8);
+                    ctx.fill();
+
+                    // Border
+                    ctx.strokeStyle = 'rgba(36,156,108,0.5)';
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 8);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+
+                    // ── Stopwatch icon (animated) ──
+                    const iconCenterX = badgeX + (isMobile ? 12 : 14);
+                    const iconCenterY = badgeY + badgeH / 2 - 2;
+                    const iconR = isMobile ? 4.5 : 5.5;
+                    
+                    ctx.save();
+                    // Clock circle
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.arc(iconCenterX, iconCenterY, iconR, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // Top button nub
+                    ctx.beginPath();
+                    ctx.moveTo(iconCenterX, iconCenterY - iconR - 1);
+                    ctx.lineTo(iconCenterX, iconCenterY - iconR - 3);
+                    ctx.stroke();
+                    
+                    // Side button nub (right top)
+                    ctx.beginPath();
+                    ctx.moveTo(iconCenterX + iconR * 0.6, iconCenterY - iconR - 0.5);
+                    ctx.lineTo(iconCenterX + iconR * 0.85, iconCenterY - iconR - 2.5);
+                    ctx.stroke();
+                    
+                    // Animated hand — rotates with the countdown
+                    const progress = 1 - (remainingMs / (duration * 1000));
+                    const handAngle = -Math.PI / 2 + (progress * Math.PI * 2);
+                    ctx.strokeStyle = '#4ADE80';
+                    ctx.lineWidth = 1.4;
+                    ctx.beginPath();
+                    ctx.moveTo(iconCenterX, iconCenterY);
+                    ctx.lineTo(
+                        iconCenterX + Math.cos(handAngle) * (iconR * 0.65),
+                        iconCenterY + Math.sin(handAngle) * (iconR * 0.65)
+                    );
+                    ctx.stroke();
+                    
+                    // Center dot
+                    ctx.beginPath();
+                    ctx.arc(iconCenterX, iconCenterY, 1, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                    ctx.restore();
+
+                    // ── "LIVE" text ──
+                    const textStartX = iconCenterX + iconR + (isMobile ? 3 : 4);
+                    ctx.fillStyle = '#4ADE80';
+                    ctx.font = `900 ${isMobile ? 7 : 8}px Inter, system-ui, sans-serif`;
+                    ctx.textBaseline = 'top';
+                    ctx.fillText('LIVE', textStartX, badgeY + (isMobile ? 5 : 6));
+
+                    // ── Countdown text ──
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = `bold ${isMobile ? 9 : 10}px IBM Plex Mono, monospace`;
+                    ctx.textBaseline = 'top';
+                    const countdownStr = remainingSec < 10 ? `0${remainingSec}` : remainingSec;
+                    ctx.fillText(countdownStr, textStartX, badgeY + (isMobile ? 16 : 18));
+                });
+            }
+
             // CROSSHAIR
             ctx.setLineDash([5, 5]);
             ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.15)';
@@ -246,6 +432,7 @@ function LiveStreamingChartComponent({ theme, symbol }) {
             ctx.fill();
             ctx.fillStyle = '#ffffff';
             ctx.textBaseline = 'middle';
+            ctx.font = `bold ${isMobile ? 14 : 12}px IBM Plex Mono, monospace`;
             ctx.fillText(latestPriceValStr, liveX + 16, liveY);
 
             // TIGHT AMBIENT GLOW — very close around the signal point

@@ -72,17 +72,17 @@ function TradeTerminalComponent({
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("UP"); }}
                 disabled={maintenanceMode}
-                className={`flex-1 relative z-10 py-2.5 lg:py-3 flex items-center justify-center transition-all duration-300 rounded-full ${direction === "UP" ? "text-white" : "text-white/20 hover:text-white/40"}`}
+                className={`flex-1 relative z-10 py-3 flex items-center justify-center transition-all duration-300 rounded-full ${direction === "UP" ? "text-white" : "text-white/20 hover:text-white/40"}`}
             >
-                <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">LONG</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">LONG</span>
             </button>
 
             <button
                 onClick={(e) => { e.stopPropagation(); !maintenanceMode && setDirection("DOWN"); }}
                 disabled={maintenanceMode}
-                className={`flex-1 relative z-10 py-2.5 lg:py-3 flex items-center justify-center transition-all duration-300 rounded-full ${direction === "DOWN" ? "text-white" : "text-white/20 hover:text-white/40"}`}
+                className={`flex-1 relative z-10 py-3 flex items-center justify-center transition-all duration-300 rounded-full ${direction === "DOWN" ? "text-white" : "text-white/20 hover:text-white/40"}`}
             >
-                <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest">SHORT</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">SHORT</span>
             </button>
         </div>
     );
