@@ -24,16 +24,18 @@ function Toast({ message, type = 'success', onClose, onClick, isSmallScreen }) {
 
     return (
         <motion.div
-            initial={{ x: '110%' }}
-            animate={{ x: '10%' }}
-            exit={{ x: '110%' }}
+            initial={{ x: '120%' }}
+            animate={{ x: isSmallScreen ? 24 : '10%' }}
+            exit={{ x: '120%' }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className={`fixed right-0 z-[9999] overflow-hidden rounded-full ${isSmallScreen ? 'bottom-[9vh]' : 'bottom-6'}`}
+            className={`fixed z-[9999] overflow-hidden rounded-full`}
             onClick={() => {
                 if (onClick) onClick();
             }}
             style={{
-                width: isSmallScreen ? 'calc(242px + 3.3vw)' : '242px',
+                width: isSmallScreen ? 'calc(50vw + 14px)' : '242px',
+                right: '0px',
+                bottom: isSmallScreen ? 'calc(34px + 2vh + 8px)' : '1.5rem',
                 boxShadow: '0 2px 10px rgba(0,0,0,0.5)',
             }}
         >
@@ -41,9 +43,8 @@ function Toast({ message, type = 'success', onClose, onClick, isSmallScreen }) {
                 style={{
                     backgroundColor: bgColor,
                     color: '#FFFFFF',
-                    width: '330px',
                 }}
-                className={`flex items-center gap-3 py-3 lg:py-3.5 pl-5 pr-10 rounded-full ${onClick ? 'cursor-pointer' : ''}`}
+                className={`flex items-center gap-2 md:gap-3 py-[11px] lg:py-3.5 pl-3 md:pl-5 pr-8 md:pr-10 rounded-full w-full ${onClick ? 'cursor-pointer' : ''}`}
             >
                 <motion.div
                     key={isSuccess ? 'check' : 'x'}

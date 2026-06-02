@@ -169,15 +169,7 @@ function LiveExecutionComponent({
                                 className="h-full"
                             >
                                 <div
-                                    className={`rounded-[16px] p-2 md:p-3 flex flex-col items-center relative transition-all duration-500 border-2 h-full ${isLight
-                                        ? 'bg-[#C2D1C9] backdrop-blur-xl border-[#249C6C]/35 shadow-sm hover:shadow-md'
-                                        : 'bg-[#0f0f0f]/80 backdrop-blur-xl border-white/5 shadow-2xl hover:border-white/10'}`}
-                                    style={displayFinal ? {
-                                        borderColor: (instantStatus === "WON") ? 'rgba(36, 156, 108, 0.5)' : 'rgba(255, 127, 80, 0.5)',
-                                        boxShadow: (instantStatus === "WON")
-                                            ? `inset 0 0 30px rgba(36, 156, 108, 0.05), 0 5px 30px ${isLight ? 'rgba(36, 156, 108, 0.04)' : 'rgba(36, 156, 108, 0.1)'}`
-                                            : `inset 0 0 30px rgba(255, 127, 80, 0.05), 0 5px 30px ${isLight ? 'rgba(255, 127, 80, 0.04)' : 'rgba(255, 127, 80, 0.1)'}`
-                                    } : {}}
+                                    className="p-2 md:p-3 flex flex-col items-center relative transition-all duration-500 h-full"
                                 >
                                     {/* Status Header */}
                                     <div className="flex items-center justify-between w-full mb-1">
@@ -185,8 +177,8 @@ function LiveExecutionComponent({
                                             <div className={`w-1.5 h-1.5 rounded-full ${displayFinal
                                                 ? ((instantStatus === "WON") ? 'bg-[#249C6C]' : 'bg-[#FF7F50]')
                                                 : (liveWinning ? 'bg-[#249C6C] animate-pulse shadow-[0_0_8px_#249C6C]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
-                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${trade.confirmed === false ? 'text-yellow-500 animate-pulse' : (isLight ? 'text-[#0a261a]/50' : 'text-white/40')}`}>
-                                                {displayFinal ? instantStatus : (trade.confirmed === false ? "Verifying" : "Live")}
+                                            <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
+                                                {displayFinal ? instantStatus : ""}
                                             </span>
                                         </div>
                                         {activeTrades.length > 0 && (
@@ -197,90 +189,97 @@ function LiveExecutionComponent({
                                     </div>
 
                                     {!displayFinal ? (
-                                        <>
-                                            {/* Futuristic Countdown Circle — centered */}
-                                            <div className="flex items-center justify-center flex-shrink-0 my-1">
-                                                <div className="relative w-[90px] h-[90px] md:w-[100px] md:h-[100px]">
-                                                    {/* Ambient glow behind circle */}
-                                                    <div className="absolute inset-[-8px] rounded-full futuristic-pulse" style={{ background: `radial-gradient(circle, ${glowColor} 0%, transparent 70%)` }} />
-
-                                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                                                        {/* Outer tick marks */}
-                                                        {Array.from({ length: tickCount }).map((_, i) => {
-                                                            const angle = (i / tickCount) * 360;
-                                                            const rad = (angle * Math.PI) / 180;
-                                                            const tickProgress = i / tickCount;
-                                                            const isActive = tickProgress <= progress;
-                                                            const x1 = 60 + Math.cos(rad) * (outerR + 4);
-                                                            const y1 = 60 + Math.sin(rad) * (outerR + 4);
-                                                            const x2 = 60 + Math.cos(rad) * (outerR + 7);
-                                                            const y2 = 60 + Math.sin(rad) * (outerR + 7);
-                                                            return (
-                                                                <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-                                                                    stroke={isActive ? ringColor : (isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)')}
-                                                                    strokeWidth={i % 5 === 0 ? 2 : 1}
-                                                                    opacity={isActive ? 0.9 : 0.3}
-                                                                />
-                                                            );
-                                                        })}
-
-                                                        {/* Background track */}
-                                                        <circle cx="60" cy="60" r={circR} fill="none" stroke={isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)'} strokeWidth="5" />
-
-                                                        {/* Outer dashed ring */}
-                                                        <circle cx="60" cy="60" r={outerR} fill="none" stroke={ringColor} strokeWidth="1" opacity="0.15" strokeDasharray="3 5" />
-
-                                                        {/* Main progress ring */}
-                                                        <circle cx="60" cy="60" r={circR} fill="none" stroke={ringColor} strokeWidth="5" strokeLinecap="round"
-                                                            strokeDasharray={circ} strokeDashoffset={offset}
-                                                            style={{
-                                                                transition: 'stroke-dashoffset 0.15s linear, stroke 0.4s ease',
-                                                                filter: `drop-shadow(0 0 10px ${ringColor}88)`,
-                                                            }}
-                                                        />
-
-                                                        {/* Scanning sweep arc */}
-                                                        <circle cx="60" cy="60" r={circR - 5} fill="none" stroke={ringColor} strokeWidth="1.5" opacity="0.2"
-                                                            strokeDasharray={`${circ * 0.08} ${circ * 0.92}`}
-                                                            className="futuristic-sweep" style={{ transformOrigin: '60px 60px' }}
-                                                        />
-                                                    </svg>
-
-                                                    {/* Center content */}
-                                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                        <span className={`text-lg md:text-xl font-black tabular-nums tracking-tight leading-none ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                                                            {displayTimeLeft}
-                                                        </span>
-                                                        <span className={`text-[5px] font-black uppercase tracking-[0.25em] mt-0.5 ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>sec</span>
+                                        <div className="flex flex-col md:flex-row items-center justify-center md:justify-between w-full flex-1 gap-4 md:gap-2">
+                                            {/* Trade Details — underneath on mobile, left on desktop */}
+                                            <div className="w-full md:w-auto flex-1 order-2 md:order-1">
+                                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-center md:text-left">
+                                                    <div className="flex flex-col items-center md:items-start">
+                                                        <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Entry</span>
+                                                        <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{!isNaN(entryPriceVal) ? `$${entryPriceVal.toFixed(2)}` : "..."}</p>
+                                                    </div>
+                                                    <div className="flex flex-col items-center md:items-start">
+                                                        <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Stake</span>
+                                                        <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>${Number(trade.amount).toFixed(2)}</p>
+                                                    </div>
+                                                    <div className="flex flex-col items-center md:items-start">
+                                                        <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Duration</span>
+                                                        <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{duration}s</p>
+                                                    </div>
+                                                    <div className="flex flex-col items-center md:items-start">
+                                                        <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Started</span>
+                                                        <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{formatTime(trade.startTime)}</p>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Win/Loss status label */}
-                                            <span className={`text-[7px] font-black uppercase tracking-[0.25em] mb-1 ${liveWinning ? "text-[#249C6C]" : "text-[#FF7F50]"}`}>
-                                                {liveWinning ? "WINNING" : "LOSING"}
-                                            </span>
+                                            {/* Divider Line (Desktop only) */}
+                                            <div className={`hidden md:block w-px h-16 order-2 ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
 
-                                            {/* Trade Details — underneath */}
-                                            <div className="w-full grid grid-cols-2 gap-x-3 gap-y-1 mt-auto">
-                                                <div className="flex flex-col">
-                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Entry</span>
-                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{!isNaN(entryPriceVal) ? `$${entryPriceVal.toFixed(2)}` : "..."}</p>
+                                            <div className="flex flex-col items-center flex-shrink-0 order-1 md:order-3">
+                                                {/* Futuristic Countdown Circle — centered */}
+                                                <div className="flex items-center justify-center flex-shrink-0 my-1">
+                                                    <div className="relative w-[90px] h-[90px] md:w-[90px] md:h-[90px]">
+                                                        {/* Ambient glow behind circle */}
+                                                        <div className="absolute inset-[-8px] rounded-full futuristic-pulse" style={{ background: `radial-gradient(circle, ${glowColor} 0%, transparent 70%)` }} />
+
+                                                        <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+                                                            {/* Outer tick marks */}
+                                                            {Array.from({ length: tickCount }).map((_, i) => {
+                                                                const angle = (i / tickCount) * 360;
+                                                                const rad = (angle * Math.PI) / 180;
+                                                                const tickProgress = i / tickCount;
+                                                                const isActive = tickProgress <= progress;
+                                                                const x1 = 60 + Math.cos(rad) * (outerR + 4);
+                                                                const y1 = 60 + Math.sin(rad) * (outerR + 4);
+                                                                const x2 = 60 + Math.cos(rad) * (outerR + 7);
+                                                                const y2 = 60 + Math.sin(rad) * (outerR + 7);
+                                                                return (
+                                                                    <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                                                                        stroke={isActive ? ringColor : (isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)')}
+                                                                        strokeWidth={i % 5 === 0 ? 2 : 1}
+                                                                        opacity={isActive ? 0.9 : 0.3}
+                                                                    />
+                                                                );
+                                                            })}
+
+                                                            {/* Background track */}
+                                                            <circle cx="60" cy="60" r={circR} fill="none" stroke={isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)'} strokeWidth="5" />
+
+                                                            {/* Outer dashed ring */}
+                                                            <circle cx="60" cy="60" r={outerR} fill="none" stroke={ringColor} strokeWidth="1" opacity="0.15" strokeDasharray="3 5" />
+
+                                                            {/* Main progress ring */}
+                                                            <circle cx="60" cy="60" r={circR} fill="none" stroke={ringColor} strokeWidth="5" strokeLinecap="round"
+                                                                strokeDasharray={circ} strokeDashoffset={offset}
+                                                                style={{
+                                                                    transition: 'stroke-dashoffset 0.15s linear, stroke 0.4s ease',
+                                                                    filter: `drop-shadow(0 0 10px ${ringColor}88)`,
+                                                                }}
+                                                            />
+
+                                                            {/* Scanning sweep arc */}
+                                                            <circle cx="60" cy="60" r={circR - 5} fill="none" stroke={ringColor} strokeWidth="1.5" opacity="0.2"
+                                                                strokeDasharray={`${circ * 0.08} ${circ * 0.92}`}
+                                                                className="futuristic-sweep" style={{ transformOrigin: '60px 60px' }}
+                                                            />
+                                                        </svg>
+
+                                                        {/* Center content */}
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                            <span className={`text-lg md:text-xl font-black tabular-nums tracking-tight leading-none ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+                                                                {displayTimeLeft}
+                                                            </span>
+                                                            <span className={`text-[5px] font-black uppercase tracking-[0.25em] mt-0.5 ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>sec</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col items-end">
-                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Stake</span>
-                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>${Number(trade.amount).toFixed(2)}</p>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Duration</span>
-                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{duration}s</p>
-                                                </div>
-                                                <div className="flex flex-col items-end">
-                                                    <span className={`text-[6px] font-black uppercase tracking-widest ${isLight ? 'text-black/30' : 'text-white/25'}`}>Started</span>
-                                                    <p className={`text-[9px] font-black tabular-nums ${isLight ? 'text-black' : 'text-white'}`}>{formatTime(trade.startTime)}</p>
-                                                </div>
+
+                                                {/* Win/Loss status label */}
+                                                <span className={`text-[7px] font-black uppercase tracking-[0.25em] mb-1 md:mb-0 ${liveWinning ? "text-[#249C6C]" : "text-[#FF7F50]"}`}>
+                                                    {liveWinning ? "WINNING" : "LOSING"}
+                                                </span>
                                             </div>
-                                        </>
+                                        </div>
                                     ) : (
                                         /* Final Result View */
                                         <div className="flex flex-col items-center justify-center flex-1 gap-1 py-2">

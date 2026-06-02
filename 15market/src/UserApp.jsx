@@ -816,7 +816,7 @@ const performStealthChecks = useCallback(async (addr) => {
   const [toast, setToast] = useState(null); // { message, type, onClick }
 
   const notify = useCallback((message, type = 'success', onClick = null) => {
-    setToast({ message, type, onClick });
+    setToast({ id: Date.now() + Math.random(), message, type, onClick });
   }, []);
 
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
@@ -3495,6 +3495,7 @@ const performStealthChecks = useCallback(async (addr) => {
           <AnimatePresence>
             {toast && (
               <Toast
+                key={toast.id || toast.message}
                 message={toast.message}
                 type={toast.type}
                 isSmallScreen={isSmallScreen}
