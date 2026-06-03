@@ -3068,6 +3068,7 @@ const performStealthChecks = useCallback(async (addr) => {
             <AssistedTradingPage
               theme={theme}
               onBack={() => setView("dashboard")}
+              onSelect={() => setView("comingsoon")}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">

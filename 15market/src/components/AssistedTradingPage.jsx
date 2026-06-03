@@ -27,38 +27,40 @@ export default function AssistedTradingPage({ onBack, theme, onSelect, isSmallSc
             </div>
 
             {/* Content */}
-            <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-12 md:gap-24 max-w-5xl mx-auto w-full relative z-10 pb-20 px-4">
+            <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-12 max-w-5xl mx-auto w-full relative z-10 pb-20 px-4">
                 
                 {/* Copytrading Block */}
                 <motion.div 
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="flex-1 w-full max-w-sm flex flex-col items-center justify-center gap-5 cursor-pointer group"
+                    onClick={() => onSelect('copytrading')}
+                    className="flex-1 w-full max-w-sm flex flex-col items-center justify-center gap-3 md:gap-5 cursor-pointer group mt-4 md:mt-0"
                 >
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${isLight ? 'bg-white border border-[#249C6C]/15 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border border-white/5 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} transition-transform group-hover:-translate-y-2`}>
-                        <Users size={28} className={`text-[#249C6C] ${isLight ? 'drop-shadow-[0_2px_6px_rgba(36,156,108,0.2)]' : 'drop-shadow-[0_0_15px_rgba(36,156,108,0.5)]'}`} />
+                    <div className="flex items-center justify-center transition-transform group-hover:-translate-y-2">
+                        <Users className={`w-8 h-8 md:w-10 md:h-10 text-[#249C6C] ${isLight ? 'drop-shadow-[0_2px_6px_rgba(36,156,108,0.2)]' : 'drop-shadow-[0_0_15px_rgba(36,156,108,0.5)]'}`} />
                     </div>
                     <div className="text-center">
-                        <h2 className={`text-lg md:text-xl font-black uppercase tracking-widest mb-2 group-hover:text-[#249C6C] transition-colors ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Copytrading</h2>
-                        <p className={`text-[11px] md:text-xs font-bold leading-relaxed max-w-[260px] mx-auto ${isLight ? 'text-black/50' : 'text-white/50'}`}>Follow top performing traders and automatically mirror their positions in real-time.</p>
+                        <h2 className={`text-[15px] md:text-xl font-black uppercase tracking-widest mb-1 md:mb-2 group-hover:text-[#249C6C] transition-colors ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Copytrading</h2>
+                        <p className={`text-[10px] md:text-xs font-bold leading-relaxed max-w-[240px] md:max-w-[260px] mx-auto ${isLight ? 'text-black/50' : 'text-white/50'}`}>Follow top performing traders and automatically mirror their positions in real-time.</p>
                     </div>
                 </motion.div>
 
                 {/* Divider Line (Horizontal on Mobile, Vertical on Desktop) */}
-                <div className={`w-full h-px md:w-px md:h-48 ${isLight ? 'bg-gradient-to-r md:bg-gradient-to-b from-transparent via-[#249C6C]/20 to-transparent' : 'bg-gradient-to-r md:bg-gradient-to-b from-transparent via-white/10 to-transparent'}`} />
+                <div className="w-full h-px md:w-px md:h-48 bg-gradient-to-r md:bg-gradient-to-b from-transparent via-[#249C6C] to-transparent" />
 
                 {/* Agentic Trading Block */}
                 <motion.div 
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="flex-1 w-full max-w-sm flex flex-col items-center justify-center gap-5 cursor-pointer group"
+                    onClick={() => onSelect('agentic')}
+                    className="flex-1 w-full max-w-sm flex flex-col items-center justify-center gap-3 md:gap-5 cursor-pointer group mb-4 md:mb-0"
                 >
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${isLight ? 'bg-white border border-[#249C6C]/15 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border border-white/5 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} transition-transform group-hover:-translate-y-2`}>
-                        <Bot size={28} className={`text-[#249C6C] ${isLight ? 'drop-shadow-[0_2px_6px_rgba(36,156,108,0.2)]' : 'drop-shadow-[0_0_15px_rgba(36,156,108,0.5)]'}`} />
+                    <div className="flex items-center justify-center transition-transform group-hover:-translate-y-2">
+                        <Bot className={`w-8 h-8 md:w-10 md:h-10 text-[#249C6C] ${isLight ? 'drop-shadow-[0_2px_6px_rgba(36,156,108,0.2)]' : 'drop-shadow-[0_0_15px_rgba(36,156,108,0.5)]'}`} />
                     </div>
                     <div className="text-center">
-                        <h2 className={`text-lg md:text-xl font-black uppercase tracking-widest mb-2 group-hover:text-[#249C6C] transition-colors ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Agentic Trading</h2>
-                        <p className={`text-[11px] md:text-xs font-bold leading-relaxed max-w-[260px] mx-auto ${isLight ? 'text-black/50' : 'text-white/50'}`}>Deploy autonomous AI agents to execute advanced strategies 24/7 on your behalf.</p>
+                        <h2 className={`text-[15px] md:text-xl font-black uppercase tracking-widest mb-1 md:mb-2 group-hover:text-[#249C6C] transition-colors ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>Agentic Trading</h2>
+                        <p className={`text-[10px] md:text-xs font-bold leading-relaxed max-w-[240px] md:max-w-[260px] mx-auto ${isLight ? 'text-black/50' : 'text-white/50'}`}>Deploy autonomous AI agents to execute advanced strategies 24/7 on your behalf.</p>
                     </div>
                 </motion.div>
 
