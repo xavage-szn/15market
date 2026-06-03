@@ -3,7 +3,7 @@ import { toPng } from 'html-to-image';
 import * as ethers from "ethers";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAccount } from "wagmi";
-import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet, Bell, Megaphone, Calendar, ChevronDown, ChevronUp, Smile, Coins, RefreshCcw, BookOpen, Share2, Mail, Download, X, Menu } from "lucide-react";
+import { Check, Trophy, Activity, DollarSign, Award, Target, BarChart2, User, Settings, ArrowLeft, ArrowRight, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Zap, Shield, Globe, MessageSquare, AlertCircle, Copy, RotateCw, ChevronRight, Send, ArrowDownLeft, Wallet, Bell, Megaphone, Calendar, ChevronDown, ChevronUp, Smile, Coins, RefreshCcw, BookOpen, Share2, Mail, Download, X, Menu, Bot } from "lucide-react";
 import MessagingSystem from "./MessagingSystem";
 import CampaignLeaderboardPane from "./CampaignLeaderboardPane";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, ReferenceLine } from 'recharts';
@@ -47,6 +47,17 @@ const AnimatedTrophy = ({ size = 16, className = '' }) => (
         style={{ display: 'inline-flex' }}
     >
         <Trophy size={size} className={className} />
+    </motion.div>
+);
+
+const AnimatedBot = ({ size = 16, className = '' }) => (
+    <motion.div
+        initial={{ y: 0, scale: 1 }}
+        animate={{ y: [0, -4, 0, -2, 0], scale: [1, 1.08, 1, 1.04, 1] }}
+        transition={{ duration: 2.2, repeat: 0, ease: 'easeInOut' }}
+        style={{ display: 'inline-flex' }}
+    >
+        <Bot size={size} className={className} />
     </motion.div>
 );
 
@@ -176,7 +187,8 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     onOpenCircleWallet,
     onCampaign,
     onTransferHub,
-    onDocs
+    onDocs,
+    onAssistedTrading
 }) {
     const isLight = theme === 'light';
     const { isConnected, address } = useAccount();
@@ -628,6 +640,9 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                         </button>
                         <button onClick={onCampaign} title="Campaign" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
                             <AnimatedTrophy size={16} className="text-[#249C6C]"/>
+                        </button>
+                        <button onClick={onAssistedTrading} title="Assisted Trading" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
+                            <AnimatedBot size={16} className="text-[#249C6C]"/>
                         </button>
                         <button onClick={onTransferHub || (() => onOpenCircleWallet?.(null))} title="Transfer Hub" className={`w-10 h-10 ${isLight ? 'bg-white border-white hover:bg-black/5 shadow-[0_2px_8px_rgba(0,0,0,0.10)]' : 'bg-white/5 border-white/5 hover:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.4)]'} rounded-2xl border flex items-center justify-center relative group`}>
                             <AnimatedSend size={15} className={isLight ? 'text-black/80' : 'text-white/80'}/>
@@ -1598,6 +1613,9 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             </button>
                             <button onClick={() => { setIsMobileMenuOpen(false); onCampaign(); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
                                 <Trophy size={16} className="text-[#249C6C]"/> <span className="text-[10px] font-black uppercase tracking-widest">Campaign</span>
+                            </button>
+                            <button onClick={() => { setIsMobileMenuOpen(false); onAssistedTrading(); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
+                                <Bot size={16} className="text-[#249C6C]"/> <span className="text-[10px] font-black uppercase tracking-widest">Assisted Trading</span>
                             </button>
                             <button onClick={() => { setIsMobileMenuOpen(false); onTransferHub?.() || onOpenCircleWallet?.(null); }} className={`flex items-center gap-4 w-full p-4 rounded-2xl relative z-10 ${isLight ? 'bg-white shadow-[0_4px_12px_rgba(36,156,108,0.15)] border border-[#249C6C]/10 hover:bg-[#f0f6f2] text-[#0a261a]' : 'bg-white/5 hover:bg-white/10 text-white'} transition-all`}>
                                 <Send size={16} className={isLight ? 'text-[#0a261a]/70' : 'text-white/70'}/> <span className="text-[10px] font-black uppercase tracking-widest">Transfer Hub</span>

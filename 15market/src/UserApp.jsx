@@ -22,8 +22,10 @@ import { publicClient } from "./client";
 import { WalletBalance } from "./components/WalletBalance";
 import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
+import ComingSoonPage from "./components/ComingSoonPage";
 import { CircleWalletPage } from "./components/CircleWalletPage";
 import { DocsPage } from "./components/DocsPage";
+import AssistedTradingPage from "./components/AssistedTradingPage";
 import CampaignsHub from "./components/CampaignsHub";
 
 // Lazy load conditionally rendered components
@@ -3020,7 +3022,11 @@ const performStealthChecks = useCallback(async (addr) => {
               }}
               onDocs={() => setView("docs")}
               onCampaign={() => setView("campaigns")}
+              onAssistedTrading={() => setView("assisted")}
+              onSelect={(type) => setView("comingsoon")}
             />
+          ) : view === "comingsoon" ? (
+            <ComingSoonPage onBack={() => setView("dashboard")} theme={theme} />
           ) : view === "circle_wallet" ? (
             <CircleWalletPage
               address={address}
@@ -3057,6 +3063,11 @@ const performStealthChecks = useCallback(async (addr) => {
               onBack={() => setView("dashboard")}
               onToggleTheme={toggleTheme}
               isSmallScreen={isSmallScreen}
+            />
+          ) : view === "assisted" ? (
+            <AssistedTradingPage
+              theme={theme}
+              onBack={() => setView("dashboard")}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
