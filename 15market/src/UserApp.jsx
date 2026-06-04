@@ -3069,6 +3069,7 @@ const performStealthChecks = useCallback(async (addr) => {
               theme={theme}
               onBack={() => setView("dashboard")}
               onSelect={() => setView("comingsoon")}
+              isSmallScreen={isSmallScreen}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
