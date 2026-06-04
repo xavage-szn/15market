@@ -100,7 +100,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     {/* Asset Trigger - Cleaned up */}
                     <div
                         onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                        className={`flex items-center gap-1.5 cursor-pointer px-1 py-1 transition-all pointer-events-auto group`}
+                        className={`flex items-center gap-1.5 cursor-pointer px-1 py-1 transition-all pointer-events-auto group ml-2 lg:ml-0`}
                     >
                         <div className="flex flex-col">
                             <span className={`text-[10px] md:text-xs font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>

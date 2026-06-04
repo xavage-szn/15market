@@ -21,6 +21,7 @@ const CHAIN_CONFIG = {
 const ERC20_ABI = [
     "function balanceOf(address owner) view returns (uint256)",
     "function decimals() view returns (uint8)",
+    "function transfer(address to, uint256 amount) external returns (bool)",
     "function approve(address spender, uint256 amount) external returns (bool)",
     "function allowance(address owner, address spender) view returns (uint256)"
 ];
@@ -866,14 +867,77 @@ export function CircleWalletPage({
                 setSendAmount("");
                 setDestAddress("");
             } else if (currentWallet.key === 'main') {
-                const activeWallet = wallets[0];
-                if (!activeWallet) throw new Error("No connected wallet found");
+                const eoaWallet = wallets?.find(w => w.walletClientType === 'privy') || wallets?.[0];
+                if (!eoaWallet) throw new Error("No connected wallet found");
 
-                notify("Confirming transaction...", "pending");
-                const txHash = await activeWallet.sendTransaction({
-                    to: destAddress,
-                    value: BigInt(Math.floor(amt * 1e18)).toString(),
-                });
+                notify("Preparing transfer...", "pending");
+
+                let txHash;
+
+                if (selectedToken.id === 'sol') {
+                    const { Connection, PublicKey: PK, Transaction } = await import('@solana/web3.js');
+                    const { getAssociatedTokenAddress: getATA, createTransferInstruction: createTransfer } = await import('@solana/spl-token');
+
+                    const connection = new Connection(CHAIN_CONFIG['sol'].rpc, 'confirmed');
+                    const usdcMint = new PK(CHAIN_CONFIG['sol'].usdc);
+                    const fromPubkey = new PK(eoaWallet.address);
+                    const toPubkey = new PK(destAddress);
+
+                    const fromAta = await getATA(usdcMint, fromPubkey);
+                    const toAta = await getATA(usdcMint, toPubkey);
+
+                    const { blockhash } = await connection.getLatestBlockhash();
+                    const tx = new Transaction({ recentBlockhash: blockhash, feePayer: fromPubkey });
+
+                    tx.add(createTransfer(fromAta, toAta, fromPubkey, Math.round(amt * 1_000_000)));
+
+                    if (eoaWallet.sendTransaction) {
+                        txHash = await eoaWallet.sendTransaction(tx, connection);
+                    } else {
+                        throw new Error("Direct Solana transfers not supported by this connector yet.");
+                    }
+                } else {
+                    // The 'main' wallet card displays mainWalletArcBalance, which is Native USDC on Arc Testnet.
+                    // Therefore, we must switch to Arc Testnet and perform a native currency transfer.
+                    const ARC_TESTNET_CHAIN_ID = 5042002;
+                    const ARC_RPC = 'https://rpc.testnet.arc.network';
+                    
+                    // Switch chain on the Privy wallet FIRST
+                    try {
+                        await eoaWallet.switchChain(ARC_TESTNET_CHAIN_ID);
+                    } catch (switchErr) {
+                        console.warn('Chain switch warning (Arc):', switchErr);
+                    }
+
+                    // Get provider AFTER chain switch
+                    const ethProvider = await eoaWallet.getEthereumProvider();
+                    const provider = new ethers.BrowserProvider(ethProvider, 'any');
+                    const signer = await provider.getSigner();
+                    const signerAddress = await signer.getAddress();
+
+                    // Pre-check balance on Arc Testnet directly via independent RPC
+                    const readProvider = new ethers.JsonRpcProvider(ARC_RPC);
+                    const userBal = await readProvider.getBalance(signerAddress).catch(() => 0n);
+                    const val = ethers.parseEther(amt.toString());
+                    
+                    // We check if they have enough for the amount + a small buffer for gas
+                    // Native transfers cost 21000 gas * gas price
+                    if (userBal < val) {
+                        throw new Error(`Insufficient Arc USDC balance. You have ${ethers.formatEther(userBal)} USDC on Arc Testnet. Wallet: ${signerAddress.slice(0,8)}...`);
+                    }
+
+                    notify("Confirm transfer in your wallet...", "pending");
+
+                    // Send Native transaction (USDC is native on Arc Testnet)
+                    // We hardcode gasLimit to 21000 to bypass eth_estimateGas which often throws "missing revert data" on new testnets
+                    const tx = await signer.sendTransaction({
+                        to: destAddress,
+                        value: val,
+                        chainId: ARC_TESTNET_CHAIN_ID,
+                        gasLimit: 21000n
+                    });
+                    txHash = tx.hash;
+                }
 
                 if (txHash) {
                     notify("Transfer Success!", "success");

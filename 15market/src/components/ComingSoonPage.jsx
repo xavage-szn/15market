@@ -20,7 +20,8 @@ export default function ComingSoonPage({ onBack, theme }) {
         {/* Back button */}
         <button
           onClick={onBack}
-          className={`absolute top-4 left-4 p-2 rounded-full ${isLight ? 'bg-white/40 hover:bg-white/80 border border-[#249C6C]/20 shadow-sm' : 'bg-white/5 hover:bg-white/10 border border-white/5 shadow-md'} transition-all`}
+          className={`absolute left-4 p-2 rounded-full ${isLight ? 'bg-white/40 hover:bg-white/80 border border-[#249C6C]/20 shadow-sm' : 'bg-white/5 hover:bg-white/10 border border-white/5 shadow-md'} transition-all`}
+          style={{ top: typeof window !== 'undefined' && window.innerWidth < 1024 ? 'calc(env(safe-area-inset-top) + 16px)' : '16px' }}
           title="Back"
         >
           <ArrowLeft size={24} className={isLight ? 'text-black' : 'text-white'} />

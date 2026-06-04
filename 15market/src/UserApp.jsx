@@ -841,18 +841,20 @@ const performStealthChecks = useCallback(async (addr) => {
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false
   );
   const [isSmallScreen, setIsSmallScreen] = useState(
-    typeof window !== 'undefined' ? (window.innerWidth < 1024 && window.innerHeight > window.innerWidth) : false
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
   );
+  const [isLandscapeBlocked, setIsLandscapeBlocked] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
       const portrait = window.innerHeight > window.innerWidth;
       const small = window.innerWidth < 1024;
+      const shortSide = Math.min(window.innerWidth, window.innerHeight);
       setIsPortrait(portrait);
-      // The Mobile UI is now strictly locked to Portrait orientation on small screens.
-      // Landscape orientation will always trigger the Desktop view for maximum workspace.
       setIsSmallScreen(small && portrait);
+      // Block landscape on mobile-class devices (short side under 600px means it's a phone/small tablet)
+      setIsLandscapeBlocked(!portrait && shortSide < 600);
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -2966,6 +2968,58 @@ const performStealthChecks = useCallback(async (addr) => {
   return (
     <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full text-current selection:bg-[#249C6C]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'}`}>
       <div className={`fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
+
+      {/* Landscape Blocker — branded fullscreen gate for mobile devices in landscape */}
+      <AnimatePresence>
+        {isLandscapeBlocked && (
+          <motion.div
+            key="landscape-blocker"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'}`}
+            style={{ fontFamily: '"Comfortaa", cursive' }}
+          >
+            {/* Subtle background glow */}
+            <div className={`absolute top-[30%] left-1/2 -translate-x-1/2 w-80 h-80 ${isLight ? 'bg-[#249C6C]/8' : 'bg-[#249C6C]/10'} rounded-full blur-[120px]`} />
+            <div className={`absolute bottom-[20%] right-[20%] w-60 h-60 ${isLight ? 'bg-[#249C6C]/5' : 'bg-[#249C6C]/5'} rounded-full blur-[100px]`} />
+
+            {/* Logo */}
+            <img src={isLight ? '/goblogo.png' : '/gowlogo.png'} alt="15market" className="h-16 w-auto mb-8 opacity-80" />
+
+            {/* Rotate-to-portrait animated icon */}
+            <div className="relative mb-6">
+              <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Landscape phone (faded, the "from" state) */}
+                <rect x="6" y="22" width="36" height="24" rx="4" stroke="#249C6C" strokeWidth="1.5" opacity="0.25" />
+                <line x1="10" y1="34" x2="10.01" y2="34" stroke="#249C6C" strokeWidth="2" strokeLinecap="round" opacity="0.25" />
+
+                {/* Portrait phone (bright, the "to" state) */}
+                <g className="animate-pulse">
+                  <rect x="40" y="10" width="24" height="36" rx="4" stroke="#249C6C" strokeWidth="2" fill="none" />
+                  <line x1="52" y1="40" x2="52.01" y2="40" stroke="#249C6C" strokeWidth="2.5" strokeLinecap="round" />
+                </g>
+
+                {/* Curved arrow from landscape to portrait */}
+                <path d="M30 50 C30 60, 45 62, 48 50" stroke="#249C6C" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                <polyline points="45,53 48,50 51,53" stroke="#249C6C" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+
+            {/* Message */}
+            <h2 className={`text-lg font-black tracking-tight mb-2 text-center px-8 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
+              Rotate Your Device
+            </h2>
+            <p className={`text-xs font-medium text-center px-12 leading-relaxed max-w-sm ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
+              The 15market trading experience is optimized for portrait mode on mobile devices. Please rotate your phone, or switch to a desktop browser for the full experience.
+            </p>
+
+            {/* Subtle brand accent line */}
+            <div className="mt-8 w-16 h-[2px] bg-gradient-to-r from-transparent via-[#249C6C]/40 to-transparent rounded-full" />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isConnected && address && !isAppReady && (
