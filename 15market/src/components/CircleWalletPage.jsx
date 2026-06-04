@@ -1880,7 +1880,7 @@ export function CircleWalletPage({
                                                             onClick={() => setFundingType('native')}
                                                             className="flex flex-col items-center gap-4 md:gap-6 transition-all hover:scale-110 active:scale-95 group"
                                                         >
-                                                            <Globe size={32} strokeWidth={1.5} className="transition-all text-white/70 group-hover:text-[#249C6C]" />
+                                                            <Globe size={24} className={`md:!w-8 md:!h-8 transition-all ${isLight ? 'text-black/60' : 'text-white/60'} group-hover:text-[#249C6C]`} strokeWidth={1.5} />
                                                             <div className="text-center">
                                                                 <p className={`text-[10px] md:text-sm font-black uppercase tracking-[0.2em] transition-all ${isLight ? 'text-black/60 group-hover:text-[#249C6C]' : 'text-white/60 group-hover:text-[#249C6C]'}`}>Native Tokens</p>
                                                             </div>
@@ -2010,11 +2010,11 @@ export function CircleWalletPage({
                                                                                 className="absolute inset-0 flex flex-col items-center justify-center"
                                                                             >
                                                                                 <div className="relative w-full h-full flex items-center justify-center">
-                                                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-44 h-44 pointer-events-none z-0">
+                                                                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[95%] w-36 h-36 pointer-events-none z-0">
                                                                                         <img
                                                                                             src={selectedToken.icon}
-                                                                                            className="w-full h-full object-contain drop-shadow-[0_0_40px_rgba(36, 156, 108,0.3)]"
-                                                                                            style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
+                                                                                            className={`w-full h-full object-contain ${isLight ? 'drop-shadow-[0_0_40px_rgba(0,0,0,0.1)]' : 'drop-shadow-[0_0_40px_rgba(36, 156, 108,0.3)]'}`}
+                                                                                            style={{ filter: isLight ? 'brightness(0) opacity(40%)' : 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
                                                                                             alt={selectedToken.symbol}
                                                                                         />
                                                                                         {fundingType === 'usdc' && (
@@ -2026,7 +2026,7 @@ export function CircleWalletPage({
                                                                                                             selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' :
                                                                                                                 'top-[50%] left-[50%] w-[20%] h-[20%]'
                                                                                                     }`}
-                                                                                                style={{ filter: 'brightness(0) invert(1)' }}
+                                                                                                style={{ filter: isLight ? 'brightness(0) opacity(40%)' : 'brightness(0) invert(1)' }}
                                                                                                 alt="USDC"
                                                                                             />
                                                                                         )}
@@ -2121,11 +2121,11 @@ export function CircleWalletPage({
                                                                                     <img
                                                                                         src={selectedToken.icon}
                                                                                         className="w-full h-full object-contain drop-shadow-[0_0_80px_rgba(36, 156, 108,0.5)]"
-                                                                                        style={{ filter: 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
+                                                                                        style={{ filter: isLight ? 'brightness(0) opacity(40%)' : 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)' }}
                                                                                         alt={selectedToken.symbol}
                                                                                     />
                                                                                     {fundingType === 'usdc' && (
-                                                                                        <img src="/circlewhite.png" className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' : selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' : selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' : selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' : 'top-[50%] left-[50%] w-[20%] h-[20%]'}`} style={{ filter: 'brightness(0) invert(1)' }} alt="USDC" />
+                                                                                        <img src="/circlewhite.png" className={`absolute -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)] z-10 ${selectedToken.id === 'eth' ? 'top-[45%] left-[50%] w-[22%] h-[22%]' : selectedToken.id === 'avax' ? 'top-[56%] left-[59%] w-[18%] h-[18%]' : selectedToken.id === 'sol' ? 'top-[59%] left-[50%] w-[18%] h-[18%]' : selectedToken.id === 'mon' ? 'top-[65%] left-[50%] w-[18%] h-[18%]' : 'top-[50%] left-[50%] w-[20%] h-[20%]'}`} style={{ filter: isLight ? 'brightness(0) opacity(40%)' : 'brightness(0) invert(1)' }} alt="USDC" />
                                                                                     )}
                                                                                 </div>
                                                                                 <div className="relative z-10 flex flex-col items-center justify-center translate-y-10">
