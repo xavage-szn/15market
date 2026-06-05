@@ -179,6 +179,7 @@ export function CircleWalletPage({
     const [multiChainBalances, setMultiChainBalances] = useState({});
     const [isFetchingBalances, setIsFetchingBalances] = useState(false);
     const [mainWalletArcBalance, setMainWalletArcBalance] = useState(0);
+    const [copyTradingWallet, setCopyTradingWallet] = useState(null);
 
     // UI State
     const [activeWalletIdx, setActiveWalletIdx] = useState(0); // 0: Trading, 1: Main
@@ -261,6 +262,23 @@ export function CircleWalletPage({
         return () => clearInterval(interval);
     }, [mainWalletAddress]);
 
+    const fetchCopyTradingWallet = async () => {
+        if (!fundingSourceAddress) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/wallet/${fundingSourceAddress}`);
+            if (res.ok) {
+                const data = await res.json();
+                setCopyTradingWallet(data.wallet);
+            }
+        } catch (e) {
+            console.error("Failed to fetch copy trading wallet:", e);
+        }
+    };
+
+    useEffect(() => {
+        fetchCopyTradingWallet();
+    }, [fundingSourceAddress]);
+
     const walletOptions = [
         {
             key: 'trading',
@@ -275,12 +293,18 @@ export function CircleWalletPage({
             address: mainWalletAddress
         },
         {
+            key: 'copy',
+            label: 'Copy Trading Wallet',
+            bal: copyTradingWallet?.balance || 0,
+            address: copyTradingWallet?.address || ''
+        },
+        {
             key: 'solana',
             label: 'Solana Wallet',
             bal: multiChainBalances['sol']?.usdc || 0,
             address: wallets?.find(w => w.address && !w.address.startsWith('0x'))?.address || ''
         }
-    ].filter(w => w.key !== 'solana' || w.address);
+    ].filter(w => (w.key !== 'solana' || w.address) && (w.key !== 'copy' || w.address));
 
     const currentWallet = walletOptions[activeWalletIdx];
     const selectedToken = SUPPORTED_TOKENS[activeTokenIdx];

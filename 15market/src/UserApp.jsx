@@ -24,6 +24,7 @@ import { LandingPage } from "./components/LandingPage";
 import { DashboardPage } from "./components/DashboardPage";
 import ComingSoonPage from "./components/ComingSoonPage";
 import { CircleWalletPage } from "./components/CircleWalletPage";
+import { CopyTradingPage } from "./components/CopyTradingPage";
 import { DocsPage } from "./components/DocsPage";
 import AssistedTradingPage from "./components/AssistedTradingPage";
 import CampaignsHub from "./components/CampaignsHub";
@@ -2062,10 +2063,27 @@ const performStealthChecks = useCallback(async (addr) => {
       }
     });
 
+    const unbindProviderUpdate = socketService.on('provider_application_update', (appStatus) => {
+      setUserProfile(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          isProvider: appStatus.status === 'APPROVED',
+          providerApplication: appStatus
+        };
+      });
+      if (appStatus.status === 'APPROVED') {
+        notify('Provider Application Approved! Generate your wallet.', 'success');
+      } else if (appStatus.status === 'REJECTED') {
+        notify('Provider Application Rejected.', 'error');
+      }
+    });
+
     return () => {
       unbindSettings();
       unbindSettled();
       unbindBroadcast();
+      unbindProviderUpdate();
     };
   }, [notify, updateEvmSessionBal, refetchEvmBalance, address, evmSessionWallet]);
 
@@ -3077,6 +3095,7 @@ const performStealthChecks = useCallback(async (addr) => {
               onDocs={() => setView("docs")}
               onCampaign={() => setView("campaigns")}
               onAssistedTrading={() => setView("assisted")}
+              onCopyTrading={() => setView("copyTrading")}
               onSelect={(type) => setView("comingsoon")}
             />
           ) : view === "comingsoon" ? (
@@ -3102,6 +3121,14 @@ const performStealthChecks = useCallback(async (addr) => {
               onWithdraw={handleWithdraw}
               triggerGlobalRefresh={triggerGlobalRefresh}
             />
+          ) : view === "copyTrading" ? (
+            <CopyTradingPage
+              address={address}
+              isLight={theme === 'light'}
+              notify={notify}
+              onBack={() => setView("dashboard")}
+              profile={userProfile}
+            />
           ) : view === "campaigns" ? (
             <CampaignsHub
               campaigns={campaigns}
@@ -3122,7 +3149,7 @@ const performStealthChecks = useCallback(async (addr) => {
             <AssistedTradingPage
               theme={theme}
               onBack={() => setView("dashboard")}
-              onSelect={() => setView("comingsoon")}
+              onSelect={(type) => type === 'copytrading' ? setView("copyTrading") : setView("comingsoon")}
               isSmallScreen={isSmallScreen}
             />
           ) : (

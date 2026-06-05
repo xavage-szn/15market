@@ -55,7 +55,7 @@ export const GlobalExpansionMap = React.memo(({ theme, currentNetwork, activeBet
 
     // In full screen, we remove the side panel and make map valid full container
     const containerClasses = isFullscreen
-        ? "h-full w-full bg-[#050505] rounded-3xl border border-white/5 overflow-hidden flex flex-col relative shadow-2xl"
+        ? "h-full w-full overflow-hidden flex flex-col relative"
         : cn("p-1 lg:p-8 rounded-[32px] border transition-all duration-500 overflow-hidden relative",
             isLight ? "bg-white border-black/5" : "bg-[#050505] border-white/10 shadow-2xl");
 

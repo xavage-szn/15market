@@ -68,6 +68,10 @@ class ProfileService {
         return this.profiles[address.toLowerCase()];
     }
 
+    getAll() {
+        return this.profiles;
+    }
+
     upsert(address, data) {
         const addr = address.toLowerCase();
         this.profiles[addr] = {

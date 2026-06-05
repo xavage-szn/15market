@@ -5,6 +5,7 @@ class SocketService {
     constructor() {
         this.socket = null;
         this.handlers = new Map();
+        this.forwardedEvents = new Set();
     }
 
     connect() {
@@ -33,14 +34,20 @@ class SocketService {
         });
 
         // Setup generic listeners that dispatch to registered handlers
-        const events = ['dashboard_stats', 'trade_detected', 'trade_settled', 'settings_confirmed', 'settings_updated', 'new_broadcast', 'admin_stats_update', 'settings_update'];
-        events.forEach(event => {
-            this.socket.on(event, (data) => {
-                if (this.handlers.has(event)) {
-                    this.handlers.get(event).forEach(handler => handler(data));
-                }
-            });
-        });
+        [
+            'connect',
+            'disconnect',
+            'dashboard_stats',
+            'trade_detected',
+            'trade_settled',
+            'global_trade_settled',
+            'settings_confirmed',
+            'settings_updated',
+            'new_broadcast',
+            'admin_stats_update',
+            'settings_update',
+            'new_copy_application'
+        ].forEach(event => this.forwardEvent(event));
     }
 
     on(event, handler) {
@@ -48,7 +55,18 @@ class SocketService {
             this.handlers.set(event, new Set());
         }
         this.handlers.get(event).add(handler);
+        if (this.socket) this.forwardEvent(event);
         return () => this.off(event, handler);
+    }
+
+    forwardEvent(event) {
+        if (!this.socket || this.forwardedEvents.has(event)) return;
+        this.forwardedEvents.add(event);
+        this.socket.on(event, (data) => {
+            if (this.handlers.has(event)) {
+                this.handlers.get(event).forEach(handler => handler(data));
+            }
+        });
     }
 
     off(event, handler) {
@@ -66,6 +84,7 @@ class SocketService {
         if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
+            this.forwardedEvents.clear();
         }
     }
 }

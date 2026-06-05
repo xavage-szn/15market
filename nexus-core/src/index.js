@@ -1667,6 +1667,329 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ============================================================
+// COPY TRADING ROUTES
+// ============================================================
+
+/**
+ * GET /copy-trading/wallet/:address
+ * Returns the permanent copy trading wallet (EVM) for the user. Generates one if it doesn't exist.
+ */
+app.get('/copy-trading/wallet/:address', (req, res) => {
+  try {
+    const userAddr = req.params.address.toLowerCase();
+    let profile = profiles.get(userAddr);
+    
+    if (!profile) {
+      profile = profiles.upsert(userAddr, { balance: 0 });
+    }
+
+    // Generate if not exists
+    if (!profile.copyTradingWallet) {
+      const newWallet = ethers.Wallet.createRandom();
+      profile.copyTradingWallet = {
+        address: newWallet.address,
+        privateKey: newWallet.privateKey, // Store securely in production
+        balance: 0 // Track isolated balance
+      };
+      profiles.upsert(userAddr, profile);
+    }
+
+    res.json({ 
+      success: true, 
+      wallet: {
+        address: profile.copyTradingWallet.address,
+        balance: profile.copyTradingWallet.balance
+      }
+    });
+  } catch (err) {
+    console.error('[copy-trading/wallet] error:', err.message);
+    res.status(500).json({ error: "Failed to fetch copy trading wallet" });
+  }
+});
+
+/**
+ * POST /copy-trading/apply
+ * User applies to be a copy trading provider
+ */
+app.post('/copy-trading/apply', (req, res) => {
+  try {
+    const { primaryWallet, name, twitter, telegram, email, copyFee, onChainData } = req.body;
+    if (!primaryWallet) return res.status(400).json({ error: "Missing address" });
+    
+    const userAddr = primaryWallet.toLowerCase();
+    const stats = profiles.getProfileStats(userAddr);
+    
+    const profile = profiles.get(userAddr) || {};
+    
+    // Save application state with all submitted details
+    profile.providerApplication = {
+      status: 'PENDING',
+      appliedAt: Date.now(),
+      primaryWallet: userAddr,
+      contactInfo: { name, twitter, telegram, email },
+      copyFee: parseFloat(copyFee) || 0,
+      onChainData: onChainData || {},
+      metricsSnapshot: stats
+    };
+    
+    profiles.upsert(userAddr, profile);
+    
+    // Emit to all connected clients (admin dashboard will listen)
+    io.emit('new_copy_application', {
+      address: userAddr,
+      username: profile.providerApplication.contactInfo?.name || profile.discord?.username || profile.username || `${userAddr.substring(0, 6)}...`,
+      primaryWallet: profile.providerApplication.primaryWallet || userAddr,
+      contactInfo: profile.providerApplication.contactInfo || {},
+      copyFee: profile.providerApplication.copyFee || 0,
+      onChainData: profile.providerApplication.onChainData || {},
+      appliedAt: profile.providerApplication.appliedAt,
+      metrics: profile.providerApplication.metricsSnapshot
+    });
+
+    res.json({ success: true, message: "Application submitted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to submit application" });
+  }
+});
+
+/**
+ * GET /admin/copy-trading/applications
+ * Admin fetches pending applications
+ */
+app.get('/admin/copy-trading/applications', (req, res) => {
+  try {
+    const apps = [];
+    for (const addr in profiles.profiles) {
+      const p = profiles.profiles[addr];
+      if (p.providerApplication && p.providerApplication.status === 'PENDING') {
+        const app = p.providerApplication;
+        apps.push({
+          address: addr,
+          username: app.contactInfo?.name || p.discord?.username || p.username || `${addr.substring(0, 6)}...`,
+          primaryWallet: app.primaryWallet || addr,
+          contactInfo: app.contactInfo || {},
+          copyFee: app.copyFee || 0,
+          onChainData: app.onChainData || {},
+          appliedAt: app.appliedAt,
+          metrics: app.metricsSnapshot
+        });
+      }
+    }
+    // Sort by newest
+    apps.sort((a, b) => b.appliedAt - a.appliedAt);
+    res.json({ success: true, applications: apps });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch applications" });
+  }
+});
+
+/**
+ * POST /admin/copy-trading/approve
+ * Admin approves or rejects an application
+ */
+app.post('/admin/copy-trading/approve', (req, res) => {
+  try {
+    const { address, approved, reason } = req.body;
+    if (!address) return res.status(400).json({ error: "Missing address" });
+    
+    const userAddr = address.toLowerCase();
+    const profile = profiles.get(userAddr);
+    
+    if (!profile || !profile.providerApplication) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+    
+    profile.providerApplication.status = approved ? 'APPROVED' : 'REJECTED';
+    if (reason) profile.providerApplication.reason = reason;
+    
+    if (approved) {
+      profile.isProvider = true;
+      profile.providerStats = {
+        followers: 0,
+        aum: 0,
+        profitGenerated: 0
+      };
+    }
+    
+    profiles.upsert(userAddr, profile);
+
+    // Notify the user via socket
+    io.to(userAddr).emit('provider_application_update', profile.providerApplication);
+
+    res.json({ success: true, status: profile.providerApplication.status });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to process application" });
+  }
+});
+
+// Clear all provider applications
+app.post('/admin/copy-trading/clear', (req, res) => {
+  try {
+    const allProfiles = profiles.getAll();
+    let cleared = 0;
+    for (const [addr, profile] of Object.entries(allProfiles)) {
+      if (profile.providerApplication || profile.isProvider) {
+        delete profile.providerApplication;
+        profile.isProvider = false;
+        delete profile.providerStats;
+        profiles.upsert(addr, profile);
+        cleared++;
+      }
+    }
+    res.json({ success: true, cleared });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to clear applications" });
+  }
+});
+
+/**
+ * GET /copy-trading/investors
+ * Returns real investors who have active copy relationships
+ */
+app.get('/copy-trading/investors', (req, res) => {
+  try {
+    const investors = [];
+    for (const addr in profiles.profiles) {
+      const p = profiles.profiles[addr];
+      if (p.copyTradingWallet && p.activeCopies && p.activeCopies.length > 0) {
+        const totalAllocated = p.activeCopies.reduce((sum, c) => sum + (c.allocated || 0), 0);
+        investors.push({
+          address: addr,
+          username: p.providerApplication?.contactInfo?.name || p.discord?.username || p.username || `${addr.substring(0, 6)}...`,
+          avatar: p.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${addr.substring(2, 8)}`,
+          allocated: totalAllocated,
+          copying: p.activeCopies.length,
+          pnl: `${p.copyTradingPnl >= 0 ? '+' : ''}$${(p.copyTradingPnl || 0).toFixed(2)}`,
+          isProvider: !!p.isProvider
+        });
+      }
+    }
+    investors.sort((a, b) => b.allocated - a.allocated);
+    res.json({ success: true, investors });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch investors" });
+  }
+});
+
+/**
+ * GET /copy-trading/providers
+ * Fetch list of approved providers for the investor dashboard (REAL DATA ONLY)
+ */
+app.get('/copy-trading/providers', (req, res) => {
+  try {
+    const providers = [];
+    for (const addr in profiles.profiles) {
+      const p = profiles.profiles[addr];
+      if (p.isProvider) {
+        const stats = profiles.getProfileStats(addr);
+        const totalPnl = (p.providerStats?.profitGenerated || 0);
+        const totalVolume = stats.totalVolume || 0;
+        providers.push({
+          address: addr,
+          username: p.providerApplication?.contactInfo?.name || p.discord?.username || p.username || `${addr.substring(0, 6)}...`,
+          avatar: p.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${addr.substring(2, 8)}`,
+          totalTrades: stats.totalTrades || 0,
+          winRate: stats.totalTrades > 0 ? ((stats.totalWins / stats.totalTrades) * 100).toFixed(1) : '0.0',
+          followers: p.providerStats?.followers || 0,
+          aum: p.providerStats?.aum || 0,
+          roi: totalVolume > 0 ? ((totalPnl / totalVolume) * 100).toFixed(2) : '0.00',
+          copyFee: p.providerApplication?.copyFee || 0
+        });
+      }
+    }
+    // Sort by winRate descending
+    providers.sort((a, b) => parseFloat(b.winRate) - parseFloat(a.winRate));
+    res.json({ success: true, providers });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch providers" });
+  }
+});
+
+/**
+ * POST /copy-trading/activate
+ * Investor activates copy trading on a specific provider.
+ * Validates balance, deducts activation fee, persists copy relationship.
+ */
+app.post('/copy-trading/activate', (req, res) => {
+  try {
+    const { investorAddress, providerAddress, mode, allocated, stakePerTrade } = req.body;
+    if (!investorAddress || !providerAddress) return res.status(400).json({ error: "Missing addresses" });
+
+    const investorAddr = investorAddress.toLowerCase();
+    const providerAddr = providerAddress.toLowerCase();
+
+    const investor = profiles.get(investorAddr);
+    if (!investor || !investor.copyTradingWallet) {
+      return res.status(400).json({ error: "Investor does not have a copy trading wallet" });
+    }
+
+    const provider = profiles.get(providerAddr);
+    if (!provider || !provider.isProvider) {
+      return res.status(400).json({ error: "Provider not found or not approved" });
+    }
+
+    const ACTIVATION_FEE = 10; // 10 USDC
+    const allocatedAmount = mode === 'isolated' ? (parseFloat(allocated) || 0) : 0;
+    const stakeAmount = parseFloat(stakePerTrade) || 0;
+    const requiredBalance = allocatedAmount + stakeAmount + ACTIVATION_FEE;
+    const walletBalance = parseFloat(investor.copyTradingWallet.balance) || 0;
+
+    if (walletBalance < requiredBalance) {
+      return res.status(400).json({ 
+        error: `Insufficient balance. Need ${requiredBalance} USDC (including ${ACTIVATION_FEE} USDC activation fee). Current balance: ${walletBalance} USDC.`
+      });
+    }
+
+    // Deduct activation fee from investor balance
+    investor.copyTradingWallet.balance = walletBalance - ACTIVATION_FEE;
+
+    // If isolated, reserve the allocated funds
+    if (mode === 'isolated') {
+      investor.copyTradingWallet.balance -= allocatedAmount;
+      investor.copyTradingAllocated = (parseFloat(investor.copyTradingAllocated) || 0) + allocatedAmount;
+    }
+
+    // Create copy relationship
+    if (!investor.activeCopies) investor.activeCopies = [];
+    investor.activeCopies.push({
+      providerAddress: providerAddr,
+      providerName: provider.providerApplication?.contactInfo?.name || provider.username || providerAddr.substring(0, 8),
+      mode,
+      allocated: allocatedAmount,
+      stakePerTrade: stakeAmount,
+      activatedAt: Date.now(),
+      pnl: 0
+    });
+
+    // Update provider stats
+    if (!provider.providerStats) provider.providerStats = { followers: 0, aum: 0, profitGenerated: 0 };
+    provider.providerStats.followers = (provider.providerStats.followers || 0) + 1;
+    provider.providerStats.aum = (provider.providerStats.aum || 0) + allocatedAmount + stakeAmount;
+
+    // Split activation fee: 50% provider, 50% protocol
+    const providerShare = ACTIVATION_FEE / 2;
+    provider.providerStats.profitGenerated = (provider.providerStats.profitGenerated || 0) + providerShare;
+
+    profiles.upsert(investorAddr, investor);
+    profiles.upsert(providerAddr, provider);
+
+    // Notify both parties via socket
+    io.to(investorAddr).emit('copy_activated', { providerAddress: providerAddr, mode, allocated: allocatedAmount, stakePerTrade: stakeAmount });
+    io.to(providerAddr).emit('new_follower', { investorAddress: investorAddr, mode, allocated: allocatedAmount });
+
+    res.json({ 
+      success: true, 
+      message: 'Copy trading activated',
+      newBalance: investor.copyTradingWallet.balance,
+      activeCopies: investor.activeCopies.length
+    });
+  } catch (err) {
+    console.error('[copy-trading/activate] error:', err.message);
+    res.status(500).json({ error: "Failed to activate copy trading" });
+  }
+});
+
 // --- Start ---
 server.listen(config.PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Nexus Core (Embedded Wallet Mode) listening on port ${config.PORT}\n`);

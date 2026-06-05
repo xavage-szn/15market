@@ -175,6 +175,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [historyFilter, setHistoryFilter] = useState({ search: '' });
     const [betaApplications, setBetaApplications] = useState([]);
     const [authorizedWallets, setAuthorizedWallets] = useState([]);
+    const [copyApplications, setCopyApplications] = useState([]);
     const [loginForm, setLoginForm] = useState({ username: '', password: '' });
     const [securityForm, setSecurityForm] = useState({ username: '', password: '', confirmPassword: '' });
     const [authError, setAuthError] = useState(null);
@@ -289,7 +290,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     // Real-time Event Subscription (SOCKET.IO)
     useEffect(() => {
-        let unbindStats, unbindDashboard, unbindTrade, unbindSettled, unbindSettings, unbindConnect, unbindDisconnect;
+        let unbindStats, unbindDashboard, unbindTrade, unbindSettled, unbindSettings, unbindConnect, unbindDisconnect, unbindCopyApp;
 
         if (isLoggedIn) {
             socketService.connect();
@@ -349,6 +350,18 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                  notify('info', 'SYNCED', 'Platform configuration updated in real-time.');
             });
 
+            unbindCopyApp = socketService.on('new_copy_application', (appData) => {
+                setCopyApplications(prev => {
+                    const incomingAddress = String(appData.address || appData.primaryWallet || '').toLowerCase();
+                    const withoutDuplicate = prev.filter(app => {
+                        const existingAddress = String(app.address || app.primaryWallet || '').toLowerCase();
+                        return existingAddress !== incomingAddress;
+                    });
+                    return [appData, ...withoutDuplicate].sort((a, b) => (b.appliedAt || 0) - (a.appliedAt || 0));
+                });
+                notify('info', 'NEW PROVIDER', 'A new copy trader application was submitted.');
+            });
+
             unbindConnect = socketService.on('connect', () => {
                 setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
             });
@@ -366,6 +379,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
             if (unbindSettings) unbindSettings();
             if (unbindConnect) unbindConnect();
             if (unbindDisconnect) unbindDisconnect();
+            if (unbindCopyApp) unbindCopyApp();
             socketService.disconnect();
         };
     }, [isLoggedIn]);
@@ -507,12 +521,27 @@ const AdminPortal = React.memo(({ onBack, price }) => {
         }
     }, []);
 
+    const fetchCopyApplications = useCallback(async () => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/applications`);
+            if (res.ok) {
+                const data = await res.json();
+                setCopyApplications(data.applications || []);
+            }
+        } catch (e) {
+            console.error("Failed to fetch copy applications:", e);
+        }
+    }, []);
+
     useEffect(() => {
         if (isLoggedIn && activeTab === 'beta') {
             fetchBetaApplications();
             fetchAuthorizedWallets();
         }
-    }, [isLoggedIn, activeTab, fetchBetaApplications, fetchAuthorizedWallets]);
+        if (isLoggedIn && activeTab === 'copytraders') {
+            fetchCopyApplications();
+        }
+    }, [isLoggedIn, activeTab, fetchBetaApplications, fetchAuthorizedWallets, fetchCopyApplications]);
 
     const handleApproveBeta = async (address, email) => {
         try {
@@ -1667,9 +1696,10 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                     )}
                 </AnimatePresence>
                 {/* Animated Background Gradients */}
-                <div className="absolute top-0 -left-1/4 w-1/2 h-full bg-[#3CB371]/10 blur-[160px] animate-pulse" />
-                <div className="absolute bottom-0 -right-1/4 w-1/2 h-full bg-[#3CB371]/5 blur-[160px]" />
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
+                <div className="absolute inset-0 bg-[#000]" />
+                <div className="absolute top-0 -left-1/4 w-1/2 h-full bg-[#249C6C]/10 blur-[160px] animate-pulse" />
+                <div className="absolute bottom-0 -right-1/4 w-1/2 h-full bg-[#249C6C]/5 blur-[160px]" />
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 pointer-events-none" />
 
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -1686,10 +1716,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                             <img src="/logo.png" alt="15market" className="h-40 w-auto relative z-10 filter drop-shadow-[0_0_30px_rgba(60,179,113,0.6)]" />
                         </motion.div>
                         <h2 className="text-xl font-black uppercase tracking-[0.3em] text-white">Citadel Access</h2>
-                        <div className="flex items-center gap-2 mt-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-[#3CB371] animate-ping" />
-                            <p className="text-[9px] text-[#3CB371] font-black uppercase tracking-[0.2em]">{isWalletConnected ? 'AUTHENTICATING WALLET' : 'SECURE NODE 01'}</p>
-                        </div>
                     </div>
 
                     {!isWalletConnected ? (
@@ -1803,10 +1829,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 </div>
                                 <button
                                     type="submit"
-                                    className="group relative w-full bg-white text-black py-4.5 rounded-2xl font-black uppercase tracking-[0.2em] text-xs overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                    className="w-full py-5 rounded-[24px] bg-[#249C6C] text-white font-black text-sm uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all"
                                 >
-                                    <div className="absolute inset-0 bg-gradient-to-r from-[#3CB371] to-[#4ADE80] opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    <span className="relative z-10 group-hover:text-white transition-colors">Verify Credentials</span>
+                                    Login
                                 </button>
 
                                 <div className="text-center">
@@ -1983,10 +2008,11 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
                 <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
                     <NavItem icon={BarChart3} label="Dashboard" id="dashboard" active={activeTab === 'dashboard'} onClick={setActiveTab} />
-                    <NavItem icon={Settings} label="Settings" id="settings" active={activeTab === 'settings'} onClick={setActiveTab} />
-                    <NavItem icon={Megaphone} label="Broadcasts" id="broadcasts" active={activeTab === 'broadcasts'} onClick={setActiveTab} />
+                    <NavItem icon={Globe} label="Network Map" id="network" active={activeTab === 'network'} onClick={setActiveTab} />
+                    <NavItem icon={Users} label="Copy Traders" id="copytraders" active={activeTab === 'copytraders'} onClick={setActiveTab} />
                     <NavItem icon={Trophy} label="Campaigns" id="campaigns" active={activeTab === 'campaigns'} onClick={setActiveTab} />
                     <NavItem icon={Gavel} label="Disputes" id="disputes" active={activeTab === 'disputes'} onClick={setActiveTab} />
+                    <NavItem icon={Settings} label="Settings" id="settings" active={activeTab === 'settings'} onClick={setActiveTab} />
                     <div className="h-[1px] w-full bg-white/5 my-4" />
                     <button
                         onClick={() => setIsMessagingOpen(true)}
@@ -2126,14 +2152,9 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                             <div className="flex-1">
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase tracking-[0.4em] mb-1 text-[#3B82F6]">
-                                                        NODE STATUS {lastSync && `• SYNC: ${String(lastSync)}`}
+                                                        PROTOCOL STATUS {lastSync && `• SYNC: ${String(lastSync)}`}
                                                     </p>
                                                     <h2 className="text-xl lg:text-3xl font-black text-white">{unifiedMetrics.currentStats.wallets} <span className="text-[10px] font-bold text-white/40 ml-2 uppercase tracking-widest">Active Users</span></h2>
-                                                    <div className="flex items-center gap-2 mt-2">
-                                                        <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest">
-                                                            Active Relay: Arc Network
-                                                        </p>
-                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="flex flex-row md:flex-col lg:flex-row gap-6 md:gap-2 lg:gap-8 mt-4 md:mt-0 pt-4 md:pt-0 border-t border-white/5 md:border-t-0">
@@ -2467,6 +2488,103 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
 
 
+
+
+                            {
+                                activeTab === 'copytraders' && (
+                                    <motion.div
+                                        key="copytraders"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="space-y-6"
+                                    >
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 lg:mb-8 gap-4">
+                                            <div>
+                                                <h3 className="text-xl font-black text-white uppercase tracking-tighter">Copy Traders</h3>
+                                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Review and manage provider applications</p>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    if(!window.confirm('Are you sure you want to wipe all copy trading data? This cannot be undone.')) return;
+                                                    try {
+                                                        const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/clear`, { method: 'POST' });
+                                                        if (res.ok) {
+                                                            setCopyApplications([]);
+                                                            notify('success', 'CLEARED', 'All provider applications have been wiped.');
+                                                        }
+                                                    } catch (e) {}
+                                                }}
+                                                className="w-fit px-6 py-2 bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
+                                            >
+                                                Wipe All Applications
+                                            </button>
+                                        </div>
+
+                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
+                                            <div className="p-8">
+                                                <div className="space-y-4">
+                                                    {copyApplications.length > 0 ? copyApplications.map((app, i) => (
+                                                        <div key={i} className="p-6 bg-white/5 border border-white/5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                                            <div className="flex items-center gap-6">
+                                                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-[#3CB371]/10 text-[#3CB371] font-black text-xl">
+                                                                    {app.username?.[0] || 'T'}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-black text-white">{app.username}</p>
+                                                                    <div className="flex items-center gap-4 mt-1">
+                                                                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest font-mono">{app.primaryWallet}</p>
+                                                                        <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">Fee: {app.copyFee}%</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/approve`, {
+                                                                                method: 'POST',
+                                                                                headers: { 'Content-Type': 'application/json' },
+                                                                                body: JSON.stringify({ address: app.address || app.primaryWallet, approved: true })
+                                                                            });
+                                                                            if (res.ok) {
+                                                                                setCopyApplications(prev => prev.filter(a => a.address !== app.address && a.primaryWallet !== app.primaryWallet));
+                                                                                notify('success', 'APPROVED', 'Provider application approved.');
+                                                                            }
+                                                                        } catch (e) {}
+                                                                    }}
+                                                                    className="px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#2e8a56] transition-colors"
+                                                                >
+                                                                    Approve
+                                                                </button>
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/approve`, {
+                                                                                method: 'POST',
+                                                                                headers: { 'Content-Type': 'application/json' },
+                                                                                body: JSON.stringify({ address: app.address || app.primaryWallet, approved: false })
+                                                                            });
+                                                                            if (res.ok) {
+                                                                                setCopyApplications(prev => prev.filter(a => a.address !== app.address && a.primaryWallet !== app.primaryWallet));
+                                                                                notify('info', 'REJECTED', 'Provider application rejected.');
+                                                                            }
+                                                                        } catch (e) {}
+                                                                    }}
+                                                                    className="px-6 py-2 bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-red-500/20 transition-colors"
+                                                                >
+                                                                    Reject
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )) : (
+                                                        <div className="text-center py-12 text-white/20 text-xs font-black uppercase tracking-widest">No pending applications</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            }
 
 
                             {
@@ -2898,6 +3016,25 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                             }
 
                             {
+                                activeTab === 'network' && (
+                                    <motion.div
+                                        key="network"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        className="w-full h-[calc(100vh-160px)]"
+                                    >
+                                        <GlobalExpansionMap 
+                                            theme="dark"
+                                            currentNetwork="ARC"
+                                            activeBets={liveEscrowBuffer ? Array.from(liveEscrowBuffer.values()) : []}
+                                            isFullscreen={true}
+                                        />
+                                    </motion.div>
+                                )
+                            }
+
+                            {
                                 activeTab === 'settings' && (
                                     <motion.div
                                         key="settings"
@@ -2916,11 +3053,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                 { id: 'platform', label: 'Platform', icon: Cpu },
                                                 { id: 'treasury', label: 'Treasury', icon: Coins },
                                                 { id: 'listing', label: 'Markets', icon: Database },
-                                                { id: 'beta', label: 'Beta Entry', icon: Key },
-                                                { id: 'globe', label: 'Geo-Map', icon: Globe },
-                                                { id: 'directory', label: 'Profiles', icon: Users },
-                                                { id: 'security', label: 'Security', icon: ShieldCheck },
-                                                { id: 'terminal', label: 'System Logs', icon: TerminalIcon },
                                             ].map((tab) => (
                                                 <button
                                                     key={tab.id}
@@ -3121,198 +3253,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                 )
                             }
 
-                            {
-                                settingsSubTab === 'directory' && (
-                                    <motion.div
-                                        key="directory"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden"
-                                    >
-                                        <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-                                            <div>
-                                                <h3 className="text-lg font-black text-white uppercase tracking-tight">User Directory</h3>
-                                                <p className="text-[10px] text-white/20 font-bold uppercase mt-1">Manage global user profiles & status</p>
-                                            </div>
-                                            <div className="flex gap-4">
-                                                <div className="relative">
-                                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={14} />
-                                                    <input
-                                                        type="text"
-                                                        placeholder="SEARCH PROFILES..."
-                                                        className="bg-black/40 border border-white/5 rounded-xl pl-10 pr-6 py-2.5 text-[9px] font-black text-white outline-none focus:border-[#3CB371]/40 w-64"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="p-8">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {protocolData.profiles.map((profile, idx) => (
-                                                    <div key={idx} className="p-6 bg-white/5 border border-white/5 rounded-3xl hover:bg-white/[0.08] transition-all group">
-                                                        <div className="flex items-center gap-4 mb-6">
-                                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#3CB371]/20 to-blue-500/20 flex items-center justify-center text-[#3CB371]">
-                                                                <User size={28} />
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="text-sm font-black text-white truncate">{profile.username || 'Anonymous'}</p>
-                                                                <p className="text-[9px] font-mono text-white/20 truncate">{profile.publicKey?.slice(0, 8)}...{profile.publicKey?.slice(-8)}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            <div className="p-3 bg-black/40 rounded-xl border border-white/5">
-                                                                <p className="text-[8px] font-black text-white/20 uppercase mb-1">Trades</p>
-                                                                <p className="text-xs font-bold text-white">{profile.stats?.totalTrades || 0}</p>
-                                                            </div>
-                                                            <div className="p-3 bg-black/40 rounded-xl border border-white/5">
-                                                                <p className="text-[8px] font-black text-white/20 uppercase mb-1">Wins</p>
-                                                                <p className="text-xs font-bold text-[#3CB371]">{profile.stats?.totalWins || 0}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {protocolData.profiles.length === 0 && (
-                                                    <div className="col-span-full py-20 text-center opacity-10">
-                                                        <Users size={64} className="mx-auto mb-4" />
-                                                        <p className="text-xs font-black uppercase tracking-[0.3em]">No synced profiles found in Arc Keeper</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                settingsSubTab === 'beta' && (
-                                    <motion.div
-                                        key="beta"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        className="space-y-8"
-                                    >
-                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden">
-                                            <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Beta Entry Control</h3>
-                                                    <p className="text-[10px] text-white/20 font-bold uppercase mt-1">Approve rounds access requests</p>
-                                                </div>
-                                            </div>
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full">
-                                                    <thead>
-                                                        <tr className="bg-white/5">
-                                                            <th className="text-left px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest">Applicant</th>
-                                                            <th className="text-left px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest">Email</th>
-                                                            <th className="text-left px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest text-center">Status</th>
-                                                            <th className="text-right px-8 py-5 text-[9px] font-black text-white/30 uppercase tracking-widest">Action</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-white/[0.02]">
-                                                        {betaApplications.map((app, i) => (
-                                                            <tr key={i} className="hover:bg-white/[0.01]">
-                                                                <td className="px-8 py-6">
-                                                                    <p className="font-mono text-xs text-white">{app.address}</p>
-                                                                </td>
-                                                                <td className="px-8 py-6">
-                                                                    <p className="text-xs text-white/40">{app.email}</p>
-                                                                </td>
-                                                                <td className="px-8 py-6 text-center">
-                                                                    <span className="px-3 py-1 bg-yellow-500/10 text-yellow-500 text-[9px] font-black uppercase rounded-lg border border-yellow-500/20">Pending</span>
-                                                                </td>
-                                                                <td className="px-8 py-6 text-right">
-                                                                    <button
-                                                                        onClick={() => handleApproveBeta(app.address, app.email)}
-                                                                        className="px-6 py-2 bg-[#3CB371]/20 text-[#3CB371] text-[9px] font-black uppercase rounded-lg border border-[#3CB371]/30 hover:bg-[#3CB371] hover:text-white transition-all"
-                                                                    >
-                                                                        Grant Access
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                        {betaApplications.length === 0 && (
-                                                            <tr><td colSpan="4" className="py-20 text-center opacity-20 text-[10px] font-black uppercase tracking-widest italic">No pending applications</td></tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden">
-                                            <div className="p-8 border-b border-white/5">
-                                                <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Authorized Beta List</h3>
-                                            </div>
-                                            <div className="p-8">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    {authorizedWallets.map((w, i) => (
-                                                        <div key={i} className="flex items-center justify-between p-5 bg-white/5 border border-white/5 rounded-2xl group">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="w-2 h-2 rounded-full bg-[#3CB371]" />
-                                                                <p className="font-mono text-xs text-white/60 group-hover:text-white transition-colors">{w}</p>
-                                                            </div>
-                                                            <button 
-                                                                onClick={() => handleRevokeBeta(w)}
-                                                                className="opacity-0 group-hover:opacity-100 p-2 hover:bg-red-500/20 text-red-500 rounded-lg transition-all"
-                                                            >
-                                                                <LogOut size={16} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                settingsSubTab === 'terminal' && (
-                                    <motion.div
-                                        key="terminal"
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -20 }}
-                                        className="bg-black border border-white/10 rounded-[32px] overflow-hidden flex flex-col h-[600px] shadow-2xl"
-                                    >
-                                        <div className="p-6 bg-[#0A0A0A] border-b border-white/10 flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-[#3CB371]/10 rounded-xl flex items-center justify-center text-[#3CB371]">
-                                                    <TerminalIcon size={20} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">System Logs</h3>
-                                                    <p className="text-[9px] text-[#3CB371] font-bold uppercase">Streaming live from Arc Keeper Node</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
-                                                    <div className="w-1.5 h-1.5 bg-[#3CB371] rounded-full animate-pulse" />
-                                                    <span className="text-[8px] font-black text-white/60 uppercase">Connected</span>
-                                                </div>
-                                                <button onClick={() => setKeeperLogs([])} className="p-2 hover:bg-white/5 text-white/20 hover:text-white transition-colors"><RefreshCw size={14} /></button>
-                                            </div>
-                                        </div>
-                                        <div className="flex-1 p-6 font-mono text-[10px] sm:text-xs overflow-y-auto custom-scrollbar-terminal bg-black/40">
-                                            {keeperLogs.map((log, i) => (
-                                                <div key={i} className="mb-2.5 flex gap-4 opacity-80 hover:opacity-100 transition-opacity">
-                                                    <span className="text-white/20 shrink-0">[{new Date().toLocaleTimeString()}]</span>
-                                                    <span className={`${log.includes('ERROR') || log.includes('FAILED') ? 'text-red-500' : log.includes('SUCCESS') || log.includes('PLACED') ? 'text-[#3CB371]' : 'text-blue-400'}`}>
-                                                        {log}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                            {keeperLogs.length === 0 && (
-                                                <div className="h-full flex items-center justify-center text-white/5 italic">Awaiting node transmission...</div>
-                                            )}
-                                        </div>
-                                        <div className="p-4 bg-[#0A0A0A] border-t border-white/5 flex items-center gap-4">
-                                            <div className="w-2 h-2 rounded-full bg-[#3CB371] shadow-[0_0_10px_rgba(60,179,113,0.5)]" />
-                                            <span className="text-[8px] font-black text-white/20 uppercase tracking-[0.3em]">Citadel Secure Relay v2.0.4 - System Active</span>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
 
                             {
                                 settingsSubTab === 'treasury' && (
@@ -3432,186 +3372,6 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                         </div>
                                                     </div>
                                                 ))}
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                settingsSubTab === 'security' && (
-                                    <motion.div
-                                        key="security"
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
-                                        className="bg-[#0D0D0D] border border-white/5 rounded-[40px] overflow-hidden"
-                                    >
-                                        <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                                            <div className="flex flex-col">
-                                                <h3 className="text-sm font-black uppercase tracking-widest text-white">Infrastructure Operators</h3>
-                                                <p className="text-[9px] text-white/20 font-bold uppercase mt-1">Manage platform access & wallet-based permissions</p>
-                                            </div>
-                                            {currentUser?.role === 'ROOT' && (
-                                                <button
-                                                    onClick={() => setIsStaffModalOpen(true)}
-                                                    className="w-fit flex items-center gap-2 px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg"
-                                                >
-                                                    <PlusCircle size={14} />
-                                                    Authorize Level-1 Wallet
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="p-8">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {staffMembers.map((staff) => (
-                                                    <div key={staff.id} className="p-6 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center relative">
-                                                                <User size={20} className="text-white/40 group-hover:text-[#3CB371] transition-colors" />
-                                                                {staff.onboardingComplete ? (
-                                                                    <div className="absolute -top-1 -right-1 bg-[#3CB371] rounded-full p-0.5 border border-[#0D0D0D]">
-                                                                        <CheckCircle2 size={10} className="text-white" />
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-0.5 border border-[#0D0D0D]">
-                                                                        <Clock size={10} className="text-white" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="text-xs font-black text-white truncate w-32">{staff.address}</p>
-                                                                <p className="text-[9px] font-bold text-[#3CB371] uppercase tracking-widest">{staff.role}</p>
-                                                                <p className="text-[10px] text-white/40 font-bold uppercase mt-0.5">{staff.username || 'Uninitialized'}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col items-end gap-3">
-                                                            <div className={`w-2 h-2 rounded-full ${staff.status === 'ACTIVE' ? 'bg-[#3CB371] animate-pulse' : 'bg-white/10'}`} />
-                                                            {staff.role !== 'ROOT' && currentUser?.role === 'ROOT' && (
-                                                                <button
-                                                                    onClick={() => handleRevokeRole(staff.id)}
-                                                                    className="p-2 hover:bg-red-500/10 text-white/20 hover:text-red-500 rounded-lg transition-colors group/btn"
-                                                                    title="Revoke Access"
-                                                                >
-                                                                    <LogOut size={14} className="group-hover/btn:scale-110 transition-transform" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                settingsSubTab === 'globe' && (
-                                    <motion.div
-                                        key="globe"
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
-                                        className="bg-[#0D0D0D] border border-white/5 rounded-[48px] overflow-hidden flex flex-col h-[700px] shadow-2xl"
-                                    >
-                                        <div className="p-8 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-[#3CB371]/10 rounded-2xl flex items-center justify-center text-[#3CB371]">
-                                                    <Globe size={28} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Geo-Spatial Analysis</h3>
-                                                    <p className="text-[10px] text-white/20 font-bold uppercase tracking-[0.2em] mt-1">Live global trade density & infrastructure health</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-3">
-                                                <div className="px-4 py-2 bg-[#3CB371]/20 rounded-xl border border-[#3CB371]/30 text-[9px] font-black text-[#3CB371] uppercase tracking-widest">
-                                                    REAL-TIME SYNC
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex-1 relative bg-black/40">
-                                            <GlobalExpansionMap onLocationUpdate={(loc) => {}} simplified={false} />
-                                            {/* Map Overlay Stats */}
-                                            <div className="absolute bottom-8 left-8 p-6 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl space-y-4 max-w-xs shadow-2xl">
-                                                <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Infrastructure Status</h4>
-                                                <div className="space-y-3">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[9px] text-white/40 uppercase font-black">NA-East Node</span>
-                                                        <span className="text-[9px] text-[#3CB371] font-black">OPTIMAL (12ms)</span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[9px] text-white/40 uppercase font-black">EU-Central Node</span>
-                                                        <span className="text-[9px] text-yellow-500 font-black">ACTIVE (48ms)</span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[9px] text-white/40 uppercase font-black">AS-Tokyo Node</span>
-                                                        <span className="text-[9px] text-blue-500 font-black">STABLE (92ms)</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )
-                            }
-
-                            {
-                                settingsSubTab === 'security' && (
-                                    <motion.div
-                                        key="security"
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -20 }}
-                                        className="bg-[#0D0D0D] border border-white/10 p-10 rounded-[48px] space-y-10 relative overflow-hidden"
-                                    >
-                                        <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
-                                            <Shield size={180} />
-                                        </div>
-                                        <div className="relative z-10">
-                                            <div className="flex items-center gap-6 mb-12">
-                                                <div className="w-16 h-16 bg-red-500/10 rounded-3xl flex items-center justify-center text-red-500 border border-red-500/20">
-                                                    <Lock size={32} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-2xl font-black text-white uppercase tracking-tight">Root Authentication</h3>
-                                                    <p className="text-xs text-white/40 font-bold uppercase tracking-widest mt-1">Manage administrative credentials and access tokens</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                                                <div className="space-y-6">
-                                                    <h4 className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em] ml-1">Secure Credential Rotation</h4>
-                                                    <div className="space-y-4">
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="Current Username"
-                                                            className="w-full bg-black/60 border border-white/5 rounded-2xl px-6 py-5 text-xs text-white outline-none focus:border-red-500/40"
-                                                        />
-                                                        <input 
-                                                            type="password" 
-                                                            placeholder="New Secure Password"
-                                                            className="w-full bg-black/60 border border-white/5 rounded-2xl px-6 py-5 text-xs text-white outline-none focus:border-red-500/40"
-                                                        />
-                                                        <button 
-                                                            onClick={() => notify('info', 'UNAUTHORIZED', 'Root credential rotation requires CLI access.')}
-                                                            className="w-full py-5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/10 hover:border-red-500/40 transition-all"
-                                                        >
-                                                            Rotate Credentials
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="p-8 bg-red-500/5 border border-red-500/10 rounded-[32px] space-y-6 shadow-2xl">
-                                                    <div className="flex items-center gap-4">
-                                                        <ShieldAlert className="text-red-500" size={24} />
-                                                        <h5 className="text-[11px] font-black text-white uppercase tracking-widest">Security Advisory</h5>
-                                                    </div>
-                                                    <p className="text-[10px] text-white/40 font-bold uppercase leading-relaxed">
-                                                        Administrative actions are logged and audited across the Arc Network. Ensure your session token ($ADMIN_TOKEN) is rotated regularily in the Citadel core configuration files.
-                                                    </p>
-                                                    <div className="pt-4 border-t border-white/10">
-                                                        <p className="text-[8px] font-mono text-white/20 uppercase tracking-[0.2em]">Session Hash: {btoa(ADMIN_TOKEN || "").slice(0, 32)}...</p>
-                                                    </div>
-                                                </div>
                                             </div>
                                         </div>
                                     </motion.div>
