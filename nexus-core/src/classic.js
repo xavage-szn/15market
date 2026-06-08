@@ -275,6 +275,12 @@ class ClassicEngine {
         settledAt: Date.now()
       });
 
+      // Notify the provider of their win
+      try {
+        const notifier = require('./services/notificationService');
+        notifier.notifyUser(trade.userAddr, "Trade Won", `Your ${trade.symbol || 'BTC'} ${trade.direction === 'UP' ? 'LONG' : 'SHORT'} trade won! +${payout.toFixed(2)} USDC.`, "success");
+      } catch (e) {}
+
       // Settle copy trades for this provider's won trade
       this.settleCopyTrades(trade, payout);
 
@@ -352,6 +358,12 @@ class ClassicEngine {
       settledAt: Date.now()
     });
 
+    // Notify the provider of their loss
+    try {
+      const notifier = require('./services/notificationService');
+      notifier.notifyUser(trade.userAddr, "Trade Lost", `Your ${trade.symbol || 'BTC'} ${trade.direction === 'UP' ? 'LONG' : 'SHORT'} trade lost. -${(trade.amount || 0).toFixed(2)} USDC.`, "error");
+    } catch (e) {}
+
     // Settle copy trades for this provider's lost trade
     this.settleCopyTrades(trade, 0);
 
@@ -415,6 +427,17 @@ class ClassicEngine {
             available: String(investor.copyTradingWallet.balance),
             reason: won ? 'COPY_WIN' : 'COPY_LOSS'
           });
+          try {
+            const notifier = require('./services/notificationService');
+            const providerName = provider?.providerApplication?.contactInfo?.name || provider?.username || providerAddr.substring(0, 6);
+            if (won) {
+              notifier.notifyUser(addr, "Copy Trade Won", `${providerName}'s copy trade won! +${settledTrade.payout.toFixed(2)} USDC on ${settledTrade.asset || 'BTC'}.`, "success");
+            } else {
+              notifier.notifyUser(addr, "Copy Trade Lost", `${providerName}'s copy trade lost. -${settledTrade.amount.toFixed(2)} USDC on ${settledTrade.asset || 'BTC'}.`, "error");
+            }
+          } catch (e) {
+            console.error('[CopyTrading] settleCopyTrades notification error:', e.message);
+          }
         }
       }
     } catch (err) {

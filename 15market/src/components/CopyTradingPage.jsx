@@ -52,6 +52,12 @@ export function CopyTradingPage({
     const [isWithdrawing, setIsWithdrawing] = useState(false);
     const [isGeneratingPortfolio, setIsGeneratingPortfolio] = useState(false);
 
+    // Deposit / Withdraw for copy trading wallet
+    const [showCopyDepositModal, setShowCopyDepositModal] = useState(false);
+    const [showCopyWithdrawModal, setShowCopyWithdrawModal] = useState(false);
+    const [copyTransferAmount, setCopyTransferAmount] = useState('');
+    const [isCopyTransferring, setIsCopyTransferring] = useState(false);
+
     // Wallet state
     const [hasCopyWallet, setHasCopyWallet] = useState(!!profile?.copyTradingWallet);
     const [isGeneratingWallet, setIsGeneratingWallet] = useState(false);
@@ -710,6 +716,7 @@ export function CopyTradingPage({
                                                         )}
                                                     </div>
                                                 </div>
+                                                {!isCurrentUser && (
                                                 <div className="flex items-center pl-1 flex-shrink-0">
                                                     <div 
                                                         className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${isLight ? 'bg-[#249C6C]/10 text-[#249C6C] hover:bg-[#249C6C] hover:text-white' : 'bg-[#249C6C]/20 text-[#249C6C] hover:bg-[#249C6C] hover:text-white'}`}
@@ -722,6 +729,7 @@ export function CopyTradingPage({
                                                         Copy
                                                     </div>
                                                 </div>
+                                                )}
                                             </button>
                                             );
                                         })
@@ -825,9 +833,25 @@ export function CopyTradingPage({
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center gap-2 mt-2">
-                                                        <Shield size={10} className="text-white opacity-40" />
-                                                        <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>Secured</p>
+                                                    <div className="flex items-center justify-between mt-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <Shield size={10} className="text-white opacity-40" />
+                                                            <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>Secured</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => { setCopyTransferAmount(''); setShowCopyDepositModal(true); }}
+                                                                className="px-3 py-1.5 rounded-full bg-white/10 text-white text-[8px] font-black uppercase tracking-widest hover:bg-white/20 active:scale-95 transition-all border border-white/10"
+                                                            >
+                                                                Deposit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setCopyTransferAmount(''); setShowCopyWithdrawModal(true); }}
+                                                                className="px-3 py-1.5 rounded-full bg-white/10 text-white text-[8px] font-black uppercase tracking-widest hover:bg-white/20 active:scale-95 transition-all border border-white/10"
+                                                            >
+                                                                Withdraw
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1935,6 +1959,165 @@ export function CopyTradingPage({
                             >
                                 {copyResult.message}
                             </motion.p>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Copy Trading Deposit Modal */}
+                {showCopyDepositModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 20 }}
+                            className={`w-full max-w-md p-6 rounded-[32px] border ${isLight ? 'bg-[#F2F7F4] border-[#249C6C]/20' : 'bg-[#0A0A0A] border-white/10'} shadow-2xl relative`}
+                        >
+                            <button
+                                onClick={() => setShowCopyDepositModal(false)}
+                                className="absolute top-6 right-6 p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                            >
+                                <X size={20} className={isLight ? 'text-black/40' : 'text-white/40'} />
+                            </button>
+
+                            <h2 className="text-2xl font-black mb-2">Deposit to Copy Trading</h2>
+                            <p className="text-sm font-bold opacity-50 mb-6">Move funds from your trading wallet to your copy trading wallet</p>
+
+                            <div className="space-y-4 mb-8">
+                                <div className={`p-4 rounded-2xl border ${isLight ? 'bg-black/5 border-transparent' : 'bg-white/5 border-white/5'}`}>
+                                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Copy Trading Balance</p>
+                                    <p className="text-xl font-black">{copyWalletBalance.toFixed(2)} USDC</p>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-2">Amount (USDC)</label>
+                                    <input
+                                        type="number"
+                                        placeholder="0.00"
+                                        value={copyTransferAmount}
+                                        onChange={e => setCopyTransferAmount(e.target.value)}
+                                        className={`w-full p-4 rounded-xl text-sm font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={async () => {
+                                    const amt = parseFloat(copyTransferAmount);
+                                    if (!amt || amt <= 0) return;
+                                    setIsCopyTransferring(true);
+                                    try {
+                                        const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/deposit`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ address: address.toLowerCase(), amount: amt })
+                                        });
+                                        const data = await res.json();
+                                        if (res.ok && data.success) {
+                                            setCopyResult({ type: 'success', message: `Deposited ${amt} USDC` });
+                                            setCopyWalletBalance(data.newBalance);
+                                            setShowCopyDepositModal(false);
+                                            setCopyTransferAmount('');
+                                            setTimeout(() => setCopyResult(null), 2500);
+                                        } else {
+                                            setCopyResult({ type: 'fail', message: data.error || 'Deposit failed' });
+                                            setTimeout(() => setCopyResult(null), 2500);
+                                        }
+                                    } catch (e) {
+                                        setCopyResult({ type: 'fail', message: 'Network error' });
+                                        setTimeout(() => setCopyResult(null), 2500);
+                                    } finally {
+                                        setIsCopyTransferring(false);
+                                    }
+                                }}
+                                disabled={!copyTransferAmount || parseFloat(copyTransferAmount) <= 0 || isCopyTransferring}
+                                className="w-full py-5 rounded-[24px] bg-[#249C6C] text-white font-black text-sm uppercase tracking-[0.2em] shadow-[0_10px_30px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                            >
+                                {isCopyTransferring ? 'Processing...' : 'Confirm Deposit'}
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Copy Trading Withdraw Modal */}
+                {showCopyWithdrawModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 20 }}
+                            className={`w-full max-w-md p-6 rounded-[32px] border ${isLight ? 'bg-[#F2F7F4] border-[#249C6C]/20' : 'bg-[#0A0A0A] border-white/10'} shadow-2xl relative`}
+                        >
+                            <button
+                                onClick={() => setShowCopyWithdrawModal(false)}
+                                className="absolute top-6 right-6 p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                            >
+                                <X size={20} className={isLight ? 'text-black/40' : 'text-white/40'} />
+                            </button>
+
+                            <h2 className="text-2xl font-black mb-2">Withdraw from Copy Trading</h2>
+                            <p className="text-sm font-bold opacity-50 mb-6">Move funds back to your trading wallet</p>
+
+                            <div className="space-y-4 mb-8">
+                                <div className={`p-4 rounded-2xl border ${isLight ? 'bg-black/5 border-transparent' : 'bg-white/5 border-white/5'}`}>
+                                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Available Balance</p>
+                                    <p className="text-xl font-black">{copyWalletBalance.toFixed(2)} USDC</p>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-2">Amount (USDC)</label>
+                                    <input
+                                        type="number"
+                                        placeholder="0.00"
+                                        value={copyTransferAmount}
+                                        onChange={e => setCopyTransferAmount(e.target.value)}
+                                        max={copyWalletBalance}
+                                        className={`w-full p-4 rounded-xl text-sm font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={async () => {
+                                    const amt = parseFloat(copyTransferAmount);
+                                    if (!amt || amt <= 0 || amt > copyWalletBalance) return;
+                                    setIsCopyTransferring(true);
+                                    try {
+                                        const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/withdraw`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ address: address.toLowerCase(), amount: amt })
+                                        });
+                                        const data = await res.json();
+                                        if (res.ok && data.success) {
+                                            setCopyResult({ type: 'success', message: `Withdrew ${amt} USDC` });
+                                            setCopyWalletBalance(data.newBalance);
+                                            setShowCopyWithdrawModal(false);
+                                            setCopyTransferAmount('');
+                                            setTimeout(() => setCopyResult(null), 2500);
+                                        } else {
+                                            setCopyResult({ type: 'fail', message: data.error || 'Withdrawal failed' });
+                                            setTimeout(() => setCopyResult(null), 2500);
+                                        }
+                                    } catch (e) {
+                                        setCopyResult({ type: 'fail', message: 'Network error' });
+                                        setTimeout(() => setCopyResult(null), 2500);
+                                    } finally {
+                                        setIsCopyTransferring(false);
+                                    }
+                                }}
+                                disabled={!copyTransferAmount || parseFloat(copyTransferAmount) <= 0 || parseFloat(copyTransferAmount) > copyWalletBalance || isCopyTransferring}
+                                className="w-full py-5 rounded-[24px] bg-[#249C6C] text-white font-black text-sm uppercase tracking-[0.2em] shadow-[0_10px_30px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                            >
+                                {isCopyTransferring ? 'Processing...' : 'Confirm Withdrawal'}
+                            </button>
                         </motion.div>
                     </motion.div>
                 )}

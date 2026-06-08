@@ -1010,6 +1010,7 @@ app.post('/session/execute', async (req, res) => {
       if (providerProfile?.isProvider) {
         const providerTradeId = String(result.tradeId);
         const tradeParams = req.body.tradeParams;
+        let investorsNotified = 0;
         for (const addr in profiles.profiles) {
           const investor = profiles.get(addr);
           if (!investor?.activeCopies || !investor?.copyTradingWallet) continue;
@@ -1043,9 +1044,17 @@ app.post('/session/execute', async (req, res) => {
               timestamp: copyTrade.timestamp
             }
           });
+          notificationService.notifyUser(addr, "Copy Trade Executed", `Copied ${copyTrade.providerName}'s trade: ${copyTrade.asset} ${copyTrade.direction === 'UP' ? 'LONG' : 'SHORT'} ($${stake} USDC)`, "info");
+          investorsNotified++;
         }
       }
+      if (investorsNotified > 0) {
+        notificationService.notifyUser(providerAddr, "Trades Copied", `${investorsNotified} investor(s) copied your ${req.body.tradeParams?.symbol || 'BTC'} trade.`, "info");
+      }
     }
+
+    // Notify the trader of their placed trade
+    notificationService.notifyUser(address, "Trade Placed", `Placed ${tradeParams?.direction === 'UP' ? 'LONG' : 'SHORT'} trade on ${tradeParams?.symbol || 'BTC'} ($${tradeParams?.amount || 0} USDC)`, "info");
 
     // Notify all connected admins of the new trade in real-time
     const newTrade = cache.trades.get(String(result.tradeId));
@@ -1738,6 +1747,7 @@ app.get('/copy-trading/wallet/:address', async (req, res) => {
         balance: 0 // Track isolated balance
       };
       profiles.upsert(userAddr, profile);
+      notificationService.notifyUser(userAddr, "Copy Trading Wallet Created", "Your dedicated copy trading wallet has been generated successfully.", "success");
     }
 
     // Sync with real on-chain balance for instant deposit reflection
@@ -1766,6 +1776,96 @@ app.get('/copy-trading/wallet/:address', async (req, res) => {
   } catch (err) {
     console.error('[copy-trading/wallet] error:', err.message);
     res.status(500).json({ error: "Failed to fetch copy trading wallet" });
+  }
+});
+
+/**
+ * POST /copy-trading/deposit
+ * Deposits funds from the user's trading wallet into the copy trading wallet.
+ * Body: { address, amount }
+ * Deducts from the tracked session/trading balance and credits the copy trading wallet.
+ */
+app.post('/copy-trading/deposit', async (req, res) => {
+  try {
+    const { address, amount } = req.body;
+    if (!address || !amount || amount <= 0) {
+      return res.status(400).json({ error: "Missing or invalid parameters" });
+    }
+
+    const userAddr = address.toLowerCase();
+    let profile = profiles.get(userAddr);
+    if (!profile) return res.status(404).json({ error: "Profile not found" });
+
+    if (!profile.copyTradingWallet) {
+      const newWallet = ethers.Wallet.createRandom();
+      profile.copyTradingWallet = {
+        address: newWallet.address,
+        privateKey: newWallet.privateKey,
+        balance: 0
+      };
+    }
+
+    const amt = parseFloat(amount);
+    const session = cache.sessions.get(userAddr);
+    const sourceBalance = session ? session.balance : (parseFloat(profile.balance) || 0);
+
+    if (amt > sourceBalance) {
+      return res.status(400).json({ error: `Insufficient trading wallet balance: ${sourceBalance.toFixed(2)} USDC` });
+    }
+
+    if (session) {
+      session.balance = sourceBalance - amt;
+    }
+    profile.balance = sourceBalance - amt;
+    profile.copyTradingWallet.balance = (parseFloat(profile.copyTradingWallet.balance) || 0) + amt;
+
+    profiles.upsert(userAddr, { balance: profile.balance, copyTradingWallet: profile.copyTradingWallet });
+
+    notificationService.notifyUser(userAddr, "Deposit to Copy Trading", `Deposited ${amt.toFixed(2)} USDC from trading wallet to copy trading wallet.`, "success");
+    res.json({ success: true, message: `Deposited ${amt.toFixed(2)} USDC`, newBalance: profile.copyTradingWallet.balance });
+  } catch (err) {
+    console.error('[copy-trading/deposit] error:', err.message);
+    res.status(500).json({ error: "Failed to process deposit" });
+  }
+});
+
+/**
+ * POST /copy-trading/withdraw
+ * Withdraws funds from the copy trading wallet back to the user's trading wallet.
+ * Body: { address, amount }
+ */
+app.post('/copy-trading/withdraw', async (req, res) => {
+  try {
+    const { address, amount } = req.body;
+    if (!address || !amount || amount <= 0) {
+      return res.status(400).json({ error: "Missing or invalid parameters" });
+    }
+
+    const userAddr = address.toLowerCase();
+    const profile = profiles.get(userAddr);
+    if (!profile) return res.status(404).json({ error: "Profile not found" });
+    if (!profile.copyTradingWallet) return res.status(400).json({ error: "No copy trading wallet" });
+
+    const amt = parseFloat(amount);
+    const currentBalance = parseFloat(profile.copyTradingWallet.balance) || 0;
+    if (amt <= 0 || amt > currentBalance) {
+      return res.status(400).json({ error: `Insufficient copy trading balance: ${currentBalance.toFixed(2)} USDC` });
+    }
+
+    profile.copyTradingWallet.balance = currentBalance - amt;
+    const session = cache.sessions.get(userAddr);
+    if (session) {
+      session.balance = (session.balance || 0) + amt;
+    }
+    profile.balance = (parseFloat(profile.balance) || 0) + amt;
+
+    profiles.upsert(userAddr, { balance: profile.balance, copyTradingWallet: profile.copyTradingWallet });
+
+    notificationService.notifyUser(userAddr, "Withdraw from Copy Trading", `Withdrew ${amt.toFixed(2)} USDC from copy trading wallet to trading wallet.`, "info");
+    res.json({ success: true, message: `Withdrew ${amt.toFixed(2)} USDC`, newBalance: profile.copyTradingWallet.balance });
+  } catch (err) {
+    console.error('[copy-trading/withdraw] error:', err.message);
+    res.status(500).json({ error: "Failed to process withdrawal" });
   }
 });
 
@@ -1952,8 +2052,16 @@ app.post('/admin/copy-trading/approve', (req, res) => {
     
     profiles.upsert(userAddr, profile);
 
-    // Notify the user via socket
+    // Notify the user via socket and email
     io.to(userAddr).emit('provider_application_update', profile.providerApplication);
+    notificationService.notifyUser(
+      userAddr,
+      approved ? "Provider Application Approved" : "Provider Application Rejected",
+      approved
+        ? `Congratulations! Your application to become a copy trading provider has been approved. You can now start building your following.`
+        : `Your provider application was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+      approved ? "success" : "error"
+    );
 
     res.json({ success: true, status: profile.providerApplication.status });
   } catch (err) {
