@@ -19,10 +19,13 @@ class SocketService {
         this.socket.on('connect', () => {
             console.log('[Socket] Connected to backend');
             this.socket.emit('auth_admin', ADMIN_TOKEN);
+            // Re-forward all registered handlers (needed after reconnect)
+            this.reForwardAll();
         });
 
-        this.socket.on('disconnect', () => {
-            console.warn('[Socket] Disconnected from backend');
+        this.socket.on('disconnect', (reason) => {
+            console.warn('[Socket] Disconnected from backend:', reason);
+            this.forwardedEvents.clear();
         });
 
         this.socket.on('error', (err) => {
@@ -50,21 +53,34 @@ class SocketService {
         ].forEach(event => this.forwardEvent(event));
     }
 
+    reForwardAll() {
+        for (const event of this.handlers.keys()) {
+            this.forwardEvent(event, true);
+        }
+    }
+
     on(event, handler) {
         if (!this.handlers.has(event)) {
             this.handlers.set(event, new Set());
         }
         this.handlers.get(event).add(handler);
-        if (this.socket) this.forwardEvent(event);
+        if (this.socket) this.forwardEvent(event, true);
         return () => this.off(event, handler);
     }
 
-    forwardEvent(event) {
-        if (!this.socket || this.forwardedEvents.has(event)) return;
+    forwardEvent(event, force = false) {
+        if (!this.socket || (!force && this.forwardedEvents.has(event))) return;
         this.forwardedEvents.add(event);
+        // Remove old listener if re-forwarding
+        if (force) {
+            this.socket.off(event);
+        }
         this.socket.on(event, (data) => {
+            console.log(`[Socket] Received event '${event}'`, data ? (data.address || data.primaryWallet || JSON.stringify(data).substring(0, 80)) : '(no data)');
             if (this.handlers.has(event)) {
                 this.handlers.get(event).forEach(handler => handler(data));
+            } else {
+                console.log(`[Socket] No handlers registered for '${event}'`);
             }
         });
     }

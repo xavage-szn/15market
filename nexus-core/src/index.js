@@ -250,7 +250,7 @@ setInterval(() => {
 
 // --- Socket.IO ---
 io.on('connection', (socket) => {
-  console.log(`[Socket] New connection: ${socket.id}`);
+  console.log(`[Socket] New connection: ${socket.id} (total: ${io.engine?.clientsCount || '?'})`);
   Object.keys(cache.prices).forEach(key => {
     if (cache.prices[key] > 0) {
       socket.emit('price', { key, price: cache.prices[key], ts: cache.priceMeta[key]?.updatedAt || Date.now() });
@@ -1735,8 +1735,7 @@ app.post('/copy-trading/apply', (req, res) => {
     
     profiles.upsert(userAddr, profile);
     
-    // Emit to all connected clients (admin dashboard will listen)
-    io.emit('new_copy_application', {
+    const payload = {
       address: userAddr,
       username: profile.providerApplication.contactInfo?.name || profile.discord?.username || profile.username || `${userAddr.substring(0, 6)}...`,
       primaryWallet: profile.providerApplication.primaryWallet || userAddr,
@@ -1745,10 +1744,16 @@ app.post('/copy-trading/apply', (req, res) => {
       onChainData: profile.providerApplication.onChainData || {},
       appliedAt: profile.providerApplication.appliedAt,
       metrics: profile.providerApplication.metricsSnapshot
-    });
+    };
 
+    const count = io.engine?.clientsCount || 0;
+    console.log(`[CopyTrading] Application saved for ${userAddr}, connected sockets: ${count}`);
+    io.emit('new_copy_application', payload);
+    console.log(`[CopyTrading] Emitted 'new_copy_application' for ${userAddr}`);
+    
     res.json({ success: true, message: "Application submitted successfully" });
   } catch (err) {
+    console.error('[CopyTrading] Apply error:', err);
     res.status(500).json({ error: "Failed to submit application" });
   }
 });
@@ -1987,6 +1992,167 @@ app.post('/copy-trading/activate', (req, res) => {
   } catch (err) {
     console.error('[copy-trading/activate] error:', err.message);
     res.status(500).json({ error: "Failed to activate copy trading" });
+  }
+});
+
+/**
+ * GET /copy-trading/providers/:address/followers
+ * Returns list of investors actively copying this provider
+ */
+app.get('/copy-trading/providers/:address/followers', (req, res) => {
+  try {
+    const providerAddr = req.params.address.toLowerCase();
+    const followers = [];
+    for (const addr in profiles.profiles) {
+      const p = profiles.profiles[addr];
+      if (p.activeCopies && Array.isArray(p.activeCopies)) {
+        const copyRelation = p.activeCopies.find(c => c.providerAddress?.toLowerCase() === providerAddr);
+        if (copyRelation) {
+          followers.push({
+            address: addr,
+            username: p.discord?.username || p.username || `${addr.substring(0, 6)}...`,
+            avatar: p.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${addr.substring(2, 8)}`,
+            mode: copyRelation.mode,
+            allocated: copyRelation.allocated || 0,
+            stakePerTrade: copyRelation.stakePerTrade || 0,
+            pnl: copyRelation.pnl || 0,
+            activatedAt: copyRelation.activatedAt
+          });
+        }
+      }
+    }
+    followers.sort((a, b) => (b.allocated || 0) - (a.allocated || 0));
+    res.json({ success: true, followers });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch followers" });
+  }
+});
+
+/**
+ * GET /copy-trading/providers/:address/performance
+ * Returns provider's own trade performance metrics and revenue history
+ */
+app.get('/copy-trading/providers/:address/performance', (req, res) => {
+  try {
+    const providerAddr = req.params.address.toLowerCase();
+    const provider = profiles.get(providerAddr);
+    if (!provider) return res.status(404).json({ error: "Provider not found" });
+
+    const stats = profiles.getProfileStats(providerAddr);
+    const activationTime = provider.providerApplication?.appliedAt || provider.providerStats?.activatedAt || Date.now() - 86400000 * 30;
+    const providerTrades = (provider.trades || []).filter(t => (t.timestamp || 0) >= activationTime);
+
+    const totalTrades = providerTrades.length;
+    const wins = providerTrades.filter(t => t.won || t.status === 'WON').length;
+    const losses = totalTrades - wins;
+    const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : '0.0';
+    const totalVolume = providerTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+    const totalPnl = providerTrades.reduce((sum, t) => sum + parseFloat(t.pnl || t.profit || 0), 0);
+
+    const revenue = provider.providerStats?.profitGenerated || 0;
+
+    // Group trades by month for monthly breakdown
+    const monthlyBuckets = {};
+    providerTrades.forEach(t => {
+      const d = new Date(t.timestamp || Date.now());
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyBuckets[key]) monthlyBuckets[key] = { trades: 0, wins: 0, volume: 0, pnl: 0 };
+      monthlyBuckets[key].trades++;
+      if (t.won || t.status === 'WON') monthlyBuckets[key].wins++;
+      monthlyBuckets[key].volume += parseFloat(t.amount || 0);
+      monthlyBuckets[key].pnl += parseFloat(t.pnl || t.profit || 0);
+    });
+    const monthlyPerformance = Object.entries(monthlyBuckets).map(([month, data]) => ({
+      month,
+      trades: data.trades,
+      winRate: data.trades > 0 ? ((data.wins / data.trades) * 100).toFixed(1) : '0.0',
+      volume: data.volume,
+      pnl: data.pnl
+    })).sort((a, b) => a.month.localeCompare(b.month));
+
+    res.json({
+      success: true,
+      performance: {
+        totalTrades,
+        wins,
+        losses,
+        winRate: parseFloat(winRate),
+        totalVolume,
+        totalPnl,
+        revenue,
+        followers: provider.providerStats?.followers || 0,
+        aum: provider.providerStats?.aum || 0,
+        monthlyPerformance
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch performance" });
+  }
+});
+
+/**
+ * GET /copy-trading/providers/:address/reports?period=daily|weekly|monthly|annual|all
+ * Returns aggregated reports for the given period
+ */
+app.get('/copy-trading/providers/:address/reports', (req, res) => {
+  try {
+    const providerAddr = req.params.address.toLowerCase();
+    const period = req.query.period || 'all';
+    const provider = profiles.get(providerAddr);
+    if (!provider) return res.status(404).json({ error: "Provider not found" });
+
+    const now = Date.now();
+    const dayMs = 86400000;
+    let fromTime = 0;
+    let groupFormat = 'day';
+
+    switch (period) {
+      case 'daily':   fromTime = now - dayMs; groupFormat = 'hour'; break;
+      case 'weekly':  fromTime = now - 7 * dayMs; groupFormat = 'day'; break;
+      case 'monthly': fromTime = now - 30 * dayMs; groupFormat = 'day'; break;
+      case 'annual':  fromTime = now - 365 * dayMs; groupFormat = 'month'; break;
+      default: fromTime = 0; groupFormat = 'month'; break;
+    }
+
+    const providerTrades = (provider.trades || []).filter(t => (t.timestamp || 0) >= fromTime);
+    const totalTrades = providerTrades.length;
+    const wins = providerTrades.filter(t => t.won || t.status === 'WON').length;
+    const losses = totalTrades - wins;
+    const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : '0.0';
+    const totalVolume = providerTrades.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+    const totalPnl = providerTrades.reduce((sum, t) => sum + parseFloat(t.pnl || t.profit || 0), 0);
+
+    // Count followers added in this period
+    let newFollowers = 0;
+    const activationTime = provider.providerApplication?.appliedAt || 0;
+    for (const addr in profiles.profiles) {
+      const p = profiles.profiles[addr];
+      if (p.activeCopies && Array.isArray(p.activeCopies)) {
+        const rel = p.activeCopies.find(c => c.providerAddress?.toLowerCase() === providerAddr);
+        if (rel && (rel.activatedAt || 0) >= fromTime) newFollowers++;
+      }
+    }
+
+    res.json({
+      success: true,
+      report: {
+        period,
+        from: fromTime,
+        to: now,
+        totalTrades,
+        wins,
+        losses,
+        winRate: parseFloat(winRate),
+        totalVolume,
+        totalPnl,
+        revenue: provider.providerStats?.profitGenerated || 0,
+        totalFollowers: provider.providerStats?.followers || 0,
+        newFollowers,
+        aum: provider.providerStats?.aum || 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to generate report" });
   }
 });
 

@@ -120,8 +120,8 @@ const getBaseUrl = (envValue) => {
         return envValue;
     }
 
-    // Optional explicit local override for developers.
-    if (isLocal && import.meta.env.VITE_FORCE_LOCAL_BACKEND === 'true') {
+    // Local dev defaults to localhost:3010 (matches admin behavior)
+    if (isLocal) {
         const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
         return `http://${host}:3010`;
     }

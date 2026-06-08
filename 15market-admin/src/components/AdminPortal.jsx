@@ -176,6 +176,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     const [betaApplications, setBetaApplications] = useState([]);
     const [authorizedWallets, setAuthorizedWallets] = useState([]);
     const [copyApplications, setCopyApplications] = useState([]);
+    const [expandedApp, setExpandedApp] = useState(null);
     const [loginForm, setLoginForm] = useState({ username: '', password: '' });
     const [securityForm, setSecurityForm] = useState({ username: '', password: '', confirmPassword: '' });
     const [authError, setAuthError] = useState(null);
@@ -523,13 +524,17 @@ const AdminPortal = React.memo(({ onBack, price }) => {
 
     const fetchCopyApplications = useCallback(async () => {
         try {
+            console.log(`[CopyTrading] Fetching from ${KEEPER_URL_ARC}/admin/copy-trading/applications`);
             const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/applications`);
             if (res.ok) {
                 const data = await res.json();
+                console.log(`[CopyTrading] Fetched ${data.applications?.length || 0} applications`, data.applications);
                 setCopyApplications(data.applications || []);
+            } else {
+                console.error(`[CopyTrading] Fetch failed: ${res.status} ${res.statusText}`);
             }
         } catch (e) {
-            console.error("Failed to fetch copy applications:", e);
+            console.error("[CopyTrading] Failed to fetch copy applications:", e);
         }
     }, []);
 
@@ -2501,86 +2506,141 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                         <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 lg:mb-8 gap-4">
                                             <div>
                                                 <h3 className="text-xl font-black text-white uppercase tracking-tighter">Copy Traders</h3>
-                                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Review and manage provider applications</p>
+                                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Review and manage provider applications ({copyApplications.length} pending)</p>
                                             </div>
-                                            <button
-                                                onClick={async () => {
-                                                    if(!window.confirm('Are you sure you want to wipe all copy trading data? This cannot be undone.')) return;
-                                                    try {
-                                                        const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/clear`, { method: 'POST' });
-                                                        if (res.ok) {
-                                                            setCopyApplications([]);
-                                                            notify('success', 'CLEARED', 'All provider applications have been wiped.');
-                                                        }
-                                                    } catch (e) {}
-                                                }}
-                                                className="w-fit px-6 py-2 bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
-                                            >
-                                                Wipe All Applications
-                                            </button>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => fetchCopyApplications()}
+                                                    className="w-fit px-4 py-2 bg-white/5 text-white/60 text-[10px] font-black uppercase tracking-widest rounded-lg border border-white/10 hover:bg-white/10 transition-all"
+                                                >
+                                                    Refresh
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        if(!window.confirm('Are you sure you want to wipe all copy trading data? This cannot be undone.')) return;
+                                                        try {
+                                                            const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/clear`, { method: 'POST' });
+                                                            if (res.ok) {
+                                                                setCopyApplications([]);
+                                                                notify('success', 'CLEARED', 'All provider applications have been wiped.');
+                                                            }
+                                                        } catch (e) {}
+                                                    }}
+                                                    className="w-fit px-6 py-2 bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-all"
+                                                >
+                                                    Wipe All
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        <div className="bg-[#0D0D0D] border border-white/5 rounded-[32px] overflow-hidden">
-                                            <div className="p-8">
-                                                <div className="space-y-4">
-                                                    {copyApplications.length > 0 ? copyApplications.map((app, i) => (
-                                                        <div key={i} className="p-6 bg-white/5 border border-white/5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                                            <div className="flex items-center gap-6">
-                                                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-[#3CB371]/10 text-[#3CB371] font-black text-xl">
-                                                                    {app.username?.[0] || 'T'}
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-sm font-black text-white">{app.username}</p>
-                                                                    <div className="flex items-center gap-4 mt-1">
-                                                                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest font-mono">{app.primaryWallet}</p>
-                                                                        <p className="text-[10px] font-black text-[#3CB371] uppercase tracking-widest">Fee: {app.copyFee}%</p>
-                                                                    </div>
-                                                                </div>
+                                        <div className="space-y-2">
+                                            {copyApplications.length > 0 ? copyApplications.map((app, i) => {
+                                                const isExpanded = expandedApp === i;
+                                                return (
+                                                    <div key={i}>
+                                                        <div className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => setExpandedApp(isExpanded ? null : i)}>
+                                                            <div className="flex items-center gap-4 min-w-0">
+                                                                <span className="text-sm font-bold text-white truncate">{app.username || app.contactInfo?.name || 'Unknown'}</span>
+                                                                <span className="text-[10px] font-mono text-white/30 truncate hidden sm:inline">{app.primaryWallet?.substring(0, 10)}...{app.primaryWallet?.substring(38)}</span>
                                                             </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        try {
-                                                                            const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/approve`, {
-                                                                                method: 'POST',
-                                                                                headers: { 'Content-Type': 'application/json' },
-                                                                                body: JSON.stringify({ address: app.address || app.primaryWallet, approved: true })
-                                                                            });
-                                                                            if (res.ok) {
-                                                                                setCopyApplications(prev => prev.filter(a => a.address !== app.address && a.primaryWallet !== app.primaryWallet));
-                                                                                notify('success', 'APPROVED', 'Provider application approved.');
-                                                                            }
-                                                                        } catch (e) {}
-                                                                    }}
-                                                                    className="px-6 py-2 bg-[#3CB371] text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#2e8a56] transition-colors"
-                                                                >
-                                                                    Approve
-                                                                </button>
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        try {
-                                                                            const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/approve`, {
-                                                                                method: 'POST',
-                                                                                headers: { 'Content-Type': 'application/json' },
-                                                                                body: JSON.stringify({ address: app.address || app.primaryWallet, approved: false })
-                                                                            });
-                                                                            if (res.ok) {
-                                                                                setCopyApplications(prev => prev.filter(a => a.address !== app.address && a.primaryWallet !== app.primaryWallet));
-                                                                                notify('info', 'REJECTED', 'Provider application rejected.');
-                                                                            }
-                                                                        } catch (e) {}
-                                                                    }}
-                                                                    className="px-6 py-2 bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-red-500/20 transition-colors"
-                                                                >
-                                                                    Reject
-                                                                </button>
+                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                <span className="text-[10px] font-black text-[#3CB371]">{app.copyFee}%</span>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <button
+                                                                        onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            try {
+                                                                                const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/approve`, {
+                                                                                    method: 'POST',
+                                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                                    body: JSON.stringify({ address: app.address || app.primaryWallet, approved: true })
+                                                                                });
+                                                                                if (res.ok) {
+                                                                                    setCopyApplications(prev => prev.filter(a => a.address !== app.address && a.primaryWallet !== app.primaryWallet));
+                                                                                    notify('success', 'APPROVED', 'Provider application approved.');
+                                                                                }
+                                                                            } catch (e) {}
+                                                                        }}
+                                                                        className="px-4 py-1.5 bg-[#3CB371] text-white text-[9px] font-black uppercase tracking-widest rounded-md hover:bg-[#2e8a56] transition-colors"
+                                                                    >
+                                                                        Approve
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            try {
+                                                                                const res = await fetch(`${KEEPER_URL_ARC}/admin/copy-trading/approve`, {
+                                                                                    method: 'POST',
+                                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                                    body: JSON.stringify({ address: app.address || app.primaryWallet, approved: false })
+                                                                                });
+                                                                                if (res.ok) {
+                                                                                    setCopyApplications(prev => prev.filter(a => a.address !== app.address && a.primaryWallet !== app.primaryWallet));
+                                                                                    notify('info', 'REJECTED', 'Provider application rejected.');
+                                                                                }
+                                                                            } catch (e) {}
+                                                                        }}
+                                                                        className="px-4 py-1.5 bg-red-500/10 text-red-500 text-[9px] font-black uppercase tracking-widest rounded-md hover:bg-red-500/20 transition-colors"
+                                                                    >
+                                                                        Reject
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    )) : (
-                                                        <div className="text-center py-12 text-white/20 text-xs font-black uppercase tracking-widest">No pending applications</div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                        {isExpanded && (
+                                                            <div className="px-4 pb-4 pt-1">
+                                                                <div className="bg-white/[0.02] rounded-xl p-4 space-y-3">
+                                                                    <div className="grid grid-cols-2 gap-4">
+                                                                        <div>
+                                                                            <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1">Wallet</p>
+                                                                            <p className="text-[10px] font-mono text-white/70 break-all">{app.primaryWallet}</p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1">Applied</p>
+                                                                            <p className="text-[10px] text-white/70">{new Date(app.appliedAt).toLocaleString()}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    {app.contactInfo && (
+                                                                        <div>
+                                                                            <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1.5">Contact</p>
+                                                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                                                                {app.contactInfo.name && <p className="text-[10px] text-white/70">Name: {app.contactInfo.name}</p>}
+                                                                                {app.contactInfo.email && <p className="text-[10px] text-white/70">Email: {app.contactInfo.email}</p>}
+                                                                                {app.contactInfo.twitter && <p className="text-[10px] text-white/70">Twitter: {app.contactInfo.twitter}</p>}
+                                                                                {app.contactInfo.telegram && <p className="text-[10px] text-white/70">Telegram: {app.contactInfo.telegram}</p>}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {app.onChainData && (
+                                                                        <div>
+                                                                            <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1.5">On-Chain Records</p>
+                                                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                                                                {app.onChainData.winRate !== undefined && <p className="text-[10px] text-white/70">Win Rate: {app.onChainData.winRate}</p>}
+                                                                                {app.onChainData.volume !== undefined && <p className="text-[10px] text-white/70">Volume: {app.onChainData.volume}</p>}
+                                                                                {app.onChainData.totalTrades !== undefined && <p className="text-[10px] text-white/70">Trades: {app.onChainData.totalTrades}</p>}
+                                                                                {app.onChainData.avgRoi !== undefined && <p className="text-[10px] text-white/70">Avg ROI: {app.onChainData.avgRoi}</p>}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {app.metrics && (
+                                                                        <div>
+                                                                            <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-1.5">Metrics</p>
+                                                                            <div className="grid grid-cols-3 gap-x-4 gap-y-1">
+                                                                                {app.metrics.totalTrades !== undefined && <p className="text-[10px] text-white/70">Trades: {app.metrics.totalTrades}</p>}
+                                                                                {app.metrics.totalWins !== undefined && <p className="text-[10px] text-white/70">Wins: {app.metrics.totalWins}</p>}
+                                                                                {app.metrics.totalVolume !== undefined && <p className="text-[10px] text-white/70">Volume: {app.metrics.totalVolume}</p>}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {i < copyApplications.length - 1 && <div className="h-[1px] bg-white/[0.03] mx-4" />}
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <div className="text-center py-12 text-white/20 text-xs font-black uppercase tracking-widest">No pending applications</div>
+                                            )}
                                         </div>
                                     </motion.div>
                                 )
