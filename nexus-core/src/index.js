@@ -998,18 +998,15 @@ app.post('/session/execute', async (req, res) => {
       if (trade) trade.stakeTxHash = stakeTxHash;
     }
 
-    res.json({
-      ...result,
-      newBalance: String(cache.sessions.get(address.toLowerCase())?.balance || 0)
-    });
-
-    // Auto-create copy trades for all investors copying this provider
+    // SYNCHRONOUS COPY TRADE EXECUTION — same request, same block as provider trade
+    // Executes immediately so investor activity is event-driven with zero latency
+    const copyTradeResults = [];
     if (result.success && result.tradeId) {
       const providerAddr = address.toLowerCase();
       const providerProfile = profiles.get(providerAddr);
       if (providerProfile?.isProvider) {
         const providerTradeId = String(result.tradeId);
-        const tradeParams = req.body.tradeParams;
+        const tParams = req.body.tradeParams;
         let investorsNotified = 0;
         for (const addr in profiles.profiles) {
           const investor = profiles.get(addr);
@@ -1020,19 +1017,21 @@ app.post('/session/execute', async (req, res) => {
           if (stake <= 0) continue;
           const bal = parseFloat(investor.copyTradingWallet.balance) || 0;
           if (bal < stake) continue;
+          // Deduct from investor's copy wallet immediately
           investor.copyTradingWallet.balance = bal - stake;
           const copyTrade = profiles.pushCopyTrade(addr, {
             id: `copy-${providerTradeId}-${addr.substring(0, 8)}`,
             providerAddress: providerAddr,
             providerName: providerProfile.providerApplication?.contactInfo?.name || providerProfile.username || '',
-            asset: tradeParams?.symbol || 'BTC',
-            direction: tradeParams?.direction || 'UP',
+            asset: tParams?.symbol || 'BTC',
+            direction: tParams?.direction || 'UP',
             result: 'PENDING',
             amount: stake,
             providerTradeId: providerTradeId,
             timestamp: Date.now()
           });
           profiles.upsert(addr, investor);
+          // Emit socket event so investor UI updates instantly
           io.to(addr).emit('copy_trade_update', {
             trade: {
               providerAddress: providerAddr,
@@ -1046,15 +1045,22 @@ app.post('/session/execute', async (req, res) => {
           });
           notificationService.notifyUser(addr, "Copy Trade Executed", `Copied ${copyTrade.providerName}'s trade: ${copyTrade.asset} ${copyTrade.direction === 'UP' ? 'LONG' : 'SHORT'} ($${stake} USDC)`, "info");
           investorsNotified++;
+          copyTradeResults.push({ addr, stake, asset: copyTrade.asset });
         }
-      }
-      if (investorsNotified > 0) {
-        notificationService.notifyUser(providerAddr, "Trades Copied", `${investorsNotified} investor(s) copied your ${req.body.tradeParams?.symbol || 'BTC'} trade.`, "info");
+        if (investorsNotified > 0) {
+          notificationService.notifyUser(providerAddr, "Trades Copied", `${investorsNotified} investor(s) copied your ${tParams?.symbol || 'BTC'} trade.`, "info");
+        }
       }
     }
 
     // Notify the trader of their placed trade
     notificationService.notifyUser(address, "Trade Placed", `Placed ${tradeParams?.direction === 'UP' ? 'LONG' : 'SHORT'} trade on ${tradeParams?.symbol || 'BTC'} ($${tradeParams?.amount || 0} USDC)`, "info");
+
+    res.json({
+      ...result,
+      newBalance: String(cache.sessions.get(address.toLowerCase())?.balance || 0),
+      copyTrades: copyTradeResults.length > 0 ? copyTradeResults : undefined
+    });
 
     // Notify all connected admins of the new trade in real-time
     const newTrade = cache.trades.get(String(result.tradeId));
