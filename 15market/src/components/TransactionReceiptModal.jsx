@@ -143,8 +143,8 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     <span className="text-base font-black tracking-widest" style={{ fontFamily: '"Comfortaa", cursive' }}>{Number(transaction.amount || 0).toFixed(2)} USDC</span>
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">SETTLED</span>
-                                    <span className={`text-sm font-black tracking-widest ${isWon ? 'text-[#249C6C]' : isLost ? 'text-[#FF7F50]' : 'text-[#249C6C]'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>{transaction.status || 'PENDING'}</span>
+                                    <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">EXIT</span>
+                                    <span className="text-base font-black tracking-widest" style={{ fontFamily: '"Comfortaa", cursive' }}>${Number(transaction.exitPrice || 0).toFixed(2)}</span>
                                 </div>
                                 <div className="flex flex-col items-end text-right">
                                     <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">PNL_OUTCOME</span>
@@ -179,7 +179,9 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                 </button>
                             </div>
 
-                            <p className="text-[7px] text-black/50 text-center font-black tracking-widest leading-loose mt-5">
+                            <span className="text-[10px] font-black tracking-widest text-black/80 text-center mt-5 block">#{transaction.id || transaction.nonce || ''}</span>
+
+                            <p className="text-[7px] text-black/50 text-center font-black tracking-widest leading-loose mt-3">
                                 TRADING_RECEIPT // 15MARKET_PROTOCOL<br />
                                 0xDE738...BLOCK_VERIFIED
                             </p>

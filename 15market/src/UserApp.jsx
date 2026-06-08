@@ -234,7 +234,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => onViewReceipt(trade)}
-                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
+                        className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
                       >
                         <Share2 size={12} />
                       </button>
@@ -242,7 +242,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                         href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`p-1.5 rounded-lg border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
+                        className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
                       >
                         <ExternalLink size={12} />
                       </a>
@@ -3128,6 +3128,8 @@ const performStealthChecks = useCallback(async (addr) => {
               notify={notify}
               onBack={() => setView("dashboard")}
               profile={userProfile}
+              user={user}
+              tradeHistory={tradeHistory}
             />
           ) : view === "campaigns" ? (
             <CampaignsHub
@@ -3717,8 +3719,7 @@ const performStealthChecks = useCallback(async (addr) => {
               onToggle={() => setShowMobileHistory(!showMobileHistory)}
               tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
               theme={theme}
-              setSelectedPnLTrade={setSelectedPnLTrade}
-              setIsPnLOpen={setIsPnLOpen}
+              onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
               userProfile={userProfile}
             />
           )}
