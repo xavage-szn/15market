@@ -4,6 +4,14 @@
 @import "@fontsource/inter/900.css";
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400..900&family=VT323&family=Doto:wght@100..900&family=Comfortaa:wght@300..700&display=swap');
 
+@font-face {
+    font-family: 'BetterBrush';
+    src: url('/BetterBrush-rgYnx.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);

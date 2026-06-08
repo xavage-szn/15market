@@ -1003,6 +1003,50 @@ app.post('/session/execute', async (req, res) => {
       newBalance: String(cache.sessions.get(address.toLowerCase())?.balance || 0)
     });
 
+    // Auto-create copy trades for all investors copying this provider
+    if (result.success && result.tradeId) {
+      const providerAddr = address.toLowerCase();
+      const providerProfile = profiles.get(providerAddr);
+      if (providerProfile?.isProvider) {
+        const providerTradeId = String(result.tradeId);
+        const tradeParams = req.body.tradeParams;
+        for (const addr in profiles.profiles) {
+          const investor = profiles.get(addr);
+          if (!investor?.activeCopies || !investor?.copyTradingWallet) continue;
+          const copyRel = investor.activeCopies.find(c => c.providerAddress === providerAddr);
+          if (!copyRel) continue;
+          const stake = parseFloat(copyRel.stakePerTrade) || 0;
+          if (stake <= 0) continue;
+          const bal = parseFloat(investor.copyTradingWallet.balance) || 0;
+          if (bal < stake) continue;
+          investor.copyTradingWallet.balance = bal - stake;
+          const copyTrade = profiles.pushCopyTrade(addr, {
+            id: `copy-${providerTradeId}-${addr.substring(0, 8)}`,
+            providerAddress: providerAddr,
+            providerName: providerProfile.providerApplication?.contactInfo?.name || providerProfile.username || '',
+            asset: tradeParams?.symbol || 'BTC',
+            direction: tradeParams?.direction || 'UP',
+            result: 'PENDING',
+            amount: stake,
+            providerTradeId: providerTradeId,
+            timestamp: Date.now()
+          });
+          profiles.upsert(addr, investor);
+          io.to(addr).emit('copy_trade_update', {
+            trade: {
+              providerAddress: providerAddr,
+              providerName: copyTrade.providerName,
+              asset: copyTrade.asset,
+              direction: copyTrade.direction,
+              result: 'PENDING',
+              amount: copyTrade.amount,
+              timestamp: copyTrade.timestamp
+            }
+          });
+        }
+      }
+    }
+
     // Notify all connected admins of the new trade in real-time
     const newTrade = cache.trades.get(String(result.tradeId));
     if (newTrade) {
@@ -1674,8 +1718,9 @@ app.get('/health', (req, res) => {
 /**
  * GET /copy-trading/wallet/:address
  * Returns the permanent copy trading wallet (EVM) for the user. Generates one if it doesn't exist.
+ * Syncs the tracked balance with the real on-chain balance for instant deposit reflection.
  */
-app.get('/copy-trading/wallet/:address', (req, res) => {
+app.get('/copy-trading/wallet/:address', async (req, res) => {
   try {
     const userAddr = req.params.address.toLowerCase();
     let profile = profiles.get(userAddr);
@@ -1695,6 +1740,22 @@ app.get('/copy-trading/wallet/:address', (req, res) => {
       profiles.upsert(userAddr, profile);
     }
 
+    // Sync with real on-chain balance for instant deposit reflection
+    try {
+      const arcRpc = config.RPCS?.[0] || 'https://rpc.testnet.arc.network';
+      const provider = new ethers.JsonRpcProvider(arcRpc);
+      const onChainBalance = await provider.getBalance(profile.copyTradingWallet.address);
+      const onChainBalanceNum = parseFloat(ethers.formatEther(onChainBalance));
+      // Use the higher of tracked vs on-chain balance
+      const syncedBalance = Math.max(profile.copyTradingWallet.balance, onChainBalanceNum);
+      if (syncedBalance !== profile.copyTradingWallet.balance) {
+        profile.copyTradingWallet.balance = syncedBalance;
+        profiles.upsert(userAddr, { copyTradingWallet: profile.copyTradingWallet });
+      }
+    } catch (e) {
+      console.warn('[copy-trading/wallet] On-chain balance sync failed (network may be down):', e.message);
+    }
+
     res.json({ 
       success: true, 
       wallet: {
@@ -1706,6 +1767,78 @@ app.get('/copy-trading/wallet/:address', (req, res) => {
     console.error('[copy-trading/wallet] error:', err.message);
     res.status(500).json({ error: "Failed to fetch copy trading wallet" });
   }
+});
+
+// Simple in-memory OTP storage (address -> { code, email, expiresAt })
+const otpStore = {};
+
+/**
+ * POST /copy-trading/send-otp
+ * Sends a 6-digit OTP code to the provided email for verification
+ */
+app.post('/copy-trading/send-otp', async (req, res) => {
+    try {
+        const { address, email } = req.body;
+        if (!address || !email) return res.status(400).json({ error: "Missing address or email" });
+
+        const userAddr = address.toLowerCase();
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+        otpStore[userAddr] = { code, email, expiresAt };
+        console.log(`[OTP] Stored code for ${userAddr}: ${code}`);
+
+        const sent = await notificationService.sendOtpEmail(email, code);
+        if (sent) {
+            res.json({ success: true, message: "OTP sent to email" });
+        } else {
+            res.status(500).json({ error: "Failed to send OTP email" });
+        }
+    } catch (err) {
+        console.error('[OTP] Send error:', err.message);
+        res.status(500).json({ error: "Failed to send OTP" });
+    }
+});
+
+/**
+ * POST /copy-trading/verify-otp
+ * Verifies the OTP code for a given address
+ */
+app.post('/copy-trading/verify-otp', (req, res) => {
+    try {
+        const { address, code } = req.body;
+        if (!address || !code) return res.status(400).json({ error: "Missing address or code" });
+
+        const userAddr = address.toLowerCase();
+        const record = otpStore[userAddr];
+
+        if (!record) {
+            return res.status(400).json({ error: "No OTP sent to this address" });
+        }
+
+        if (Date.now() > record.expiresAt) {
+            delete otpStore[userAddr];
+            return res.status(400).json({ error: "OTP has expired. Request a new one." });
+        }
+
+        if (record.code !== code.trim()) {
+            return res.status(400).json({ error: "Invalid verification code" });
+        }
+
+        // OTP verified - clean up and mark email as verified
+        delete otpStore[userAddr];
+        
+        // Store verified email on profile
+        const profile = profiles.get(userAddr) || {};
+        profile.emailVerified = true;
+        profile.verifiedEmail = record.email;
+        profiles.upsert(userAddr, profile);
+
+        res.json({ success: true, message: "Email verified successfully" });
+    } catch (err) {
+        console.error('[OTP] Verify error:', err.message);
+        res.status(500).json({ error: "Failed to verify OTP" });
+    }
 });
 
 /**
@@ -1878,6 +2011,57 @@ app.get('/copy-trading/investors', (req, res) => {
 });
 
 /**
+ * GET /copy-trading/investors/:address/copies
+ * Returns individual copy trade activity for an investor (ticker, direction, result, timestamp)
+ */
+app.get('/copy-trading/investors/:address/copies', (req, res) => {
+  try {
+    const addr = req.params.address.toLowerCase();
+    const profile = profiles.get(addr);
+    const copyTrades = profile?.copyTrades || [];
+    
+    // Separate active (PENDING) vs settled trades
+    const active = copyTrades.filter(t => t.result === 'PENDING');
+    const history = copyTrades.filter(t => t.result !== 'PENDING');
+    
+    res.json({ success: true, active, history });
+  } catch (err) {
+    console.error('[copy-trading/copies] error:', err.message);
+    res.status(500).json({ error: "Failed to fetch copy trades" });
+  }
+});
+
+/**
+ * POST /copy-trading/trade
+ * Records an individual copy trade for an investor (called when a provider takes a trade)
+ */
+app.post('/copy-trading/trade', (req, res) => {
+  try {
+    const { investorAddress, providerAddress, providerName, asset, direction, amount } = req.body;
+    if (!investorAddress || !asset) return res.status(400).json({ error: "Missing required fields" });
+
+    const provider = profiles.get(providerAddress?.toLowerCase());
+    const trade = profiles.pushCopyTrade(investorAddress, {
+      providerAddress,
+      providerName: providerName || provider?.providerApplication?.contactInfo?.name || provider?.username || `${providerAddress?.substring(0, 6)}...`,
+      asset,
+      direction: direction || 'UP',
+      result: 'PENDING',
+      amount: amount || 0,
+      timestamp: Date.now()
+    });
+
+    // Emit real-time update
+    io.to(investorAddress.toLowerCase()).emit('copy_trade_update', { trade });
+
+    res.json({ success: true, trade });
+  } catch (err) {
+    console.error('[copy-trading/trade] error:', err.message);
+    res.status(500).json({ error: "Failed to record trade" });
+  }
+});
+
+/**
  * GET /copy-trading/providers
  * Fetch list of approved providers for the investor dashboard (REAL DATA ONLY)
  */
@@ -1934,7 +2118,7 @@ app.post('/copy-trading/activate', (req, res) => {
       return res.status(400).json({ error: "Provider not found or not approved" });
     }
 
-    const ACTIVATION_FEE = 10; // 10 USDC
+    const ACTIVATION_FEE = 1; // 1 USDC
     const allocatedAmount = mode === 'isolated' ? (parseFloat(allocated) || 0) : 0;
     const stakeAmount = parseFloat(stakePerTrade) || 0;
     const requiredBalance = allocatedAmount + stakeAmount + ACTIVATION_FEE;
@@ -1972,22 +2156,28 @@ app.post('/copy-trading/activate', (req, res) => {
     provider.providerStats.followers = (provider.providerStats.followers || 0) + 1;
     provider.providerStats.aum = (provider.providerStats.aum || 0) + allocatedAmount + stakeAmount;
 
-    // Split activation fee: 50% provider, 50% protocol
+    // Split activation fee: 50% provider portfolio wallet, 50% protocol treasury
     const providerShare = ACTIVATION_FEE / 2;
-    provider.providerStats.profitGenerated = (provider.providerStats.profitGenerated || 0) + providerShare;
+    if (provider.providerPortfolioWallet) {
+      provider.providerPortfolioWallet.balance = (provider.providerPortfolioWallet.balance || 0) + providerShare;
+    } else {
+      provider.pendingPortfolioRevenue = (provider.pendingPortfolioRevenue || 0) + providerShare;
+    }
+    provider.providerStats.profitGenerated = (provider.providerStats.profitGenerated || 0) + ACTIVATION_FEE;
 
     profiles.upsert(investorAddr, investor);
     profiles.upsert(providerAddr, provider);
 
     // Notify both parties via socket
-    io.to(investorAddr).emit('copy_activated', { providerAddress: providerAddr, mode, allocated: allocatedAmount, stakePerTrade: stakeAmount });
-    io.to(providerAddr).emit('new_follower', { investorAddress: investorAddr, mode, allocated: allocatedAmount });
+    io.to(investorAddr).emit('copy_activated', { providerAddress: providerAddr, mode, allocated: allocatedAmount, stakePerTrade: stakeAmount, newBalance: investor.copyTradingWallet.balance });
+    io.to(providerAddr).emit('new_follower', { investorAddress: investorAddr, mode, allocated: allocatedAmount, portfolioShare: providerShare });
 
     res.json({ 
       success: true, 
       message: 'Copy trading activated',
       newBalance: investor.copyTradingWallet.balance,
-      activeCopies: investor.activeCopies.length
+      activeCopies: investor.activeCopies.length,
+      portfolioShare: providerShare
     });
   } catch (err) {
     console.error('[copy-trading/activate] error:', err.message);
@@ -2153,6 +2343,169 @@ app.get('/copy-trading/providers/:address/reports', (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to generate report" });
+  }
+});
+
+/**
+ * GET /copy-trading/providers/:address/portfolio
+ * Returns the provider's portfolio wallet balance (earnings from activation fees).
+ */
+app.get('/copy-trading/providers/:address/portfolio', (req, res) => {
+  try {
+    const providerAddr = req.params.address.toLowerCase();
+    const provider = profiles.get(providerAddr);
+    if (!provider) return res.status(404).json({ error: "Provider not found" });
+
+    const wallet = provider.providerPortfolioWallet || null;
+    res.json({
+      success: true,
+      portfolio: {
+        wallet: wallet ? { address: wallet.address, balance: wallet.balance || 0 } : null,
+        pendingRevenue: provider.pendingPortfolioRevenue || 0,
+        balance: wallet ? (wallet.balance || 0) : 0,
+        totalEarned: provider.providerStats?.profitGenerated || 0,
+        activationRevenue: provider.providerStats?.profitGenerated || 0,
+        feeRevenue: 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch portfolio" });
+  }
+});
+
+/**
+ * POST /copy-trading/providers/:address/generate-portfolio-wallet
+ * Generates a portfolio wallet for the provider. If there is pending revenue,
+ * applies a 10% penalty and credits the balance.
+ */
+app.post('/copy-trading/providers/:address/generate-portfolio-wallet', (req, res) => {
+  try {
+    const providerAddr = req.params.address.toLowerCase();
+    const provider = profiles.get(providerAddr);
+    if (!provider) return res.status(404).json({ error: "Provider not found" });
+
+    if (provider.providerPortfolioWallet) {
+      return res.json({ success: true, wallet: { address: provider.providerPortfolioWallet.address, balance: provider.providerPortfolioWallet.balance || 0 }, alreadyGenerated: true });
+    }
+
+    const newWallet = ethers.Wallet.createRandom();
+    let credited = 0;
+    let penalty = 0;
+    const pending = provider.pendingPortfolioRevenue || 0;
+
+    if (pending > 0) {
+      penalty = pending * 0.1;
+      credited = pending - penalty;
+      provider.providerStats.profitGenerated = (provider.providerStats.profitGenerated || 0) - pending + credited;
+    }
+
+    provider.providerPortfolioWallet = {
+      address: newWallet.address,
+      privateKey: newWallet.privateKey,
+      balance: credited
+    };
+    provider.pendingPortfolioRevenue = 0;
+
+    profiles.upsert(providerAddr, { providerPortfolioWallet: provider.providerPortfolioWallet, pendingPortfolioRevenue: 0, providerStats: provider.providerStats });
+
+    res.json({
+      success: true,
+      wallet: { address: newWallet.address, balance: credited },
+      claimed: pending > 0 ? { gross: pending, penalty, net: credited } : null
+    });
+  } catch (err) {
+    console.error('[generate-portfolio-wallet] error:', err.message);
+    res.status(500).json({ error: "Failed to generate portfolio wallet" });
+  }
+});
+
+/**
+ * POST /copy-trading/providers/:address/claim-revenue
+ * Claims pending portfolio revenue with 10% penalty.
+ */
+app.post('/copy-trading/providers/:address/claim-revenue', (req, res) => {
+  try {
+    const providerAddr = req.params.address.toLowerCase();
+    const provider = profiles.get(providerAddr);
+    if (!provider) return res.status(404).json({ error: "Provider not found" });
+
+    const pending = provider.pendingPortfolioRevenue || 0;
+    if (pending <= 0) return res.status(400).json({ error: "No pending revenue to claim" });
+    if (!provider.providerPortfolioWallet) return res.status(400).json({ error: "Generate portfolio wallet first" });
+
+    const penalty = pending * 0.1;
+    const net = pending - penalty;
+
+    provider.providerPortfolioWallet.balance = (provider.providerPortfolioWallet.balance || 0) + net;
+    provider.pendingPortfolioRevenue = 0;
+
+    profiles.upsert(providerAddr, { providerPortfolioWallet: provider.providerPortfolioWallet, pendingPortfolioRevenue: 0 });
+
+    res.json({
+      success: true,
+      newBalance: provider.providerPortfolioWallet.balance,
+      claimed: { gross: pending, penalty, net }
+    });
+  } catch (err) {
+    console.error('[claim-revenue] error:', err.message);
+    res.status(500).json({ error: "Failed to claim revenue" });
+  }
+});
+
+/**
+ * POST /copy-trading/providers/:address/withdraw
+ * Withdraws portfolio earnings to the provider's main wallet.
+ * Deducts from tracked portfolio balance and sends on-chain from treasury.
+ */
+app.post('/copy-trading/providers/:address/withdraw', async (req, res) => {
+  try {
+    const providerAddr = req.params.address.toLowerCase();
+    const { amount, targetAddress } = req.body;
+
+    if (!amount || amount <= 0) return res.status(400).json({ error: "Invalid withdrawal amount" });
+    if (!targetAddress) return res.status(400).json({ error: "Target address required" });
+
+    const provider = profiles.get(providerAddr);
+    if (!provider) return res.status(404).json({ error: "Provider not found" });
+
+    if (!provider.providerPortfolioWallet) return res.status(400).json({ error: "No portfolio wallet" });
+    const currentBalance = provider.providerPortfolioWallet.balance || 0;
+    if (amount > currentBalance) {
+      return res.status(400).json({ error: `Insufficient portfolio balance. Have ${currentBalance} USDC, need ${amount} USDC.` });
+    }
+
+    // Deduct from tracked balance
+    provider.providerPortfolioWallet.balance = currentBalance - amount;
+
+    // Attempt on-chain transfer from treasury to target address
+    try {
+      if (config.TREASURY_ADDRESS && config.TREASURY_ADDRESS !== ethers.ZeroAddress && config.PRIVATE_KEY) {
+        const arcRpc = config.RPCS?.[0] || 'https://rpc.testnet.arc.network';
+        const provider_ = new ethers.JsonRpcProvider(arcRpc);
+        const treasuryWallet = new ethers.Wallet(config.PRIVATE_KEY, provider_);
+        const tx = await treasuryWallet.sendTransaction({
+          to: targetAddress,
+          value: ethers.parseEther(String(amount))
+        });
+        await tx.wait();
+        console.log(`[withdraw] Sent ${amount} USDC to ${targetAddress} (tx: ${tx.hash})`);
+      } else {
+        console.log(`[withdraw] On-chain transfer skipped (no treasury key). Recorded ${amount} USDC withdrawal for ${targetAddress}`);
+      }
+    } catch (e) {
+      console.warn('[withdraw] On-chain transfer failed, balance already deducted:', e.message);
+    }
+
+    profiles.upsert(providerAddr, { providerPortfolioWallet: provider.providerPortfolioWallet });
+
+    res.json({
+      success: true,
+      message: `Withdrawal of ${amount} USDC submitted to ${targetAddress}`,
+      newBalance: provider.providerPortfolioWallet.balance
+    });
+  } catch (err) {
+    console.error('[copy-trading/withdraw] error:', err.message);
+    res.status(500).json({ error: "Failed to process withdrawal" });
   }
 });
 

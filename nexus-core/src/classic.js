@@ -275,6 +275,9 @@ class ClassicEngine {
         settledAt: Date.now()
       });
 
+      // Settle copy trades for this provider's won trade
+      this.settleCopyTrades(trade, payout);
+
       // Remove from active cache so it stops showing as pending
       cache.trades.delete(trade.id);
       
@@ -349,6 +352,9 @@ class ClassicEngine {
       settledAt: Date.now()
     });
 
+    // Settle copy trades for this provider's lost trade
+    this.settleCopyTrades(trade, 0);
+
     // Notify ALL admins of the settled trade status
     this.io.emit('global_trade_settled', {
       betId: trade.id,
@@ -358,6 +364,62 @@ class ClassicEngine {
       exitPrice: trade.lockedExitPrice,
       userAddr: trade.userAddr
     });
+  }
+
+  settleCopyTrades(providerTrade, payout) {
+    try {
+      const profiles = require('./profiles');
+      const providerAddr = providerTrade.userAddr?.toLowerCase();
+      if (!providerAddr) return;
+      const provider = profiles.get(providerAddr);
+      if (!provider?.isProvider) return;
+      const providerTradeId = String(providerTrade.id);
+      const won = providerTrade.won || providerTrade.status === 'WON';
+      for (const addr in profiles.profiles) {
+        const investor = profiles.get(addr);
+        if (!investor?.copyTrades || !investor.copyTradingWallet) continue;
+        let updated = false;
+        let settledTrade = null;
+        investor.copyTrades = investor.copyTrades.map(ct => {
+          if (ct.providerTradeId === providerTradeId && ct.result === 'PENDING') {
+            updated = true;
+            const ratio = providerTrade.amount > 0 ? (payout / providerTrade.amount) : 0;
+            const payoutAmount = won ? (ct.amount * ratio) : 0;
+            settledTrade = { ...ct, result: won ? 'WON' : 'LOST', payout: payoutAmount, settledAt: Date.now() };
+            return settledTrade;
+          }
+          return ct;
+        });
+        if (updated && settledTrade) {
+          if (won) {
+            investor.copyTradingWallet.balance = (parseFloat(investor.copyTradingWallet.balance) || 0) + settledTrade.payout;
+          }
+          if (investor.activeCopies) {
+            const rel = investor.activeCopies.find(c => c.providerAddress === providerAddr);
+            if (rel) {
+              const pnl = won ? (settledTrade.payout - settledTrade.amount) : -settledTrade.amount;
+              rel.pnl = (rel.pnl || 0) + pnl;
+            }
+          }
+          profiles.upsert(addr, investor);
+          this.io.to(addr).emit('copy_trade_update', {
+            trade: {
+              providerAddress: providerAddr,
+              result: settledTrade.result,
+              amount: settledTrade.amount,
+              payout: settledTrade.payout
+            }
+          });
+          this.io.to(addr).emit('balance_update', {
+            balance: String(investor.copyTradingWallet.balance),
+            available: String(investor.copyTradingWallet.balance),
+            reason: won ? 'COPY_WIN' : 'COPY_LOSS'
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[CopyTrading] settleCopyTrades error:', err.message);
+    }
   }
 
   async ensureOperatorFunded() {

@@ -143,6 +143,44 @@ class ProfileService {
         return profile ? (profile.trades || []) : [];
     }
 
+    pushCopyTrade(address, trade) {
+        const addr = address.toLowerCase();
+        if (!this.profiles[addr]) {
+            this.profiles[addr] = { address: addr, copyTrades: [], createdAt: Date.now() };
+        }
+        if (!this.profiles[addr].copyTrades) {
+            this.profiles[addr].copyTrades = [];
+        }
+
+        const record = {
+            id: trade.id || `ct-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            providerAddress: trade.providerAddress?.toLowerCase() || '',
+            providerName: trade.providerName || '',
+            asset: trade.asset || '',
+            direction: trade.direction || 'UP',
+            result: trade.result || 'PENDING',
+            amount: trade.amount || 0,
+            providerTradeId: trade.providerTradeId || '',
+            payout: trade.payout || 0,
+            settledAt: trade.settledAt || 0,
+            timestamp: trade.timestamp || Date.now()
+        };
+
+        this.profiles[addr].copyTrades.unshift(record);
+        if (this.profiles[addr].copyTrades.length > 200) {
+            this.profiles[addr].copyTrades = this.profiles[addr].copyTrades.slice(0, 200);
+        }
+
+        this.profiles[addr].updatedAt = Date.now();
+        this.save().catch(e => console.warn('[Profiles] Background save failed:', e.message));
+        return record;
+    }
+
+    getCopyTrades(address) {
+        const profile = this.get(address);
+        return profile ? (profile.copyTrades || []) : [];
+    }
+
     getProfileStats(address) {
         const trades = this.getHistory(address);
         let totalWins = 0;

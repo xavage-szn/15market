@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Search, TrendingUp, Users, DollarSign, Activity, ChevronRight, ChevronUp, ChevronDown, CheckCircle, Copy, Wallet, Trophy, X, AlertCircle, BarChart, PieChartIcon, Download, Calendar } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart as ReBarChart, Bar } from 'recharts';
+import { ArrowLeft, ArrowRight, Search, TrendingUp, Activity, ChevronRight, ChevronUp, ChevronDown, CheckCircle, Copy, Wallet, Trophy, X, AlertCircle, BarChart, Download, Calendar, Shield, Check, Settings, Send } from 'lucide-react';
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { socketService } from '../utils/socket';
 import { KEEPER_URL_ARC } from '../constants';
 
 export function CopyTradingPage({
@@ -9,7 +10,9 @@ export function CopyTradingPage({
     isLight,
     notify,
     onBack,
-    profile
+    profile,
+    user,
+    tradeHistory
 }) {
     const [mode, setMode] = useState(null); // null = select, 'investor' or 'trader'
     const [providers, setProviders] = useState([]);
@@ -24,10 +27,52 @@ export function CopyTradingPage({
     const [appData, setAppData] = useState({ name: '', twitter: '', telegram: '', email: '', fee: '' });
     const [appSuccess, setAppSuccess] = useState(false);
     const [localPending, setLocalPending] = useState(false);
+    const [copyWalletAddress, setCopyWalletAddress] = useState(profile?.copyTradingWallet?.address || '');
+    const [copyWalletBalance, setCopyWalletBalance] = useState(parseFloat(profile?.copyTradingWallet?.balance || 0));
+    const [otpCode, setOtpCode] = useState('');
+    const [isSendingOtp, setIsSendingOtp] = useState(false);
+    const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+    const [otpSent, setOtpSent] = useState(false);
+    const [otpVerified, setOtpVerified] = useState(false);
+    const [otpError, setOtpError] = useState('');
+    const [emailSource, setEmailSource] = useState(''); // 'privy' or 'manual'
+
+    const [copied, setCopied] = useState(false);
+
+    // Local metrics (overrides profile prop for immediate updates)
+    const [localAllocated, setLocalAllocated] = useState(null);
+
+    // Copy result animation
+    const [copyResult, setCopyResult] = useState(null); // { type: 'success'|'fail', message: string } | null
+
+    // Portfolio / Withdrawal
+    const [portfolioBalance, setPortfolioBalance] = useState(0);
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+    const [isGeneratingPortfolio, setIsGeneratingPortfolio] = useState(false);
 
     // Wallet state
     const [hasCopyWallet, setHasCopyWallet] = useState(!!profile?.copyTradingWallet);
     const [isGeneratingWallet, setIsGeneratingWallet] = useState(false);
+
+    // Fetch copy trading wallet address and on-chain balance
+    const fetchCopyWallet = useCallback(async () => {
+        if (!address) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/wallet/${address}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.wallet) {
+                    setCopyWalletAddress(data.wallet.address);
+                    setCopyWalletBalance(parseFloat(data.wallet.balance || 0));
+                    setHasCopyWallet(true);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch copy wallet:', e);
+        }
+    }, [address]);
 
     // Provider dashboard data
     const [followers, setFollowers] = useState([]);
@@ -55,13 +100,24 @@ export function CopyTradingPage({
         return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
     };
 
+    const handleCopy = useCallback(async (text) => {
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch { }
+    }, []);
+
     const handleGenerateWallet = async () => {
         setIsGeneratingWallet(true);
         try {
             const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/wallet/${address}`);
             if (res.ok) {
                 const data = await res.json();
-                if (data.success) {
+                if (data.success && data.wallet) {
+                    setCopyWalletAddress(data.wallet.address);
+                    setCopyWalletBalance(parseFloat(data.wallet.balance || 0));
                     setHasCopyWallet(true);
                     notify("Copy Trading Wallet generated successfully!", "success");
                 } else {
@@ -223,19 +279,201 @@ export function CopyTradingPage({
         }
     }, [address]);
 
+    // Portfolio / revenue state
+    const [portfolioWallet, setPortfolioWallet] = useState(null); // { address, balance } or null
+    const [pendingRevenue, setPendingRevenue] = useState(0);
+    const [activationRevenue, setActivationRevenue] = useState(0);
+
+    // Fetch portfolio balance for provider
+    const fetchPortfolio = useCallback(async () => {
+        if (!address || !isProvider) return;
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/providers/${address.toLowerCase()}/portfolio`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success) {
+                    setPortfolioWallet(data.portfolio.wallet);
+                    setPortfolioBalance(data.portfolio.balance);
+                    setPendingRevenue(data.portfolio.pendingRevenue);
+                    setActivationRevenue(data.portfolio.activationRevenue);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch portfolio:', e);
+        }
+    }, [address, isProvider]);
+
     useEffect(() => {
         if (isProvider && hasCopyWallet) {
             fetchFollowers();
             fetchPerformance();
             fetchReport(reportPeriod);
+            fetchPortfolio();
         }
-    }, [isProvider, hasCopyWallet, fetchFollowers, fetchPerformance, fetchReport, reportPeriod]);
+    }, [isProvider, hasCopyWallet, fetchFollowers, fetchPerformance, fetchReport, reportPeriod, fetchPortfolio]);
+
+    // Fetch copy wallet on mount and poll for balance updates
+    useEffect(() => {
+        fetchCopyWallet();
+    }, [fetchCopyWallet]);
+
+    useEffect(() => {
+        if (!hasCopyWallet) return;
+        const interval = setInterval(fetchCopyWallet, 10000);
+        return () => clearInterval(interval);
+    }, [hasCopyWallet, fetchCopyWallet]);
 
     useEffect(() => {
         if (mode === 'investor' && hasCopyWallet) {
             fetchInvestorCopies();
         }
     }, [mode, hasCopyWallet, fetchInvestorCopies]);
+
+    // Poll for live trade activity updates
+    useEffect(() => {
+        if (mode !== 'investor' || !hasCopyWallet) return;
+        const interval = setInterval(fetchInvestorCopies, 15000);
+        return () => clearInterval(interval);
+    }, [mode, hasCopyWallet, fetchInvestorCopies]);
+
+    // Socket listener for real-time trade updates
+    useEffect(() => {
+        if (mode !== 'investor' || !hasCopyWallet) return;
+        const handleTradeUpdate = () => {
+            fetchInvestorCopies();
+            fetchCopyWallet();
+        };
+        const handleBalanceUpdate = (data) => {
+            if (data.reason === 'COPY_WIN' || data.reason === 'COPY_LOSS') {
+                setCopyWalletBalance(parseFloat(data.balance || 0));
+                fetchInvestorCopies();
+            }
+        };
+        socketService.on('copy_trade_update', handleTradeUpdate);
+        socketService.on('balance_update', handleBalanceUpdate);
+        return () => {
+            socketService.off('copy_trade_update', handleTradeUpdate);
+            socketService.off('balance_update', handleBalanceUpdate);
+        };
+    }, [mode, hasCopyWallet, fetchInvestorCopies, fetchCopyWallet]);
+
+    // Socket listener for new follower + trade settled (provider side) — updates portfolio, performance, followers in real-time
+    useEffect(() => {
+        if (mode !== 'trader' || !isProvider) return;
+        const handleNewFollower = () => {
+            fetchFollowers();
+            fetchPortfolio();
+            fetchPerformance();
+        };
+        const handleTradeSettled = () => {
+            fetchPerformance();
+            fetchPortfolio();
+        };
+        const handlePayoutCompleted = () => {
+            fetchPerformance();
+            fetchPortfolio();
+        };
+        const handleBalanceUpdate = (data) => {
+            if (data.reason === 'WIN_PAYOUT_SETTLED' || data.reason === 'WIN' || data.reason === 'LOSS') {
+                fetchPerformance();
+                fetchPortfolio();
+            }
+        };
+        socketService.on('new_follower', handleNewFollower);
+        socketService.on('trade_settled', handleTradeSettled);
+        socketService.on('payout_completed', handlePayoutCompleted);
+        socketService.on('balance_update', handleBalanceUpdate);
+        return () => {
+            socketService.off('new_follower', handleNewFollower);
+            socketService.off('trade_settled', handleTradeSettled);
+            socketService.off('payout_completed', handlePayoutCompleted);
+            socketService.off('balance_update', handleBalanceUpdate);
+        };
+    }, [mode, isProvider, fetchFollowers, fetchPortfolio, fetchPerformance]);
+
+    // Socket listener for copy activated (investor side) — updates wallet balance instantly
+    useEffect(() => {
+        if (mode !== 'investor') return;
+        const handleCopyActivated = (data) => {
+            if (data.newBalance !== undefined) {
+                setCopyWalletBalance(parseFloat(data.newBalance));
+            }
+            fetchInvestorCopies();
+            fetchCopyWallet();
+        };
+        socketService.on('copy_activated', handleCopyActivated);
+        return () => socketService.off('copy_activated', handleCopyActivated);
+    }, [mode, fetchInvestorCopies, fetchCopyWallet]);
+
+    // Auto-fetch email from Privy user
+    useEffect(() => {
+        if (user) {
+            const privyEmail = user?.email?.address || user?.google?.email;
+            if (privyEmail) {
+                setAppData(prev => ({ ...prev, email: privyEmail }));
+                setEmailSource('privy');
+                setOtpVerified(true);
+            } else {
+                setEmailSource('manual');
+                setOtpVerified(false);
+            }
+        }
+    }, [user]);
+
+    const handleSendOtp = async () => {
+        if (!appData.email || !/\S+@\S+\.\S+/.test(appData.email)) {
+            setOtpError('Please enter a valid email address');
+            return;
+        }
+        setIsSendingOtp(true);
+        setOtpError('');
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/send-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address, email: appData.email })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setOtpSent(true);
+                setOtpCode('');
+                notify('Verification code sent to your email', 'success');
+            } else {
+                setOtpError(data.error || 'Failed to send OTP');
+            }
+        } catch (e) {
+            setOtpError('Network error. Please try again.');
+        } finally {
+            setIsSendingOtp(false);
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        if (!otpCode || otpCode.length < 6) {
+            setOtpError('Please enter the 6-digit code');
+            return;
+        }
+        setIsVerifyingOtp(true);
+        setOtpError('');
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/verify-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address, code: otpCode })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setOtpVerified(true);
+                notify('Email verified successfully!', 'success');
+            } else {
+                setOtpError(data.error || 'Invalid verification code');
+            }
+        } catch (e) {
+            setOtpError('Network error. Please try again.');
+        } finally {
+            setIsVerifyingOtp(false);
+        }
+    };
 
     const filteredProviders = providers.filter(p =>
         p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -244,8 +482,8 @@ export function CopyTradingPage({
 
     // User's copy trading metrics (from profile or defaults)
     const userMetrics = {
-        balance: profile?.copyTradingWallet?.balance ?? profile?.copyTradingBalance ?? '0.00',
-        allocated: profile?.copyTradingAllocated || '0.00',
+        balance: copyWalletBalance,
+        allocated: localAllocated !== null ? localAllocated : (profile?.copyTradingAllocated || '0.00'),
         pnl: profile?.copyTradingPnl || '+0.00',
         pnlPercent: profile?.copyTradingPnlPercent || '0.0',
         activeCopies: investorCopies.active.length || profile?.activeCopies?.length || profile?.activeCopies || 0,
@@ -294,7 +532,7 @@ export function CopyTradingPage({
 
             {/* Header */}
             <div className="w-full shrink-0 relative z-50 safe-top">
-                <div className="w-full px-3 md:px-6 h-12 md:h-14 flex items-center">
+                <div className="w-full px-3 md:px-6 h-12 md:h-14 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => {
@@ -311,10 +549,25 @@ export function CopyTradingPage({
                             <ArrowLeft size={16} />
                         </button>
                         <h2 className={`text-base font-black uppercase tracking-tighter ${isLight ? 'text-black/80' : 'text-white'} leading-none`}>
-                            Copy Trading
+                            {mode === 'trader' ? 'Provider Dashboard' : 'Copy Trading'}
                         </h2>
                     </div>
+                    {mode === 'trader' && (
+                        <button
+                            onClick={() => { setWithdrawAmount(''); setShowWithdrawModal(true); }}
+                            className={`p-2 rounded-full transition-all active:scale-90 ${isLight ? 'hover:bg-black/5 text-black/40' : 'hover:bg-white/5 text-white/40'}`}
+                        >
+                            <Settings size={16} />
+                        </button>
+                    )}
                 </div>
+                {mode === 'trader' && (
+                    <div className="w-full px-3 md:px-6 pb-2 flex justify-end">
+                        <span className={`text-2xl md:text-4xl font-normal leading-snug tracking-normal inline-block pb-2 pt-1 overflow-visible ${isLight ? 'bg-gradient-to-b from-[#249C6C] to-black bg-clip-text text-transparent' : 'text-white'}`} style={{ fontFamily: '"BetterBrush", cursive' }}>
+                            {profile?.providerApplication?.contactInfo?.name || address?.substring(0, 6)}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Mode Selection Screen */}
@@ -348,10 +601,28 @@ export function CopyTradingPage({
                 </div>
             )}
 
+            {mode === 'trader' && isProvider && (
+                <div className="w-full shrink-0 px-3 md:px-6 py-2 md:py-3 flex justify-center relative z-10">
+                    <div className="flex items-center gap-3 md:gap-6">
+                        {[
+                            { icon: Activity, label: 'Trades', value: providerPerformance?.totalTrades ?? profile?.stats?.totalTrades ?? 0 },
+                            { icon: TrendingUp, label: 'Win Rate', value: `${providerPerformance?.winRate ?? (profile?.stats?.totalTrades > 0 ? ((profile.stats.totalWins / profile.stats.totalTrades) * 100).toFixed(1) : '0.0')}%`, color: 'text-[#249C6C]' },
+                            { icon: Trophy, label: 'Revenue', value: `$${(providerPerformance?.revenue ?? profile?.providerStats?.profitGenerated ?? 0).toLocaleString()}`, color: 'text-amber-500' },
+                            { icon: BarChart, label: 'Volume', value: `$${(providerPerformance?.totalVolume ?? profile?.stats?.totalVolume ?? 0).toLocaleString()}`, color: 'text-blue-500' }
+                        ].map((item, idx) => (
+                            <div key={idx} className={`flex flex-col items-center px-2 md:px-4 py-1 border-r last:border-r-0 ${isLight ? 'border-black/[0.12]' : 'border-white/[0.12]'}`}>
+                                <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white/40'}`}>{item.label}</span>
+                                <span className={`text-xs md:text-sm font-black mt-0.5 ${item.color || (isLight ? 'text-black' : 'text-white')}`}>{item.value}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Main Content Area */}
             {mode && (
-            <div className="flex-1 w-full px-3 md:px-6 py-2 md:py-4 flex flex-col lg:flex-row items-start justify-center gap-4 lg:gap-8 overflow-y-auto lg:overflow-hidden relative z-10 no-scrollbar">
-
+            <div className="flex-1 w-full px-3 md:px-6 flex flex-col overflow-y-auto lg:overflow-hidden relative z-10 no-scrollbar">
+                <div className="flex flex-col lg:flex-row items-start justify-center gap-4 lg:gap-8 py-2 md:py-4">
                 {mode === 'investor' ? (
                     !hasCopyWallet ? (
                         <div className="w-full max-w-md mx-auto flex flex-col items-center justify-center text-center">
@@ -410,11 +681,13 @@ export function CopyTradingPage({
                                             <div className="w-6 h-6 border-2 border-[#249C6C]/20 border-t-[#249C6C] rounded-full animate-spin" />
                                         </div>
                                     ) : filteredProviders.length > 0 ? (
-                                        filteredProviders.map((provider, idx) => (
+                                        filteredProviders.map((provider, idx) => {
+                                            const isCurrentUser = provider.address?.toLowerCase() === address?.toLowerCase();
+                                            return (
                                             <button
                                                 key={provider.address}
                                                 onClick={() => setSelectedProvider(provider)}
-                                                className={`shrink-0 w-[240px] lg:w-full text-left p-2 rounded-2xl border transition-all flex items-center justify-between group ${selectedProvider?.address === provider.address ? (isLight ? 'bg-white border-[#249C6C]/40 shadow-md' : 'bg-white/10 border-[#249C6C]/40') : (isLight ? 'bg-transparent border-transparent hover:bg-black/5' : 'bg-transparent border-transparent hover:bg-white/5')}`}
+                                                className={`shrink-0 w-[240px] lg:w-full text-left p-2 rounded-2xl border transition-all flex items-center justify-between group ${isCurrentUser ? 'border-[#249C6C] bg-[#249C6C]/10 shadow-[0_0_12px_rgba(36,156,108,0.3)]' : selectedProvider?.address === provider.address ? (isLight ? 'bg-white border-[#249C6C]/40 shadow-md' : 'bg-white/10 border-[#249C6C]/40') : (isLight ? 'bg-transparent border-transparent hover:bg-black/5' : 'bg-transparent border-transparent hover:bg-white/5')}`}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-5 flex justify-center items-center flex-shrink-0">
@@ -432,6 +705,9 @@ export function CopyTradingPage({
                                                         <div className="text-[8px] font-bold opacity-50 uppercase whitespace-nowrap">
                                                             {provider.winRate}% Win · +{provider.roi}%
                                                         </div>
+                                                        {isCurrentUser && (
+                                                            <div className="text-[7px] font-black text-[#249C6C] uppercase tracking-widest">You</div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center pl-1 flex-shrink-0">
@@ -447,7 +723,8 @@ export function CopyTradingPage({
                                                     </div>
                                                 </div>
                                             </button>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div className="text-center opacity-40 text-xs font-bold py-6 w-full">No providers found</div>
                                     )}
@@ -465,10 +742,38 @@ export function CopyTradingPage({
                                     <div className="hidden lg:flex w-full xl:max-w-md flex-col shrink-0 lg:h-full overflow-visible">
 
                                         {/* Transfer Hub Style Copy Trading Wallet */}
-                                        <div className="w-full h-[180px] shrink-0 mb-4 group">
-                                            <div className={`w-full h-full p-6 rounded-[32px] relative overflow-hidden flex flex-col justify-between bg-[#249C6C] border border-white/20`} style={{ boxShadow: isLight ? '0 8px 30px rgba(0,0,0,0.1)' : '0 8px 30px rgba(0,0,0,0.5)' }}>
+                                        <div className="relative h-[220px] md:h-[260px] w-full shrink-0 mb-4 group">
+                                            <div className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between bg-[#249C6C] border border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.15)]`}>
                                                 
-                                                {/* Platform Standard Texture Layer */}
+                                                {/* Immersive Nature-Series Layer (Behind Texture) */}
+                                                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                                                    <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                        <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.15" />
+                                                        <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.15" />
+                                                        <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.15" />
+                                                        <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.15" />
+                                                    </svg>
+                                                    <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-40" viewBox="0 0 200 100" preserveAspectRatio="none">
+                                                        <path d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" fill="none" stroke="white" strokeWidth="10" className="opacity-10" />
+                                                        <path d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" fill="none" stroke="white" strokeWidth="0.6" strokeDasharray="4 6" className="opacity-30" />
+                                                    </svg>
+                                                    <div className="absolute bottom-[15%] right-[12%] flex items-end gap-1 opacity-30">
+                                                        <svg width="20" height="28" viewBox="0 0 24 32" fill="white"><path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" /></svg>
+                                                        <svg width="14" height="20" viewBox="0 0 24 32" fill="white" className="opacity-60"><path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" /></svg>
+                                                    </div>
+                                                    <div className="absolute top-[20%] left-[45%] opacity-20">
+                                                        <div className="relative w-3 h-3">
+                                                            <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white" />
+                                                            <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="absolute bottom-[30%] left-[20%] opacity-10 grid grid-cols-2 gap-2">
+                                                        <div className="w-1 h-1 rounded-full bg-white" />
+                                                        <div className="w-1 h-1 rounded-full bg-white" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Platform Standard Texture Layer (On Top) */}
                                                 <div className="absolute inset-0 z-0">
                                                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#2E8B57_0%,transparent_60%)] opacity-60" />
                                                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,#1E5D3B_0%,transparent_60%)] opacity-40" />
@@ -476,29 +781,53 @@ export function CopyTradingPage({
                                                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent opacity-30" />
                                                 </div>
 
+                                                {/* Credit Card Chip (Metallic Gold) - Moved to Right */}
+                                                <div className="absolute top-1/2 right-10 -translate-y-1/2 w-14 h-11 rounded-xl bg-gradient-to-br from-[#E6BE8A] via-[#C5A059] to-[#8B7355] shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-black/20 z-10">
+                                                    <div className="absolute inset-0 grid grid-cols-2 grid-rows-3 gap-[1.5px] p-2.5 opacity-30">
+                                                        {[...Array(6)].map((_, i) => (
+                                                            <div key={i} className="border border-black/40 rounded-[3px]" />
+                                                        ))}
+                                                    </div>
+                                                    <div className="absolute top-1/2 left-0 w-full h-[1px] bg-black/20" />
+                                                </div>
+
                                                 <div className="flex-1 flex flex-col justify-between relative z-20">
                                                     <div className="flex items-center justify-between">
-                                                        <p className={`text-[10px] font-black uppercase tracking-[0.2em] text-white/80`}>COPY TRADING WALLET</p>
-                                                        <img src="/boblogo.png" alt="Logo" className="h-10 object-contain brightness-0 invert mix-blend-overlay opacity-80" />
+                                                        <div>
+                                                            <p className={`text-[11px] font-black uppercase tracking-[0.2em] text-white`}>Copy Trading</p>
+                                                            <p className={`text-[28px] md:text-[34px] font-black uppercase text-white/80 -mt-1 leading-none`}>Investor</p>
+                                                        </div>
+                                                        <img src="/boblogo.png" alt="Logo" className="h-16 md:h-20 object-contain brightness-0 invert mix-blend-overlay opacity-80" />
                                                     </div>
 
-                                                    <div>
-                                                        <div className="flex items-center gap-2 group/copy cursor-pointer" onClick={(e) => { e.stopPropagation(); address && navigator.clipboard.writeText(address); }}>
-                                                            <p className="text-sm font-mono tracking-[0.2em] text-white">
-                                                                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '---'}
+                                                    {/* Card Number (Wallet Address) */}
+                                                    <div className="py-2">
+                                                        <div className="flex items-center gap-3 group/copy cursor-pointer" onClick={(e) => { e.stopPropagation(); handleCopy(copyWalletAddress); }}>
+                                                            <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
+                                                                {copyWalletAddress ? `${copyWalletAddress.slice(0, 6)}...${copyWalletAddress.slice(-4)}`.toUpperCase() : "xxxx...xxxx"}
                                                             </p>
-                                                            <div className="p-1 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
-                                                                <Copy size={12} className="text-white/40" />
+                                                            <div className="p-1.5 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
+                                                                {copied ? <Check size={14} className="text-[#249C6C]" /> : <Copy size={14} className="text-white/40" />}
                                                             </div>
+                                                        </div>
+                                                        <div className="flex gap-1.5 mt-4">
+                                                            <div className="w-4 h-1.5 rounded-full bg-white" />
                                                         </div>
                                                     </div>
 
-                                                    <div>
-                                                        <p className={`text-[9px] font-black uppercase tracking-[0.2em] mb-0.5 text-white/80`}>Available Balance</p>
-                                                        <h1 className={`text-2xl font-black tracking-tighter text-white flex items-baseline gap-1`}>
-                                                            {formatNumber(userMetrics.balance, 2)}
-                                                            <span className="text-sm text-white/60">USDC</span>
-                                                        </h1>
+                                                    <div className="flex items-end justify-between relative">
+                                                        <div>
+                                                            <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-white`}>Available Balance</p>
+                                                            <h1 className={`text-4xl md:text-5xl font-black tracking-tighter text-white flex items-baseline gap-2`}>
+                                                                {copyWalletBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                                <span className="text-xl text-white/60">USDC</span>
+                                                            </h1>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 mt-2">
+                                                        <Shield size={10} className="text-white opacity-40" />
+                                                        <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>Secured</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -521,6 +850,45 @@ export function CopyTradingPage({
                                             <div className={`px-3 py-2 rounded-2xl border ${isLight ? 'border-[#249C6C]/15 bg-white/40' : 'border-white/5 bg-white/[0.02]'}`}>
                                                 <div className="text-[8px] font-black opacity-40 uppercase tracking-widest mb-0.5">Total Copied</div>
                                                 <div className="text-base font-black">{userMetrics.totalCopied}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Activity */}
+                                        <div className="mt-3">
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Activity</span>
+                                                <button onClick={fetchInvestorCopies} className="text-[6px] font-bold opacity-30 hover:opacity-60 uppercase tracking-widest transition-opacity">Refresh</button>
+                                            </div>
+                                            <div className="max-h-32 overflow-y-auto no-scrollbar space-y-0.5">
+                                                {isLoadingInvestorCopies ? (
+                                                    <div className="py-3 flex items-center justify-center">
+                                                        <div className="w-3 h-3 border-2 border-[#249C6C]/20 border-t-[#249C6C] rounded-full animate-spin" />
+                                                    </div>
+                                                ) : [...investorCopies.active, ...investorCopies.history].length > 0 ? (
+                                                    [...investorCopies.active, ...investorCopies.history].map((trade, i) => (
+                                                        <div key={trade.id || i} className={`flex items-center justify-between gap-1 px-2 py-1 rounded-lg ${isLight ? 'hover:bg-black/5' : 'hover:bg-white/5'}`}>
+                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${trade.result === 'PENDING' ? 'bg-[#249C6C] shadow-[0_0_6px_rgba(36,156,108,0.7)]' : trade.result === 'WON' ? 'bg-[#249C6C]' : 'bg-red-400'}`} />
+                                                                <span className="text-[10px] font-black truncate">{trade.asset || '---'}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                <span className={`text-[8px] font-bold ${trade.direction === 'UP' ? 'text-[#249C6C]' : 'text-red-400'}`}>
+                                                                    {trade.direction || '---'}
+                                                                </span>
+                                                                <span className={`text-[8px] font-bold ${trade.result === 'WON' ? 'text-[#249C6C]' : trade.result === 'LOST' ? 'text-red-400' : 'text-amber-400'}`}>
+                                                                    {trade.result === 'PENDING' ? 'Active' : trade.result || '---'}
+                                                                </span>
+                                                                <span className={`text-[7px] font-bold ${isLight ? 'text-black/30' : 'text-white/30'}`}>
+                                                                    {trade.timestamp ? new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="py-4 text-center">
+                                                        <p className={`text-[8px] font-bold ${isLight ? 'text-black/30' : 'text-white/30'}`}>No activity yet</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -557,11 +925,13 @@ export function CopyTradingPage({
                                                 <div className="w-6 h-6 border-2 border-[#249C6C]/20 border-t-[#249C6C] rounded-full animate-spin" />
                                             </div>
                                         ) : filteredProviders.length > 0 ? (
-                                            filteredProviders.map(provider => (
+                                            filteredProviders.map(provider => {
+                                                const isCurrentUser = provider.address?.toLowerCase() === address?.toLowerCase();
+                                                return (
                                                 <button
                                                     key={provider.address}
                                                     onClick={() => setSelectedProvider(provider)}
-                                                    className={`w-full text-left p-3 rounded-2xl border flex items-center justify-between transition-all group ${isLight ? 'bg-transparent border-[#249C6C]/10 hover:bg-white hover:shadow-md' : 'bg-transparent border-white/5 hover:bg-white/5'}`}
+                                                    className={`w-full text-left p-3 rounded-2xl border flex items-center justify-between transition-all group ${isCurrentUser ? 'border-[#249C6C] bg-[#249C6C]/10 shadow-[0_0_12px_rgba(36,156,108,0.3)]' : isLight ? 'bg-transparent border-[#249C6C]/10 hover:bg-white hover:shadow-md' : 'bg-transparent border-white/5 hover:bg-white/5'}`}
                                                 >
                                                     <div className="flex items-center gap-2">
                                                         <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-[#249C6C] to-[#124e36] flex-shrink-0 border border-[#249C6C]">
@@ -572,6 +942,9 @@ export function CopyTradingPage({
                                                             <div className="text-[9px] font-bold opacity-50 uppercase">
                                                                 {provider.winRate}% Win Rate · {provider.followers} Copiers
                                                             </div>
+                                                            {isCurrentUser && (
+                                                                <div className="text-[7px] font-black text-[#249C6C] uppercase tracking-widest mt-0.5">You</div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <div className="text-right flex items-center gap-2">
@@ -582,61 +955,14 @@ export function CopyTradingPage({
                                                         <ChevronRight size={14} className="opacity-30 group-hover:opacity-70 transition-all" />
                                                     </div>
                                                 </button>
-                                            ))
+                                                );
+                                            })
                                         ) : (
                                             <div className="text-center opacity-40 text-xs font-bold py-6">No providers found</div>
                                         )}
                                     </div>
 
-                                    <div className={`mt-3 shrink-0 rounded-2xl border overflow-hidden ${isLight ? 'border-[#249C6C]/15 bg-white/40' : 'border-white/5 bg-white/[0.03]'}`}>
-                                        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
-                                            <div className="flex items-center gap-2">
-                                                <Activity size={12} className="text-[#249C6C]" />
-                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-50">Active Traders & History</span>
-                                            </div>
-                                            <button onClick={fetchInvestorCopies} className="text-[7px] font-bold opacity-40 hover:opacity-70 uppercase tracking-widest transition-opacity">Refresh</button>
-                                        </div>
-                                        <div className="max-h-44 overflow-y-auto no-scrollbar divide-y divide-white/[0.04]">
-                                            {isLoadingInvestorCopies ? (
-                                                <div className="py-6 flex items-center justify-center">
-                                                    <div className="w-5 h-5 border-2 border-[#249C6C]/20 border-t-[#249C6C] rounded-full animate-spin" />
-                                                </div>
-                                            ) : [...investorCopies.active, ...investorCopies.history].length > 0 ? (
-                                                [...investorCopies.active, ...investorCopies.history].map((copy, i) => {
-                                                    const isActive = copy.status !== 'closed' && copy.status !== 'stopped';
-                                                    return (
-                                                        <div key={`${copy.providerAddress}-${copy.activatedAt || i}`} className="px-4 py-3 flex items-center justify-between gap-3">
-                                                            <div className="flex items-center gap-3 min-w-0">
-                                                                <div className={`w-2 h-2 rounded-full shrink-0 ${isActive ? 'bg-[#249C6C] shadow-[0_0_8px_rgba(36,156,108,0.7)]' : 'bg-white/20'}`} />
-                                                                <div className="min-w-0">
-                                                                    <div className="text-xs font-black truncate">{copy.providerName || `${copy.providerAddress?.substring(0, 6)}...`}</div>
-                                                                    <div className="text-[8px] font-bold opacity-40 uppercase tracking-widest">
-                                                                        {isActive ? 'Active' : 'History'} · {copy.tradesTaken || 0} trades taken
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                <span className={`px-2 py-1 rounded-full text-[7px] font-black uppercase tracking-widest ${copy.mode === 'isolated' ? 'bg-blue-400/10 text-blue-400' : 'bg-amber-400/10 text-amber-400'}`}>
-                                                                    {copy.mode || 'cross'}
-                                                                </span>
-                                                                <div className="text-right">
-                                                                    <div className="text-[9px] font-black">{formatCurrency(copy.allocated || copy.stakePerTrade || 0, 0)}</div>
-                                                                    <div className={`text-[8px] font-bold ${Number(copy.pnl || 0) >= 0 ? 'text-[#249C6C]' : 'text-red-400'}`}>
-                                                                        {Number(copy.pnl || 0) >= 0 ? '+' : ''}{formatCurrency(copy.pnl || 0)}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
-                                            ) : (
-                                                <div className="py-7 text-center">
-                                                    <p className="text-[9px] font-bold opacity-30">No copied traders yet</p>
-                                                    <p className="text-[8px] font-bold opacity-20 mt-1">Activated traders and past copied trades will appear here</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+
                                     </div>
                                     </>
                             ) : (
@@ -697,321 +1023,369 @@ export function CopyTradingPage({
                     )
                 ) : (
                     /* TRADER MODE PANE */
-                    <div className="w-full max-w-3xl mx-auto flex flex-col items-center justify-center">
+                    <div className="w-full flex flex-col">
                         {isProvider ? (
-                            !hasCopyWallet ? (
-                                <div className="w-full max-w-md mx-auto flex flex-col items-center justify-center text-center">
-                                    <h2 className="text-xl font-black mb-3">Activate Provider Account</h2>
-                                    <p className="text-xs font-bold opacity-60 leading-relaxed mb-6">
-                                        Your provider application has been approved! You must now generate a dedicated Copy Trading Wallet to receive your performance fees and manage your follower capital.
-                                    </p>
-                                    <button 
-                                        onClick={handleGenerateWallet}
-                                        disabled={isGeneratingWallet}
-                                        className="w-auto px-8 py-4 rounded-[20px] bg-amber-500 text-black font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(245,158,11,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                                    >
-                                        {isGeneratingWallet ? 'Generating Wallet...' : 'Generate Copy Trading Wallet'}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="w-full max-w-4xl mx-auto text-left space-y-6 px-4 pb-8">
-                                    {/* Dashboard Header */}
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h2 className="text-2xl font-black tracking-tight">Provider Dashboard</h2>
-                                            <p className="text-[10px] font-bold opacity-50 uppercase tracking-widest mt-0.5">{profile?.providerApplication?.contactInfo?.name || address?.substring(0, 6)} · Active Provider · {profile?.providerApplication?.copyFee || 0}% fee</p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-[#249C6C] animate-pulse shadow-[0_0_8px_rgba(36,156,108,0.6)]" />
-                                            <span className="text-[9px] font-black text-[#249C6C] uppercase tracking-widest">Live</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Key Metrics */}
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                                        {[
-                                            { icon: Users, label: 'Followers', value: providerPerformance?.followers ?? profile?.providerStats?.followers ?? 0, color: 'text-[#249C6C]' },
-                                            { icon: DollarSign, label: 'AUM', value: `$${(providerPerformance?.aum ?? profile?.providerStats?.aum ?? 0).toLocaleString()}`, color: 'text-blue-400' },
-                                            { icon: Activity, label: 'Trades', value: providerPerformance?.totalTrades ?? profile?.stats?.totalTrades ?? 0, color: '' },
-                                            { icon: TrendingUp, label: 'Win Rate', value: `${providerPerformance?.winRate ?? (profile?.stats?.totalTrades > 0 ? ((profile.stats.totalWins / profile.stats.totalTrades) * 100).toFixed(1) : '0.0')}%`, color: 'text-[#249C6C]' },
-                                            { icon: Trophy, label: 'Revenue', value: `$${(providerPerformance?.revenue ?? profile?.providerStats?.profitGenerated ?? 0).toLocaleString()}`, color: 'text-amber-400' },
-                                            { icon: BarChart, label: 'Volume', value: `$${(providerPerformance?.totalVolume ?? profile?.stats?.totalVolume ?? 0).toLocaleString()}`, color: 'text-blue-400' }
-                                        ].map((item, idx) => (
-                                            <div key={idx} className="bg-white/[0.03] rounded-2xl p-3 border border-white/[0.05]">
-                                                <div className="flex items-center gap-1.5 mb-1.5">
-                                                    <item.icon size={10} className={item.color || 'text-white/40'} />
-                                                    <span className="text-[7px] font-black uppercase opacity-40 tracking-widest">{item.label}</span>
+                            <div className="w-full flex flex-col lg:flex-row gap-4 lg:gap-8 overflow-y-auto lg:overflow-hidden relative">
+                                {/* LEFT: Wallet Card + Revenue */}
+                                <div className="w-full xl:max-w-md flex flex-col shrink-0 lg:h-full overflow-visible">
+                                    {/* Portfolio Wallet Card (same design as investor wallet) */}
+                                    <div className="relative h-[220px] md:h-[260px] w-full shrink-0 mb-4 group">
+                                        <div className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between bg-[#249C6C] border border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.15)]`}>
+                                            
+                                            {/* Immersive Nature-Series Layer */}
+                                            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                                                <svg className="absolute inset-0 w-full h-full opacity-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                    <path d="M0,20 Q20,10 40,20 T80,20 T100,10" fill="none" stroke="white" strokeWidth="0.15" />
+                                                    <path d="M0,40 Q20,30 40,40 T80,40 T100,30" fill="none" stroke="white" strokeWidth="0.15" />
+                                                    <path d="M0,60 Q20,50 40,60 T80,60 T100,50" fill="none" stroke="white" strokeWidth="0.15" />
+                                                    <path d="M0,80 Q20,70 40,80 T80,80 T100,70" fill="none" stroke="white" strokeWidth="0.15" />
+                                                </svg>
+                                                <svg className="absolute top-0 right-[-10%] w-[120%] h-full opacity-40" viewBox="0 0 200 100" preserveAspectRatio="none">
+                                                    <path d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" fill="none" stroke="white" strokeWidth="10" className="opacity-10" />
+                                                    <path d="M0,20 C50,10 80,60 130,50 C180,40 200,90 250,80" fill="none" stroke="white" strokeWidth="0.6" strokeDasharray="4 6" className="opacity-30" />
+                                                </svg>
+                                                <div className="absolute bottom-[15%] right-[12%] flex items-end gap-1 opacity-30">
+                                                    <svg width="20" height="28" viewBox="0 0 24 32" fill="white"><path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" /></svg>
+                                                    <svg width="14" height="20" viewBox="0 0 24 32" fill="white" className="opacity-60"><path d="M12,0 L24,24 L16,24 L20,32 L4,32 L8,24 L0,24 Z" /></svg>
                                                 </div>
-                                                <div className={`text-base font-black ${item.color}`}>{item.value}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Portfolio Overview */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                                        <div className="lg:col-span-3 bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Wallet size={12} className="text-[#249C6C]" />
-                                                    <span className="text-[8px] font-black uppercase opacity-40 tracking-widest">Follower Portfolio</span>
-                                                </div>
-                                                <span className="text-[8px] font-black text-[#249C6C] uppercase tracking-widest">{formatCurrency(providerPerformance?.aum ?? profile?.providerStats?.aum ?? 0, 0)} AUM</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                                {[
-                                                    { label: 'Isolated AUM', value: formatCurrency(providerPortfolio.isolatedAllocated, 0), tone: 'text-blue-400' },
-                                                    { label: 'Cross Stake', value: formatCurrency(providerPortfolio.crossStake, 0), tone: 'text-amber-400' },
-                                                    { label: 'Stake/Trade', value: formatCurrency(providerPortfolio.totalStakePerTrade, 0), tone: 'text-[#249C6C]' },
-                                                    { label: 'Follower PnL', value: `${providerPortfolio.totalPnl >= 0 ? '+' : ''}${formatCurrency(providerPortfolio.totalPnl)}`, tone: providerPortfolio.totalPnl >= 0 ? 'text-[#249C6C]' : 'text-red-400' }
-                                                ].map(item => (
-                                                    <div key={item.label} className="rounded-xl bg-white/[0.03] p-3">
-                                                        <div className="text-[7px] font-black opacity-35 uppercase tracking-widest mb-1">{item.label}</div>
-                                                        <div className={`text-sm font-black ${item.tone}`}>{item.value}</div>
+                                                <div className="absolute top-[20%] left-[45%] opacity-20">
+                                                    <div className="relative w-3 h-3">
+                                                        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white" />
+                                                        <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white" />
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-                                            <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
-                                                <div className="text-[8px] font-black uppercase opacity-40 tracking-widest mb-2">Mode Mix</div>
-                                                <div className="h-24">
-                                                    {providerPortfolio.modeData.length > 0 ? (
-                                                        <ResponsiveContainer width="100%" height="100%">
-                                                            <PieChart>
-                                                                <Pie data={providerPortfolio.modeData} cx="50%" cy="50%" innerRadius={24} outerRadius={38} dataKey="value" stroke="none">
-                                                                    <Cell fill="#60A5FA" />
-                                                                    <Cell fill="#F59E0B" />
-                                                                </Pie>
-                                                            </PieChart>
-                                                        </ResponsiveContainer>
-                                                    ) : (
-                                                        <div className="h-full flex items-center justify-center text-[8px] font-bold opacity-25">No followers</div>
-                                                    )}
                                                 </div>
-                                                <div className="flex justify-center gap-3 text-[7px] font-black uppercase opacity-60">
-                                                    <span className="text-blue-400">Iso {providerPortfolio.isolatedFollowers.length}</span>
-                                                    <span className="text-amber-400">Cross {providerPortfolio.crossFollowers.length}</span>
+                                                <div className="absolute bottom-[30%] left-[20%] opacity-10 grid grid-cols-2 gap-2">
+                                                    <div className="w-1 h-1 rounded-full bg-white" />
+                                                    <div className="w-1 h-1 rounded-full bg-white" />
                                                 </div>
                                             </div>
 
-                                            <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
-                                                <div className="text-[8px] font-black uppercase opacity-40 tracking-widest mb-2">Capital Mix</div>
-                                                <div className="h-24">
-                                                    {providerPortfolio.allocationData.length > 0 ? (
-                                                        <ResponsiveContainer width="100%" height="100%">
-                                                            <PieChart>
-                                                                <Pie data={providerPortfolio.allocationData} cx="50%" cy="50%" innerRadius={24} outerRadius={38} dataKey="value" stroke="none">
-                                                                    <Cell fill="#249C6C" />
-                                                                    <Cell fill="#A3E635" />
-                                                                </Pie>
-                                                            </PieChart>
-                                                        </ResponsiveContainer>
-                                                    ) : (
-                                                        <div className="h-full flex items-center justify-center text-[8px] font-bold opacity-25">No capital</div>
-                                                    )}
-                                                </div>
-                                                <div className="flex justify-center gap-3 text-[7px] font-black uppercase opacity-60">
-                                                    <span className="text-[#249C6C]">Alloc</span>
-                                                    <span className="text-lime-300">Stake</span>
-                                                </div>
+                                            {/* Texture Layer */}
+                                            <div className="absolute inset-0 z-0">
+                                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#2E8B57_0%,transparent_60%)] opacity-60" />
+                                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_70%,#1E5D3B_0%,transparent_60%)] opacity-40" />
+                                                <div className="absolute inset-0 opacity-[0.07] mix-blend-overlay" style={{ backgroundImage: `url('https://www.transparenttextures.com/patterns/carbon-fibre.png')` }} />
+                                                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent opacity-30" />
                                             </div>
-                                        </div>
-                                    </div>
 
-                                    {/* Charts Row */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                                        {/* Win Rate Trend Chart */}
-                                        <div className="lg:col-span-3 bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <div className="flex items-center gap-2">
-                                                    <TrendingUp size={12} className="text-[#249C6C]" />
-                                                    <span className="text-[8px] font-black uppercase opacity-40 tracking-widest">Win Rate Trend</span>
+                                            {/* Credit Card Chip */}
+                                            <div className="absolute top-1/2 right-10 -translate-y-1/2 w-14 h-11 rounded-xl bg-gradient-to-br from-[#E6BE8A] via-[#C5A059] to-[#8B7355] shadow-[0_4px_12px_rgba(0,0,0,0.5)] border border-black/20 z-10">
+                                                <div className="absolute inset-0 grid grid-cols-2 grid-rows-3 gap-[1.5px] p-2.5 opacity-30">
+                                                    {[...Array(6)].map((_, i) => (
+                                                        <div key={i} className="border border-black/40 rounded-[3px]" />
+                                                    ))}
                                                 </div>
+                                                <div className="absolute top-1/2 left-0 w-full h-[1px] bg-black/20" />
                                             </div>
-                                            <div className="h-32">
-                                                {providerPerformance?.monthlyPerformance?.length > 0 ? (
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <AreaChart data={providerPerformance.monthlyPerformance} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                                                            <defs>
-                                                                <linearGradient id="winRateGrad" x1="0" y1="0" x2="0" y2="1">
-                                                                    <stop offset="0%" stopColor="#249C6C" stopOpacity={0.3} />
-                                                                    <stop offset="100%" stopColor="#249C6C" stopOpacity={0} />
-                                                                </linearGradient>
-                                                            </defs>
-                                                            <XAxis dataKey="month" tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)' }} tickLine={false} axisLine={false} />
-                                                            <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.3)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                                                            <Tooltip contentStyle={{ background: 'rgba(10,10,10,0.9)', border: 'none', borderRadius: 8, fontSize: 8 }} formatter={(v) => [`${v}%`, 'Win Rate']} />
-                                                            <Area type="monotone" dataKey="winRate" stroke="#249C6C" strokeWidth={1.5} fill="url(#winRateGrad)" dot={false} activeDot={{ r: 3, fill: '#249C6C' }} />
-                                                        </AreaChart>
-                                                    </ResponsiveContainer>
-                                                ) : (
-                                                    <div className="h-full flex items-center justify-center text-[9px] font-bold opacity-30">No trade data yet</div>
-                                                )}
-                                            </div>
-                                        </div>
 
-                                        {/* Win/Loss Donut Chart */}
-                                        <div className="lg:col-span-2 bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <PieChartIcon size={12} className="text-amber-400" />
-                                                <span className="text-[8px] font-black uppercase opacity-40 tracking-widest">Win / Loss</span>
-                                            </div>
-                                            <div className="flex items-center justify-center h-32 gap-4">
-                                                {providerPerformance && (providerPerformance.wins > 0 || providerPerformance.losses > 0) ? (
+                                            <div className="flex-1 flex flex-col justify-between relative z-20">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] text-white`}>Portfolio Wallet</p>
+                                                        <p className={`text-[28px] md:text-[34px] font-black uppercase text-white/80 -mt-1 leading-none`}>Provider</p>
+                                                    </div>
+                                                    {portfolioWallet ? (
+                                                        <img src="/boblogo.png" alt="Logo" className="h-16 md:h-20 object-contain brightness-0 invert mix-blend-overlay opacity-80" />
+                                                    ) : null}
+                                                </div>
+
+                                                {portfolioWallet ? (
                                                     <>
-                                                        <ResponsiveContainer width={100} height={100}>
-                                                            <PieChart>
-                                                                <Pie data={[
-                                                                    { name: 'Wins', value: providerPerformance.wins },
-                                                                    { name: 'Losses', value: providerPerformance.losses }
-                                                                ]} cx="50%" cy="50%" innerRadius={28} outerRadius={42} startAngle={90} endAngle={-270} dataKey="value" stroke="none">
-                                                                    <Cell fill="#249C6C" />
-                                                                    <Cell fill="rgba(255,255,255,0.1)" />
-                                                                </Pie>
-                                                            </PieChart>
-                                                        </ResponsiveContainer>
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-2 h-2 rounded-full bg-[#249C6C]" />
-                                                                <span className="text-[9px] font-bold text-white/60">Wins <span className="text-white font-black">{providerPerformance.wins}</span></span>
+                                                        <div className="py-2">
+                                                            <div className="flex items-center gap-3 group/copy cursor-pointer" onClick={(e) => { e.stopPropagation(); handleCopy(portfolioWallet.address); }}>
+                                                                <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
+                                                                    {portfolioWallet.address ? `${portfolioWallet.address.slice(0, 6)}...${portfolioWallet.address.slice(-4)}`.toUpperCase() : "xxxx...xxxx"}
+                                                                </p>
+                                                                <div className="p-1.5 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
+                                                                    {copied ? <Check size={14} className="text-[#249C6C]" /> : <Copy size={14} className="text-white/40" />}
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-2 h-2 rounded-full bg-white/10" />
-                                                                <span className="text-[9px] font-bold text-white/60">Losses <span className="text-white font-black">{providerPerformance.losses}</span></span>
+                                                            <div className="flex gap-1.5 mt-4">
+                                                                <div className="w-4 h-1.5 rounded-full bg-white" />
                                                             </div>
-                                                            <div className="text-[8px] font-black text-[#249C6C]">{providerPerformance.winRate}% Win Rate</div>
+                                                        </div>
+
+                                                        <div className="flex items-end justify-between relative">
+                                                            <div>
+                                                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-white`}>Available Balance</p>
+                                                                <h1 className={`text-4xl md:text-5xl font-black tracking-tighter text-white flex items-baseline gap-2`}>
+                                                                    {portfolioWallet.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                                    <span className="text-xl text-white/60">USDC</span>
+                                                                </h1>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <Shield size={10} className="text-white opacity-40" />
+                                                            <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>Secured</p>
                                                         </div>
                                                     </>
                                                 ) : (
-                                                    <div className="text-[9px] font-bold opacity-30">No data yet</div>
+                                                    <>
+                                                        {/* Generate Portfolio Wallet */}
+                                                        <div className="py-2">
+                                                            <div className="flex items-center gap-3">
+                                                                <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white/40">xxxx...xxxx</p>
+                                                            </div>
+                                                            <div className="flex gap-1.5 mt-4">
+                                                                <div className="w-4 h-1.5 rounded-full bg-white/20" />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-end justify-between relative">
+                                                            <div>
+                                                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-white/60`}>Available Balance</p>
+                                                                <h1 className={`text-4xl md:text-5xl font-black tracking-tighter text-white/40 flex items-baseline gap-2`}>
+                                                                    0.00
+                                                                    <span className="text-xl text-white/30">USDC</span>
+                                                                </h1>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-center mt-2">
+                                                            <button
+                                                                onClick={async () => {
+                                                                    setIsGeneratingPortfolio(true);
+                                                                    try {
+                                                                        const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/providers/${address.toLowerCase()}/generate-portfolio-wallet`, { method: 'POST' });
+                                                                        const data = await res.json();
+                                                                        if (res.ok && data.success) {
+                                                                            setPortfolioWallet(data.wallet);
+                                                                            setPortfolioBalance(data.wallet.balance);
+                                                                            if (data.claimed) {
+                                                                                setCopyResult({ type: 'success', message: `Wallet +${data.claimed.net.toFixed(2)} USDC` });
+                                                                            } else {
+                                                                                setCopyResult({ type: 'success', message: 'Wallet generated' });
+                                                                            }
+                                                                            fetchPortfolio();
+                                                                            setTimeout(() => setCopyResult(null), 3000);
+                                                                        } else {
+                                                                            setCopyResult({ type: 'fail', message: data.error || 'Generation failed' });
+                                                                            setTimeout(() => setCopyResult(null), 2500);
+                                                                        }
+                                                                    } catch (e) {
+                                                                        setCopyResult({ type: 'fail', message: 'Network error' });
+                                                                        setTimeout(() => setCopyResult(null), 2500);
+                                                                    } finally {
+                                                                        setIsGeneratingPortfolio(false);
+                                                                    }
+                                                                }}
+                                                                disabled={isGeneratingPortfolio}
+                                                                className="px-6 py-2.5 rounded-xl bg-amber-500 text-black font-black text-[10px] uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg"
+                                                            >
+                                                                {isGeneratingPortfolio ? 'Generating...' : 'Generate Wallet'}
+                                                            </button>
+                                                        </div>
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Followers / Subscribers List */}
-                                    <div className="bg-white/[0.03] rounded-2xl border border-white/[0.05] overflow-hidden">
-                                        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
-                                            <div className="flex items-center gap-2">
-                                                <Users size={12} className="text-[#249C6C]" />
-                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-40">Active Investors ({followers.length})</span>
+                                    {/* Pending Revenue Alert */}
+                                    {pendingRevenue > 0 && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="mb-4 p-4 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-between"
+                                        >
+                                            <div>
+                                                <p className="text-[9px] font-black uppercase tracking-widest text-amber-400">Unclaimed Revenue</p>
+                                                <p className="text-sm font-black text-amber-400">{pendingRevenue.toFixed(2)} USDC</p>
+                                                <p className="text-[8px] font-bold text-amber-400/60 mt-1">Generate wallet to claim (10% penalty applies)</p>
                                             </div>
-                                            <button onClick={fetchFollowers} className="text-[7px] font-bold text-white/30 hover:text-white/60 uppercase tracking-widest transition-colors">Refresh</button>
-                                        </div>
-                                        {followers.length > 0 ? (
-                                            <div className="divide-y divide-white/[0.03]">
-                                                {followers.map((f, i) => (
-                                                    <div key={i} className="grid grid-cols-[1fr_auto] md:grid-cols-[1fr_90px_90px_80px_70px] gap-3 items-center px-4 py-3 hover:bg-white/[0.01] transition-colors">
-                                                        <div className="flex items-center gap-3 min-w-0">
-                                                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-[#249C6C] to-[#124e36] shrink-0">
-                                                                {f.avatar ? <img src={f.avatar} className="w-full h-full object-cover" /> : null}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <span className="text-xs font-bold truncate block">{f.username}</span>
-                                                                <span className="text-[8px] font-mono opacity-25 hidden sm:inline">{f.address?.substring(0, 6)}...{f.address?.slice(-4)}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="hidden md:block">
-                                                            <div className="text-[7px] font-black opacity-30 uppercase tracking-widest">Allocated</div>
-                                                            <div className="text-[9px] font-black">{formatCurrency(f.allocated || 0, 0)}</div>
-                                                        </div>
-                                                        <div className="hidden md:block">
-                                                            <div className="text-[7px] font-black opacity-30 uppercase tracking-widest">Stake/Trade</div>
-                                                            <div className="text-[9px] font-black">{formatCurrency(f.stakePerTrade || 0, 0)}</div>
-                                                        </div>
-                                                        <div className="hidden md:block">
-                                                            <div className="text-[7px] font-black opacity-30 uppercase tracking-widest">PnL</div>
-                                                            <div className={`text-[9px] font-black ${Number(f.pnl || 0) >= 0 ? 'text-[#249C6C]' : 'text-red-400'}`}>{Number(f.pnl || 0) >= 0 ? '+' : ''}{formatCurrency(f.pnl || 0)}</div>
-                                                        </div>
-                                                        <div className="flex items-center justify-end">
-                                                            <span className={`px-2 py-1 rounded-full text-[7px] font-black uppercase tracking-widest ${f.mode === 'isolated' ? 'bg-blue-400/10 text-blue-400' : 'bg-amber-400/10 text-amber-400'}`}>
-                                                                {f.mode === 'isolated' ? 'Isolated' : 'Cross'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="py-8 text-center">
-                                                <p className="text-[9px] font-bold opacity-30">No active subscribers yet</p>
-                                                <p className="text-[8px] font-bold opacity-20 mt-1">Investors will appear here when they start copying your trades</p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Monthly Performance + Report Section */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                        {/* Monthly Volume Bar Chart */}
-                                        <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <Activity size={12} className="text-blue-400" />
-                                                <span className="text-[8px] font-black uppercase opacity-40 tracking-widest">Monthly Volume</span>
-                                            </div>
-                                            <div className="h-28">
-                                                {providerPerformance?.monthlyPerformance?.length > 0 ? (
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <ReBarChart data={providerPerformance.monthlyPerformance} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                                                            <XAxis dataKey="month" tick={{ fontSize: 7, fill: 'rgba(255,255,255,0.3)' }} tickLine={false} axisLine={false} />
-                                                            <YAxis tick={{ fontSize: 7, fill: 'rgba(255,255,255,0.3)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
-                                                            <Tooltip contentStyle={{ background: 'rgba(10,10,10,0.9)', border: 'none', borderRadius: 8, fontSize: 8 }} formatter={(v) => [`$${v.toLocaleString()}`, 'Volume']} />
-                                                            <Bar dataKey="volume" fill="#249C6C" radius={[2, 2, 0, 0]} />
-                                                        </ReBarChart>
-                                                    </ResponsiveContainer>
-                                                ) : (
-                                                    <div className="h-full flex items-center justify-center text-[9px] font-bold opacity-30">No volume data yet</div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Reports Panel */}
-                                        <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={12} className="text-amber-400" />
-                                                    <span className="text-[8px] font-black uppercase opacity-40 tracking-widest">Reports</span>
-                                                </div>
-                                                <div className="flex gap-1">
-                                                    {['daily', 'weekly', 'monthly', 'annual', 'all'].map(p => (
-                                                        <button key={p} onClick={() => { setReportPeriod(p); fetchReport(p); }}
-                                                            className={`px-2 py-1 text-[7px] font-black uppercase tracking-widest rounded transition-colors ${reportPeriod === p ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>
-                                                            {p === 'all' ? 'All' : p.substring(0, 3)}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            {providerReport && (
-                                                <div className="grid grid-cols-2 gap-2 text-[9px]">
-                                                    <div className="bg-white/[0.03] rounded-lg p-2">
-                                                        <span className="text-white/30 font-bold uppercase tracking-widest text-[7px] block mb-0.5">Trades</span>
-                                                        <span className="font-black">{providerReport.totalTrades}</span>
-                                                    </div>
-                                                    <div className="bg-white/[0.03] rounded-lg p-2">
-                                                        <span className="text-white/30 font-bold uppercase tracking-widest text-[7px] block mb-0.5">Win Rate</span>
-                                                        <span className="font-black text-[#249C6C]">{providerReport.winRate}%</span>
-                                                    </div>
-                                                    <div className="bg-white/[0.03] rounded-lg p-2">
-                                                        <span className="text-white/30 font-bold uppercase tracking-widest text-[7px] block mb-0.5">Volume</span>
-                                                        <span className="font-black">${providerReport.totalVolume.toLocaleString()}</span>
-                                                    </div>
-                                                    <div className="bg-white/[0.03] rounded-lg p-2">
-                                                        <span className="text-white/30 font-bold uppercase tracking-widest text-[7px] block mb-0.5">PnL</span>
-                                                        <span className={`font-black ${providerReport.totalPnl >= 0 ? 'text-[#249C6C]' : 'text-red-400'}`}>{providerReport.totalPnl >= 0 ? '+' : ''}${providerReport.totalPnl.toFixed(2)}</span>
-                                                    </div>
-                                                    <div className="bg-white/[0.03] rounded-lg p-2">
-                                                        <span className="text-white/30 font-bold uppercase tracking-widest text-[7px] block mb-0.5">Revenue</span>
-                                                        <span className="font-black text-amber-400">${providerReport.revenue.toFixed(2)}</span>
-                                                    </div>
-                                                    <div className="bg-white/[0.03] rounded-lg p-2">
-                                                        <span className="text-white/30 font-bold uppercase tracking-widest text-[7px] block mb-0.5">New Followers</span>
-                                                        <span className="font-black text-blue-400">+{providerReport.newFollowers}</span>
-                                                    </div>
-                                                </div>
+                                            {portfolioWallet && (
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/providers/${address.toLowerCase()}/claim-revenue`, { method: 'POST' });
+                                                            const data = await res.json();
+                                                            if (res.ok && data.success) {
+                                                                setPortfolioWallet(prev => ({ ...prev, balance: data.newBalance }));
+                                                                setPendingRevenue(0);
+                                                                setCopyResult({ type: 'success', message: `Claimed ${data.claimed.net.toFixed(2)} USDC (10% penalty: ${data.claimed.penalty.toFixed(2)})` });
+                                                                setTimeout(() => setCopyResult(null), 3000);
+                                                            } else {
+                                                                setCopyResult({ type: 'fail', message: data.error || 'Claim failed' });
+                                                                setTimeout(() => setCopyResult(null), 2500);
+                                                            }
+                                                        } catch (e) {
+                                                            setCopyResult({ type: 'fail', message: 'Network error' });
+                                                            setTimeout(() => setCopyResult(null), 2500);
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 rounded-xl bg-amber-500 text-black font-black text-[9px] uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                                >
+                                                    Claim
+                                                </button>
                                             )}
+                                        </motion.div>
+                                    )}
+
+                                    {/* Withdraw button for portfolio wallet */}
+                                    {portfolioWallet && (
+                                        <button
+                                            onClick={() => { setWithdrawAmount(''); setShowWithdrawModal(true); }}
+                                            className="w-full py-3 rounded-[20px] bg-[#249C6C] text-white font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Send size={14} />
+                                            Withdraw from Portfolio
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* CENTER: Two Donuts — Revenue + Win/Loss */}
+                                <div className="hidden xl:flex flex-col items-center justify-center gap-8 shrink-0 py-4 w-80 ml-[10%]">
+                                    {/* Revenue Donut */}
+                                    <div className="w-full flex flex-col">
+                                        <div className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 text-center">Revenue</div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="relative h-32 w-32 shrink-0">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie data={(() => {
+                                                            if (activationRevenue === 0) return [{ name: 'No Data', value: 1, color: '#249C6C' }];
+                                                            return [
+                                                                { name: 'Activation Fees', value: activationRevenue / 2, color: '#8B7355' },
+                                                                { name: 'Win Trade Fees', value: 0, color: '#249C6C' },
+                                                                { name: 'Loss Trade Fees', value: 0, color: '#FF4444' }
+                                                            ];
+                                                        })()} cx="50%" cy="50%" innerRadius={30} outerRadius={48} dataKey="value" stroke="none">
+                                                            {activationRevenue === 0 ? (
+                                                                <Cell fill="#249C6C" />
+                                                            ) : (
+                                                                <><Cell fill="#8B7355" /><Cell fill="#249C6C" /><Cell fill="#FF4444" /></>
+                                                            )}
+                                                        </Pie>
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                    <span className="text-[10px] font-black">{activationRevenue.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2 text-[8px] font-bold opacity-60">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#8B7355]" />Activation</span>
+                                                    <span className="font-black">{(activationRevenue / 2).toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#249C6C]" />Trade Fees</span>
+                                                    <span className="font-black">0.00</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-4 pt-1 border-t border-white/10">
+                                                    <span className="flex items-center gap-1.5 font-black uppercase tracking-wider">Total</span>
+                                                    <span className="font-black">{activationRevenue.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Win/Loss Donut */}
+                                    <div className="w-full flex flex-col">
+                                        <div className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2 text-center">Win / Loss</div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="relative h-32 w-32 shrink-0">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie data={(() => {
+                                                            const w = providerPerformance?.wins || profile?.stats?.totalWins || 0;
+                                                            const l = providerPerformance?.losses || (profile?.stats?.totalTrades - profile?.stats?.totalWins) || 0;
+                                                            if (w === 0 && l === 0) return [{ name: 'No Data', value: 1, color: '#249C6C' }];
+                                                            return [{ name: 'Wins', value: w, color: '#249C6C' }, { name: 'Losses', value: l, color: '#FF4444' }];
+                                                        })()} cx="50%" cy="50%" innerRadius={30} outerRadius={48} startAngle={90} endAngle={-270} dataKey="value" stroke="none">
+                                                            {(() => {
+                                                                const w = providerPerformance?.wins || profile?.stats?.totalWins || 0;
+                                                                const l = providerPerformance?.losses || (profile?.stats?.totalTrades - profile?.stats?.totalWins) || 0;
+                                                                if (w === 0 && l === 0) return <Cell fill="#249C6C" />;
+                                                                return <><Cell fill="#249C6C" /><Cell fill="#FF4444" /></>;
+                                                            })()}
+                                                        </Pie>
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                    <span className="text-[10px] font-black">
+                                                        {(() => {
+                                                            const total = providerPerformance?.wins || profile?.stats?.totalWins || 0;
+                                                            const losses = providerPerformance?.losses || (profile?.stats?.totalTrades - profile?.stats?.totalWins) || 0;
+                                                            const all = total + losses;
+                                                            return all > 0 ? ((total / all) * 100).toFixed(0) + '%' : '0%';
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2 text-[8px] font-bold opacity-60">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#249C6C]" />Wins</span>
+                                                    <span className="font-black">{providerPerformance?.wins || profile?.stats?.totalWins || 0}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#FF4444]" />Losses</span>
+                                                    <span className="font-black">{providerPerformance?.losses || (profile?.stats?.totalTrades - profile?.stats?.totalWins) || 0}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            )
+
+                                {/* RIGHT: Activities */}
+                                <div className="w-full xl:max-w-sm ml-auto flex flex-col lg:h-full lg:overflow-hidden pb-8 px-2">
+                                    <div className="flex flex-col items-center gap-0.5">
+                                        <div className="flex items-center gap-2 opacity-40">
+                                            <Activity size={10} className="text-[#249C6C]" />
+                                            <span className="text-[7px] font-black uppercase tracking-widest">Activities</span>
+                                        </div>
+                                        <button
+                                            onMouseEnter={() => { const el = document.getElementById('activities-scroll'); if (el) { el._scrollInterval = setInterval(() => { el.scrollTop -= 4; }, 16); } }}
+                                            onMouseLeave={() => { const el = document.getElementById('activities-scroll'); if (el && el._scrollInterval) { clearInterval(el._scrollInterval); el._scrollInterval = null; } }}
+                                            onClick={() => { const el = document.getElementById('activities-scroll'); if (el) { el.scrollTop -= 100; } }}
+                                            className="p-1 rounded transition-all hover:bg-white/5 active:scale-90"
+                                        >
+                                            <ChevronUp size={14} className="opacity-30" />
+                                        </button>
+                                        {tradeHistory && tradeHistory.length > 0 ? (
+                                            <div id="activities-scroll" className="divide-y divide-white/[0.03] max-h-[200px] overflow-y-auto custom-scrollbar w-full">
+                                                {tradeHistory.slice(0, 10).map((trade) => {
+                                                    const isWin = trade.status === 'WON' || trade.status === 'PAID';
+                                                    const isLoss = trade.status === 'LOST';
+                                                    return (
+                                                        <div key={trade.id} className="grid grid-cols-[1fr_auto] md:grid-cols-[1fr_70px_70px_70px] gap-3 items-center px-2 py-2 hover:bg-white/[0.01] transition-colors">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <div className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
+                                                                    {trade.direction === 'UP' ? 'LONG' : 'SHORT'}
+                                                                </div>
+                                                                <span className="text-[9px] font-bold uppercase tracking-widest truncate">{trade.symbol?.toUpperCase() || 'BTC'}</span>
+                                                            </div>
+                                                            <div className="hidden md:block text-right">
+                                                                <div className="text-[7px] font-black opacity-30 uppercase tracking-widest">Amt</div>
+                                                                <div className="text-[9px] font-black">{Number(trade.amount || 0).toFixed(2)}</div>
+                                                            </div>
+                                                            <div className="hidden md:block text-right">
+                                                                <div className="text-[7px] font-black opacity-30 uppercase tracking-widest">Entry</div>
+                                                                <div className="text-[9px] font-black">${Number(trade.entryPrice || 0).toFixed(2)}</div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className={`text-[9px] font-black ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : 'opacity-40'}`}>
+                                                                    {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : isLoss ? `-$${Number(trade.amount || 0).toFixed(2)}` : trade.status}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center py-4 text-[8px] font-bold opacity-25">No trades yet</div>
+                                        )}
+                                        <button
+                                            onMouseEnter={() => { const el = document.getElementById('activities-scroll'); if (el) { el._scrollInterval = setInterval(() => { el.scrollTop += 4; }, 16); } }}
+                                            onMouseLeave={() => { const el = document.getElementById('activities-scroll'); if (el && el._scrollInterval) { clearInterval(el._scrollInterval); el._scrollInterval = null; } }}
+                                            onClick={() => { const el = document.getElementById('activities-scroll'); if (el) { el.scrollTop += 100; } }}
+                                            className="p-1 rounded transition-all hover:bg-white/5 active:scale-90"
+                                        >
+                                            <ChevronDown size={14} className="opacity-30" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         ) : isPending ? (
                             <div className={`p-8 rounded-[32px] max-w-md w-full text-center ${isLight ? 'bg-transparent' : 'bg-transparent'} backdrop-blur-xl`}>
                                 <div className="flex items-center justify-center gap-1 mb-5">
@@ -1060,76 +1434,305 @@ export function CopyTradingPage({
                                     </motion.div>
                                 )}
 
-                                {appStep >= 1 && (
-                                    <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} className="text-left w-full">
-                                        <h2 className="text-lg font-black mb-4 text-center">Provider Application</h2>
-                                        
-                                        <div className="flex flex-col gap-3 mb-6">
-                                            <input 
-                                                type="text" 
-                                                placeholder="Display Name" 
-                                                value={appData.name}
-                                                onChange={(e) => setAppData({...appData, name: e.target.value})}
-                                                disabled={appStep > 1}
-                                                className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
-                                            />
-                                            <input 
-                                                type="text" 
-                                                placeholder="Twitter Username" 
-                                                value={appData.twitter}
-                                                onChange={(e) => setAppData({...appData, twitter: e.target.value})}
-                                                disabled={appStep > 1}
-                                                className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
-                                            />
-                                            <input 
-                                                type="text" 
-                                                placeholder="Telegram Username" 
-                                                value={appData.telegram}
-                                                onChange={(e) => setAppData({...appData, telegram: e.target.value})}
-                                                disabled={appStep > 1}
-                                                className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
-                                            />
-                                            <input 
-                                                type="email" 
-                                                placeholder="Email Address" 
-                                                value={appData.email}
-                                                onChange={(e) => setAppData({...appData, email: e.target.value})}
-                                                disabled={appStep > 1}
-                                                className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
-                                            />
-                                            <input 
-                                                type="number" 
-                                                placeholder="Copy Fee % (0-5%)" 
-                                                value={appData.fee}
-                                                onChange={(e) => {
-                                                    let val = e.target.value;
-                                                    if(val !== '') {
-                                                        val = Number(val);
-                                                        if(val > 5) val = 5;
-                                                        if(val < 0) val = 0;
-                                                    }
-                                                    setAppData({...appData, fee: val});
-                                                }}
-                                                min="0"
-                                                max="5"
-                                                disabled={appStep > 1}
-                                                className={`w-full p-3 rounded-xl text-xs font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
-                                            />
+                                {appStep >= 1 && appStep <= 5 && (
+                                    <motion.div key={appStep} initial={{opacity:0, x:30}} animate={{opacity:1, x:0}} className="text-left w-full">
+                                        {/* Progress bar */}
+                                        <div className="flex items-center gap-1 mb-6 justify-center">
+                                            {[1,2,3,4,5].map(s => (
+                                                <div key={s} className={`h-1 rounded-full transition-all duration-500 ${s <= appStep ? 'bg-[#249C6C]' : isLight ? 'bg-black/10' : 'bg-white/10'} ${s === appStep ? 'w-8' : 'w-4'}`} />
+                                            ))}
                                         </div>
 
-                                        <button 
-                                            onClick={handleApply}
-                                            disabled={isApplying || !appData.name || !appData.email || appData.fee === ''}
-                                            className="w-auto px-8 py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                                        >
-                                            {isApplying ? 'Submitting...' : 'Submit Application'}
-                                        </button>
+                                        <h2 className="text-lg font-black mb-1 text-center">{
+                                            appStep === 1 ? 'Display Name' :
+                                            appStep === 2 ? 'Twitter' :
+                                            appStep === 3 ? 'Telegram' :
+                                            appStep === 4 ? 'Email Address' :
+                                            appStep === 5 ? 'Copy Fee' : ''
+                                        }</h2>
+                                        <p className={`text-[10px] font-bold opacity-40 uppercase tracking-widest mb-6 text-center`}>
+                                            Step {appStep} of 5
+                                        </p>
+
+                                        {/* Step 1: Name */}
+                                        {appStep === 1 && (
+                                            <div className="flex flex-col gap-4">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Enter your display name"
+                                                    value={appData.name}
+                                                    onChange={(e) => setAppData({...appData, name: e.target.value})}
+                                                    autoFocus
+                                                    className={`w-full p-4 rounded-2xl text-sm font-bold outline-none border transition-all ${isLight ? 'bg-black/5 border-transparent text-black focus:border-[#249C6C]/40' : 'bg-white/5 border-white/5 text-white focus:border-[#249C6C]/40'}`}
+                                                />
+                                                <button
+                                                    onClick={() => appData.name.trim() && setAppStep(2)}
+                                                    disabled={!appData.name.trim()}
+                                                    className="w-full py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                                                >
+                                                    Continue
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Step 2: Twitter */}
+                                        {appStep === 2 && (
+                                            <div className="flex flex-col gap-4">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="@username"
+                                                    value={appData.twitter}
+                                                    onChange={(e) => setAppData({...appData, twitter: e.target.value})}
+                                                    autoFocus
+                                                    className={`w-full p-4 rounded-2xl text-sm font-bold outline-none border transition-all ${isLight ? 'bg-black/5 border-transparent text-black focus:border-[#249C6C]/40' : 'bg-white/5 border-white/5 text-white focus:border-[#249C6C]/40'}`}
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => setAppStep(1)}
+                                                        className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.2em] transition-all border ${isLight ? 'border-black/10 text-black/60 hover:bg-black/5' : 'border-white/10 text-white/60 hover:bg-white/5'}`}
+                                                    >
+                                                        Back
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setAppStep(3)}
+                                                        disabled={!appData.twitter.trim()}
+                                                        className="flex-1 py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                                                    >
+                                                        Continue
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Step 3: Telegram */}
+                                        {appStep === 3 && (
+                                            <div className="flex flex-col gap-4">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="@telegram_username"
+                                                    value={appData.telegram}
+                                                    onChange={(e) => setAppData({...appData, telegram: e.target.value})}
+                                                    autoFocus
+                                                    className={`w-full p-4 rounded-2xl text-sm font-bold outline-none border transition-all ${isLight ? 'bg-black/5 border-transparent text-black focus:border-[#249C6C]/40' : 'bg-white/5 border-white/5 text-white focus:border-[#249C6C]/40'}`}
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => setAppStep(2)}
+                                                        className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.2em] transition-all border ${isLight ? 'border-black/10 text-black/60 hover:bg-black/5' : 'border-white/10 text-white/60 hover:bg-white/5'}`}
+                                                    >
+                                                        Back
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setAppStep(4);
+                                                            // Reset OTP state when entering email step
+                                                            if (emailSource === 'manual') {
+                                                                setOtpVerified(false);
+                                                                setOtpSent(false);
+                                                            }
+                                                        }}
+                                                        disabled={!appData.telegram.trim()}
+                                                        className="flex-1 py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                                                    >
+                                                        Continue
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Step 4: Email with OTP verification */}
+                                        {appStep === 4 && (
+                                            <div className="flex flex-col gap-4">
+                                                {emailSource === 'privy' && appData.email ? (
+                                                    <>
+                                                        <div className={`p-4 rounded-2xl border ${isLight ? 'bg-[#249C6C]/5 border-[#249C6C]/20' : 'bg-[#249C6C]/10 border-[#249C6C]/20'}`}>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <CheckCircle size={14} className="text-[#249C6C]" />
+                                                                <span className="text-[10px] font-black uppercase tracking-widest text-[#249C6C]">Auto-detected Email</span>
+                                                            </div>
+                                                            <p className="text-sm font-bold">{appData.email}</p>
+                                                        </div>
+                                                        <p className={`text-[11px] font-bold leading-relaxed ${isLight ? 'text-black/50' : 'text-white/50'}`}>
+                                                            This email was fetched from your connected account. Confirm it is correct to proceed.
+                                                        </p>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => setAppStep(3)}
+                                                                className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.2em] transition-all border ${isLight ? 'border-black/10 text-black/60 hover:bg-black/5' : 'border-white/10 text-white/60 hover:bg-white/5'}`}
+                                                            >
+                                                                Back
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setAppStep(5)}
+                                                                className="flex-1 py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                                            >
+                                                                Confirm & Continue
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <input 
+                                                            type="email" 
+                                                            placeholder="you@email.com"
+                                                            value={appData.email}
+                                                            onChange={(e) => {
+                                                                setAppData({...appData, email: e.target.value});
+                                                                setOtpVerified(false);
+                                                                setOtpSent(false);
+                                                                setOtpError('');
+                                                            }}
+                                                            disabled={otpSent}
+                                                            autoFocus
+                                                            className={`w-full p-4 rounded-2xl text-sm font-bold outline-none border transition-all ${isLight ? 'bg-black/5 border-transparent text-black focus:border-[#249C6C]/40' : 'bg-white/5 border-white/5 text-white focus:border-[#249C6C]/40'}`}
+                                                        />
+
+                                                        {!otpSent ? (
+                                                            <button
+                                                                onClick={handleSendOtp}
+                                                                disabled={isSendingOtp || !appData.email || !/\S+@\S+\.\S+/.test(appData.email)}
+                                                                className="w-full py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                                                            >
+                                                                {isSendingOtp ? 'Sending Code...' : 'Send Verification Code'}
+                                                            </button>
+                                                        ) : (
+                                                            <>
+                                                                <div className={`p-4 rounded-2xl border ${isLight ? 'bg-black/5 border-transparent' : 'bg-white/5 border-white/5'}`}>
+                                                                    <label className={`text-[10px] font-black uppercase tracking-widest block mb-2 ${isLight ? 'text-black/50' : 'text-white/50'}`}>
+                                                                        Enter 6-digit verification code
+                                                                    </label>
+                                                                    <input 
+                                                                        type="text"
+                                                                        maxLength={6}
+                                                                        placeholder="000000"
+                                                                        value={otpCode}
+                                                                        onChange={(e) => {
+                                                                            setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                                                                            setOtpError('');
+                                                                        }}
+                                                                        autoFocus
+                                                                        className={`w-full p-4 rounded-2xl text-center text-2xl font-black tracking-[0.3em] outline-none border transition-all ${isLight ? 'bg-black/5 border-transparent text-black focus:border-[#249C6C]/40' : 'bg-white/5 border-white/5 text-white focus:border-[#249C6C]/40'}`}
+                                                                    />
+                                                                </div>
+
+                                                                {otpError && (
+                                                                    <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold text-center">
+                                                                        {otpError}
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => { setOtpSent(false); setOtpCode(''); setOtpError(''); }}
+                                                                        className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.2em] transition-all border ${isLight ? 'border-black/10 text-black/60 hover:bg-black/5' : 'border-white/10 text-white/60 hover:bg-white/5'}`}
+                                                                    >
+                                                                        Change Email
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={handleVerifyOtp}
+                                                                        disabled={isVerifyingOtp || otpCode.length < 6}
+                                                                        className="flex-1 py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                                                                    >
+                                                                        {isVerifyingOtp ? 'Verifying...' : 'Verify Code'}
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Step 5: Copy Fee */}
+                                        {appStep === 5 && (
+                                            <div className="flex flex-col gap-4">
+                                                <div className={`p-4 rounded-2xl border ${isLight ? 'bg-black/5 border-transparent' : 'bg-white/5 border-white/5'}`}>
+                                                    <label className={`text-[10px] font-black uppercase tracking-widest block mb-2 ${isLight ? 'text-black/50' : 'text-white/50'}`}>
+                                                        Performance Fee (%)
+                                                    </label>
+                                                    <input 
+                                                        type="number"
+                                                        placeholder="2.5"
+                                                        value={appData.fee}
+                                                        onChange={(e) => {
+                                                            let val = e.target.value;
+                                                            if(val !== '') {
+                                                                val = Number(val);
+                                                                if(val > 5) val = 5;
+                                                                if(val < 0) val = 0;
+                                                            }
+                                                            setAppData({...appData, fee: val});
+                                                        }}
+                                                        min="0"
+                                                        max="5"
+                                                        step="0.5"
+                                                        autoFocus
+                                                        className={`w-full p-4 rounded-2xl text-2xl font-black text-center outline-none border transition-all ${isLight ? 'bg-black/5 border-transparent text-black focus:border-[#249C6C]/40' : 'bg-white/5 border-white/5 text-white focus:border-[#249C6C]/40'}`}
+                                                    />
+                                                    <p className={`text-[10px] font-bold opacity-40 mt-2 text-center`}>Set between 0% and 5%</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => setAppStep(4)}
+                                                        className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.2em] transition-all border ${isLight ? 'border-black/10 text-black/60 hover:bg-black/5' : 'border-white/10 text-white/60 hover:bg-white/5'}`}
+                                                    >
+                                                        Back
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setAppStep(6)}
+                                                        disabled={appData.fee === '' || Number(appData.fee) > 5}
+                                                        className="flex-1 py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                                                    >
+                                                        Review
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
+
+                                {/* Step 6: Review & Submit */}
+                                {appStep === 6 && (
+                                    <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} className="text-left w-full">
+                                        <h2 className="text-lg font-black mb-4 text-center">Review Application</h2>
+                                        
+                                        <div className={`rounded-2xl border divide-y ${isLight ? 'border-[#249C6C]/15 bg-black/5 divide-black/5' : 'border-white/10 bg-white/[0.02] divide-white/5'} mb-6 overflow-hidden`}>
+                                            {[
+                                                { label: 'Name', value: appData.name },
+                                                { label: 'Twitter', value: appData.twitter },
+                                                { label: 'Telegram', value: appData.telegram },
+                                                { label: 'Email', value: appData.email },
+                                                { label: 'Copy Fee', value: `${appData.fee}%` },
+                                            ].map((item, i) => (
+                                                <div key={i} className="flex items-center justify-between px-4 py-3">
+                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>{item.label}</span>
+                                                    <span className="text-xs font-bold">{item.value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setAppStep(5)}
+                                                className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-[0.2em] transition-all border ${isLight ? 'border-black/10 text-black/60 hover:bg-black/5' : 'border-white/10 text-white/60 hover:bg-white/5'}`}
+                                            >
+                                                Back
+                                            </button>
+                                            <button 
+                                                onClick={handleApply}
+                                                disabled={isApplying}
+                                                className="flex-1 py-4 rounded-[20px] bg-[#249C6C] text-white font-black text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                                            >
+                                                {isApplying ? 'Submitting...' : 'Submit Application'}
+                                            </button>
+                                        </div>
                                     </motion.div>
                                 )}
                             </div>
                         )}
                     </div>
                 )}
+                </div>
             </div>
             )}
 
@@ -1213,15 +1816,15 @@ export function CopyTradingPage({
                                 <div className="p-4 rounded-xl bg-[#249C6C]/10 border border-[#249C6C]/20 flex flex-col gap-2">
                                     <div className="flex justify-between items-center">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-[#249C6C]">Activation Fee</span>
-                                        <span className="text-xs font-black text-[#249C6C]">10 USDC</span>
+                                        <span className="text-xs font-black text-[#249C6C]">1 USDC</span>
                                     </div>
                                     <div className="flex justify-between items-center text-[9px] font-bold opacity-50 uppercase">
                                         <span>Provider Share</span>
-                                        <span>50% (5 USDC)</span>
+                                        <span>0.5 USDC</span>
                                     </div>
                                     <div className="flex justify-between items-center text-[9px] font-bold opacity-50 uppercase">
                                         <span>Protocol Share</span>
-                                        <span>50% (5 USDC)</span>
+                                        <span>0.5 USDC</span>
                                     </div>
                                 </div>
                             </div>
@@ -1229,11 +1832,12 @@ export function CopyTradingPage({
                             <button 
                                 onClick={async () => {
                                     if(!profile?.copyTradingWallet) {
-                                        notify("You do not have a copy trading wallet yet.", "error");
+                                        setCopyResult({ type: 'fail', message: 'No copy trading wallet' });
+                                        setTimeout(() => setCopyResult(null), 2500);
                                         return;
                                     }
-                                    if(copyParams.mode === 'isolated' && !copyParams.allocated) { notify("Please specify allocated funds for isolated mode", "error"); return; }
-                                    if(!copyParams.stakePerTrade) { notify("Please specify a stake per trade", "error"); return; }
+                                    if(copyParams.mode === 'isolated' && !copyParams.allocated) { setCopyResult({ type: 'fail', message: 'Specify allocated funds' }); setTimeout(() => setCopyResult(null), 2500); return; }
+                                    if(!copyParams.stakePerTrade) { setCopyResult({ type: 'fail', message: 'Specify stake per trade' }); setTimeout(() => setCopyResult(null), 2500); return; }
 
                                     try {
                                         const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/activate`, {
@@ -1249,14 +1853,26 @@ export function CopyTradingPage({
                                         });
                                         const data = await res.json();
                                         if (res.ok && data.success) {
+                                            setCopyResult({ type: 'success', message: `Copied ${providerToCopy.username}!` });
                                             setIsCopyModalOpen(false);
                                             setCopyParams({ mode: 'isolated', allocated: '', stakePerTrade: '' });
-                                            notify(`Copy trading activated on ${providerToCopy.username}! New balance: ${data.newBalance} USDC`, "success");
+                                            // Immediately update local metrics
+                                            setCopyWalletBalance(parseFloat(data.newBalance));
+                                            if (copyParams.mode === 'isolated' && copyParams.allocated) {
+                                                const prev = parseFloat(localAllocated !== null ? localAllocated : (profile?.copyTradingAllocated || 0));
+                                                setLocalAllocated(prev + parseFloat(copyParams.allocated));
+                                            }
+                                            // Refresh copies
+                                            fetchInvestorCopies();
+                                            fetchCopyWallet();
+                                            setTimeout(() => setCopyResult(null), 2500);
                                         } else {
-                                            notify(data.error || 'Activation failed', "error");
+                                            setCopyResult({ type: 'fail', message: data.error || 'Activation failed' });
+                                            setTimeout(() => setCopyResult(null), 2500);
                                         }
                                     } catch (e) {
-                                        notify(e.message || 'Network error', "error");
+                                        setCopyResult({ type: 'fail', message: 'Network error' });
+                                        setTimeout(() => setCopyResult(null), 2500);
                                     }
                                 }}
                                 className="w-full py-5 rounded-[24px] bg-[#249C6C] text-white font-black text-sm uppercase tracking-[0.2em] shadow-[0_10px_30px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -1266,6 +1882,144 @@ export function CopyTradingPage({
                         </motion.div>
                     </motion.div>
                 )}
+
+                {/* Success/Fail Animation Overlay */}
+                {copyResult && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.5, opacity: 0 }}
+                            transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+                            className="flex flex-col items-center gap-3"
+                        >
+                            <motion.div
+                                initial={{ scale: 0, rotate: -180 }}
+                                animate={{ scale: 1, rotate: 0 }}
+                                transition={{ type: 'spring', damping: 10, stiffness: 150, delay: 0.1 }}
+                            >
+                                {copyResult.type === 'success' ? (
+                                    <div className="w-16 h-16 rounded-full bg-[#249C6C] flex items-center justify-center shadow-2xl">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <motion.path
+                                                initial={{ pathLength: 0 }}
+                                                animate={{ pathLength: 1 }}
+                                                transition={{ duration: 0.4, delay: 0.2 }}
+                                                d="M20 6L9 17l-5-5"
+                                            />
+                                        </svg>
+                                    </div>
+                                ) : (
+                                    <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center shadow-2xl">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <motion.path
+                                                initial={{ pathLength: 0, opacity: 0 }}
+                                                animate={{ pathLength: 1, opacity: 1 }}
+                                                transition={{ duration: 0.2, delay: 0.3 }}
+                                                d="M15 9l-6 6M9 9l6 6"
+                                            />
+                                        </svg>
+                                    </div>
+                                )}
+                            </motion.div>
+                            <motion.p
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 }}
+                                className="text-white/90 font-bold text-sm text-center"
+                            >
+                                {copyResult.message}
+                            </motion.p>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Withdrawal Modal */}
+                {showWithdrawModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 20 }}
+                            className={`w-full max-w-md p-6 rounded-[32px] border ${isLight ? 'bg-[#F2F7F4] border-[#249C6C]/20' : 'bg-[#0A0A0A] border-white/10'} shadow-2xl relative`}
+                        >
+                            <button
+                                onClick={() => setShowWithdrawModal(false)}
+                                className="absolute top-6 right-6 p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                            >
+                                <X size={20} className={isLight ? 'text-black/40' : 'text-white/40'} />
+                            </button>
+
+                            <h2 className="text-2xl font-black mb-2">Withdraw</h2>
+                            <p className="text-sm font-bold opacity-50 mb-6">Withdraw portfolio earnings to your main wallet</p>
+
+                            <div className="space-y-4 mb-8">
+                                <div className={`p-4 rounded-2xl border ${isLight ? 'bg-black/5 border-transparent' : 'bg-white/5 border-white/5'}`}>
+                                    <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">Available Balance</p>
+                                    <p className="text-xl font-black">{portfolioBalance.toFixed(2)} USDC</p>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-2">Amount (USDC)</label>
+                                    <input
+                                        type="number"
+                                        placeholder="0.00"
+                                        value={withdrawAmount}
+                                        onChange={e => setWithdrawAmount(e.target.value)}
+                                        max={portfolioBalance}
+                                        className={`w-full p-4 rounded-xl text-sm font-bold outline-none border ${isLight ? 'bg-black/5 border-transparent text-black' : 'bg-white/5 border-white/5 text-white'}`}
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={async () => {
+                                    const amt = parseFloat(withdrawAmount);
+                                    if (!amt || amt <= 0 || amt > portfolioBalance) return;
+                                    setIsWithdrawing(true);
+                                    try {
+                                        const res = await fetch(`${KEEPER_URL_ARC}/copy-trading/providers/${address.toLowerCase()}/withdraw`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ amount: amt, targetAddress: address })
+                                        });
+                                        const data = await res.json();
+                                        if (res.ok && data.success) {
+                                            setCopyResult({ type: 'success', message: `Withdrew ${amt} USDC` });
+                                            setPortfolioBalance(data.newBalance);
+                                            setPortfolioWallet(prev => prev ? { ...prev, balance: data.newBalance } : null);
+                                            setShowWithdrawModal(false);
+                                            setWithdrawAmount('');
+                                            setTimeout(() => setCopyResult(null), 2500);
+                                        } else {
+                                            setCopyResult({ type: 'fail', message: data.error || 'Withdrawal failed' });
+                                            setTimeout(() => setCopyResult(null), 2500);
+                                        }
+                                    } catch (e) {
+                                        setCopyResult({ type: 'fail', message: 'Network error' });
+                                        setTimeout(() => setCopyResult(null), 2500);
+                                    } finally {
+                                        setIsWithdrawing(false);
+                                    }
+                                }}
+                                disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > portfolioBalance || isWithdrawing}
+                                className="w-full py-5 rounded-[24px] bg-[#249C6C] text-white font-black text-sm uppercase tracking-[0.2em] shadow-[0_10px_30px_-10px_rgba(36,156,108,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
+                            >
+                                {isWithdrawing ? 'Processing...' : 'Confirm Withdrawal'}
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+
             </AnimatePresence>
 
         </motion.div>
