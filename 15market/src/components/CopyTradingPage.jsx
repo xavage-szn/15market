@@ -525,6 +525,65 @@ export function CopyTradingPage({
         };
     }, [followers]);
 
+    const mobileActivityPane = (
+        <motion.div
+            initial={false}
+            animate={{ height: showMobileActivity ? 300 : 48 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+            className="w-full overflow-hidden xl:hidden flex flex-col shrink-0"
+        >
+            <div className={`w-full h-full pointer-events-auto backdrop-blur-xl border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
+                {/* Toggle Handle */}
+                <div
+                    onClick={() => setShowMobileActivity(!showMobileActivity)}
+                    className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isDark ? 'bg-white/5 border-b border-white/5' : 'bg-[#249C6C] border-b border-[#249C6C]/20'}`}
+                >
+                    {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
+                    <div className="flex items-center justify-center gap-3 w-full">
+                        <Activity size={14} className={`${isDark ? 'text-white' : 'text-white'}`} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
+                        <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? 'text-white' : 'text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+                            ACTIVITIES ({tradeHistory?.length || 0})
+                        </span>
+                        {showMobileActivity ? <ChevronDown size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} /> : <ChevronUp size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} />}
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
+                    {tradeHistory && tradeHistory.length > 0 ? (
+                        tradeHistory.slice(0, 20).map((trade) => {
+                            const isWin = trade.status === 'WON' || trade.status === 'PAID';
+                            const isLoss = trade.status === 'LOST';
+                            return (
+                                <div key={trade.id} className={`p-3 rounded-2xl border transition-all active:scale-[0.98] ${isLight ? 'bg-white/40 border-[#249C6C]/20 shadow-sm' : 'bg-white/5 border-white/5'}`}>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
+                                                {trade.direction === 'UP' ? 'LONG' : 'SHORT'}
+                                            </div>
+                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{trade.symbol?.toUpperCase() || 'BTC'}</span>
+                                        </div>
+                                        <span className={`text-[10px] font-black uppercase ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isLight ? 'text-[#0a261a]/40' : 'text-white/40')}`}>
+                                            {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : isLoss ? `-$${Number(trade.amount || 0).toFixed(2)}` : trade.status}
+                                        </span>
+                                    </div>
+                                    <div className={`text-[9px] font-medium ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+                                        ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>
+                            <Activity size={48} className="mb-4" />
+                            <p className="text-[10px] font-black uppercase tracking-widest">No activity yet</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </motion.div>
+    );
+
     return (<>
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -675,6 +734,8 @@ export function CopyTradingPage({
                                     </div>
                                 </div>
                             )}
+
+                            {mobileActivityPane}
 
                             {/* LEFT PANE: Top Traders List */}
                         <div className={`flex flex-col gap-2 lg:gap-2 w-full lg:max-w-[280px] shrink-0 ${!selectedProvider ? '' : 'hidden lg:flex'} lg:h-full`}>
@@ -1261,6 +1322,8 @@ export function CopyTradingPage({
                                         </button>
                                     )}
                                 </div>
+
+                                {mobileActivityPane}
 
                                 {/* CENTER: Two Donuts — Revenue + Win/Loss */}
                                 <div className="flex flex-row xl:flex-col items-start xl:items-center justify-center gap-4 xl:gap-8 shrink-0 py-2 xl:py-4 w-full xl:w-80 xl:ml-[10%]">
@@ -2210,65 +2273,6 @@ export function CopyTradingPage({
 
             </AnimatePresence>
 
-        </motion.div>
-
-        {/* Mobile Activity Bottom Pane - outside scale transform */}
-        <motion.div
-            initial={false}
-            animate={{ y: showMobileActivity ? 0 : 'calc(100% - 48px + 1%)' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-            className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none xl:hidden"
-            style={{ height: '300px' }}
-        >
-            <div className={`w-full h-full pointer-events-auto backdrop-blur-xl border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
-                {/* Toggle Handle */}
-                <div
-                    onClick={() => setShowMobileActivity(!showMobileActivity)}
-                    className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isDark ? 'bg-white/5 border-b border-white/5' : 'bg-[#249C6C] border-b border-[#249C6C]/20'}`}
-                >
-                    {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
-                    <div className="flex items-center justify-center gap-3 w-full">
-                        <Activity size={14} className={`${isDark ? 'text-white' : 'text-white'}`} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
-                        <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? 'text-white' : 'text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
-                            ACTIVITIES ({tradeHistory?.length || 0})
-                        </span>
-                        {showMobileActivity ? <ChevronDown size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} /> : <ChevronUp size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} />}
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
-                    {tradeHistory && tradeHistory.length > 0 ? (
-                        tradeHistory.slice(0, 20).map((trade) => {
-                            const isWin = trade.status === 'WON' || trade.status === 'PAID';
-                            const isLoss = trade.status === 'LOST';
-                            return (
-                                <div key={trade.id} className={`p-3 rounded-2xl border transition-all active:scale-[0.98] ${isLight ? 'bg-white/40 border-[#249C6C]/20 shadow-sm' : 'bg-white/5 border-white/5'}`}>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
-                                                {trade.direction === 'UP' ? 'LONG' : 'SHORT'}
-                                            </div>
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{trade.symbol?.toUpperCase() || 'BTC'}</span>
-                                        </div>
-                                        <span className={`text-[10px] font-black uppercase ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isLight ? 'text-[#0a261a]/40' : 'text-white/40')}`}>
-                                            {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : isLoss ? `-$${Number(trade.amount || 0).toFixed(2)}` : trade.status}
-                                        </span>
-                                    </div>
-                                    <div className={`text-[9px] font-medium ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
-                                        ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </div>
-                                </div>
-                            );
-                        })
-                    ) : (
-                        <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>
-                            <Activity size={48} className="mb-4" />
-                            <p className="text-[10px] font-black uppercase tracking-widest">No activity yet</p>
-                        </div>
-                    )}
-                </div>
-            </div>
         </motion.div>
 
         <style>{`
