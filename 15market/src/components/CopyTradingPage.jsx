@@ -528,9 +528,10 @@ export function CopyTradingPage({
     const mobileActivityPane = (
         <motion.div
             initial={false}
-            animate={{ height: showMobileActivity ? 300 : 48 }}
+            animate={{ y: showMobileActivity ? 0 : 'calc(100% - 48px + 1%)' }}
             transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-            className="w-full overflow-hidden xl:hidden flex flex-col shrink-0"
+            className="absolute inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none xl:hidden"
+            style={{ height: '300px' }}
         >
             <div className={`w-full h-full pointer-events-auto backdrop-blur-xl border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
                 {/* Toggle Handle */}
@@ -734,8 +735,6 @@ export function CopyTradingPage({
                                     </div>
                                 </div>
                             )}
-
-                            {mobileActivityPane}
 
                             {/* LEFT PANE: Top Traders List */}
                         <div className={`flex flex-col gap-2 lg:gap-2 w-full lg:max-w-[280px] shrink-0 ${!selectedProvider ? '' : 'hidden lg:flex'} lg:h-full`}>
@@ -1322,8 +1321,6 @@ export function CopyTradingPage({
                                         </button>
                                     )}
                                 </div>
-
-                                {mobileActivityPane}
 
                                 {/* CENTER: Two Donuts — Revenue + Win/Loss */}
                                 <div className="flex flex-row xl:flex-col items-start xl:items-center justify-center gap-4 xl:gap-8 shrink-0 py-2 xl:py-4 w-full xl:w-80 xl:ml-[10%]">
@@ -2272,6 +2269,8 @@ export function CopyTradingPage({
                 )}
 
             </AnimatePresence>
+
+            {mobileActivityPane}
 
         </motion.div>
 
