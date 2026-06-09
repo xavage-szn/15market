@@ -1419,10 +1419,10 @@ export function CopyTradingPage({
                                     initial={false}
                                     animate={{ y: showMobileActivity ? 0 : 'calc(100% - 48px + 1%)' }}
                                     transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-                                    className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none xl:hidden"
+                                    className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
                                     style={{ height: '300px' }}
                                 >
-                                    <div className={`w-full h-full pointer-events-auto border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
+                                    <div className={`w-full h-full pointer-events-auto backdrop-blur-xl border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
                                         {/* Toggle Handle */}
                                         <div
                                             onClick={() => setShowMobileActivity(!showMobileActivity)}
