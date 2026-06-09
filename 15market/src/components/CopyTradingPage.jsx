@@ -15,6 +15,7 @@ export function CopyTradingPage({
     tradeHistory
 }) {
     const [mode, setMode] = useState(null); // null = select, 'investor' or 'trader'
+    const isDark = !isLight;
     const [providers, setProviders] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedProvider, setSelectedProvider] = useState(null);
