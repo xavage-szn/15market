@@ -1416,16 +1416,16 @@ export function CopyTradingPage({
                                 {/* Mobile Activity Bottom Pane */}
                                 <motion.div
                                     initial={false}
-                                    animate={{ y: showMobileActivity ? 0 : 'calc(100% - 56px + 1%)' }}
+                                    animate={{ y: showMobileActivity ? 0 : 'calc(100% - 48px + 1%)' }}
                                     transition={{ type: 'spring', damping: 28, stiffness: 220 }}
                                     className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none xl:hidden"
                                     style={{ height: '300px' }}
                                 >
-                                    <div className={`w-full h-full pointer-events-auto backdrop-blur-xl border-t rounded-t-[40px] flex flex-col overflow-hidden ${isLight ? 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]' : 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'}`}>
+                                    <div className={`w-full h-full pointer-events-auto border-t rounded-t-[40px] flex flex-col overflow-hidden ${isLight ? 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]' : 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'}`}>
                                         {/* Toggle Handle */}
                                         <div
                                             onClick={() => setShowMobileActivity(!showMobileActivity)}
-                                            className={`w-full h-14 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isLight ? 'bg-[#249C6C] border-b border-[#249C6C]/20' : 'bg-white/5 border-b border-white/5'}`}
+                                            className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isLight ? 'bg-[#249C6C] border-b border-[#249C6C]/20' : 'bg-white/5 border-b border-white/5'}`}
                                         >
                                             {isLight && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent opacity-90" />}
                                             <div className="flex items-center justify-center gap-3 w-full">
