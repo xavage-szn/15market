@@ -1421,19 +1421,19 @@ export function CopyTradingPage({
                                     className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none xl:hidden"
                                     style={{ height: '300px' }}
                                 >
-                                    <div className={`w-full h-full pointer-events-auto border-t rounded-t-[40px] flex flex-col overflow-hidden ${isLight ? 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]' : 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'}`}>
+                                    <div className={`w-full h-full pointer-events-auto border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
                                         {/* Toggle Handle */}
                                         <div
                                             onClick={() => setShowMobileActivity(!showMobileActivity)}
-                                            className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isLight ? 'bg-[#249C6C] border-b border-[#249C6C]/20' : 'bg-white/5 border-b border-white/5'}`}
+                                            className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isDark ? 'bg-white/5 border-b border-white/5' : 'bg-[#249C6C] border-b border-[#249C6C]/20'}`}
                                         >
-                                            {isLight && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent opacity-90" />}
+                                            {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
                                             <div className="flex items-center justify-center gap-3 w-full">
-                                                <Activity size={14} className="text-white" />
-                                                <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-white" style={{ fontFamily: '"Comfortaa", cursive' }}>
+                                                <Activity size={14} className={`${isDark ? 'text-white' : 'text-white'}`} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
+                                                <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? 'text-white' : 'text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
                                                     ACTIVITIES ({tradeHistory?.length || 0})
                                                 </span>
-                                                {showMobileActivity ? <ChevronDown size={12} className="text-white/80" /> : <ChevronUp size={12} className="text-white/80" />}
+                                                {showMobileActivity ? <ChevronDown size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} /> : <ChevronUp size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} />}
                                             </div>
                                         </div>
 
