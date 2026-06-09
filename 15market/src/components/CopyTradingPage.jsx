@@ -572,8 +572,8 @@ export function CopyTradingPage({
                     )}
                 </div>
                     {mode === 'trader' && (
-                        <div className="w-full px-3 md:px-6 pb-2 flex justify-start">
-                            <span className={`text-2xl md:text-4xl font-normal leading-snug tracking-normal inline-block pb-2 pt-1 overflow-visible ${isLight ? 'bg-gradient-to-b from-[#249C6C] to-black bg-clip-text text-transparent' : 'text-white'}`} style={{ fontFamily: '"BetterBrush", cursive' }}>
+                        <div className="w-full px-3 md:px-6 pb-2 flex justify-center lg:justify-start">
+                            <span className={`text-2xl md:text-4xl font-normal leading-snug tracking-normal inline-block pb-2 pt-1 overflow-visible ${isLight ? 'bg-gradient-to-b from-[#249C6C] to-black bg-clip-text text-transparent animate-gradient' : 'text-white'}`} style={{ fontFamily: '"BetterBrush", cursive' }}>
                                 {profile?.providerApplication?.contactInfo?.name || address?.substring(0, 6)}
                             </span>
                         </div>
@@ -2270,5 +2270,17 @@ export function CopyTradingPage({
                 </div>
             </div>
         </motion.div>
+
+        <style>{`
+            @keyframes gradientShift {
+                0% { background-position: 50% 0%; }
+                50% { background-position: 50% 100%; }
+                100% { background-position: 50% 0%; }
+            }
+            .animate-gradient {
+                background-size: 200% 200%;
+                animation: gradientShift 3s ease infinite;
+            }
+        `}</style>
     </>);
 }
