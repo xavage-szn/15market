@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Search, TrendingUp, Activity, ChevronRight, ChevronUp, ChevronDown, CheckCircle, Copy, Wallet, Trophy, X, AlertCircle, BarChart, Download, Calendar, Shield, Check, Settings, Send } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -55,6 +55,16 @@ export function CopyTradingPage({
 
     // Mobile activity bottom pane
     const [showMobileActivity, setShowMobileActivity] = useState(false);
+    const [showTraderSettings, setShowTraderSettings] = useState(false);
+    const walletCardRef = useRef(null);
+    const [traderPaneTop, setTraderPaneTop] = useState(0);
+
+    useLayoutEffect(() => {
+        if (mode === 'trader' && walletCardRef.current) {
+            const rect = walletCardRef.current.getBoundingClientRect();
+            setTraderPaneTop(rect.bottom + 8);
+        }
+    }, [mode]);
 
     // Deposit / Withdraw for copy trading wallet
     const [showCopyDepositModal, setShowCopyDepositModal] = useState(false);
@@ -525,65 +535,185 @@ export function CopyTradingPage({
         };
     }, [followers]);
 
-    const mobileActivityPane = (
-        <motion.div
-            initial={false}
-            animate={{ y: showMobileActivity ? 0 : 'calc(100% - 48px + 1%)' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-            className="absolute inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none xl:hidden"
-            style={{ height: '300px' }}
-        >
-            <div className={`w-full h-full pointer-events-auto backdrop-blur-xl border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
-                {/* Toggle Handle */}
-                <div
-                    onClick={() => setShowMobileActivity(!showMobileActivity)}
-                    className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isDark ? 'bg-white/5 border-b border-white/5' : 'bg-[#249C6C] border-b border-[#249C6C]/20'}`}
-                >
-                    {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
-                    <div className="flex items-center justify-center gap-3 w-full">
-                        <Activity size={14} className={`${isDark ? 'text-white' : 'text-white'}`} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
-                        <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? 'text-white' : 'text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
-                            ACTIVITIES ({tradeHistory?.length || 0})
-                        </span>
-                        {showMobileActivity ? <ChevronDown size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} /> : <ChevronUp size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} />}
-                    </div>
-                </div>
+    const mobilePane = (isInvestor) => {
+        const togglePane = () => setShowMobileActivity(!showMobileActivity);
+        const label = isInvestor ? 'TRADE LOGS' : 'ACTIVITIES';
+        const count = isInvestor
+            ? [...(investorCopies?.active || []), ...(investorCopies?.history || [])].length
+            : tradeHistory?.length || 0;
+        const Icon = isInvestor ? BarChart : Activity;
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
-                    {tradeHistory && tradeHistory.length > 0 ? (
-                        tradeHistory.slice(0, 20).map((trade) => {
-                            const isWin = trade.status === 'WON' || trade.status === 'PAID';
-                            const isLoss = trade.status === 'LOST';
-                            return (
-                                <div key={trade.id} className={`p-3 rounded-2xl border transition-all active:scale-[0.98] ${isLight ? 'bg-white/40 border-[#249C6C]/20 shadow-sm' : 'bg-white/5 border-white/5'}`}>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
-                                                {trade.direction === 'UP' ? 'LONG' : 'SHORT'}
-                                            </div>
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{trade.symbol?.toUpperCase() || 'BTC'}</span>
-                                        </div>
-                                        <span className={`text-[10px] font-black uppercase ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isLight ? 'text-[#0a261a]/40' : 'text-white/40')}`}>
-                                            {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : isLoss ? `-$${Number(trade.amount || 0).toFixed(2)}` : trade.status}
-                                        </span>
-                                    </div>
-                                    <div className={`text-[9px] font-medium ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
-                                        ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </div>
+        const content = isInvestor ? (
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
+                {[...(investorCopies?.active || []), ...(investorCopies?.history || [])].length > 0 ? (
+                    [...investorCopies.active, ...investorCopies.history].map((trade, i) => (
+                        <div key={trade.id || i} className={`p-3 rounded-2xl border transition-all active:scale-[0.98] ${isLight ? 'bg-white/40 border-[#249C6C]/20 shadow-sm' : 'bg-white/5 border-white/5'}`}>
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${trade.result === 'PENDING' ? 'bg-[#249C6C] shadow-[0_0_6px_rgba(36,156,108,0.7)]' : trade.result === 'WON' ? 'bg-[#249C6C]' : 'bg-red-400'}`} />
+                                    <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{trade.asset || '---'}</span>
                                 </div>
-                            );
-                        })
-                    ) : (
-                        <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>
-                            <Activity size={48} className="mb-4" />
-                            <p className="text-[10px] font-black uppercase tracking-widest">No activity yet</p>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-[8px] font-bold ${trade.direction === 'UP' ? 'text-[#249C6C]' : 'text-red-400'}`}>
+                                        {trade.direction || '---'}
+                                    </span>
+                                    <span className={`text-[8px] font-bold ${trade.result === 'WON' ? 'text-[#249C6C]' : trade.result === 'LOST' ? 'text-red-400' : 'text-amber-400'}`}>
+                                        {trade.result === 'PENDING' ? 'Active' : trade.result || '---'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className={`text-[9px] font-medium ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+                                {trade.timestamp ? new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </div>
                         </div>
-                    )}
-                </div>
+                    ))
+                ) : (
+                    <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>
+                        <BarChart size={48} className="mb-4" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">No trade logs yet</p>
+                    </div>
+                )}
             </div>
-        </motion.div>
-    );
+        ) : (
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-12 flex flex-col gap-2">
+                {tradeHistory && tradeHistory.length > 0 ? (
+                    tradeHistory.slice(0, 20).map((trade) => {
+                        const isWin = trade.status === 'WON' || trade.status === 'PAID';
+                        const isLoss = trade.status === 'LOST';
+                        return (
+                            <div key={trade.id} className={`p-3 rounded-2xl border transition-all active:scale-[0.98] ${isLight ? 'bg-white/40 border-[#249C6C]/20 shadow-sm' : 'bg-white/5 border-white/5'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}`}>
+                                            {trade.direction === 'UP' ? 'LONG' : 'SHORT'}
+                                        </div>
+                                        <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>{trade.symbol?.toUpperCase() || 'BTC'}</span>
+                                    </div>
+                                    <span className={`text-[10px] font-black uppercase ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isLight ? 'text-[#0a261a]/40' : 'text-white/40')}`}>
+                                        {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : isLoss ? `-$${Number(trade.amount || 0).toFixed(2)}` : trade.status}
+                                    </span>
+                                </div>
+                                <div className={`text-[9px] font-medium ${isLight ? 'text-[#0a261a]/60' : 'text-white/40'}`}>
+                                    ${Number(trade.entryPrice).toFixed(2)} • {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className={`h-full flex flex-col items-center justify-center opacity-20 text-center p-8 ${isLight ? 'text-[#0f2618]' : 'text-white'}`}>
+                        <Activity size={48} className="mb-4" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">No activity yet</p>
+                    </div>
+                )}
+            </div>
+        );
+
+        return (
+            <motion.div
+                initial={false}
+                animate={{ y: showMobileActivity ? 0 : 'calc(100% - 48px)' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+                className="absolute inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none xl:hidden"
+                style={isInvestor ? { height: '51.1vh' } : { top: Math.max(traderPaneTop, 300) || 300, bottom: 0 }}
+            >
+                <div className={`w-full h-full pointer-events-auto backdrop-blur-xl border-t rounded-t-[40px] flex flex-col overflow-hidden ${isDark ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10' : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}`}>
+                    {/* Toggle Handle */}
+                    <div
+                        onClick={togglePane}
+                        className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isDark ? 'bg-white/5 border-b border-white/5' : 'bg-[#249C6C] border-b border-[#249C6C]/20'}`}
+                    >
+                        {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
+                        <div className="flex items-center justify-center gap-3 w-full">
+                            <Icon size={14} className={`${isDark ? 'text-white' : 'text-white'}`} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
+                            <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? 'text-white' : 'text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+                                {label} ({count})
+                            </span>
+                            {showMobileActivity ? <ChevronDown size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} /> : <ChevronUp size={12} className={`${isDark ? 'text-white/80' : 'text-white/80'}`} />}
+                        </div>
+                    </div>
+                    {content}
+                </div>
+            </motion.div>
+        );
+    };
+
+    const exportTradeHistory = () => {
+        const winCount = tradeHistory?.filter(t => t.status === 'WON' || t.status === 'PAID').length || 0;
+        const lossCount = tradeHistory?.filter(t => t.status === 'LOST').length || 0;
+        const totalPnl = tradeHistory?.reduce((sum, t) => {
+            if (t.status === 'WON' || t.status === 'PAID') return sum + Number(t.payout || 0);
+            if (t.status === 'LOST') return sum - Number(t.amount || 0);
+            return sum;
+        }, 0) || 0;
+
+        const rows = (tradeHistory || []).map(t => `
+            <tr>
+                <td style="padding:8px 12px;border-bottom:1px solid #1a3a2a;text-align:left;">
+                    <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.1em;${t.direction === 'UP' ? 'background:#249C6C33;color:#249C6C' : 'background:#FF7F5033;color:#FF7F50'}">${t.direction === 'UP' ? 'LONG' : 'SHORT'}</span>
+                </td>
+                <td style="padding:8px 12px;border-bottom:1px solid #1a3a2a;text-align:left;font-size:12px;font-weight:600">${t.symbol?.toUpperCase() || 'BTC'}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #1a3a2a;text-align:right;font-size:12px;font-weight:600">${Number(t.amount || 0).toFixed(2)}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #1a3a2a;text-align:right;font-size:12px;font-weight:600">$${Number(t.entryPrice || 0).toFixed(2)}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #1a3a2a;text-align:right;font-size:12px;font-weight:700;${(t.status === 'WON' || t.status === 'PAID') ? 'color:#249C6C' : t.status === 'LOST' ? 'color:#FF7F50' : ''}">${(t.status === 'WON' || t.status === 'PAID') ? '+' : t.status === 'LOST' ? '-' : ''}${(t.status === 'WON' || t.status === 'PAID') ? Number(t.payout || 0).toFixed(2) : t.status === 'LOST' ? Number(t.amount || 0).toFixed(2) : t.status}</td>
+                <td style="padding:8px 12px;border-bottom:1px solid #1a3a2a;text-align:right;font-size:11px;color:#888">${t.timestamp ? new Date(t.timestamp).toLocaleString() : ''}</td>
+            </tr>
+        `).join('');
+
+        const html = `<!DOCTYPE html>
+<html>
+<head><title>15market Trade History</title></head>
+<body style="margin:0;padding:40px;font-family:system-ui,-apple-system,sans-serif;background:#0a1a12;color:#e0e0e0;">
+    <div style="max-width:900px;margin:0 auto;">
+        <div style="text-align:center;margin-bottom:40px;padding-bottom:30px;border-bottom:2px solid #249C6C;">
+            <h1 style="font-size:28px;font-weight:900;margin:0;color:#fff;letter-spacing:0.05em;">15MARKET</h1>
+            <p style="font-size:12px;color:#249C6C;font-weight:700;letter-spacing:0.2em;margin:6px 0 0;">TRADE HISTORY REPORT</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;">
+            <div style="background:#0d2b1d;border-radius:12px;padding:16px;text-align:center;border:1px solid #1a3a2a;">
+                <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.1em;">TOTAL TRADES</div>
+                <div style="font-size:24px;font-weight:900;color:#fff;margin-top:6px;">${tradeHistory?.length || 0}</div>
+            </div>
+            <div style="background:#0d2b1d;border-radius:12px;padding:16px;text-align:center;border:1px solid #1a3a2a;">
+                <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.1em;">WINS</div>
+                <div style="font-size:24px;font-weight:900;color:#249C6C;margin-top:6px;">${winCount}</div>
+            </div>
+            <div style="background:#0d2b1d;border-radius:12px;padding:16px;text-align:center;border:1px solid #1a3a2a;">
+                <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.1em;">LOSSES</div>
+                <div style="font-size:24px;font-weight:900;color:#FF7F50;margin-top:6px;">${lossCount}</div>
+            </div>
+            <div style="background:#0d2b1d;border-radius:12px;padding:16px;text-align:center;border:1px solid #1a3a2a;">
+                <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.1em;">TOTAL P&L</div>
+                <div style="font-size:24px;font-weight:900;color:${totalPnl >= 0 ? '#249C6C' : '#FF7F50'};margin-top:6px;">${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}</div>
+            </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;background:#0d2b1d;border-radius:12px;overflow:hidden;border:1px solid #1a3a2a;">
+            <thead>
+                <tr style="background:#0a1a12;">
+                    <th style="padding:12px;text-align:left;font-size:10px;font-weight:700;color:#888;letter-spacing:0.15em;border-bottom:2px solid #249C6C;">DIRECTION</th>
+                    <th style="padding:12px;text-align:left;font-size:10px;font-weight:700;color:#888;letter-spacing:0.15em;border-bottom:2px solid #249C6C;">SYMBOL</th>
+                    <th style="padding:12px;text-align:right;font-size:10px;font-weight:700;color:#888;letter-spacing:0.15em;border-bottom:2px solid #249C6C;">AMOUNT</th>
+                    <th style="padding:12px;text-align:right;font-size:10px;font-weight:700;color:#888;letter-spacing:0.15em;border-bottom:2px solid #249C6C;">ENTRY</th>
+                    <th style="padding:12px;text-align:right;font-size:10px;font-weight:700;color:#888;letter-spacing:0.15em;border-bottom:2px solid #249C6C;">P&L</th>
+                    <th style="padding:12px;text-align:right;font-size:10px;font-weight:700;color:#888;letter-spacing:0.15em;border-bottom:2px solid #249C6C;">DATE</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <div style="text-align:center;margin-top:32px;font-size:10px;color:#444;letter-spacing:0.1em;">
+            15market &bull; Generated ${new Date().toLocaleDateString()}
+        </div>
+    </div>
+</body>
+</html>`;
+
+        const win = window.open('', '_blank');
+        if (win) {
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            setTimeout(() => win.print(), 500);
+        }
+    };
 
     return (<>
         <motion.div
@@ -624,7 +754,7 @@ export function CopyTradingPage({
                     </div>
                     {mode === 'trader' && (
                         <button
-                            onClick={() => { setWithdrawAmount(''); setShowWithdrawModal(true); }}
+                            onClick={() => setShowTraderSettings(true)}
                             className={`p-2 rounded-full transition-all active:scale-90 ${isLight ? 'hover:bg-black/5 text-black/40' : 'hover:bg-white/5 text-white/40'}`}
                         >
                             <Settings size={16} />
@@ -807,7 +937,7 @@ export function CopyTradingPage({
                         <div className={`hidden lg:block w-px h-full ${isLight ? 'bg-gradient-to-b from-transparent via-[#249C6C]/20 to-transparent' : 'bg-gradient-to-b from-transparent via-white/10 to-transparent'}`} />
 
                         {/* RIGHT PANE: Metrics + Search + Details */}
-                        <div className="flex-1 max-w-2xl lg:h-full flex flex-col xl:flex-row gap-4 lg:gap-6 overflow-visible lg:overflow-y-auto xl:overflow-visible no-scrollbar">
+                        <div className="flex-1 w-full lg:w-auto max-w-2xl lg:h-full flex flex-col xl:flex-row gap-4 lg:gap-6 overflow-visible lg:overflow-y-auto xl:overflow-visible no-scrollbar">
                             {!selectedProvider ? (
                                 <>
                                     {/* Desktop-Only Sub-Left: Wallet Card & Metrics */}
@@ -941,8 +1071,8 @@ export function CopyTradingPage({
                                             </div>
                                         </div>
 
-                                        {/* Activity */}
-                                        <div className="mt-3">
+                                        {/* Activity (Desktop Only) */}
+                                        <div className="hidden lg:block mt-3">
                                             <div className="flex items-center justify-between mb-1.5">
                                                 <span className={`text-[7px] font-black uppercase tracking-widest ${isLight ? 'text-black/40' : 'text-white/40'}`}>Activity</span>
                                                 <button onClick={fetchInvestorCopies} className="text-[6px] font-bold opacity-30 hover:opacity-60 uppercase tracking-widest transition-opacity">Refresh</button>
@@ -1117,8 +1247,8 @@ export function CopyTradingPage({
                                 {/* LEFT: Wallet Card + Revenue */}
                                 <div className="w-full xl:max-w-md flex flex-col shrink-0 lg:h-full overflow-visible">
                                     {/* Portfolio Wallet Card (same design as investor wallet) */}
-                                    <div className="relative h-[220px] md:h-[260px] w-full shrink-0 mb-4 group">
-                                        <div className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between bg-[#249C6C] border border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.15)]`}>
+                                    <div ref={walletCardRef} className="relative h-[220px] md:h-[260px] w-full shrink-0 mb-4 group">
+                                        <div className={`w-full h-full px-6 py-4 md:px-10 md:py-8 rounded-[40px] relative overflow-hidden flex flex-col justify-between bg-[#249C6C] border border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.15)]`}>
                                             
                                             {/* Immersive Nature-Series Layer */}
                                             <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -1230,7 +1360,8 @@ export function CopyTradingPage({
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex items-center justify-center mt-2">
+                                                        <div className="flex flex-col items-center justify-center">
+                                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/40 mb-1">Generate</span>
                                                             <button
                                                                 onClick={async () => {
                                                                     setIsGeneratingPortfolio(true);
@@ -2270,7 +2401,64 @@ export function CopyTradingPage({
 
             </AnimatePresence>
 
-            {mobileActivityPane}
+            {/* Trader Settings Modal */}
+            <AnimatePresence>
+                {showTraderSettings && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowTraderSettings(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            onClick={e => e.stopPropagation()}
+                            className={`w-full max-w-sm p-6 rounded-[32px] border ${isLight ? 'bg-[#F2F7F4] border-[#249C6C]/20' : 'bg-[#0A0A0A] border-white/10'} shadow-2xl`}
+                        >
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-lg font-black">Settings</h2>
+                                <button onClick={() => setShowTraderSettings(false)} className={`p-2 rounded-full ${isLight ? 'hover:bg-black/5' : 'hover:bg-white/5'} transition-colors`}>
+                                    <X size={16} className="opacity-40" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => { setShowTraderSettings(false); setWithdrawAmount(''); setShowWithdrawModal(true); }}
+                                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all active:scale-[0.98] ${isLight ? 'border-black/10 hover:bg-black/5' : 'border-white/10 hover:bg-white/5'}`}
+                                >
+                                    <div className={`p-2.5 rounded-xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
+                                        <Wallet size={18} className="opacity-60" />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className={`text-sm font-black ${isLight ? 'text-black/80' : 'text-white'}`}>Withdraw Funds</div>
+                                        <div className={`text-[10px] font-bold opacity-40`}>Withdraw from your portfolio wallet</div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => { setShowTraderSettings(false); exportTradeHistory(); }}
+                                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all active:scale-[0.98] ${isLight ? 'border-black/10 hover:bg-black/5' : 'border-white/10 hover:bg-white/5'}`}
+                                >
+                                    <div className={`p-2.5 rounded-xl ${isLight ? 'bg-black/5' : 'bg-white/5'}`}>
+                                        <Download size={18} className="opacity-60" />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className={`text-sm font-black ${isLight ? 'text-black/80' : 'text-white'}`}>Export Trade History</div>
+                                        <div className={`text-[10px] font-bold opacity-40`}>Download as branded PDF report</div>
+                                    </div>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Mobile Bottom Pane */}
+            {mode === 'investor' ? mobilePane(true) : mode === 'trader' ? mobilePane(false) : null}
 
         </motion.div>
 
