@@ -30,6 +30,10 @@ services:
     rootDir: 15market
     buildCommand: npm install --legacy-peer-deps && npm run build
     publishDir: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: VITE_KEEPER_URL
         value: https://api.15market.online
@@ -43,6 +47,22 @@ services:
         value: https://api.turnkey.com
       - key: VITE_TURNKEY_RP_ID
         value: 15market.online
+      - key: VITE_ARC_CONTRACT_ADDRESS
+        value: "0x153cA7FAeE348f1892D1478868E15e17dDd09584"
+      - key: VITE_TREASURY_ADDRESS
+        value: "0x153cA7FAeE348f1892D1478868E15e17dDd09584"
+      - key: VITE_ARC_USDC_ADDRESS
+        value: "0x0000000000000000000000000000000000000000"
+      - key: VITE_REOWN_PROJECT_ID
+        value: "4aebd2ef806c541b6aaf003da2930c58"
+      - key: VITE_ARC_ROUNDS_CONTRACT_ADDRESS
+        value: "0x02AE9D2a7CEca436E7B3A482772EfB74C4fE4721"
+      - key: VITE_ARC_RPC_1
+        value: "https://rpc.testnet.arc.network"
+      - key: VITE_PRICE_FEED_URL
+        value: "https://prices.15market.com"
+      - key: VITE_PRIVY_APP_ID
+        value: "cmisfdm6o00j9jr0d2tjntq58"
 
   # Admin Frontend Service (Static Site)
   - type: static
@@ -51,8 +71,13 @@ services:
     rootDir: 15market-admin
     buildCommand: npm install --legacy-peer-deps && npm run build
     publishDir: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: VITE_KEEPER_URL
         value: https://15market-backend.onrender.com
       - key: VITE_KEEPER_URL_ARC
         value: https://15market-backend.onrender.com
+
