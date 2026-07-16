@@ -24,6 +24,7 @@ const Redis = require('ioredis');
 const circleService = require('./services/circleService');
 const fundingService = require('./services/fundingService');
 const notificationService = require('./services/notificationService');
+const OddsEngine = require('./services/OddsEngine');
 
 // --- DYNAMICALLY DERIVED SOLANA RELAYER ADDRESS ---
 let derivedSolanaRelayerAddress = '11111111111111111111111111111111'; // default fallback
@@ -136,6 +137,10 @@ let activeBroadcast = null;
 classicEngine.start();
 emitAdminStats(); // Initial broadcast
 setInterval(emitAdminStats, 10000); // Periodic 10s sync
+
+// Initialize Odds Engine
+const oddsEngine = new OddsEngine(io, redis);
+oddsEngine.start();
 
 // --- INTERNAL PRICE FEED ---
 const PYTH_IDS = {
@@ -292,6 +297,11 @@ io.on('connection', (socket) => {
       .reduce((sum, t) => sum + t.amount, 0),
     totalWallets: Object.keys(profiles.profiles).length
   });
+
+  // Push latest odds on connection
+  if (oddsEngine.currentOdds) {
+    socket.emit('live_odds', oddsEngine.currentOdds);
+  }
 });
 
 // ============================================================

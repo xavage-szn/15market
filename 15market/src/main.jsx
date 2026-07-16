@@ -22,11 +22,14 @@ const queryClient = new QueryClient();
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
-  static getDerivedStateFromError() { return { hasError: true }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught:', error, info);
+  }
   render() {
-    if (this.state.hasError) return <div className="p-8 text-white">Critical Load Error</div>;
+    if (this.state.hasError) return <div className="p-6 text-white min-h-screen flex flex-col items-center justify-center text-sm font-bold"><p className="text-[#249C6C] text-lg mb-2">Load Error</p><pre className="max-w-full overflow-auto text-[10px] opacity-70">{this.state.error?.message || 'Unknown error'}</pre></div>;
     return this.props.children;
   }
 }

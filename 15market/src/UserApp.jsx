@@ -538,6 +538,7 @@ export default function UserApp() {
 
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [hasRoundsAccess, setHasRoundsAccess] = useState(null); // null = unknown, true/false = verified
+  const [liveOdds, setLiveOdds] = useState(null);
 
 const performStealthChecks = useCallback(async (addr) => {
     if (!addr) return;
@@ -852,10 +853,11 @@ const performStealthChecks = useCallback(async (addr) => {
       const portrait = window.innerHeight > window.innerWidth;
       const small = window.innerWidth < 1024;
       const shortSide = Math.min(window.innerWidth, window.innerHeight);
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
       setIsPortrait(portrait);
       setIsSmallScreen(small && portrait);
-      // Block landscape on mobile-class devices (short side under 600px means it's a phone/small tablet)
-      setIsLandscapeBlocked(!portrait && shortSide < 600);
+      // Block landscape on mobile-class devices only
+      setIsLandscapeBlocked(!portrait && shortSide < 600 && isMobile);
     };
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -1974,6 +1976,10 @@ const performStealthChecks = useCallback(async (addr) => {
       });
     });
 
+    const unbindLiveOdds = socketService.on('live_odds', (data) => {
+      setLiveOdds(data);
+    });
+
     // ── BACKEND-AUTHORITATIVE SETTLEMENT ──
     // The backend is the ONLY source of truth for trade results.
     const unbindSettled = socketService.on('trade_settled', (data) => {
@@ -2617,11 +2623,12 @@ const performStealthChecks = useCallback(async (addr) => {
       const betId = (trade.id || trade.nonce || trade.tx).toString();
       if (creditedPayouts.current.has(betId)) return;
 
-      // Calculate payout: Stake * Multiplier
-      const amt = parseFloat(trade.amount);
-      const duration = trade.duration || 15;
-      const multiplier = duration <= 5 ? 2.90 : (duration <= 10 ? 2.40 : 1.90);
-      const payout = amt * multiplier;
+      // Calculate payout: Use backend-provided payout if available, else fallback to sharePrice
+      let payout = parseFloat(trade.payout || 0);
+      if (!payout || payout <= 0) {
+          const amt = parseFloat(trade.amount);
+          payout = trade.sharePrice ? (amt / trade.sharePrice * 0.99) : (amt * 1.90); // default fallback
+      }
 
       creditedPayouts.current.add(betId);
       // Clean up tracking after 10 mins (plenty of time for on-chain event to confirm)
@@ -3165,70 +3172,78 @@ const performStealthChecks = useCallback(async (addr) => {
                 </div>
 
                 <div className="hidden lg:flex items-center gap-3 px-2 py-1">
-                  {/* Branded Game Mode Switcher - Large Screens */}
-                  <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
-                    <motion.div
-                      className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#2EC47C] to-[#14472C] shadow-[0_0_20px_rgba(36, 156, 108,0.4)]"
-                      initial={false}
-                      animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                    {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
-                      <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                        className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
-                        <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
-                        <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
+                  {authenticated && (
+                    <>
+                      {/* Branded Game Mode Switcher - Large Screens */}
+                      <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
+                        <motion.div
+                          className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#2EC47C] to-[#14472C] shadow-[0_0_20px_rgba(36, 156, 108,0.4)]"
+                          initial={false}
+                          animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                        />
+                        {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
+                          <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                            className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
+                            <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                            <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <ThemeToggle theme={theme} onToggle={toggleTheme} />
+                      <div className="flex items-center gap-3">
+                        <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
+                      </div>
+                      <button onClick={() => setView("dashboard")} className="w-10 h-10 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
+                        style={{
+                          backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                          borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                        }}>
+                        {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                          <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                        )}
                       </button>
-                    ))}
-                  </div>
-                  <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                  <div className="flex items-center gap-3">
-                    <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
-                  </div>
-                  <button onClick={() => setView("dashboard")} className="w-10 h-10 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
-                    style={{
-                      backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                      borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                    }}>
-                    {(userProfile?.avatar || userProfile?.xProfileImage) ? (
-                      <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-                    )}
-                  </button>
+                    </>
+                  )}
                   <UnifiedWalletButton theme={theme} />
                 </div>
 
                 <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
-                  {/* Branded Game Mode Switcher - Mobile */}
-                  <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'}`}>
-                    <motion.div
-                      className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#2EC47C] to-[#14472C]"
-                      initial={false}
-                      animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                    {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
-                      <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                        className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
-                        <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                  {authenticated && (
+                    <>
+                      {/* Branded Game Mode Switcher - Mobile */}
+                      <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'}`}>
+                        <motion.div
+                          className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#2EC47C] to-[#14472C]"
+                          initial={false}
+                          animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                        />
+                        {[{ key: 'classic', Icon: Zap }, { key: 'rounds', Icon: Layers }].map(({ key, Icon }) => (
+                          <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
+                            className={`relative z-10 flex items-center justify-center h-[28px] w-[54px] transition-all duration-300`}>
+                            <Icon size={11} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
+                          </button>
+                        ))}
+                      </div>
+                      <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
+                        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+                      </div>
+                      <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden p-[1px]"
+                        style={{
+                          backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                          borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                        }}>
+                        {(userProfile?.avatar || userProfile?.xProfileImage) ? (
+                          <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                        )}
                       </button>
-                    ))}
-                  </div>
-                  <div className="scale-[0.8] origin-center -mx-1.5 flex items-center gap-1">
-                    <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                  </div>
-                  <button onClick={() => setView("dashboard")} className="h-[32px] w-[32px] flex items-center justify-center rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden p-[1px]"
-                    style={{
-                      backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                      borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
-                    }}>
-                    {(userProfile?.avatar || userProfile?.xProfileImage) ? (
-                      <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      <User size={14} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
-                    )}
-                  </button>
+                    </>
+                  )}
                   <div className="scale-[0.9] origin-right ml-[-2px]">
                     <UnifiedWalletButton theme={theme} />
                   </div>
@@ -3287,8 +3302,8 @@ const performStealthChecks = useCallback(async (addr) => {
                   <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} ${isSmallScreen ? 'mb-0' : 'mb-5 md:mb-5'} relative z-0 flex-1 min-h-0`}>
                     {/* V2 Integrated Content Container */}
                     <motion.div
-                      layout
-                      className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-0' : 'h-full flex-1'} min-h-0 transition-all duration-500 relative`}
+                      layout={!isSmallScreen}
+                      className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-[200px]' : 'h-full flex-1 min-h-0'} transition-all duration-500 relative`}
                       style={{ paddingLeft: !isSmallScreen && showSideHistory ? '202px' : (!isSmallScreen ? '20px' : '0px') }}>
 
                       {!isSmallScreen && (
@@ -3314,7 +3329,7 @@ const performStealthChecks = useCallback(async (addr) => {
                           filter: theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
                         }}>
                         {/* CHART CONTAINER (LOCKED DESKTOP HEIGHT: lg:min-h-[470px]) */}
-                        <div className={`${isSmallScreen ? 'flex-grow h-full' : 'flex-[2] min-h-[280px]'} lg:min-h-[470px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full min-h-0 relative z-10`}
+                        <div className={`${isSmallScreen ? 'flex-grow h-full' : 'flex-[2] min-h-[280px]'} lg:min-h-[380px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full ${isSmallScreen ? '' : 'min-h-0'} relative z-10`}
                           style={{
                             background: isSmallScreen
                               ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)')
@@ -3373,13 +3388,14 @@ const performStealthChecks = useCallback(async (addr) => {
                     </motion.div>
 
                     <motion.div
-                      layout
-                      className={`w-full lg:w-[30%] flex flex-col gap-1 ${isSmallScreen ? 'h-[300px] flex-none relative mt-auto' : 'h-full flex-1'} min-h-0`}
+                      layout={!isSmallScreen}
+                      style={isSmallScreen ? { height: 'auto', flex: 'none' } : undefined}
+                      className={`w-full lg:w-[30%] flex flex-col ${isSmallScreen ? 'flex-none relative mt-auto' : 'h-full flex-1 gap-1 min-h-0'}`}
                     >
                       {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
-                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex h-full min-h-0 pb-[calc(34px+2vh)] px-1' : 'hidden md:hidden lg:hidden'}`}>
+                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? `flex h-[210px] min-h-0 ${authenticated ? 'mb-12' : 'mb-2'} px-1` : 'hidden md:hidden lg:hidden'}`}>
                         {/* Terminal Area */}
-                        <div className={`flex-1 min-h-0 min-h-[180px] lg:min-h-[320px] flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
+                        <div className={`flex-none w-1/2 flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] border glass-panel p-1 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
                           style={{
                             background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
                             borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : 'rgba(255,255,255,0.05)'),
@@ -3417,6 +3433,7 @@ const performStealthChecks = useCallback(async (addr) => {
                               maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                               tradingHalted={platformSettings.tradingHalted}
                               uiVersion={uiVersion}
+                              liveOdds={liveOdds}
                             />
                           )}
                         </div>
@@ -3480,13 +3497,13 @@ const performStealthChecks = useCallback(async (addr) => {
 
                           {/* Navigation Bar - TOP BAR */}
                           {/* Trading Terminal Box - Dynamic height to maximize active trades space */}
-                          <div className={`rounded-[22px] md:rounded-[32px] overflow-hidden transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'h-fit w-full lg:w-full')} min-h-0 ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
+                          <div className={`rounded-[22px] md:rounded-[32px] transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'w-full lg:w-full')} ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
                             style={{
                               background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
                               borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)'),
                               filter: gameMode === 'rounds' ? 'none' : (theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))')
                             }}>
-                            <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-4'}`} flex flex-col min-h-0`}>
+                            <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-2.5'}`} flex flex-col`}>
                               {gameMode === 'rounds' ? (
                                 <RoundsTerminal
                                   price={price}
@@ -3519,6 +3536,7 @@ const performStealthChecks = useCallback(async (addr) => {
                                   maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                                   tradingHalted={platformSettings.tradingHalted}
                                   uiVersion={uiVersion}
+                                  liveOdds={liveOdds}
                                 />
                               )}
                             </div>
@@ -3526,7 +3544,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
                           {/* ACTIVE TRADES (LOCKED DESKTOP HEIGHT: lg:min-h-[200px]) */}
                           {gameMode !== 'rounds' && (
-                            <div className={`flex-1 min-h-[160px] md:min-h-0 lg:min-h-[200px] rounded-[22px] md:rounded-[32px] overflow-hidden border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
+                            <div className={`flex-1 min-h-[160px] md:min-h-0 lg:min-h-[180px] rounded-[22px] md:rounded-[32px] border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
                               style={{
                                 background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
                                 borderColor: theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)',
@@ -3674,24 +3692,7 @@ const performStealthChecks = useCallback(async (addr) => {
              </Suspense>
            )}
 
-          {/* OVERLAY: Landing Page (Not Connected) */}
-          <AnimatePresence>
-            {!authenticated && view !== "docs" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[100]"
-              >
-                <LandingPage 
-                  theme={theme} 
-                  onToggle={toggleTheme} 
-                  onDocs={() => setView("docs")} 
-                  isSmallScreen={isSmallScreen}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Landing Page removed — users land directly on trading view with Connect button in navbar */}
 
           {/* Removed Global Initial Loader with Lane as requested */}
 

@@ -134,6 +134,13 @@ class ClassicEngine {
     const symbol = SYMBOL_MAP[marketId] || 'eth';
     const entryPrice = Number(cache.prices[symbol] || tradeParams.entryPrice || 0);
 
+    // Dynamic Odds Share Price Lookup
+    const currentOdds = cache.liveOdds?.[symbol]?.[duration];
+    let sharePrice = 0.50; // fallback
+    if (currentOdds) {
+      sharePrice = direction === 1 ? currentOdds.LONG : currentOdds.SHORT;
+    }
+
     try {
       const contract = new ethers.Contract(config.TREASURY_ADDRESS, this.TREASURY_ABI, sessionWallet);
       const contractDir = direction === 1 ? 0 : 1; 
@@ -155,6 +162,7 @@ class ClassicEngine {
         amount,
         symbol,
         entryPrice,
+        sharePrice,
         status: 'PENDING',
         stakeTxHash: tx.hash,
         createdAt: Date.now(),
@@ -229,12 +237,12 @@ class ClassicEngine {
       trade.payoutTx = tx.hash;
       trade.status = 'SETTLED';
 
-      // AUTHORITATIVE PAYOUT CALCULATION — mirrors ArcPrediction.sol tier logic exactly
-      // 5s=2.90x, 10s=2.40x, 15s=1.90x gross; 1% platform fee baked in via *0.99
-      const MULTIPLIER_TIERS = { 5: 2.871, 10: 2.376, 15: 1.881 };
-      const mult = MULTIPLIER_TIERS[trade.duration] ||
-        (trade.duration <= 5 ? 2.871 : trade.duration <= 10 ? 2.376 : 1.881);
-      const payout = Number((trade.amount * mult).toFixed(6));
+      // AUTHORITATIVE PAYOUT CALCULATION — Dynamic Odds Engine (Shares Model)
+      // Payout = Stake / Share Price (each share pays $1.00)
+      // Apply 1% platform fee to the final payout
+      const sharePrice = trade.sharePrice || 0.50;
+      const grossPayout = trade.amount / sharePrice;
+      const payout = Number((grossPayout * 0.99).toFixed(6));
       
       const session = cache.sessions.get(trade.userAddr);
       if (session) {

@@ -143,6 +143,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
     });
 
     const [keeperLogs, setKeeperLogs] = useState([]);
+    const [liveOdds, setLiveOdds] = useState({});
     const [arcTreasuryBalance, setArcTreasuryBalance] = useState(0);
     const [escrowStats, setEscrowStats] = useState({
         arc: { stake: 0, count: 0, totalVolume: 0, wallets: 0, balance: 0 }
@@ -367,6 +368,7 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                 setKeeperHealth({ connected: true, failCount: 0, lastCheck: Date.now() });
             });
 
+            const unbindLiveOdds = socketService.on('live_odds', (data) => setLiveOdds(data));
             unbindDisconnect = socketService.on('disconnect', () => {
                 setKeeperHealth(prev => ({ ...prev, connected: false, failCount: prev.failCount + 1 }));
             });
@@ -2172,6 +2174,43 @@ const AdminPortal = React.memo(({ onBack, price }) => {
                                                     <p className="text-lg lg:text-xl font-bold font-mono leading-none" style={{ color: '#3CB371' }}>{unifiedMetrics.currentStats.volume} {unifiedMetrics.currencyUnit}</p>
                                                 </div>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {/* LIVE ODDS ENGINE MONITOR */}
+                                    <div className="bg-[#111] border border-[#3B82F6]/20 p-6 rounded-[32px] relative overflow-hidden mb-8">
+                                        <div className="absolute top-0 left-0 w-1/4 h-full bg-gradient-to-r from-[#3B82F6]/5 to-transparent pointer-events-none" />
+                                        <div className="flex items-center gap-4 mb-6 relative z-10">
+                                            <div className="w-10 h-10 rounded-xl bg-[#3B82F6]/20 flex items-center justify-center">
+                                                <Activity size={20} className="text-[#3B82F6] animate-pulse" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-black text-white uppercase tracking-tight">Live Odds Engine</h3>
+                                                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Real-time dynamic probability pricing</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
+                                            {['btc', 'eth', 'sol'].map(symbol => {
+                                                const odds = liveOdds[symbol];
+                                                if (!odds) return null;
+                                                return (
+                                                    <div key={symbol} className="bg-black/40 border border-white/5 rounded-2xl p-4">
+                                                        <h4 className="text-xs font-black text-white uppercase tracking-widest mb-3">{symbol.toUpperCase()}/USDT</h4>
+                                                        <div className="space-y-2">
+                                                            {[5, 10, 15].map(duration => (
+                                                                <div key={duration} className="flex items-center justify-between bg-white/5 p-2 rounded-xl">
+                                                                    <span className="text-[10px] font-bold text-white/60">{duration}s</span>
+                                                                    <div className="flex gap-2 text-[10px] font-mono">
+                                                                        <span className="text-[#3CB371]">UP: ${odds[duration]?.LONG?.toFixed(2)}</span>
+                                                                        <span className="text-white/20">|</span>
+                                                                        <span className="text-red-500">DN: ${odds[duration]?.SHORT?.toFixed(2)}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
                                     </div>
 

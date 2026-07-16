@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Zap, Loader2, Globe } from 'lucide-react';
+import { ChevronDown, ChevronUp, Zap, Loader2, Globe } from 'lucide-react';
 import LiveStreamingChart from './LiveStreamingChart';
 
 export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [] }) {
@@ -14,6 +14,31 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
     const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 1024;
     const [isInternalLoading, setIsInternalLoading] = useState(false);
     const [hasReceivedPrice, setHasReceivedPrice] = useState(false);
+
+    const listRef = useRef(null);
+    const scrollInterval = useRef(null);
+
+    const handleScroll = (direction, speed) => {
+        if (scrollInterval.current) clearInterval(scrollInterval.current);
+        scrollInterval.current = setInterval(() => {
+            if (listRef.current) {
+                listRef.current.scrollTop += direction === 'down' ? speed : -speed;
+            }
+        }, 16);
+    };
+
+    const stopScroll = () => {
+        if (scrollInterval.current) {
+            clearInterval(scrollInterval.current);
+            scrollInterval.current = null;
+        }
+    };
+
+    const scrollByAmount = (direction) => {
+        if (listRef.current) {
+            listRef.current.scrollBy({ top: direction === 'down' ? 100 : -100, behavior: 'smooth' });
+        }
+    };
 
     // Track first price tick
     useEffect(() => {
@@ -94,55 +119,108 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
 
 
 
-            {/* Top Controls */}
-            <div className="absolute top-0 left-0 right-0 z-30 p-1 lg:p-4 pointer-events-none">
-                <div className="flex items-center justify-between gap-2 pointer-events-auto">
-                    {/* Asset Trigger - Cleaned up */}
-                    <div
-                        onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                        className={`flex items-center gap-1.5 cursor-pointer px-1 py-1 transition-all pointer-events-auto group ml-2 lg:ml-0`}
-                    >
-                        <div className="flex flex-col">
-                            <span className={`text-[10px] md:text-xs font-black uppercase tracking-tighter ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
-                                {activeMarket?.symbol || 'ETH'}
+            {/* Top Controls: Asset Dropdown / Drawer */}
+            <div className="absolute top-0 left-0 right-0 bottom-0 z-30 pointer-events-none">
+                {/* Trigger Button */}
+                {!isSelectorOpen && (
+                    <div className="absolute top-2 left-2 lg:top-4 lg:left-4 z-30">
+                        <div
+                            onClick={() => setIsSelectorOpen(true)}
+                            className="flex items-center gap-1.5 cursor-pointer px-2.5 py-1.5 transition-all pointer-events-auto group"
+                        >
+                            <span className={`text-[10px] md:text-xs font-black uppercase tracking-widest ${isDark ? 'text-white' : 'text-[#0a261a]'}`}>
+                                {activeMarket?.symbol || 'Select Asset'}
                             </span>
-                            {window.innerWidth >= 768 && (
-                                <div className="flex items-center gap-1">
-                                    <div className="w-1 h-1 rounded-full bg-[#249C6C] animate-pulse" />
-                                    <span className="text-[7px] font-bold opacity-30 uppercase tracking-widest">Live</span>
-                                </div>
-                            )}
+                            <ChevronDown size={12} className="-rotate-90 opacity-60 transition-all group-hover:opacity-100" />
                         </div>
-                        <ChevronDown size={12} className={`opacity-20 group-hover:opacity-100 transition-all ${isSelectorOpen ? 'rotate-180' : ''}`} />
                     </div>
-                    <AnimatePresence>
-                        {isSelectorOpen && (
+                )}
+
+                {/* Left Side Asset List Drawer */}
+                <AnimatePresence>
+                    {isSelectorOpen && (
+                        <>
+                            {/* Click-outside overlay */}
+                            <motion.div 
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                className="absolute inset-0 z-40 pointer-events-auto bg-black/5 backdrop-blur-[2px]" 
+                                onClick={() => setIsSelectorOpen(false)} 
+                            />
+                            
+                            {/* Side Pane - No background, no outline */}
                             <motion.div
-                                initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                className={`absolute top-16 left-4 z-[100] w-44 md:w-56 ${controlBgAlt} backdrop-blur-3xl border ${controlBorder} rounded-2xl p-1 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col gap-0.5 pointer-events-auto overflow-hidden`}
+                                initial={{ opacity: 0, x: -50 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -50 }}
+                                className={`absolute top-0 left-0 bottom-0 z-50 flex flex-col pointer-events-auto w-[140px] pt-[60px]`}
                             >
-                                <div className="px-3 py-1.5 border-b border-white/5 mb-0.5">
-                                    <span className="text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Select Asset</span>
-                                </div>
-                                {tokens.map(t => (
-                                    <button 
-                                        key={t.id} 
-                                        onClick={() => onAssetSwitch(t)} 
-                                        className={`flex items-center justify-between px-2.5 py-2 rounded-xl transition-all group ${activeMarket?.id === t.id ? 'bg-[#249C6C] text-white' : `hover:bg-white/5 ${controlTextDim} hover:${controlText}`}`}
+                                {/* Desktop Close Button */}
+                                {!isSmallScreen && (
+                                    <div 
+                                        onClick={() => setIsSelectorOpen(false)} 
+                                        className={`flex items-center justify-end p-2 cursor-pointer mb-2`}
                                     >
-                                        <div className="flex flex-col items-start leading-tight">
-                                            <span className="text-[9px] md:text-xs font-black uppercase tracking-widest">{t.symbol}</span>
-                                            <span className="text-[6px] md:text-[8px] opacity-60 font-bold uppercase tracking-tight">{t.name || 'Crypto'}</span>
-                                        </div>
-                                        {activeMarket?.id === t.id && <Zap size={8} className="fill-current text-white animate-pulse" />}
-                                    </button>
-                                ))}
+                                        <ChevronDown size={14} className="-rotate-90 opacity-60 hover:opacity-100 transition-all" />
+                                    </div>
+                                )}
+                                
+                                {/* Up Scroll Area */}
+                                {tokens.length > 5 && (
+                                    <div 
+                                        className={`flex items-center justify-center py-2 cursor-pointer opacity-40 hover:opacity-100 transition-all z-10`}
+                                        onMouseEnter={() => handleScroll('up', 1.5)}
+                                        onMouseLeave={stopScroll}
+                                        onClick={() => scrollByAmount('up')}
+                                    >
+                                        <ChevronUp size={16} />
+                                    </div>
+                                )}
+                                
+                                <div ref={listRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col px-4 scroll-smooth">
+                                    {tokens.map((t, index) => {
+                                        const isActive = activeMarket?.id === t.id;
+                                        return (
+                                            <React.Fragment key={t.id}>
+                                                <div
+                                                    onClick={() => {
+                                                        if (!isActive) onAssetSwitch(t);
+                                                        setIsSelectorOpen(false); // Close on select
+                                                    }}
+                                                    className={`flex items-center justify-between py-3 cursor-pointer transition-all group`}
+                                                >
+                                                    <span className={`text-[11px] md:text-[13px] font-black uppercase tracking-widest transition-all ${isActive ? (isDark ? 'text-white' : 'text-[#0a261a]') : (isDark ? 'text-white/40 group-hover:text-white/80' : 'text-[#0a261a]/40 group-hover:text-[#0a261a]/80')}`}
+                                                        style={{
+                                                            textShadow: isActive ? (isDark ? '0 0 12px rgba(255,255,255,0.6)' : '0 0 12px rgba(10,38,26,0.4)') : 'none',
+                                                        }}
+                                                    >
+                                                        {t.symbol}
+                                                    </span>
+                                                    {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#249C6C] animate-pulse" style={{ boxShadow: '0 0 8px #249C6C' }} />}
+                                                </div>
+                                                {/* Horizontal Line Divider */}
+                                                {index < tokens.length - 1 && (
+                                                    <div className={`w-full h-[1px] transition-colors ${isDark ? 'bg-white/10' : 'bg-[#0a261a]/10'}`} />
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </div>
+                                
+                                {/* Down Scroll Area */}
+                                {tokens.length > 5 && (
+                                    <div 
+                                        className={`flex items-center justify-center py-2 cursor-pointer opacity-40 hover:opacity-100 transition-all z-10`}
+                                        onMouseEnter={() => handleScroll('down', 1.5)}
+                                        onMouseLeave={stopScroll}
+                                        onClick={() => scrollByAmount('down')}
+                                    >
+                                        <ChevronDown size={16} />
+                                    </div>
+                                )}
                             </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+                        </>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );
