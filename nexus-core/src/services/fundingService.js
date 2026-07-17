@@ -121,6 +121,7 @@ class FundingService {
         const price = mockPrices[fromToken.toUpperCase()] || 1;
         const rawUsdc = amount * price;
         const fee = rawUsdc * this.fundingFee;
+        const estimatedUsdc = (rawUsdc - fee).toFixed(2);
         return { estimatedUsdc, fee: fee.toFixed(2), price };
     }
 

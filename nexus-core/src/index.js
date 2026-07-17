@@ -614,13 +614,17 @@ app.post('/session/init', async (req, res) => {
       balance = ethers.formatEther(balWei);
     } catch (_) {}
 
-    // Sync in-process session with protection against recent win reversion
+    // Sync in-process session with protection against recent trade activity
     let session = cache.sessions.get(userAddr);
     const onChainBal = parseFloat(balance);
     if (session) {
       const timeSinceWin = Date.now() - (session.lastWinAt || 0);
-      // Only downgrade if it's been a while since a win (45s)
-      if (onChainBal > session.balance || timeSinceWin > 45000) {
+      const timeSinceTrade = Date.now() - (session.lastTradeAt || 0);
+      // Don't downgrade balance if a trade was placed in the last 30s
+      // (the optimistic deduction in classic.js is authoritative until trade settles)
+      if (timeSinceTrade < 30000) {
+        // Keep the in-memory balance — it reflects the optimistic deduction
+      } else if (onChainBal > session.balance || timeSinceWin > 45000) {
         session.balance = onChainBal;
       }
     } else {
@@ -669,9 +673,11 @@ app.get('/session/balance/:address', async (req, res) => {
     const session = cache.sessions.get(userAddr);
     if (session) {
       const timeSinceWin = Date.now() - (session.lastWinAt || 0);
-      // Sync the cache with on-chain IF on-chain is higher (e.g., a direct USDC transfer was received)
-      // or if it's been a while since the last trade win (to let DB sync).
-      if (onChainBal > session.balance || timeSinceWin > 45000) {
+      const timeSinceTrade = Date.now() - (session.lastTradeAt || 0);
+      // Don't overwrite balance if a trade was placed in the last 30s
+      if (timeSinceTrade < 30000) {
+        // Keep in-memory balance — reflects optimistic deduction or payout credit
+      } else if (onChainBal > session.balance || timeSinceWin > 45000) {
         session.balance = onChainBal;
         profiles.upsert(userAddr, { balance: onChainBal }); // Ensure it persists
       }

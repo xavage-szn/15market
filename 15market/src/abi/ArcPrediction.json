@@ -246,6 +246,11 @@
           "internalType": "uint256",
           "name": "_exitPrice",
           "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_payoutAmount",
+          "type": "uint256"
         }
       ],
       "name": "settleBet",

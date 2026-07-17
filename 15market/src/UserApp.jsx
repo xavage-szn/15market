@@ -937,9 +937,9 @@ const performStealthChecks = useCallback(async (addr) => {
     if (!address) return;
 
     // GUARD: If user just performed an optimistic action (Trade/Deposit), 
-    // ignore backend syncs for 15s to allow chain confirmation.
+    // ignore backend syncs for 30s to allow chain confirmation.
     const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-    if (msSinceAction < 20000 && !force) return;
+    if (msSinceAction < 30000 && !force) return;
 
     try {
       // Read the real on-chain EOA session wallet balance from backend
@@ -947,6 +947,7 @@ const performStealthChecks = useCallback(async (addr) => {
       if (res.ok) {
         const data = await res.json();
         const bal = parseFloat(data.balance);
+        if (isNaN(bal)) return;
         const currentBal = sessionBalanceRef.current;
         if (Math.abs(bal - currentBal) > 0.0001 || force) {
           setSessionBalance(bal);
@@ -1230,9 +1231,9 @@ const performStealthChecks = useCallback(async (addr) => {
   useEffect(() => {
     if (!address) return;
     const interval = setInterval(() => {
-      // Only poll if we're not in the optimistic guard window
+      // Only poll if we're not in the optimistic guard window (30s after last trade)
       const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-      if (msSinceAction > 8000) {
+      if (msSinceAction > 30000) {
         updateEvmSessionBal(false);
       }
     }, 12000);
@@ -1251,16 +1252,20 @@ const performStealthChecks = useCallback(async (addr) => {
 
     // Bind Socket listeners
     const unbindBal = socketService.on('balance_update', (data) => {
-      // GUARD: If user just performed an optimistic action, ignore socket updates for 15s
-      // EXCEPT for winnings, which we always want to see instantly.
+      // GUARD: If user just performed an optimistic action, ignore non-win socket updates
+      // to prevent the balance from bouncing back to the pre-trade value.
+      // We allow WIN events through immediately so payouts show instantly.
       const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-      const isWinningEvent = data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED';
+      const isWinningEvent = data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED' || data.reason === 'WIN_CONFIRMED';
 
-      if (msSinceAction < 15000 && !isWinningEvent) return;
+      if (msSinceAction < 30000 && !isWinningEvent) return;
 
       const val = data.balance || data.available;
-      if (val !== undefined) {
-        setSessionBalance(parseFloat(val));
+      if (val !== undefined && val !== null) {
+        const parsed = parseFloat(val);
+        if (!isNaN(parsed) && parsed >= 0) {
+          setSessionBalance(parsed);
+        }
       }
 
       if (data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED') {
@@ -1558,6 +1563,9 @@ const performStealthChecks = useCallback(async (addr) => {
     const currentBal = sessionBalance;
     const sanitizedAmount = (activeAmount || "0").toString().replace(',', '.');
     const stakeAmt = parseFloat(sanitizedAmount);
+    if (isNaN(stakeAmt) || stakeAmt <= 0) {
+      return notify("Invalid trade amount", "error");
+    }
 
     // Reserve a tiny margin for gas (USDC is gas on Arc)
     const gasMargin = 0.001;
@@ -1584,6 +1592,10 @@ const performStealthChecks = useCallback(async (addr) => {
     const dirVal = (activeDirection === "buy" || activeDirection === "UP") ? 1 : 0;
     const ASSET_ID_MAP = { 'eth': 0, 'btc': 1, 'sol': 2, 'mon': 3, 'jup': 4, 'xrp': 5 };
     const assetId = ASSET_ID_MAP[activeMarket?.id?.toLowerCase()] || 0;
+    // Guard against NaN: if activePrice is invalid, abort early
+    if (isNaN(activePrice) || activePrice <= 0) {
+      return notify("Price feed not ready. Please wait.", "error");
+    }
     const entryPriceParams = (assetId === 2) ? Math.floor(activePrice * 1000000) : Math.floor(activePrice * 100);
     const activeUserAddr = (sessionMode && evmSessionWallet) ? evmSessionWallet.address : address;
     const now = Date.now();

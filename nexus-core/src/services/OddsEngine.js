@@ -4,7 +4,8 @@ const https = require('https');
 /**
  * MULTI-TIMEFRAME DYNAMIC ODDS ENGINE
  * Calculates real-time prediction market share prices based on a composite
- * momentum score across 4 timeframes to protect the house from micro-dip exploits.
+ * momentum score across 4 timeframes with enhanced micro-volatility injection
+ * to produce a wide, enticing range of share prices (frequently reaching 10c).
  */
 class OddsEngine {
     constructor(io, redis) {
@@ -16,10 +17,16 @@ class OddsEngine {
         // Cache for live odds and macro data
         this.currentOdds = {};
         this.macroData = { btc: 0, eth: 0, sol: 0 }; // 24h change %
+        
+        // Micro-volatility state — injects controlled noise so share prices
+        // oscillate frequently and produce enticing sub-20c swings
+        this.microPhase = { btc: Math.random() * Math.PI * 2, eth: Math.random() * Math.PI * 2, sol: Math.random() * Math.PI * 2 };
+        this.lastTick = Date.now();
+        this.tickCount = 0;
     }
 
     start() {
-        console.log('[OddsEngine] Starting Multi-Timeframe Dynamic Odds Engine...');
+        console.log('[OddsEngine] Starting Enhanced Dynamic Odds Engine with Micro-Volatility...');
         // Fetch 24h Macro data immediately, then every 60 seconds
         this.fetchMacroData();
         setInterval(() => this.fetchMacroData(), 60000);
@@ -54,8 +61,23 @@ class OddsEngine {
         return ((currentPrice - oldPrice) / oldPrice) * 100; // Returns % change
     }
 
+    // Compute tick-to-tick velocity (price delta per second) for ultra-short momentum
+    getTickVelocity(history) {
+        if (history.length < 6) return 0; // Need at least ~1.5s of 250ms snapshots
+        const recent = history.slice(-6);
+        const now = recent[recent.length - 1];
+        const ago = recent[0];
+        const dt = (now.time - ago.time) / 1000;
+        if (dt <= 0) return 0;
+        return ((now.price - ago.price) / ago.price) * 100 / dt; // % per second
+    }
+
     calculateAndBroadcast() {
         const liveOdds = {};
+        const now = Date.now();
+        this.tickCount++;
+        const dt = (now - this.lastTick) / 1000;
+        this.lastTick = now;
 
         for (const symbol of this.symbols) {
             const history = cache.priceHistory[symbol];
@@ -66,42 +88,58 @@ class OddsEngine {
             // 1. Calculate Rate of Change (ROC) % for each timeframe
             const roc5s = this.getROC(history, currentPrice, 5000);
             const roc60s = this.getROC(history, currentPrice, 60000);
-            const roc15m = this.getROC(history, currentPrice, 15 * 60000); // 15 mins
-            const roc24h = this.macroData[symbol] || 0; // 24 hours (from Binance API)
+            const roc15m = this.getROC(history, currentPrice, 15 * 60000);
+            const roc24h = this.macroData[symbol] || 0;
 
-            // 2. Composite Skew Calculation
-            // We map the % change into a normalized skew factor (-0.45 to +0.45 max)
-            // Weightings: 5s (35%), 60s (30%), 15m (20%), 24h (15%)
-            // The 5s window is given the most weight so the price reacts in FULL FORCE
-            // when the oracle streams a direction change. Higher timeframes anchor it.
-            const skew5s = Math.max(-0.45, Math.min(0.45, roc5s * 10.0)) * 0.35;  // Hyper-reactive
-            const skew60s = Math.max(-0.45, Math.min(0.45, roc60s * 3.0)) * 0.30;  // Strong short-term
-            const skew15m = Math.max(-0.45, Math.min(0.45, roc15m * 0.8)) * 0.20;  // Structural anchor
-            const skew24h = Math.max(-0.45, Math.min(0.45, roc24h * 0.06)) * 0.15; // Daily bias
+            // 2. Tick-to-Tick Velocity — captures micro-momentum between polls
+            const tickVelocity = this.getTickVelocity(history);
+
+            // 3. Enhanced Composite Skew Calculation
+            // Multipliers significantly increased to produce wide share price swings.
+            // The 5s ROC and tick velocity are hyper-sensitive so even small dips
+            // push one side to 10-15c territory frequently.
+            // Weightings: 5s (30%), velocity (20%), 60s (25%), 15m (15%), 24h (10%)
+            const skew5s = Math.max(-0.48, Math.min(0.48, roc5s * 25.0)) * 0.30;   // Extremely reactive
+            const skewVel = Math.max(-0.48, Math.min(0.48, tickVelocity * 8.0)) * 0.20; // Micro-momentum
+            const skew60s = Math.max(-0.48, Math.min(0.48, roc60s * 8.0)) * 0.25;   // Strong short-term
+            const skew15m = Math.max(-0.48, Math.min(0.48, roc15m * 2.0)) * 0.15;   // Structural anchor
+            const skew24h = Math.max(-0.48, Math.min(0.48, roc24h * 0.15)) * 0.10;  // Daily bias
             
-            const totalSkew = skew5s + skew60s + skew15m + skew24h;
+            // 4. Micro-Volatility Injection — deterministic sine-wave noise
+            // Creates regular oscillation so share prices swing even during flat markets.
+            // Phase advances per tick at a frequency that varies per symbol.
+            const freq = { btc: 0.12, eth: 0.18, sol: 0.25 }[symbol] || 0.15;
+            const amplitude = 0.06; // ±6% of skew range
+            this.microPhase[symbol] += freq * dt;
+            const microNoise = Math.sin(this.microPhase[symbol]) * amplitude;
             
+            const totalSkew = skew5s + skewVel + skew60s + skew15m + skew24h + microNoise;
+            
+            // Clamp totalSkew to the expanded range
+            const clampedSkew = Math.max(-0.48, Math.min(0.48, totalSkew));
+
             // Determine overall composite trend direction based on the merged skew
-            const trendDirection = totalSkew >= 0 ? 'UP' : 'DOWN';
+            const trendDirection = clampedSkew >= 0 ? 'UP' : 'DOWN';
 
             liveOdds[symbol] = {};
 
             for (const duration of this.durations) {
-                // Base probability is 0.5 for each side
-                let longProb = 0.50 + totalSkew;
-                let shortProb = 0.50 - totalSkew;
+                // Base probability is 0.50 for each side
+                let longProb = 0.50 + clampedSkew;
+                let shortProb = 0.50 - clampedSkew;
 
                 // Ensure LONG + SHORT always equals exactly 1.00 (no internal spread)
                 let finalLong = Number(longProb.toFixed(2));
                 let finalShort = Number((1.00 - finalLong).toFixed(2));
 
-                // Clamp to prevent either side from going below $0.05 or above $0.95
-                if (finalLong > 0.95) {
-                    finalLong = 0.95;
-                    finalShort = 0.05;
-                } else if (finalLong < 0.05) {
-                    finalLong = 0.05;
-                    finalShort = 0.95;
+                // WIDENED CLAMP: Allow prices as low as $0.03 and as high as $0.97
+                // This ensures share prices can frequently reach 10c and below
+                if (finalLong > 0.97) {
+                    finalLong = 0.97;
+                    finalShort = 0.03;
+                } else if (finalLong < 0.03) {
+                    finalLong = 0.03;
+                    finalShort = 0.97;
                 }
 
                 liveOdds[symbol][duration] = {
@@ -109,7 +147,8 @@ class OddsEngine {
                     SHORT: finalShort,
                     metadata: {
                         trend: trendDirection,
-                        skew: totalSkew.toFixed(4),
+                        skew: clampedSkew.toFixed(4),
+                        velocity: tickVelocity.toFixed(4),
                         roc24h: roc24h.toFixed(2),
                         roc60s: roc60s.toFixed(4)
                     }

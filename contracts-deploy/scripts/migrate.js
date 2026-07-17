@@ -47,17 +47,18 @@ async function main() {
   const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, deployer);
   
   let newContract, newAddress;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 10; i++) {
     try {
-      console.log(`  Attempt ${i+1}...`);
-      await new Promise(r => setTimeout(r, 3000));
+      const delay = 10000 + (i * 5000); // 10s, 15s, 20s, ... escalating
+      console.log(`  Attempt ${i+1}/10 (waiting ${delay/1000}s)...`);
+      await new Promise(r => setTimeout(r, delay));
       newContract = await factory.deploy();
       await newContract.waitForDeployment();
       newAddress = await newContract.getAddress();
       break;
     } catch (e) {
-      if (i === 4) throw e;
-      console.log(`  Deploy failed, retrying: ${e.message}`);
+      if (i === 9) throw e;
+      console.log(`  Deploy failed, retrying: ${e.message.substring(0, 120)}`);
     }
   }
   console.log(`✅ New Contract Deployed: ${newAddress}`);
@@ -71,23 +72,27 @@ async function main() {
 
     // Withdraw to deployer (owner)
     let withdrawTx;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       try {
-        await new Promise(r => setTimeout(r, 3000));
+        const delay = 10000 + (i * 5000);
+        console.log(`  Withdraw attempt ${i+1}/10 (waiting ${delay/1000}s)...`);
+        await new Promise(r => setTimeout(r, delay));
         withdrawTx = await oldContract.withdraw(oldBalWei, { gasLimit: 200000 });
         const withdrawReceipt = await withdrawTx.wait();
         console.log(`  ✅ Withdrawn | tx: ${withdrawTx.hash} | block: ${withdrawReceipt.blockNumber}`);
         break;
       } catch (e) {
-        if (i === 4) throw e;
-        console.log(`  Withdraw failed, retrying: ${e.message}`);
+        if (i === 9) throw e;
+        console.log(`  Withdraw failed, retrying: ${e.message.substring(0, 120)}`);
       }
     }
 
     // Forward to new contract
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       try {
-        await new Promise(r => setTimeout(r, 3000));
+        const delay = 10000 + (i * 5000);
+        console.log(`  Fund attempt ${i+1}/10 (waiting ${delay/1000}s)...`);
+        await new Promise(r => setTimeout(r, delay));
         const sendTx = await deployer.sendTransaction({
           to: newAddress,
           value: oldBalWei,
@@ -97,8 +102,8 @@ async function main() {
         console.log(`  ✅ Funded new contract | tx: ${sendTx.hash}`);
         break;
       } catch (e) {
-        if (i === 4) throw e;
-        console.log(`  Funding failed, retrying: ${e.message}`);
+        if (i === 9) throw e;
+        console.log(`  Funding failed, retrying: ${e.message.substring(0, 120)}`);
       }
     }
 
