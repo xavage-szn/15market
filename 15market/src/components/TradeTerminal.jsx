@@ -92,11 +92,11 @@ function TradeTerminalComponent({
     const noPayout = currentOdds.SHORT > 0 ? (stakeAmt / currentOdds.SHORT) : 0;
 
     const containerClass = transparent
-        ? "flex flex-col h-full gap-1 lg:gap-1 overflow-x-hidden"
+        ? "flex flex-col h-full gap-2 lg:gap-1 overflow-hidden"
         : `w-full min-h-0 h-auto lg:h-full p-2 lg:p-2.5 pb-3 lg:pb-4 rounded-[32px] glass-panel relative transition-all duration-300 flex flex-col gap-1.5 lg:gap-2 !overflow-visible !z-50 ${isLight ? 'static-panel-light' : ''}`;
 
     const renderHeader = () => (
-        <div className="flex items-center justify-between pointer-events-auto mt-[3.5%]">
+        <div className="flex items-center justify-between pointer-events-auto mt-[4%]">
             <div className="flex items-center gap-2 lg:gap-2.5 pl-1">
                 <div className="flex items-center gap-1">
                     <h2 className={`text-[9px] lg:text-xs font-black tracking-tighter uppercase ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
@@ -146,14 +146,14 @@ function TradeTerminalComponent({
     );
 
     const renderAmountBox = () => (
-        <div className="flex flex-col gap-0.5 pointer-events-auto shrink-0">
+        <div className="flex flex-col gap-1 pointer-events-auto shrink-0">
             <div className="flex items-center justify-between px-1.5">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`}>Amount</span>
                 <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black' : 'text-yellow-400'}`}>
                     ${(sessionBalance || 0).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex flex-col gap-1.5 py-0.5 lg:py-1 px-3 rounded-[12px] lg:rounded-[16px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-transparent border-[#249C6C]/20 shadow-none' : 'bg-white/10 border-[#249C6C]/30 shadow-[0_0_20px_rgba(36, 156, 108,0.1)]') : (isLight ? 'bg-transparent border-[#249C6C]/20' : 'bg-white/5 border-white/5')}`}>
+            <div className={`flex flex-col gap-1.5 py-1 lg:py-1 px-3 rounded-[12px] lg:rounded-[16px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-transparent border-[#249C6C]/20 shadow-none' : 'bg-white/10 border-[#249C6C]/30 shadow-[0_0_20px_rgba(36, 156, 108,0.1)]') : (isLight ? 'bg-transparent border-[#249C6C]/20' : 'bg-white/5 border-white/5')}`}>
                 <div className="flex items-center gap-1.5">
                     <span className={`text-[10px] md:text-sm font-black transition-opacity duration-300 ${isFocused ? 'opacity-40 text-[#249C6C]' : 'opacity-20'}`}>$</span>
                     <input
@@ -186,7 +186,7 @@ function TradeTerminalComponent({
     );
 
     const renderAmountSlider = () => (
-        <div className="relative pt-1.5 pb-0.5 px-2 pointer-events-auto shrink-0">
+        <div className="relative pt-2 pb-1 px-2 pointer-events-auto shrink-0">
             <div className="relative h-1.5">
                 <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
                 <div className="absolute inset-y-0 left-0 rounded-full bg-[#249C6C] transition-all duration-150" style={{ width: `${sliderValue || 0}%`, boxShadow: '0 0 10px rgba(36, 156, 108, 0.4)' }} />
@@ -210,11 +210,11 @@ function TradeTerminalComponent({
     const shortCents = Math.round(currentOdds.SHORT * 100);
 
     const renderExecuteButtons = () => (
-        <div className="flex w-[85%] mx-auto gap-2 pointer-events-auto shrink-0 mt-1">
+        <div className="flex w-[85%] mx-auto gap-2 pointer-events-auto">
             <button
                 onClick={(e) => { e.stopPropagation(); handleAction("UP"); }}
                 disabled={isExecuting || maintenanceMode || tradingHalted}
-                className={`flex-1 flex flex-row items-center justify-center gap-1.5 py-2 lg:py-2.5 rounded-[16px] transition-all relative overflow-hidden group hover:brightness-110 active:brightness-95 ${isExecuting || maintenanceMode || tradingHalted ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex-1 flex flex-row items-center justify-center gap-1.5 py-2.5 lg:py-2.5 rounded-[16px] transition-all relative overflow-hidden group hover:brightness-110 active:brightness-95 ${isExecuting || maintenanceMode || tradingHalted ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={{ background: '#249C6C', color: 'white' }}
             >
                 {isExecuting && direction === "UP" ? (
@@ -231,7 +231,7 @@ function TradeTerminalComponent({
             <button
                 onClick={(e) => { e.stopPropagation(); handleAction("DOWN"); }}
                 disabled={isExecuting || maintenanceMode || tradingHalted}
-                className={`flex-1 flex flex-row items-center justify-center gap-1.5 py-2 lg:py-2.5 rounded-[16px] transition-all relative overflow-hidden group hover:brightness-110 active:brightness-95 ${isExecuting || maintenanceMode || tradingHalted ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex-1 flex flex-row items-center justify-center gap-1.5 py-2.5 lg:py-2.5 rounded-[16px] transition-all relative overflow-hidden group hover:brightness-110 active:brightness-95 ${isExecuting || maintenanceMode || tradingHalted ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={{ background: '#FF4D4D', color: 'white' }}
             >
                 {isExecuting && direction === "DOWN" ? (

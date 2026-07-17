@@ -3393,7 +3393,7 @@ const performStealthChecks = useCallback(async (addr) => {
                       className={`w-full lg:w-[30%] flex flex-col ${isSmallScreen ? 'flex-none relative mt-auto' : 'h-full flex-1 gap-1 min-h-0'}`}
                     >
                       {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
-                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? `flex h-[210px] min-h-0 ${authenticated ? 'mb-12' : 'mb-2'} px-1` : 'hidden md:hidden lg:hidden'}`}>
+                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? `flex h-[231px] min-h-0 ${authenticated ? 'mb-12' : 'mb-2'} px-1` : 'hidden md:hidden lg:hidden'}`}>
                         {/* Terminal Area */}
                         <div className={`flex-none w-1/2 flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] border glass-panel p-1 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
                           style={{
@@ -3714,10 +3714,16 @@ const performStealthChecks = useCallback(async (addr) => {
           )}
 
           {/* Authoritative Mobile History Drawer (Unconstrained) */}
-          {isSmallScreen && authenticated && view === "trading" && (
+          {isSmallScreen && view === "trading" && (
             <MobileBottomHistoryPane
-              isOpen={showMobileHistory}
-              onToggle={() => setShowMobileHistory(!showMobileHistory)}
+              isOpen={authenticated && showMobileHistory}
+              onToggle={() => {
+                if (!authenticated) {
+                  alert('Please connect your wallet or login to view trade history.');
+                  return;
+                }
+                setShowMobileHistory(!showMobileHistory);
+              }}
               tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
               theme={theme}
               onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
