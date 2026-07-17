@@ -88,12 +88,7 @@ export function UnifiedWalletButton({ theme }) {
             onClick={handleLogout}
             title="Click to Disconnect"
             id="disconnect-wallet-btn"
-            className={`flex items-center gap-2 lg:gap-3 px-2 lg:px-4 py-1.5 lg:py-2 rounded-full border backdrop-blur-md transition-all duration-300 group`}
-            style={{
-                backgroundColor: theme === 'light' ? `${currentColor}08` : `${currentColor}15`,
-                borderColor: theme === 'light' ? `${currentColor}20` : `${currentColor}30`,
-                cursor: 'pointer'
-            }}
+            className="flex items-center gap-2 lg:gap-3 px-1 lg:px-2 py-1.5 lg:py-2 transition-all duration-300 group cursor-pointer"
         >
             {isSmartWalletReady && (
                 <div className="w-2 h-2 bg-yellow-400 rounded-full border border-[#0D0D0D] shadow-sm shrink-0" title="Smart Wallet Active"></div>
@@ -101,12 +96,12 @@ export function UnifiedWalletButton({ theme }) {
             <span className={`hidden md:inline-block text-xs font-black font-mono ${theme === 'light' ? 'text-black' : 'text-white'}`}>
                 {user?.wallet?.address ? `${user.wallet.address.slice(0, 4)}...${user.wallet.address.slice(-4)}` : (address ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Connected')}
             </span>
-            <div className={`flex items-center justify-center transition-all ${
+            <div className={`flex items-center justify-center transition-all ml-1 ${
                 theme === 'light'
                     ? 'text-black/40 group-hover:text-red-500'
                     : 'text-white/40 group-hover:text-red-500'
             }`}>
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                <svg width="21" height="21" viewBox="0 0 12 12" fill="none">
                     <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
                     <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
                 </svg>

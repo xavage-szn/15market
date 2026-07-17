@@ -22,12 +22,12 @@ const ENV_PATH = path.resolve("../nexus-core/.env");
 
 // Minimal ABI to drain old contract
 const OLD_ABI = [
-  "function withdraw(uint256 _amount) external",
-  "receive() external payable"
+  "function withdraw(uint256 _amount) external"
 ];
 
 async function main() {
-  const provider = new ethers.JsonRpcProvider(ARC_RPC);
+  const network = new ethers.Network("arc-testnet", 5042002);
+  const provider = new ethers.JsonRpcProvider(ARC_RPC, network, { staticNetwork: true });
   const deployer = new ethers.Wallet(PRIVATE_KEY, provider);
   const deployerAddr = deployer.address;
 
@@ -45,9 +45,21 @@ async function main() {
   const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
   
   const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, deployer);
-  const newContract = await factory.deploy();
-  await newContract.waitForDeployment();
-  const newAddress = await newContract.getAddress();
+  
+  let newContract, newAddress;
+  for (let i = 0; i < 5; i++) {
+    try {
+      console.log(`  Attempt ${i+1}...`);
+      await new Promise(r => setTimeout(r, 3000));
+      newContract = await factory.deploy();
+      await newContract.waitForDeployment();
+      newAddress = await newContract.getAddress();
+      break;
+    } catch (e) {
+      if (i === 4) throw e;
+      console.log(`  Deploy failed, retrying: ${e.message}`);
+    }
+  }
   console.log(`✅ New Contract Deployed: ${newAddress}`);
 
   // --- Step 3: Migrate funds from old → new ---
@@ -58,18 +70,37 @@ async function main() {
     const oldContract = new ethers.Contract(OLD_TREASURY, OLD_ABI, deployer);
 
     // Withdraw to deployer (owner)
-    const withdrawTx = await oldContract.withdraw(oldBalWei, { gasLimit: 200000 });
-    const withdrawReceipt = await withdrawTx.wait();
-    console.log(`  ✅ Withdrawn | tx: ${withdrawTx.hash} | block: ${withdrawReceipt.blockNumber}`);
+    let withdrawTx;
+    for (let i = 0; i < 5; i++) {
+      try {
+        await new Promise(r => setTimeout(r, 3000));
+        withdrawTx = await oldContract.withdraw(oldBalWei, { gasLimit: 200000 });
+        const withdrawReceipt = await withdrawTx.wait();
+        console.log(`  ✅ Withdrawn | tx: ${withdrawTx.hash} | block: ${withdrawReceipt.blockNumber}`);
+        break;
+      } catch (e) {
+        if (i === 4) throw e;
+        console.log(`  Withdraw failed, retrying: ${e.message}`);
+      }
+    }
 
     // Forward to new contract
-    const sendTx = await deployer.sendTransaction({
-      to: newAddress,
-      value: oldBalWei,
-      gasLimit: 100000
-    });
-    await sendTx.wait();
-    console.log(`  ✅ Funded new contract | tx: ${sendTx.hash}`);
+    for (let i = 0; i < 5; i++) {
+      try {
+        await new Promise(r => setTimeout(r, 3000));
+        const sendTx = await deployer.sendTransaction({
+          to: newAddress,
+          value: oldBalWei,
+          gasLimit: 100000
+        });
+        await sendTx.wait();
+        console.log(`  ✅ Funded new contract | tx: ${sendTx.hash}`);
+        break;
+      } catch (e) {
+        if (i === 4) throw e;
+        console.log(`  Funding failed, retrying: ${e.message}`);
+      }
+    }
 
     const newBal = await provider.getBalance(newAddress);
     console.log(`  💰 New Treasury Balance: ${ethers.formatEther(newBal)} ETH`);

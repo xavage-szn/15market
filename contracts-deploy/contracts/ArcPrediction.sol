@@ -71,9 +71,9 @@ contract ArcPrediction is Ownable {
 
     /**
      * @dev Settle a bet. Authority restricted to Owner (Backend).
-     * Automatically transfers winnings from Treasury to the payoutAddress.
+     * Automatically transfers winnings from Treasury to the payoutAddress based on dynamic share pricing.
      */
-    function settleBet(uint256 _betId, uint256 _exitPrice) external onlyOwner {
+    function settleBet(uint256 _betId, uint256 _exitPrice, uint256 _payoutAmount) external onlyOwner {
         Bet storage bet = bets[_betId];
         require(bet.id != 0, "Bet not found");
         require(!bet.settled, "Already settled");
@@ -90,20 +90,9 @@ contract ArcPrediction is Ownable {
 
         uint256 payout = 0;
         if (bet.won) {
-            // Duration-based multiplier tiers (matches backend config):
-            // 5s  = 2.90x gross → 2.871x net (1% platform fee)
-            // 10s = 2.40x gross → 2.376x net
-            // 15s = 1.90x gross → 1.881x net
-            // Formula: payout = stake * multiplierNumerator / multiplierDenominator
-            uint256 payoutNumerator;
-            if (bet.duration <= 5) {
-                payoutNumerator = 2871; // 2.90 * 0.99 * 1000
-            } else if (bet.duration <= 10) {
-                payoutNumerator = 2376; // 2.40 * 0.99 * 1000
-            } else {
-                payoutNumerator = 1881; // 1.90 * 0.99 * 1000
-            }
-            payout = (bet.amount * payoutNumerator) / 1000;
+            // Payout is calculated authoritatively off-chain based on real-time share prices
+            // and passed in by the backend oracle.
+            payout = _payoutAmount;
             
             require(address(this).balance >= payout, "Insufficient Treasury funds");
             

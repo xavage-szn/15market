@@ -120,20 +120,48 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     <span className="opacity-50 uppercase">TIMESTAMP:</span>
                                     <span>{new Date(transaction.timestamp).toLocaleString()}</span>
                                 </div>
+                                <div className="flex justify-between w-full">
+                                    <span className="opacity-50 uppercase">ASSET PAIR:</span>
+                                    <span>{transaction.symbol ? `${transaction.symbol.toUpperCase()} // USD` : 'ETH // USD'}</span>
+                                </div>
+                                <div className="flex justify-between w-full">
+                                    <span className="opacity-50 uppercase">DIRECTION:</span>
+                                    <span>{side === 'LONG' ? 'LONG (YES)' : 'SHORT (NO)'}</span>
+                                </div>
+                                {(() => {
+                                    const getMultiplier = (d) => { if (d === 5) return 2.90; if (d === 10) return 2.40; return 1.90; };
+                                    const mult = getMultiplier(transaction.duration || 15);
+                                    const payout = transaction.payout ? parseFloat(transaction.payout) : (parseFloat(transaction.amount) * mult);
+                                    const shares = payout;
+                                    const sharePr = shares > 0 ? (parseFloat(transaction.amount) / shares) : 0;
+                                    const profit = isWon ? (payout - parseFloat(transaction.amount)) : 0;
+                                    return (
+                                        <>
+                                            <div className="flex justify-between w-full">
+                                                <span className="opacity-50 uppercase">SHARE PRICE @ ENTRY:</span>
+                                                <span>{Math.round(sharePr * 100)}¢</span>
+                                            </div>
+                                            <div className="flex justify-between w-full">
+                                                <span className="opacity-50 uppercase">SHARES BOUGHT:</span>
+                                                <span>{shares.toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between w-full">
+                                                <span className="opacity-50 uppercase">TOTAL:</span>
+                                                <span>${Number(transaction.amount).toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between w-full">
+                                                <span className="opacity-50 uppercase">TRADE PROFIT:</span>
+                                                <span className={isWon ? 'text-[#249C6C]' : 'opacity-60'}>${profit.toFixed(2)}</span>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
 
                             <div className="w-full border-t border-dashed border-black/20 mb-4" />
 
                             {/* Trade Details */}
                             <div className="w-full grid grid-cols-2 gap-y-6 relative mb-8">
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">ASSET PAIR</span>
-                                    <span className="text-base font-black tracking-widest" style={{ fontFamily: '"Comfortaa", cursive' }}>{transaction.symbol ? `${transaction.symbol.toUpperCase()} // USD` : 'ETH // USD'}</span>
-                                </div>
-                                <div className="flex flex-col items-end text-right">
-                                    <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">EXECUTION</span>
-                                    <span className={`text-base font-black tracking-widest ${side === 'LONG' ? 'text-[#249C6C]' : 'text-[#FF7F50]'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>{side}</span>
-                                </div>
                                 <div className="flex flex-col">
                                     <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">ENTRY</span>
                                     <span className="text-base font-black tracking-widest" style={{ fontFamily: '"Comfortaa", cursive' }}>${Number(transaction.entryPrice || 0).toFixed(2)}</span>
@@ -147,7 +175,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     <span className="text-base font-black tracking-widest" style={{ fontFamily: '"Comfortaa", cursive' }}>${Number(transaction.exitPrice || 0).toFixed(2)}</span>
                                 </div>
                                 <div className="flex flex-col items-end text-right">
-                                    <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">PNL_OUTCOME</span>
+                                    <span className="text-[9px] opacity-50 font-black tracking-widest uppercase mb-1">PNL</span>
                                     <span className={`text-sm font-black tracking-widest ${isWon ? 'text-[#249C6C]' : isLost ? 'text-[#FF7F50]' : 'text-black/60'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
                                         {isWon ? '+' : isLost ? '▼ -' : ''}{Number(transaction.payout || transaction.amount || 0).toFixed(2)} <span className="text-[8px]">USDC</span>
                                     </span>

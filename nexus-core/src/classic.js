@@ -5,6 +5,7 @@ const cache = require('./cache');
 const config = require('./config');
 const rpc = require('./rpc');
 const { ethers } = require('ethers');
+const crypto = require('crypto');
 
 class ClassicEngine {
   constructor(io) {
@@ -16,7 +17,7 @@ class ClassicEngine {
     // AUTHORITATIVE ARC-NATIVE ABI
     this.TREASURY_ABI = [
       "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
-      "function settleBet(uint256 _betId, uint256 _exitPrice) external",
+      "function settleBet(uint256 _betId, uint256 _exitPrice, uint256 _payoutAmount) external",
       "function withdraw(uint256 _amount) external",
       "function bets(uint256) view returns (uint256 id, address user, uint256 amount, uint8 direction, uint256 entryPrice, uint256 timestamp, uint256 duration, uint8 marketId, uint256 settlementPrice, bool settled, bool won)"
     ];
@@ -90,12 +91,12 @@ class ClassicEngine {
   }
 
   lockResult(trade) {
-    if (trade.expiryEmitted) return;
+    if (trade.expiryEmitted || trade.isSettled) return;
+    trade.isSettled = true; // Absolute idempotency lock
     
-    const targetTime = trade.settleAt;
-    // CRITICAL: Ensure we use the historical price captured exactly at expiry.
-    // If we are late, getHistoricalPrice will now safely avoid the current 'retraced' price.
-    const exitPrice = cache.getHistoricalPrice(trade.symbol, targetTime) || cache.prices[trade.symbol] || trade.entryPrice;
+    // SINGLE SOURCE OF TRUTH: Use the exact real-time price in memory right now.
+    // This perfectly matches the final trade_tick sent to the UI, ensuring no desync.
+    const exitPrice = cache.prices[trade.symbol] || trade.entryPrice;
     
     const isUp = this.resolveDirection(trade.direction) === 1;
     const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
@@ -125,7 +126,10 @@ class ClassicEngine {
     const userAddr = this.normalizeAddr(identityPayload.address);
     const sessionWallet = rpc.deriveSessionWallet(userAddr);
     const amount = Number(tradeParams.amount);
-    const numericId = BigInt(tradeParams.id && /^\d+$/.test(tradeParams.id) ? tradeParams.id : Date.now());
+    
+    // STRICT IDEMPOTENCY: Ensure ID is always unique, even if frontend fails or duplicates arrive concurrently.
+    let generatedId = Date.now().toString() + crypto.randomInt(100000, 999999).toString();
+    const numericId = BigInt(tradeParams.id && /^\d+$/.test(tradeParams.id) ? tradeParams.id : generatedId);
     
     const direction = this.resolveDirection(tradeParams.direction);
     const duration = Math.max(1, Number(tradeParams.duration || 5));
@@ -146,11 +150,27 @@ class ClassicEngine {
       const contractDir = direction === 1 ? 0 : 1; 
       const contractPrice = ethers.parseUnits(entryPrice.toFixed(8), 8);
       
-      // AUTHORITY: Set sessionWallet.address as the direct payout destination on-chain
-      const tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, sessionWallet.address, { 
-        value: ethers.parseUnits(amount.toFixed(18), 18),
-        gasLimit: 400000 
-      });
+      // Sanitize amount to exactly 6 decimal places as a string to avoid scientific notation
+      const safeAmountStr = amount.toFixed(6);
+      
+      let tx;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          tx = await contract.placeBet(numericId, contractDir, duration, contractPrice, marketId, sessionWallet.address, { 
+            value: ethers.parseEther(safeAmountStr),
+            gasLimit: 400000 
+          });
+          break; // Success
+        } catch (err) {
+          const isRateLimit = err.message && (err.message.includes('coalesce') || err.message.includes('limit') || err.message.includes('429') || err.message.includes('fetch') || err.message.includes('timeout'));
+          if (isRateLimit && attempt < 5) {
+            console.log(`[Rate Limit] Retrying placeBet #${numericId}... (Attempt ${attempt})`);
+            await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential-ish backoff
+            continue;
+          }
+          throw err;
+        }
+      }
 
       const trade = {
         id: numericId.toString(),
@@ -208,45 +228,59 @@ class ClassicEngine {
   }
 
   async settleTradeOnChain(trade) {
-    trade.onChainSettleStarted = true;
+    if (trade.onChainSettleStarted) return;
+    trade.onChainSettleStarted = true; // Absolute idempotency lock
     try {
-      if (!this.payoutNonce || (Date.now() - this.lastNonceSync > 30000)) {
-        this.payoutNonce = await rpc.wallet.getNonce('pending');
-        this.lastNonceSync = Date.now();
-      }
-
       const betId = BigInt(trade.id);
       const exitPriceBigInt = ethers.parseUnits(trade.lockedExitPrice.toFixed(8), 8);
       
-      // Aggressive Settlement: 20% gas bump for instant confirmation
       const feeData = await rpc.mainProvider.getFeeData();
       const baseGasPrice = feeData.gasPrice || ethers.parseUnits("50", "gwei");
       const gasPrice = (baseGasPrice * 120n) / 100n;
 
-      console.log(`[On-Chain] Payout #${betId} | Nonce: ${this.payoutNonce} | Gas: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
+      const sharePrice = trade.sharePrice || 0.50;
+      const grossPayout = trade.amount / sharePrice;
+      const payoutStr = (grossPayout * 0.99).toFixed(6);
+      const payoutBigInt = ethers.parseEther(payoutStr);
 
       // AUTHORITY: Call settleBet to trigger the Treasury's direct payout to the user
-      const tx = await this.treasuryContract.settleBet(betId, exitPriceBigInt, {
-        gasPrice,
-        nonce: this.payoutNonce++,
-        gasLimit: 600000 // Increased limit for safety
-      });
+      let tx;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          if (!this.payoutNonce || (Date.now() - this.lastNonceSync > 30000)) {
+            this.payoutNonce = await rpc.wallet.getNonce('pending');
+            this.lastNonceSync = Date.now();
+          }
+          const currentNonce = this.payoutNonce++;
+          
+          tx = await this.treasuryContract.settleBet(betId, exitPriceBigInt, payoutBigInt, {
+            gasPrice,
+            nonce: currentNonce,
+            gasLimit: 600000 // Increased limit for safety
+          });
+          break; // Success
+        } catch (err) {
+          this.payoutNonce = null; // Force nonce resync on failure
+          const isRateLimit = err.message && (err.message.includes('coalesce') || err.message.includes('limit') || err.message.includes('429') || err.message.includes('fetch') || err.message.includes('timeout'));
+          if (isRateLimit && attempt < 5) {
+            console.log(`[Rate Limit] Retrying settleBet #${betId}... (Attempt ${attempt})`);
+            await new Promise(r => setTimeout(r, 1000 * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
 
       console.log(`[On-Chain] Broadcasted #${betId} | Tx: ${tx.hash}`);
 
       trade.payoutTx = tx.hash;
       trade.status = 'SETTLED';
-
-      // AUTHORITATIVE PAYOUT CALCULATION — Dynamic Odds Engine (Shares Model)
-      // Payout = Stake / Share Price (each share pays $1.00)
-      // Apply 1% platform fee to the final payout
-      const sharePrice = trade.sharePrice || 0.50;
-      const grossPayout = trade.amount / sharePrice;
-      const payout = Number((grossPayout * 0.99).toFixed(6));
+      
+      const payoutAmount = parseFloat(payoutStr);
       
       const session = cache.sessions.get(trade.userAddr);
       if (session) {
-          session.balance = Number((session.balance + payout).toFixed(6));
+          session.balance = Number((session.balance + payoutAmount).toFixed(6));
           session.lastWinAt = Date.now();
           this.io.to(trade.userAddr).emit('balance_update', { 
               balance: String(session.balance), 
@@ -260,7 +294,7 @@ class ClassicEngine {
         tradeId: trade.id, 
         betId: trade.id, 
         tx: tx.hash,
-        payout: payout
+        payout: payoutAmount
       });
 
       // Notify ALL admins of the settled trade status
@@ -268,29 +302,29 @@ class ClassicEngine {
         betId: trade.id,
         won: true,
         status: 'WON',
-        payout,
+        payout: payoutAmount,
         exitPrice: trade.lockedExitPrice,
         userAddr: trade.userAddr
       });
 
-      // PERSISTENCE: Save to profile history — status MUST be WON (not SETTLED) for UI
+      // PERSISTENCE: Save to profile history — status MUST be PAID to clear the UI spinner
       cache.pushHistory(trade.userAddr, {
         ...trade,
         won: true,
-        status: 'WON',
+        status: 'PAID',
         exitPrice: trade.lockedExitPrice,
-        payout: payout,
+        payout: payoutAmount,
         settledAt: Date.now()
       });
 
       // Notify the provider of their win
       try {
         const notifier = require('./services/notificationService');
-        notifier.notifyUser(trade.userAddr, "Trade Won", `Your ${trade.symbol || 'BTC'} ${trade.direction === 'UP' ? 'LONG' : 'SHORT'} trade won! +${payout.toFixed(2)} USDC.`, "success");
+        notifier.notifyUser(trade.userAddr, "Trade Won", `Your ${trade.symbol || 'BTC'} ${trade.direction === 'UP' ? 'LONG' : 'SHORT'} trade won! +${payoutAmount.toFixed(2)} USDC.`, "success");
       } catch (e) {}
 
       // Settle copy trades for this provider's won trade
-      this.settleCopyTrades(trade, payout);
+      this.settleCopyTrades(trade, payoutAmount);
 
       // Remove from active cache so it stops showing as pending
       cache.trades.delete(trade.id);

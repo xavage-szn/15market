@@ -1,7 +1,55 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { usePrivy } from '@privy-io/react-auth';
+
+/**
+ * AnimatedCents — Smooth odometer-style digit roller.
+ * When the value changes, each digit slides up or down into position like a meter reading.
+ */
+function AnimatedCents({ value, color }) {
+    const display = String(value).padStart(2, '0');
+    const prevRef = useRef(display);
+    const [direction, setDirection] = useState(0); // 1 = up, -1 = down
+
+    useEffect(() => {
+        const prev = parseInt(prevRef.current, 10);
+        const curr = parseInt(display, 10);
+        if (curr > prev) setDirection(1);
+        else if (curr < prev) setDirection(-1);
+        prevRef.current = display;
+    }, [display]);
+
+    return (
+        <span style={{ display: 'inline-flex', overflow: 'hidden', height: '1.3em', lineHeight: '1.3em', verticalAlign: 'bottom' }}>
+            {display.split('').map((digit, i) => (
+                <span key={i} style={{ display: 'inline-block', position: 'relative', width: '0.65em', height: '1.3em', overflow: 'hidden' }}>
+                    <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.span
+                            key={`${i}-${digit}`}
+                            initial={{ y: direction >= 0 ? '100%' : '-100%', opacity: 0.3 }}
+                            animate={{ y: '0%', opacity: 1 }}
+                            exit={{ y: direction >= 0 ? '-100%' : '100%', opacity: 0.3 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 35, mass: 0.6 }}
+                            style={{
+                                display: 'block',
+                                position: 'absolute',
+                                inset: 0,
+                                textAlign: 'center',
+                                color: color,
+                                fontWeight: 900,
+                                fontFamily: '"Comfortaa", cursive',
+                            }}
+                        >
+                            {digit}
+                        </motion.span>
+                    </AnimatePresence>
+                </span>
+            ))}
+            <span style={{ color, fontWeight: 900, fontFamily: '"Comfortaa", cursive' }}>¢</span>
+        </span>
+    );
+}
 
 function TradeTerminalComponent({
     mode,
@@ -38,11 +86,10 @@ function TradeTerminalComponent({
     const symbol = activeMarket?.symbol?.toLowerCase() || 'eth';
     const currentOdds = liveOdds?.[symbol]?.[duration] || { LONG: 0.50, SHORT: 0.50 };
     
-    // Calculate Payout
+    // Calculate Payout for both directions
     const stakeAmt = parseFloat(amount) || 0;
-    const selectedPrice = direction === "UP" ? currentOdds.LONG : currentOdds.SHORT;
-    const estimatedShares = selectedPrice > 0 ? (stakeAmt / selectedPrice) : 0;
-    const potentialPayout = estimatedShares; // because each share pays $1.00
+    const yesPayout = currentOdds.LONG > 0 ? (stakeAmt / currentOdds.LONG) : 0;
+    const noPayout = currentOdds.SHORT > 0 ? (stakeAmt / currentOdds.SHORT) : 0;
 
     const containerClass = transparent
         ? "flex flex-col h-full gap-1 lg:gap-1 overflow-x-hidden"
@@ -122,10 +169,18 @@ function TradeTerminalComponent({
             </div>
             
             <div className="flex items-center justify-between px-1.5 mt-0.5">
-                <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>Payout</span>
-                <span className={`text-[9px] lg:text-[11px] font-black text-[#249C6C]`} style={{ fontFamily: '"Comfortaa", cursive' }}>
-                    ${potentialPayout.toFixed(2)}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>Payout</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className={`text-[9px] lg:text-[11px] font-black text-[#249C6C]`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+                        YES ${yesPayout.toFixed(2)}
+                    </span>
+                    <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black/20' : 'text-white/15'}`}>|</span>
+                    <span className={`text-[9px] lg:text-[11px] font-black text-[#FF7F50]`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+                        NO ${noPayout.toFixed(2)}
+                    </span>
+                </div>
             </div>
         </div>
     );
@@ -151,6 +206,9 @@ function TradeTerminalComponent({
         executeTrade({ direction: dir });
     };
 
+    const longCents = Math.round(currentOdds.LONG * 100);
+    const shortCents = Math.round(currentOdds.SHORT * 100);
+
     const renderExecuteButtons = () => (
         <div className="flex w-[85%] mx-auto gap-2 pointer-events-auto shrink-0 mt-1">
             <button
@@ -164,7 +222,9 @@ function TradeTerminalComponent({
                 ) : (
                     <>
                         <span className="text-[12px] lg:text-[14px] font-black uppercase tracking-widest leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>YES</span>
-                        <span className="text-[10px] lg:text-[12px] font-black opacity-80 leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>{Math.round(currentOdds.LONG * 100)}¢</span>
+                        <span className="text-[10px] lg:text-[12px] font-black opacity-90 leading-none">
+                            <AnimatedCents value={longCents} color="rgba(255,255,255,0.9)" />
+                        </span>
                     </>
                 )}
             </button>
@@ -179,7 +239,9 @@ function TradeTerminalComponent({
                 ) : (
                     <>
                         <span className="text-[12px] lg:text-[14px] font-black uppercase tracking-widest leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>NO</span>
-                        <span className="text-[10px] lg:text-[12px] font-black opacity-80 leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>{Math.round(currentOdds.SHORT * 100)}¢</span>
+                        <span className="text-[10px] lg:text-[12px] font-black opacity-90 leading-none">
+                            <AnimatedCents value={shortCents} color="rgba(255,255,255,0.9)" />
+                        </span>
                     </>
                 )}
             </button>

@@ -3171,7 +3171,7 @@ const performStealthChecks = useCallback(async (addr) => {
                   <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[64px]' : 'h-[72px] lg:h-[84px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all`} />
                 </div>
 
-                <div className="hidden lg:flex items-center gap-3 px-2 py-1">
+                <div className="hidden lg:flex items-center gap-3 px-2 py-1 scale-[0.8] origin-right">
                   {authenticated && (
                     <>
                       {/* Branded Game Mode Switcher - Large Screens */}
@@ -3210,7 +3210,7 @@ const performStealthChecks = useCallback(async (addr) => {
                   <UnifiedWalletButton theme={theme} />
                 </div>
 
-                <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2">
+                <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2 scale-[0.8] origin-right">
                   {authenticated && (
                     <>
                       {/* Branded Game Mode Switcher - Mobile */}

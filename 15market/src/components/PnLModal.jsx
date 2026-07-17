@@ -50,10 +50,18 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
     const tradeDuration = trade.duration || 15;
     const currency = trade.currency || (trade.network === 'sol' || trade.network === 'SOL' ? 'SOL' : 'USDC');
     const multiplier = getMultiplier(tradeDuration);
-    const profitPercentage = Math.round((multiplier - 1) * 100);
+    
     const totalPayout = trade.payout ? parseFloat(trade.payout) : (parseFloat(trade.amount) * multiplier);
+    
+    // Prediction Market Share Logic
+    const numShares = totalPayout; 
+    const pricePerShare = numShares > 0 ? (parseFloat(trade.amount) / numShares) : 0;
+    
+    // Profit Calculation: If won -> totalPayout - stake. If lost -> 0.
+    const finalProfit = isWon ? (totalPayout - parseFloat(trade.amount)) : 0;
+
     // SYSTEM-WIDE: 2 decimal places only
-    const profit = isWon ? `+${(Math.floor(totalPayout * 100) / 100).toFixed(2)}` : `-${Number(trade.amount).toFixed(2)}`;
+    const profitDisplay = isWon ? `+${(Math.floor(totalPayout * 100) / 100).toFixed(2)}` : `-${Number(trade.amount).toFixed(2)}`;
 
     return (
         <AnimatePresence>
@@ -129,15 +137,26 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                     <span>{new Date(trade.timestamp || Date.now()).toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>DURATION // PROFIT:</span>
-                                    <span>{tradeDuration}s // +{profitPercentage}%</span>
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>DIRECTION:</span>
+                                    <span>{isUp ? 'LONG (YES)' : 'SHORT (NO)'}</span>
                                 </div>
-                                {trade.type === 'rounds' && (
-                                    <div className="flex justify-between items-center">
-                                        <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>POOL_ID:</span>
-                                        <span>#{trade.poolId || 'N/A'}</span>
-                                    </div>
-                                )}
+                                <div className="flex justify-between items-center">
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>SHARE PRICE @ ENTRY:</span>
+                                    <span>{Math.round(pricePerShare * 100)}¢</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>SHARES BOUGHT:</span>
+                                    <span>{numShares.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>TOTAL:</span>
+                                    <span>${Number(trade.amount).toFixed(2)}</span>
+                                </div>
+
+                                <div className="flex justify-between items-center">
+                                    <span className={`uppercase ${isLight ? 'text-black/50' : 'text-white/50'}`}>TRADE PROFIT:</span>
+                                    <span className={isWon ? 'text-[#249C6C]' : 'opacity-60'}>${finalProfit.toFixed(2)}</span>
+                                </div>
                             </div>
 
                             <div className={`w-full border-t border-dashed ${isLight ? 'border-black/20' : 'border-white/20'} my-4`} />
@@ -173,9 +192,9 @@ export function PnLModal({ isOpen, onClose, trade, theme }) {
                                     </span>
                                 </div>
                                 <div className="flex flex-col items-end text-right mt-2">
-                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>PNL_OUTCOME</span>
+                                    <span className={`text-[10px] font-bold uppercase mb-1 ${isLight ? 'text-black/50' : 'text-white/50'}`}>PNL</span>
                                     <span className={`text-xl font-black tracking-tight ${isWon ? 'text-[#249C6C]' : 'text-[#FF7F50]'}`}>
-                                        {isWon ? '▲' : '▼'}{profit} <span className="text-xs">{currency}</span>
+                                        {isWon ? '▲' : '▼'}{profitDisplay} <span className="text-xs">{currency}</span>
                                     </span>
                                 </div>
 
