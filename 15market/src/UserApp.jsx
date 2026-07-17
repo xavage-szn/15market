@@ -3303,7 +3303,7 @@ const performStealthChecks = useCallback(async (addr) => {
                     {/* V2 Integrated Content Container */}
                     <motion.div
                       layout={!isSmallScreen}
-                      className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-[200px]' : 'h-full flex-1 min-h-0'} transition-all duration-500 relative`}
+                      className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-[200px] pb-[279px]' : 'h-full flex-1 min-h-0'} transition-all duration-500 relative`}
                       style={{ paddingLeft: !isSmallScreen && showSideHistory ? '202px' : (!isSmallScreen ? '20px' : '0px') }}>
 
                       {!isSmallScreen && (
@@ -3390,10 +3390,10 @@ const performStealthChecks = useCallback(async (addr) => {
                     <motion.div
                       layout={!isSmallScreen}
                       style={isSmallScreen ? { height: 'auto', flex: 'none' } : undefined}
-                      className={`w-full lg:w-[30%] flex flex-col ${isSmallScreen ? 'flex-none relative mt-auto' : 'h-full flex-1 gap-1 min-h-0'}`}
+                      className={`w-full lg:w-[30%] flex flex-col ${isSmallScreen ? 'fixed inset-x-0 bottom-[48px] z-[90] px-1' : 'h-full flex-1 gap-1 min-h-0'}`}
                     >
-                      {/* Trade Terminal / Active Section Side-by-Side on Mobile (Restored for balance) */}
-                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? `flex h-[231px] min-h-0 ${authenticated ? 'mb-12' : 'mb-2'} px-1` : 'hidden md:hidden lg:hidden'}`}>
+                      {/* Trade Terminal / Active Section — Locked just above bottom pane handle */}
+                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex h-[231px] min-h-0' : 'hidden md:hidden lg:hidden'}`}>
                         {/* Terminal Area */}
                         <div className={`flex-none w-1/2 flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] border glass-panel p-1 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
                           style={{
