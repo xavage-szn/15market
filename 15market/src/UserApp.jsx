@@ -149,7 +149,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
       }}
       transition={{ type: 'spring', damping: 28, stiffness: 220 }}
       className="fixed inset-x-0 bottom-0 z-[110] flex flex-col pointer-events-none"
-      style={{ height: '300px' }}
+      style={{ height: '279px' }}
     >
       <div className={`
         w-full h-full pointer-events-auto
@@ -3719,7 +3719,7 @@ const performStealthChecks = useCallback(async (addr) => {
               isOpen={authenticated && showMobileHistory}
               onToggle={() => {
                 if (!authenticated) {
-                  alert('Please connect your wallet or login to view trade history.');
+                  notify('Please connect your wallet or login to view trade history.', 'error');
                   return;
                 }
                 setShowMobileHistory(!showMobileHistory);
