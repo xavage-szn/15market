@@ -938,22 +938,13 @@ const performStealthChecks = useCallback(async (addr) => {
   const updateEvmSessionBal = useCallback(async (force = false) => {
     if (!address) return;
 
-    // GUARD: If user just performed an optimistic action (Trade/Deposit), 
-    // ignore backend syncs for 30s to allow chain confirmation.
-    const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-    if (msSinceAction < 30000 && !force) return;
-
     try {
-      // Read the real on-chain EOA session wallet balance from backend
       const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`);
       if (res.ok) {
         const data = await res.json();
         const bal = parseFloat(data.balance);
         if (isNaN(bal)) return;
-        const currentBal = sessionBalanceRef.current;
-        if (Math.abs(bal - currentBal) > 0.0001 || force) {
-          setSessionBalance(bal);
-        }
+        setSessionBalance(bal);
       }
     } catch (err) { }
   }, [address]);
@@ -1228,17 +1219,12 @@ const performStealthChecks = useCallback(async (addr) => {
     if (address) triggerGlobalRefresh(true);
   }, [address, triggerGlobalRefresh]);
 
-  // Periodic session balance refresh (every 12s) — catches cases where
-  // socket balance_update events are missed and no other trigger fires.
+  // Periodic session balance refresh (every 5s) — always sync with backend.
   useEffect(() => {
     if (!address) return;
     const interval = setInterval(() => {
-      // Only poll if we're not in the optimistic guard window (30s after last trade)
-      const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-      if (msSinceAction > 30000) {
-        updateEvmSessionBal(false);
-      }
-    }, 12000);
+      updateEvmSessionBal(true);
+    }, 5000);
     return () => clearInterval(interval);
   }, [address, updateEvmSessionBal]);
 
@@ -1254,17 +1240,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
     // Bind Socket listeners
     const unbindBal = socketService.on('balance_update', (data) => {
-      // GUARD: If user just performed an optimistic action, ignore non-win socket updates
-      // to prevent the balance from bouncing back to the pre-trade value.
-      // We allow WIN events through immediately so payouts show instantly.
-      // We also allow correction/revert events and deposit events through.
-      const msSinceAction = Date.now() - lastOptimisticActionTime.current;
-      const isWinningEvent = data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED' || data.reason === 'WIN_CONFIRMED';
-      const isCorrection = data.reason === 'TRADE_FAILED_REVERT' || data.reason === 'SETTLEMENT_FAILED_REVERT';
-      const isDeposit = data.reason === 'DEPOSIT' || data.reason === 'DEPOSIT_CONFIRMED' || data.reason === 'DEPOSIT_OPTIMISTIC';
-
-      if (msSinceAction < 30000 && !isWinningEvent && !isCorrection && !isDeposit) return;
-
+      // Always accept balance updates from the backend — it is the source of truth.
       const val = data.balance || data.available;
       if (val !== undefined && val !== null) {
         const parsed = parseFloat(val);
@@ -2839,7 +2815,7 @@ const performStealthChecks = useCallback(async (addr) => {
         return;
       }
 
-      notify("Processing transfer...", "pending");
+      notify("Processing...", "pending");
 
       const cleanNetAmt = parseFloat(netAmt.toFixed(6));
 

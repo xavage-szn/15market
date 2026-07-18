@@ -679,67 +679,37 @@ app.get('/session/balance/:address', async (req, res) => {
     const userAddr = req.params.address.toLowerCase();
     const sessionWallet = deriveSessionWallet(userAddr);
     
-    // Read the true USDC ERC-20 balance on Arc Testnet, NOT the native ARC balance
-    const usdcAddr = '0x3600000000000000000000000000000000000000';
-    const usdcAbi = ['function balanceOf(address) view returns (uint256)'];
-    // Use direct provider to avoid FallbackProvider crashes under rate limiting
-    const usdcContract = new ethers.Contract(usdcAddr, usdcAbi, rpc.writeProvider);
-    
-    // We add a short timeout so this doesn't hang the UI if the RPC is lagging
-    let onChainBal = 0;
-    try {
-      const balPromise = usdcContract.balanceOf(sessionWallet.address);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), 8000));
-      const balRaw = await Promise.race([balPromise, timeoutPromise]);
-      onChainBal = parseFloat(ethers.formatUnits(balRaw, 18)); // Arc USDC has 18 decimals
-    } catch (balanceErr) {
-      // If USDC balanceOf fails (contract may not exist), fall back to native balance
-      console.warn(`[session/balance] USDC balanceOf failed, using native balance:`, balanceErr.message?.substring(0, 100));
-      try {
-        const nativeBal = await rpc.getBalance(sessionWallet.address);
-        onChainBal = parseFloat(nativeBal || '0');
-      } catch (nativeErr) {
-        console.error('[session/balance] Native balance also failed:', nativeErr.message?.substring(0, 100));
-      }
-    }
-
-    // Read persisted profile balance (authoritative source that survives restarts)
+    // Session balance is the authoritative source of truth.
+    // It is updated in real-time by placeTrade, creditWinner, creditTradingWallet, etc.
+    // Profile is the persistent backup that survives restarts.
+    // On-chain balance is NOT used here — the virtual trading balance may differ.
+    const session = cache.sessions.get(userAddr);
     const profile = profiles.get(userAddr);
     const profileBal = parseFloat(profile?.balance || 0);
 
-    // Sync in-process session balance — NEVER overwrite with on-chain value
-    const session = cache.sessions.get(userAddr);
     if (session) {
-      const timeSinceTrade = Date.now() - (session.lastTradeAt || 0);
-      if (timeSinceTrade >= 30000) {
-        // Use the highest known good balance: session vs profile vs on-chain
-        const bestBalance = Math.max(session.balance || 0, profileBal, onChainBal);
-        if (bestBalance !== session.balance) {
-          session.balance = bestBalance;
-          profiles.upsert(userAddr, { balance: bestBalance });
-        }
+      // Always return the live in-memory session balance — no guards, no Math.max
+      // Sync to profile periodically so it survives restarts
+      if (session.balance !== profileBal) {
+        profiles.upsert(userAddr, { balance: session.balance });
       }
-      // If within 30s of a trade, keep the in-memory balance untouched
     } else {
-      // No in-memory session — rebuild from profile (survives restarts) or on-chain
-      const restoredBalance = Math.max(profileBal, onChainBal);
+      // No in-memory session — rebuild from profile (survives restarts)
+      const restoredBalance = profileBal;
       cache.getOrCreateSession(userAddr, {
         identityKey: userAddr,
         walletAddress: userAddr,
         sessionAddress: sessionWallet.address,
         balance: restoredBalance
       });
-      if (restoredBalance > 0) {
-        profiles.upsert(userAddr, { balance: restoredBalance });
-      }
     }
 
     const finalSession = cache.sessions.get(userAddr);
     res.json({ 
       success: true, 
-      balance: String(finalSession ? finalSession.balance : Math.max(profileBal, onChainBal)), 
+      balance: String(finalSession ? finalSession.balance : profileBal), 
       sessionAddress: sessionWallet.address, 
-      source: 'usdc-onchain-synced' 
+      source: 'session-cache' 
     });
   } catch (err) {
     console.error('[session/balance] error:', err.message);
@@ -1269,14 +1239,6 @@ app.post('/session/cashout', async (req, res) => {
       reason: 'CASHOUT',
       txHash: tx.hash
     });
-
-    // Trigger notification and email
-    notificationService.notifyUser(
-        userAddr,
-        "Withdrawal Successful",
-        `Successfully withdrew ${ethers.formatEther(sendAmount)} USDC to ${targetAddr}.`,
-        "success"
-    );
 
     res.json({ success: true, txHash: tx.hash, amount: ethers.formatEther(sendAmount) });
   } catch (err) {
