@@ -523,8 +523,16 @@ class FundingService {
 
             console.log(`[CCTP-Relayer] ✅ USDC minted on ${destConfig.name}! TX: ${mintTx.hash}`);
 
-            // Step 5: Credit the user's platform trading balance (on-chain mint confirmed)
-            const creditResult = await this.creditTradingWallet(userAddr, amount, mintTx.hash);
+            // Step 5: The optimistic credit was already applied by the caller
+            // (/fund/monitor-cctp or /fund/permit-bridge). Just sync profile
+            // persistence and emit the confirmation event — do NOT call
+            // creditTradingWallet() again as that would double-credit.
+            const cache = require('../cache');
+            const profiles = require('../profiles');
+            const session = cache.sessions.get(userAddr);
+            const currentBalance = session ? session.balance : parseFloat(amount || 0);
+            // Persist to profile so balance survives restarts
+            profiles.upsert(userAddr, { balance: currentBalance });
 
             // Trigger CCTP Bridge Confirmed notification
             notificationService.notifyUser(
@@ -537,11 +545,11 @@ class FundingService {
             // Push live socket update to user confirming final on-chain settlement
             if (io) {
                 io.to(userAddr).emit('balance_update', {
-                    balance: String(creditResult.newBalance || amount),
+                    balance: String(currentBalance),
                     reason: 'DEPOSIT_CONFIRMED',
                     txHash: mintTx.hash
                 });
-                console.log(`[CCTP-Relayer] Socket balance_update emitted to ${userAddr}: ${creditResult.newBalance} USDC`);
+                console.log(`[CCTP-Relayer] Socket balance_update emitted to ${userAddr}: ${currentBalance} USDC`);
             }
 
         } catch (err) {

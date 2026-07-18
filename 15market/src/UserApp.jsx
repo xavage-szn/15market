@@ -1255,10 +1255,13 @@ const performStealthChecks = useCallback(async (addr) => {
       // GUARD: If user just performed an optimistic action, ignore non-win socket updates
       // to prevent the balance from bouncing back to the pre-trade value.
       // We allow WIN events through immediately so payouts show instantly.
+      // We also allow correction/revert events and deposit events through.
       const msSinceAction = Date.now() - lastOptimisticActionTime.current;
       const isWinningEvent = data.reason === 'WIN' || data.reason === 'WIN_PAYOUT' || data.reason === 'WIN_PAYOUT_SETTLED' || data.reason === 'WIN_CONFIRMED';
+      const isCorrection = data.reason === 'TRADE_FAILED_REVERT' || data.reason === 'SETTLEMENT_FAILED_REVERT';
+      const isDeposit = data.reason === 'DEPOSIT' || data.reason === 'DEPOSIT_CONFIRMED' || data.reason === 'DEPOSIT_OPTIMISTIC';
 
-      if (msSinceAction < 30000 && !isWinningEvent) return;
+      if (msSinceAction < 30000 && !isWinningEvent && !isCorrection && !isDeposit) return;
 
       const val = data.balance || data.available;
       if (val !== undefined && val !== null) {

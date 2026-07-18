@@ -16,6 +16,7 @@ const STATIC_GAS_PRICE = ethers.parseUnits("60", "gwei");
 class ClassicEngine {
   constructor(io) {
     this.io = io;
+    this._tradeLocks = new Set(); // Prevents concurrent trade placement per user
 
     this.TREASURY_ABI = [
       "function placeBet(uint256 _betId, uint8 _direction, uint256 _duration, uint256 _entryPrice, uint8 _marketId, address _payoutAddress) external payable",
@@ -67,6 +68,17 @@ class ClassicEngine {
   }
 
   normalizeAddr(addr) { return String(addr || '').toLowerCase(); }
+
+  /**
+   * Syncs session balance to profile store so it survives server restarts.
+   */
+  syncBalance(userAddr, session) {
+    if (!session) return;
+    try {
+      const profiles = require('./profiles');
+      profiles.upsert(userAddr, { balance: session.balance });
+    } catch (_) {}
+  }
 
   resolveSessionIdentity(body) {
     const raw = body.address || body.walletAddress || body.userAddress;
@@ -157,6 +169,7 @@ class ClassicEngine {
       session.balance = Number((session.balance + payoutAmount).toFixed(6));
       session.lastWinAt = Date.now();
       session.lastTradeAt = Date.now();
+      this.syncBalance(trade.userAddr, session);
     }
 
     this.io.to(trade.userAddr).emit('balance_update', {
@@ -273,11 +286,12 @@ class ClassicEngine {
         }
       }
 
-      // ALL RETRIES FAILED — Revert the in-memory credit
+      // ALL RETRIES FAILED — Revert the in-memory credit (guard against negative)
       console.error(`[BG-Settle] #${betId} FAILED after ${maxRetries} attempts. Reverting credit.`);
       const session = cache.sessions.get(trade.userAddr);
       if (session) {
-        session.balance = Number((session.balance - payoutAmount).toFixed(6));
+        session.balance = Number(Math.max(0, session.balance - payoutAmount).toFixed(6));
+        this.syncBalance(trade.userAddr, session);
         this.io.to(trade.userAddr).emit('balance_update', {
           balance: String(session.balance),
           reason: 'SETTLEMENT_FAILED_REVERT',
@@ -309,6 +323,21 @@ class ClassicEngine {
   async placeTrade(tradeParams, identityPayload) {
     const userAddr = this.normalizeAddr(identityPayload.address);
     const sessionWallet = rpc.deriveSessionWallet(userAddr);
+
+    // Prevent concurrent trades for the same user
+    if (this._tradeLocks.has(userAddr)) {
+      return { success: false, error: 'A trade is already being placed. Please wait.' };
+    }
+    this._tradeLocks.add(userAddr);
+
+    try {
+      return await this._placeTradeInner(tradeParams, identityPayload, userAddr, sessionWallet);
+    } finally {
+      this._tradeLocks.delete(userAddr);
+    }
+  }
+
+  async _placeTradeInner(tradeParams, identityPayload, userAddr, sessionWallet) {
 
     const rawAmount = tradeParams.amount;
     const amount = Number(rawAmount);
@@ -394,6 +423,7 @@ class ClassicEngine {
     // ── DEDUCT BALANCE AFTER SUCCESSFUL BROADCAST ────────────────────────
     session.balance = Number((session.balance - amount).toFixed(6));
     session.lastTradeAt = Date.now();
+    this.syncBalance(userAddr, session);
 
     const trade = {
       id: numericId.toString(),
@@ -427,7 +457,8 @@ class ClassicEngine {
         cache.trades.delete(trade.id);
         const sess = cache.sessions.get(userAddr);
         if (sess) {
-          sess.balance = Number((sess.balance + amount).toFixed(6));
+          sess.balance = Number(Math.max(0, sess.balance + amount).toFixed(6));
+          this.syncBalance(userAddr, sess);
           this.io.to(userAddr).emit('balance_update', {
             balance: String(sess.balance),
             reason: 'TRADE_FAILED_REVERT',

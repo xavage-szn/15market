@@ -618,40 +618,51 @@ app.post('/session/init', async (req, res) => {
     const sessionWallet = deriveSessionWallet(userAddr);
     const sessionAddress = sessionWallet.address;
 
-    // Fetch real on-chain balance of the session EOA
-    let balance = '0';
+    // Read persisted profile balance (authoritative source that survives restarts)
+    const profile = profiles.get(userAddr);
+    const profileBal = parseFloat(profile?.balance || 0);
+
+    // Fetch native ARC balance as a fallback
+    let onChainBal = 0;
     try {
       const balWei = await provider.getBalance(sessionAddress);
-      balance = ethers.formatEther(balWei);
+      onChainBal = parseFloat(ethers.formatEther(balWei));
     } catch (_) {}
 
-    // Sync in-process session with protection against recent trade activity
+    // Initialize or restore session — prefer profile balance over on-chain native balance
     let session = cache.sessions.get(userAddr);
-    const onChainBal = parseFloat(balance);
     if (session) {
-      const timeSinceWin = Date.now() - (session.lastWinAt || 0);
       const timeSinceTrade = Date.now() - (session.lastTradeAt || 0);
-      // Don't downgrade balance if a trade was placed in the last 30s
-      // (the optimistic deduction in classic.js is authoritative until trade settles)
-      if (timeSinceTrade < 30000) {
-        // Keep the in-memory balance — it reflects the optimistic deduction
-      } else if (onChainBal > session.balance || timeSinceWin > 45000) {
-        session.balance = onChainBal;
+      // Never overwrite if a trade was placed recently
+      if (timeSinceTrade >= 30000) {
+        // Use the highest known good balance: profile vs current session vs on-chain
+        const bestBalance = Math.max(session.balance || 0, profileBal, onChainBal);
+        session.balance = bestBalance;
+        // Re-sync profile if session drifted ahead (e.g. from win credits)
+        if (session.balance > profileBal) {
+          profiles.upsert(userAddr, { balance: session.balance });
+        }
       }
     } else {
+      // No in-memory session — rebuild from profile (survives restarts) or on-chain
+      const restoredBalance = Math.max(profileBal, onChainBal);
       session = cache.getOrCreateSession(userAddr, {
         identityKey: userAddr,
         walletAddress: identity.walletAddress,
         sessionAddress,
-        balance: onChainBal,
+        balance: restoredBalance,
       });
+      // Ensure profile is up to date
+      if (restoredBalance > 0) {
+        profiles.upsert(userAddr, { balance: restoredBalance });
+      }
     }
 
     res.json({
       success: true,
       sessionAddress,
       walletAddress: session.walletAddress,
-      balance,
+      balance: String(session.balance || 0),
     });
   } catch (err) {
     console.error('[session/init] error:', err.message);
@@ -692,32 +703,41 @@ app.get('/session/balance/:address', async (req, res) => {
       }
     }
 
-    // Also sync in-process session balance with protection
+    // Read persisted profile balance (authoritative source that survives restarts)
+    const profile = profiles.get(userAddr);
+    const profileBal = parseFloat(profile?.balance || 0);
+
+    // Sync in-process session balance — NEVER overwrite with on-chain value
     const session = cache.sessions.get(userAddr);
     if (session) {
-      const timeSinceWin = Date.now() - (session.lastWinAt || 0);
       const timeSinceTrade = Date.now() - (session.lastTradeAt || 0);
-      // Don't overwrite balance if a trade was placed in the last 30s
-      if (timeSinceTrade < 30000) {
-        // Keep in-memory balance — reflects optimistic deduction or payout credit
-      } else if (onChainBal > session.balance || timeSinceWin > 45000) {
-        session.balance = onChainBal;
-        profiles.upsert(userAddr, { balance: onChainBal }); // Ensure it persists
+      if (timeSinceTrade >= 30000) {
+        // Use the highest known good balance: session vs profile vs on-chain
+        const bestBalance = Math.max(session.balance || 0, profileBal, onChainBal);
+        if (bestBalance !== session.balance) {
+          session.balance = bestBalance;
+          profiles.upsert(userAddr, { balance: bestBalance });
+        }
       }
+      // If within 30s of a trade, keep the in-memory balance untouched
     } else {
-        // Create session if missing so UI gets it
-        cache.getOrCreateSession(userAddr, {
-            identityKey: userAddr,
-            walletAddress: userAddr,
-            sessionAddress: sessionWallet.address,
-            balance: onChainBal
-        });
-        profiles.upsert(userAddr, { balance: onChainBal });
+      // No in-memory session — rebuild from profile (survives restarts) or on-chain
+      const restoredBalance = Math.max(profileBal, onChainBal);
+      cache.getOrCreateSession(userAddr, {
+        identityKey: userAddr,
+        walletAddress: userAddr,
+        sessionAddress: sessionWallet.address,
+        balance: restoredBalance
+      });
+      if (restoredBalance > 0) {
+        profiles.upsert(userAddr, { balance: restoredBalance });
+      }
     }
 
+    const finalSession = cache.sessions.get(userAddr);
     res.json({ 
       success: true, 
-      balance: String(session ? session.balance : onChainBal), 
+      balance: String(finalSession ? finalSession.balance : Math.max(profileBal, onChainBal)), 
       sessionAddress: sessionWallet.address, 
       source: 'usdc-onchain-synced' 
     });
@@ -1240,6 +1260,7 @@ app.post('/session/cashout', async (req, res) => {
       try {
         const newBal = await directProvider.getBalance(sessionWallet.address);
         session.balance = parseFloat(ethers.formatEther(newBal));
+        profiles.upsert(userAddr, { balance: session.balance });
       } catch {}
     }
 
@@ -1277,16 +1298,18 @@ app.post('/session/deposit', async (req, res) => {
     // Update balance optimistically in the backend cache
     if (session) {
       session.balance = Number((session.balance + parseFloat(amount)).toFixed(4));
+      profiles.upsert(userAddr, { balance: session.balance });
       console.log(`[Deposit] Session updated: ${userAddr} new balance ${session.balance}`);
     } else {
       console.warn(`[Deposit] No active session found for ${userAddr}. Creating with derived addresses.`);
       const sessionWallet = deriveSessionWallet(userAddr);
-      cache.getOrCreateSession(userAddr, { 
+      session = cache.getOrCreateSession(userAddr, { 
         balance: parseFloat(amount),
         identityKey: userAddr,
-        walletAddress: userAddr, // Assuming the deposit came from their main wallet
+        walletAddress: userAddr,
         sessionAddress: sessionWallet.address
       });
+      profiles.upsert(userAddr, { balance: parseFloat(amount) });
     }
 
     // Push to history
