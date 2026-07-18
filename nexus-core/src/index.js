@@ -13,6 +13,17 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 
+// SAFETY NET: Prevent ethers.js v6 internal polling rejections from crashing the process.
+// Even with manual receipt polling, some ethers internals can emit unhandled rejections.
+process.on('unhandledRejection', (reason, promise) => {
+    const msg = reason?.message || String(reason);
+    // Silently swallow known RPC rate-limit errors from ethers internals
+    if (msg.includes('request limit reached') || msg.includes('could not coalesce') || msg.includes('fetch')) {
+        return;
+    }
+    console.error('[UnhandledRejection]', msg?.substring(0, 200));
+});
+
 const config = require('./config');
 const cache = require('./cache');
 const rpc = require('./rpc');
@@ -660,14 +671,26 @@ app.get('/session/balance/:address', async (req, res) => {
     // Read the true USDC ERC-20 balance on Arc Testnet, NOT the native ARC balance
     const usdcAddr = '0x3600000000000000000000000000000000000000';
     const usdcAbi = ['function balanceOf(address) view returns (uint256)'];
-    const usdcContract = new ethers.Contract(usdcAddr, usdcAbi, provider);
+    // Use direct provider to avoid FallbackProvider crashes under rate limiting
+    const usdcContract = new ethers.Contract(usdcAddr, usdcAbi, rpc.writeProvider);
     
     // We add a short timeout so this doesn't hang the UI if the RPC is lagging
-    const balPromise = usdcContract.balanceOf(sessionWallet.address);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), 10000));
-    
-    const balRaw = await Promise.race([balPromise, timeoutPromise]);
-    const onChainBal = parseFloat(ethers.formatUnits(balRaw, 6)); // USDC has 6 decimals
+    let onChainBal = 0;
+    try {
+      const balPromise = usdcContract.balanceOf(sessionWallet.address);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), 8000));
+      const balRaw = await Promise.race([balPromise, timeoutPromise]);
+      onChainBal = parseFloat(ethers.formatUnits(balRaw, 18)); // Arc USDC has 18 decimals
+    } catch (balanceErr) {
+      // If USDC balanceOf fails (contract may not exist), fall back to native balance
+      console.warn(`[session/balance] USDC balanceOf failed, using native balance:`, balanceErr.message?.substring(0, 100));
+      try {
+        const nativeBal = await rpc.getBalance(sessionWallet.address);
+        onChainBal = parseFloat(nativeBal || '0');
+      } catch (nativeErr) {
+        console.error('[session/balance] Native balance also failed:', nativeErr.message?.substring(0, 100));
+      }
+    }
 
     // Also sync in-process session balance with protection
     const session = cache.sessions.get(userAddr);
@@ -957,7 +980,7 @@ app.post('/solana/fund', async (req, res) => {
         const usdcAbi = ['function transfer(address to, uint256 value) external returns (bool)'];
         // Arc Testnet USDC is 0x3600000000000000000000000000000000000000
         const arcUsdc = new ethers.Contract('0x3600000000000000000000000000000000000000', usdcAbi, destRelayerWallet);
-        const amountWei = ethers.parseUnits(amtNum.toString(), 6);
+        const amountWei = ethers.parseUnits(amtNum.toString(), 18); // Arc USDC has 18 decimals
         console.log(`[Solana/Fund] Transferring ${amtNum} real USDC on Arc Testnet to ${sessionWallet.address}...`);
         
         // Execute transfer without waiting for confirmation to keep API fast
@@ -1068,9 +1091,6 @@ app.post('/session/execute', async (req, res) => {
         }
       }
     }
-
-    // Notify the trader of their placed trade
-    notificationService.notifyUser(address, "Trade Placed", `Placed ${tradeParams?.direction === 'UP' ? 'LONG' : 'SHORT'} trade on ${tradeParams?.symbol || 'BTC'} ($${tradeParams?.amount || 0} USDC)`, "info");
 
     res.json({
       ...result,
@@ -2617,8 +2637,12 @@ app.post('/copy-trading/providers/:address/withdraw', async (req, res) => {
           to: targetAddress,
           value: ethers.parseEther(String(amount))
         });
-        await tx.wait();
-        console.log(`[withdraw] Sent ${amount} USDC to ${targetAddress} (tx: ${tx.hash})`);
+        const receipt = await rpc.waitForReceipt(tx.hash);
+        if (!receipt || receipt.status !== 1) {
+          console.error('[withdraw] Transfer reverted on-chain');
+        } else {
+          console.log(`[withdraw] Sent ${amount} USDC to ${targetAddress} (tx: ${tx.hash})`);
+        }
       } else {
         console.log(`[withdraw] On-chain transfer skipped (no treasury key). Recorded ${amount} USDC withdrawal for ${targetAddress}`);
       }

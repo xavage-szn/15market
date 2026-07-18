@@ -4,6 +4,7 @@ const { ethers } = require('ethers');
 const config = require('../config');
 const profiles = require('../profiles');
 const notificationService = require('./notificationService');
+const rpc = require('../rpc');
 
 // Circle IRIS Attestation API V2 (testnet sandbox)
 // V2 endpoint: GET /v2/messages/{sourceDomain}?transactionHash={txHash}
@@ -257,7 +258,8 @@ class FundingService {
         while (transferRetries > 0) {
             try {
                 txTransfer = await usdcContract.transferFrom(userAddress, relayerWallet.address, amountRaw);
-                await txTransfer.wait();
+                const transferReceipt = await rpc.waitForReceipt(txTransfer.hash);
+                if (!transferReceipt || transferReceipt.status !== 1) throw new Error('transferFrom reverted on-chain');
                 console.log(`[Permit-Bridge] transferFrom transaction success: ${txTransfer.hash}`);
                 break;
             } catch (err) {
@@ -282,7 +284,8 @@ class FundingService {
             while (approveRetries > 0) {
                 try {
                     txApprove = await usdcWithStandardAbi.approve(chainCfg.tokenMessenger, netAmountRaw);
-                    await txApprove.wait();
+                    const approveReceipt = await rpc.waitForReceipt(txApprove.hash);
+                    if (!approveReceipt || approveReceipt.status !== 1) throw new Error('approve reverted on-chain');
                     break;
                 } catch (err) {
                     console.error(`[Permit-Bridge] approve error: ${err.message}. Retries left: ${approveRetries - 1}`);
@@ -316,7 +319,8 @@ class FundingService {
                     0n,
                     2000
                 );
-                burnReceipt = await txBurn.wait();
+                burnReceipt = await rpc.waitForReceipt(txBurn.hash);
+                if (!burnReceipt || burnReceipt.status !== 1) throw new Error('depositForBurn reverted on-chain');
                 console.log(`[Permit-Bridge] depositForBurn transaction success: ${txBurn.hash}`);
                 break;
             } catch (err) {
@@ -514,7 +518,8 @@ class FundingService {
 
             console.log(`[CCTP-Relayer] Calling receiveMessage on ${destConfig.name} (${destConfig.messageTransmitter})`);
             const mintTx = await transmitter.receiveMessage(messageData.message, messageData.attestation);
-            const mintReceipt = await mintTx.wait();
+            const mintReceipt = await rpc.waitForReceipt(mintTx.hash);
+            if (!mintReceipt || mintReceipt.status !== 1) throw new Error('receiveMessage reverted on-chain');
 
             console.log(`[CCTP-Relayer] ✅ USDC minted on ${destConfig.name}! TX: ${mintTx.hash}`);
 

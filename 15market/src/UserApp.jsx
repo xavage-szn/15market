@@ -1293,57 +1293,21 @@ const performStealthChecks = useCallback(async (addr) => {
           const tid = String(data.betId || "");
           const tx = String(data.txHash || "");
           const matchFn = t => (tid && String(t.id || t.nonce) === tid) || (tx && String(t.tx || t.txHash) === tx);
-          setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
-          setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, tx: data.txHash || t.tx } : t));
+          setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, payout: payoutAmt > 0 ? payoutAmt : t.payout, tx: data.txHash || t.tx } : t));
+          setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payoutSettled: true, payout: payoutAmt > 0 ? payoutAmt : t.payout, tx: data.txHash || t.tx } : t));
+        }
+        // Also write payout to trade record on WIN_PAYOUT (instant credit)
+        if (data.reason === 'WIN_PAYOUT' && payoutAmt > 0) {
+          const tid = String(data.betId || "");
+          const matchFn = t => (tid && String(t.id || t.nonce) === tid);
+          setActiveTrades(prev => prev.map(t => matchFn(t) ? { ...t, payout: payoutAmt } : t));
+          setTradeHistory(prev => prev.map(t => matchFn(t) ? { ...t, payout: payoutAmt } : t));
         }
         triggerGlobalRefresh(true);
       }
     });
 
-    const unbindTick = socketService.on('trade_tick', (data) => {
-      const tid = String(data.betId || data.tradeId);
-      setActiveTrades(prev => prev.map(t => {
-        if (String(t.id || t.nonce) === tid) {
-          return {
-            ...t,
-            timeLeft: data.timeLeft,
-            currentPrice: data.currentPrice,
-            isWinning: data.isWinning
-          };
-        }
-        return t;
-      }));
-    });
-
-    const unbindExpired = socketService.on('trade_expired', (data) => {
-      console.log("[Socket] Trade Expired:", data);
-      const tid = String(data.betId || data.tradeId);
-      const updateFn = (t) => {
-        if (String(t.id || t.nonce) === tid) {
-          return {
-            ...t,
-            status: data.won ? 'WON' : 'LOST',
-            won: data.won,
-            settlementPrice: data.exitPrice,
-            payoutPending: data.won, // Only pending if won
-            confirmed: true
-          };
-        }
-        return t;
-      };
-      setActiveTrades(prev => prev.map(updateFn));
-      setTradeHistory(prev => {
-        const exists = prev.some(t => String(t.id || t.nonce) === tid);
-        if (exists) return prev.map(updateFn);
-        // If not in history yet (rare for active), we'll let reconcile handle it or wait for settled
-        return prev;
-      });
-      if (data.won) {
-        notify("Trade Won! Processing Payout...", "success");
-      } else {
-        notify("Trade Lost", "error");
-      }
-    });
+    // trade_tick and trade_expired handlers consolidated in authoritative block (line ~2130)
 
     const unbindSettled = socketService.on('trade_settled', (data) => {
       console.log("[Socket] Trade Settled:", data);
@@ -1355,7 +1319,11 @@ const performStealthChecks = useCallback(async (addr) => {
             status: data.won ? 'WON' : 'LOST',
             won: data.won,
             confirmed: true,
-            payoutPending: data.won && t.status !== 'PAID'
+            payoutPending: data.won && t.status !== 'PAID',
+            payout: data.payout !== undefined ? parseFloat(data.payout) : t.payout,
+            exitPrice: data.exitPrice || t.exitPrice,
+            settlementPrice: data.exitPrice || t.settlementPrice,
+            amount: data.amount || t.amount,
           };
         }
         return t;
@@ -1369,6 +1337,7 @@ const performStealthChecks = useCallback(async (addr) => {
     const unbindPayout = socketService.on('payout_completed', (data) => {
       console.log("[Socket] Payout Completed:", data);
       const tid = String(data.betId || data.tradeId);
+      const payoutAmt = parseFloat(data.payout || 0);
 
       const updateFn = (t) => {
         if (String(t.id || t.tx || t.nonce) === tid) {
@@ -1378,7 +1347,8 @@ const performStealthChecks = useCallback(async (addr) => {
             payoutTx: data.txHash || data.tx,
             tx: data.txHash || data.tx,
             payoutPending: false,
-            confirmed: true
+            confirmed: true,
+            payout: payoutAmt > 0 ? payoutAmt : t.payout,
           };
         }
         return t;
@@ -1386,7 +1356,9 @@ const performStealthChecks = useCallback(async (addr) => {
 
       setActiveTrades(prev => prev.map(updateFn));
       setTradeHistory(prev => prev.map(updateFn));
-      notify(`Payout Confirmed: +$${parseFloat(data.payout || 0).toFixed(2)}`, "success");
+      if (payoutAmt > 0) {
+        notify(`Payout Confirmed: +$${payoutAmt.toFixed(2)}`, "success");
+      }
       triggerGlobalRefresh(true);
     });
 
@@ -1426,8 +1398,6 @@ const performStealthChecks = useCallback(async (addr) => {
       unbindBal();
       unbindPayout();
       unbindPayoutFailed();
-      unbindTick();
-      unbindExpired();
       unbindSettled();
       unbindErr();
     };
@@ -2475,7 +2445,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
   // Safety Cleanup: Remove finalized trades after showing result
   useEffect(() => {
-    const finalStatuses = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"];
+    const finalStatuses = ["WON", "LOST", "PAID", "RESOLVING", "TIMEOUT", "PAYOUT_DELAYED"];
     const finished = activeTrades.filter(t => finalStatuses.includes(t.status));
 
     finished.forEach(trade => {
@@ -2489,7 +2459,7 @@ const performStealthChecks = useCallback(async (addr) => {
           delete cleanupTimers.current[tid];
           // Auto-cleanup the removed set after 10 minutes to keep memory bounded
           setTimeout(() => removedTradeIds.current.delete(String(tid)), 10 * 60 * 1000);
-        }, 3500); // 3.5 seconds of glory on screen
+        }, 2000); // 2 seconds to see result, then auto-remove
       }
     });
 

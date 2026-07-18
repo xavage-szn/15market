@@ -6,18 +6,21 @@ const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false,
     retryStrategy: (times) => {
-        console.warn(`[Redis] Connection failed or lost. Retrying in 30 seconds... (Attempt ${times})`);
+        if (times === 1) console.warn(`[Redis] Connection failed. Retrying in 30 seconds...`);
         return 30000; // 30 seconds
     }
 });
 
-// Suppress unhandled connection error events to prevent Node crash loops
-redis.on('error', (err) => {
-    // Only log if it's not a connection timeout/unreachable event to keep console clean
+let redisReady = false;
+redis.on('ready', () => { redisReady = true; });
+redis.on('error', (err) => { 
+    redisReady = false;
+    // Suppress noisy connection errors
     if (!err.message.includes('Stream isn\'t writeable') && !err.message.includes('ENOTFOUND')) {
         console.error('[Redis-Error]', err.message);
     }
 });
+redis.on('close', () => { redisReady = false; });
 
 class ProfileService {
     constructor() {
@@ -26,12 +29,13 @@ class ProfileService {
 
         // When Redis is fully authenticated and ready to execute commands
         redis.on('ready', async () => {
-            console.log('[Redis] Connected and ready to execute commands on Redis Cloud!');
+            redisReady = true;
+            console.log('[Redis] Connected and ready.');
             if (Object.keys(this.profiles).length === 0) {
-                console.log('[Redis] Local cache is empty. Fetching profiles from Redis Cloud...');
+                console.log('[Redis] Local cache is empty. Fetching profiles from Redis...');
                 await this.load();
             } else {
-                console.log('[Redis] Syncing local profiles up to Redis Cloud...');
+                console.log('[Redis] Syncing local profiles to Redis...');
                 await this.save();
             }
         });
@@ -41,6 +45,7 @@ class ProfileService {
     }
 
     async load() {
+        if (!redisReady) return;
         try {
             const data = await redis.get('15market_profiles_db');
             if (data) {
@@ -50,17 +55,18 @@ class ProfileService {
                 console.log(`[Profiles] No existing profiles found in Redis. Starting fresh.`);
             }
         } catch (e) {
-            console.error("Failed to load profiles from Redis:", e.message);
+            // Silently skip when Redis is unavailable
         }
     }
 
     async save() {
+        if (!redisReady) return;
         try {
             if (Object.keys(this.profiles).length > 0) {
                 await redis.set('15market_profiles_db', JSON.stringify(this.profiles));
             }
         } catch (e) {
-            console.error("Failed to save profiles to Redis:", e.message);
+            // Silently skip when Redis is unavailable
         }
     }
 

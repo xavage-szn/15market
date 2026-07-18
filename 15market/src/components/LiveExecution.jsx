@@ -30,22 +30,23 @@ function LiveExecutionComponent({
     const [tick, setTick] = useState(0);
     const isLight = theme === 'light';
 
-    // Higher frequency clock (33ms ~ 30fps) for butter-smooth countdown and precise expiry freezing
-    const startTimeRef = useRef(Date.now());
-    const [elapsed, setElapsed] = useState(0);
+    // 60fps clock via requestAnimationFrame — butter-smooth countdown
+    const [now, setNow] = useState(Date.now());
+    const rafRef = useRef(null);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setElapsed(Date.now() - startTimeRef.current);
-        }, 100);
-        return () => clearInterval(interval);
+        const tick = () => {
+            setNow(Date.now());
+            rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
     }, []);
 
     // --- UI-ONLY MONITORING ---
     const priceRefInternal = useRef(price);
     useEffect(() => { priceRefInternal.current = price; }, [price]);
 
-    const lastTimeRef = useRef({}); // tradeId -> lastTime
     const capturedResultsRef = useRef({}); // tradeId -> { won, exitPrice }
 
     const removeTrade = (id) => {
@@ -86,18 +87,13 @@ function LiveExecutionComponent({
                     (() => {
                         const sorted = [...activeTrades].sort((a, b) => (b.startTime || b.id) - (a.startTime || a.id));
                         const trade = sorted[0];
-                        const now = Date.now();
                         const start = trade.startTime || (trade.id > 1e14 ? Math.floor(trade.id / 1000) : (trade.id > 1e12 ? trade.id : Math.floor(trade.id / 100) * 1000)) || now;
                         const duration = trade.duration || 30;
                         const expiryMs = trade.expiry || trade.expiryMs || (start + (duration * 1000));
-                        const currentRawTime = (expiryMs - now) / 1000;
-                        const stableRawTime = Math.min(duration, Math.max(0, currentRawTime));
 
-                        if (lastTimeRef.current[trade.id] === undefined || stableRawTime < lastTimeRef.current[trade.id]) {
-                            lastTimeRef.current[trade.id] = stableRawTime;
-                        }
-                        const rawTimeLeft = lastTimeRef.current[trade.id];
-                        const displayTimeLeft = (trade.status !== "PENDING") ? "0.0" : (trade.timeLeft !== undefined ? trade.timeLeft.toFixed(1) : rawTimeLeft.toFixed(1));
+                        // Smooth countdown: use requestAnimationFrame clock + expiryMs for butter-smooth erasure
+                        const rawTimeLeft = Math.max(0, (expiryMs - now) / 1000);
+                        const displayTimeLeft = (trade.status !== "PENDING") ? "0.0" : (trade.timeLeft !== undefined ? Math.min(trade.timeLeft, rawTimeLeft).toFixed(1) : rawTimeLeft.toFixed(1));
 
                         const timerExpired = (trade.timeLeft !== undefined ? trade.timeLeft <= 0 : rawTimeLeft <= 0);
                         const isFinal = ["WON", "LOST", "TIMEOUT", "PAYOUT_DELAYED"].includes(trade.status);
@@ -252,7 +248,6 @@ function LiveExecutionComponent({
                                                             <circle cx="60" cy="60" r={circR} fill="none" stroke={ringColor} strokeWidth="5" strokeLinecap="round"
                                                                 strokeDasharray={circ} strokeDashoffset={offset}
                                                                 style={{
-                                                                    transition: 'stroke-dashoffset 0.15s linear, stroke 0.4s ease',
                                                                     filter: `drop-shadow(0 0 10px ${ringColor}88)`,
                                                                 }}
                                                             />
