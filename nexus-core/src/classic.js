@@ -227,8 +227,20 @@ class ClassicEngine {
         } catch (err) {
           const isRateLimit = err.message && (err.message.includes('coalesce') || err.message.includes('limit') || err.message.includes('429') || err.message.includes('fetch') || err.message.includes('timeout'));
           if (isRateLimit && attempt < 5) {
+            // The tx might have actually gone through despite the rate limit error.
+            // Check on-chain before retrying to avoid duplicate bets.
+            try {
+              const existingBet = await contract.bets(numericId);
+              if (existingBet && existingBet.id !== 0n) {
+                console.log(`[Engine] Bet #${numericId} already exists on-chain (rate-limit false negative). Treating as success.`);
+                // Build a fake tx receipt — the bet is on-chain
+                return { success: true, txHash: `rate-limit-confirmed-${numericId}`, tradeId: numericId.toString() };
+              }
+            } catch (checkErr) {
+              // Bet check also failed — likely rate limited. Proceed with retry.
+            }
             console.log(`[Rate Limit] Retrying placeBet #${numericId}... (Attempt ${attempt})`);
-            await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential-ish backoff
+            await new Promise(r => setTimeout(r, 2000 * attempt)); // Exponential backoff
             continue;
           }
           throw err;
@@ -260,7 +272,24 @@ class ClassicEngine {
       // WAIT FOR ON-CHAIN CONFIRMATION before deducting balance.
       // This prevents the "stake deducted but trade invalid" bug where a reverted
       // placeBet tx leaves the user with reduced balance and no active trade.
-      const receipt = await tx.wait();
+      let receipt;
+      try {
+        receipt = await tx.wait();
+      } catch (waitErr) {
+        // Under RPC rate limiting, tx.wait() can throw even when the tx succeeded.
+        // Verify on-chain before giving up.
+        console.warn(`[Engine] tx.wait() error for #${numericId}:`, waitErr.message?.substring(0, 100));
+        try {
+          const verifyBet = await contract.bets(numericId);
+          if (verifyBet && verifyBet.id !== 0n) {
+            console.log(`[Engine] Bet #${numericId} confirmed on-chain despite tx.wait() error.`);
+            receipt = { status: 1 }; // Synthesize success receipt
+          }
+        } catch (verifyErr) {
+          // Verification also failed
+        }
+      }
+      
       if (!receipt || receipt.status !== 1) {
         cache.trades.delete(trade.id);
         throw new Error("PlaceBet transaction reverted on-chain");
@@ -294,7 +323,14 @@ class ClassicEngine {
         .slice(0, 100); // Process up to 100 winning trades per tick
 
       for (const trade of pending) {
-        await this.settleTradeOnChain(trade);
+        try {
+          await this.settleTradeOnChain(trade);
+        } catch (e) {
+          // Prevent one failed settlement from crashing the entire batch
+          console.error(`[Settlement] Unhandled error for trade #${trade.id}:`, e.message?.substring(0, 200));
+          trade.onChainSettleStarted = false;
+          trade.settleRetries = (trade.settleRetries || 0) + 1;
+        }
       }
     } finally {
       this.settlementProcessing = false;
@@ -316,7 +352,7 @@ class ClassicEngine {
       }
       const exitPriceBigInt = ethers.parseUnits(exitPrice.toFixed(8), 8);
       
-      const feeData = await rpc.mainProvider.getFeeData();
+      const feeData = await rpc.writeProvider.getFeeData();
       const baseGasPrice = feeData.gasPrice || ethers.parseUnits("50", "gwei");
       const gasPrice = (baseGasPrice * 120n) / 100n;
 
@@ -367,9 +403,24 @@ class ClassicEngine {
       console.log(`[On-Chain] Broadcasted #${betId} | Tx: ${tx.hash}`);
 
       // NOW WAIT FOR CONFIRMATION before marking SETTLED and crediting balance.
-      // This prevents the "balance bouncing back" problem where we optimistically
-      // credit then the tx reverts.
-      const receipt = await tx.wait();
+      // Under RPC rate limiting, tx.wait() can throw or return wrong status.
+      // We verify on-chain as a fallback.
+      let receipt;
+      try {
+        receipt = await tx.wait();
+      } catch (waitErr) {
+        console.warn(`[On-Chain] tx.wait() error for #${betId}:`, waitErr.message?.substring(0, 100));
+        // Verify on-chain before giving up
+        try {
+          const verifyBet = await this.treasuryContract.bets(betId);
+          if (verifyBet && verifyBet.settled) {
+            console.log(`[On-Chain] Bet #${betId} confirmed settled on-chain despite tx.wait() error.`);
+            receipt = { status: 1 };
+          }
+        } catch (verifyErr) {
+          // Verification also failed
+        }
+      }
       
       if (!receipt || receipt.status !== 1) {
         throw new Error("Transaction reverted on-chain");
@@ -440,7 +491,7 @@ class ClassicEngine {
 
       // Final balance sync from chain to ensure precision
       try {
-        const balWei = await rpc.mainProvider.getBalance(trade.sessionAddress);
+        const balWei = await rpc.writeProvider.getBalance(trade.sessionAddress);
         const onChainBal = parseFloat(ethers.formatEther(balWei));
         if (session && onChainBal > 0) {
             session.balance = onChainBal;

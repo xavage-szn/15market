@@ -26,7 +26,7 @@ class RPCManager {
       console.warn("⚠️ [RPCManager] No valid providers initialized. Some features will fail.");
     }
 
-    // High-availability fallback provider
+    // High-availability fallback provider for READS only
     this.provider = new ethers.FallbackProvider(this.providers.map((p, i) => ({
       provider: p,
       priority: i,
@@ -34,9 +34,16 @@ class RPCManager {
       stallTimeout: 2500
     })));
 
+    // Direct provider for WRITES (sending transactions, waiting for receipts).
+    // The FallbackProvider's quorum consensus corrupts tx.wait() under rate limiting,
+    // causing txs that succeeded on-chain to report status: 0 (reverted).
+    // A single direct provider avoids this.
+    this.writeProvider = this.providers[0] || this.provider;
+    
     this.mainProvider = this.provider;
     if (config.PRIVATE_KEY) {
-      this.wallet = new ethers.Wallet(config.PRIVATE_KEY, this.mainProvider);
+      // Operator wallet uses direct provider for reliable tx sending
+      this.wallet = new ethers.Wallet(config.PRIVATE_KEY, this.writeProvider);
     }
   }
 
@@ -65,7 +72,8 @@ class RPCManager {
     const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
     const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr.toLowerCase());
     const privateKey = ethers.keccak256(entropy);
-    return new ethers.Wallet(privateKey, this.mainProvider);
+    // Use direct provider for session wallets too — FallbackProvider corrupts tx.wait()
+    return new ethers.Wallet(privateKey, this.writeProvider);
   }
 }
 
