@@ -235,6 +235,8 @@ class ClassicEngine {
         }
       }
 
+      // Store trade optimistically with PENDING status, but do NOT deduct balance yet.
+      // Balance is deducted only after on-chain confirmation to prevent phantom deductions.
       const trade = {
         id: numericId.toString(),
         userAddr,
@@ -250,11 +252,21 @@ class ClassicEngine {
         stakeTxHash: tx.hash,
         createdAt: Date.now(),
         settleAt: Date.now() + (duration * 1000),
+        settleRetries: 0,
       };
 
       cache.trades.set(trade.id, trade);
-      
-      // Deduct from in-process session immediately for responsive balance tracking
+
+      // WAIT FOR ON-CHAIN CONFIRMATION before deducting balance.
+      // This prevents the "stake deducted but trade invalid" bug where a reverted
+      // placeBet tx leaves the user with reduced balance and no active trade.
+      const receipt = await tx.wait();
+      if (!receipt || receipt.status !== 1) {
+        cache.trades.delete(trade.id);
+        throw new Error("PlaceBet transaction reverted on-chain");
+      }
+
+      // ✅ CONFIRMED — Now safe to deduct from session balance
       const session = cache.sessions.get(userAddr);
       if (session) {
           session.balance = Number((session.balance - amount).toFixed(6));
@@ -265,8 +277,6 @@ class ClassicEngine {
               betId: numericId.toString() 
           });
       }
-
-      cache.queueTradeForSettlement(trade);
       
       return { success: true, txHash: tx.hash, tradeId: trade.id };
     } catch (err) {
@@ -447,13 +457,33 @@ class ClassicEngine {
 
     } catch (err) {
       console.error(`❌ [On-Chain] Settlement failed for #${trade.id}:`, err.message);
+      
+      trade.settleRetries = (trade.settleRetries || 0) + 1;
+      
+      if (trade.settleRetries >= 10) {
+        // MAX RETRIES EXCEEDED: Settle as loss locally to stop the infinite loop
+        console.error(`[On-Chain] Max retries (10) exceeded for #${trade.id}. Settling locally as loss.`);
+        this.io.to(trade.userAddr).emit('payout_failed', { 
+          betId: trade.id, 
+          message: "Payout settlement failed after maximum retries. Settled locally."
+        });
+        this.settleTradeLocally(trade);
+        return;
+      }
+      
       this.io.to(trade.userAddr).emit('payout_failed', { 
         betId: trade.id, 
         message: "Payout settlement failed. Retrying..."
       });
-      // Reset so the settlement batch processor retries
-      trade.onChainSettleStarted = false;
-      this.payoutNonce = null; // Force resync on failure
+      
+      // EXPONENTIAL BACKOFF: Don't retry immediately. Wait 2s, 4s, 8s, 16s...
+      // Use a delayed reset so processSettlementBatch doesn't pick it up for a while
+      const backoffMs = Math.min(2000 * Math.pow(2, trade.settleRetries - 1), 60000);
+      console.log(`[On-Chain] Retrying #${trade.id} in ${backoffMs}ms (attempt ${trade.settleRetries}/10)`);
+      setTimeout(() => {
+        trade.onChainSettleStarted = false;
+        this.payoutNonce = null; // Force resync after backoff
+      }, backoffMs);
     }
   }
 

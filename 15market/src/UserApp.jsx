@@ -1538,11 +1538,12 @@ const performStealthChecks = useCallback(async (addr) => {
     // #region agent log
     postDebugLog({ runId: 'initial', hypothesisId: 'H1', location: 'UserApp.jsx:executeTrade:entry', message: 'executeTrade entry', data: { probeId, isExecuting, gameMode, paramsType: params?.type || null, sessionMode, sessionBalance: sessionBalanceRef.current, amount, duration, direction } });
     // #endregion
-    if (isExecuting) return;
-
     // Determine if we are placing a Rounds trade vs Classic trade
     const activeType = params?.type || (gameMode === 'rounds' ? 'rounds' : 'classic');
     const isRounds = activeType === 'round' || activeType === 'rounds';
+
+    // For rounds, block double-submission. For classic, allow burst mode (multiple concurrent trades).
+    if (isRounds && isExecuting) return;
 
     if (platformSettings.tradingHalted) {
       return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
@@ -1602,9 +1603,11 @@ const performStealthChecks = useCallback(async (addr) => {
     const amtNum = parseFloat(activeAmount);
 
     // --- INSTANT UI START ---
-    setIsExecuting(true);
-    // Harder lockout to prevent accidental double-clicks on slow connections
-    setTimeout(() => setIsExecuting(false), 2000);
+    // Only lock for rounds. Classic trades allow burst mode (multiple concurrent).
+    if (isRounds) {
+      setIsExecuting(true);
+      setTimeout(() => setIsExecuting(false), 2000);
+    }
 
     try {
       if (!address) {
@@ -1728,7 +1731,7 @@ const performStealthChecks = useCallback(async (addr) => {
       // --- Execute Trade via Backend ---
       const backgroundTrade = async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s for on-chain stake move
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s — chain confirmation can take time
         try {
           const res = await fetch(`${KEEPER_URL_ARC}/session/execute`, {
             method: 'POST',
@@ -1750,7 +1753,7 @@ const performStealthChecks = useCallback(async (addr) => {
           const data = await res.json();
 
           if (!res.ok) {
-            // Restore balance on failure
+            // Restore balance ONLY on definitive failure (not timeout)
             notify(data.error || 'Trade failed', 'error');
             setSessionBalance(prev => prev + amtNum);
             setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
@@ -1758,7 +1761,7 @@ const performStealthChecks = useCallback(async (addr) => {
             return;
           }
 
-          // ✅ Trade Active (On-chain stake moved)
+          // ✅ Trade Active (On-chain stake confirmed)
           const confirmedTradeId = data.tradeId || tradeId;
           const txHash = data.txHash;
 
@@ -1777,19 +1780,19 @@ const performStealthChecks = useCallback(async (addr) => {
         } catch (err) {
           clearTimeout(timeoutId);
           console.error('[Trade] Execution error:', err.message);
-          setSessionBalance(prev => prev + amtNum);
-          setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
-          setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
-          notify(err.name === 'AbortError' ? '⚡ Network Congested — Trade Cancelled' : err.message, 'error');
+          // On timeout/abort, DON'T restore balance — the backend may still be processing.
+          // The backend's balance_update event will reconcile the actual balance.
+          // Only restore on definitive non-timeout errors.
+          if (err.name !== 'AbortError') {
+            setSessionBalance(prev => prev + amtNum);
+            setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
+            setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+          }
+          notify(err.name === 'AbortError' ? '⏳ Trade processing — balance will sync when confirmed' : err.message, 'error');
         }
       };
 
       backgroundTrade();
-
-      // Safety: If backend hangs forever, we still want to let the user trade again
-      setTimeout(() => {
-        setIsExecuting(false);
-      }, 5000);
 
     } catch (err) {
       notify(err.message, "error");
@@ -2505,9 +2508,8 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
 
-  // Arc Settlement Listener — with dedup to prevent double-crediting
+  // Arc Settlement Listener — with dedup to prevent double-processing
   const processedSettlements = useRef(new Set());
-  const creditedPayouts = useRef(new Set()); // Track which betIds have had balance credited
 
   useEffect(() => {
     const unwatch = publicClient.watchContractEvent({
@@ -2561,54 +2563,23 @@ const performStealthChecks = useCallback(async (addr) => {
             if (won) {
               const payoutNum = parseFloat(formattedPayout);
 
-              // 🔥 DIRECT CREDIT: Only credit if the optimistic resolver hasn't already done it
-              // Check activeTradesRef to see if the trade already has balanceApplied
-              const existingTrade = activeTradesRef.current.find(t =>
-                (t.id && t.id.toString() === betId) || (t.nonce && t.nonce.toString() === betId)
-              );
-              const alreadyOptimisticallyCredited = existingTrade?.balanceApplied === true ||
-                creditedPayouts.current.has(betId);
-
-              if (!alreadyOptimisticallyCredited) {
-                creditedPayouts.current.add(betId);
-                setTimeout(() => creditedPayouts.current.delete(betId), 5 * 60 * 1000);
-
-                const sessionAddrLower = evmSessionWallet?.address?.toLowerCase();
-                const mainAddrLower = address?.toLowerCase();
-
-                if (sessionAddrLower && normalizedUser === sessionAddrLower) {
-                  setSessionBalance(prev => prev + payoutNum);
-                } else if (mainAddrLower && normalizedUser === mainAddrLower) {
-                  setEvmBalance(prev => {
-                    const current = parseFloat(prev || '0');
-                    return (current + payoutNum).toFixed(6);
-                  });
-                }
-              }
-
-              // Also set the lastOptimisticActionTime to prevent the polling cooldown
-              // from immediately overwriting our credited balance with a stale on-chain value
-              lastOptimisticActionTime.current = Date.now();
+              // NOTE: Balance crediting is handled by the backend via `balance_update` socket event.
+              // The backend credits balance in settleTradeOnChain after tx.wait() confirms, then
+              // emits balance_update with the correct server-side balance. We do NOT credit here
+              // to prevent double-crediting. This handler only updates trade status.
 
               // Finalize status across trade lists
               const finalizeWin = () => {
                 const matchFn = (t) => {
                   const isMatch = (t.tx && log.transactionHash && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
                     (t.id && t.id.toString() === betId);
-                  return isMatch ? { ...t, status: "WON", payout: formattedPayout, chainConfirmed: true, balanceApplied: true } : t;
+                  return isMatch ? { ...t, status: "WON", payout: formattedPayout, chainConfirmed: true } : t;
                 };
                 setTradeHistory(prev => prev.map(matchFn));
                 setActiveTrades(prev => prev.map(matchFn));
-                notify(`Trade WON! +${formattedPayout} USDC`, "success");
               };
 
-              // Release cooldown and do a final on-chain sync after 5s
-              setTimeout(() => {
-                lastOptimisticActionTime.current = 0;
-                refetchEvmBalance(true);
-                updateEvmSessionBal(true);
-                finalizeWin();
-              }, 5000);
+              finalizeWin();
 
             } else {
               notify(`Trade LOST.`, "error");
@@ -2626,45 +2597,19 @@ const performStealthChecks = useCallback(async (addr) => {
     return () => unwatch();
   }, [address, evmSessionWallet, notify, aggressiveRefresh, updateEvmSessionBal, refetchEvmBalance]);
 
-  // --- OPTIMISTIC PAYOUT CREDITOR ---
-  // If a trade hits WON status (from LiveExecution or Resolver), credit balance immediately
+  // --- TRADE STATUS SYNC ---
+  // When a trade hits WON status, just update the UI. Balance crediting is handled
+  // entirely by the backend via `balance_update` socket event after on-chain confirmation.
+  // This effect ONLY cleans up the trade card status — no balance crediting.
   useEffect(() => {
     const winningTrades = activeTrades.filter(t => t.status === "WON" && !t.balanceApplied);
+    if (winningTrades.length === 0) return;
 
-    winningTrades.forEach(trade => {
-      const betId = (trade.id || trade.nonce || trade.tx).toString();
-      if (creditedPayouts.current.has(betId)) return;
-
-      // Calculate payout: Use backend-provided payout if available, else fallback to sharePrice
-      let payout = parseFloat(trade.payout || 0);
-      if (!payout || payout <= 0) {
-          const amt = parseFloat(trade.amount);
-          payout = trade.sharePrice ? (amt / trade.sharePrice * 0.99) : (amt * 1.90); // default fallback
-      }
-
-      creditedPayouts.current.add(betId);
-      // Clean up tracking after 10 mins (plenty of time for on-chain event to confirm)
-      setTimeout(() => creditedPayouts.current.delete(betId), 600000);
-
-      const isSession = trade.isSessionTrade || trade.sessionOwner;
-
-      if (isSession) {
-        setSessionBalance(prev => prev + payout);
-      } else {
-        setEvmBalance(prev => {
-          const current = parseFloat(prev || '0');
-          return (current + payout).toFixed(6);
-        });
-      }
-
-      // Mark as applied so the chain listener doesn't double-credit
-      setActiveTrades(prev => prev.map(t =>
-        (t.id?.toString() === betId || t.nonce?.toString() === betId) ? { ...t, balanceApplied: true, payout: payout.toString() } : t
-      ));
-
-      notify(`INSTANT WIN! +${payout.toFixed(2)} USDC`, "success");
-    });
-  }, [activeTrades, evmSessionWallet, notify]);
+    // Mark as applied so we don't process again
+    setActiveTrades(prev => prev.map(t =>
+      t.status === "WON" && !t.balanceApplied ? { ...t, balanceApplied: true } : t
+    ));
+  }, [activeTrades]);
 
 
   /**

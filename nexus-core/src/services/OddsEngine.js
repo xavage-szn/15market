@@ -58,6 +58,7 @@ class OddsEngine {
         const windowHistory = history.filter(p => p.time >= cutoff);
         if (windowHistory.length < 2) return 0; // Not enough data
         const oldPrice = windowHistory[0].price;
+        if (!oldPrice || oldPrice <= 0) return 0; // Guard division by zero
         return ((currentPrice - oldPrice) / oldPrice) * 100; // Returns % change
     }
 
@@ -67,6 +68,7 @@ class OddsEngine {
         const recent = history.slice(-6);
         const now = recent[recent.length - 1];
         const ago = recent[0];
+        if (!ago.price || ago.price <= 0) return 0; // Guard division by zero
         const dt = (now.time - ago.time) / 1000;
         if (dt <= 0) return 0;
         return ((now.price - ago.price) / ago.price) * 100 / dt; // % per second
@@ -84,6 +86,7 @@ class OddsEngine {
             if (!history || history.length < 2) continue;
 
             const currentPrice = history[history.length - 1].price;
+            if (!currentPrice || currentPrice <= 0) continue; // Skip if price is invalid
             
             // 1. Calculate Rate of Change (ROC) % for each timeframe
             const roc5s = this.getROC(history, currentPrice, 5000);

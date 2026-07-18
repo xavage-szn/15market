@@ -9,9 +9,8 @@ class Cache {
     this.trades = new Map(); // tradeId -> trade object
     this.userHistory = new Map(); // address -> array of history records
     
-    // In-memory queues
+    // In-memory queues (unused)
     this.settlementQueue = [];
-    this.payoutQueue = [];
     
     // Market data
     // Market data
@@ -106,11 +105,6 @@ class Cache {
   getHistory(userAddr) {
     const profiles = require('./profiles');
     return profiles.getHistory(userAddr);
-  }
-
-  queueTradeForSettlement(trade) {
-    this.settlementQueue.push(trade);
-    this.settlementQueue.sort((a, b) => a.settleAt - b.settleAt);
   }
 
   // --- Rounds Helpers ---
