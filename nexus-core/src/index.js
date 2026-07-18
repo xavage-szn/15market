@@ -1167,8 +1167,7 @@ app.post('/session/cashout', async (req, res) => {
       return res.status(400).json({ error: "No funds in session wallet to withdraw" });
     }
 
-    const feeData = await directProvider.getFeeData();
-    const gasPrice = (feeData.gasPrice || ethers.parseUnits("50", "gwei")) * 13n / 10n;
+    const gasPrice = ethers.parseUnits("60", "gwei");
     const gasLimit = 21000n;
     const gasCost = gasPrice * gasLimit;
 
@@ -1201,36 +1200,47 @@ app.post('/session/cashout', async (req, res) => {
 
     console.log(`[Withdrawal] Routing: ${ethers.formatEther(sendAmount)} USDC to ${targetAddr} | ${ethers.formatEther(feeAmount)} USDC to Treasury`);
 
-    let currentNonce = await directProvider.getTransactionCount(sessionWallet.address, 'pending');
+    let currentNonce = await rpc.getNonce(sessionWallet.address);
 
     if (feeAmount > 0n && config.TREASURY_ADDRESS && config.TREASURY_ADDRESS !== ethers.ZeroAddress) {
       try {
-        const feeTx = await sessionWallet.sendTransaction({
-          to: ethers.getAddress(config.TREASURY_ADDRESS),
-          value: feeAmount,
-          gasLimit: 21000n,
-          gasPrice,
-          nonce: currentNonce
-        });
+        const feeTx = await rpc.broadcastWithFailover(
+          sessionWallet.privateKey,
+          {
+            to: ethers.getAddress(config.TREASURY_ADDRESS),
+            value: feeAmount,
+            gasLimit: 21000n,
+            gasPrice,
+            nonce: currentNonce,
+            chainId: rpc.chainId
+          }
+        );
         currentNonce++;
+        console.log(`[Withdrawal] Fee tx sent: ${feeTx.hash}`);
       } catch (feeErr) {
-        console.warn("[Withdrawal] Treasury transfer failed:", feeErr.message);
-        currentNonce = await directProvider.getTransactionCount(sessionWallet.address, 'pending');
+        console.warn("[Withdrawal] Treasury transfer failed:", feeErr.message?.substring(0, 100));
+        currentNonce = await rpc.getNonce(sessionWallet.address);
       }
     }
 
-    const tx = await sessionWallet.sendTransaction({
-      to: targetAddr,
-      value: sendAmount,
-      gasLimit,
-      gasPrice,
-      nonce: currentNonce
-    });
+    const tx = await rpc.broadcastWithFailover(
+      sessionWallet.privateKey,
+      {
+        to: targetAddr,
+        value: sendAmount,
+        gasLimit,
+        gasPrice,
+        nonce: currentNonce,
+        chainId: rpc.chainId
+      }
+    );
 
     const session = cache.sessions.get(userAddr);
     if (session) {
-      const newBal = await rpc.getBalance(sessionWallet.address);
-      session.balance = parseFloat(newBal);
+      try {
+        const newBal = await directProvider.getBalance(sessionWallet.address);
+        session.balance = parseFloat(ethers.formatEther(newBal));
+      } catch {}
     }
 
     io.to(userAddr).emit('balance_update', {
@@ -2630,13 +2640,18 @@ app.post('/copy-trading/providers/:address/withdraw', async (req, res) => {
     // Attempt on-chain transfer from treasury to target address
     try {
       if (config.TREASURY_ADDRESS && config.TREASURY_ADDRESS !== ethers.ZeroAddress && config.PRIVATE_KEY) {
-        const arcRpc = config.RPCS?.[0] || 'https://rpc.testnet.arc.network';
-        const provider_ = new ethers.JsonRpcProvider(arcRpc);
-        const treasuryWallet = new ethers.Wallet(config.PRIVATE_KEY, provider_);
-        const tx = await treasuryWallet.sendTransaction({
-          to: targetAddress,
-          value: ethers.parseEther(String(amount))
-        });
+        const nonce = await rpc.getNonce(rpc.wallet.address);
+        const tx = await rpc.broadcastWithFailover(
+          config.PRIVATE_KEY,
+          {
+            to: targetAddress,
+            value: ethers.parseEther(String(amount)),
+            gasLimit: 21000n,
+            gasPrice: ethers.parseUnits("60", "gwei"),
+            nonce,
+            chainId: rpc.chainId
+          }
+        );
         const receipt = await rpc.waitForReceipt(tx.hash);
         if (!receipt || receipt.status !== 1) {
           console.error('[withdraw] Transfer reverted on-chain');
@@ -2647,7 +2662,7 @@ app.post('/copy-trading/providers/:address/withdraw', async (req, res) => {
         console.log(`[withdraw] On-chain transfer skipped (no treasury key). Recorded ${amount} USDC withdrawal for ${targetAddress}`);
       }
     } catch (e) {
-      console.warn('[withdraw] On-chain transfer failed, balance already deducted:', e.message);
+      console.warn('[withdraw] On-chain transfer failed, balance already deducted:', e.message?.substring(0, 100));
     }
 
     profiles.upsert(providerAddr, { providerPortfolioWallet: provider.providerPortfolioWallet });
