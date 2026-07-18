@@ -51,6 +51,7 @@ import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
 import { MascotLoader } from "./components/MascotLoader";
 import CustomChart from './components/CustomChart';
 import Toast from "./components/Toast";
+import SuccessOverlay from "./components/SuccessOverlay";
 import { ThemeToggle } from "./components/ThemeToggle";
 import SideHistoryPane from "./components/SideHistoryPane";
 import WalletConnectionLoading from "./components/WalletConnectionLoading";
@@ -818,6 +819,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type, onClick }
+  const [successOverlay, setSuccessOverlay] = useState(null); // { title, subtitle, amount }
 
   const notify = useCallback((message, type = 'success', onClick = null) => {
     setToast({ id: Date.now() + Math.random(), message, type, onClick });
@@ -2710,7 +2712,11 @@ const performStealthChecks = useCallback(async (addr) => {
         // STEP 5: Hard Confirmation Refresh
         // Re-syncs with on-chain state once the transaction is actually mined
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
-          notify("Deposit Confirmed!", "success");
+          setSuccessOverlay({
+            title: 'DEPOSIT SUCCESSFUL',
+            amount: depositAmt,
+            subtitle: 'Funds added to trading wallet'
+          });
           setTimeout(() => updateEvmSessionBal(true), 2000);
           setTimeout(() => refetchEvmBalance(true), 2000);
         });
@@ -2874,7 +2880,11 @@ const performStealthChecks = useCallback(async (addr) => {
       const data = await res.json();
       const withdrawalHash = data.txHash;
 
-      notify(isExternal ? "Transfer Successful!" : "Arc Withdrawal Successful!", "success");
+      setSuccessOverlay({
+        title: isExternal ? 'TRANSFER SUCCESSFUL' : 'WITHDRAWAL SUCCESSFUL',
+        amount: cleanNetAmt,
+        subtitle: isExternal ? `Sent to ${targetAddr?.slice(0, 6)}...${targetAddr?.slice(-4)}` : 'Funds sent to main wallet'
+      });
 
       setSessionBalance(prev => Math.max(0, prev - amtNum));
       if (!isExternal) {
@@ -3545,6 +3555,19 @@ const performStealthChecks = useCallback(async (addr) => {
                 isSmallScreen={isSmallScreen}
                 onClose={closeToast}
                 onClick={toast.onClick}
+              />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {successOverlay && (
+              <SuccessOverlay
+                key="success-overlay"
+                show={!!successOverlay}
+                title={successOverlay.title}
+                amount={successOverlay.amount}
+                subtitle={successOverlay.subtitle}
+                onDone={() => setSuccessOverlay(null)}
               />
             )}
           </AnimatePresence>
