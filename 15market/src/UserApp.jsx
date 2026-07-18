@@ -3554,16 +3554,13 @@ const performStealthChecks = useCallback(async (addr) => {
             )}
           </AnimatePresence>
 
-          <AnimatePresence>
-            {successOverlay && (
-              <SuccessOverlay
-                key="success-overlay"
-                show={!!successOverlay}
-                title={successOverlay.title}
-                onDone={() => setSuccessOverlay(null)}
-              />
-            )}
-          </AnimatePresence>
+          {successOverlay && (
+            <SuccessOverlay
+              show={!!successOverlay}
+              title={successOverlay.title}
+              onDone={() => setSuccessOverlay(null)}
+            />
+          )}
 
           {/* Network Status Overlay */}
           <AnimatePresence>
