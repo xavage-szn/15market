@@ -1227,11 +1227,10 @@ app.post('/session/cashout', async (req, res) => {
 
     const session = cache.sessions.get(userAddr);
     if (session) {
-      try {
-        const newBal = await directProvider.getBalance(sessionWallet.address);
-        session.balance = parseFloat(ethers.formatEther(newBal));
-        profiles.upsert(userAddr, { balance: session.balance });
-      } catch {}
+      // Deduct the full requested withdrawal amount from the virtual trading balance
+      const totalDeduction = parseFloat(ethers.formatEther(sendAmount + feeAmount));
+      session.balance = Number(Math.max(0, session.balance - totalDeduction).toFixed(6));
+      profiles.upsert(userAddr, { balance: session.balance });
     }
 
     io.to(userAddr).emit('balance_update', {
