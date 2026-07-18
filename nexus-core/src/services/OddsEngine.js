@@ -2,10 +2,19 @@ const cache = require('../cache');
 const https = require('https');
 
 /**
- * MULTI-TIMEFRAME DYNAMIC ODDS ENGINE
+ * MULTI-TIMEFRAME DYNAMIC ODDS ENGINE (Duration-Aware)
  * Calculates real-time prediction market share prices based on a composite
- * momentum score across 4 timeframes with enhanced micro-volatility injection
- * to produce a wide, enticing range of share prices (frequently reaching 10c).
+ * momentum score across 4 timeframes with duration decay:
+ * 
+ * - SHORT durations (5s): Full momentum skew → extreme odds (e.g. 80c/20c)
+ * - MEDIUM durations (10s): Moderate decay → balanced odds (e.g. 70c/30c)
+ * - LONG durations (15s): Strong decay → near 50/50 odds (e.g. 65c/35c)
+ * 
+ * This reflects the reality that longer trades have more time for price
+ * reversal, so the "advantage" of current momentum is worth less.
+ * 
+ * Micro-volatility injection ensures share prices oscillate frequently
+ * even during flat markets, producing enticing sub-20c swings.
  */
 class OddsEngine {
     constructor(io, redis) {
@@ -127,9 +136,27 @@ class OddsEngine {
             liveOdds[symbol] = {};
 
             for (const duration of this.durations) {
-                // Base probability is 0.50 for each side
-                let longProb = 0.50 + clampedSkew;
-                let shortProb = 0.50 - clampedSkew;
+                // ── DURATION-AWARE ODDS ──────────────────────────────────────
+                // Longer durations have MORE time for price reversal, so odds
+                // should be pulled closer to 50/50. Shorter durations lock in
+                // momentum more firmly, so odds are more extreme.
+                //
+                // decayRate controls how aggressively odds normalize:
+                //   5s  → factor = 1.00 (full skew, most extreme odds)
+                //   10s → factor = 0.67 (moderate normalization)
+                //   15s → factor = 0.50 (strong normalization toward 50/50)
+                const minDuration = 5;
+                const decayRate = 0.10;
+                const durationFactor = 1.0 / (1.0 + decayRate * (duration - minDuration));
+                const adjustedSkew = clampedSkew * durationFactor;
+
+                // Longer durations also get extra micro-volatility noise
+                // to reflect the increased uncertainty of a longer window
+                const durationNoise = Math.sin(this.microPhase[symbol] * (duration / 5)) * 0.02 * (duration / 5);
+
+                // Base probability is 0.50 for each side, modified by duration-adjusted skew
+                let longProb = 0.50 + adjustedSkew + durationNoise;
+                let shortProb = 0.50 - adjustedSkew - durationNoise;
 
                 // Ensure LONG + SHORT always equals exactly 1.00 (no internal spread)
                 let finalLong = Number(longProb.toFixed(2));
@@ -151,6 +178,8 @@ class OddsEngine {
                     metadata: {
                         trend: trendDirection,
                         skew: clampedSkew.toFixed(4),
+                        adjustedSkew: adjustedSkew.toFixed(4),
+                        durationFactor: durationFactor.toFixed(4),
                         velocity: tickVelocity.toFixed(4),
                         roc24h: roc24h.toFixed(2),
                         roc60s: roc60s.toFixed(4)
