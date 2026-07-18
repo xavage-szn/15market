@@ -26,7 +26,7 @@ const CheckmarkSVG = () => (
   </svg>
 );
 
-export default function SuccessOverlay({ show, title = 'WITHDRAWAL SUCCESSFUL', subtitle, amount, onDone }) {
+export default function SuccessOverlay({ show, title = 'WITHDRAWAL SUCCESSFUL', onDone }) {
   useEffect(() => {
     if (!show) return;
     const timer = setTimeout(() => {
@@ -45,33 +45,36 @@ export default function SuccessOverlay({ show, title = 'WITHDRAWAL SUCCESSFUL', 
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Backdrop */}
+      {/* Backdrop blur only */}
       <motion.div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-md"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       />
 
-      {/* Content */}
+      {/* Close button — same dashed X as wallet disconnect */}
+      <motion.button
+        onClick={onDone}
+        className="absolute top-6 right-6 text-white/40 hover:text-white transition-colors cursor-pointer z-[10001]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        <svg width="21" height="21" viewBox="0 0 12 12" fill="none">
+          <path d="M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+          <path d="M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 3" />
+        </svg>
+      </motion.button>
+
+      {/* Content — no card, just animation + text over blur */}
       <motion.div
-        className="relative flex flex-col items-center gap-5 px-10 py-10 rounded-[28px] border border-white/10 shadow-2xl"
-        style={{ background: 'linear-gradient(145deg, #0d1f15 0%, #133a2a 100%)' }}
+        className="relative flex flex-col items-center gap-5"
         initial={{ scale: 0.7, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.85, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 350, damping: 25, delay: 0.05 }}
       >
-        {/* Logo */}
-        <motion.img
-          src="/gowlogo.png"
-          alt="15Market"
-          className="w-14 h-14 object-contain"
-          initial={{ scale: 0, rotate: -30 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.15 }}
-        />
-
         {/* Animated Checkmark */}
         <motion.div
           initial={{ scale: 0 }}
@@ -91,32 +94,6 @@ export default function SuccessOverlay({ show, title = 'WITHDRAWAL SUCCESSFUL', 
         >
           {title}
         </motion.p>
-
-        {/* Amount */}
-        {amount !== undefined && amount !== null && (
-          <motion.p
-            className="text-[#249C6C] font-bold text-2xl md:text-3xl"
-            style={{ fontFamily: '"Comfortaa", cursive' }}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.55, duration: 0.35 }}
-          >
-            {typeof amount === 'number' ? `$${amount.toFixed(2)}` : amount}
-          </motion.p>
-        )}
-
-        {/* Subtitle */}
-        {subtitle && (
-          <motion.p
-            className="text-white/50 text-[10px] md:text-xs uppercase tracking-[0.2em] text-center"
-            style={{ fontFamily: '"Comfortaa", cursive' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.65, duration: 0.3 }}
-          >
-            {subtitle}
-          </motion.p>
-        )}
       </motion.div>
     </motion.div>
   );

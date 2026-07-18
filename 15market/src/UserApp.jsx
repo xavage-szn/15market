@@ -819,7 +819,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
   const [treasuryBalance, setTreasuryBalance] = useState(0);
   const [toast, setToast] = useState(null); // { message, type, onClick }
-  const [successOverlay, setSuccessOverlay] = useState(null); // { title, subtitle, amount }
+  const [successOverlay, setSuccessOverlay] = useState(null); // { title }
 
   const notify = useCallback((message, type = 'success', onClick = null) => {
     setToast({ id: Date.now() + Math.random(), message, type, onClick });
@@ -2714,8 +2714,6 @@ const performStealthChecks = useCallback(async (addr) => {
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
           setSuccessOverlay({
             title: 'DEPOSIT SUCCESSFUL',
-            amount: depositAmt,
-            subtitle: 'Funds added to trading wallet'
           });
           setTimeout(() => updateEvmSessionBal(true), 2000);
           setTimeout(() => refetchEvmBalance(true), 2000);
@@ -2882,8 +2880,6 @@ const performStealthChecks = useCallback(async (addr) => {
 
       setSuccessOverlay({
         title: isExternal ? 'TRANSFER SUCCESSFUL' : 'WITHDRAWAL SUCCESSFUL',
-        amount: cleanNetAmt,
-        subtitle: isExternal ? `Sent to ${targetAddr?.slice(0, 6)}...${targetAddr?.slice(-4)}` : 'Funds sent to main wallet'
       });
 
       setSessionBalance(prev => Math.max(0, prev - amtNum));
@@ -3565,8 +3561,6 @@ const performStealthChecks = useCallback(async (addr) => {
                 key="success-overlay"
                 show={!!successOverlay}
                 title={successOverlay.title}
-                amount={successOverlay.amount}
-                subtitle={successOverlay.subtitle}
                 onDone={() => setSuccessOverlay(null)}
               />
             )}
