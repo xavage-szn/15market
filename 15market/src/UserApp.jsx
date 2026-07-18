@@ -2690,7 +2690,6 @@ const performStealthChecks = useCallback(async (addr) => {
           account: address,
         });
 
-        notify("Deposit Split! Waiting for confirmations...", "success");
 
         // STEP 3: Backend Synchronization
         // Inform the backend of the successful deposit so it can credit the user history
