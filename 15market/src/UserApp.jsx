@@ -13,9 +13,9 @@ import {
   Maximize2, RotateCw, Layers
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
-import { parseEther, parseUnits, formatUnits, encodeFunctionData } from "viem";
+import { parseEther, parseUnits } from "viem";
 // Solana imports removed
-import ArcABI from "./abi/ArcPrediction.json";
+
 import * as ethers from "ethers";
 import { publicClient } from "./client";
 
@@ -2445,94 +2445,11 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
 
-  // Arc Settlement Listener — with dedup to prevent double-processing
-  const processedSettlements = useRef(new Set());
-
-  useEffect(() => {
-    const unwatch = publicClient.watchContractEvent({
-      address: ARC_CONTRACT_ADDRESS,
-      abi: ArcABI.abi,
-      eventName: 'BetSettled',
-      onLogs(logs) {
-        logs.forEach(log => {
-          const { id, user: betUser, settlementPrice, won, payout } = log.args;
-          const normalizedUser = betUser?.toLowerCase();
-          const mainAddr = address?.toLowerCase();
-          const sessionAddr = evmSessionWallet?.address?.toLowerCase();
-
-          if (normalizedUser === mainAddr || normalizedUser === sessionAddr) {
-            const betId = id.toString();
-
-            // 🛑 DEDUP: Skip if we already processed this exact settlement event
-            const eventKey = `${betId}_${log.transactionHash}`;
-            if (processedSettlements.current.has(eventKey)) {
-              return;
-            }
-            processedSettlements.current.add(eventKey);
-
-            // Auto-cleanup old entries after 5 minutes
-            setTimeout(() => processedSettlements.current.delete(eventKey), 5 * 60 * 1000);
-
-            const eventInitialStatus = won ? "WON" : "LOST"; // FIXED: Use WON immediately, don't stay in PENDING
-            const priceUSD = parseFloat(formatUnits(settlementPrice || log.args.exitPrice, 8)).toFixed(2);
-            const formattedPayout = parseFloat(formatUnits(payout, 18)).toFixed(2);
-
-            const updateTrade = (t) => {
-              const isMatch = (t.tx && log.transactionHash && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
-                (t.nonce && t.nonce.toString() === betId) ||
-                (t.id && t.id.toString() === betId);
-              if (isMatch) {
-                return {
-                  ...t,
-                  status: eventInitialStatus,
-                  settlementPrice: priceUSD,
-                  payout: formattedPayout,
-                  chainConfirmed: true,
-                  balanceApplied: t.balanceApplied || false // Preserve existing flag
-                };
-              }
-              return t;
-            };
-
-            setTradeHistory(prev => prev.map(updateTrade));
-            setActiveTrades(prev => prev.map(updateTrade));
-
-            if (won) {
-              const payoutNum = parseFloat(formattedPayout);
-
-              // NOTE: Balance crediting is handled by the backend via `balance_update` socket event.
-              // The backend credits balance in settleTradeOnChain after tx.wait() confirms, then
-              // emits balance_update with the correct server-side balance. We do NOT credit here
-              // to prevent double-crediting. This handler only updates trade status.
-
-              // Finalize status across trade lists
-              const finalizeWin = () => {
-                const matchFn = (t) => {
-                  const isMatch = (t.tx && log.transactionHash && t.tx.toLowerCase() === log.transactionHash.toLowerCase()) ||
-                    (t.id && t.id.toString() === betId);
-                  return isMatch ? { ...t, status: "WON", payout: formattedPayout, chainConfirmed: true } : t;
-                };
-                setTradeHistory(prev => prev.map(matchFn));
-                setActiveTrades(prev => prev.map(matchFn));
-              };
-
-              finalizeWin();
-
-            } else {
-              notify(`Trade LOST.`, "error");
-              // Force-read balance after loss settlement
-              lastOptimisticActionTime.current = 0;
-              setTimeout(() => {
-                updateEvmSessionBal(true);
-                refetchEvmBalance(true);
-              }, 2000);
-            }
-          }
-        });
-      },
-    });
-    return () => unwatch();
-  }, [address, evmSessionWallet, notify, aggressiveRefresh, updateEvmSessionBal, refetchEvmBalance]);
+  // Arc Settlement Listener
+  // REMOVED: publicClient.watchContractEvent — it polled the RPC continuously via HTTP,
+  // exhausting the browser connection pool and freezing the platform after deposit/withdraw.
+  // The backend already sends 'trade_settled', 'trade_expired', and 'balance_update' via socket,
+  // making this redundant. All settlement state is now handled via socket events.
 
   // --- TRADE STATUS SYNC ---
   // When a trade hits WON status, just update the UI. Balance crediting is handled
@@ -2670,11 +2587,8 @@ const performStealthChecks = useCallback(async (addr) => {
         });
         lastOptimisticActionTime.current = Date.now();
 
-        // STEP 5: Hard Confirmation Refresh
-        publicClient.waitForTransactionReceipt({ hash }).then(() => {
-          setSuccessOverlay({ title: 'DEPOSIT SUCCESSFUL' });
-          setTimeout(() => refetchEvmBalance(true), 2000);
-        });
+        // STEP 5: Show success immediately — socket balance_update handles real balance
+        setSuccessOverlay({ title: 'DEPOSIT SUCCESSFUL' });
 
         const newTx = {
           id: `dep_${Date.now()}`,
