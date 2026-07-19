@@ -121,25 +121,25 @@ function LiveExecutionComponent({
 
                         if (timerExpired && !isLocked && capturedResultsRef.current[trade.id] === undefined) {
                             capturedResultsRef.current[trade.id] = {
-                                won: (trade.isWinning !== undefined ? trade.isWinning : localWinCalc),
+                                won: undefined,
                                 exitPrice: currentPriceVal
                             };
                         }
 
                         const liveWinning = trade.won !== undefined
                             ? trade.won
-                            : (capturedResultsRef.current[trade.id] !== undefined
+                            : (capturedResultsRef.current[trade.id] !== undefined && capturedResultsRef.current[trade.id].won !== undefined
                                 ? capturedResultsRef.current[trade.id].won
                                 : (trade.isWinning !== undefined
                                     ? trade.isWinning
                                     : localWinCalc));
 
-                        const showInstantResult = timerExpired && !isFinal;
+                        const showInstantResult = timerExpired && !isFinal && trade.won !== undefined;
                         const instantStatus = showInstantResult
-                            ? (liveWinning ? "WON" : "LOST")
-                            : trade.status;
+                            ? (trade.won ? "WON" : "LOST")
+                            : (isFinal ? trade.status : (timerExpired ? "LOCKING..." : trade.status));
 
-                        const displayFinal = isFinal || showInstantResult;
+                        const displayFinal = isFinal || (timerExpired && trade.won !== undefined);
                         const isPayoutPending = (instantStatus === "WON" || trade.status === "WON") && !trade.chainConfirmed && !trade.payout;
 
                         const formatTime = (ts) => {
@@ -172,9 +172,9 @@ function LiveExecutionComponent({
                                         <div className="flex items-center gap-1.5">
                                             <div className={`w-1.5 h-1.5 rounded-full ${displayFinal
                                                 ? ((instantStatus === "WON") ? 'bg-[#249C6C]' : 'bg-[#FF7F50]')
-                                                : (liveWinning ? 'bg-[#249C6C] animate-pulse shadow-[0_0_8px_#249C6C]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]')}`} />
+                                                : (timerExpired ? 'bg-yellow-400 animate-pulse shadow-[0_0_8px_#FBBF24]' : (liveWinning ? 'bg-[#249C6C] animate-pulse shadow-[0_0_8px_#249C6C]' : 'bg-[#FF7F50] animate-pulse shadow-[0_0_8px_#FF7F50]'))}`} />
                                             <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-[#0a261a]/50' : 'text-white/40'}`}>
-                                                {displayFinal ? instantStatus : ""}
+                                                {displayFinal ? instantStatus : (timerExpired ? "LOCKING..." : "")}
                                             </span>
                                         </div>
                                         {activeTrades.length > 0 && (
@@ -270,8 +270,8 @@ function LiveExecutionComponent({
                                                 </div>
 
                                                 {/* Win/Loss status label */}
-                                                <span className={`text-[7px] font-black uppercase tracking-[0.25em] mb-1 md:mb-0 ${liveWinning ? "text-[#249C6C]" : "text-[#FF7F50]"}`}>
-                                                    {liveWinning ? "WINNING" : "LOSING"}
+                                                <span className={`text-[7px] font-black uppercase tracking-[0.25em] mb-1 md:mb-0 ${timerExpired ? 'text-yellow-400' : (liveWinning ? "text-[#249C6C]" : "text-[#FF7F50]")}`}>
+                                                    {timerExpired ? "LOCKING..." : (liveWinning ? "WINNING" : "LOSING")}
                                                 </span>
                                             </div>
                                         </div>

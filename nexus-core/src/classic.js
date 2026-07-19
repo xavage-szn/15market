@@ -48,7 +48,7 @@ class ClassicEngine {
           if (trade.expiryEmitted) continue;
 
           const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
-          if (msLeft < 500 && currentPrice > 0) cache.snapshotPrice(trade.symbol);
+          if (msLeft < 10000 && currentPrice > 0) cache.snapshotPrice(trade.symbol);
 
           if (msLeft <= 0) {
             this.lockResult(trade);
@@ -102,18 +102,15 @@ class ClassicEngine {
     if (trade.expiryEmitted || trade.isSettled) return;
     trade.isSettled = true;
 
-    let exitPrice = 0;
-    const history = cache.priceHistory[trade.symbol];
-    if (history && history.length > 0) {
-      const now = Date.now();
-      for (let i = history.length - 1; i >= Math.max(0, history.length - 12); i++) {
-        if (history[i].price > 0 && Math.abs(history[i].time - now) < 2000) {
-          exitPrice = history[i].price;
-          break;
-        }
-      }
-    }
-    if (exitPrice <= 0) exitPrice = cache.prices[trade.symbol] || 0;
+    // ALWAYS lock to the price AT expiry time (trade.settleAt), NOT Date.now().
+    // The 50ms monitor loop can fire late — using Date.now() picks up post-expiry
+    // prices that may have moved against the user, causing win→lose flips.
+    const settleTime = trade.settleAt || Date.now();
+    const lockDelay = Date.now() - settleTime;
+    let exitPrice = cache.getHistoricalPrice(trade.symbol, settleTime);
+
+    // Fallback: last snapshotted price (never use live cache.prices)
+    if (exitPrice <= 0) exitPrice = cache.getLatestPrice(trade.symbol) || 0;
     if (exitPrice <= 0) exitPrice = trade.entryPrice;
 
     if (trade.entryPrice > 0 && exitPrice > 0) {
@@ -128,7 +125,7 @@ class ClassicEngine {
     trade.lockedExitPrice = exitPrice;
     trade.lockedWon = won;
 
-    console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice}`);
+    console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} | Lock delay: ${lockDelay}ms`);
 
     this.io.to(trade.userAddr).emit('trade_expired', {
       betId: trade.id,
