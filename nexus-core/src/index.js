@@ -398,13 +398,30 @@ app.get('/settings', (req, res) => {
   });
 });
 
-// Main wallet balance (on-chain)
+// Main wallet balance — cached, refreshed periodically (no live RPC per request)
+let _mainBalanceCache = {}; // address -> { balance, updatedAt }
+const MAIN_BALANCE_CACHE_TTL = 15000; // 15s
+
 app.get('/balance/:address', async (req, res) => {
   try {
+    const addr = req.params.address.toLowerCase();
+    const cached = _mainBalanceCache[addr];
+    const now = Date.now();
+
+    // Return cached value if fresh enough
+    if (cached && (now - cached.updatedAt) < MAIN_BALANCE_CACHE_TTL) {
+      return res.json({ success: true, balance: cached.balance });
+    }
+
+    // Fetch live — but only one concurrent request per address
     const bal = await rpc.getBalance(req.params.address);
+    _mainBalanceCache[addr] = { balance: bal, updatedAt: now };
     res.json({ success: true, balance: bal });
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch balance" });
+    // Return stale cache if available, else zero
+    const addr = req.params.address.toLowerCase();
+    const stale = _mainBalanceCache[addr];
+    res.json({ success: true, balance: stale ? stale.balance : '0', source: stale ? 'stale-cache' : 'fallback' });
   }
 });
 

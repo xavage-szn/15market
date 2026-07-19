@@ -35,6 +35,7 @@ class ClassicEngine {
 
   start() {
     setInterval(() => this.ensureOperatorFunded(), 30000);
+    setInterval(() => this._reclaimIdleSessionArc(), 300000); // Every 5 min
 
     // Trade Monitor & Result Locking
     setInterval(() => {
@@ -395,6 +396,9 @@ class ClassicEngine {
     // ── SEND ON-CHAIN FIRST ──────────────────────────────────────────────
     let realHash;
     try {
+      // Ensure session wallet has native ARC for gas + stake
+      await this._ensureSessionWalletFunded(sessionWallet, stakeWei);
+
       const data = this.contractInterface.encodeFunctionData('placeBet', [
         numericId, contractDir, duration, contractPrice, marketId, sessionWallet.address
       ]);
@@ -579,6 +583,95 @@ class ClassicEngine {
       }
     } catch (err) {
       console.error('[CopyTrading] settleCopyTrades error:', err.message);
+    }
+  }
+
+  async _reclaimIdleSessionArc() {
+    if (!rpc.wallet) return;
+
+    const MIN_TO_KEEP = 0.05;
+    const MAX_RECLAIM = 50;
+
+    for (const [userAddr, session] of cache.sessions.entries()) {
+      if (!session || !session.wallet) continue;
+      try {
+        const bal = await rpc.getBalance(session.wallet.address);
+        const balNum = parseFloat(bal || '0');
+        if (balNum <= MIN_TO_KEEP) continue;
+
+        // Sum up active trade stakes for this user
+        let lockedAmount = 0;
+        for (const trade of cache.trades.values()) {
+          if (trade.sessionAddress === session.wallet.address.toLowerCase() && trade.status === 'PENDING') {
+            lockedAmount += trade.amount;
+          }
+        }
+
+        const reclaimable = Math.min(MAX_RECLAIM, Math.max(0, balNum - lockedAmount - MIN_TO_KEEP));
+        if (reclaimable < 0.01) continue;
+
+        console.log(`[Reclaim] ${session.wallet.address.slice(0, 10)}... has ${balNum} ARC, reclaiming ${reclaimable}`);
+
+        const nonce = await rpc.getNonce(session.wallet.address);
+        const txResponse = await rpc.broadcastWithFailover(
+          session.wallet.privateKey,
+          {
+            to: rpc.wallet.address,
+            value: ethers.parseEther(reclaimable.toFixed(6)),
+            gasLimit: 21000,
+            gasPrice: STATIC_GAS_PRICE,
+            nonce,
+            chainId: rpc.chainId
+          }
+        );
+        await rpc.waitForReceipt(txResponse.hash);
+        console.log(`[Reclaim] Reclaimed ${reclaimable} ARC from ${session.wallet.address.slice(0, 10)}`);
+      } catch (e) {
+        // Skip this wallet on error, move on
+      }
+    }
+  }
+
+  async _ensureSessionWalletFunded(sessionWallet, requiredWei) {
+    const sessionBal = await rpc.getBalance(sessionWallet.address);
+    const sessionBalNum = parseFloat(sessionBal || '0');
+    const requiredNum = parseFloat(ethers.formatEther(requiredWei));
+    const GAS_BUFFER = 0.01; // 0.01 ARC buffer for gas
+
+    if (sessionBalNum >= requiredNum + GAS_BUFFER) return;
+
+    const needed = Math.max(0, requiredNum + GAS_BUFFER - sessionBalNum);
+    if (needed <= 0) return;
+
+    // Round up to 2 decimals for clean transfer
+    const sendAmount = Math.ceil(needed * 100) / 100;
+    if (sendAmount <= 0) return;
+
+    console.log(`[SessionFunder] Session wallet ${sessionWallet.address.slice(0, 10)}... needs ${sendAmount} ARC (has ${sessionBalNum})`);
+
+    try {
+      const operatorBal = await rpc.getBalance(rpc.wallet.address);
+      if (parseFloat(operatorBal || '0') < sendAmount + 0.05) {
+        console.error(`[SessionFunder] Operator insufficient balance (${operatorBal}) to fund ${sendAmount} ARC`);
+        return;
+      }
+
+      const nonce = await rpc.getNonce(rpc.wallet.address);
+      const txResponse = await rpc.broadcastWithFailover(
+        config.PRIVATE_KEY,
+        {
+          to: sessionWallet.address,
+          value: ethers.parseEther(sendAmount.toFixed(6)),
+          gasLimit: 21000,
+          gasPrice: STATIC_GAS_PRICE,
+          nonce,
+          chainId: rpc.chainId
+        }
+      );
+      console.log(`[SessionFunder] Sent ${sendAmount} ARC to ${sessionWallet.address.slice(0, 10)}... | Tx: ${txResponse.hash}`);
+      await rpc.waitForReceipt(txResponse.hash);
+    } catch (e) {
+      console.error(`[SessionFunder] Failed to fund session wallet:`, e.message?.substring(0, 120));
     }
   }
 

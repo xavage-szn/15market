@@ -889,44 +889,27 @@ const performStealthChecks = useCallback(async (addr) => {
     if (!address) return;
 
     try {
-      let formatted;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
 
-      // Priority 1: Backend proxy — faster and avoids direct RPC CORS issues
-      const res = await fetch(`${KEEPER_URL_ARC}/balance/${address}`);
       if (res.ok) {
         const data = await res.json();
-        formatted = data.balance;
-      } else {
-        // Priority 2: Direct on-chain fallback if backend is down
-        const balWei = await publicClient.getBalance({ address });
-        formatted = formatUnits(balWei, 18);
+        const formatted = data.balance;
+        if (force) {
+          setEvmBalance(formatted);
+        } else {
+          const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
+          if (msSinceLastAction < 20000) return;
+          setEvmBalance(prev => {
+            const current = parseFloat(prev || '0');
+            const newBal = parseFloat(formatted || '0');
+            return Math.abs(newBal - current) > 0.000001 ? formatted : prev;
+          });
+        }
       }
-
-      const newBalNum = parseFloat(formatted);
-
-      // If forced (e.g. after a withdrawal), ALWAYS write the new balance — no stale comparisons.
-      // This prevents the bug where the main wallet shows 60 instead of 90 after a 30 USDC withdrawal.
-      if (force) {
-        setEvmBalance(formatted);
-        return;
-      }
-
-      // During passive polling, apply a guard window to avoid overwriting optimistic state
-      const msSinceLastAction = Date.now() - lastOptimisticActionTime.current;
-      if (msSinceLastAction < 20000) return;
-
-      // Only update if the value has meaningfully changed
-      setEvmBalance(prev => {
-        const current = parseFloat(prev || '0');
-        return Math.abs(newBalNum - current) > 0.000001 ? formatted : prev;
-      });
-    } catch (e) {
-      // Last resort: direct on-chain fetch (no comparison, just set it)
-      try {
-        const balWei = await publicClient.getBalance({ address });
-        setEvmBalance(formatUnits(balWei, 18));
-      } catch (err) { }
-    }
+    } catch (e) { }
   }, [address]);
 
   // Keep sessionBalanceRef in sync with sessionBalance state so async
@@ -939,7 +922,10 @@ const performStealthChecks = useCallback(async (addr) => {
     if (!address) return;
 
     try {
-      const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`${KEEPER_URL_ARC}/session/balance/${address}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         const bal = parseFloat(data.balance);
@@ -1200,8 +1186,8 @@ const performStealthChecks = useCallback(async (addr) => {
   // 3. Aggressive Logic (Optimized: fewer redundant refreshes)
   const aggressiveRefresh = useCallback((force = false) => {
     triggerGlobalRefresh(force);
-    [500, 2000, 5000].forEach(delay => setTimeout(() => triggerGlobalRefresh(force), delay));
-    [1500, 4000].forEach(delay => setTimeout(fetchMyProfile, delay));
+    setTimeout(() => triggerGlobalRefresh(force), 1000);
+    fetchMyProfile();
   }, [triggerGlobalRefresh, fetchMyProfile]);
 
   // 4. Derived State
@@ -2685,12 +2671,8 @@ const performStealthChecks = useCallback(async (addr) => {
         lastOptimisticActionTime.current = Date.now();
 
         // STEP 5: Hard Confirmation Refresh
-        // Re-syncs with on-chain state once the transaction is actually mined
         publicClient.waitForTransactionReceipt({ hash }).then(() => {
-          setSuccessOverlay({
-            title: 'DEPOSIT SUCCESSFUL',
-          });
-          setTimeout(() => updateEvmSessionBal(true), 2000);
+          setSuccessOverlay({ title: 'DEPOSIT SUCCESSFUL' });
           setTimeout(() => refetchEvmBalance(true), 2000);
         });
 
@@ -2884,12 +2866,8 @@ const performStealthChecks = useCallback(async (addr) => {
         body: JSON.stringify({ address, transaction: newTx })
       }).catch(() => { });
 
-      [2000, 5000].forEach(delay => {
-        setTimeout(() => {
-          updateEvmSessionBal(true);
-          refetchEvmBalance(true);
-        }, delay);
-      });
+      // Single delayed refresh — socket balance_update handles trading balance
+      setTimeout(() => refetchEvmBalance(true), 3000);
     } catch (e) {
       notify("Transfer failed: " + (e.shortMessage || e.message), "error");
     } finally {
