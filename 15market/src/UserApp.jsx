@@ -1951,6 +1951,8 @@ const performStealthChecks = useCallback(async (addr) => {
       removedTradeIds.current.add(betId);
 
       // Build the fully-settled trade record
+      // NOTE: Backend sends 'stakeTxHash', not 'txHash'
+      const resolvedTxHash = data.txHash || data.stakeTxHash || null;
       const settledRecord = {
         id: betId,
         nonce: betId,
@@ -1965,8 +1967,8 @@ const performStealthChecks = useCallback(async (addr) => {
         symbol: data.symbol || 'ETH',
         duration: data.duration,
         timestamp: data.timestamp || Date.now(),
-        txHash: data.txHash || null,
-        tx: data.txHash || null,
+        txHash: resolvedTxHash,
+        tx: resolvedTxHash,
         backendSettled: true,
         balanceApplied: true,
       };
@@ -1976,7 +1978,8 @@ const performStealthChecks = useCallback(async (addr) => {
 
       // Upsert into tradeHistory and setActiveTrades with final WON/LOST status
       const updateFn = (t) => {
-        if (String(t.id) === betId || String(t.nonce) === betId || (data.tx && (String(t.tx) === String(data.tx) || String(t.txHash) === String(data.tx)))) {
+        if (String(t.id) === betId || String(t.nonce) === betId ||
+            (resolvedTxHash && (String(t.tx) === String(resolvedTxHash) || String(t.txHash) === String(resolvedTxHash)))) {
           return { ...t, ...settledRecord };
         }
         return t;
@@ -1986,7 +1989,7 @@ const performStealthChecks = useCallback(async (addr) => {
       setTradeHistory(prev => {
         const existing = prev.find(t =>
           String(t.id) === betId || String(t.nonce) === betId ||
-          (data.tx && (String(t.tx) === String(data.tx) || String(t.txHash) === String(data.tx)))
+          (resolvedTxHash && (String(t.tx) === String(resolvedTxHash) || String(t.txHash) === String(resolvedTxHash)))
         );
         if (existing) return prev.map(updateFn);
         return [settledRecord, ...prev];
