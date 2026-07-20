@@ -1490,8 +1490,8 @@ const performStealthChecks = useCallback(async (addr) => {
     const activeType = params?.type || (gameMode === 'rounds' ? 'rounds' : 'classic');
     const isRounds = activeType === 'round' || activeType === 'rounds';
 
-    // For rounds, block double-submission. For classic, allow burst mode (multiple concurrent trades).
-    if (isRounds && isExecuting) return;
+    // Block double-submission for both rounds and classic
+    if (isExecuting) return;
 
     if (platformSettings.tradingHalted) {
       return notify("TRADING HALTED BY ADMIN - Operations Paused", "error");
@@ -1533,8 +1533,6 @@ const performStealthChecks = useCallback(async (addr) => {
     // Ensure active expansion pane is controlled if necessary
     if (typeof setShowActiveExpanded === 'function') setShowActiveExpanded(false);
 
-    // setIsExecuting(true); // REMOVED global block for burst mode
-
     // Generate truly unique bet ID immediately
     const addressSuffix = address ? parseInt(address.slice(-4), 16) : 0;
     const tradeId = Date.now() * 1000 + Math.floor(Math.random() * 1000000) + addressSuffix;
@@ -1551,11 +1549,8 @@ const performStealthChecks = useCallback(async (addr) => {
     const amtNum = parseFloat(activeAmount);
 
     // --- INSTANT UI START ---
-    // Only lock for rounds. Classic trades allow burst mode (multiple concurrent).
-    if (isRounds) {
-      setIsExecuting(true);
-      setTimeout(() => setIsExecuting(false), 2000);
-    }
+    // Lock for both rounds and classic to prevent rapid-fire race conditions
+    setIsExecuting(true);
 
     try {
       if (!address) {
@@ -1706,6 +1701,7 @@ const performStealthChecks = useCallback(async (addr) => {
             setSessionBalance(prev => prev + amtNum);
             setActiveTrades(prev => prev.filter(t => t.id !== tradeId));
             setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
+            setIsExecuting(false);
             return;
           }
 
@@ -1725,6 +1721,7 @@ const performStealthChecks = useCallback(async (addr) => {
           ));
 
           notify('Trade Active ✓', 'success');
+          setIsExecuting(false);
         } catch (err) {
           clearTimeout(timeoutId);
           console.error('[Trade] Execution error:', err.message);
@@ -1737,6 +1734,7 @@ const performStealthChecks = useCallback(async (addr) => {
             setTradeHistory(prev => prev.filter(t => t.id !== tradeId));
           }
           notify(err.name === 'AbortError' ? '⏳ Trade processing — balance will sync when confirmed' : err.message, 'error');
+          setIsExecuting(false);
         }
       };
 
