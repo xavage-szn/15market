@@ -435,14 +435,17 @@ export default function UserApp() {
     let cancelled = false;
     let attempt = 0;
     const maxAttempts = 10;
+    const healthUrl = `${KEEPER_URL_ARC}/health`;
+    console.log(`[HealthGate] Starting health check: ${healthUrl}`);
 
     const checkHealth = async () => {
       if (cancelled) return;
       try {
-        const res = await fetch(`${KEEPER_URL_ARC}/health`, { signal: AbortSignal.timeout(8000) });
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(8000) });
         if (res.ok) {
           const data = await res.json();
           if (data.status === 'OK' && !cancelled) {
+            console.log('[HealthGate] Backend ready');
             setHealthProgress(1);
             setBackendReady(true);
             setTimeout(() => {
@@ -452,7 +455,9 @@ export default function UserApp() {
             return;
           }
         }
-      } catch (e) { }
+      } catch (e) {
+        console.warn(`[HealthGate] Attempt ${attempt + 1} failed:`, e.message);
+      }
 
       if (cancelled) return;
       attempt++;
