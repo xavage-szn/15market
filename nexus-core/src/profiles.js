@@ -1,4 +1,14 @@
 const Redis = require('ioredis');
+const fs = require('fs');
+const path = require('path');
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const FILE_PATH = path.join(DATA_DIR, 'profiles.json');
+
+// Ensure data directory exists
+try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (e) { }
 
 // Ensure we don't block startup but sync as soon as possible
 // Configured to retry connecting every 30 seconds if offline, with offline queue disabled to prevent clog
@@ -25,6 +35,11 @@ redis.on('close', () => { redisReady = false; });
 class ProfileService {
     constructor() {
         this.profiles = {};
+
+        // Load from file first (survives Redis wipes)
+        this.loadFromFile();
+
+        // Then try Redis
         this.load();
 
         // When Redis is fully authenticated and ready to execute commands
@@ -34,6 +49,10 @@ class ProfileService {
             if (Object.keys(this.profiles).length === 0) {
                 console.log('[Redis] Local cache is empty. Fetching profiles from Redis...');
                 await this.load();
+                // If Redis also empty, file was already loaded
+                if (Object.keys(this.profiles).length > 0) {
+                    console.log(`[Profiles] Restored ${Object.keys(this.profiles).length} profiles.`);
+                }
             } else {
                 console.log('[Redis] Syncing local profiles to Redis...');
                 await this.save();
@@ -44,15 +63,44 @@ class ProfileService {
         setInterval(() => this.save(), 10000);
     }
 
+    loadFromFile() {
+        try {
+            if (fs.existsSync(FILE_PATH)) {
+                const data = fs.readFileSync(FILE_PATH, 'utf8');
+                if (data) {
+                    this.profiles = JSON.parse(data);
+                    console.log(`[Profiles] Loaded ${Object.keys(this.profiles).length} profiles from file backup.`);
+                }
+            }
+        } catch (e) {
+            console.warn('[Profiles] Failed to load from file:', e.message);
+        }
+    }
+
+    saveToFile() {
+        try {
+            if (Object.keys(this.profiles).length > 0) {
+                fs.writeFileSync(FILE_PATH, JSON.stringify(this.profiles, null, 2));
+            }
+        } catch (e) {
+            // Silently skip file write errors
+        }
+    }
+
     async load() {
         if (!redisReady) return;
         try {
             const data = await redis.get('15market_profiles_db');
             if (data) {
-                this.profiles = JSON.parse(data);
-                console.log(`[Profiles] Loaded ${Object.keys(this.profiles).length} profiles from Redis.`);
+                const redisProfiles = JSON.parse(data);
+                // Merge: Redis data takes precedence, but keep any file-only entries
+                const redisCount = Object.keys(redisProfiles).length;
+                const fileCount = Object.keys(this.profiles).length;
+                this.profiles = { ...this.profiles, ...redisProfiles };
+                const mergedCount = Object.keys(this.profiles).length;
+                console.log(`[Profiles] Loaded ${redisCount} from Redis, merged with ${fileCount} from file = ${mergedCount} total.`);
             } else {
-                console.log(`[Profiles] No existing profiles found in Redis. Starting fresh.`);
+                console.log(`[Profiles] No profiles in Redis. Using file backup (${Object.keys(this.profiles).length} profiles).`);
             }
         } catch (e) {
             // Silently skip when Redis is unavailable
@@ -60,6 +108,9 @@ class ProfileService {
     }
 
     async save() {
+        // Always save to file (survives Redis wipes)
+        this.saveToFile();
+
         if (!redisReady) return;
         try {
             if (Object.keys(this.profiles).length > 0) {

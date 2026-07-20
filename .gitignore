@@ -28,6 +28,7 @@ settlement_activity.log
 
 # Persistent User Data (server-side, do not commit)
 backend/profiles_db.json
+nexus-core/data/
 
 # IDE/Editor
 .vscode/

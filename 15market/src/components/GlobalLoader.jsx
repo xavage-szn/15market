@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const GlobalLoader = ({ theme = 'dark' }) => {
+const GlobalLoader = ({ theme = 'dark', status = 'Loading' }) => {
     const isLight = theme === 'light';
     
     return (
@@ -14,7 +14,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
             {/* Branded Background Texture - DARK MODE ONLY */}
             <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
             
-            <div className="relative flex items-center gap-0">
+            <div className="relative flex flex-col items-center gap-0">
                 {/* 1. Logo */}
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -63,15 +63,15 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                     </motion.span>
                 </motion.div>
 
-                {/* 3. Loading Text (Typing Effect + Looping Balls) */}
+                {/* 3. Status Text (Dynamic) */}
                 <div className="flex items-baseline ml-1.5 gap-1">
                     <div className="flex">
-                        {"Loading".split("").map((char, index) => (
+                        {status.split("").map((char, index) => (
                             <motion.span
-                                key={index}
+                                key={`${status}-${index}`}
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
-                                transition={{ delay: 0.8 + index * 0.1, duration: 0.1 }}
+                                transition={{ delay: 0.8 + index * 0.05, duration: 0.1 }}
                                 className={`text-[15px] font-medium tracking-tight ${isLight ? 'text-black' : 'text-white'}`}
                                 style={{ fontFamily: '"Comfortaa", cursive' }}
                             >
@@ -90,7 +90,7 @@ const GlobalLoader = ({ theme = 'dark' }) => {
                                 transition={{ 
                                     repeat: Infinity, 
                                     duration: 1.5, 
-                                    delay: 0.8 + (7 * 0.1) + (i * 0.2), // Types in after "Loading"
+                                    delay: 0.8 + (status.length * 0.05) + (i * 0.2),
                                     ease: "easeInOut" 
                                 }}
                                 className={`w-[4px] h-[4px] rounded-full ${isLight ? 'opacity-60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'shadow-[0_0_12px_rgba(255,255,255,0.3)]'}`}

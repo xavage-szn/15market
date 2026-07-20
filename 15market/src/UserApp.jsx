@@ -330,6 +330,7 @@ export default function UserApp() {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
 
     // Show the branded loading modal during the switch
+    setLoadingStatus('Switching theme');
     setIsGlobalLoading(true);
 
     setTargetTheme(nextTheme);
@@ -420,26 +421,49 @@ export default function UserApp() {
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
   const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
   const [isAppReady, setIsAppReady] = useState(false);
+  const [backendReady, setBackendReady] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('Connecting to server');
   const isInitializing = status === 'reconnecting' || (status === 'connecting' && !isConnected);
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
   const activeTrade = activeTrades[0] || null;
 
-  // Safety Timeout: Clear splash/global loader whenever it triggers
+  // Backend Health Gate: Poll /health until backend responds, then dismiss loader
   useEffect(() => {
-    if (isGlobalLoading) {
-      const timer = setTimeout(() => {
-        setIsAppReady(true);
-        setIsGlobalLoading(false);
-      }, 1800); // 1.8s for initial branded splash
-      return () => clearTimeout(timer);
-    } else {
-      // If global loading is turned off elsewhere (e.g. stealth checks),
-      // we must ensure the app is marked as ready.
-      setIsAppReady(true);
-    }
-  }, [isGlobalLoading]);
+    if (backendReady) return;
+
+    let cancelled = false;
+    let attempt = 0;
+
+    const checkHealth = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(`${KEEPER_URL_ARC}/health`, { signal: AbortSignal.timeout(8000) });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'OK' && !cancelled) {
+            setBackendReady(true);
+            setIsGlobalLoading(false);
+            setIsAppReady(true);
+            return;
+          }
+        }
+      } catch (e) { }
+
+      if (cancelled) return;
+      attempt++;
+      const delay = Math.min(2000 + attempt * 500, 8000);
+      setLoadingStatus(prev => {
+        const dots = '.'.repeat((attempt % 3) + 1);
+        return `Connecting to server${dots}`;
+      });
+      setTimeout(checkHealth, delay);
+    };
+
+    checkHealth();
+    return () => { cancelled = true; };
+  }, [backendReady]);
 
   // Loading progress animation
   useEffect(() => {
@@ -668,41 +692,11 @@ const performStealthChecks = useCallback(async (addr) => {
         }
     }
 
-    // We don't block the UI forever if it's already cached
-    if (!success && localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
-        // Allow UI to show sooner for returning users
-        setTimeout(() => {
-            clearInterval(progressInterval);
-            setIsGlobalLoading(false);
-        }, 3000); // Show UI after 3 seconds max for returning users
-        return;
-    }
-
-    // Wrap up: Delivery with reasonable timeout
-    const startTime = Date.now();
-    const finish = () => {
-        const elapsed = Date.now() - startTime;
-        // Reduce max wait time for poor networks
-        const maxWait = navigator.connection && navigator.connection.effectiveType === 'slow-2g' ? 8000 : 5000;
-        const remaining = Math.max(0, maxWait - elapsed);
-        setTimeout(() => {
-            clearInterval(progressInterval);
-            setGlobalLoadingProgress(100);
-            setIsGlobalLoading(false);
-        }, remaining);
-    };
-
-    if (success) {
-        finish();
-    } else {
-        // If still failing after retries, but we have local proof, let them in sooner
-        if (localStorage.getItem(`15market_onboarded_${addr.toLowerCase()}`) === 'true') {
-            finish();
-        } else {
-            // For new users with persistent issues, show UI after reasonable timeout
-            setTimeout(finish, 5000); // 5 second max wait
-        }
-    }
+    // Stealth checks no longer dismiss the loader.
+    // The health gate (backendReady effect) handles loader dismissal.
+    // These checks just populate profile/session/rounds data in the background.
+    clearInterval(progressInterval);
+    setGlobalLoadingProgress(100);
 }, [address]);
 
   // Trigger stealth checks when wallet connects or changes
@@ -2866,7 +2860,7 @@ const performStealthChecks = useCallback(async (addr) => {
           <WalletConnectionLoading theme={theme} onFinish={() => setIsWalletLoading(false)} />
         )}
         {isGlobalLoading && (
-          <GlobalLoader theme={theme} />
+           <GlobalLoader theme={theme} status={loadingStatus} />
         )}
       </AnimatePresence>
 
