@@ -573,7 +573,10 @@ export default function UserApp() {
 const performStealthChecks = useCallback(async (addr) => {
     if (!addr) return;
 
-    setIsGlobalLoading(true);
+    // Don't re-show loader if backend is already confirmed ready
+    if (!backendReady) {
+      setIsGlobalLoading(true);
+    }
     setGlobalLoadingProgress(0);
     setIsOffline(!navigator.onLine);
 
@@ -697,12 +700,21 @@ const performStealthChecks = useCallback(async (addr) => {
         }
     }
 
-    // Stealth checks no longer dismiss the loader.
-    // The health gate (backendReady effect) handles loader dismissal.
-    // These checks just populate profile/session/rounds data in the background.
+    // Stealth checks populate profile/session/rounds data in the background.
+    // Only dismiss the loader if these checks were the ones that showed it
+    // (i.e. backend was not yet ready when stealth checks started).
     clearInterval(progressInterval);
     setGlobalLoadingProgress(100);
-}, [address]);
+    if (!backendReady) {
+      // Health gate hasn't passed yet, these checks confirmed backend is reachable
+      setHealthProgress(1);
+      setBackendReady(true);
+      setTimeout(() => {
+        setIsGlobalLoading(false);
+        setIsAppReady(true);
+      }, 400);
+    }
+}, [address, backendReady]);
 
   // Trigger stealth checks when wallet connects or changes
   useEffect(() => {
