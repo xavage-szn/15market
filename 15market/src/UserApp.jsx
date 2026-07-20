@@ -330,7 +330,6 @@ export default function UserApp() {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
 
     // Show the branded loading modal during the switch
-    setLoadingStatus('Switching theme');
     setIsGlobalLoading(true);
 
     setTargetTheme(nextTheme);
@@ -346,7 +345,7 @@ export default function UserApp() {
       setIsAnimatingTheme(false);
       setTargetTheme(null);
       setIsGlobalLoading(false);
-    }, 1800); // 1.8s provides a smooth, premium branded transition
+    }, 1800);
   }, [theme, isAnimatingTheme]);
 
   // Keep-Alive Heartbeat (Prevents Backend from Sleeping while user is active)
@@ -417,24 +416,25 @@ export default function UserApp() {
   const [duration, setDuration] = useState(15);
   const [timeLeft, setTimeLeft] = useState(15);
 
-  // Show the branded splash on initial page load, cleared after 1.8s
+  // Show the branded splash on initial page load, cleared after health check passes
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
   const [globalLoadingProgress, setGlobalLoadingProgress] = useState(0);
   const [isAppReady, setIsAppReady] = useState(false);
   const [backendReady, setBackendReady] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState('Connecting to server');
+  const [healthProgress, setHealthProgress] = useState(0);
   const isInitializing = status === 'reconnecting' || (status === 'connecting' && !isConnected);
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
   const activeTrade = activeTrades[0] || null;
 
-  // Backend Health Gate: Poll /health until backend responds, then dismiss loader
+  // Backend Health Gate: Poll /health until backend responds, progress drives the three dots
   useEffect(() => {
     if (backendReady) return;
 
     let cancelled = false;
     let attempt = 0;
+    const maxAttempts = 10;
 
     const checkHealth = async () => {
       if (cancelled) return;
@@ -443,9 +443,12 @@ export default function UserApp() {
         if (res.ok) {
           const data = await res.json();
           if (data.status === 'OK' && !cancelled) {
+            setHealthProgress(1);
             setBackendReady(true);
-            setIsGlobalLoading(false);
-            setIsAppReady(true);
+            setTimeout(() => {
+              setIsGlobalLoading(false);
+              setIsAppReady(true);
+            }, 400);
             return;
           }
         }
@@ -453,11 +456,8 @@ export default function UserApp() {
 
       if (cancelled) return;
       attempt++;
-      const delay = Math.min(2000 + attempt * 500, 8000);
-      setLoadingStatus(prev => {
-        const dots = '.'.repeat((attempt % 3) + 1);
-        return `Connecting to server${dots}`;
-      });
+      setHealthProgress(Math.min(0.1 + (attempt / maxAttempts) * 0.85, 0.95));
+      const delay = Math.min(1500 + attempt * 500, 6000);
       setTimeout(checkHealth, delay);
     };
 
@@ -2860,7 +2860,7 @@ const performStealthChecks = useCallback(async (addr) => {
           <WalletConnectionLoading theme={theme} onFinish={() => setIsWalletLoading(false)} />
         )}
         {isGlobalLoading && (
-           <GlobalLoader theme={theme} status={loadingStatus} />
+           <GlobalLoader theme={theme} progress={healthProgress} />
         )}
       </AnimatePresence>
 

@@ -1,8 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const GlobalLoader = ({ theme = 'dark', status = 'Loading' }) => {
+const GlobalLoader = ({ theme = 'dark', progress = 0 }) => {
     const isLight = theme === 'light';
+    const dotThresholds = [0.33, 0.66, 1.0];
     
     return (
         <motion.div
@@ -11,11 +12,10 @@ const GlobalLoader = ({ theme = 'dark', status = 'Loading' }) => {
             exit={{ opacity: 0 }}
             className={`fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden ${isLight ? 'bg-[#249C6C]' : 'bg-[#050505]'}`}
         >
-            {/* Branded Background Texture - DARK MODE ONLY */}
             <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
             
             <div className="relative flex flex-col items-center gap-0">
-                {/* 1. Logo */}
+                {/* Logo */}
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -30,7 +30,7 @@ const GlobalLoader = ({ theme = 'dark', status = 'Loading' }) => {
                     />
                 </motion.div>
 
-                {/* 2. Divider Lines (//) */}
+                {/* Divider Lines (//) */}
                 <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -45,7 +45,7 @@ const GlobalLoader = ({ theme = 'dark', status = 'Loading' }) => {
                                 : ['#ffffff', '#ffffff', '#ffffff']
                         }}
                         transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                        className={`text-3xl md:text-4xl font-light select-none`}
+                        className="text-3xl md:text-4xl font-light select-none"
                     >
                         /
                     </motion.span>
@@ -57,55 +57,40 @@ const GlobalLoader = ({ theme = 'dark', status = 'Loading' }) => {
                                 : ['#ffffff', '#ffffff', '#ffffff']
                         }}
                         transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                        className={`text-3xl md:text-4xl font-light select-none -ml-1`}
+                        className="text-3xl md:text-4xl font-light select-none -ml-1"
                     >
                         /
                     </motion.span>
                 </motion.div>
 
-                {/* 3. Status Text (Dynamic) */}
-                <div className="flex items-baseline ml-1.5 gap-1">
-                    <div className="flex">
-                        {status.split("").map((char, index) => (
-                            <motion.span
-                                key={`${status}-${index}`}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.8 + index * 0.05, duration: 0.1 }}
-                                className={`text-[15px] font-medium tracking-tight ${isLight ? 'text-black' : 'text-white'}`}
-                                style={{ fontFamily: '"Comfortaa", cursive' }}
-                            >
-                                {char}
-                            </motion.span>
-                        ))}
-                    </div>
-                    <div className="flex items-baseline gap-1 ml-0.5">
-                        {[0, 1, 2].map((i) => (
+                {/* Progress Dots - light up as health check progresses */}
+                <div className="flex items-center gap-1.5 -translate-y-2">
+                    {dotThresholds.map((threshold, i) => {
+                        const lit = progress >= threshold;
+                        return (
                             <motion.div
                                 key={i}
-                                animate={{ 
-                                    opacity: [0, 1, 0],
-                                    backgroundColor: isLight ? '#000000' : ['#ffffff', '#000000']
+                                animate={{
+                                    scale: lit ? 1.2 : 1,
+                                    opacity: lit ? 1 : 0.2,
+                                    backgroundColor: lit
+                                        ? (isLight ? '#000000' : '#ffffff')
+                                        : (isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)')
                                 }}
-                                transition={{ 
-                                    repeat: Infinity, 
-                                    duration: 1.5, 
-                                    delay: 0.8 + (status.length * 0.05) + (i * 0.2),
-                                    ease: "easeInOut" 
-                                }}
-                                className={`w-[4px] h-[4px] rounded-full ${isLight ? 'opacity-60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'shadow-[0_0_12px_rgba(255,255,255,0.3)]'}`}
+                                transition={{ duration: 0.4, ease: "easeOut" }}
+                                className={`w-[5px] h-[5px] rounded-full ${lit && !isLight ? 'shadow-[0_0_10px_rgba(255,255,255,0.5)]' : ''} ${lit && isLight ? 'shadow-[0_0_10px_rgba(0,0,0,0.15)]' : ''}`}
                             />
-                        ))}
-                    </div>
+                        );
+                    })}
                 </div>
             </div>
 
-            {/* Subtle Progress bar at the bottom */}
+            {/* Bottom progress bar linked to health check */}
             <motion.div 
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "100%", opacity: 0.5 }}
-                transition={{ duration: 1.2, ease: "easeInOut" }}
-                className={`absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-transparent ${isLight ? 'via-black' : 'via-white'} to-transparent`}
+                className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-transparent via-white to-transparent opacity-50"
+                initial={{ width: '0%' }}
+                animate={{ width: `${Math.min(progress * 100, 100)}%` }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
             />
         </motion.div>
     );

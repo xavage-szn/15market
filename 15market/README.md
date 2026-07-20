@@ -18,7 +18,7 @@ The frontend interface for the 15MARKET prediction market protocol. Built for re
 
 ### Real-Time Trading
 
-The TradeTerminal component provides instant price updates, dynamic share pricing, and one-click trade execution. Share prices are computed by the backend OddsEngine and streamed via Socket.IO. The UI displays potential payout before confirmation using the current share price and duration multiplier.
+The TradeTerminal component provides instant price updates, dynamic share pricing, and one-click trade execution. Share prices are computed by the backend OddsEngine and streamed via Socket.IO. The UI displays potential payout before confirmation using the current share price and selected duration.
 
 ### Live Execution Monitor
 
