@@ -75,12 +75,7 @@ function LiveExecutionComponent({
     return (
         <div className="flex flex-col gap-1 relative min-h-0 h-full" style={{ fontFamily: '"Comfortaa", cursive' }}>
             <style>{LCD_COUNTER_STYLE}</style>
-            <div className="flex items-center gap-1.5 px-2 flex-none">
-                <div className={`w-1.5 h-1.5 rounded-full lcd-live-blink ${activeTrades.length > 0 ? (isLight ? 'lcd-live-dot-light' : 'lcd-live-dot-dark') : 'opacity-20'}`} />
-                <h4 className={`text-[9px] lg:text-xs font-black tracking-tighter uppercase ${isLight ? 'text-black/50' : 'text-white/40'}`}>
-                    ACTIVE TRADES
-                </h4>
-            </div>
+
 
             <div className={`flex-1 overflow-y-auto custom-scrollbar min-h-0`}>
                 {activeTrades.length > 0 ? (

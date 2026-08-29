@@ -125,7 +125,7 @@ function TradeHistoryComponent({
                                         </div>
 
                                         <div className="flex items-center gap-1.5 ml-2">
-                                            {t.tx && (
+                                            {t.tx && t.tx.startsWith('0x') && t.tx.length > 10 && (
                                                 <a href={`https://testnet.arcscan.app/tx/${t.tx}`} target="_blank" rel="noopener noreferrer" 
                                                    className={`p-1.5 lg:p-2 rounded-xl transition-all ${isLight ? 'bg-black/5 hover:bg-black/10 text-black/40 hover:text-black' : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white'}`}
                                                    title="View Explorer">

@@ -78,6 +78,7 @@ function TradeTerminalComponent({
     uiVersion = 'v1',
     activeMarket,
     liveOdds,
+    timerActive = false,
 }) {
     const [isFocused, setIsFocused] = useState(false);
     const isLight = theme === 'light';
@@ -95,36 +96,15 @@ function TradeTerminalComponent({
         ? "flex flex-col h-full gap-2 lg:gap-1 overflow-hidden"
         : `w-full min-h-0 h-auto lg:h-full p-2 lg:p-2.5 pb-3 lg:pb-4 rounded-[32px] glass-panel relative transition-all duration-300 flex flex-col gap-1.5 lg:gap-2 !overflow-visible !z-50 ${isLight ? 'static-panel-light' : ''}`;
 
-    const renderHeader = () => (
-        <div className="flex items-center justify-between pointer-events-auto mt-[4%]">
-            <div className="flex items-center gap-2 lg:gap-2.5 pl-1">
-                <div className="flex items-center gap-1">
-                    <h2 className={`text-[9px] lg:text-xs font-black tracking-tighter uppercase ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
-                        TERMINAL
-                    </h2>
-                    <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#249C6C', boxShadow: `0 0 10px #249C6C` }} />
-                </div>
-            </div>
-
-            <div className="flex items-center pr-1.5">
-                <span className={`text-[9px] lg:text-xs font-mono font-black ${isLight ? 'text-black' : 'text-[#249C6C]'}`}>
-                    ${(Math.floor(Number(price) * 100) / 100).toFixed(2)}
-                </span>
-            </div>
-        </div>
-    );
+    const renderHeader = () => null;
 
     const renderTime = () => (
         <div className="flex flex-col gap-1 pointer-events-auto shrink-0">
-            <div className="flex items-center justify-between px-1">
-                <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-black/60' : 'text-white opacity-30'}`}>Time</span>
-            </div>
-
             <div className="relative w-full flex items-center p-0.5 rounded-full border border-white/5 bg-white/5 backdrop-blur-3xl overflow-hidden">
                 {/* 3-way Sliding Pill Background */}
                 <motion.div
-                    className="absolute top-0.5 bottom-0.5 w-[calc(33.33%-2px)] rounded-full bg-[#249C6C]"
-                    style={{ boxShadow: isLight ? 'none' : '0 0 15px rgba(36, 156, 108,0.3)' }}
+                    className="absolute top-0.5 bottom-0.5 w-[calc(33.33%-2px)] rounded-full bg-[#17A364]"
+                    style={{ boxShadow: isLight ? 'none' : '0 0 15px rgba(23, 163, 100,0.3)' }}
                     initial={false}
                     animate={{
                         x: duration === 15 ? 1 : duration === 10 ? 'calc(100% + 1px)' : 'calc(200% + 1px)',
@@ -135,8 +115,9 @@ function TradeTerminalComponent({
                 {[15, 10, 5].map(d => (
                     <button
                         key={d}
-                        onClick={(e) => { e.stopPropagation(); setDuration(d); }}
-                        className={`flex-1 relative z-10 py-1.5 lg:py-2 flex flex-col items-center justify-center transition-all duration-300 ${duration === d ? "text-white scale-110" : (isLight ? "text-black/40 hover:text-black/60" : "text-white/20 hover:text-white/40")}`}
+                        onClick={(e) => { e.stopPropagation(); if (!timerActive) setDuration(d); }}
+                        disabled={timerActive}
+                        className={`flex-1 relative z-10 py-1.5 lg:py-2 flex flex-col items-center justify-center transition-all duration-300 ${timerActive ? 'opacity-40 cursor-not-allowed' : ''} ${duration === d ? "text-white scale-110" : (isLight ? "text-black/40 hover:text-black/60" : "text-white/20 hover:text-white/40")}`}
                     >
                         <span className="text-[9px] lg:text-[10px] font-black tracking-tighter leading-none">{d}s</span>
                     </button>
@@ -153,17 +134,18 @@ function TradeTerminalComponent({
                     ${(sessionBalance || 0).toFixed(2)}
                 </span>
             </div>
-            <div className={`flex flex-col gap-1.5 py-1 lg:py-1 px-3 rounded-[12px] lg:rounded-[16px] border transition-all duration-300 ${isFocused ? (isLight ? 'bg-transparent border-[#249C6C]/20 shadow-none' : 'bg-white/10 border-[#249C6C]/30 shadow-[0_0_20px_rgba(36, 156, 108,0.1)]') : (isLight ? 'bg-transparent border-[#249C6C]/20' : 'bg-white/5 border-white/5')}`}>
-                <div className="flex items-center gap-1.5">
-                    <span className={`text-[10px] md:text-sm font-black transition-opacity duration-300 ${isFocused ? 'opacity-40 text-[#249C6C]' : 'opacity-20'}`}>$</span>
+            <div className={`flex flex-col gap-1 py-1 px-4 rounded-full border transition-all duration-300 ${isFocused ? (isLight ? 'bg-white border-[#17A364] shadow-[0_0_15px_rgba(23,163,100,0.15)]' : 'bg-black/40 border-[#17A364] shadow-[0_0_20px_rgba(23,163,100,0.2)]') : (isLight ? 'bg-white/60 border-[#17A364]/30 hover:border-[#17A364]/60' : 'bg-black/20 border-white/10 hover:border-white/20')}`}>
+                <div className="flex items-center justify-center relative w-full h-6 lg:h-8">
+                    <span className={`absolute left-0 text-[12px] md:text-sm font-black transition-opacity duration-300 ${isFocused ? 'opacity-80 text-[#17A364]' : (isLight ? 'text-[#0a261a]/40' : 'text-white/40')}`}>$</span>
                     <input
                         type="number"
                         value={amount}
                         onChange={handleAmountChange}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-                        placeholder="0.00"
-                        className={`w-full bg-transparent force-transparent-bg text-sm md:text-base font-black outline-none border-none transition-all focus:!ring-0 focus:!shadow-none focus:!border-none focus:!outline-none ${isLight ? 'text-black placeholder:text-black/30' : 'text-white placeholder:text-white/10'}`}
+                        placeholder="STAKE"
+                        disabled={timerActive}
+                        className={`w-full bg-transparent force-transparent-bg text-center text-sm md:text-[15px] font-black uppercase tracking-widest outline-none border-none transition-all focus:!ring-0 focus:!shadow-none focus:!border-none focus:!outline-none ${timerActive ? 'opacity-40 cursor-not-allowed' : ''} ${isLight ? 'text-[#17A364] placeholder:text-[#17A364]/60' : 'text-white placeholder:text-white/40'}`}
                     />
                 </div>
             </div>
@@ -173,7 +155,7 @@ function TradeTerminalComponent({
                     <span className={`text-[9px] font-black uppercase tracking-widest ${isLight ? 'text-black/70' : 'text-white/40'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>Payout</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className={`text-[9px] lg:text-[11px] font-black text-[#249C6C]`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+                    <span className={`text-[9px] lg:text-[11px] font-black text-[#17A364]`} style={{ fontFamily: '"Comfortaa", cursive' }}>
                         YES ${yesPayout.toFixed(2)}
                     </span>
                     <span className={`text-[9px] lg:text-[11px] font-black ${isLight ? 'text-black/20' : 'text-white/15'}`}>|</span>
@@ -187,11 +169,11 @@ function TradeTerminalComponent({
 
     const renderAmountSlider = () => (
         <div className="relative pt-2 pb-1 px-2 pointer-events-auto shrink-0">
-            <div className="relative h-1.5">
+            <div className="relative h-0.5">
                 <div className={`absolute inset-0 rounded-full ${isLight ? 'bg-black/10' : 'bg-white/10'}`} />
-                <div className="absolute inset-y-0 left-0 rounded-full bg-[#249C6C] transition-all duration-150" style={{ width: `${sliderValue || 0}%`, boxShadow: '0 0 10px rgba(36, 156, 108, 0.4)' }} />
+                <div className="absolute inset-y-0 left-0 rounded-full bg-[#17A364] transition-all duration-150" style={{ width: `${sliderValue || 0}%` }} />
                 <div
-                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 lg:w-4 lg:h-4 rounded-full bg-white shadow-lg border-2 border-[#249C6C] pointer-events-none transition-all duration-150 z-20"
+                    className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 lg:w-5 lg:h-5 rounded-full ${isLight ? 'bg-white border-[3px] border-[#17A364]' : 'bg-[#17A364] border-2 border-black'} pointer-events-none transition-all duration-150 z-20`}
                     style={{ left: `calc(${sliderValue || 0}% - ${(sliderValue || 0) > 50 ? 8 : 6}px)` }}
                 />
                 <input type="range" min="0" max="100" step="1" value={sliderValue || 0} onChange={handleSliderChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30" />
@@ -202,6 +184,7 @@ function TradeTerminalComponent({
     const handleAction = (dir) => {
         if (maintenanceMode || tradingHalted) return;
         if (!wallet?.connected) { login(); return; }
+        if (timerActive) return;
         setDirection(dir);
         executeTrade({ direction: dir });
     };
@@ -210,19 +193,19 @@ function TradeTerminalComponent({
     const shortCents = Math.round(currentOdds.SHORT * 100);
 
     const renderExecuteButtons = () => (
-        <div className="flex w-[85%] mx-auto gap-2 pointer-events-auto">
+        <div className="flex w-full mx-auto gap-2 pointer-events-auto mt-2">
             <button
                 onClick={(e) => { e.stopPropagation(); handleAction("UP"); }}
-                disabled={isExecuting || maintenanceMode || tradingHalted}
-                className={`flex-1 flex flex-row items-center justify-center gap-1.5 py-2.5 lg:py-2.5 rounded-[16px] transition-all relative overflow-hidden group hover:brightness-110 active:brightness-95 ${isExecuting || maintenanceMode || tradingHalted ? 'opacity-50 cursor-not-allowed' : ''}`}
-                style={{ background: '#249C6C', color: 'white' }}
+                disabled={isExecuting || maintenanceMode || tradingHalted || timerActive}
+                className={`flex-1 flex flex-row items-center justify-center gap-1 py-2 lg:py-2.5 rounded-full transition-all relative overflow-hidden group hover:scale-[1.02] active:scale-95 ${isExecuting || maintenanceMode || tradingHalted || timerActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                style={{ background: '#17A364', color: 'white', boxShadow: '0 8px 20px -6px rgba(23,163,100,0.4)' }}
             >
                 {isExecuting && direction === "UP" ? (
                     <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
                 ) : (
                     <>
-                        <span className="text-[12px] lg:text-[14px] font-black uppercase tracking-widest leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>YES</span>
-                        <span className="text-[10px] lg:text-[12px] font-black opacity-90 leading-none">
+                        <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>YES</span>
+                        <span className="text-[9px] lg:text-[10px] font-black opacity-90 leading-none">
                             <AnimatedCents value={longCents} color="rgba(255,255,255,0.9)" />
                         </span>
                     </>
@@ -230,16 +213,16 @@ function TradeTerminalComponent({
             </button>
             <button
                 onClick={(e) => { e.stopPropagation(); handleAction("DOWN"); }}
-                disabled={isExecuting || maintenanceMode || tradingHalted}
-                className={`flex-1 flex flex-row items-center justify-center gap-1.5 py-2.5 lg:py-2.5 rounded-[16px] transition-all relative overflow-hidden group hover:brightness-110 active:brightness-95 ${isExecuting || maintenanceMode || tradingHalted ? 'opacity-50 cursor-not-allowed' : ''}`}
-                style={{ background: '#FF4D4D', color: 'white' }}
+                disabled={isExecuting || maintenanceMode || tradingHalted || timerActive}
+                className={`flex-1 flex flex-row items-center justify-center gap-1 py-2 lg:py-2.5 rounded-full transition-all relative overflow-hidden group hover:scale-[1.02] active:scale-95 ${isExecuting || maintenanceMode || tradingHalted || timerActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                style={{ background: '#F04C4C', color: 'white', boxShadow: '0 8px 20px -6px rgba(240,76,76,0.4)' }}
             >
                 {isExecuting && direction === "DOWN" ? (
                     <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
                 ) : (
                     <>
-                        <span className="text-[12px] lg:text-[14px] font-black uppercase tracking-widest leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>NO</span>
-                        <span className="text-[10px] lg:text-[12px] font-black opacity-90 leading-none">
+                        <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest leading-none" style={{ fontFamily: '"Comfortaa", cursive' }}>NO</span>
+                        <span className="text-[9px] lg:text-[10px] font-black opacity-90 leading-none">
                             <AnimatedCents value={shortCents} color="rgba(255,255,255,0.9)" />
                         </span>
                     </>
@@ -249,8 +232,14 @@ function TradeTerminalComponent({
     );
 
     return (
-        <div className={containerClass} style={{ fontFamily: '"Comfortaa", cursive' }}>
-            {renderHeader()}
+        <div
+            className={
+                transparent
+                    ? "flex flex-col h-full gap-2 lg:gap-1 overflow-hidden"
+                    : `w-full min-h-0 h-auto lg:h-full p-4 lg:p-6 rounded-[32px] bg-white border border-gray-100 shadow-sm relative transition-all duration-300 flex flex-col gap-4 !overflow-visible !z-50`
+            }
+            style={{ fontFamily: '"Comfortaa", cursive' }}
+        >
             {renderTime()}
             {renderAmountBox()}
             {renderAmountSlider()}

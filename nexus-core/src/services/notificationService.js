@@ -93,7 +93,7 @@ function getEmailTemplate(title, message, type) {
     `;
 }
 
-async function notifyUser(userAddr, title, message, type = 'info') {
+async function notifyUser(userAddr, title, message, type = 'info', emailEnabled = false) {
     if (!userAddr) return;
     const addr = userAddr.toLowerCase();
 
@@ -134,9 +134,11 @@ async function notifyUser(userAddr, title, message, type = 'info') {
         console.error(`[Notification] Failed to emit socket notification for ${addr}:`, e.message);
     }
 
-    sendNotificationEmail(addr, title, message, type, notification).catch(e => {
-        console.error(`[Notification] Email send failed for ${addr}:`, e.message);
-    });
+    if (emailEnabled) {
+        sendNotificationEmail(addr, title, message, type, notification).catch(e => {
+            console.error(`[Notification] Email send failed for ${addr}:`, e.message);
+        });
+    }
 }
 
 async function sendNotificationEmail(addr, title, message, type, notification) {

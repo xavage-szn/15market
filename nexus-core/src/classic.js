@@ -98,25 +98,15 @@ class ClassicEngine {
   }
 
   // ── RESULT LOCKING ─────────────────────────────────────────────────────
+  // Captures the LIVE price at the instant countdown hits 0.
+  // That price is the single source of truth — cached in Redis for the settler.
   lockResult(trade) {
     if (trade.expiryEmitted || trade.isSettled) return;
     trade.isSettled = true;
 
-    // ALWAYS lock to the price AT expiry time (trade.settleAt), NOT Date.now().
-    // The 50ms monitor loop can fire late — using Date.now() picks up post-expiry
-    // prices that may have moved against the user, causing win→lose flips.
-    const settleTime = trade.settleAt || Date.now();
-    const lockDelay = Date.now() - settleTime;
-    let exitPrice = cache.getHistoricalPrice(trade.symbol, settleTime);
-
-    // Fallback: last snapshotted price (never use live cache.prices)
-    if (exitPrice <= 0) exitPrice = cache.getLatestPrice(trade.symbol) || 0;
-    if (exitPrice <= 0) exitPrice = trade.entryPrice;
-
-    if (trade.entryPrice > 0 && exitPrice > 0) {
-      const deviation = Math.abs(exitPrice - trade.entryPrice) / trade.entryPrice;
-      if (deviation > 0.30) exitPrice = trade.entryPrice;
-    }
+    // Capture the LIVE price at this exact moment — the instant the timer expires.
+    // This is the single source of truth for settlement.
+    const exitPrice = cache.prices[trade.symbol] || trade.entryPrice;
 
     const isUp = this.resolveDirection(trade.direction) === 1;
     const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
@@ -124,8 +114,22 @@ class ClassicEngine {
     trade.expiryEmitted = true;
     trade.lockedExitPrice = exitPrice;
     trade.lockedWon = won;
+    trade.settledAt = Date.now();
 
-    console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} | Lock delay: ${lockDelay}ms`);
+    console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} (live)`);
+
+    // Cache the result in Redis — backend settler reads from here
+    cache.cacheTradeResult(trade.id, {
+      tradeId: trade.id,
+      exitPrice,
+      won,
+      entryPrice: trade.entryPrice,
+      amount: trade.amount,
+      symbol: trade.symbol,
+      direction: trade.direction,
+      userAddr: trade.userAddr,
+      settledAt: trade.settledAt
+    });
 
     this.io.to(trade.userAddr).emit('trade_expired', {
       betId: trade.id,
@@ -220,7 +224,7 @@ class ClassicEngine {
 
     try {
       const notifier = require('./services/notificationService');
-      notifier.notifyUser(trade.userAddr, "Trade Won", `Your ${trade.symbol?.toUpperCase() || 'BTC'} ${trade.direction === 1 ? 'LONG' : 'SHORT'} trade won! +${payoutAmount.toFixed(2)} USDC.`, "success");
+      notifier.notifyUser(trade.userAddr, "Trade Won", `Your ${trade.symbol?.toUpperCase() || 'BTC'} ${trade.direction === 1 ? 'LONG' : 'SHORT'} trade won! +${payoutAmount.toFixed(2)} USDC.`, "success", false);
     } catch (e) {}
 
     console.log(`[Instant] Bet #${trade.id} credited. Payout: ${payoutStr} USDC`);
@@ -264,6 +268,7 @@ class ClassicEngine {
           if (receipt && receipt.status === 1) {
             console.log(`[BG-Settle] #${betId} confirmed on-chain`);
             cache.trades.delete(String(betId));
+            cache.deleteCachedTradeResult(String(betId));
             return;
           }
 
@@ -272,6 +277,7 @@ class ClassicEngine {
             if (verifyBet && verifyBet.settled) {
               console.log(`[BG-Settle] #${betId} confirmed via direct check`);
               cache.trades.delete(String(betId));
+              cache.deleteCachedTradeResult(String(betId));
               return;
             }
           } catch {}
@@ -312,6 +318,7 @@ class ClassicEngine {
       });
 
       cache.trades.delete(String(betId));
+      cache.deleteCachedTradeResult(String(betId));
     })();
   }
 
@@ -356,7 +363,7 @@ class ClassicEngine {
     }
     const duration = Math.max(1, Number(tradeParams.duration || 5));
     const marketId = Math.max(0, Number(tradeParams.marketId || 0));
-    const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp'];
+    const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp', 'avax'];
     const symbol = SYMBOL_MAP[marketId] || 'eth';
 
     let entryPrice = Number(cache.prices[symbol]);
@@ -456,6 +463,7 @@ class ClassicEngine {
       if (!receipt || receipt.status !== 1) {
         console.error(`[Place] #${numericId} tx NOT confirmed. Reverting balance.`);
         cache.trades.delete(trade.id);
+        cache.deleteCachedTradeResult(trade.id);
         const sess = cache.sessions.get(userAddr);
         if (sess) {
           sess.balance = Number(Math.max(0, sess.balance + amount).toFixed(6));
@@ -571,9 +579,9 @@ class ClassicEngine {
             const notifier = require('./services/notificationService');
             const providerName = provider?.providerApplication?.contactInfo?.name || provider?.username || providerAddr.substring(0, 6);
             if (won) {
-              notifier.notifyUser(addr, "Copy Trade Won", `${providerName}'s copy trade won! +${settledTrade.payout.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "success");
+              notifier.notifyUser(addr, "Copy Trade Won", `${providerName}'s copy trade won! +${settledTrade.payout.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "success", false);
             } else {
-              notifier.notifyUser(addr, "Copy Trade Lost", `${providerName}'s copy trade lost. -${settledTrade.amount.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "error");
+              notifier.notifyUser(addr, "Copy Trade Lost", `${providerName}'s copy trade lost. -${settledTrade.amount.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "error", false);
             }
           } catch (e) {}
         }
@@ -633,24 +641,24 @@ class ClassicEngine {
     const sessionBal = await rpc.getBalance(sessionWallet.address);
     const sessionBalNum = parseFloat(sessionBal || '0');
     const requiredNum = parseFloat(ethers.formatEther(requiredWei));
-    const GAS_BUFFER = 0.01; // 0.01 ARC buffer for gas
+    const GAS_BUFFER = 0.05; // 0.05 ARC buffer for gas
 
     if (sessionBalNum >= requiredNum + GAS_BUFFER) return;
 
     const needed = Math.max(0, requiredNum + GAS_BUFFER - sessionBalNum);
     if (needed <= 0) return;
 
-    // Round up to 2 decimals for clean transfer
-    const sendAmount = Math.ceil(needed * 100) / 100;
+    // Fund with at least 2 ARC to avoid frequent re-funding (reduces RPC calls)
+    const sendAmount = Math.max(2, Math.ceil(needed * 100) / 100);
     if (sendAmount <= 0) return;
 
     console.log(`[SessionFunder] Session wallet ${sessionWallet.address.slice(0, 10)}... needs ${sendAmount} ARC (has ${sessionBalNum})`);
 
     try {
       const operatorBal = await rpc.getBalance(rpc.wallet.address);
-      if (parseFloat(operatorBal || '0') < sendAmount + 0.05) {
+      if (parseFloat(operatorBal || '0') < sendAmount + 0.1) {
         console.error(`[SessionFunder] Operator insufficient balance (${operatorBal}) to fund ${sendAmount} ARC`);
-        return;
+        throw new Error(`Operator has ${operatorBal || 0} ARC, needs ${sendAmount + 0.1} ARC to fund session wallet. Refill operator or treasury.`);
       }
 
       const nonce = await rpc.getNonce(rpc.wallet.address);
@@ -666,9 +674,10 @@ class ClassicEngine {
         }
       );
       console.log(`[SessionFunder] Sent ${sendAmount} ARC to ${sessionWallet.address.slice(0, 10)}... | Tx: ${txResponse.hash}`);
-      await rpc.waitForReceipt(txResponse.hash);
+      // Don't wait for receipt — save an RPC call, the tx will confirm in background
     } catch (e) {
       console.error(`[SessionFunder] Failed to fund session wallet:`, e.message?.substring(0, 120));
+      throw new Error(`Session wallet funding failed: ${e.message?.substring(0, 100)}`);
     }
   }
 

@@ -2,6 +2,19 @@
 // nexus-core/src/cache.js
 // In-process cache layer for the unified backend.
 // ============================================================
+const Redis = require('ioredis');
+
+let redis = null;
+function getRedis() {
+  if (!redis) {
+    redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      maxRetriesPerRequest: null,
+      retryStrategy: (times) => Math.min(times * 1000, 30000)
+    });
+    redis.on('error', (err) => {});
+  }
+  return redis;
+}
 
 class Cache {
   constructor() {
@@ -14,11 +27,13 @@ class Cache {
     
     // Market data
     // Market data
-    this.prices = { btc: 0, eth: 0, sol: 0 };
+    this.prices = { btc: 0, eth: 0, sol: 0, mon: 0, avax: 0 };
     this.priceMeta = {
       btc: { updatedAt: 0 },
       eth: { updatedAt: 0 },
       sol: { updatedAt: 0 },
+      mon: { updatedAt: 0 },
+      avax: { updatedAt: 0 },
     };
     
     // Rounds state
@@ -26,6 +41,63 @@ class Cache {
 
     // Price History (Stable settlement buffer)
     this.priceHistory = {}; // key -> array of {price, time}
+
+    // 24h change calculation — 5-minute rolling window snapshots
+    this.dailySnapshots = {}; // key -> array of {price, time} (max 288 = 24h at 5min intervals)
+    this.lastSnapshotMinute = 0;
+
+    // Binance-sourced 24h changes (instant, no warmup needed)
+    this.binance24h = {}; // key -> percentage change number
+  }
+
+  /**
+   * Take 5-minute rolling window snapshots for 24h change calculation.
+   * Used for assets without Binance pairs (e.g. MON).
+   * Called every 60s, stores once per 5 minutes.
+   */
+  takeDailySnapshot() {
+    const now = Date.now();
+    const currentMinute = Math.floor(now / 60000);
+    if (currentMinute === this.lastSnapshotMinute) return;
+    // Only store every 5 minutes
+    if (currentMinute % 5 !== 0) return;
+    this.lastSnapshotMinute = currentMinute;
+
+    for (const key of Object.keys(this.prices)) {
+      const price = this.prices[key];
+      if (!price || price <= 0) continue;
+      if (!this.dailySnapshots[key]) this.dailySnapshots[key] = [];
+      this.dailySnapshots[key].push({ price, time: now });
+      // Keep 288 entries (24h at 5min intervals)
+      if (this.dailySnapshots[key].length > 288) this.dailySnapshots[key].shift();
+    }
+  }
+
+  /**
+   * Store a Binance-sourced 24h percentage change (instant, no warmup).
+   */
+  setBinance24h(key, change) {
+    this.binance24h[key] = change;
+  }
+
+  /**
+   * Calculate 24h % change.
+   * Prefers Binance-sourced data (instant). Falls back to rolling window.
+   * Returns the percentage change, or null if no data available.
+   */
+  get24hChange(key) {
+    // Prefer Binance 24h ticker data (instant, accurate)
+    if (this.binance24h[key] !== undefined && this.binance24h[key] !== null) {
+      return this.binance24h[key];
+    }
+
+    // Fallback: rolling window snapshots (for assets without Binance pairs)
+    const snaps = this.dailySnapshots[key];
+    if (!snaps || snaps.length < 2) return null;
+    const oldest = snaps[0];
+    const current = this.prices[key];
+    if (!current || !oldest.price || oldest.price <= 0) return null;
+    return ((current - oldest.price) / oldest.price) * 100;
   }
 
   /**
@@ -118,6 +190,35 @@ class Cache {
 
   setRoundState(asset, state) {
     this.roundsState.set(asset, state);
+  }
+
+  // --- Redis Trade Result Caching ---
+  // Pre-locks the result (exit price + won/lost) in Redis so the backend
+  // settler can read it instantly when the countdown hits 0.
+
+  async cacheTradeResult(tradeId, result) {
+    try {
+      const r = getRedis();
+      const key = `trade:${tradeId}:result`;
+      await r.set(key, JSON.stringify(result), 'EX', 3600); // 1h TTL
+    } catch (e) {}
+  }
+
+  async getCachedTradeResult(tradeId) {
+    try {
+      const r = getRedis();
+      const data = await r.get(`trade:${tradeId}:result`);
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async deleteCachedTradeResult(tradeId) {
+    try {
+      const r = getRedis();
+      await r.del(`trade:${tradeId}:result`);
+    } catch (e) {}
   }
 }
 

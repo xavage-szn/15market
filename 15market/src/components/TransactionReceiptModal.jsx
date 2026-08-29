@@ -135,6 +135,9 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                     const shares = payout;
                                     const sharePr = shares > 0 ? (parseFloat(transaction.amount) / shares) : 0;
                                     const profit = isWon ? (payout - parseFloat(transaction.amount)) : 0;
+                                    const isMon = (transaction.symbol || '').toUpperCase() === 'MON';
+                                    const isAvax = (transaction.symbol || '').toUpperCase() === 'AVAX';
+                                    const settleDecimals = isMon ? 6 : isAvax ? 4 : 2;
                                     return (
                                         <>
                                             <div className="flex justify-between w-full">
@@ -143,7 +146,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                             </div>
                                             <div className="flex justify-between w-full">
                                                 <span className="opacity-50 uppercase">SHARES BOUGHT:</span>
-                                                <span>{shares.toFixed(2)}</span>
+                                                <span>{shares.toFixed(settleDecimals)}</span>
                                             </div>
                                             <div className="flex justify-between w-full">
                                                 <span className="opacity-50 uppercase">TOTAL:</span>
@@ -151,7 +154,7 @@ export function TransactionReceiptModal({ isOpen, onClose, transaction }) {
                                             </div>
                                             <div className="flex justify-between w-full">
                                                 <span className="opacity-50 uppercase">TRADE PROFIT:</span>
-                                                <span className={isWon ? 'text-[#249C6C]' : 'opacity-60'}>${profit.toFixed(2)}</span>
+                                                <span className={isWon ? 'text-[#249C6C]' : 'opacity-60'}>${profit.toFixed(settleDecimals)}</span>
                                             </div>
                                         </>
                                     );

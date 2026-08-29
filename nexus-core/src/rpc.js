@@ -55,12 +55,19 @@ class RPCManager {
    * Get nonce from any working provider.
    */
   async getNonce(address) {
+    const errors = [];
     for (let i = 0; i < this.providers.length; i++) {
       try {
-        return await this.providers[i].getTransactionCount(address, 'pending');
-      } catch {}
+        const count = await this.callWithTimeout(
+          this.providers[i].getTransactionCount(address, 'pending'),
+          8000
+        );
+        return count;
+      } catch (err) {
+        errors.push(`[RPC#${i}] ${err.message?.substring(0, 80)}`);
+      }
     }
-    throw new Error('Failed to get nonce from all providers');
+    throw new Error(`Failed to get nonce from all ${this.providers.length} providers: ${errors.join(' | ')}`);
   }
 
   /**

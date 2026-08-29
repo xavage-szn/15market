@@ -52,6 +52,12 @@ export default defineConfig({
       ".trycloudflare.com"
     ],
     proxy: {
+      '/api-binance': {
+        target: 'https://api.binance.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api-binance/, '')
+      },
       '/api-mexc': {
         target: 'https://api.mexc.com',
         changeOrigin: true,

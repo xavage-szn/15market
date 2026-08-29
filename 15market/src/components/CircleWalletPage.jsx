@@ -332,15 +332,17 @@ export function CircleWalletPage({
         fetchWalletInfo();
     }, [address]);
 
+    // Extract solana address as a PRIMITIVE dependency to avoid unstable `wallets` reference from Privy
+    const solanaAddr = wallets?.find(w => w.address && !w.address.startsWith('0x'))?.address || null;
+
     const fetchAllBalances = useCallback(async () => {
         if (!fundingSourceAddress) return;
         setIsFetchingBalances(true);
         const newBalances = {};
 
-        // Extract solana address — prefer Privy-linked wallet, fall back to generated deposit wallet
-        const solWallet = wallets?.find(w => w.address && !w.address.startsWith('0x'));
+        // Use solanaAddr extracted outside this callback (stable dependency)
         const _generatedPub = localStorage.getItem(`15market_solana_deposit_pub_${fundingSourceAddress}`);
-        const solAddress = solWallet?.address || _generatedPub || null;
+        const solAddress = solanaAddr || _generatedPub || null;
 
         const promises = SUPPORTED_TOKENS.map(async (token) => {
             const config = CHAIN_CONFIG[token.id];
@@ -384,7 +386,7 @@ export function CircleWalletPage({
         await Promise.allSettled(promises);
         setMultiChainBalances(newBalances);
         setIsFetchingBalances(false);
-    }, [fundingSourceAddress, wallets, generatedSolWalletPub]);
+    }, [fundingSourceAddress, solanaAddr, generatedSolWalletPub]);
 
     useEffect(() => {
         if (fundingSourceAddress) {
@@ -926,9 +928,11 @@ export function CircleWalletPage({
                     const ARC_TESTNET_CHAIN_ID = 5042002;
                     const ARC_RPC = 'https://rpc.testnet.arc.network';
                     
-                    // Switch chain on the Privy wallet FIRST
+                    // Switch chain on the Privy wallet FIRST — with timeout to prevent page freeze
                     try {
-                        await eoaWallet.switchChain(ARC_TESTNET_CHAIN_ID);
+                        const switchPromise = eoaWallet.switchChain(ARC_TESTNET_CHAIN_ID);
+                        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+                        await Promise.race([switchPromise, timeout]);
                     } catch (switchErr) {
                         console.warn('Chain switch warning (Arc):', switchErr);
                     }

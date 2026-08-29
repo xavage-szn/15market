@@ -10,7 +10,7 @@ import {
   MessageSquare, User, Trophy, Calendar, CheckCircle, ChevronRight,
   Image as ImageIcon, PartyPopper, Settings, LogOut, Coins, Menu, X, Shield, Lock,
   History, ChevronUp, ChevronDown, Share2, ExternalLink, Zap, Activity, TrendingUp,
-  Maximize2, RotateCw, Layers
+  Maximize2, RotateCw, Layers, Sun, Moon
 } from "lucide-react";
 import { Stamp } from "./components/Stamp";
 import { parseEther, parseUnits } from "viem";
@@ -58,6 +58,9 @@ import WalletConnectionLoading from "./components/WalletConnectionLoading";
 import GlobalLoader from "./components/GlobalLoader";
 
 import { RoundsTerminal } from "./components/RoundsTerminal";
+import LeftSidebar from './components/LeftSidebar';
+import TradingWidget from './components/TradingWidget';
+import TradeHistoryTable from './components/TradeHistoryTable';
 // Rounds chart logic merged into LiveStreamingChart/CustomChart for performance
 import { socketService } from './utils/socket';
 import { priceSocketService } from './utils/priceSocket';
@@ -79,7 +82,7 @@ class ErrorBoundary extends Component {
           </div>
           <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">Platform Interrupted</h1>
           <p className="text-xs text-white/40 mb-8 max-w-xs">{this.state.error?.message || "An unexpected error occurred in the UI layer."}</p>
-          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#249C6C] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
+          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-[#17A364] rounded-xl font-black uppercase text-xs tracking-widest">Restart Terminal</button>
         </div>
       );
     }
@@ -98,7 +101,7 @@ const PortraitPrompt = ({ theme }) => (
     animate={{ opacity: 1 }}
     className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center p-8 text-center backdrop-blur-3xl`}
     style={{
-      background: theme === 'light' ? '#CFDCD5' : 'rgba(5, 5, 5, 0.98)'
+      background: theme === 'light' ? '#ffffff' : 'rgba(5, 5, 5, 0.98)'
     }}
   >
     <div className="relative mb-12">
@@ -107,9 +110,9 @@ const PortraitPrompt = ({ theme }) => (
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 1 }}
         className="relative"
       >
-        <div className="w-32 h-20 rounded-2xl border-4 border-[#249C6C]/30 flex items-center justify-center">
-          <div className="w-1 h-8 rounded-full bg-[#249C6C]/20 absolute -right-1" />
-          <div className="w-2 h-2 rounded-full bg-[#249C6C]/20 absolute left-4" />
+        <div className="w-32 h-20 rounded-2xl border-4 border-[#17A364]/30 flex items-center justify-center">
+          <div className="w-1 h-8 rounded-full bg-[#17A364]/20 absolute -right-1" />
+          <div className="w-2 h-2 rounded-full bg-[#17A364]/20 absolute left-4" />
         </div>
       </motion.div>
       <motion.div
@@ -117,21 +120,21 @@ const PortraitPrompt = ({ theme }) => (
         transition={{ duration: 2, repeat: Infinity }}
         className="absolute -top-8 left-1/2 -translate-x-1/2"
       >
-        <RotateCw className="w-8 h-8 text-[#249C6C]" />
+        <RotateCw className="w-8 h-8 text-[#17A364]" />
       </motion.div>
     </div>
 
-    <h2 className="text-3xl font-black text-[#249C6C] uppercase tracking-tighter mb-4">
+    <h2 className="text-3xl font-black text-[#17A364] uppercase tracking-tighter mb-4">
       Rotate Your Device
     </h2>
     <p className="text-white/40 text-sm font-medium max-w-xs leading-relaxed"
       style={{ color: theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }}>
-      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#249C6C] font-bold">Landscape</span> to access the Precision V2 Terminal.
+      Expert-level trading requires a wider field of view. Please turn your screen to <span className="text-[#17A364] font-bold">Landscape</span> to access the Precision V2 Terminal.
     </p>
 
-    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#249C6C]/10 border border-[#249C6C]/20">
-      <Maximize2 className="w-4 h-4 text-[#249C6C]" />
-      <span className="text-[10px] font-black uppercase tracking-widest text-[#249C6C]">Desktop Mode Optimization</span>
+    <div className="mt-12 flex items-center gap-3 py-2 px-4 rounded-full bg-[#17A364]/10 border border-[#17A364]/20">
+      <Maximize2 className="w-4 h-4 text-[#17A364]" />
+      <span className="text-[10px] font-black uppercase tracking-widest text-[#17A364]">Desktop Mode Optimization</span>
     </div>
   </motion.div>
 );
@@ -158,7 +161,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
         flex flex-col overflow-hidden
         ${isDark
           ? 'bg-[#0D2B1D]/80 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] border-white/10'
-          : 'bg-[#CFDCD5]/80 shadow-2xl border-t-[2px] border-[#249C6C]'}
+          : 'bg-white/80 shadow-2xl border-t-[2px] border-[#17A364]'}
       `}>
         {/* Horizontal Toggle Handle Bar */}
         <div
@@ -168,7 +171,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
             transition-all duration-300 relative shrink-0
             ${isDark
               ? 'bg-white/5 border-b border-white/5'
-              : 'bg-[#249C6C] border-b border-[#249C6C]/20'}
+              : 'bg-[#17A364] border-b border-[#17A364]/20'}
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
@@ -201,14 +204,14 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                   key={trade.id}
                   className={`
                     p-4 rounded-2xl border transition-all active:scale-[0.98]
-                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/40 border-[#249C6C]/20 shadow-sm'}
+                    ${isDark ? 'bg-white/5 border-white/5' : 'bg-white/40 border-[#17A364]/20 shadow-sm'}
                   `}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className={`
                         text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter
-                        ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
+                        ${trade.direction === 'UP' ? 'bg-[#17A364]/20 text-[#17A364]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
                       `}>
                         {trade.direction === 'UP' ? 'LONG' : (trade.direction === 'DOWN' ? 'SHORT' : trade.direction)}
                       </div>
@@ -217,7 +220,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                       </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className={`text-xs font-black uppercase ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                      <span className={`text-xs font-black uppercase ${isWin ? 'text-[#17A364]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
                         {isWin ? `+$${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                       </span>
                       {isWin && (trade.payoutSettled || trade.status === 'PAID') && (
@@ -235,7 +238,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => onViewReceipt(trade)}
-                        className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
+                        className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#17A364]/5'}`}
                       >
                         <Share2 size={12} />
                       </button>
@@ -243,7 +246,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
                         href={`https://testnet.arcscan.app/tx/${trade.tx}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#249C6C]/5'}`}
+                        className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 text-[#0a261a]/40 hover:text-[#0a261a]/60 hover:bg-[#17A364]/5'}`}
                       >
                         <ExternalLink size={12} />
                       </a>
@@ -569,6 +572,7 @@ export default function UserApp() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [hasRoundsAccess, setHasRoundsAccess] = useState(null); // null = unknown, true/false = verified
   const [liveOdds, setLiveOdds] = useState(null);
+  const [changes24h, setChanges24h] = useState({});
 
 const performStealthChecks = useCallback(async (addr) => {
     if (!addr) return;
@@ -1444,7 +1448,7 @@ const performStealthChecks = useCallback(async (addr) => {
     return null;
   }, [isConnected, address]);
 
-  const GREEN = "#249C6C";
+  const GREEN = "#17A364";
   const CORAL = "#FF4444";
 
   useEffect(() => {
@@ -1828,6 +1832,7 @@ const performStealthChecks = useCallback(async (addr) => {
     { id: 'btc', symbol: 'BTC', name: 'Bitcoin', pair: '0xCBCdAf43E4E8BA277685D62aA137BA4904f421ac', pythId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43', binance: 'BTCUSDT', kraken: 'XBTUSD' },
     { id: 'sol', symbol: 'SOL', name: 'Solana', pair: '0x127452f3f1da03d95f9bbd58a2d10c1154b33001', pythId: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d', binance: 'SOLUSDT', kraken: 'SOLUSD' },
     { id: 'mon', symbol: 'MON', name: 'Monad', pythId: '0x0000000000000000000000000000000000000000000000000000000000000000', binance: 'MONUSDT' },
+    { id: 'avax', symbol: 'AVAX', name: 'Avalanche', pythId: '0x93da3352f9f1d105fdfe4971cfa80e9dd777bfc5d0f683ebb6e1294b92137bb7', binance: 'AVAXUSDT' },
   ]), []);
 
   const mergeMarketWithDefault = useCallback((market) => {
@@ -1851,9 +1856,21 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
 
+  const tickerTrades = useMemo(() => {
+    const recent = gameMode === 'rounds' ? roundsTradeHistory : tradeHistory;
+    return (recent || []).slice(-20).reverse().map(t => ({
+      win: t.status === 'WON' || t.result === 'WIN',
+      sym: (t.symbol || 'ETH').toUpperCase(),
+      val: t.amount || '0.00',
+    }));
+  }, [gameMode, roundsTradeHistory, tradeHistory]);
+
   // ─── UNIFIED PRICE CONSUMPTION ───
-  // Uses the dedicated price-frontend service for ultra-low-latency streaming.
-  const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, ts: {} });
+  // Uses the dedicated direct Pyth price stream (priceSocketService) for ultra-low-latency
+  // UI pricing. The backend socket 'price' feed is deliberately NOT consumed here — it is
+  // the execution/settlement reference only.
+  const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, mon: 0, avax: 0, ts: {} });
+  const [oraclePrices, setOraclePrices] = useState({ btc: 0, eth: 0, sol: 0, mon: 0, avax: 0 });
   const [streamStatus, setStreamStatus] = useState('connecting');
 
   useEffect(() => {
@@ -1920,6 +1937,23 @@ const performStealthChecks = useCallback(async (addr) => {
 
         lastPriceUpdateRef.current = Date.now();
       }
+
+      // Update all prices for the sidebar independently of the current asset
+      setOraclePrices(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(oraclePricesRef.current)) {
+          if (k === 'ts') continue;
+          if (typeof v === 'number' && v > 0) {
+            const trunc = Math.floor(v * 100) / 100;
+            if (prev[k] !== trunc) {
+              next[k] = trunc;
+              changed = true;
+            }
+          }
+        }
+        return changed ? next : prev;
+      });
     }, 200);
 
     return () => clearInterval(pulseLoop);
@@ -1939,6 +1973,10 @@ const performStealthChecks = useCallback(async (addr) => {
 
     const unbindLiveOdds = socketService.on('live_odds', (data) => {
       setLiveOdds(data);
+    });
+
+    const unbindMacro24h = socketService.on('macro_24h', (data) => {
+      if (data && typeof data === 'object') setChanges24h(data);
     });
 
     // ── BACKEND-AUTHORITATIVE SETTLEMENT ──
@@ -2051,6 +2089,8 @@ const performStealthChecks = useCallback(async (addr) => {
 
     return () => {
       unbindSettings();
+      unbindLiveOdds();
+      unbindMacro24h();
       unbindSettled();
       unbindBroadcast();
       unbindProviderUpdate();
@@ -2806,7 +2846,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
   return (
-    <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full text-current selection:bg-[#249C6C]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'}`}>
+    <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full text-current selection:bg-[#17A364]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative ${isLight ? 'bg-white' : 'bg-black'}`}>
       <div className={`fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
 
       {/* Landscape Blocker — branded fullscreen gate for mobile devices in landscape */}
@@ -2818,12 +2858,12 @@ const performStealthChecks = useCallback(async (addr) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'}`}
+            className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center ${isLight ? 'bg-white' : 'bg-black'}`}
             style={{ fontFamily: '"Comfortaa", cursive' }}
           >
             {/* Subtle background glow */}
-            <div className={`absolute top-[30%] left-1/2 -translate-x-1/2 w-80 h-80 ${isLight ? 'bg-[#249C6C]/8' : 'bg-[#249C6C]/10'} rounded-full blur-[120px]`} />
-            <div className={`absolute bottom-[20%] right-[20%] w-60 h-60 ${isLight ? 'bg-[#249C6C]/5' : 'bg-[#249C6C]/5'} rounded-full blur-[100px]`} />
+            <div className={`absolute top-[30%] left-1/2 -translate-x-1/2 w-80 h-80 ${isLight ? 'bg-[#17A364]/8' : 'bg-[#17A364]/10'} rounded-full blur-[120px]`} />
+            <div className={`absolute bottom-[20%] right-[20%] w-60 h-60 ${isLight ? 'bg-[#17A364]/5' : 'bg-[#17A364]/5'} rounded-full blur-[100px]`} />
 
             {/* Logo */}
             <img src={isLight ? '/goblogo.png' : '/gowlogo.png'} alt="15market" className="h-16 w-auto mb-8 opacity-80" />
@@ -2832,18 +2872,18 @@ const performStealthChecks = useCallback(async (addr) => {
             <div className="relative mb-6">
               <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {/* Landscape phone (faded, the "from" state) */}
-                <rect x="6" y="22" width="36" height="24" rx="4" stroke="#249C6C" strokeWidth="1.5" opacity="0.25" />
-                <line x1="10" y1="34" x2="10.01" y2="34" stroke="#249C6C" strokeWidth="2" strokeLinecap="round" opacity="0.25" />
+                <rect x="6" y="22" width="36" height="24" rx="4" stroke="#17A364" strokeWidth="1.5" opacity="0.25" />
+                <line x1="10" y1="34" x2="10.01" y2="34" stroke="#17A364" strokeWidth="2" strokeLinecap="round" opacity="0.25" />
 
                 {/* Portrait phone (bright, the "to" state) */}
                 <g className="animate-pulse">
-                  <rect x="40" y="10" width="24" height="36" rx="4" stroke="#249C6C" strokeWidth="2" fill="none" />
-                  <line x1="52" y1="40" x2="52.01" y2="40" stroke="#249C6C" strokeWidth="2.5" strokeLinecap="round" />
+                  <rect x="40" y="10" width="24" height="36" rx="4" stroke="#17A364" strokeWidth="2" fill="none" />
+                  <line x1="52" y1="40" x2="52.01" y2="40" stroke="#17A364" strokeWidth="2.5" strokeLinecap="round" />
                 </g>
 
                 {/* Curved arrow from landscape to portrait */}
-                <path d="M30 50 C30 60, 45 62, 48 50" stroke="#249C6C" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-                <polyline points="45,53 48,50 51,53" stroke="#249C6C" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M30 50 C30 60, 45 62, 48 50" stroke="#17A364" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                <polyline points="45,53 48,50 51,53" stroke="#17A364" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
 
@@ -2856,7 +2896,7 @@ const performStealthChecks = useCallback(async (addr) => {
             </p>
 
             {/* Subtle brand accent line */}
-            <div className="mt-8 w-16 h-[2px] bg-gradient-to-r from-transparent via-[#249C6C]/40 to-transparent rounded-full" />
+            <div className="mt-8 w-16 h-[2px] bg-gradient-to-r from-transparent via-[#17A364]/40 to-transparent rounded-full" />
           </motion.div>
         )}
       </AnimatePresence>
@@ -2979,45 +3019,50 @@ const performStealthChecks = useCallback(async (addr) => {
           ) : (
             <div className="w-full flex-1 flex flex-col items-center flex-shrink-0 py-0 overflow-hidden min-h-0">
 
-              <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-[160] safe-top ${isSmallScreen ? 'h-auto py-1' : 'h-20 lg:h-24'}`}
+              <header className={`w-full max-w-[1600px] px-4 md:px-6 flex items-center justify-between mb-0 relative z-[160] safe-top ${isSmallScreen ? 'h-14' : 'h-16 lg:h-20'}`}
                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : {}}>
-                <div className="flex items-center transition-all duration-500 h-full"
-                  style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '36px') : '0px' }}>
-                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[64px]' : 'h-[72px] lg:h-[84px]'} w-auto drop-shadow-[0_0_50px_rgba(36, 156, 108,0.3)] transition-all`} />
+                <div className="flex items-center transition-all duration-500 h-full overflow-visible"
+                  style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '16px') : '0px' }}>
+                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[60px]' : 'h-[90px] lg:h-[100px]'} w-auto transition-all pointer-events-auto`} style={{ marginTop: '-20px', marginBottom: '-20px', marginLeft: '-0.5%' }} />
                 </div>
 
-                <div className="hidden lg:flex items-center gap-3 px-2 py-1 scale-[0.8] origin-right">
+                <div className="hidden lg:flex items-center gap-2 px-2 py-1 origin-right">
                   {authenticated && (
                     <>
-                      {/* Branded Game Mode Switcher - Large Screens */}
-                      <div className={`flex items-center p-1.5 rounded-[22px] border backdrop-blur-3xl shadow-2xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'} scale-90 origin-right`}>
-                        <motion.div
-                          className="absolute top-1.5 bottom-1.5 rounded-[18px] bg-gradient-to-br from-[#2EC47C] to-[#14472C] shadow-[0_0_20px_rgba(36, 156, 108,0.4)]"
-                          initial={false}
-                          animate={{ x: gameMode === 'classic' ? 0 : 90, width: 90 }}
-                          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                        />
-                        {[{ key: 'classic', Icon: Zap, label: 'Classic' }, { key: 'rounds', Icon: Layers, label: 'Rounds' }].map(({ key, Icon, label }) => (
+                      {/* Game Mode Switcher */}
+                      <div className={`flex items-center gap-0.5 p-[3px] rounded-full border transition-all duration-500 ${theme === 'light' ? 'bg-white border-[#E5E7EB]' : 'bg-white/5 border-white/10'}`}>
+                        {[{ key: 'classic', label: 'CLASSIC' }, { key: 'rounds', label: 'LADDERS' }].map(({ key, label }) => (
                           <button key={key} onClick={() => { setGameMode(key); setView('trading'); }}
-                            className={`relative z-10 flex items-center justify-center gap-2 h-8 w-[90px] transition-all duration-300`}>
-                            <Icon size={12} className={`transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/30' : 'text-white/20')}`} />
-                            <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${gameMode === key ? 'text-white' : (theme === 'light' ? 'text-black/40' : 'text-white/20')}`}>{label}</span>
+                            style={{ fontFamily: '"Comfortaa", cursive' }}
+                            className={`h-[26px] px-3 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center ${
+                              gameMode === key
+                                ? 'bg-[#17A364] text-white shadow-sm'
+                                : (theme === 'light' ? 'text-gray-400 hover:text-gray-600' : 'text-white/40 hover:text-white/60')
+                            }`}>
+                            {label}
                           </button>
                         ))}
                       </div>
-                      <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                      <div className="flex items-center gap-3">
-                        <WalletBalance network={network} theme={theme} balanceOverride={sessionBalance} />
+
+                      {/* Theme toggle - pill switch */}
+                      <div className={`flex items-center gap-0.5 p-[3px] rounded-full border transition-all duration-500 ${theme === 'light' ? 'bg-white border-[#E5E7EB]' : 'bg-white/5 border-white/10'}`}>
+                        <button onClick={toggleTheme} className={`w-[26px] h-[26px] rounded-full flex items-center justify-center transition-all duration-300 ${theme === 'light' ? 'bg-[#17A364] text-white shadow-sm' : 'bg-transparent text-white/40 hover:text-white/60'}`}>
+                          <Sun size={12} className={theme === 'light' ? 'text-white' : ''} />
+                        </button>
+                        <button onClick={toggleTheme} className={`w-[26px] h-[26px] rounded-full flex items-center justify-center transition-all duration-300 ${theme === 'dark' ? 'bg-[#17A364] text-white shadow-sm' : 'bg-transparent text-gray-400 hover:text-gray-600'}`}>
+                          <Moon size={12} className={theme === 'dark' ? 'text-white' : ''} />
+                        </button>
                       </div>
-                      <button onClick={() => setView("dashboard")} className="w-10 h-10 rounded-full border backdrop-blur-md transition-all group active:scale-95 overflow-hidden flex items-center justify-center p-[2px]"
+
+                      {/* Profile */}
+                      <button onClick={() => setView("dashboard")} className="w-8 h-8 rounded-full border flex items-center justify-center transition-all group active:scale-95 overflow-hidden"
                         style={{
-                          backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
-                          borderColor: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                          borderColor: theme === 'light' ? 'rgba(229,231,235,1)' : 'rgba(255,255,255,0.1)',
                         }}>
                         {(userProfile?.avatar || userProfile?.xProfileImage) ? (
                           <img src={userProfile?.avatar || userProfile?.xProfileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
                         ) : (
-                          <User size={18} className={theme === 'light' ? 'text-black/60 group-hover:text-black' : 'text-white/60 group-hover:text-white'} />
+                          <User size={14} className={theme === 'light' ? 'text-gray-400 group-hover:text-black' : 'text-white/40 group-hover:text-white'} />
                         )}
                       </button>
                     </>
@@ -3029,7 +3074,7 @@ const performStealthChecks = useCallback(async (addr) => {
                   {authenticated && (
                     <>
                       {/* Branded Game Mode Switcher - Mobile */}
-                      <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#249C6C]/20' : 'bg-black/40 border-white/5'}`}>
+                      <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#17A364]/20' : 'bg-black/40 border-white/5'}`}>
                         <motion.div
                           className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#2EC47C] to-[#14472C]"
                           initial={false}
@@ -3072,17 +3117,17 @@ const performStealthChecks = useCallback(async (addr) => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#249C6C]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#249C6C]/5 to-yellow-500/10 border-white/5'}`}
+                    className={`w-full overflow-hidden relative z-[101] border-b ${theme === 'light' ? 'bg-yellow-500/10 border-[#17A364]/20' : 'bg-gradient-to-r from-yellow-500/10 via-[#17A364]/5 to-yellow-500/10 border-white/5'}`}
                   >
                     <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-2 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <Trophy className="w-3 h-3 md:w-4 md:h-4 text-yellow-500 animate-bounce" />
-                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#249C6C]'}`}>
+                        <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-[#0a261a]' : 'text-[#17A364]'}`}>
                           {winnerBanner.text || "New Winner Leaderboard is Live!"}
                         </span>
                       </div>
                       {winnerBanner.cta && (
-                        <button className="px-3 py-0.5 md:py-1 bg-[#249C6C] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
+                        <button className="px-3 py-0.5 md:py-1 bg-[#17A364] text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-tighter hover:scale-105 transition-transform">
                           {winnerBanner.cta}
                         </button>
                       )}
@@ -3091,15 +3136,8 @@ const performStealthChecks = useCallback(async (addr) => {
                 )}
               </AnimatePresence>
 
-              {/* DESKTOP-ONLY: Weighted Green Line Separator (LOCKED POSITION) */}
-              {!isSmallScreen && (
-                <div className="w-full flex flex-col relative z-[170] -mt-2 md:mt-0 lg:-mt-4 mb-2">
-                  <div className="w-full h-[2px] bg-[#249C6C] shadow-[0_0_15px_rgba(36, 156, 108,0.6)]" />
-                </div>
-              )}
-
-              {/* MAIN CONTENT CONTAINER (LOCKED DESKTOP MARGIN: lg:mt-2) */}
-              <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 h-full lg:mt-2 relative z-10`}>
+              {/* MAIN CONTENT CONTAINER */}
+              <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 h-full relative z-10`}>
                 <Suspense fallback={<div className="h-[200px] flex items-center justify-center animate-pulse">Loading Rounds Access...</div>}>
                   <RoundsAccessGate
                     theme={theme}
@@ -3114,274 +3152,115 @@ const performStealthChecks = useCallback(async (addr) => {
                     </div>
                   )}
 
-                  <div className={`w-full flex lg:flex-row landscape:flex-row flex-col ${isSmallScreen ? 'gap-[2px]' : 'gap-0 lg:gap-1'} ${isSmallScreen ? 'mb-0' : 'mb-5 md:mb-5'} relative z-0 flex-1 min-h-0`}>
-                    {/* V2 Integrated Content Container */}
-                    <motion.div
-                      layout={!isSmallScreen}
-                      className={`w-full lg:w-[70%] flex flex-col gap-0.5 ${isSmallScreen ? 'flex-1 min-h-[200px] pb-[281px]' : 'h-full flex-1 min-h-0'} transition-all duration-500 relative`}
-                      style={{ paddingLeft: !isSmallScreen && showSideHistory ? '202px' : (!isSmallScreen ? '20px' : '0px') }}>
+              {/* 2-COLUMN LAYOUT */}
+              <div className="flex-1 grid grid-cols-[220px_1fr] min-h-0 overflow-hidden px-4 pt-0 pb-2 gap-4">
+                {/* LEFT SIDEBAR */}
+                <div className="h-full border-r border-[#17A364] pr-4 overflow-y-auto scrollbar-none">
+                  <LeftSidebar
+                    sessionBalance={sessionBalance}
+                    evmBalance={evmBalance}
+                    activeMarket={activeMarket}
+                    setActiveMarket={handleMarketChange}
+                    defaultTokens={defaultTokens}
+                    oraclePrices={oraclePrices}
+                    changes24h={changes24h}
+                    theme={theme}
+                    isSmallScreen={isSmallScreen}
+                  />
+                </div>
 
-                      {!isSmallScreen && (
-                        <SideHistoryPane
-                          isOpen={showSideHistory}
-                          onToggle={() => setShowSideHistory(!showSideHistory)}
-                          tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-                          theme={theme}
-                          onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
-                        />
-                      )}
-
-                      {!isSmallScreen && (
-                        <div className={`w-full md:w-full relative z-[45] overflow-hidden mb-1 md:rounded-full`}>
-                          <GlobalTradeScroller theme={theme} />
-                        </div>
-                      )}
-
-
-                      {/* Chart Container Wrapper for Shadow - PREVENTS CLIPPING */}
-                      <div className="flex-1 w-full flex flex-col relative z-0"
-                        style={{
-                          filter: theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
-                        }}>
-                        {/* CHART CONTAINER (LOCKED DESKTOP HEIGHT: lg:min-h-[470px]) */}
-                        <div className={`${isSmallScreen ? 'flex-grow h-full' : 'flex-[2] min-h-[280px]'} lg:min-h-[380px] lg:h-full lg:min-h-0 rounded-[32px] overflow-hidden border transition-all duration-300 ${isSmallScreen ? 'glass-panel backdrop-blur-3xl' : 'glass-panel chart-glow'} flex flex-col w-full ${isSmallScreen ? '' : 'min-h-0'} relative z-10`}
-                          style={{
-                            background: isSmallScreen
-                              ? (theme === 'light' ? 'rgba(180, 217, 199, 0.2)' : 'rgba(10, 10, 10, 0.85)')
-                              : (theme === 'light' ? 'rgba(36, 156, 108, 0.08)' : 'rgba(10, 10, 10, 0.7)'),
-                            boxShadow: theme === 'light'
-                              ? 'none'
-                              : (isSmallScreen
-                                ? '0 30px 90px rgba(0,0,0,0.8), inset 0 0 60px rgba(36, 156, 108,0.05), inset 0 2px 4px rgba(255,255,255,0.05)'
-                                : `0 0 60px ${GREEN}10, inset 0 0 40px ${GREEN}05`),
-                            borderColor: isSmallScreen
-                              ? (theme === 'light' ? 'rgba(36, 156, 108, 0.35)' : 'rgba(255, 255, 255, 0.05)')
-                              : (theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : `${GREEN}15`)
-                          }}>
-                          {isSmallScreen ? (
-                            <CustomChart
-                              symbol={activeMarket?.binance || 'BTCUSDT'}
-                              theme={theme}
-                              network={network}
-                              activeMarket={activeMarket}
-                              uiVersion={uiVersion}
-                              setActiveMarket={handleMarketChange}
-                              activeTrades={activeTrades}
-                              currentPrice={price}
-                              priceHistory={priceHistoryRef.current}
-                            />
+                {/* RIGHT AREA (Scroller + Chart/Trading Row + Trade History) */}
+                <div className="flex flex-col min-h-0 min-w-0 relative z-10">
+                  
+                  
+                  {/* MARKET SCROLLER (Marquee) */}
+                  <div className="w-full h-[36px] shrink-0 bg-[#17A364] rounded-2xl flex items-center px-4 mb-3 overflow-hidden relative">
+                    <div className="flex gap-8 whitespace-nowrap animate-ticker">
+                      {tickerTrades.map((item, idx) => (
+                        <div key={idx} className="inline-flex items-center gap-1.5 text-white font-bold text-[12px]">
+                          {item.win ? (
+                            <span className="text-white font-black drop-shadow-md">✓</span>
                           ) : (
-                            <div className="flex-1 w-full h-full flex flex-row relative">
-                              {/* Chart Area */}
-                              <div className="flex-1 w-full h-full relative min-w-0">
-                                <CustomChart
-                                  symbol={activeMarket?.binance || 'BTCUSDT'}
-                                  theme={theme}
-                                  network={network}
-                                  activeMarket={activeMarket}
-                                  uiVersion={uiVersion}
-                                  setActiveMarket={handleMarketChange}
-                                  activeTrades={activeTrades}
-                                  currentPrice={price}
-                                  priceHistory={priceHistoryRef.current}
-                                />
-                              </div>
-
-                              {/* Slim Order Book Area (Hidden on Mobile or when History is Open) */}
-                              <div className={`hidden ${showSideHistory ? 'lg:hidden' : 'lg:flex'} w-[120px] xl:w-[150px] flex-col border-l transition-all duration-300 ${theme === 'light' ? 'border-[#249C6C]/10 bg-[#e6f4ed]/30' : 'border-white/5 bg-black/20'}`}>
-                                <div className={`px-4 py-3 border-b text-[10px] font-black tracking-widest uppercase flex items-center gap-2 ${theme === 'light' ? 'text-[#0a261a]/60 border-[#249C6C]/10' : 'text-white/40 border-white/5'}`}>
-                                  Order Book
-                                </div>
-                                <div className="flex-1 overflow-hidden p-2">
-                                  <OrderBook price={price} theme={theme} symbol={activeMarket.symbol} />
-                                </div>
-                              </div>
-                            </div>
+                            <span className="text-[#EF4444] font-black">✕</span>
                           )}
+                          <span>{item.sym}</span>
+                          <span className="text-white/80 font-semibold">{item.win ? `WIN $${item.val}` : `LOST $${item.val}`}</span>
+                          <span className="text-white/30 ml-4 font-normal">|</span>
                         </div>
-                      </div>
-                    </motion.div>
-
-                    <motion.div
-                      layout={!isSmallScreen}
-                      style={isSmallScreen ? { height: 'auto', flex: 'none' } : undefined}
-                      className={`w-full lg:w-[30%] flex flex-col ${isSmallScreen ? 'fixed inset-x-0 bottom-[48px] z-[90] px-1' : 'h-full flex-1 gap-1 min-h-0'}`}
-                    >
-                      {/* Trade Terminal / Active Section — Locked just above bottom pane handle */}
-                      <div className={`w-full flex-row lg:flex-row gap-1 lg:gap-3 ${isSmallScreen ? 'flex h-[231px] min-h-0' : 'hidden md:hidden lg:hidden'}`}>
-                        {/* Terminal Area */}
-                        <div className={`flex-none w-1/2 flex flex-col ${gameMode === 'rounds' ? '' : `rounded-[32px] lg:rounded-[32px] border glass-panel p-1 ${theme === 'light' ? 'shadow-none' : 'shadow-lg'}`}`}
-                          style={{
-                            background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)'),
-                            borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : 'rgba(255,255,255,0.05)'),
-                            filter: gameMode === 'rounds' ? 'none' : (theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))')
-                          }}>
-                          {gameMode === 'rounds' ? (
-                            <RoundsTerminal
-                              price={price}
-                              balance={parseFloat(evmBalance || '0')}
-                              executeTrade={executeTrade}
-                              isExecuting={isExecuting}
-                              theme={theme}
-                              sessionMode={sessionMode}
-                              sessionBalance={sessionBalance}
-                              amount={amount}
-                              handleAmountChange={handleAmountChange}
-                              sliderValue={sliderValue}
-                              handleSliderChange={handleSliderChange}
-                              activeMarket={activeMarket}
-                              onRoundPhaseChange={handleRoundPhaseChange}
-                              maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                            />
-                          ) : (
-                            <TradeTerminal
-                              transparent={true}
-                              activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                              sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                              setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
-                              sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                              theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                              depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
-                              CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                              evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                              activeMarket={activeMarket}
-                              maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                              tradingHalted={platformSettings.tradingHalted}
-                              uiVersion={uiVersion}
-                              liveOdds={liveOdds}
-                            />
-                          )}
-                        </div>
- 
-                        {/* ACTIVE EXECUTION - Hidden entirely in Rounds mode */}
-                        {(gameMode !== 'rounds') && (
-                          <div className={`flex-1 min-h-0 rounded-[32px] overflow-hidden border glass-panel p-2 ${theme === 'light' ? 'shadow-sm' : 'shadow-lg'} flex flex-col`}
-                            style={{
-                              background: theme === 'light' ? 'transparent' : 'rgba(10,10,10,0.8)',
-                              borderColor: theme === 'light' ? 'rgba(36, 156, 108, 0.15)' : 'rgba(255,255,255,0.05)',
-                              filter: theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
-                            }}>
-                            <div className="flex flex-col h-full min-h-0">
-                              <LiveExecution
-                                activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                                setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                                theme={theme} currentNetwork={network}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {/* V2 Mobile History Drawer integrated at bottom level */}
-                      {/* Compact spacer */}
-
-                      {!isSmallScreen && (
-                        /* Existing Desktop V2 Layout */
-                        <>
-                          {/* Global System Banner */}
-                          <AnimatePresence>
-                            {platformSettings.systemBanner && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className={`w-full overflow-hidden relative z-[100] border-b ${platformSettings.bannerLevel === 'error' ? 'bg-red-500/10 border-red-500/20' :
-                                  platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' :
-                                    platformSettings.bannerLevel === 'success' ? 'bg-[#249C6C]/10 border-[#249C6C]/20' :
-                                      'bg-blue-500/10 border-blue-500/20'
-                                  }`}
-                              >
-                                <div className="max-w-[1400px] mx-auto px-6 py-2 flex items-center justify-between gap-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-2 h-2 rounded-full animate-pulse ${platformSettings.bannerLevel === 'error' ? 'bg-red-500' :
-                                      platformSettings.bannerLevel === 'warning' ? 'bg-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'bg-[#249C6C]' :
-                                          'bg-blue-500'
-                                      }`} />
-                                    <span className={`text-[10px] font-black uppercase tracking-widest ${platformSettings.bannerLevel === 'error' ? 'text-red-500' :
-                                      platformSettings.bannerLevel === 'warning' ? 'text-yellow-500' :
-                                        platformSettings.bannerLevel === 'success' ? 'text-[#249C6C]' :
-                                          'text-blue-500'
-                                      }`}>
-                                      {platformSettings.systemBanner}
-                                    </span>
-                                  </div>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-
-                          {/* Navigation Bar - TOP BAR */}
-                          {/* Trading Terminal Box - Dynamic height to maximize active trades space */}
-                          <div className={`rounded-[22px] md:rounded-[32px] transition-all duration-500 flex flex-col ${showActiveExpanded ? 'h-0 opacity-0 pointer-events-none mb-0 w-0' : (gameMode === 'rounds' ? 'lg:h-full w-full' : 'w-full lg:w-full')} ${gameMode === 'rounds' ? 'border-none bg-transparent shadow-none' : 'border glass-panel'}`}
-                            style={{
-                              background: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)'),
-                              borderColor: gameMode === 'rounds' ? 'transparent' : (theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)'),
-                              filter: gameMode === 'rounds' ? 'none' : (theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))')
-                            }}>
-                            <div className={`${showActiveExpanded ? 'h-0 overflow-hidden' : `${gameMode === 'rounds' ? 'p-0 flex-1 h-full' : 'p-2 lg:p-2.5'}`} flex flex-col`}>
-                              {gameMode === 'rounds' ? (
-                                <RoundsTerminal
-                                  price={price}
-                                  balance={parseFloat(evmBalance || '0')}
-                                  executeTrade={executeTrade}
-                                  isExecuting={isExecuting}
-                                  theme={theme}
-                                  sessionMode={sessionMode}
-                                  sessionBalance={sessionBalance}
-                                  amount={amount}
-                                  handleAmountChange={handleAmountChange}
-                                  sliderValue={sliderValue}
-                                  handleSliderChange={handleSliderChange}
-                                  activeMarket={activeMarket}
-                                  onRoundPhaseChange={handleRoundPhaseChange}
-                                  maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                                />
-                              ) : (
-                                <TradeTerminal
-                                  transparent={true}
-                                  activeTrade={activeTrade} sessionMode={sessionMode} setSessionMode={toggleSessionMode} price={price}
-                                  sessionBalance={sessionBalance} direction={direction} setDirection={setDirection} duration={duration}
-                                  setDuration={setDuration} amount={amount} handleAmountChange={handleAmountChange} balance={parseFloat(evmBalance || '0')}
-                                  sliderValue={sliderValue} handleSliderChange={handleSliderChange} executeTrade={executeTrade}
-                                  theme={theme} minStake={platformSettings.minBet} timerActive={activeTrades.length > 0} isExecuting={isExecuting} wallet={wallet}
-                                  depositAmount={depositAmount} setDepositAmount={setDepositAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw}
-                                  CORAL={CORAL} GREEN={GREEN} currentNetwork={network} chainId={chainId}
-                                  evmSessionWallet={evmSessionWallet} hasProfile={!!userProfile}
-                                  activeMarket={activeMarket}
-                                  maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
-                                  tradingHalted={platformSettings.tradingHalted}
-                                  uiVersion={uiVersion}
-                                  liveOdds={liveOdds}
-                                />
-                              )}
-                            </div>
-                          </div>
-
-                          {/* ACTIVE TRADES (LOCKED DESKTOP HEIGHT: lg:min-h-[200px]) */}
-                          {gameMode !== 'rounds' && (
-                            <div className={`flex-1 min-h-[160px] md:min-h-0 lg:min-h-[180px] rounded-[22px] md:rounded-[32px] border glass-panel transition-all duration-500 flex flex-col ${showActiveExpanded ? 'w-full' : 'w-full lg:w-full'}`}
-                              style={{
-                                background: theme === 'light' ? 'rgba(240, 250, 245, 0.9)' : 'rgba(10,10,10,0.8)',
-                                borderColor: theme === 'light' ? 'rgba(36, 156, 108, 0.18)' : 'rgba(255,255,255,0.05)',
-                                filter: theme === 'light' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'
-                              }}>
-                              <div className="p-1 lg:p-3 flex flex-col h-full min-h-0">
-                                <LiveExecution
-                                  activeTrades={activeTrades} setActiveTrades={setActiveTrades} price={price}
-                                  setSelectedPnLTrade={setSelectedPnLTrade} setIsPnLOpen={setIsPnLOpen}
-                                  theme={theme} currentNetwork={network}
-                                  isTruncated={uiVersion === 'v2' && !showActiveExpanded}
-                                  isExpanded={showActiveExpanded}
-                                  setIsExpanded={setShowActiveExpanded}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </motion.div>
+                      ))}
+                    </div>
                   </div>
 
+                  {/* CHART & TRADING WIDGET ROW */}
+                  <div className="flex-1 flex gap-4 min-h-0">
+                    
+                    {/* CHART */}
+                    <div className="flex-1 min-w-0 relative">
+                      <div className="w-full h-full rounded-[16px] overflow-hidden relative z-10"
+                        style={{
+                          background: theme === 'light' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(10, 10, 10, 0.7)',
+                          boxShadow: theme === 'light' ? '0 0 16px rgba(0,0,0,0.10), 0 0 4px rgba(0,0,0,0.05)' : 'none',
+                        }}>
+                        <CustomChart
+                          symbol={activeMarket?.binance || 'BTCUSDT'}
+                          theme={theme}
+                          network={network}
+                          activeMarket={activeMarket}
+                          uiVersion={uiVersion}
+                          setActiveMarket={handleMarketChange}
+                          activeTrades={activeTrades}
+                          currentPrice={price}
+                          priceHistory={priceHistoryRef.current}
+                        />
+                      </div>
+                    </div>
+
+                    {/* TRADING WIDGET */}
+                    <div className="w-[310px] shrink-0 h-full relative">
+                      <div className="w-full h-full rounded-[16px] overflow-hidden relative z-10"
+                        style={{
+                          boxShadow: theme === 'light' ? '0 0 16px rgba(0,0,0,0.10), 0 0 4px rgba(0,0,0,0.05)' : 'none',
+                        }}>
+                      <TradingWidget
+                        activeMarket={activeMarket}
+                        price={price}
+                        evmBalance={evmBalance}
+                        sessionBalance={sessionBalance}
+                        sessionMode={sessionMode}
+                        toggleSessionMode={toggleSessionMode}
+                        theme={theme}
+                        amount={amount}
+                        handleAmountChange={handleAmountChange}
+                        sliderValue={sliderValue}
+                        handleSliderChange={handleSliderChange}
+                        direction={direction}
+                        setDirection={setDirection}
+                        duration={duration}
+                        setDuration={setDuration}
+                        handleExecuteTrade={executeTrade}
+                        isExecuting={isExecuting}
+                        wallet={wallet}
+                        minStake={platformSettings.minBet}
+                        maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                        liveOdds={liveOdds}
+                        activeTrade={activeTrades[0] || null}
+                      />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TRADE HISTORY (Spans across bottom of both chart and trading widget) */}
+                  <div className="shrink-0 h-[90px] mt-2" style={{ fontFamily: '"Comfortaa", cursive' }}>
+                    <TradeHistoryTable
+                      tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                      activeTrades={activeTrades}
+                      theme={theme}
+                      onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
+                    />
+                  </div>
+
+                </div>
+              </div>
 
                   {/* Forced Orientation Overlay for V2 Mobile */}
                   {showPortraitLock && <PortraitPrompt theme={theme} />}
@@ -3421,19 +3300,7 @@ const performStealthChecks = useCallback(async (addr) => {
            
 
 
-          <AnimatePresence>
-            {toast && (
-              <Toast
-                key={toast.id || toast.message}
-                message={toast.message}
-                type={toast.type}
-                isSmallScreen={isSmallScreen}
-                onClose={closeToast}
-                onClick={toast.onClick}
-              />
-            )}
-          </AnimatePresence>
-
+          {/* Toast notifications removed in favor of inline outcome UI */}
           {successOverlay && (
             <SuccessOverlay
               show={!!successOverlay}
@@ -3481,15 +3348,6 @@ const performStealthChecks = useCallback(async (addr) => {
 
           <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
             style={{ fontFamily: 'Arial, sans-serif' }}>
-            <div className="flex items-center gap-4 pointer-events-auto">
-              <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="15market" className="h-[15px] lg:h-[20px] w-auto opacity-60" />
-              <span className={`text-[7px] lg:text-[9px] font-bold tracking-widest ${theme === 'light' ? 'text-black' : 'text-white'}`}>
-                © 2026 15market
-              </span>
-            </div>
-            <span className={`text-[7px] lg:text-[9px] font-medium tracking-widest pointer-events-auto ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
-              Built by 15labs
-            </span>
           </footer>
            <Suspense fallback={<div className="h-[400px] flex items-center justify-center animate-pulse">Loading Transaction Details...</div>}>
              <TransactionReceiptModal
@@ -3524,8 +3382,8 @@ const performStealthChecks = useCallback(async (addr) => {
           {/* OVERLAY: Maintenance Mode */}
           {platformSettings.maintenanceMode && (
             <div className={`fixed inset-0 z-[3000] flex flex-col items-center justify-center p-8 text-center ${isLight ? 'bg-[#f0f9f4]' : 'bg-[#050505]'}`}>
-              <div className="w-24 h-24 bg-[#249C6C]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#249C6C]/20">
-                <Settings className="text-[#249C6C] w-12 h-12 animate-spin-slow" />
+              <div className="w-24 h-24 bg-[#17A364]/10 rounded-[32px] flex items-center justify-center mb-8 border border-[#17A364]/20">
+                <Settings className="text-[#17A364] w-12 h-12 animate-spin-slow" />
               </div>
               <h1 className={`text-4xl font-black uppercase tracking-tighter mb-4 ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
                 Under Maintenance

@@ -27,7 +27,7 @@ const SideHistoryPane = ({
                 transition-all duration-500 flex flex-row overflow-hidden
                 ${isDark
                     ? 'bg-[#0a0a0a]/90 border-white/10'
-                    : 'bg-transparent border-[#249C6C]/30 shadow-[30px_0_70px_rgba(0,0,0,0.25)]'}
+                    : 'bg-transparent border-[#17A364]/30 shadow-[30px_0_70px_rgba(0,0,0,0.25)]'}
             `}>
                 {/* Vertical Toggle Bar */}
                 <div
@@ -35,7 +35,7 @@ const SideHistoryPane = ({
                     className={`
                         w-12 h-full flex flex-col items-center justify-center cursor-pointer 
                         transition-all relative shrink-0 z-10
-                        ${isDark ? 'hover:bg-white/5' : 'bg-[#249C6C] shadow-[2px_0_15px_rgba(0,0,0,0.1)]'}
+                        ${isDark ? 'hover:bg-white/5' : 'bg-[#17A364] shadow-[2px_0_15px_rgba(0,0,0,0.1)]'}
                     `}
                 >
                     <div className="flex flex-col items-center gap-8">
@@ -68,7 +68,7 @@ const SideHistoryPane = ({
                                         style={{ fontFamily: '"Comfortaa", cursive' }}>
                                         Trade History
                                     </h2>
-                                    <span className="flex items-center justify-center w-6 h-6 text-[10px] font-bold rounded-full bg-[#249C6C]/10 text-[#249C6C] border border-[#249C6C]/20">
+                                    <span className="flex items-center justify-center w-6 h-6 text-[10px] font-bold rounded-full bg-[#17A364]/10 text-[#17A364] border border-[#17A364]/20">
                                         {tradeHistory.length}
                                     </span>
                                 </div>
@@ -90,14 +90,14 @@ const SideHistoryPane = ({
                                                 key={trade.id}
                                                 className={`
                                                     p-3 rounded-[22px] border transition-all hover:-translate-y-0.5 active:scale-[0.98] group/item
-                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-white/40 border-[#249C6C]/20 shadow-[0_4px_15px_rgba(0,0,0,0.02)]'}
+                                                    ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10' : 'bg-white/40 border-[#17A364]/20 shadow-[0_4px_15px_rgba(0,0,0,0.02)]'}
                                                 `}
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2">
                                                         <div className={`
                                                             text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter
-                                                            ${trade.direction === 'UP' ? 'bg-[#249C6C]/20 text-[#249C6C]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
+                                                            ${trade.direction === 'UP' ? 'bg-[#17A364]/20 text-[#17A364]' : 'bg-[#FF7F50]/20 text-[#FF7F50]'}
                                                         `}>
                                                             {trade.direction}
                                                         </div>
@@ -105,10 +105,10 @@ const SideHistoryPane = ({
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
                                                         {isWin && !trade.payoutSettled && (
-                                                            <div className="w-2 h-2 rounded-full border border-[#249C6C] border-t-transparent animate-spin" />
+                                                            <div className="w-2 h-2 rounded-full border border-[#17A364] border-t-transparent animate-spin" />
                                                         )}
                                                     <div className="flex flex-col items-end">
-                                                        <span className={`text-[11px] font-black uppercase ${isWin ? 'text-[#249C6C]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
+                                                        <span className={`text-[11px] font-black uppercase ${isWin ? 'text-[#17A364]' : isLoss ? 'text-[#FF7F50]' : (isDark ? 'text-white/40' : 'text-[#0a261a]/40')}`}>
                                                             {isWin ? `+${Number(trade.payout || 0).toFixed(2)}` : trade.status}
                                                         </span>
                                                         {isWin && (trade.payoutSettled || trade.status === 'PAID') && (
@@ -131,18 +131,20 @@ const SideHistoryPane = ({
                                                     <div className="flex items-center gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
                                                         <button
                                                             onClick={() => onViewReceipt(trade)}
-                                                            className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 hover:bg-[#249C6C]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
+                                                            className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 hover:bg-[#17A364]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
                                                         >
                                                             <Share2 size={12} />
                                                         </button>
-                                                        <a
-                                                            href={`https://testnet.arcscan.app/tx/${trade.tx}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#249C6C]/20 hover:bg-[#249C6C]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
-                                                        >
-                                                            <ExternalLink size={12} />
-                                                        </a>
+                                                        {trade.tx && trade.tx.startsWith('0x') && trade.tx.length > 10 && (
+                                                            <a
+                                                                href={`https://testnet.arcscan.app/tx/${trade.tx}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className={`p-1.5 rounded-full border transition-all ${isDark ? 'bg-white/5 border-transparent hover:bg-white/10 text-white/40 hover:text-white' : 'bg-transparent border-[#17A364]/20 hover:bg-[#17A364]/5 text-[#0a261a]/40 hover:text-[#0a261a]/60'}`}
+                                                            >
+                                                                <ExternalLink size={12} />
+                                                            </a>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

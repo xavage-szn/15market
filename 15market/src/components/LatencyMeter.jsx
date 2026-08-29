@@ -25,7 +25,7 @@ export function LatencyMeter({ currentNetwork = 'arc' }) {
 
             // Measure Price API Latency (Binance as primary)
             const priceStart = performance.now();
-            await fetch("https://api.binance.com/api/v3/ping");
+            await fetch("/api-binance/api/v3/ping");
             const priceEnd = performance.now();
             const priceTime = Math.round(priceEnd - priceStart);
             setPriceLatency(priceTime);

@@ -25,8 +25,8 @@ let redisReady = false;
 redis.on('ready', () => { redisReady = true; });
 redis.on('error', (err) => { 
     redisReady = false;
-    // Suppress noisy connection errors
-    if (!err.message.includes('Stream isn\'t writeable') && !err.message.includes('ENOTFOUND')) {
+    // Suppress noisy/recoverable connection errors
+    if (!err.message.includes('Stream isn\'t writeable') && !err.message.includes('ENOTFOUND') && !err.message.includes('ETIMEDOUT') && !err.message.includes('ECONNRESET')) {
         console.error('[Redis-Error]', err.message);
     }
 });

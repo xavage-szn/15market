@@ -37,7 +37,6 @@ export default function SuccessOverlay({ show, title = 'WITHDRAWAL SUCCESSFUL', 
     }
   }, [show]);
 
-  // Auto-dismiss after 1s — trigger exit animation first
   useEffect(() => {
     if (!visible || exiting) return;
     const timer = setTimeout(() => {
@@ -46,7 +45,16 @@ export default function SuccessOverlay({ show, title = 'WITHDRAWAL SUCCESSFUL', 
     return () => clearTimeout(timer);
   }, [visible, exiting]);
 
-  // After exit animation completes, notify parent
+  useEffect(() => {
+    if (!exiting) return;
+    const safetyTimer = setTimeout(() => {
+      setExiting(false);
+      setVisible(false);
+      if (onDone) onDone();
+    }, 800);
+    return () => clearTimeout(safetyTimer);
+  }, [exiting, onDone]);
+
   const handleExitComplete = useCallback(() => {
     if (exiting) {
       setExiting(false);
@@ -64,7 +72,7 @@ export default function SuccessOverlay({ show, title = 'WITHDRAWAL SUCCESSFUL', 
       {visible && (
         <motion.div
           key="success-overlay"
-          className="fixed inset-0 z-[10000] flex items-center justify-center cursor-pointer"
+          className={`fixed inset-0 z-[10000] flex items-center justify-center cursor-pointer ${exiting ? 'pointer-events-none' : ''}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: exiting ? 0 : 1 }}
           exit={{ opacity: 0 }}
