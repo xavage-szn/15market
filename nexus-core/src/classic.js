@@ -104,9 +104,12 @@ class ClassicEngine {
     if (trade.expiryEmitted || trade.isSettled) return;
     trade.isSettled = true;
 
-    // Capture the LIVE price at this exact moment — the instant the timer expires.
-    // This is the single source of truth for settlement.
-    const exitPrice = cache.prices[trade.symbol] || trade.entryPrice;
+    // Capture the price at the EXACT instant the timer expires (trade.settleAt),
+    // NOT the latest live poll. The 250ms snapshot buffer records precise
+    // timestamped prices, so getHistoricalPrice returns the capture closest to
+    // the moment countdown hits zero instead of a stale 1s REST poll.
+    const liveBackup = cache.prices[trade.symbol] || trade.entryPrice;
+    const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt || Date.now()) || liveBackup;
 
     const isUp = this.resolveDirection(trade.direction) === 1;
     const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
@@ -366,9 +369,19 @@ class ClassicEngine {
     const SYMBOL_MAP = ['eth', 'btc', 'sol', 'mon', 'jup', 'xrp', 'avax'];
     const symbol = SYMBOL_MAP[marketId] || 'eth';
 
-    let entryPrice = Number(cache.prices[symbol]);
+    // ENTRY PRICE = price at the EXACT moment the user clicked YES/NO.
+    // The frontend reads the live price in the same frame as the click and sends
+    // it here (scaled integer: SOL=1e6, other assets=1e2). Prefer that precise
+    // click-time price over this engine's own (slightly later) feed read so the
+    // entry matches exactly what the user saw when they pressed the button.
+    const SCALE = marketId === 2 ? 1000000 : 100;
+    let entryPrice = 0;
+    const clientPriceRaw = Number(tradeParams.entryPrice);
+    if (clientPriceRaw && isFinite(clientPriceRaw) && clientPriceRaw > 0) {
+      entryPrice = Number((clientPriceRaw / SCALE).toFixed(12));
+    }
     if (!entryPrice || isNaN(entryPrice) || entryPrice <= 0) {
-      entryPrice = Number(tradeParams.entryPrice);
+      entryPrice = Number(cache.prices[symbol]);
     }
     if (!entryPrice || isNaN(entryPrice) || entryPrice <= 0) {
       return { success: false, error: 'Price feed not available. Please wait and retry.' };

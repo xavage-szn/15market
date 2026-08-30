@@ -42,23 +42,30 @@ function FlipClockSmall({ seconds }) {
     );
 }
 
-// 2. LASER PROGRESS BEAM (Thin line laser beam transitioning from Green to Orange)
-function SidebarProgressBeam({ progress }) {
+// 2. LASER PROGRESS BEAM (Thin line laser beam)
+// Width only from countdown progress. Color = live win/lose tracker
+// (green winning, NO-button orange losing). Un-filled track has slanted ash/grey stripes.
+function SidebarProgressBeam({ progress, isWinning }) {
     const clamped = Math.max(0, Math.min(100, progress));
-    const hue = Math.round(22 + (clamped / 100) * (142 - 22));
-    const beamColor = `hsl(${hue}, 100%, 50%)`;
-    const beamGlow = `hsla(${hue}, 100%, 50%, 0.7)`;
-    const beamCore = `hsl(${hue}, 100%, 85%)`;
+    const color = isWinning ? '#17A364' : '#FF914D';
+    const head = isWinning ? '#3DDC97' : '#FFB085';
+    const glow = color;
 
     return (
         <div className="flex-1 relative flex items-center justify-center min-w-[50px] h-[16px] px-1 select-none">
-            <div className="w-full h-[1.5px] bg-black/40 dark:bg-white/10 rounded-full relative overflow-visible">
+            <div
+                className="w-full h-[5px] rounded-full relative overflow-hidden"
+                style={{
+                    background: 'repeating-linear-gradient(135deg, rgba(148,150,155,0.30) 0 4px, rgba(148,150,155,0.08) 4px 9px)',
+                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.25)',
+                }}
+            >
                 <div
-                    className="h-[2px] -top-[0.25px] rounded-full relative transition-all duration-100 ease-linear flex items-center justify-end"
+                    className="h-full rounded-full relative flex items-center justify-end will-change-[width]"
                     style={{
                         width: `${clamped}%`,
-                        background: `linear-gradient(90deg, hsl(142, 100%, 45%) 0%, ${beamColor} 100%)`,
-                        boxShadow: `0 0 4px ${beamCore}, 0 0 8px ${beamGlow}`,
+                        background: `linear-gradient(90deg, ${color} 0%, ${head} 100%)`,
+                        boxShadow: `0 0 4px ${color}, 0 0 8px ${glow}`,
                     }}
                 >
                     {clamped > 1 && (
@@ -66,13 +73,171 @@ function SidebarProgressBeam({ progress }) {
                             className="w-[3px] h-[5px] rounded-full shadow-[0_0_6px_#ffffff]"
                             style={{
                                 backgroundColor: '#ffffff',
-                                boxShadow: `0 0 4px #ffffff, 0 0 8px ${beamColor}`,
+                                boxShadow: `0 0 4px #ffffff, 0 0 8px ${color}`,
                             }}
                         />
                     )}
                 </div>
             </div>
         </div>
+    );
+}
+
+// Smooth moving countdown state for each active trade card.
+function useElapsedProgress(start, duration, expiryMs) {
+    const [state, setState] = useState(() => {
+        const now = Date.now();
+        return { progress: 0, remainingSec: Math.max(0, Math.ceil((expiryMs - now) / 1000)) };
+    });
+
+    useEffect(() => {
+        let raf;
+        let timer;
+        const update = () => {
+            const now = Date.now();
+            const totalMs = (duration || 15) * 1000;
+            const remainingMs = Math.max(0, expiryMs - now);
+            const progress = totalMs > 0
+                ? Math.max(0, Math.min(100, ((totalMs - remainingMs) / totalMs) * 100))
+                : 100;
+            const secs = Math.max(0, Math.ceil(remainingMs / 1000));
+            setState({ progress, remainingSec: secs });
+            if (remainingMs > 0) {
+                raf = requestAnimationFrame(update);
+            }
+        };
+        timer = setTimeout(() => { raf = requestAnimationFrame(update); }, 0);
+        return () => {
+            clearTimeout(timer);
+            if (raf) cancelAnimationFrame(raf);
+        };
+    }, [start, duration, expiryMs]);
+
+    return state;
+}
+
+function TradeRow({ trade, price, isDark, setSelectedPnLTrade, setIsPnLOpen }) {
+    const isLong = trade.direction === "buy" || trade.direction === "UP" || trade.direction === "YES" || trade.direction === 1 || String(trade.direction) === "1";
+    const entryPrice = parseFloat(trade.entryPrice);
+
+    const now = Date.now();
+    const isLocked = trade.won !== undefined;
+    const isExpired = isLocked || trade.status === "WON" || trade.status === "LOST" || trade.status === "RESOLVING" || (trade.expiryMs && now >= trade.expiryMs);
+
+    const current = (isLocked && trade.livePrice !== undefined)
+        ? parseFloat(trade.livePrice)
+        : (isExpired ? parseFloat(trade.livePrice || trade.lastTickPrice || trade.entryPrice) : parseFloat(price));
+
+    const isWinning = trade.won !== undefined
+        ? trade.won
+        : (trade.isWinning !== undefined
+            ? trade.isWinning
+            : (isLong ? current > entryPrice : current < entryPrice));
+
+    const statusColor = isWinning ? GREEN_COLOR : RED_COLOR;
+
+    const start = trade.startTime || (trade.id > 1e12 ? trade.id : now);
+    const duration = trade.duration || 15;
+    const expiryMs = trade.expiryMs || trade.expiry || (start + (duration * 1000));
+    const { progress, remainingSec } = useElapsedProgress(start, duration, expiryMs);
+    const secondsLeft = remainingSec;
+
+    return (
+        <motion.div
+            layout
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            onClick={() => {
+                if (trade.status === "WON" || trade.status === "LOST") {
+                    setSelectedPnLTrade(trade);
+                    setIsPnLOpen(true);
+                }
+            }}
+            className={`relative p-3 rounded-2xl border transition-all hover:scale-[1.02] active:scale-[0.98] group/item
+                ${isDark ? 'bg-white/5 border-white/5 hover:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.3)]' : 'bg-[#f0f9f4] border-[#17A364]/10 shadow-[0_2px_10px_rgba(0,0,0,0.02)]'}
+            `}
+        >
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg ${isLong ? 'bg-[#17A364]/10' : 'bg-[#FF7F50]/10'}`}>
+                        {isLong
+                            ? <ArrowUp size={12} color="#17A364" strokeWidth={3} />
+                            : <ArrowDown size={12} color="#FF7F50" strokeWidth={3} />
+                        }
+                    </div>
+                    <div>
+                        <div className={`text-[10px] font-black uppercase tracking-tight ${isDark ? 'text-white' : 'text-[#05140b]'}`}>
+                            {isLong ? "LONG / YES" : "SHORT / NO"}
+                        </div>
+                        <div className={`text-[7px] font-bold tracking-widest uppercase ${isDark ? 'opacity-30 text-white' : 'text-[#05140b]/30'}`}>
+                            ARC
+                        </div>
+                    </div>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                    <div className={`text-[10px] font-black tracking-tight ${isDark ? 'text-white/50' : 'text-[#05140b]/50'}`}>
+                        {Number(trade.amount).toFixed(2)} USDC
+                    </div>
+                    <div className="text-[9px] font-black flex items-center gap-1" style={{ color: statusColor }}>
+                        {isWinning ? '▲' : '▼'}
+                        {isWinning
+                            ? `+${(Math.floor(parseFloat(trade.amount) * (trade.duration <= 5 ? 2.90 : (trade.duration <= 10 ? 2.40 : 1.90)) * 100) / 100).toFixed(2)}`
+                            : `-${Number(trade.amount).toFixed(2)}`
+                        }
+                    </div>
+                </div>
+            </div>
+
+            {/* Flip Clock + Progress Beam (beam color = live win/lose tracker) */}
+            <div className="flex items-center gap-2 my-2 py-1.5 px-2 rounded-xl">
+                {/* 1. Flip Clock */}
+                <FlipClockSmall seconds={secondsLeft} />
+
+                {/* 2. Progress Beam (color = win/lose, width = countdown) */}
+                <SidebarProgressBeam progress={progress} isWinning={isWinning} />
+            </div>
+
+            <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-2">
+                    <span className={`text-[7px] font-black uppercase tracking-widest opacity-20 ${isDark ? 'text-white' : 'text-[#05140b]'}`}>Entry</span>
+                    <span className={`text-[9px] font-mono font-black ${isDark ? 'text-white/40' : 'text-[#05140b]/40'}`}>${Number(trade.entryPrice).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className={`text-[7px] font-black uppercase tracking-widest opacity-20 ${isDark ? 'text-white' : 'text-[#05140b]'}`}>Now</span>
+                    <span className="text-[9px] font-mono font-black tabular-nums" style={{ color: statusColor }}>
+                        ${current.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                </div>
+            </div>
+
+            {(trade.status === 'RESOLVING' || trade.status === 'WON' || trade.status === 'LOST' || trade.status === 'PAID') && (
+                <div className={`absolute inset-0 z-10 backdrop-blur-md ${isDark ? 'bg-black/60 border-white/10' : 'bg-white/60 border-[#17A364]/10'} flex flex-col items-center justify-center rounded-xl border`}>
+                    {(trade.status === 'WON' || trade.status === 'PAID') && (
+                        <div className="flex flex-col items-center text-[#17A364] scale-90">
+                            <Trophy size={20} />
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Won</span>
+                            {trade.status === 'WON' && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                    <div className="w-2 h-2 rounded-full border border-[#17A364] border-t-transparent animate-spin" />
+                                    <span className="text-[7px] font-bold uppercase opacity-60 animate-pulse">Payout Pending</span>
+                                </div>
+                            )}
+                            {trade.status === 'PAID' && (
+                                <span className="text-[7px] font-bold uppercase opacity-80 mt-0.5">Paid</span>
+                            )}
+                        </div>
+                    )}
+                    {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#FF7F50] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
+                    {trade.status === 'RESOLVING' && (
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-4 h-4 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
+                            <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#17A364] animate-pulse">Syncing</span>
+                        </div>
+                    )}
+                </div>
+            )}
+        </motion.div>
     );
 }
 
@@ -186,22 +351,13 @@ export function ActiveTradesSidebar({ activeTrades, price, theme = 'dark', curre
                                         </div>
                                     </div>
 
-                                    {/* 3-Part Animation Layout: Flip Clock + Progress Beam (Green -> Orange) + Realtime Tracker */}
-                                    <div className="flex items-center gap-2 my-2 py-1.5 px-2 rounded-xl bg-black/20 border border-white/5">
+                                    {/* Flip Clock + Progress Beam (beam color = live win/lose tracker) */}
+                                    <div className="flex items-center gap-2 my-2 py-1.5 px-2 rounded-xl">
                                         {/* 1. Flip Clock */}
                                         <FlipClockSmall seconds={secondsLeft} />
 
-                                        {/* 2. Progress Beam (Green -> Orange transition) */}
-                                        <SidebarProgressBeam progress={progress} />
-
-                                        {/* 3. Realtime Result Status */}
-                                        <div className={`text-[9px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded-full border ${
-                                            isWinning 
-                                                ? 'bg-[#17A364]/15 border-[#17A364]/40 text-[#17A364]' 
-                                                : 'bg-[#FF914D]/15 border-[#FF914D]/40 text-[#FF914D]'
-                                        }`}>
-                                            {isWinning ? 'WIN' : 'LOSE'}
-                                        </div>
+                                        {/* 2. Progress Beam (color = win/lose, width = countdown) */}
+                                        <SidebarProgressBeam progress={progress} isWinning={isWinning} />
                                     </div>
 
                                     <div className="flex items-center justify-between mt-1">

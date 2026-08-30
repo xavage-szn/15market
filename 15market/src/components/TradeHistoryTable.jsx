@@ -9,9 +9,18 @@ function formatTime(ms) {
 
 export default function TradeHistoryTable({ tradeHistory = [], activeTrades = [], theme, onViewReceipt }) {
   const hasRealTrades = [...activeTrades, ...tradeHistory].length > 0;
-  
-  const displayTrades = hasRealTrades 
-    ? [...activeTrades, ...tradeHistory].slice(0, 12)
+
+  // A newly executed trade is intentionally present in BOTH activeTrades and tradeHistory
+  // (so it shows in the sidebar AND the history strip). Dedupe on merge so it only renders once.
+  const merged = [...activeTrades, ...tradeHistory];
+  const seen = new Set();
+  const displayTrades = hasRealTrades
+    ? merged.filter((trade) => {
+        const key = String(trade.id || trade.tx || trade.nonce || JSON.stringify(trade));
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 12)
     : [
         { id: 'mock-1', timestamp: Date.now() - 5000, symbol: 'ETH', direction: 'UP', amount: 10.00, payout: 16.39, status: 'WON' },
         { id: 'mock-2', timestamp: Date.now() - 20000, symbol: 'BTC', direction: 'DOWN', amount: 8.50, payout: 0, status: 'LOST' },

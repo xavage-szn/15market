@@ -48,11 +48,12 @@ function PriceMeterTicker({ value }) {
 }
 
 // 1. FLIP CLOCK DIGIT (Realistic 3D mechanical flip animation with split card)
-function FlipDigit({ digit }) {
+// Brand green face with high-contrast numbers: black in dark mode, white in light mode.
+function FlipDigit({ digit, isLight }) {
   return (
-    <div className="relative w-[18px] h-[28px] bg-[#0c0e12] border border-white/15 rounded-[5px] shadow-[0_2px_6px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col items-center justify-center select-none">
+    <div className={`relative w-[26px] h-[40px] bg-[#17A364] rounded-[7px] shadow-[0_2px_10px_rgba(23,163,100,0.55)] overflow-hidden flex flex-col items-center justify-center select-none ${isLight ? 'border border-[#0F7A4A]/20' : ''}`}>
       {/* Horizontal split crease seam */}
-      <div className="absolute inset-x-0 top-1/2 h-[1px] bg-black/80 z-20 shadow-[0_1px_1px_rgba(255,255,255,0.12)]" />
+      <div className="absolute inset-x-0 top-1/2 h-[1px] bg-black/25 z-20" />
 
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
@@ -62,73 +63,78 @@ function FlipDigit({ digit }) {
           exit={{ rotateX: 90, opacity: 0 }}
           transition={{ duration: 0.26, ease: [0.25, 1, 0.5, 1] }}
           style={{ transformOrigin: "center center", transformStyle: "preserve-3d" }}
-          className="absolute inset-0 flex items-center justify-center font-mono font-black text-[16px] text-white tabular-nums tracking-tighter"
+          className={`absolute inset-0 flex items-center justify-center font-mono font-black text-[24px] tabular-nums tracking-tighter ${isLight ? 'text-white' : 'text-black'}`}
         >
           {digit}
         </motion.div>
       </AnimatePresence>
 
       {/* Glossy lighting overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.12] via-transparent to-black/30 pointer-events-none z-10" />
+      <div className={`absolute inset-0 ${isLight ? 'bg-gradient-to-b from-white/25 via-transparent to-black/10' : 'bg-gradient-to-b from-white/15 via-transparent to-black/25'} pointer-events-none z-10`} />
     </div>
   );
 }
 
-function FlipClock({ seconds }) {
+function FlipClock({ seconds, isLight }) {
   const s = Math.max(0, Math.floor(seconds || 0));
   const tens = Math.floor(s / 10);
   const ones = s % 10;
 
   return (
-    <div className="flex items-center gap-[2.5px] select-none shrink-0">
-      <FlipDigit digit={tens} />
-      <FlipDigit digit={ones} />
-      <span className="text-[9px] font-mono font-black text-white/60 ml-0.5 uppercase tracking-tight">s</span>
+    <div className="flex items-center gap-[3px] select-none shrink-0">
+      <FlipDigit digit={tens} isLight={isLight} />
+      <FlipDigit digit={ones} isLight={isLight} />
+      <span className={`text-[13px] font-mono font-black ${isLight ? 'text-[#17A364]' : 'text-[#17A364]'} ml-1 uppercase tracking-tight`}>s</span>
     </div>
   );
 }
 
-// 2. LASER PROGRESS BEAM (Thin radiant laser line beam transitioning from Electric Green to Danger Orange)
-function ProgressBeam({ progress }) {
-  // progress goes from 100% (highest remaining time) down to 0% (danger remaining time)
+// 2. LASER PROGRESS BEAM (Thin radiant laser line beam)
+// `progress` is elapsed time 0->100 and ONLY drives the LEFT->RIGHT fill width.
+// The un-filled track has slanted ash/grey diagonal stripes.
+// The BEAM COLOR is the live outcome tracker: brand green when winning,
+// NO-button orange when losing (matches the NO button/labels).
+function ProgressBeam({ progress, isWinning }) {
   const clamped = Math.max(0, Math.min(100, progress));
-  
-  // Dynamic laser hue: 142deg (Electric Neon Green) at 100% -> 65deg (Yellow-Green) at 50% -> 22deg (Laser Orange) at 0%
-  const hue = Math.round(22 + (clamped / 100) * (142 - 22));
-  const beamColor = `hsl(${hue}, 100%, 50%)`;
-  const beamGlow = `hsla(${hue}, 100%, 50%, 0.75)`;
-  const beamCore = `hsl(${hue}, 100%, 85%)`;
+
+  // Whole-beam color = live win/lose status
+  const color = isWinning ? '#17A364' : '#FF914D';
+  const head = isWinning ? '#3DDC97' : '#FFB085'; // brighter head shade for the laser
+  const glow = color;
 
   return (
-    <div className="flex-1 relative flex items-center justify-center min-w-[70px] h-[20px] px-1 select-none">
-      {/* Razor-thin conduit track line */}
-      <div className="w-full h-[1.5px] bg-black/40 dark:bg-white/10 rounded-full relative overflow-visible">
-        {/* Faint ambient line track glow */}
-        <div className="absolute inset-0 bg-white/5 blur-[1px]" />
-
-        {/* Radiant Laser Line Beam */}
+    <div className="flex-1 relative flex items-center justify-center min-w-[120px] h-[24px] px-1 select-none">
+      {/* Conduit track — slanted ash/grey diagonal stripes on the UN-FILLED portion */}
+      <div
+        className="w-full h-[6px] rounded-full relative overflow-hidden"
+        style={{
+          background: 'repeating-linear-gradient(135deg, rgba(148,150,155,0.30) 0 4px, rgba(148,150,155,0.08) 4px 9px)',
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.25)',
+        }}
+      >
+        {/* Radiant Laser Line Beam — width only from progress, color from win/lose */}
         <div
-          className="h-[2.5px] -top-[0.5px] rounded-full relative transition-all duration-100 ease-linear flex items-center justify-end"
+          className="h-full rounded-full relative flex items-center justify-end will-change-[width]"
           style={{
             width: `${clamped}%`,
-            background: `linear-gradient(90deg, hsl(142, 100%, 45%) 0%, ${beamColor} 100%)`,
-            boxShadow: `0 0 4px ${beamCore}, 0 0 10px ${beamGlow}, 0 0 18px ${beamGlow}`,
+            background: `linear-gradient(90deg, ${color} 0%, ${head} 100%)`,
+            boxShadow: `0 0 6px ${color}, 0 0 12px ${glow}, 0 0 20px ${glow}`,
           }}
         >
-          {/* Laser Head Flare / Spark on leading edge */}
+          {/* Laser Head Flare / Spark on advancing (right) leading edge */}
           {clamped > 1 && (
             <div className="relative flex items-center justify-center">
               {/* Outer halo */}
               <div
                 className="absolute w-[9px] h-[9px] rounded-full animate-ping opacity-60 pointer-events-none"
-                style={{ backgroundColor: beamColor }}
+                style={{ backgroundColor: color }}
               />
               {/* Core radiant spark */}
               <div
                 className="w-[4px] h-[7px] rounded-full z-10 shadow-[0_0_8px_#ffffff]"
                 style={{
                   backgroundColor: '#ffffff',
-                  boxShadow: `0 0 6px #ffffff, 0 0 12px ${beamColor}, 0 0 18px ${beamGlow}`,
+                  boxShadow: `0 0 6px #ffffff, 0 0 12px ${color}, 0 0 18px ${glow}`,
                 }}
               />
             </div>
@@ -139,42 +145,322 @@ function ProgressBeam({ progress }) {
   );
 }
 
-// 3. REALTIME RESULT TRACKER (Live Winning/Losing indicator + real-time payout tracker)
-function RealtimeResultTracker({ isWinning, pnl, currentPrice, entryPrice }) {
+// 3.5 RESOLVING OUTCOME (brief handoff shown when the beam finishes but the backend hasn't settled yet).
+function ResolvingOutcome({ isLight, isWinning }) {
+  const color = isWinning ? '#17A364' : '#FF914D';
   return (
-    <div className="shrink-0 flex items-center select-none">
-      <div
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-300 ${
-          isWinning
-            ? 'bg-[#17A364]/20 border-[#17A364]/50 text-[#17A364] shadow-[0_0_12px_rgba(23,163,100,0.3)]'
-            : 'bg-[#FF914D]/20 border-[#FF914D]/50 text-[#FF914D] shadow-[0_0_12px_rgba(255,145,77,0.3)]'
-        }`}
+    <div className="w-full flex items-center justify-center gap-2.5 select-none">
+      <motion.div
+        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5], rotate: [0, 360] }}
+        transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+        className="w-3.5 h-3.5 rounded-full border-2"
+        style={{ borderColor: color, borderTopColor: 'transparent', boxShadow: `0 0 12px ${color}` }}
+      />
+      <motion.span
+        animate={{ opacity: [0.5, 1, 0.5], letterSpacing: ['0.22em', '0.3em', '0.22em'] }}
+        transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+        className={`text-[12px] font-black tracking-[0.22em] uppercase ${isLight ? 'text-[#111827]/70' : 'text-white/60'}`}
       >
-        {/* Pulsing live radar beacon */}
-        <span className="relative flex h-2 w-2">
-          <span
-            className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-              isWinning ? 'bg-[#17A364]' : 'bg-[#FF914D]'
-            }`}
-          />
-          <span
-            className={`relative inline-flex rounded-full h-2 w-2 ${
-              isWinning ? 'bg-[#17A364]' : 'bg-[#FF914D]'
-            }`}
-          />
-        </span>
-
-        {/* Live Status Label */}
-        <span className="text-[10px] font-black tracking-wider uppercase">
-          {isWinning ? 'WINNING' : 'LOSING'}
-        </span>
-
-        {/* Live Projected PnL */}
-        <span className="text-[11px] font-black font-mono tracking-tight">
-          {isWinning ? `+$${pnl}` : `-$${pnl}`}
-        </span>
-      </div>
+        Resolving
+      </motion.span>
     </div>
+  );
+}
+
+// 4. TRADE OUTCOME — premium "million dollar" result reveal.
+// Fully transparent: no colored rectangle, floats directly on the trading area.
+// Win: cinematic green victory (trophy + shockwave rings + gold burst + rising coins).
+// Lose: dramatic red-orange crash (slamming down arrow + crumbling chips + falling trend).
+function TradeOutcome({ won, isLight }) {
+  // Entrance on mount, then exit after 3 seconds so it "animates in and out".
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGone(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const exit = { opacity: 0, scale: 0.8, filter: 'blur(4px)' };
+  const enter = { opacity: 1, scale: 1, filter: 'blur(0px)' };
+
+  const GREEN = '#17A364';
+  const ORANGE = '#FF914D';
+  const GOLD = '#FFD34D';
+
+  // Floating ember / coin sparks for the win celebration
+  const embers = [
+    { left: '12%', delay: 0.2,  color: '#FFD700' },
+    { left: '30%', delay: 0.5,  color: GREEN },
+    { left: '55%', delay: 0.35, color: '#A3E635' },
+    { left: '72%', delay: 0.7,  color: '#FFC53D' },
+    { left: '88%', delay: 0.55, color: '#22C55E' },
+  ];
+
+  const confetti = [
+    { left: '6%',  delay: 0,    color: GREEN },
+    { left: '22%', delay: 0.08, color: '#FFD700' },
+    { left: '40%', delay: 0.16, color: '#22C55E' },
+    { left: '58%', delay: 0.1,  color: '#A3E635' },
+    { left: '76%', delay: 0.2,  color: GREEN },
+    { left: '92%', delay: 0.05, color: '#FFC53D' },
+  ];
+
+  // Sinking rubble/chips for the loss — crumbles downward and fades.
+  const rubble = [
+    { left: '14%', delay: 0.15, size: 7,  color: '#FFB085' },
+    { left: '34%', delay: 0.35, size: 6,  color: '#FF914D' },
+    { left: '56%', delay: 0.25, size: 8,  color: '#DD5A2A' },
+    { left: '72%', delay: 0.45, size: 6,  color: '#FFB085' },
+    { left: '88%', delay: 0.2,  size: 7,  color: '#FF914D' },
+  ];
+
+  return won ? (
+    <motion.div
+      initial={enter}
+      animate={gone ? exit : enter}
+      transition={{ duration: gone ? 0.6 : 0.5, ease: "easeInOut" }}
+      className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl"
+    >
+      {/* Expanding shockwave rings (transparent) */}
+      {[0, 1, 2].map((i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full border"
+          style={{ borderColor: 'rgba(23,163,100,0.5)' }}
+          initial={{ width: 20, height: 20, opacity: 0.8 }}
+          animate={{ width: i === 0 ? 160 : 200, height: i === 0 ? 160 : 200, opacity: 0 }}
+          transition={{ duration: 1.6, delay: 0.1 + i * 0.18, repeat: Infinity, ease: "easeOut" }}
+        />
+      ))}
+
+      {/* Light sweep across the widget (transparent) */}
+      <motion.div
+        className="absolute inset-y-0 w-[45%]"
+        style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent)' }}
+        initial={{ x: '-120%' }}
+        animate={{ x: isLight ? '180%' : '300%' }}
+        transition={{ duration: 1.1, delay: 0.15, repeat: Infinity, repeatDelay: 1.1, ease: "easeInOut" }}
+      />
+
+      {/* Confetti burst (transparent) */}
+      {confetti.map((c, i) => (
+        <motion.span
+          key={`conf-${i}`}
+          className="absolute w-[6px] h-[10px] rounded-[2px]"
+          style={{ left: c.left, backgroundColor: c.color }}
+          initial={{ y: 0, opacity: 1, rotate: 0 }}
+          animate={{ y: [0, 52], opacity: [1, 0], rotate: [0, 260] }}
+          transition={{ duration: 1.4, delay: c.delay, ease: "easeOut", repeat: Infinity, repeatDelay: 0.4 }}
+        />
+      ))}
+
+      {/* Rising golden ember sparks (transparent) */}
+      {embers.map((e, i) => (
+        <motion.span
+          key={`emb-${i}`}
+          className="absolute w-[7px] h-[7px] rounded-full"
+          style={{ left: e.left, backgroundColor: e.color, boxShadow: `0 0 10px ${e.color}` }}
+          initial={{ y: 34, opacity: 0 }}
+          animate={{ y: [34, -8], opacity: [0, 1, 0] }}
+          transition={{ duration: 1.6, delay: e.delay, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+
+      {/* Glowing pulsing gold core halo (transparent glow, no fill) */}
+      <motion.div
+        animate={{ scale: [1, 1.22, 1], opacity: [0.55, 0.25, 0.55] }}
+        transition={{ duration: 1.7, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute w-[96px] h-[96px] rounded-full blur-xl"
+        style={{ background: `radial-gradient(circle, ${GOLD}66, transparent 70%)` }}
+      />
+
+      {/* Golden trophy with metallic gradient + dramatic spring */}
+      <motion.div
+        initial={{ scale: 0, rotate: -30, y: 24, opacity: 0 }}
+        animate={{ scale: 1, rotate: 0, y: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 260, damping: 13, delay: 0.05 }}
+        className="relative flex flex-col items-center gap-0.5"
+      >
+        <motion.div
+          animate={{ y: [0, -5, 0], rotate: [0, -3, 3, 0] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+          className="relative"
+        >
+          {/* Trophy SVG with gold metallic gradient + crown */}
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+            <defs>
+              <linearGradient id="goldTrophy" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#FFF3B0" />
+                <stop offset="0.5" stopColor="#FFD34D" />
+                <stop offset="1" stopColor="#E8A020" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M8 2v3h8V2H8Zm-5 3h3v2.5C6 10.4 8.2 12.7 11 13.1V15H8.8C6.6 15 5 16.6 5 18.8V21h14v-2.2c0-2.2-1.6-3.8-3.8-3.8H13v-1.9c2.8-.4 5-2.7 5-5.6V5h3V2H19M7 5h10v.5c0 3-2.3 5.4-5 5.4s-5-2.4-5-5.4V5Z"
+              fill="url(#goldTrophy)"
+            />
+            <path
+              d="M2 5l3.2 2.6L8.6 4.6l2.6 3.4v.2h1.6v-.2l2.6-3.4 3.4 3L21.5 5l-1.2 2.2 2.5 3H2l2.5-3L2 5Z"
+              fill="#FFC53D"
+              opacity="0.9"
+              transform="translate(-0.8 0)"
+            />
+            <path d="M9 18h6v-1h-6v1Z" fill="#EFC94C" />
+          </svg>
+          {/* Orbit sparkles around trophy */}
+          <motion.span
+            animate={{ scale: [0.6, 1.3, 0.6], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+            className="absolute -top-1.5 -right-2 text-[11px] text-[#FFF3B0]"
+          >
+            ✦
+          </motion.span>
+          <motion.span
+            animate={{ scale: [0.6, 1.3, 0.6], opacity: [0, 1, 0] }}
+            transition={{ duration: 1.2, repeat: Infinity, delay: 0.6 }}
+            className="absolute -bottom-1 -left-2 text-[10px] text-[#FFD34D]"
+          >
+            ✦
+          </motion.span>
+        </motion.div>
+
+        {/* Radiant gold-green gradient WON text (transparent bg) */}
+        <motion.span
+          animate={{ opacity: [1, 0.75, 1] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          className="text-[26px] font-black tracking-[0.18em] uppercase"
+          style={{
+            background: `linear-gradient(180deg, #EAFEFF, ${GREEN} 60%)`,
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
+            filter: `drop-shadow(0 0 14px rgba(23,163,100,0.9))`,
+          }}
+        >
+          WON
+        </motion.span>
+      </motion.div>
+    </motion.div>
+  ) : (
+    <motion.div
+      initial={enter}
+      animate={gone ? exit : enter}
+      transition={{ duration: gone ? 0.6 : 0.5, ease: "easeInOut" }}
+      className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl"
+    >
+      {/* Falling red-orange trend line that plummets (transparent) */}
+      <motion.svg
+        className="absolute"
+        width="120"
+        height="40"
+        viewBox="0 0 120 40"
+        fill="none"
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: [0, 0.9, 0.2, 0.9], y: 16 }}
+        transition={{ duration: 1.6, ease: "easeInOut" }}
+      >
+        <motion.path
+          d="M2 8 L30 14 L52 10 L74 22 L96 30 L118 36"
+          stroke={ORANGE}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.2, ease: "easeIn" }}
+        />
+        <circle cx="118" cy="36" r="3" fill={ORANGE}>
+          <animate attributeName="opacity" values="1;0.4;1" dur="0.7s" repeatCount="indefinite" />
+        </circle>
+      </motion.svg>
+
+      {/* Sinking crumbling chips — depicts value draining away (transparent) */}
+      {rubble.map((r, i) => (
+        <motion.span
+          key={`rub-${i}`}
+          className="absolute rounded-[3px]"
+          style={{
+            left: r.left,
+            width: r.size,
+            height: r.size,
+            backgroundColor: r.color,
+            boxShadow: `0 0 8px ${r.color}66`,
+          }}
+          initial={{ y: 8, opacity: 0, rotate: 0 }}
+          animate={{ y: [8, 42], opacity: [0, 1, 0], rotate: [0, i % 2 ? 200 : -200] }}
+          transition={{ duration: 1.5, delay: r.delay, repeat: Infinity, ease: "easeIn" }}
+        />
+      ))}
+
+      {/* Downward crash arrow that slams in with impact shake */}
+      <motion.div
+        initial={{ scale: 0, y: -26, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 12, delay: 0.05 }}
+        className="relative flex flex-col items-center gap-0.5"
+      >
+        {/* Impact shake on the whole group after landing */}
+        <motion.div
+          animate={{ x: [0, -3, 3, -2, 2, 0], rotate: [0, -2, 2, -1, 1, 0] }}
+          transition={{ duration: 0.5, delay: 0.35 }}
+          className="relative flex flex-col items-center"
+        >
+          {/* Red-orange downward arrow with drop shadow */}
+          <motion.div
+            animate={{ y: [0, 3, 0] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+            className="relative"
+            style={{ filter: `drop-shadow(0 0 14px ${ORANGE}aa)` }}
+          >
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+              <defs>
+                <linearGradient id="downArrow" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#FFD9B8" />
+                  <stop offset="0.5" stopColor="#FF914D" />
+                  <stop offset="1" stopColor="#DD5A2A" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M12 3v14m0 0l-5.5-5.5M12 17l5.5-5.5M4 21h16"
+                stroke="url(#downArrow)"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {/* impact pulse under the arrow tip */}
+              <motion.path
+                d="M7 13l5-5 5 5"
+                stroke={ORANGE}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: [0, 1, 0] }}
+                transition={{ duration: 0.8, delay: 0.55, ease: "easeIn" }}
+              />
+            </svg>
+            {/* falling $-econ drip dots */}
+            <motion.span
+              animate={{ y: [0, 14], opacity: [1, 0] }}
+              transition={{ duration: 1.2, delay: 0.2, repeat: Infinity }}
+              className="absolute left-1/2 top-0 -translate-x-1/2 text-[10px] text-[#FFB085]"
+            >
+              ✕
+            </motion.span>
+          </motion.div>
+
+          {/* LOSE in crashing orange with downward drift */}
+          <motion.span
+            animate={{ opacity: [1, 0.6, 1], y: [0, 2, 0], letterSpacing: ['0.18em', '0.26em', '0.18em'] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+            className={`text-[22px] font-black tracking-[0.18em] uppercase ${
+              isLight ? 'text-[#C2410C]' : 'text-[#FF914D]'
+            }`}
+            style={{ filter: `drop-shadow(0 0 12px ${ORANGE}99)` }}
+          >
+            LOSE
+          </motion.span>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -192,7 +478,7 @@ export default function TradingWidget({
   const [stakeInput, setStakeInput] = useState('');
   const stake = parseFloat(stakeInput) || 0;
 
-  const [progress, setProgress] = useState(100);
+  const [progress, setProgress] = useState(0);
   const [remainingSec, setRemainingSec] = useState(0);
   const remainingSecRef = useRef(0);
 
@@ -208,8 +494,9 @@ export default function TradingWidget({
         const totalMs = activeTrade.duration ? activeTrade.duration * 1000 : 
                         (activeTrade.expiryMs - activeTrade.startTime) || 15000;
         
-        const currentProgress = Math.max(0, Math.min(100, (remainingMs / totalMs) * 100));
-        setProgress(currentProgress);
+        // Elapsed time 0 -> 100 so the beam fills LEFT -> RIGHT (smooth per-frame)
+        const elapsed = Math.max(0, Math.min(100, ((totalMs - remainingMs) / totalMs) * 100));
+        setProgress(elapsed);
 
         const secs = Math.ceil(remainingMs / 1000);
         if (secs !== remainingSecRef.current) {
@@ -260,10 +547,13 @@ export default function TradingWidget({
   const yesPayoutAmt = (stake / Math.max(0.01, yesShare)).toFixed(2);
   const noPayoutAmt = (stake / Math.max(0.01, noShare)).toFixed(2);
 
-  const tradeStake = parseFloat(activeTrade?.amount) || stake || 0;
-  const livePayoutEst = isWinning
-    ? (activeTrade?.payout ? Number(activeTrade.payout).toFixed(2) : (activeTrade?.direction === 'YES' || activeTrade?.direction === 'UP' ? yesPayoutAmt : noPayoutAmt))
-    : Number(tradeStake).toFixed(2);
+  const didWin = (['WON', 'PAID'].includes(activeTrade?.status) || activeTrade?.won) === true;
+
+  // When the progress beam has fully elapsed (expired) we hand off to the outcome icon
+  // instead of leaving the beam stuck at 100%.
+  const isPendingLive = ['PENDING', 'RESOLVING'].includes(activeTrade?.status);
+  const tradeExpired = progress >= 99.7;
+  const settledOutcome = activeTrade && !isPendingLive;
 
   const handleTrade = useCallback(async (direction) => {
     if (stake <= 0) return;
@@ -370,52 +660,29 @@ export default function TradingWidget({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className={`w-full h-full relative overflow-hidden flex items-center justify-between rounded-full font-black text-[15px] tracking-wide ${
-                isLight ? 'bg-gray-100 text-gray-900 border border-gray-200 shadow-sm' : 'bg-[#111418] text-white border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
-              }`}
+              className={`w-full h-full relative flex items-center justify-between text-[15px] tracking-wide ${isLight ? 'text-gray-900' : 'text-white'}`}
             >
-              <div className="absolute inset-0 flex items-center justify-between px-3 z-10 w-full">
-                {isExecuting ? (
+              <div className="absolute inset-0 flex items-center justify-between z-10 w-full">
+                {/* If a PENDING trade exists, show the live countdown IMMEDIATELY on click */}
+                {isPendingLive && !tradeExpired ? (
+                  <div className="flex w-full h-full items-center justify-center gap-2.5">
+                    {/* 1. FLIP CLOCK */}
+                    <FlipClock seconds={remainingSec} isLight={isLight} />
+
+                    {/* 2. PROGRESS BEAM — width = countdown progress, color = live win/lose tracker */}
+                    <ProgressBeam progress={progress} isWinning={isWinning} />
+                  </div>
+                ) : isExecuting && !tradeExpired ? (
+                  // Only show "placing" while the backend is confirming AND the countdown is still running.
                   <div className="w-full text-center text-[#17A364] animate-pulse text-[16px] font-black tracking-widest flex items-center justify-center gap-2">
                     <div className="w-3 h-3 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
                     PLACING TRADE...
                   </div>
-                ) : ['PENDING', 'RESOLVING'].includes(activeTrade?.status) ? (
-                  <div className="flex w-full h-full items-center justify-between gap-2.5">
-                    {/* 1. FLIP CLOCK WITH DIRECTION BADGE */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider ${
-                        activeTrade.direction === 'YES' || activeTrade.direction === 'UP'
-                          ? 'bg-[#17A364]/15 text-[#17A364] border-[#17A364]/40 shadow-[0_0_8px_rgba(23,163,100,0.2)]'
-                          : 'bg-[#FF914D]/15 text-[#FF914D] border-[#FF914D]/40 shadow-[0_0_8px_rgba(255,145,77,0.2)]'
-                      }`}>
-                        {activeTrade.direction === 'YES' || activeTrade.direction === 'UP' ? 'UP' : 'DN'}
-                      </span>
-                      <FlipClock seconds={remainingSec} />
-                    </div>
-
-                    {/* 2. PROGRESS BEAM (Green -> Orange) */}
-                    <ProgressBeam progress={progress} />
-                    
-                    {/* 3. REALTIME RESULT TRACKER */}
-                    <RealtimeResultTracker
-                      isWinning={isWinning}
-                      pnl={livePayoutEst}
-                      currentPrice={currentPrice}
-                      entryPrice={entryPrice}
-                    />
-                  </div>
+                ) : !settledOutcome ? (
+                  // Countdown ended but the authoritative result hasn't landed yet -> brief resolving state
+                  <ResolvingOutcome isLight={isLight} isWinning={isWinning} />
                 ) : (
-                  <div className="flex w-full h-full items-center justify-between px-4">
-                    <span className="text-[14px] font-black uppercase tracking-wider opacity-60">OUTCOME</span>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[16px] font-black font-mono tracking-tight ${['WON', 'PAID'].includes(activeTrade?.status) || activeTrade?.won ? 'text-[#17A364]' : 'text-[#EF4444]'}`}>
-                        {['WON', 'PAID'].includes(activeTrade?.status) || activeTrade?.won
-                          ? `WON +$${activeTrade.payout ? Number(activeTrade.payout).toFixed(2) : livePayoutEst}` 
-                          : `LOST -$${Number(tradeStake).toFixed(2)}`}
-                      </span>
-                    </div>
-                  </div>
+                  <TradeOutcome won={didWin} isLight={isLight} />
                 )}
               </div>
             </motion.div>
