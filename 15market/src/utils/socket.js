@@ -4,7 +4,7 @@ import { KEEPER_URL_ARC } from "../constants";
 class SocketService {
     constructor() {
         this.socket = null;
-        this.listeners = new Map();
+        this.listeners = new Map(); // event -> Set of callbacks
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 15;
     }
@@ -14,42 +14,34 @@ class SocketService {
 
         // Adaptive timeout based on network conditions
         const getTimeout = () => {
-            // Try to get network information if available
             if (navigator.connection && navigator.connection.effectiveType) {
                 switch (navigator.connection.effectiveType) {
-                    case 'slow-2g':
-                        return 15000; // 15 seconds for slow 2G
-                    case '2g':
-                        return 10000; // 10 seconds for 2G
-                    case '3g':
-                        return 7000; // 7 seconds for 3G
-                    default:
-                        return 5000; // 5 seconds for 4G or better
+                    case 'slow-2g': return 15000;
+                    case '2g': return 10000;
+                    case '3g': return 7000;
+                    default: return 5000;
                 }
             }
-            return 5000; // Default 5 seconds
+            return 5000;
         };
 
         this.socket = io(KEEPER_URL_ARC, {
-            transports: ['websocket', 'polling'], // Add polling as fallback
+            transports: ['websocket', 'polling'],
             reconnectionAttempts: this.maxReconnectAttempts,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: getTimeout(),
-            // Add randomization to prevent thundering herd
             randomizationFactor: 0.5
         });
 
         this.socket.on("connect", () => {
             console.log("[Socket] Platform Link Active");
-            this.reconnectAttempts = 0; // Reset counter on successful connection
+            this.reconnectAttempts = 0;
         });
 
         this.socket.on("disconnect", (reason) => {
             console.log("[Socket] Platform Link Lost:", reason);
-            // Only attempt to reconnect if not manually disconnected
             if (reason !== "io server disconnect" && reason !== "io client disconnect") {
-                // Exponential backoff for reconnection attempts
                 this.reconnectAttempts++;
                 if (this.reconnectAttempts <= this.maxReconnectAttempts) {
                     console.log(`[Socket] Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
@@ -69,15 +61,16 @@ class SocketService {
             console.error("[Socket] Reconnection failed after max attempts");
         });
 
-        // Re-attach all active listeners on reconnect
+        // Re-attach ALL active listeners on reconnect
         this.socket.on("reconnect", () => {
             console.log("[Socket] Reconnected successfully");
-            this.listeners.forEach((callback, event) => {
-                this.socket.on(event, callback);
+            this.listeners.forEach((callbacks, event) => {
+                callbacks.forEach(callback => {
+                    this.socket.on(event, callback);
+                });
             });
         });
 
-        // Handle connection errors gracefully
         this.socket.on("connect_error", (error) => {
             console.error("[Socket] Connection error:", error);
         });
@@ -85,20 +78,28 @@ class SocketService {
 
     on(event, callback) {
         if (!this.socket) this.connect();
-        this.listeners.set(event, callback);
+        if (!this.listeners.has(event)) {
+            this.listeners.set(event, new Set());
+        }
+        this.listeners.get(event).add(callback);
         this.socket.on(event, callback);
         return () => this.off(event, callback);
     }
 
     off(event, callback) {
         if (!this.socket) return;
-        this.listeners.delete(event);
+        const callbacks = this.listeners.get(event);
+        if (callbacks) {
+            callbacks.delete(callback);
+            if (callbacks.size === 0) {
+                this.listeners.delete(event);
+            }
+        }
         this.socket.off(event, callback);
     }
 
     emit(event, data) {
         if (!this.socket) this.connect();
-        // Add retry logic for emitting events
         const emitWithRetry = (retries = 3) => {
             if (!this.socket || !this.socket.connected) {
                 if (retries > 0) {
@@ -113,12 +114,10 @@ class SocketService {
         emitWithRetry();
     }
 
-    // Method to check connection status
     isConnected() {
         return this.socket?.connected || false;
     }
 
-    // Method to force reconnection
     reconnect() {
         if (this.socket) {
             this.socket.disconnect();

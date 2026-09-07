@@ -107,6 +107,13 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
             if (interpolatedPriceRef.current !== null) {
                 const now = Date.now();
                 const history = priceHistoryRef.current;
+
+                // Smoothly interpolate toward the target price
+                if (targetPriceRef.current !== null) {
+                    const diff = targetPriceRef.current - interpolatedPriceRef.current;
+                    interpolatedPriceRef.current += diff * 0.18;
+                }
+
                 const lastPt = history[history.length - 1];
                 if (!lastPt || now > lastPt.t) {
                     history.push({ t: now, p: interpolatedPriceRef.current });
@@ -116,7 +123,7 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
                 }
                 // Save to cache every 2 seconds, but only data from real SSE (after mount)
                 saveCounter++;
-                if (saveCounter >= 20) {
+                if (saveCounter >= 40) {
                     saveCounter = 0;
                     const realData = history.filter(p => p.t >= mountTime);
                     if (realData.length >= 10) {
@@ -124,7 +131,7 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
                     }
                 }
             }
-        }, 100);
+        }, 50);
         return () => {
             clearInterval(historyInterval);
         };
@@ -152,10 +159,10 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
 
             ctx.clearRect(0, 0, W, H);
 
-            // FASTER INTERPOLATION (0.4 instead of 0.3)
+            // SMOOTH INTERPOLATION — gentle per-frame lerp for silky animation
             if (targetPriceRef.current !== null && interpolatedPriceRef.current !== null) {
                 const diff = targetPriceRef.current - interpolatedPriceRef.current;
-                interpolatedPriceRef.current += diff * 0.4;
+                interpolatedPriceRef.current += diff * 0.12;
             }
 
             const history = priceHistoryRef.current;

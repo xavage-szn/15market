@@ -50,6 +50,7 @@ import { OrderBook } from "./components/OrderBook";
 import { ActiveTradesSidebar } from "./components/ActiveTradesSidebar";
 import { MascotLoader } from "./components/MascotLoader";
 import CustomChart from './components/CustomChart';
+import MobileTradeView from './components/MobileTradeView';
 import Toast from "./components/Toast";
 import SuccessOverlay from "./components/SuccessOverlay";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -506,6 +507,15 @@ export default function UserApp() {
   const [isPnLOpen, setIsPnLOpen] = useState(false);
   const [showSideHistory, setShowSideHistory] = useState(false);
   const [showMobileHistory, setShowMobileHistory] = useState(false);
+  const [showFullHistory, setShowFullHistory] = useState(false);
+
+  // Escape key collapses expanded history
+  useEffect(() => {
+    if (!showFullHistory) return;
+    const onKey = (e) => { if (e.key === 'Escape') setShowFullHistory(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showFullHistory]);
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
   const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
@@ -1856,17 +1866,45 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
 
+  const [globalTickerTrades, setGlobalTickerTrades] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchGlobalTicker = async () => {
+      try {
+        const res = await fetch(`${KEEPER_URL_ARC}/history`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !Array.isArray(data)) return;
+        const settled = data
+          .filter(t => ['WON', 'LOST'].includes(t.status))
+          .sort((a, b) => (b.timestamp || b.createdAt || 0) - (a.timestamp || a.createdAt || 0))
+          .slice(0, 20);
+        setGlobalTickerTrades(settled);
+      } catch (e) { }
+    };
+    fetchGlobalTicker();
+    const interval = setInterval(fetchGlobalTicker, 12000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
   const tickerTrades = useMemo(() => {
     const recent = gameMode === 'rounds' ? roundsTradeHistory : tradeHistory;
-    return (recent || []).slice(-20).reverse().map(t => ({
+    const mine = (recent || []).slice(-20).reverse().map(t => ({
       win: t.status === 'WON' || t.result === 'WIN',
       sym: (t.symbol || 'ETH').toUpperCase(),
       val: t.amount || '0.00',
     }));
-  }, [gameMode, roundsTradeHistory, tradeHistory]);
+    if (mine.length > 0) return mine;
+    return globalTickerTrades.map(t => ({
+      win: t.status === 'WON' || t.result === 'WIN',
+      sym: (t.symbol || 'ETH').toUpperCase(),
+      val: t.amount || '0.00',
+    }));
+  }, [gameMode, roundsTradeHistory, tradeHistory, globalTickerTrades]);
 
   // ─── UNIFIED PRICE CONSUMPTION ───
-  // Uses the dedicated direct Pyth price stream (priceSocketService) for ultra-low-latency
+  // Uses the dedicated priceOracle service (priceSocketService) for ultra-low-latency
   // UI pricing. The backend socket 'price' feed is deliberately NOT consumed here — it is
   // the execution/settlement reference only.
   const oraclePricesRef = useRef({ btc: 0, eth: 0, sol: 0, mon: 0, avax: 0, ts: {} });
@@ -2210,6 +2248,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
     // #endregion
     if (!newMarket || newMarket.id === activeMarket.id) return;
+    if (newMarket.id === 'mon' || newMarket.id === 'avax') return;
 
     localStorage.setItem('15market_active_token_id', newMarket.id);
     const resolvedMarket = mergeMarketWithDefault(newMarket);
@@ -2478,7 +2517,7 @@ const performStealthChecks = useCallback(async (addr) => {
           delete cleanupTimers.current[tid];
           // Auto-cleanup the removed set after 10 minutes to keep memory bounded
           setTimeout(() => removedTradeIds.current.delete(String(tid)), 10 * 60 * 1000);
-        }, 2000); // 2 seconds to see result, then auto-remove
+        }, 1000); // 1 second to see result, then auto-remove
       }
     });
 
@@ -2846,8 +2885,8 @@ const performStealthChecks = useCallback(async (addr) => {
 
 
   return (
-    <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full text-current selection:bg-[#17A364]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative ${isLight ? 'bg-white' : 'bg-black'}`}>
-      <div className={`fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? '' : 'hidden'}`} />
+    <div className={`min-h-screen ${!isSmallScreen ? 'h-screen' : 'h-screen h-[100dvh]'} w-full text-current selection:bg-[#17A364]/30 selection:text-white transition-colors duration-500 overflow-hidden font-sans relative ${isLight ? 'bg-white' : 'bg-black'}`}>
+      <div className={`fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'hidden' : ''}`} />
 
       {/* Landscape Blocker — branded fullscreen gate for mobile devices in landscape */}
       <AnimatePresence>
@@ -2921,7 +2960,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
       <ErrorBoundary>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className={`min-h-screen ${!isSmallScreen ? 'h-screen' : ''} w-full overflow-hidden font-sans flex flex-col items-center ${themeClass}`}
+          className={`min-h-screen ${!isSmallScreen ? 'h-screen' : 'h-screen h-[100dvh]'} w-full overflow-hidden font-sans flex flex-col items-center ${themeClass}`}
           style={{
             color: theme === 'light' ? '#1f2937' : '#ffffff',
             transition: "color 0.3s ease"
@@ -3023,7 +3062,7 @@ const performStealthChecks = useCallback(async (addr) => {
                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : {}}>
                 <div className="flex items-center transition-all duration-500 h-full overflow-visible"
                   style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '16px') : '0px' }}>
-                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[60px]' : 'h-[90px] lg:h-[100px]'} w-auto transition-all pointer-events-auto`} style={{ marginTop: '-20px', marginBottom: '-20px', marginLeft: '-0.5%' }} />
+                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[72px]' : 'h-[100px] lg:h-[120px]'} w-auto transition-all pointer-events-auto`} style={{ marginTop: '-24px', marginBottom: '-24px', marginLeft: '-0.5%' }} />
                 </div>
 
                 <div className="hidden lg:flex items-center gap-2 px-2 py-1 origin-right">
@@ -3070,7 +3109,7 @@ const performStealthChecks = useCallback(async (addr) => {
                   <UnifiedWalletButton theme={theme} />
                 </div>
 
-                <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2 scale-[0.8] origin-right">
+                <div className="flex lg:hidden landscape:hidden items-center gap-1.5 md:gap-2 scale-[0.88] origin-right">
                   {authenticated && (
                     <>
                       {/* Branded Game Mode Switcher - Mobile */}
@@ -3137,7 +3176,7 @@ const performStealthChecks = useCallback(async (addr) => {
               </AnimatePresence>
 
               {/* MAIN CONTENT CONTAINER */}
-              <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} flex flex-col items-center flex-1 min-h-0 h-full relative z-10`}>
+              <div className={`w-full ${uiVersion === 'v2' ? 'max-w-[1600px] px-2 md:px-6 lg:px-8 focus-visible:outline-none' : 'max-w-4xl lg:max-w-7xl px-4 sm:px-6 lg:px-8'} ${isSmallScreen ? '!px-0' : ''} flex flex-col items-center flex-1 min-h-0 h-full relative z-10`}>
                 <Suspense fallback={<div className="h-[200px] flex items-center justify-center animate-pulse">Loading Rounds Access...</div>}>
                   <RoundsAccessGate
                     theme={theme}
@@ -3145,15 +3184,37 @@ const performStealthChecks = useCallback(async (addr) => {
                     verified={hasRoundsAccess}
                     onUnlock={handleRoundsUnlock}
                   >
-                  {/* MOBILE FULL-WIDTH SCROLLER (Matching Desktop Design) */}
-                  {isSmallScreen && (
-                    <div className="h-7 mb-1.5 overflow-hidden relative z-[50]" style={{ width: '105vw', marginLeft: '-8px', transform: 'translateX(3%)' }}>
-                      <GlobalTradeScroller theme={theme} />
-                    </div>
-                  )}
-
-              {/* 2-COLUMN LAYOUT */}
-              <div className="flex-1 grid grid-cols-[220px_1fr] min-h-0 overflow-hidden px-4 pt-0 pb-2 gap-4">
+              {/* MOBILE: vertical layout matching reference screenshot */}
+              {isSmallScreen ? (
+                <div className="flex-1 w-full min-h-0 overflow-hidden flex flex-col">
+                  <MobileTradeView
+                    theme={theme}
+                    activeMarket={activeMarket}
+                    handleMarketChange={handleMarketChange}
+                    defaultTokens={defaultTokens}
+                    oraclePrices={oraclePrices}
+                    changes24h={changes24h}
+                    price={price}
+                    network={network}
+                    uiVersion={uiVersion}
+                    priceHistory={priceHistoryRef.current}
+                    activeTrades={activeTrades}
+                    isExecuting={isExecuting}
+                    executeTrade={executeTrade}
+                    sessionBalance={sessionBalance}
+                    liveOdds={liveOdds}
+                    minStake={platformSettings.minBet}
+                    maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
+                    tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
+                    showFullHistory={showFullHistory}
+                    setShowFullHistory={setShowFullHistory}
+                    onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
+                    gameMode={gameMode}
+                  />
+                </div>
+              ) : (
+              // 2-COLUMN LAYOUT
+              <div className="flex-1 w-full grid grid-cols-[220px_1fr] min-h-0 overflow-hidden px-4 pt-0 pb-2 gap-4">
                 {/* LEFT SIDEBAR */}
                 <div className="h-full border-r border-[#17A364] pr-4 overflow-y-auto scrollbar-none">
                   <LeftSidebar
@@ -3174,25 +3235,12 @@ const performStealthChecks = useCallback(async (addr) => {
                   
                   
                   {/* MARKET SCROLLER (Marquee) */}
-                  <div className="w-full h-[36px] shrink-0 bg-[#17A364] rounded-2xl flex items-center px-4 mb-3 overflow-hidden relative">
-                    <div className="flex gap-8 whitespace-nowrap animate-ticker">
-                      {tickerTrades.map((item, idx) => (
-                        <div key={idx} className="inline-flex items-center gap-1.5 text-white font-bold text-[12px]">
-                          {item.win ? (
-                            <span className="text-white font-black drop-shadow-md">✓</span>
-                          ) : (
-                            <span className="text-[#EF4444] font-black">✕</span>
-                          )}
-                          <span>{item.sym}</span>
-                          <span className="text-white/80 font-semibold">{item.win ? `WIN $${item.val}` : `LOST $${item.val}`}</span>
-                          <span className="text-white/30 ml-4 font-normal">|</span>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="w-full shrink-0 mb-3 overflow-hidden relative">
+                    <GlobalTradeScroller theme={theme} />
                   </div>
 
                   {/* CHART & TRADING WIDGET ROW */}
-                  <div className="flex-1 flex gap-4 min-h-0">
+                  <div className={`${showFullHistory ? 'flex-none h-0 overflow-hidden' : 'flex-1'} flex gap-4 min-h-0 transition-all duration-300`}>
                     
                     {/* CHART */}
                     <div className="flex-1 min-w-0 relative">
@@ -3250,17 +3298,28 @@ const performStealthChecks = useCallback(async (addr) => {
                   </div>
 
                   {/* TRADE HISTORY (Spans across bottom of both chart and trading widget) */}
-                  <div className="shrink-0 h-[90px] mt-2" style={{ fontFamily: '"Comfortaa", cursive' }}>
+                  <div className={`${showFullHistory ? 'flex-1 min-h-0 overflow-y-auto rounded-[16px]' : 'shrink-0 h-[90px] mt-2'} transition-all duration-300`}
+                    style={{
+                      fontFamily: '"Comfortaa", cursive',
+                      ...(showFullHistory ? {
+                        background: theme === 'light' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(10, 10, 10, 0.9)',
+                        boxShadow: theme === 'light' ? '0 0 16px rgba(0,0,0,0.10), 0 0 4px rgba(0,0,0,0.05)' : 'none',
+                        padding: '12px',
+                      } : {})
+                    }}>
                     <TradeHistoryTable
                       tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                       activeTrades={activeTrades}
                       theme={theme}
                       onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
+                      isExpanded={showFullHistory}
+                      onToggleExpand={() => setShowFullHistory(!showFullHistory)}
                     />
                   </div>
 
                 </div>
               </div>
+              )}
 
                   {/* Forced Orientation Overlay for V2 Mobile */}
                   {showPortraitLock && <PortraitPrompt theme={theme} />}
@@ -3395,22 +3454,7 @@ const performStealthChecks = useCallback(async (addr) => {
           )}
 
           {/* Authoritative Mobile History Drawer (Unconstrained) */}
-          {isSmallScreen && view === "trading" && (
-            <MobileBottomHistoryPane
-              isOpen={authenticated && showMobileHistory}
-              onToggle={() => {
-                if (!authenticated) {
-                  notify('Please connect your wallet or login to view trade history.', 'error');
-                  return;
-                }
-                setShowMobileHistory(!showMobileHistory);
-              }}
-              tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
-              theme={theme}
-              onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
-              userProfile={userProfile}
-            />
-          )}
+
         </motion.div >
       </ErrorBoundary>
     </div>

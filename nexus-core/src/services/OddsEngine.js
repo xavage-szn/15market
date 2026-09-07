@@ -44,9 +44,9 @@ class OddsEngine {
     }
 
     fetchMacroData() {
-        const binanceSymbols = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
-        for (const [key, symbol] of Object.entries(binanceSymbols)) {
-            https.get(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, (res) => {
+        const mexcSymbols = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
+        for (const [key, symbol] of Object.entries(mexcSymbols)) {
+            https.get(`https://api.mexc.com/api/v3/ticker/24hr?symbol=${symbol}`, (res) => {
                 let data = '';
                 res.on('data', (chunk) => data += chunk);
                 res.on('end', () => {

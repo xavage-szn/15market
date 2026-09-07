@@ -175,6 +175,7 @@ export default function LeftSidebar({
       <div ref={listRef} className="flex-1 overflow-y-auto py-0 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
         {tokensToDisplay.map((m, idx) => {
           const isActive = activeMarket?.id === m.id;
+          const isUnavailable = m.id?.toLowerCase() === 'mon' || m.id?.toLowerCase() === 'avax';
           const livePriceRaw = oraclePrices[m.id?.toLowerCase()];
           const hasPrice = livePriceRaw && livePriceRaw > 0;
           
@@ -204,12 +205,14 @@ export default function LeftSidebar({
           return (
             <div key={m.id}>
               <button
+                disabled={isUnavailable}
                 onClick={() => {
+                  if (isUnavailable) return;
                   const token = defaultTokens?.find(t => t.id === m.id) || m;
                   setActiveMarket?.(token);
                 }}
                 className={`w-full py-2.5 text-left transition-all flex items-center gap-3 ${
-                  isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'
+                  isUnavailable ? 'opacity-30 cursor-not-allowed' : isActive ? 'opacity-100' : 'opacity-60 hover:opacity-100'
                 }`}
               >
                 {logo ? (
@@ -227,13 +230,19 @@ export default function LeftSidebar({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span className={`text-[13px] font-bold ${isLight ? 'text-[#111827]' : 'text-white/90'}`}>{m.symbol}</span>
-                    {(m.id === 'mon' || m.id === 'avax') && (
-                      <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#17A364] text-white leading-none">NEW</span>
+                    {isUnavailable && (
+                      <span className="text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 leading-none">COMING SOON</span>
                     )}
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className={`text-[12px] font-medium ${isLight ? 'text-[#111827]' : 'text-white/80'}`}>${priceStr}</span>
-                    <span className="text-[11px] font-bold" style={{ color: isUp ? '#17A364' : '#E13E27' }}>{changeStr}</span>
+                    {isUnavailable ? (
+                      <span className={`text-[11px] font-medium italic ${isLight ? 'text-[#9CA3AF]' : 'text-white/30'}`}>Not yet available</span>
+                    ) : (
+                      <>
+                        <span className={`text-[12px] font-medium ${isLight ? 'text-[#111827]' : 'text-white/80'}`}>${priceStr}</span>
+                        <span className="text-[11px] font-bold" style={{ color: isUp ? '#17A364' : '#E13E27' }}>{changeStr}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </button>

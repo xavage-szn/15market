@@ -41,28 +41,30 @@ class ClassicEngine {
     setInterval(() => {
       const now = Date.now();
       for (const trade of cache.trades.values()) {
-        if (trade.status === 'PENDING') {
-          const msLeft = (trade.settleAt || 0) - now;
-          const timeLeft = Math.max(0, msLeft / 1000);
+        if (trade.status !== 'PENDING' || trade.expiryEmitted) continue;
 
-          if (trade.expiryEmitted) continue;
+        const msLeft = (trade.settleAt || 0) - now;
 
+        if (msLeft <= 0) {
+          // Countdown hit zero — capture the LIVE price RIGHT NOW as the exit price.
+          // Do NOT snapshot, do NOT keep monitoring. This price is final.
+          const exitPrice = cache.prices[trade.symbol] || trade.entryPrice;
+          this.lockResult(trade, exitPrice);
+        } else {
+          // Still counting down — snapshot for high-res history and emit tick
           const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
           if (msLeft < 10000 && currentPrice > 0) cache.snapshotPrice(trade.symbol);
 
-          if (msLeft <= 0) {
-            this.lockResult(trade);
-          } else {
-            const isUp = this.resolveDirection(trade.direction) === 1;
-            const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
-            this.io.to(trade.userAddr).emit('trade_tick', {
-              betId: trade.id,
-              timeLeft,
-              currentPrice,
-              isWinning,
-              direction: trade.direction
-            });
-          }
+          const timeLeft = Math.max(0, msLeft / 1000);
+          const isUp = this.resolveDirection(trade.direction) === 1;
+          const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
+          this.io.to(trade.userAddr).emit('trade_tick', {
+            betId: trade.id,
+            timeLeft,
+            currentPrice,
+            isWinning,
+            direction: trade.direction
+          });
         }
       }
     }, 50);
@@ -100,31 +102,32 @@ class ClassicEngine {
   // ── RESULT LOCKING ─────────────────────────────────────────────────────
   // Captures the LIVE price at the instant countdown hits 0.
   // That price is the single source of truth — cached in Redis for the settler.
-  lockResult(trade) {
+  // The exit price is passed in from the tick loop (captured at the exact moment
+  // msLeft <= 0 was detected) — no history lookup, no further monitoring.
+  lockResult(trade, exitPrice) {
     if (trade.expiryEmitted || trade.isSettled) return;
     trade.isSettled = true;
+    trade.expiryEmitted = true;
 
-    // Capture the price at the EXACT instant the timer expires (trade.settleAt),
-    // NOT the latest live poll. The 250ms snapshot buffer records precise
-    // timestamped prices, so getHistoricalPrice returns the capture closest to
-    // the moment countdown hits zero instead of a stale 1s REST poll.
-    const liveBackup = cache.prices[trade.symbol] || trade.entryPrice;
-    const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt || Date.now()) || liveBackup;
+    // Use the price captured at the exact instant the timer expired.
+    // Fallback chain: captured price → live cache → entry price
+    const finalPrice = (exitPrice && exitPrice > 0 && !isNaN(exitPrice))
+      ? exitPrice
+      : (cache.prices[trade.symbol] || trade.entryPrice);
 
     const isUp = this.resolveDirection(trade.direction) === 1;
-    const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
+    const won = isUp ? (finalPrice > trade.entryPrice) : (finalPrice < trade.entryPrice);
 
-    trade.expiryEmitted = true;
-    trade.lockedExitPrice = exitPrice;
+    trade.lockedExitPrice = finalPrice;
     trade.lockedWon = won;
     trade.settledAt = Date.now();
 
-    console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} (live)`);
+    console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${finalPrice}`);
 
     // Cache the result in Redis — backend settler reads from here
     cache.cacheTradeResult(trade.id, {
       tradeId: trade.id,
-      exitPrice,
+      exitPrice: finalPrice,
       won,
       entryPrice: trade.entryPrice,
       amount: trade.amount,
@@ -136,18 +139,47 @@ class ClassicEngine {
 
     this.io.to(trade.userAddr).emit('trade_expired', {
       betId: trade.id,
-      exitPrice,
+      exitPrice: finalPrice,
       won,
       stakeTxHash: trade.stakeTxHash || null,
       status: 'RESOLVING'
     });
 
-    if (won) {
-      this.creditWinner(trade, exitPrice);
-      this.settleOnChainBackground(trade);
-    } else {
-      trade.status = 'LOST';
-      this.settleTradeLocally(trade);
+    try {
+      if (won) {
+        this.creditWinner(trade, finalPrice);
+        this.settleOnChainBackground(trade);
+      } else {
+        trade.status = 'LOST';
+        this.settleTradeLocally(trade);
+      }
+    } catch (err) {
+      console.error(`[Engine] lockResult settlement error #${trade.id}:`, err.message);
+      // CRITICAL: If creditWinner/settleTradeLocally throw, trade_settled is never emitted.
+      // Emit it manually so the frontend doesn't leave the trade stuck in RESOLVING.
+      if (!trade._settledEventEmitted) {
+        trade._settledEventEmitted = true;
+        this.io.to(trade.userAddr).emit('trade_settled', {
+          betId: trade.id,
+          won: false,
+          status: 'LOST',
+          exitPrice: finalPrice,
+          stakeTxHash: trade.stakeTxHash || null,
+          userAddr: trade.userAddr,
+          entryPrice: trade.entryPrice,
+          amount: trade.amount,
+          symbol: trade.symbol,
+          direction: trade.direction,
+          duration: trade.duration
+        });
+        cache.pushHistory(trade.userAddr, {
+          ...trade,
+          won: false,
+          status: 'LOST',
+          exitPrice: finalPrice,
+          settledAt: Date.now()
+        });
+      }
     }
   }
 
@@ -184,6 +216,7 @@ class ClassicEngine {
       payout: payoutAmount
     });
 
+    trade._settledEventEmitted = true;
     this.io.to(trade.userAddr).emit('trade_settled', {
       betId: trade.id,
       won: true,
@@ -505,6 +538,7 @@ class ClassicEngine {
     trade.status = 'LOST';
     trade.settledAt = Date.now();
 
+    trade._settledEventEmitted = true;
     this.io.to(trade.userAddr).emit('trade_settled', {
       betId: trade.id,
       won: false,

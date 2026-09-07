@@ -3,6 +3,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Zap, Loader2, Globe } from 'lucide-react';
 import LiveStreamingChart from './LiveStreamingChart';
 
+const LOGO_MAP = {
+  eth: '/ethusdc.png',
+  btc: '/btc.png',
+  sol: '/sol.png',
+  mon: '/monad.png',
+  avax: '/avax.png',
+};
+
+function getLogoFilter(isLight) {
+  if (isLight) return 'brightness(0)';
+  return 'brightness(0) saturate(100%) invert(64%) sepia(26%) saturate(1028%) hue-rotate(101deg) brightness(88%) contrast(82%)';
+}
+
 export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', currentPrice, activeMarket, setActiveMarket, activeTrades = [], uiVersion = 'v1', priceHistory = [], windowMs = 20000 }) {
     const isDark = theme !== 'light';
     const controlBgAlt = isDark ? 'bg-[#0a0a0a]/95' : 'bg-[#b5d3c7]/95';
@@ -97,9 +110,17 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     transition: 'filter 0.5s ease-in-out',
                 }}
             >
-                {/* Asset Label (like dark mode screenshot) */}
-                <div className="absolute top-4 left-6 z-[20] pointer-events-none">
-                    <span className={`text-[20px] font-bold tracking-widest ${isDark ? 'text-white' : 'text-[#0a261a]'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+                {/* Asset Label with Logo */}
+                <div className="absolute top-4 left-6 z-[20] pointer-events-none flex items-center gap-2.5">
+                    {LOGO_MAP[(activeMarket?.id || symbol.replace('USDT', '')).toLowerCase()] && (
+                        <img
+                            src={LOGO_MAP[(activeMarket?.id || symbol.replace('USDT', '')).toLowerCase()]}
+                            alt={activeMarket?.symbol || symbol.replace('USDT', '')}
+                            className="w-11 h-11 object-contain shrink-0"
+                            style={{ filter: getLogoFilter(!isDark) }}
+                        />
+                    )}
+                    <span className={`text-[22px] font-bold tracking-widest ${isDark ? 'text-white' : 'text-[#0a261a]'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
                         {activeMarket?.symbol || symbol.replace('USDT', '')}
                     </span>
                 </div>

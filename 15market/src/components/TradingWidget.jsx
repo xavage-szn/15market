@@ -464,6 +464,8 @@ function TradeOutcome({ won, isLight }) {
   );
 }
 
+export { FlipClock, ProgressBeam, ResolvingOutcome, TradeOutcome };
+
 export default function TradingWidget({
   price,
   activeMarket,
@@ -577,6 +579,9 @@ export default function TradingWidget({
       {/* Duration Section */}
       <div className="flex items-center justify-between mb-2">
         <div className={`text-[12px] font-bold ${isLight ? 'text-[#111827]' : 'text-white/90'}`}>DURATION</div>
+        <div className={`text-[12px] font-black ${isLight ? 'text-[#17A364]' : 'text-[#17A364]'}`}>
+          ${parseFloat(price || 0).toFixed(2)}
+        </div>
       </div>
       <div className="flex gap-2 mb-4">
         {[15, 10, 5].map((d) => (
