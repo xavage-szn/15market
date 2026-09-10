@@ -1659,6 +1659,29 @@ app.get('/winner-banner', (req, res) => res.json(null));
 app.post('/active-market', (req, res) => res.json({ success: true }));
 app.post('/record-fee', (req, res) => res.json({ success: true }));
 
+// --- Chart History Redis Endpoints ---
+app.get('/chart/history/:symbol', async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const history = await cache.loadChartHistory(symbol);
+    res.json(history);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+app.post('/chart/history/:symbol', async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const { history } = req.body;
+    if (!Array.isArray(history)) return res.status(400).json({ error: 'history must be an array' });
+    await cache.saveChartHistory(symbol, history);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save' });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',

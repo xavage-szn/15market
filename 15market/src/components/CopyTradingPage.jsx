@@ -622,7 +622,7 @@ export function CopyTradingPage({
                         onClick={togglePane}
                         className={`w-full h-12 flex items-center justify-center cursor-pointer transition-all duration-300 relative shrink-0 ${isDark ? 'bg-white/5 border-b border-white/5' : 'bg-[#249C6C] border-b border-[#249C6C]/20'}`}
                     >
-                        {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
+                        {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#17A364] to-transparent opacity-90" />}
                         <div className="flex items-center justify-center gap-3 w-full">
                             <Icon size={14} className={`${isDark ? 'text-white' : 'text-white'}`} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
                             <span className={`text-[11px] font-bold uppercase tracking-[0.25em] ${isDark ? 'text-white' : 'text-white'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { priceSocketService } from '../utils/priceSocket';
+import { KEEPER_URL_ARC } from '../constants';
 
 /**
  * LiveStreamingChart — A specialized Canvas-based line chart for 1s timeframe.
@@ -32,29 +33,46 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
     const isLight = theme === 'light';
     const GREEN = '#17A364';
 
-    // Cache helpers
+    // Cache helpers — synchronous localStorage first, async Redis background sync
     const getCacheKey = (sym) => `15market_chart_${sym?.toLowerCase()}`;
-    const loadCachedHistory = (sym) => {
+    const loadCachedHistorySync = (sym) => {
         try {
             const cached = localStorage.getItem(getCacheKey(sym));
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed.length === 0) return [];
-                // Shift timestamps so the last point aligns with "now"
-                // This makes the cached data appear as if it just happened
-                const lastTs = parsed[parsed.length - 1].t;
-                const now = Date.now();
-                const shift = now - lastTs;
-                return parsed.map(p => ({ t: p.t + shift, p: p.p }));
+                if (parsed.length > 0) {
+                    const lastTs = parsed[parsed.length - 1].t;
+                    const now = Date.now();
+                    const shift = now - lastTs;
+                    return parsed.map(p => ({ t: p.t + shift, p: p.p }));
+                }
             }
         } catch {}
         return [];
     };
+    const syncFromRedis = async (sym) => {
+        try {
+            const res = await fetch(`${KEEPER_URL_ARC}/chart/history/${encodeURIComponent(sym)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    localStorage.setItem(getCacheKey(sym), JSON.stringify(data));
+                    return data;
+                }
+            }
+        } catch {}
+        return null;
+    };
     const saveHistoryToCache = (sym, history) => {
         try {
-            // Only save the last 300 points (~30s at 100ms)
-            const toSave = history.slice(-300);
-            localStorage.setItem(getCacheKey(sym), JSON.stringify(toSave));
+            localStorage.setItem(getCacheKey(sym), JSON.stringify(history.slice(-300)));
+        } catch {}
+        try {
+            fetch(`${KEEPER_URL_ARC}/chart/history/${encodeURIComponent(sym)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: history.slice(-300) }),
+            });
         } catch {}
     };
 
@@ -82,7 +100,7 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
         };
     }, [symbol]);
 
-    // Reset state on symbol change — load cached data first
+    // Reset state on symbol change — load cached data synchronously, sync Redis in background
     useEffect(() => {
         // Save current symbol's data before switching
         if (symbolRef.current !== symbol && priceHistoryRef.current.length > 0) {
@@ -90,13 +108,27 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
         }
         symbolRef.current = symbol;
 
-        const cached = loadCachedHistory(symbol);
+        // 1. Instant load from localStorage
+        const cached = loadCachedHistorySync(symbol);
         priceHistoryRef.current = cached;
         targetPriceRef.current = null;
         interpolatedPriceRef.current = cached.length > 0 ? cached[cached.length - 1].p : null;
         startTimeRef.current = cached.length > 0 ? cached[cached.length - 1].t : null;
         yMinRef.current = null;
         yMaxRef.current = null;
+
+        // 2. Background sync from Redis
+        syncFromRedis(symbol).then(redisData => {
+            if (redisData && redisData.length > 0) {
+                const lastTs = redisData[redisData.length - 1].t;
+                const now = Date.now();
+                const shift = now - lastTs;
+                const shifted = redisData.map(p => ({ t: p.t + shift, p: p.p }));
+                priceHistoryRef.current = shifted;
+                interpolatedPriceRef.current = shifted[shifted.length - 1].p;
+                startTimeRef.current = shifted[shifted.length - 1].t;
+            }
+        });
     }, [symbol]);
 
     // History management + periodic cache save (only save real SSE data)

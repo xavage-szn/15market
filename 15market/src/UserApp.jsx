@@ -32,7 +32,8 @@ import CampaignsHub from "./components/CampaignsHub";
 // Lazy load conditionally rendered components
 const ProfileModal = lazy(() => import("./components/ProfileModal").then(m => ({ default: m.ProfileModal })));
 const PnLModal = lazy(() => import("./components/PnLModal").then(m => ({ default: m.PnLModal })));
-const TransactionReceiptModal = lazy(() => import("./components/TransactionReceiptModal").then(m => ({ default: m.TransactionReceiptModal })));
+// const TransactionReceiptModal = lazy(() => import("./components/TransactionReceiptModal").then(m => ({ default: m.TransactionReceiptModal })));
+const TradeShareCard = lazy(() => import("./components/TradeShareCard"));
 const OnboardingFlow = lazy(() => import("./components/OnboardingFlow").then(m => ({ default: m.OnboardingFlow })));
 const MessagingSystem = lazy(() => import("./components/MessagingSystem"));
 const RoundsAccessGate = lazy(() => import("./components/RoundsAccessGate"));
@@ -176,7 +177,7 @@ const MobileBottomHistoryPane = ({ isOpen, onToggle, tradeHistory, theme, onView
           `}
         >
           {/* Branded "Glow Line" at the top edge */}
-          {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
+          {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#17A364] to-transparent opacity-90" />}
 
           <div className="flex items-center justify-center gap-3 w-full">
             <History size={14} className={isDark ? "text-white" : "text-white"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />
@@ -517,8 +518,8 @@ export default function UserApp() {
     return () => window.removeEventListener('keydown', onKey);
   }, [showFullHistory]);
   const [selectedPnLTrade, setSelectedPnLTrade] = useState(null);
-  const [isTransactionReceiptOpen, setIsTransactionReceiptOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [isShareCardOpen, setIsShareCardOpen] = useState(false);
+  const [shareTrade, setShareTrade] = useState(null);
   const [view, setView] = useState("trading"); // "trading", "dashboard", "history", or "circle_wallet"
   const [circleWalletMode, setCircleWalletMode] = useState(null); // 'send' or 'receive'
   const [showCircleWallet, setShowCircleWallet] = useState(false);
@@ -1273,11 +1274,11 @@ const performStealthChecks = useCallback(async (addr) => {
             (tx && String(t.tx || t.txHash) === tx)
           );
           if (trade) {
-            setSelectedTransaction({
+            setShareTrade({
               ...trade,
               tx: data.txHash || trade.tx
             });
-            setIsTransactionReceiptOpen(true);
+            setIsShareCardOpen(true);
           }
         });
 
@@ -2987,7 +2988,7 @@ const performStealthChecks = useCallback(async (addr) => {
               isSignerInitializing={isSignerInitializing}
               onRetryInit={initializeSessionWallet}
               transactionHistory={transactionHistory}
-              onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
+              onViewReceipt={(tx) => { setShareTrade(tx); setIsShareCardOpen(true); }}
               uiVersion={uiVersion}
               onOpenCircleWallet={(initialMode) => {
                 setCircleWalletMode(initialMode);
@@ -3062,7 +3063,7 @@ const performStealthChecks = useCallback(async (addr) => {
                 style={isSmallScreen ? { paddingTop: 'calc(env(safe-area-inset-top) + 12px)' } : {}}>
                 <div className="flex items-center transition-all duration-500 h-full overflow-visible"
                   style={{ paddingLeft: !isSmallScreen ? (showSideHistory ? '268px' : '16px') : '0px' }}>
-                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[72px]' : 'h-[100px] lg:h-[120px]'} w-auto transition-all pointer-events-auto`} style={{ marginTop: '-24px', marginBottom: '-24px', marginLeft: '-0.5%' }} />
+                  <img src={theme === 'light' ? '/goblogo.png' : '/gowlogo.png'} alt="logo" className={`${isSmallScreen ? 'h-[72px]' : 'h-[100px] lg:h-[120px]'} w-auto transition-all pointer-events-auto`} style={{ marginTop: '-24px', marginBottom: '-24px', marginLeft: '-4.32%' }} />
                 </div>
 
                 <div className="hidden lg:flex items-center gap-2 px-2 py-1 origin-right">
@@ -3115,7 +3116,7 @@ const performStealthChecks = useCallback(async (addr) => {
                       {/* Branded Game Mode Switcher - Mobile */}
                       <div className={`flex items-center p-0.5 rounded-full border backdrop-blur-3xl transition-all duration-500 ${theme === 'light' ? 'bg-white/40 border-[#17A364]/20' : 'bg-black/40 border-white/5'}`}>
                         <motion.div
-                          className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-br from-[#2EC47C] to-[#14472C]"
+                          className="absolute top-0.5 bottom-0.5 rounded-full bg-[#17A364]"
                           initial={false}
                           animate={{ x: gameMode === 'classic' ? 0 : 54, width: 54 }}
                           transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -3208,7 +3209,7 @@ const performStealthChecks = useCallback(async (addr) => {
                     tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                     showFullHistory={showFullHistory}
                     setShowFullHistory={setShowFullHistory}
-                    onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
+                    onViewReceipt={(tx) => { setShareTrade(tx); setIsShareCardOpen(true); }}
                     gameMode={gameMode}
                   />
                 </div>
@@ -3235,7 +3236,7 @@ const performStealthChecks = useCallback(async (addr) => {
                   
                   
                   {/* MARKET SCROLLER (Marquee) */}
-                  <div className="w-full shrink-0 mb-3 overflow-hidden relative">
+                  <div className="w-full shrink-0 mb-3 overflow-hidden relative rounded-[10px]">
                     <GlobalTradeScroller theme={theme} />
                   </div>
 
@@ -3288,6 +3289,7 @@ const performStealthChecks = useCallback(async (addr) => {
                         handleExecuteTrade={executeTrade}
                         isExecuting={isExecuting}
                         wallet={wallet}
+                        address={address}
                         minStake={platformSettings.minBet}
                         maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                         liveOdds={liveOdds}
@@ -3297,7 +3299,8 @@ const performStealthChecks = useCallback(async (addr) => {
                     </div>
                   </div>
 
-                  {/* TRADE HISTORY (Spans across bottom of both chart and trading widget) */}
+                  {/* TRADE HISTORY (Spans across bottom of both chart and trading widget) — only shown when logged in */}
+                  {address && (
                   <div className={`${showFullHistory ? 'flex-1 min-h-0 overflow-y-auto rounded-[16px]' : 'shrink-0 h-[90px] mt-2'} transition-all duration-300`}
                     style={{
                       fontFamily: '"Comfortaa", cursive',
@@ -3311,11 +3314,13 @@ const performStealthChecks = useCallback(async (addr) => {
                       tradeHistory={gameMode === 'rounds' ? roundsTradeHistory : tradeHistory}
                       activeTrades={activeTrades}
                       theme={theme}
-                      onViewReceipt={(tx) => { setSelectedTransaction(tx); setIsTransactionReceiptOpen(true); }}
+                      onViewReceipt={(tx) => { setShareTrade(tx); setIsShareCardOpen(true); }}
+                      onShare={(trade) => { setShareTrade(trade); setIsShareCardOpen(true); }}
                       isExpanded={showFullHistory}
                       onToggleExpand={() => setShowFullHistory(!showFullHistory)}
                     />
                   </div>
+                  )}
 
                 </div>
               </div>
@@ -3347,13 +3352,13 @@ const performStealthChecks = useCallback(async (addr) => {
                sessionBalance={sessionBalance}
                evmBalance={evmBalance}
                onDeposit={handleDeposit}
-               onWithdraw={handleWithdraw}
-               transactionHistory={transactionHistory}
-               onViewReceipt={(tx) => {
-                 setSelectedTransaction(tx);
-                 setIsTransactionReceiptOpen(true);
-               }}
-               notify={notify}
+                onWithdraw={handleWithdraw}
+                transactionHistory={transactionHistory}
+                onViewReceipt={(tx) => {
+                  setShareTrade(tx);
+                  setIsShareCardOpen(true);
+                }}
+                notify={notify}
              />
             </Suspense>
            
@@ -3405,14 +3410,16 @@ const performStealthChecks = useCallback(async (addr) => {
             )}
           </AnimatePresence>
 
-          <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
+           <footer className={`${isSmallScreen ? 'hidden' : 'fixed bottom-1 left-0 w-full px-8 z-[100] opacity-30 hover:opacity-100 transition-opacity pointer-events-none'} flex items-center justify-between gap-6 flex-none bg-transparent`}
             style={{ fontFamily: 'Arial, sans-serif' }}>
-          </footer>
-           <Suspense fallback={<div className="h-[400px] flex items-center justify-center animate-pulse">Loading Transaction Details...</div>}>
-             <TransactionReceiptModal
-               isOpen={isTransactionReceiptOpen}
-               onClose={() => setIsTransactionReceiptOpen(false)}
-               transaction={selectedTransaction}
+           </footer>
+           <Suspense fallback={null}>
+              <TradeShareCard
+               isOpen={isShareCardOpen}
+               onClose={() => setIsShareCardOpen(false)}
+               trade={shareTrade}
+               userProfile={userProfile}
+               theme={theme}
              />
            </Suspense>
 

@@ -10,7 +10,7 @@ const GlobalLoader = ({ theme = 'dark', progress = 0 }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden ${isLight ? 'bg-[#249C6C]' : 'bg-[#050505]'}`}
+            className={`fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden ${isLight ? 'bg-[#17A364]' : 'bg-[#050505]'}`}
         >
             {/* Branded Background Texture - DARK MODE ONLY */}
             <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
@@ -31,37 +31,18 @@ const GlobalLoader = ({ theme = 'dark', progress = 0 }) => {
                     />
                 </motion.div>
 
-                {/* 2. Divider Lines (//) */}
+                {/* 2. Divider */}
                 <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.4, duration: 0.5 }}
-                    className="flex items-center gap-0 -translate-y-14 md:-translate-y-20 -ml-2 z-10 relative"
+                    className="flex items-center -ml-2 z-10 relative"
                 >
-                    <motion.span 
-                        animate={{ 
-                            opacity: [0.3, 1, 0.3],
-                            color: isLight 
-                                ? ['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)'] 
-                                : ['#ffffff', '#ffffff', '#ffffff']
-                        }}
-                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                        className={`text-3xl md:text-4xl font-light select-none`}
-                    >
-                        /
-                    </motion.span>
-                    <motion.span 
-                        animate={{ 
-                            opacity: [1, 0.3, 1],
-                            color: isLight 
-                                ? ['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)'] 
-                                : ['#ffffff', '#ffffff', '#ffffff']
-                        }}
-                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                        className={`text-3xl md:text-4xl font-light select-none -ml-1`}
-                    >
-                        /
-                    </motion.span>
+                    <div className="flex items-center justify-center">
+                        <span className={`text-base md:text-lg font-light select-none ${isLight ? 'text-black/40' : 'text-white/40'}`}>
+                            |
+                        </span>
+                    </div>
                 </motion.div>
 
                 {/* 3. Loading Text (Typing Effect + Looping Balls) */}
@@ -73,7 +54,7 @@ const GlobalLoader = ({ theme = 'dark', progress = 0 }) => {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.8 + index * 0.1, duration: 0.1 }}
-                                className={`text-[15px] font-medium tracking-tight ${isLight ? 'text-black' : 'text-white'}`}
+                                className={`text-[14px] md:text-[16px] font-medium tracking-tight ${isLight ? 'text-black' : 'text-white'}`}
                                 style={{ fontFamily: '"Comfortaa", cursive' }}
                             >
                                 {char}
@@ -86,17 +67,11 @@ const GlobalLoader = ({ theme = 'dark', progress = 0 }) => {
                             return (
                                 <motion.div
                                     key={i}
-                                    animate={{ 
-                                        opacity: lit ? 1 : [0, 1, 0],
-                                        backgroundColor: isLight ? '#000000' : ['#ffffff', '#000000']
-                                    }}
-                                    transition={lit ? { duration: 0.3 } : { 
-                                        repeat: Infinity, 
-                                        duration: 1.5, 
-                                        delay: 0.8 + (7 * 0.1) + (i * 0.2),
-                                        ease: "easeInOut" 
-                                    }}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: lit ? 1 : 1 }}
+                                    transition={{ delay: 1.0 + (i * 0.15), duration: 0.1 }}
                                     className={`w-[4px] h-[4px] rounded-full ${isLight ? 'opacity-60 shadow-[0_0_8px_rgba(0,0,0,0.1)]' : 'shadow-[0_0_12px_rgba(255,255,255,0.3)]'}`}
+                                    style={{ backgroundColor: isLight ? '#000000' : '#ffffff' }}
                                 />
                             );
                         })}

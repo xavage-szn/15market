@@ -601,12 +601,12 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
     const truncate = (str) => str ? `${str.slice(0, 6)}...${str.slice(-4)}` : "";
 
     return (
-        <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'text-black bg-[#CFDCD5]' : 'text-white bg-black'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
+        <div className={`h-screen w-full flex flex-col overflow-hidden relative ${isLight ? 'text-black bg-white' : 'text-white bg-black'}`} style={{ fontFamily: '"Comfortaa", cursive' }}>
             <style>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }
                 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-                .db-card { background: ${isLight ? 'rgba(207,220,213,0.7)' : 'rgba(10,10,10,0.8)'}; border: 1px solid ${isLight ? 'rgba(36, 156, 108,0.15)' : 'rgba(255,255,255,0.06)'}; border-radius: 24px; margin: 0 2px; filter: drop-shadow(${isLight ? '0 2px 4px rgba(0,0,0,0.10)' : '0 2px 4px rgba(0,0,0,0.4)'}); }
-                .db-card-alt { background: ${isLight ? 'rgba(207,220,213,0.65)' : 'rgba(10,10,10,0.75)'}; border: 1px solid ${isLight ? 'rgba(36, 156, 108,0.12)' : 'rgba(255,255,255,0.05)'}; border-radius: 24px; margin: 0 2px; filter: drop-shadow(${isLight ? '0 2px 4px rgba(0,0,0,0.10)' : '0 2px 4px rgba(0,0,0,0.4)'}); }
+                .db-card { background: ${isLight ? 'rgba(255,255,255,0.7)' : 'rgba(10,10,10,0.8)'}; border: 1px solid ${isLight ? 'rgba(36, 156, 108,0.15)' : 'rgba(255,255,255,0.06)'}; border-radius: 24px; margin: 0 2px; filter: drop-shadow(${isLight ? '0 2px 4px rgba(0,0,0,0.10)' : '0 2px 4px rgba(0,0,0,0.4)'}); }
+                .db-card-alt { background: ${isLight ? 'rgba(255,255,255,0.65)' : 'rgba(10,10,10,0.75)'}; border: 1px solid ${isLight ? 'rgba(36, 156, 108,0.12)' : 'rgba(255,255,255,0.05)'}; border-radius: 24px; margin: 0 2px; filter: drop-shadow(${isLight ? '0 2px 4px rgba(0,0,0,0.10)' : '0 2px 4px rgba(0,0,0,0.4)'}); }
                 @keyframes breathe { 0%,100%{box-shadow:0 0 20px rgba(36, 156, 108,0.3)} 50%{box-shadow:0 0 40px rgba(36, 156, 108,0.6)} }
             `}</style>
 
@@ -671,7 +671,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
 
                     {/* TRADING WALLET */}
                     <div className="flex-none">
-                        <div className={`w-full rounded-[24px] p-4 flex flex-col gap-3 relative overflow-hidden ${isLight ? 'bg-[#CFDCD5] border-[#249C6C]/20' : 'bg-[#0a0a0a] border-white/5'}`} style={{ filter: isLight ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
+                        <div className={`w-full rounded-[24px] p-4 flex flex-col gap-3 relative overflow-hidden backdrop-blur-xl ${isLight ? 'bg-white/50 border-white/60' : 'bg-[#0a0a0a] border-white/5'}`} style={{ boxShadow: isLight ? '0 4px 30px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))', border: isLight ? '1px solid rgba(255,255,255,0.6)' : '1px solid rgba(255,255,255,0.05)' }}>
 
                             {/* Profile Row */}
                             <div className="flex items-center justify-between">
@@ -713,7 +713,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             </div>
 
                             {/* Main Wallet Balance */}
-                            <div className={`rounded-xl border px-3 py-2 flex items-center justify-between ${isLight ? 'bg-white/40 border-[#249C6C]/20' : 'bg-white/5 border-white/10'}`} style={{ boxShadow: isLight ? '0 1px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)' : '0 1px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+                            <div className={`rounded-xl border px-3 py-2 flex items-center justify-between ${isLight ? 'bg-white/60 border-white/80' : 'bg-white/5 border-white/10'}`} style={{ boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)' : '0 1px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)', backdropFilter: 'blur(10px)' }}>
                                 <div>
                                     <div className={`text-[6px] font-black uppercase tracking-widest mb-0.5 ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>Main Wallet Balance</div>
                                     <div onClick={() => { if (address) { navigator.clipboard.writeText(address); setToast('Copied!'); setTimeout(() => setToast(null), 2000); }}}
@@ -878,7 +878,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                     <div className="w-[380px] flex-none flex flex-col justify-center min-h-0 gap-6">
 
                         {/* WALLET CARD */}
-                        <div className={`w-full rounded-[40px] p-8 flex flex-col gap-5 relative overflow-hidden ${isLight ? 'bg-[#CFDCD5] border-[#249C6C]/20' : 'bg-[#0a0a0a] border-white/5'}`} style={{ minHeight: '280px', margin: '0 2px', filter: isLight ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.10))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
+                        <div className={`w-full rounded-[40px] p-8 flex flex-col gap-5 relative overflow-hidden backdrop-blur-xl ${isLight ? 'bg-white/50 border-white/60' : 'bg-[#0a0a0a] border-white/5'}`} style={{ minHeight: '280px', margin: '0 2px', boxShadow: isLight ? '0 4px 30px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))', border: isLight ? '1px solid rgba(255,255,255,0.6)' : '1px solid rgba(255,255,255,0.05)' }}>
 
                             {/* Profile Row */}
                             <div className="flex items-center justify-between">
@@ -923,7 +923,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             </div>
 
                             {/* Main Wallet Balance Panel */}
-                            <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between ${isLight ? 'bg-white/40 border-[#249C6C]/20' : 'bg-white/5 border-white/10'}`} style={{ boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)' : '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)' }}>
+                            <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between ${isLight ? 'bg-white/60 border-white/80' : 'bg-white/5 border-white/10'}`} style={{ boxShadow: isLight ? '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)' : '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)', backdropFilter: 'blur(10px)' }}>
                                 <div>
                                     <div className={`text-[7px] font-black uppercase tracking-widest mb-1 ${isLight ? 'text-[#0a261a]/40' : 'text-white/30'}`}>Main Wallet Balance</div>
                                     <div onClick={() => { if (address) { navigator.clipboard.writeText(address); setToast('Copied!'); setTimeout(() => setToast(null), 2000); }}}
@@ -1166,7 +1166,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
             {isSettingsOpen && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
                     <motion.div initial={{opacity:0,scale:0.9,y:20}} animate={{opacity:1,scale:1,y:0}}
-                        className={`w-full max-w-md ${isLight ? 'bg-[#CFDCD5] border-[#249C6C]/20' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-5 max-h-[90vh] overflow-y-auto no-scrollbar relative overflow-hidden`}>
+                        className={`w-full max-w-md ${isLight ? 'bg-white border-[#249C6C]/20' : 'bg-[#1a1a1a] border-white/10'} border shadow-2xl rounded-[32px] p-5 max-h-[90vh] overflow-y-auto no-scrollbar relative overflow-hidden`}>
                         {isLight && (
                             <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
                         )}
@@ -1598,7 +1598,7 @@ export function DashboardPage({ onBack, onAdmin, sessionBalance, evmBalance, onD
                             animate={{ x: 0 }}
                             exit={{ x: '100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className={`fixed top-0 right-0 w-[65%] max-w-[300px] h-full z-[9999] shadow-2xl flex flex-col gap-3 p-6 pt-24 ${isLight ? 'bg-[#CFDCD5] border-l border-[#249C6C]/20' : 'bg-[#0a0a0a] border-l border-white/10'} overflow-hidden`}
+                            className={`fixed top-0 right-0 w-[65%] max-w-[300px] h-full z-[9999] shadow-2xl flex flex-col gap-3 p-6 pt-24 ${isLight ? 'bg-white border-l border-[#249C6C]/20' : 'bg-[#0a0a0a] border-l border-white/10'} overflow-hidden`}
                         >
                             {isLight && (
                                 <div className="absolute inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />

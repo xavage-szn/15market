@@ -194,10 +194,12 @@ function GlobalTradeScrollerComponent({ theme, isV1 = false }) {
 
     const v1Bg = isLight ? 'bg-white zigzag-ticker shadow-sm' : 'bg-[#0a0a0a] zigzag-ticker zigzag-outline';
     const v1TextClass = isLight ? 'text-[#0a261a]' : 'text-white';
-    const switchEffectBg = 'bg-gradient-to-br from-[#2EC47C] to-[#14472C] text-white';
+    const switchEffectBg = isLight
+        ? 'text-white'
+        : 'text-white';
 
     return (
-        <div className={`w-full ${isV1 ? 'h-5 md:h-6 lg:h-10 ' + v1Bg : 'h-7 md:h-7 lg:h-10 zigzag-ticker ' + switchEffectBg} relative z-[45] overflow-hidden`}>
+        <div className={`w-full ${isV1 ? 'h-5 md:h-6 lg:h-10 ' + v1Bg : 'h-7 md:h-7 lg:h-10 bg-[#17A364] text-white'} relative z-[45] overflow-hidden`} style={{ fontFamily: '"Comfortaa", cursive' }}>
             {/* Smooth Transition Layer for Broadcasts */}
             <AnimatePresence mode="wait">
                 {(activeBroadcast || (isCampaignWindow && campaignBroadcast)) ? (

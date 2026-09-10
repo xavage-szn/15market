@@ -47,28 +47,101 @@ function MobileSteppedChart({
 
   const numericPrice = parseFloat(currentPrice) || 0;
 
-  // Initialize and seed synthetic rolling points if empty so canvas is NEVER blank
+  // Cache helpers — synchronous localStorage first, async Redis background sync
+  const getCacheKey = (sym) => `15market_mobile_chart_${sym?.toLowerCase()}`;
+  const loadCachedHistorySync = (sym) => {
+    // Synchronous load from localStorage (instant)
+    try {
+      const cached = localStorage.getItem(getCacheKey(sym));
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.length > 0) {
+          const lastTs = parsed[parsed.length - 1].t;
+          const now = Date.now();
+          const shift = now - lastTs;
+          return parsed.map(p => ({ t: p.t + shift, p: p.p }));
+        }
+      }
+    } catch {}
+    return [];
+  };
+  const syncFromRedis = async (sym) => {
+    // Background sync from Redis → localStorage
+    try {
+      const { KEEPER_URL_ARC } = await import('../constants');
+      const res = await fetch(`${KEEPER_URL_ARC}/chart/history/${encodeURIComponent(sym)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          // Update localStorage with Redis data
+          localStorage.setItem(getCacheKey(sym), JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch {}
+    return null;
+  };
+  const saveHistoryToCache = (sym, history) => {
+    // Save to localStorage (instant)
+    try {
+      localStorage.setItem(getCacheKey(sym), JSON.stringify(history.slice(-300)));
+    } catch {}
+    // Background save to Redis
+    try {
+      import('../constants').then(({ KEEPER_URL_ARC }) => {
+        fetch(`${KEEPER_URL_ARC}/chart/history/${encodeURIComponent(sym)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ history: history.slice(-300) }),
+        });
+      });
+    } catch {}
+  };
+
+  // Initialize: load cached history synchronously, then sync from Redis in background
   useEffect(() => {
     const symKey = (symbol || 'ETHUSDT').replace('USDT', '').toLowerCase();
     const basePrice = numericPrice > 0 ? numericPrice : (symKey === 'btc' ? 68000 : symKey === 'sol' ? 140 : 1880.89);
 
     if (priceHistoryRef.current.length === 0) {
-      const now = Date.now();
-      const initial = [];
-      let walk = basePrice;
-      const stepCount = 35;
-      const timeStep = windowMs / stepCount;
+      // 1. Instant load from localStorage
+      const cached = loadCachedHistorySync(symbol);
+      if (cached.length > 10) {
+        priceHistoryRef.current = cached;
+        interpolatedPriceRef.current = cached[cached.length - 1].p;
+        targetPriceRef.current = cached[cached.length - 1].p;
+      } else {
+        // Fallback: generate synthetic data
+        const now = Date.now();
+        const initial = [];
+        let walk = basePrice;
+        const stepCount = 35;
+        const timeStep = windowMs / stepCount;
 
-      for (let i = stepCount; i >= 0; i--) {
-        const t = now - (i * timeStep);
-        if (i % 3 === 0) {
-          walk += (Math.random() - 0.48) * (basePrice * 0.0015);
+        for (let i = stepCount; i >= 0; i--) {
+          const t = now - (i * timeStep);
+          if (i % 3 === 0) {
+            walk += (Math.random() - 0.48) * (basePrice * 0.0015);
+          }
+          initial.push({ t, p: walk });
         }
-        initial.push({ t, p: walk });
+        priceHistoryRef.current = initial;
+        interpolatedPriceRef.current = walk;
+        targetPriceRef.current = basePrice;
       }
-      priceHistoryRef.current = initial;
-      interpolatedPriceRef.current = walk;
-      targetPriceRef.current = basePrice;
+
+      // 2. Background sync from Redis (updates localStorage for next load)
+      syncFromRedis(symbol).then(redisData => {
+        if (redisData && redisData.length > 10) {
+          const lastTs = redisData[redisData.length - 1].t;
+          const now = Date.now();
+          const shift = now - lastTs;
+          const shifted = redisData.map(p => ({ t: p.t + shift, p: p.p }));
+          priceHistoryRef.current = shifted;
+          interpolatedPriceRef.current = shifted[shifted.length - 1].p;
+          targetPriceRef.current = shifted[shifted.length - 1].p;
+        }
+      });
     }
   }, [symbol, numericPrice, windowMs]);
 
@@ -102,8 +175,10 @@ function MobileSteppedChart({
     }
   }, [numericPrice]);
 
-  // Append new points to rolling history every 50ms for silky-smooth streaming
+  // Append new points to rolling history every 50ms and periodically save to cache
   useEffect(() => {
+    let saveCounter = 0;
+    const mountTime = Date.now();
     const iv = setInterval(() => {
       if (interpolatedPriceRef.current !== null) {
         const now = Date.now();
@@ -122,11 +197,20 @@ function MobileSteppedChart({
         if (history.length > 500) {
           priceHistoryRef.current = history.slice(-300);
         }
+        // Save to cache every 2 seconds (40 * 50ms)
+        saveCounter++;
+        if (saveCounter >= 40) {
+          saveCounter = 0;
+          const realData = history.filter(p => p.t >= mountTime);
+          if (realData.length >= 10) {
+            saveHistoryToCache(symbol, realData);
+          }
+        }
       }
     }, 50);
 
     return () => clearInterval(iv);
-  }, []);
+  }, [symbol]);
 
   // Main Canvas Render Loop
   useEffect(() => {
@@ -1014,7 +1098,7 @@ export default function MobileTradeView({
               <button
                 onClick={() => handleTrade('UP')}
                 disabled={currentStake <= 0 || isExecuting}
-                className={`flex-1 h-[52px] rounded-full bg-gradient-to-br from-[#2EC47C] to-[#14472C] text-white flex items-center justify-center gap-3 font-black text-[18px] tracking-wide active:scale-[0.98] transition-all shadow-md ${
+                className={`flex-1 h-[52px] rounded-full bg-[#17A364] text-white flex items-center justify-center gap-3 font-black text-[18px] tracking-wide active:scale-[0.98] transition-all shadow-md ${
                   currentStake <= 0 || isExecuting ? 'opacity-85' : 'hover:brightness-105'
                 }`}
               >
@@ -1031,7 +1115,7 @@ export default function MobileTradeView({
               <button
                 onClick={() => handleTrade('DOWN')}
                 disabled={currentStake <= 0 || isExecuting}
-                className={`flex-1 h-[52px] rounded-full bg-gradient-to-br from-[#EF5350] to-[#7F1D1D] text-white flex items-center justify-center gap-3 font-black text-[18px] tracking-wide active:scale-[0.98] transition-all shadow-md ${
+                className={`flex-1 h-[52px] rounded-full bg-[#EF5350] text-white flex items-center justify-center gap-3 font-black text-[18px] tracking-wide active:scale-[0.98] transition-all shadow-md ${
                   currentStake <= 0 || isExecuting ? 'opacity-85' : 'hover:brightness-105'
                 }`}
               >
