@@ -2,19 +2,10 @@ const cache = require('../cache');
 const https = require('https');
 
 /**
- * MULTI-TIMEFRAME DYNAMIC ODDS ENGINE (Duration-Aware)
+ * MULTI-TIMEFRAME DYNAMIC ODDS ENGINE
  * Calculates real-time prediction market share prices based on a composite
- * momentum score across 4 timeframes with duration decay:
- * 
- * - SHORT durations (5s): Full momentum skew → extreme odds (e.g. 80c/20c)
- * - MEDIUM durations (10s): Moderate decay → balanced odds (e.g. 70c/30c)
- * - LONG durations (15s): Strong decay → near 50/50 odds (e.g. 65c/35c)
- * 
- * This reflects the reality that longer trades have more time for price
- * reversal, so the "advantage" of current momentum is worth less.
- * 
- * Micro-volatility injection ensures share prices oscillate frequently
- * even during flat markets, producing enticing sub-20c swings.
+ * momentum score across 4 timeframes with enhanced micro-volatility injection
+ * to produce a wide, enticing range of share prices (frequently reaching 10c).
  */
 class OddsEngine {
     constructor(io, redis) {
@@ -44,9 +35,9 @@ class OddsEngine {
     }
 
     fetchMacroData() {
-        const mexcSymbols = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
-        for (const [key, symbol] of Object.entries(mexcSymbols)) {
-            https.get(`https://api.mexc.com/api/v3/ticker/24hr?symbol=${symbol}`, (res) => {
+        const binanceSymbols = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
+        for (const [key, symbol] of Object.entries(binanceSymbols)) {
+            https.get(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, (res) => {
                 let data = '';
                 res.on('data', (chunk) => data += chunk);
                 res.on('end', () => {
@@ -67,7 +58,6 @@ class OddsEngine {
         const windowHistory = history.filter(p => p.time >= cutoff);
         if (windowHistory.length < 2) return 0; // Not enough data
         const oldPrice = windowHistory[0].price;
-        if (!oldPrice || oldPrice <= 0) return 0; // Guard division by zero
         return ((currentPrice - oldPrice) / oldPrice) * 100; // Returns % change
     }
 
@@ -77,7 +67,6 @@ class OddsEngine {
         const recent = history.slice(-6);
         const now = recent[recent.length - 1];
         const ago = recent[0];
-        if (!ago.price || ago.price <= 0) return 0; // Guard division by zero
         const dt = (now.time - ago.time) / 1000;
         if (dt <= 0) return 0;
         return ((now.price - ago.price) / ago.price) * 100 / dt; // % per second
@@ -95,7 +84,6 @@ class OddsEngine {
             if (!history || history.length < 2) continue;
 
             const currentPrice = history[history.length - 1].price;
-            if (!currentPrice || currentPrice <= 0) continue; // Skip if price is invalid
             
             // 1. Calculate Rate of Change (ROC) % for each timeframe
             const roc5s = this.getROC(history, currentPrice, 5000);
@@ -136,27 +124,9 @@ class OddsEngine {
             liveOdds[symbol] = {};
 
             for (const duration of this.durations) {
-                // ── DURATION-AWARE ODDS ──────────────────────────────────────
-                // Longer durations have MORE time for price reversal, so odds
-                // should be pulled closer to 50/50. Shorter durations lock in
-                // momentum more firmly, so odds are more extreme.
-                //
-                // decayRate controls how aggressively odds normalize:
-                //   5s  → factor = 1.00 (full skew, most extreme odds)
-                //   10s → factor = 0.67 (moderate normalization)
-                //   15s → factor = 0.50 (strong normalization toward 50/50)
-                const minDuration = 5;
-                const decayRate = 0.10;
-                const durationFactor = 1.0 / (1.0 + decayRate * (duration - minDuration));
-                const adjustedSkew = clampedSkew * durationFactor;
-
-                // Longer durations also get extra micro-volatility noise
-                // to reflect the increased uncertainty of a longer window
-                const durationNoise = Math.sin(this.microPhase[symbol] * (duration / 5)) * 0.02 * (duration / 5);
-
-                // Base probability is 0.50 for each side, modified by duration-adjusted skew
-                let longProb = 0.50 + adjustedSkew + durationNoise;
-                let shortProb = 0.50 - adjustedSkew - durationNoise;
+                // Base probability is 0.50 for each side
+                let longProb = 0.50 + clampedSkew;
+                let shortProb = 0.50 - clampedSkew;
 
                 // Ensure LONG + SHORT always equals exactly 1.00 (no internal spread)
                 let finalLong = Number(longProb.toFixed(2));
@@ -178,8 +148,6 @@ class OddsEngine {
                     metadata: {
                         trend: trendDirection,
                         skew: clampedSkew.toFixed(4),
-                        adjustedSkew: adjustedSkew.toFixed(4),
-                        durationFactor: durationFactor.toFixed(4),
                         velocity: tickVelocity.toFixed(4),
                         roc24h: roc24h.toFixed(2),
                         roc60s: roc60s.toFixed(4)
