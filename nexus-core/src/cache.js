@@ -48,6 +48,14 @@ class Cache {
 
     // Binance-sourced 24h changes (instant, no warmup needed)
     this.binance24h = {}; // key -> percentage change number
+
+    // Last successfully polled price per asset — survives transient API
+    // failures so cache.prices never drops to 0 (priceService.js writes these).
+    this.lastPollPrice = {}; // key -> last successful price
+    this.lastPollTime = {}; // key -> last successful poll timestamp
+
+    // Latest odds computed by the Odds Engine (read by the classic engine).
+    this.liveOdds = {}; // symbol -> { duration -> multiplier }
   }
 
   /**
