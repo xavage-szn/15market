@@ -167,10 +167,10 @@ function ResolvingOutcome({ isLight, isWinning }) {
   );
 }
 
-// 4. TRADE OUTCOME — premium "million dollar" result reveal.
-// Fully transparent: no colored rectangle, floats directly on the trading area.
-// Win: cinematic green victory (trophy + shockwave rings + gold burst + rising coins).
-// Lose: dramatic red-orange crash (slamming down arrow + crumbling chips + falling trend).
+// 4. TRADE OUTCOME — rounds-style compact result reveal (compact live status card).
+// Replaces the "million dollar" cinematic with the ROUNDS compact live status card:
+// tinted rounded card + italic tracking-widest WIN/LOSS lettering, kept at the
+// current animation container size (not stretched to the chart widget size).
 function TradeOutcome({ won, isLight }) {
   // Entrance on mount, then exit after 3 seconds so it "animates in and out".
   const [gone, setGone] = useState(false);
@@ -182,287 +182,60 @@ function TradeOutcome({ won, isLight }) {
   const exit = { opacity: 0, scale: 0.8, filter: 'blur(4px)' };
   const enter = { opacity: 1, scale: 1, filter: 'blur(0px)' };
 
-  const GREEN = '#17A364';
-  const ORANGE = '#FF914D';
-  const GOLD = '#FFD34D';
+  const isWin = !!won;
+  const cardClass = isWin
+    ? 'bg-[#17A364]/15 border-[#17A364]/30'
+    : 'bg-[#FF7F50]/15 border-[#FF7F50]/40';
+  const textClass = isWin ? 'text-[#17A364]' : 'text-[#FF7F50]';
 
-  // Floating ember / coin sparks for the win celebration
-  const embers = [
-    { left: '12%', delay: 0.2,  color: '#FFD700' },
-    { left: '30%', delay: 0.5,  color: GREEN },
-    { left: '55%', delay: 0.35, color: '#A3E635' },
-    { left: '72%', delay: 0.7,  color: '#FFC53D' },
-    { left: '88%', delay: 0.55, color: '#22C55E' },
-  ];
-
-  const confetti = [
-    { left: '6%',  delay: 0,    color: GREEN },
-    { left: '22%', delay: 0.08, color: '#FFD700' },
-    { left: '40%', delay: 0.16, color: '#22C55E' },
-    { left: '58%', delay: 0.1,  color: '#A3E635' },
-    { left: '76%', delay: 0.2,  color: GREEN },
-    { left: '92%', delay: 0.05, color: '#FFC53D' },
-  ];
-
-  // Sinking rubble/chips for the loss — crumbles downward and fades.
-  const rubble = [
-    { left: '14%', delay: 0.15, size: 7,  color: '#FFB085' },
-    { left: '34%', delay: 0.35, size: 6,  color: '#FF914D' },
-    { left: '56%', delay: 0.25, size: 8,  color: '#DD5A2A' },
-    { left: '72%', delay: 0.45, size: 6,  color: '#FFB085' },
-    { left: '88%', delay: 0.2,  size: 7,  color: '#FF914D' },
-  ];
-
-  return won ? (
+  return (
     <motion.div
       initial={enter}
       animate={gone ? exit : enter}
       transition={{ duration: gone ? 0.6 : 0.5, ease: "easeInOut" }}
       className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl"
     >
-      {/* Expanding shockwave rings (transparent) */}
-      {[0, 1, 2].map((i) => (
-        <motion.div
-          key={i}
-          className="absolute rounded-full border"
-          style={{ borderColor: 'rgba(23,163,100,0.5)' }}
-          initial={{ width: 20, height: 20, opacity: 0.8 }}
-          animate={{ width: i === 0 ? 160 : 200, height: i === 0 ? 160 : 200, opacity: 0 }}
-          transition={{ duration: 1.6, delay: 0.1 + i * 0.18, repeat: Infinity, ease: "easeOut" }}
-        />
-      ))}
-
-      {/* Light sweep across the widget (transparent) */}
+      {/* Rounds-style compact live status card */}
       <motion.div
-        className="absolute inset-y-0 w-[45%]"
-        style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent)' }}
-        initial={{ x: '-120%' }}
-        animate={{ x: isLight ? '180%' : '300%' }}
-        transition={{ duration: 1.1, delay: 0.15, repeat: Infinity, repeatDelay: 1.1, ease: "easeInOut" }}
-      />
-
-      {/* Confetti burst (transparent) */}
-      {confetti.map((c, i) => (
-        <motion.span
-          key={`conf-${i}`}
-          className="absolute w-[6px] h-[10px] rounded-[2px]"
-          style={{ left: c.left, backgroundColor: c.color }}
-          initial={{ y: 0, opacity: 1, rotate: 0 }}
-          animate={{ y: [0, 52], opacity: [1, 0], rotate: [0, 260] }}
-          transition={{ duration: 1.4, delay: c.delay, ease: "easeOut", repeat: Infinity, repeatDelay: 0.4 }}
-        />
-      ))}
-
-      {/* Rising golden ember sparks (transparent) */}
-      {embers.map((e, i) => (
-        <motion.span
-          key={`emb-${i}`}
-          className="absolute w-[7px] h-[7px] rounded-full"
-          style={{ left: e.left, backgroundColor: e.color, boxShadow: `0 0 10px ${e.color}` }}
-          initial={{ y: 34, opacity: 0 }}
-          animate={{ y: [34, -8], opacity: [0, 1, 0] }}
-          transition={{ duration: 1.6, delay: e.delay, repeat: Infinity, ease: "easeInOut" }}
-        />
-      ))}
-
-      {/* Glowing pulsing gold core halo (transparent glow, no fill) */}
-      <motion.div
-        animate={{ scale: [1, 1.22, 1], opacity: [0.55, 0.25, 0.55] }}
-        transition={{ duration: 1.7, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute w-[96px] h-[96px] rounded-full blur-xl"
-        style={{ background: `radial-gradient(circle, ${GOLD}66, transparent 70%)` }}
-      />
-
-      {/* Golden trophy with metallic gradient + dramatic spring */}
-      <motion.div
-        initial={{ scale: 0, rotate: -30, y: 24, opacity: 0 }}
-        animate={{ scale: 1, rotate: 0, y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 260, damping: 13, delay: 0.05 }}
-        className="relative flex flex-col items-center gap-0.5"
+        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 260, damping: 18 }}
+        className={`px-5 py-2.5 rounded-[24px] border flex items-center justify-center gap-2.5 select-none shadow-lg ${cardClass}`}
       >
-        <motion.div
-          animate={{ y: [0, -5, 0], rotate: [0, -3, 3, 0] }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-          className="relative"
-        >
-          {/* Trophy SVG with gold metallic gradient + crown */}
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-            <defs>
-              <linearGradient id="goldTrophy" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#FFF3B0" />
-                <stop offset="0.5" stopColor="#FFD34D" />
-                <stop offset="1" stopColor="#E8A020" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M8 2v3h8V2H8Zm-5 3h3v2.5C6 10.4 8.2 12.7 11 13.1V15H8.8C6.6 15 5 16.6 5 18.8V21h14v-2.2c0-2.2-1.6-3.8-3.8-3.8H13v-1.9c2.8-.4 5-2.7 5-5.6V5h3V2H19M7 5h10v.5c0 3-2.3 5.4-5 5.4s-5-2.4-5-5.4V5Z"
-              fill="url(#goldTrophy)"
-            />
-            <path
-              d="M2 5l3.2 2.6L8.6 4.6l2.6 3.4v.2h1.6v-.2l2.6-3.4 3.4 3L21.5 5l-1.2 2.2 2.5 3H2l2.5-3L2 5Z"
-              fill="#FFC53D"
-              opacity="0.9"
-              transform="translate(-0.8 0)"
-            />
-            <path d="M9 18h6v-1h-6v1Z" fill="#EFC94C" />
-          </svg>
-          {/* Orbit sparkles around trophy */}
-          <motion.span
-            animate={{ scale: [0.6, 1.3, 0.6], opacity: [0, 1, 0] }}
-            transition={{ duration: 1.2, repeat: Infinity }}
-            className="absolute -top-1.5 -right-2 text-[11px] text-[#FFF3B0]"
+        {/* Result chip */}
+        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isWin ? 'bg-[#17A364] text-white' : 'bg-[#FF7F50] text-white'}`}>
+          <motion.svg
+            viewBox="0 0 24 24"
+            width="13"
+            height="13"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            animate={{ scale: [1, 1.15, 1], opacity: [0.8, 1, 0.8] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
           >
-            ✦
-          </motion.span>
-          <motion.span
-            animate={{ scale: [0.6, 1.3, 0.6], opacity: [0, 1, 0] }}
-            transition={{ duration: 1.2, repeat: Infinity, delay: 0.6 }}
-            className="absolute -bottom-1 -left-2 text-[10px] text-[#FFD34D]"
-          >
-            ✦
-          </motion.span>
-        </motion.div>
+            {isWin ? <path d="M5 13l4 4L19 7" /> : <path d="M6 6l12 12M18 6L6 18" />}
+          </motion.svg>
+        </div>
 
-        {/* Radiant gold-green gradient WON text (transparent bg) */}
+        {/* WIN / LOSS lettering — italic, tracking-widest, rounds style */}
         <motion.span
-          animate={{ opacity: [1, 0.75, 1] }}
+          animate={{ opacity: [1, 0.7, 1] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-          className="text-[26px] font-black tracking-[0.18em] uppercase"
-          style={{
-            background: `linear-gradient(180deg, #EAFEFF, ${GREEN} 60%)`,
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent',
-            filter: `drop-shadow(0 0 14px rgba(23,163,100,0.9))`,
-          }}
+          className={`text-[15px] font-black italic tracking-widest ${textClass}`}
+          style={{ filter: `drop-shadow(0 0 10px ${isWin ? 'rgba(23,163,100,0.5)' : 'rgba(255,127,80,0.5)'})` }}
         >
-          WON
+          {isWin ? 'WIN' : 'LOSS'}
         </motion.span>
-      </motion.div>
-    </motion.div>
-  ) : (
-    <motion.div
-      initial={enter}
-      animate={gone ? exit : enter}
-      transition={{ duration: gone ? 0.6 : 0.5, ease: "easeInOut" }}
-      className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl"
-    >
-      {/* Falling red-orange trend line that plummets (transparent) */}
-      <motion.svg
-        className="absolute"
-        width="120"
-        height="40"
-        viewBox="0 0 120 40"
-        fill="none"
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: [0, 0.9, 0.2, 0.9], y: 16 }}
-        transition={{ duration: 1.6, ease: "easeInOut" }}
-      >
-        <motion.path
-          d="M2 8 L30 14 L52 10 L74 22 L96 30 L118 36"
-          stroke={ORANGE}
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 1.2, ease: "easeIn" }}
-        />
-        <circle cx="118" cy="36" r="3" fill={ORANGE}>
-          <animate attributeName="opacity" values="1;0.4;1" dur="0.7s" repeatCount="indefinite" />
-        </circle>
-      </motion.svg>
-
-      {/* Sinking crumbling chips — depicts value draining away (transparent) */}
-      {rubble.map((r, i) => (
-        <motion.span
-          key={`rub-${i}`}
-          className="absolute rounded-[3px]"
-          style={{
-            left: r.left,
-            width: r.size,
-            height: r.size,
-            backgroundColor: r.color,
-            boxShadow: `0 0 8px ${r.color}66`,
-          }}
-          initial={{ y: 8, opacity: 0, rotate: 0 }}
-          animate={{ y: [8, 42], opacity: [0, 1, 0], rotate: [0, i % 2 ? 200 : -200] }}
-          transition={{ duration: 1.5, delay: r.delay, repeat: Infinity, ease: "easeIn" }}
-        />
-      ))}
-
-      {/* Downward crash arrow that slams in with impact shake */}
-      <motion.div
-        initial={{ scale: 0, y: -26, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 300, damping: 12, delay: 0.05 }}
-        className="relative flex flex-col items-center gap-0.5"
-      >
-        {/* Impact shake on the whole group after landing */}
-        <motion.div
-          animate={{ x: [0, -3, 3, -2, 2, 0], rotate: [0, -2, 2, -1, 1, 0] }}
-          transition={{ duration: 0.5, delay: 0.35 }}
-          className="relative flex flex-col items-center"
-        >
-          {/* Red-orange downward arrow with drop shadow */}
-          <motion.div
-            animate={{ y: [0, 3, 0] }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-            className="relative"
-            style={{ filter: `drop-shadow(0 0 14px ${ORANGE}aa)` }}
-          >
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-              <defs>
-                <linearGradient id="downArrow" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#FFD9B8" />
-                  <stop offset="0.5" stopColor="#FF914D" />
-                  <stop offset="1" stopColor="#DD5A2A" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M12 3v14m0 0l-5.5-5.5M12 17l5.5-5.5M4 21h16"
-                stroke="url(#downArrow)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* impact pulse under the arrow tip */}
-              <motion.path
-                d="M7 13l5-5 5 5"
-                stroke={ORANGE}
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: [0, 1, 0] }}
-                transition={{ duration: 0.8, delay: 0.55, ease: "easeIn" }}
-              />
-            </svg>
-            {/* falling $-econ drip dots */}
-            <motion.span
-              animate={{ y: [0, 14], opacity: [1, 0] }}
-              transition={{ duration: 1.2, delay: 0.2, repeat: Infinity }}
-              className="absolute left-1/2 top-0 -translate-x-1/2 text-[10px] text-[#FFB085]"
-            >
-              ✕
-            </motion.span>
-          </motion.div>
-
-          {/* LOSE in crashing orange with downward drift */}
-          <motion.span
-            animate={{ opacity: [1, 0.6, 1], y: [0, 2, 0], letterSpacing: ['0.18em', '0.26em', '0.18em'] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-            className={`text-[22px] font-black tracking-[0.18em] uppercase ${
-              isLight ? 'text-[#C2410C]' : 'text-[#FF914D]'
-            }`}
-            style={{ filter: `drop-shadow(0 0 12px ${ORANGE}99)` }}
-          >
-            LOSE
-          </motion.span>
-        </motion.div>
       </motion.div>
     </motion.div>
   );
 }
+
+export { FlipClock, ProgressBeam, ResolvingOutcome, TradeOutcome };
 
 export default function TradingWidget({
   price,
@@ -528,9 +301,15 @@ export default function TradingWidget({
   const currentPrice = parseFloat(price) || 0;
   const entryPrice = parseFloat(activeTrade?.entryPrice) || 0;
   
+  // CRITICAL: Once the backend locks the result (trade_expired sets `won`),
+  // use that locked value for the resolving animation. The live price keeps
+  // streaming past the countdown and could flip the displayed outcome even
+  // though the trade was already settled at the instant the timer hit 0.
   let isWinning = false;
   if (activeTrade) {
-    if (activeTrade.direction === 'UP' || activeTrade.direction === 'YES') {
+    if (typeof activeTrade.won === 'boolean') {
+      isWinning = activeTrade.won;
+    } else if (activeTrade.direction === 'UP' || activeTrade.direction === 'YES') {
       isWinning = currentPrice > entryPrice;
     } else {
       isWinning = currentPrice < entryPrice;

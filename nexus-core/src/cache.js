@@ -125,19 +125,40 @@ class Cache {
   }
 
   /**
-   * Find the historical price closest to `targetTime`.
-   * Stale threshold tightened to 3 s — any miss beyond that falls back
-   * to the most recently snapshotted price (not just cache.prices which
-   * could be a stale 1-second-old REST poll result).
+   * Find the historical price at (or just before) `targetTime`.
+   *
+   * SETTLEMENT ACCURACY: for a PAST target (the normal trade-settlement path),
+   * this NEVER returns a snapshot captured after `targetTime`. The price feed
+   * keeps streaming past the countdown, so a "closest match" can land on a
+   * post-expiry capture and flip a trade that was won the instant the timer
+   * hit 0. We therefore lock to the LAST snapshot at-or-before the target.
    */
   getHistoricalPrice(key, targetTime) {
     const history = this.priceHistory[key];
     if (!history || history.length === 0) return this.prices[key] || 0;
 
+    if (targetTime < Date.now()) {
+      // Past target — settlement. Use the last capture at or before the target
+      // so the exit price is locked at the countdown end, never beyond it.
+      let lastAtOrBefore = null;
+      for (const entry of history) {
+        if (entry.time <= targetTime && (!lastAtOrBefore || entry.time >= lastAtOrBefore.time)) {
+          lastAtOrBefore = entry;
+        }
+      }
+      if (lastAtOrBefore) {
+        const gap = targetTime - lastAtOrBefore.time;
+        if (gap > 1000) {
+          console.warn(`[Cache] Large gap (${gap}ms) for ${key} at ${targetTime}. Locking to last known price before expiry.`);
+        }
+        return lastAtOrBefore.price;
+      }
+      // No capture before the target yet — fall through to closest match below.
+    }
+
+    // Future / current target (live estimates): pick the closest capture.
     let closest = history[0];
     let minDiff = Math.abs(targetTime - closest.time);
-
-    // Find the price capture closest to our target expiration timestamp
     for (const entry of history) {
       const diff = Math.abs(targetTime - entry.time);
       if (diff < minDiff) {
@@ -145,18 +166,6 @@ class Cache {
         closest = entry;
       }
     }
-
-    // CRITICAL: If we are looking for a past expiration price and the engine is lagging, 
-    // we must NOT use the 'latest' price (which could be a retracement).
-    // If the gap is > 1s, we prefer the closest price BEFORE the target if available.
-    if (minDiff > 1000 && targetTime < Date.now()) {
-      const before = history.filter(h => h.time <= targetTime).pop();
-      if (before) {
-        console.warn(`[Cache] Large gap (${minDiff}ms) for ${key} at ${targetTime}. Locking to last known price before expiry.`);
-        return before.price;
-      }
-    }
-
     return closest.price;
   }
 

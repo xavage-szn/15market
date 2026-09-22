@@ -216,12 +216,12 @@ export default function LeftSidebar({
                   <img
                     src={logo}
                     alt={m.symbol}
-                    className="w-8 h-8 object-contain shrink-0"
+                    className={`${(m.id === 'sol' || m.symbol === 'SOL') ? 'w-5 h-5' : 'w-4 h-4'} object-contain shrink-0`}
                     style={{ filter: getLogoFilter(isLight) }}
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-[#17A364] flex items-center justify-center shrink-0">
-                    <span className="text-white text-[11px] font-black">{(m.symbol || 'E').slice(0, 1)}</span>
+                  <div className="w-4 h-4 rounded-full bg-[#17A364] flex items-center justify-center shrink-0">
+                    <span className="text-white text-[9px] font-black">{(m.symbol || 'E').slice(0, 1)}</span>
                   </div>
                 )}
                 <div className="flex-1 min-w-0">

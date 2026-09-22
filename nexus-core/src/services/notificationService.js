@@ -14,9 +14,23 @@ if (resendApiKey) {
     console.warn('[NotificationService] RESEND_API_KEY environment variable is not defined. Email notifications will be mock-logged.');
 }
 
+// ─── OneSignal (phone notifications) ──────────────────────────────────────
+// The browser identifies itself to OneSignal via OneSignal.login(address) on
+// the frontend (external_id = wallet address). Win/lose settlements then target
+// the user server-side with include_external_user_ids. Requires the App API
+// key from the dashboard (Settings > Keys & IDs).
+const onesignalAppId = process.env.ONESIGNAL_APP_ID;
+const onesignalApiKey = process.env.ONESIGNAL_API_KEY;
+const onesignalReady = Boolean(onesignalAppId && onesignalApiKey);
+if (onesignalReady) {
+    console.log(`[NotificationService] OneSignal initialized (app ${onesignalAppId}).`);
+} else {
+    console.warn('[NotificationService] ONESIGNAL_APP_ID / ONESIGNAL_API_KEY not set. Phone push notifications disabled.');
+}
+
 let socketIo = null;
 
-let notificationStats = { sent: 0, failed: 0, emailsSent: 0, emailsFailed: 0 };
+let notificationStats = { sent: 0, failed: 0, emailsSent: 0, emailsFailed: 0, pushSent: 0, pushFailed: 0 };
 
 function init(io) {
     socketIo = io;
@@ -93,7 +107,48 @@ function getEmailTemplate(title, message, type) {
     `;
 }
 
-async function notifyUser(userAddr, title, message, type = 'info', emailEnabled = false) {
+// ─── OneSignal push dispatch ─────────────────────────────────────────────
+// Fire-and-forget notification to every device the identified user has.
+// Targeting uses the wallet address as external_id (lowercased to match the
+// frontend's OneSignal.login(address.toLowerCase())).
+
+async function sendOneSignalPush(addr, title, message, type = 'info') {
+    if (!onesignalReady) return;
+    const targetAddr = String(addr).toLowerCase();
+    try {
+        const payload = {
+            app_id: onesignalAppId,
+            name: `trade-${type}-${Date.now()}`,
+            target_channel: 'push',
+            include_external_user_ids: [targetAddr],
+            headings: { en: title },
+            contents: { en: message },
+            web_push_topic: 'trade-settlement'
+        };
+        const res = await fetch('https://api.onesignal.com/notifications', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                Authorization: `Key ${onesignalApiKey}`
+            },
+            body: JSON.stringify(payload)
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && (body.id || body.notification_id || body.errors === undefined)) {
+            notificationStats.pushSent++;
+            console.log(`[Notification-Push] OneSignal ${body.id || body.notification_id || 'sent'} → ${addr}.`);
+        } else {
+            notificationStats.pushFailed++;
+            console.error(`[Notification-Push] OneSignal rejected for ${addr} (${res.status}):`,
+                JSON.stringify(body).slice(0, 300));
+        }
+    } catch (e) {
+        notificationStats.pushFailed++;
+        console.error(`[Notification-Push] OneSignal send failed for ${addr}:`, e.message);
+    }
+}
+
+async function notifyUser(userAddr, title, message, type = 'info', emailEnabled = false, pushEnabled = false) {
     if (!userAddr) return;
     const addr = userAddr.toLowerCase();
 
@@ -134,11 +189,23 @@ async function notifyUser(userAddr, title, message, type = 'info', emailEnabled 
         console.error(`[Notification] Failed to emit socket notification for ${addr}:`, e.message);
     }
 
+    if (pushEnabled) {
+        sendOneSignalPush(addr, title, message, type).catch(e => {
+            console.error(`[Notification] Push send failed for ${addr}:`, e.message);
+        });
+    }
+
     if (emailEnabled) {
         sendNotificationEmail(addr, title, message, type, notification).catch(e => {
             console.error(`[Notification] Email send failed for ${addr}:`, e.message);
         });
     }
+}
+
+// Fires an in-app + phone push notification. Used for high-priority events
+// (trade wins/losses) on settlement paths.
+async function notifyUserWithPush(userAddr, title, message, type = 'info') {
+    return notifyUser(userAddr, title, message, type, false, true);
 }
 
 async function sendNotificationEmail(addr, title, message, type, notification) {
@@ -273,6 +340,8 @@ function getStats() {
 module.exports = {
     init,
     notifyUser,
+    notifyUserWithPush,
+    sendOneSignalPush,
     sendOtpEmail,
     getStats
 };

@@ -227,7 +227,7 @@ class ClassicEngine {
 
     try {
       const notifier = require('./services/notificationService');
-      notifier.notifyUser(trade.userAddr, "Trade Won", `Your ${trade.symbol?.toUpperCase() || 'BTC'} ${trade.direction === 1 ? 'LONG' : 'SHORT'} trade won! +${payoutAmount.toFixed(2)} USDC.`, "success", false);
+      notifier.notifyUserWithPush(trade.userAddr, "Trade Won 🎉", `Your ${trade.symbol?.toUpperCase() || 'BTC'} ${trade.direction === 1 ? 'LONG' : 'SHORT'} trade won! +${payoutAmount.toFixed(2)} USDC.`, "success");
     } catch (e) {}
 
     console.log(`[Instant] Bet #${trade.id} credited. Payout: ${payoutStr} USDC`);
@@ -505,6 +505,12 @@ class ClassicEngine {
     trade.status = 'LOST';
     trade.settledAt = Date.now();
 
+    // Phone + in-app notification for lost trades
+    try {
+      const notifier = require('./services/notificationService');
+      notifier.notifyUserWithPush(trade.userAddr, "Trade Lost", `Your ${trade.symbol?.toUpperCase() || 'BTC'} ${trade.direction === 1 ? 'LONG' : 'SHORT'} trade lost. -${(Number(trade.amount) || 0).toFixed(2)} USDC.`, "error");
+    } catch (e) {}
+
     this.io.to(trade.userAddr).emit('trade_settled', {
       betId: trade.id,
       won: false,
@@ -592,9 +598,9 @@ class ClassicEngine {
             const notifier = require('./services/notificationService');
             const providerName = provider?.providerApplication?.contactInfo?.name || provider?.username || providerAddr.substring(0, 6);
             if (won) {
-              notifier.notifyUser(addr, "Copy Trade Won", `${providerName}'s copy trade won! +${settledTrade.payout.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "success", false);
+              notifier.notifyUserWithPush(addr, "Copy Trade Won 🎉", `${providerName}'s copy trade won! +${settledTrade.payout.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "success");
             } else {
-              notifier.notifyUser(addr, "Copy Trade Lost", `${providerName}'s copy trade lost. -${settledTrade.amount.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "error", false);
+              notifier.notifyUserWithPush(addr, "Copy Trade Lost", `${providerName}'s copy trade lost. -${settledTrade.amount.toFixed(2)} USDC on ${settledTrade.asset?.toUpperCase() || 'BTC'}.`, "error");
             }
           } catch (e) {}
         }

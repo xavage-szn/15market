@@ -327,16 +327,54 @@ function LiveStreamingChartComponent({ theme, symbol, activeTrades = [], current
                         ? currentLivePrice >= entryPrice
                         : currentLivePrice <= entryPrice;
 
+                    // ── TARGET PRICE LINE — thick grey dashed line at the entry (target) price ──
+                    ctx.save();
+                    ctx.setLineDash([6, 5]);
+                    ctx.strokeStyle = isLight ? 'rgba(120,120,120,0.55)' : 'rgba(150,150,150,0.55)';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, entryY);
+                    ctx.lineTo(W, entryY);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.restore();
+
+                    // Target label — italic, small, on the right (just before the price scale)
+                    ctx.save();
+                    ctx.font = `italic 600 ${isMobile ? 7 : 8}px Inter, system-ui, sans-serif`;
+                    const tgtLabel = `TGT ${entryPrice.toFixed(chartDecimals)}`;
+                    const tgtLabelW = ctx.measureText(tgtLabel).width + 10;
+                    const tgtX = (W - priceScaleWidth) - tgtLabelW - 8;
+                    const tgtYTop = Math.max(4, Math.min(entryY - 12, H - 16));
+                    ctx.fillStyle = isLight ? 'rgba(255,255,255,0.85)' : 'rgba(30,34,32,0.85)';
+                    ctx.beginPath();
+                    ctx.roundRect(tgtX, tgtYTop, tgtLabelW, 11, 3);
+                    ctx.fill();
+                    ctx.fillStyle = isLight ? '#6b6b6b' : '#c9c9c9';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(tgtLabel, tgtX + 5, tgtYTop + 5.5);
+                    ctx.restore();
+
                     // ═══════════════════════════════════════
-                    // LIVE BADGE — Floating on the vertical line
+                    // LIVE BADGE — Pinned to the entry point ON the price streaming line
                     // ═══════════════════════════════════════
                     const badgeW = isMobile ? 68 : 78;
                     const badgeH = isMobile ? 30 : 34;
                     const badgeX = entryX - badgeW / 2;
-                    const rawBadgeY = H * 0.18;
-                    const badgeY = Math.max(8, Math.min(rawBadgeY, H - badgeH - 8));
-                    const lineTop = badgeY + badgeH;
-                    const lineBottom = entryY;
+                    // Anchor the flag to the entry point: hover just above it when there is
+                    // room, otherwise just below it (always clamped inside the canvas).
+                    const flagGap = 5;
+                    let badgeY, lineTop, lineBottom;
+                    if (entryY - badgeH - flagGap >= 4) {
+                        badgeY = entryY - badgeH - flagGap;   // badge above the line point
+                        lineTop = badgeY + badgeH;
+                        lineBottom = entryY;
+                    } else {
+                        badgeY = Math.min(H - badgeH - 6, entryY + flagGap); // badge below
+                        lineTop = entryY;
+                        lineBottom = badgeY;
+                    }
 
                     // Determine badge color based on result
                     let badgeColor, badgeGlow, resultText, resultColor;
