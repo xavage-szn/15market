@@ -246,6 +246,7 @@ export default function TradingWidget({
   liveOdds,
   activeTrade,
   isExecuting,
+  address,
 }) {
   const [selectedDuration, setSelectedDuration] = useState(15);
   const [stakeInput, setStakeInput] = useState('');
@@ -356,6 +357,9 @@ export default function TradingWidget({
       {/* Duration Section */}
       <div className="flex items-center justify-between mb-2">
         <div className={`text-[12px] font-bold ${isLight ? 'text-[#111827]' : 'text-white/90'}`}>DURATION</div>
+        <div className={`text-[12px] font-black ${isLight ? 'text-[#17A364]' : 'text-[#17A364]'}`}>
+          ${parseFloat(price || 0).toFixed(2)}
+        </div>
       </div>
       <div className="flex gap-2 mb-4">
         {[15, 10, 5].map((d) => (
@@ -472,21 +476,22 @@ export default function TradingWidget({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="flex justify-between gap-3 h-full"
+              className="flex justify-between gap-3 h-full relative"
             >
+              <div className="absolute inset-0 -inset-x-4 -inset-y-2 bg-[#17A364]/10 rounded-full blur-xl pointer-events-none" />
               <button
                 onClick={() => handleTrade('YES')}
                 disabled={stake <= 0 || stake > (sessionBalance || 0)}
-                className="flex-1 h-full bg-[#17A364] hover:bg-[#0C6F3F] disabled:opacity-50 text-white rounded-full flex items-center justify-center transition-colors text-[20px] font-black tracking-wide"
+                className={`flex-1 h-full rounded-full flex items-center justify-center gap-2 transition-all text-[20px] font-black tracking-wide text-white bg-[#17A364] ${!address ? 'opacity-40' : 'opacity-100 hover:scale-[1.02] active:scale-[0.98]'}`}
               >
-                YES <span className="text-[18px] ml-2 inline-flex items-center"><PriceMeterTicker value={Math.round(yesShare * 100)} />¢</span>
+                YES <span className="text-[18px] inline-flex items-center"><PriceMeterTicker value={Math.round(yesShare * 100)} />¢</span>
               </button>
               <button
                 onClick={() => handleTrade('NO')}
                 disabled={stake <= 0 || stake > (sessionBalance || 0)}
-                className="flex-1 h-full bg-[#FF914D] hover:bg-[#E67E3A] disabled:opacity-50 text-white rounded-full flex items-center justify-center transition-colors text-[20px] font-black tracking-wide"
+                className={`flex-1 h-full rounded-full flex items-center justify-center gap-2 transition-all text-[20px] font-black tracking-wide text-white bg-[#EF5350] ${!address ? 'opacity-40' : 'opacity-100 hover:scale-[1.02] active:scale-[0.98]'}`}
               >
-                NO <span className="text-[18px] ml-2 inline-flex items-center"><PriceMeterTicker value={Math.round(noShare * 100)} />¢</span>
+                NO <span className="text-[18px] inline-flex items-center"><PriceMeterTicker value={Math.round(noShare * 100)} />¢</span>
               </button>
             </motion.div>
           )}

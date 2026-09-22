@@ -1530,11 +1530,11 @@ export function CircleWalletPage({
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className={`absolute inset-0 z-[100] ${isLight ? 'bg-[#CFDCD5]' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
+                className={`absolute inset-0 z-[100] ${isLight ? 'bg-white' : 'bg-black'} overflow-hidden flex flex-col font-sans transition-all duration-700 ${isLoading ? 'blur-3xl scale-[1.1]' : 'blur-0 scale-100'}`}
                 style={{ fontFamily: '"Comfortaa", cursive' }}
             >
                 {/* Full-page Standard Carbon-Fibre Texture */}
-                <div className="fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+                <div className={`fixed inset-0 opacity-[0.1] pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] ${isLight ? 'hidden' : ''}`} />
 
                 {/* Immersive Ambiance (Global Glows) */}
                 <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
@@ -1601,7 +1601,7 @@ export function CircleWalletPage({
                                     initial={{ opacity: 0, scale: 0.9, x: 100 }}
                                     animate={{ opacity: 1, scale: 1, x: 0 }}
                                     exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                                    className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing bg-[#249C6C] ${isLight ? 'shadow-[0_60px_120px_rgba(0,0,0,0.5)]' : 'shadow-[0_40px_100px_rgba(36, 156, 108,0.35)]'} border border-white/20`}
+                                    className={`w-full h-full p-8 md:p-10 rounded-[40px] relative overflow-hidden flex flex-col justify-between cursor-grab active:cursor-grabbing ${isLight ? 'bg-white/90' : 'bg-[#0a0a0a]/90'} ${isLight ? 'border-2 border-[#249C6C] shadow-[0_40px_100px_rgba(0,0,0,0.25)]' : 'border-2 border-[#249C6C] shadow-[0_40px_100px_rgba(36, 156, 108,0.25)]'}`}
                                 >
                                     {/* Immersive Nature-Series Layer (Behind Texture) */}
                                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -1695,13 +1695,13 @@ export function CircleWalletPage({
                                         {/* Card Number (Wallet Address) */}
                                         <div className="py-2">
                                             <div className="flex items-center gap-3 group/copy cursor-pointer" onClick={(e) => { e.stopPropagation(); handleCopy(currentWallet.address); }}>
-                                                <p className="text-[18px] md:text-[22px] font-mono tracking-[0.2em] text-white">
+                                                <p className={`text-[18px] md:text-[22px] font-mono tracking-[0.2em] ${isLight ? 'text-[#0a261a]' : 'text-white'}`}>
                                                     {currentWallet.address
                                                         ? `${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)}`.toUpperCase()
                                                         : "xxxx...xxxx"}
                                                 </p>
                                                 <div className="p-1.5 rounded-lg bg-white/5 opacity-0 group-hover/copy:opacity-100 transition-all hover:bg-white/10 active:scale-90">
-                                                    {copied ? <Check size={14} className="text-[#249C6C]" /> : <Copy size={14} className="text-white/40" />}
+                                                    {copied ? <Check size={14} className="text-[#249C6C]" /> : <Copy size={14} className={isLight ? 'text-black/40' : 'text-white/40'} />}
                                                 </div>
                                             </div>
                                             <div className="flex gap-1.5 mt-4">
@@ -1713,18 +1713,18 @@ export function CircleWalletPage({
 
                                         <div className="flex items-end justify-between relative">
                                             <div>
-                                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-white`}>Available Balance</p>
-                                                <h1 className={`text-4xl md:text-5xl font-black tracking-tighter text-white flex items-baseline gap-2`}>
+                                                <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${isLight ? 'text-[#0a261a]/60' : 'text-white'}`}>Available Balance</p>
+                                                <h1 className={`text-4xl md:text-5xl font-black tracking-tighter ${isLight ? 'text-[#0a261a]' : 'text-white'} flex items-baseline gap-2`}>
                                                     {currentWallet.bal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                    <span className="text-xl text-white/60">USDC</span>
+                                                    <span className={`text-xl ${isLight ? 'text-[#249C6C]' : 'text-white/60'}`}>USDC</span>
                                                 </h1>
                                             </div>
 
                                         </div>
 
                                         <div className="flex items-center gap-2 mt-2">
-                                            <Shield size={10} className="text-white opacity-40" />
-                                            <p className={`text-[9px] font-bold uppercase tracking-widest text-white opacity-40`}>
+                                            <Shield size={10} className={isLight ? 'text-[#249C6C] opacity-50' : 'text-white opacity-40'} />
+                                            <p className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-[#0a261a]/50' : 'text-white opacity-40'}`}>
                                                 Secured
                                             </p>
                                         </div>

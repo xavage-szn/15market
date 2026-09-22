@@ -45,7 +45,7 @@ const CampaignLeaderboardPane = ({
                         `}
                     >
                         {/* Branded "Glow Line" at the top edge */}
-                        {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#2EC47C] to-transparent opacity-90" />}
+                        {isDark && <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#17A364] to-transparent opacity-90" />}
                         
                         <div className="flex items-center justify-center gap-3 w-full">
                             <Trophy size={14} className={isDark ? "text-white" : "text-[#0a261a]"} style={isDark ? { filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' } : {}} />

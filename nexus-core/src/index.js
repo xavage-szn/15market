@@ -36,6 +36,8 @@ const circleService = require('./services/circleService');
 const fundingService = require('./services/fundingService');
 const notificationService = require('./services/notificationService');
 const OddsEngine = require('./services/OddsEngine');
+const priceService = require('./services/priceService');
+const settlementPriceService = require('./services/settlementPriceService');
 
 // --- DYNAMICALLY DERIVED SOLANA RELAYER ADDRESS ---
 let derivedSolanaRelayerAddress = '11111111111111111111111111111111'; // default fallback
@@ -153,116 +155,11 @@ setInterval(emitAdminStats, 10000); // Periodic 10s sync
 const oddsEngine = new OddsEngine(io, redis);
 oddsEngine.start();
 
-// --- INTERNAL PRICE FEED ---
-const PYTH_IDS = {
-  btc: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
-  eth: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
-  sol: '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'
-};
-const https = require('https');
-const BINANCE_IDS = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
-const MEXC_IDS   = { btc: 'BTCUSDT', eth: 'ETHUSDT', sol: 'SOLUSDT' };
-
-function fetchFromSource(url, parser) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => {
-        try {
-          if (res.statusCode !== 200) throw new Error(`Status ${res.statusCode}`);
-          const p = parser(JSON.parse(data));
-          if (!p || isNaN(p)) throw new Error('Invalid price');
-          resolve(p);
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(800, () => { req.destroy(); reject(new Error('Timeout')); });
-  });
-}
-
-/**
- * MULTI-SOURCE PRICE FEED ENGINE (HYBRID ORACLE)
- * -----------------------------------------------
- * Polls prices every 1000ms from 3 distinct sources to ensure 100% uptime.
- * Sources (in order of priority):
- * 1. Pyth Network (On-chain/Hermes) - Primary authority for settlement.
- * 2. Binance REST API - High-liquidity fallback.
- * 3. MEXC REST API - Safety fallback.
- * 
- * IMPACT IF BUGGED: If this fails, users cannot trade as markets will halt. 
- * If it returns incorrect prices, the platform could lose funds through arbitrage.
- */
-async function pollPrices() {
-  const keys = Object.keys(PYTH_IDS);
-  
-  await Promise.all(keys.map(async (key) => {
-    try {
-      let bestPrice = null;
-      let sourceUsed = 'none';
-
-      // 1. Pyth (Primary)
-      try {
-        bestPrice = await fetchFromSource(`https://hermes.pyth.network/v2/updates/price/latest?ids[]=${PYTH_IDS[key]}`, (d) => {
-          const p = d.parsed?.[0]?.price;
-          if (!p) return null;
-          return parseFloat(p.price) * Math.pow(10, p.expo);
-        });
-        sourceUsed = 'pyth';
-      } catch (e) {}
-
-      // 2. Binance (Fallback)
-      if (!bestPrice || bestPrice <= 0) {
-        try {
-          bestPrice = await fetchFromSource(`https://api.binance.com/api/v3/ticker/price?symbol=${BINANCE_IDS[key]}`, d => parseFloat(d.price));
-          sourceUsed = 'binance';
-        } catch (e) {}
-      }
-
-      // 3. MEXC (Last Resort)
-      if (!bestPrice || bestPrice <= 0) {
-        try {
-          bestPrice = await fetchFromSource(`https://api.mexc.com/api/v3/ticker/price?symbol=${MEXC_IDS[key]}`, d => parseFloat(d.price));
-          sourceUsed = 'mexc';
-        } catch (e) {}
-      }
-
-      if (bestPrice && bestPrice > 0) {
-        const now = Date.now();
-        cache.prices[key] = bestPrice;
-        cache.priceMeta[key] = { updatedAt: now, source: sourceUsed };
-        
-        // Store history for chart rendering and result validation
-        if (!cache.priceHistory[key]) cache.priceHistory[key] = [];
-        cache.priceHistory[key].push({ price: bestPrice, time: now });
-        if (cache.priceHistory[key].length > 1200) cache.priceHistory[key].shift();
-        
-        // Broadcast to all connected clients via Socket.IO
-        const payload = { key, price: bestPrice, ts: now };
-        io.emit('price', payload);
-        // Sync with any other backend instances via Redis
-        redis.publish('price_updates', JSON.stringify(payload)).catch(() => {});
-      }
-    } catch (err) {
-      // Quiet fail to prevent console flooding during network blips
-    }
-  }));
-}
-setInterval(pollPrices, 1000);
-
-// HIGH-FREQUENCY PRICE SNAPSHOT (250ms)
-// Stamps the currently known price into the history buffer 4x per second.
-// This gives lockResult a dense set of timestamps to find the precise
-// exit price even when a price reversal happens in the final second of a trade.
-setInterval(() => {
-  const keys = Object.keys(cache.prices);
-  for (const key of keys) {
-    if (cache.prices[key] > 0) {
-      cache.snapshotPrice(key);
-    }
-  }
-}, 250);
+// --- DEDICATED PRICE FEED SERVICES ---
+// Separate modules for odds engine and settlement. Both write to shared cache.
+// MEXC primary, Kraken secondary, Binance tertiary (Pyth removed — returns 401).
+priceService.start(io);
+settlementPriceService.startSettlement(io);
 
 // --- Socket.IO ---
 io.on('connection', (socket) => {
@@ -639,30 +536,29 @@ app.post('/session/init', async (req, res) => {
     const profile = profiles.get(userAddr);
     const profileBal = parseFloat(profile?.balance || 0);
 
-    // Fetch native ARC balance as a fallback
-    let onChainBal = 0;
-    try {
-      const balWei = await provider.getBalance(sessionAddress);
-      onChainBal = parseFloat(ethers.formatEther(balWei));
-    } catch (_) {}
+    // NOTE: The virtual USDC trading balance is independent of the on-chain ARC
+    // gas balance of the session wallet. We MUST NOT use onChainBal to restore the
+    // trading balance, otherwise every refresh re-inflates it (the gas-funder sends
+    // ARC to the session wallet for gas, unrelated to the trading pot). The trading
+    // balance always lives in profile.balance, updated by syncBalance on every trade.
 
-    // Initialize or restore session — prefer profile balance over on-chain native balance
+    // Initialize or restore session — profile balance is the single source of truth
     let session = cache.sessions.get(userAddr);
     if (session) {
       const timeSinceTrade = Date.now() - (session.lastTradeAt || 0);
       // Never overwrite if a trade was placed recently
       if (timeSinceTrade >= 30000) {
-        // Use the highest known good balance: profile vs current session vs on-chain
-        const bestBalance = Math.max(session.balance || 0, profileBal, onChainBal);
-        session.balance = bestBalance;
-        // Re-sync profile if session drifted ahead (e.g. from win credits)
-        if (session.balance > profileBal) {
-          profiles.upsert(userAddr, { balance: session.balance });
+        // Reconcile to the persisted virtual balance. Never re-inflate from on-chain ARC.
+        session.balance = profileBal > 0 ? profileBal : (session.balance || 0);
+        // Re-sync profile if session drifted (e.g. from win credits) — but only keep
+        // the persisted value as truth; on-chain ARC is excluded.
+        if (session.balance !== profileBal && profileBal > 0) {
+          session.balance = profileBal;
         }
       }
     } else {
-      // No in-memory session — rebuild from profile (survives restarts) or on-chain
-      const restoredBalance = Math.max(profileBal, onChainBal);
+      // No in-memory session — rebuild from the persisted profile balance only
+      const restoredBalance = profileBal;
       session = cache.getOrCreateSession(userAddr, {
         identityKey: userAddr,
         walletAddress: identity.walletAddress,
@@ -1762,6 +1658,29 @@ app.get('/enroll', (req, res) => {
 app.get('/winner-banner', (req, res) => res.json(null));
 app.post('/active-market', (req, res) => res.json({ success: true }));
 app.post('/record-fee', (req, res) => res.json({ success: true }));
+
+// --- Chart History Redis Endpoints ---
+app.get('/chart/history/:symbol', async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const history = await cache.loadChartHistory(symbol);
+    res.json(history);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+app.post('/chart/history/:symbol', async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const { history } = req.body;
+    if (!Array.isArray(history)) return res.status(400).json({ error: 'history must be an array' });
+    await cache.saveChartHistory(symbol, history);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to save' });
+  }
+});
 
 app.get('/health', (req, res) => {
   res.json({

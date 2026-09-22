@@ -3250,7 +3250,7 @@ const performStealthChecks = useCallback(async (addr) => {
                 </div>
               ) : (
               // 2-COLUMN LAYOUT
-              <div className="flex-1 w-full grid grid-cols-[minmax(180px,220px)_1fr] min-h-0 overflow-hidden px-4 pt-0 pb-2 gap-4">
+<div className="flex-1 w-full grid grid-cols-[minmax(180px,220px)_1fr] min-h-0 overflow-hidden px-4 pt-0 pb-2 gap-4">
                 {/* LEFT SIDEBAR */}
                 <div className="h-full border-r border-[#17A364] pr-4 overflow-y-auto scrollbar-none">
                   <LeftSidebar
@@ -3336,11 +3336,13 @@ const performStealthChecks = useCallback(async (addr) => {
 
                   {/* TRADE HISTORY (Spans across bottom of both chart and trading widget) — only shown when logged in */}
                   {address && (
-                  <div className={`${showFullHistory ? 'flex-1 min-h-0 overflow-y-auto custom-scrollbar' : 'shrink-0 h-[90px] mt-2'} transition-all duration-300`}
+<div className={`${showFullHistory ? 'flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-[16px]' : 'shrink-0 h-[90px] mt-2'} transition-all duration-300`}
                     style={{
                       fontFamily: '"Comfortaa", cursive',
                       ...(showFullHistory ? {
-                        padding: '0 4px',
+                        background: theme === 'light' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(10, 10, 10, 0.9)',
+                        boxShadow: theme === 'light' ? '0 0 16px rgba(0,0,0,0.10), 0 0 4px rgba(0,0,0,0.05)' : 'none',
+                        padding: '12px',
                       } : {})
                     }}>
                     <TradeHistoryTable

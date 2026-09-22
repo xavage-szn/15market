@@ -114,7 +114,7 @@ export default function CustomChart({ symbol = 'SOLUSDT', theme = 'dark', curren
                     transition: 'filter 0.5s ease-in-out',
                 }}
             >
-                {/* Asset Label (like dark mode screenshot) */}
+{/* Asset Label (like dark mode screenshot) */}
                 <div className="absolute top-4 left-6 z-[20] pointer-events-none flex items-center gap-2.5">
                     {(() => {
                         const marketKey = (activeMarket?.id || activeMarket?.symbol || symbol.replace('USDT', '')).toLowerCase();

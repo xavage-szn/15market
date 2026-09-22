@@ -229,6 +229,28 @@ class Cache {
       await r.del(`trade:${tradeId}:result`);
     } catch (e) {}
   }
+
+  // --- Redis Chart History Caching ---
+  // Persists chart price history across server restarts for all users.
+
+  async saveChartHistory(symbol, history) {
+    try {
+      const r = getRedis();
+      const key = `15market_chart:${symbol.toLowerCase()}`;
+      const toSave = history.slice(-300); // last 300 points (~30s)
+      await r.set(key, JSON.stringify(toSave), 'EX', 86400); // 24h TTL
+    } catch (e) {}
+  }
+
+  async loadChartHistory(symbol) {
+    try {
+      const r = getRedis();
+      const data = await r.get(`15market_chart:${symbol.toLowerCase()}`);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
+    }
+  }
 }
 
 module.exports = new Cache();
