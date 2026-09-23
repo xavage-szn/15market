@@ -207,7 +207,7 @@ function TradeOutcome({ won, isLight }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 260, damping: 18 }}
-        className={`w-[min(100%,calc(100vw-2rem))] max-w-full min-w-0 mx-auto px-3 py-2 sm:px-5 sm:py-2.5 rounded-[24px] border flex items-center justify-center gap-2 sm:gap-2.5 select-none shadow-lg ${cardClass}`}
+        className={`w-full max-w-full min-w-0 mx-auto px-3 py-2 sm:px-5 sm:py-2.5 rounded-[24px] border flex items-center justify-center gap-2 sm:gap-2.5 select-none shadow-lg ${cardClass}`}
       >
         {/* Result chip */}
         <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isWin ? 'bg-[#17A364] text-white' : 'bg-[#FF7F50] text-white'}`}>

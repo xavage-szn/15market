@@ -668,13 +668,13 @@ function MobileSteppedChart({
     <div ref={containerRef} className="w-full h-full relative overflow-visible select-none">
       {/* Centered faint 15market watermark */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-        <img
+      <img
           src="/logo.png"
           alt="15market"
           className="w-[220px] object-contain select-none"
           style={{
-            opacity: isLight ? 0.07 : 0.05,
-            filter: isLight ? 'grayscale(100%)' : 'grayscale(100%) invert(1)',
+              opacity: isLight ? 0.12 : 0.1,
+              filter: isLight ? 'grayscale(100%)' : 'grayscale(100%) invert(100%)',
           }}
         />
       </div>
@@ -796,30 +796,30 @@ export default function MobileTradeView({
   const [remainingSec, setRemainingSec] = useState(0);
   const [tradeProgress, setTradeProgress] = useState(0);
 
-  useEffect(() => {
+useEffect(() => {
     if (!currentActiveTrade) {
-      setRemainingSec(0);
-      setTradeProgress(0);
-      return;
+        setRemainingSec(0);
+        setTradeProgress(0);
+        return;
     }
     const duration = currentActiveTrade.duration || 15;
     const totalMs = duration * 1000;
     let rafId;
 
     const tick = () => {
-      const now = Date.now();
-      const startTime = currentActiveTrade.startTime || currentActiveTrade.createdAt || currentActiveTrade.timestamp || Date.now();
-      const expiry = currentActiveTrade.expiryMs || (startTime + totalMs);
-      const remaining = Math.max(0, expiry - now);
-      const secs = Math.ceil(remaining / 1000);
-      const prog = Math.min(100, ((totalMs - remaining) / totalMs) * 100);
-      setRemainingSec(secs);
-      setTradeProgress(prog);
-      if (remaining > 0) rafId = requestAnimationFrame(tick);
+        const now = Date.now();
+        const startTime = currentActiveTrade.startTime || currentActiveTrade.createdAt || currentActiveTrade.timestamp || Date.now();
+        const expiry = currentActiveTrade.expiryMs || (startTime + totalMs);
+        const remaining = Math.max(0, expiry - now);
+        const secs = Math.ceil(remaining / 1000);
+        const prog = Math.min(100, ((totalMs - remaining) / totalMs) * 100);
+        setRemainingSec(secs);
+        setTradeProgress(prog);
+        rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [currentActiveTrade]);
+}, [currentActiveTrade]);
 
   // Odds calculation (defaults to 61¢ / 39¢ like in screenshot)
   const symLower = (activeMarket?.id || 'eth').toLowerCase();
@@ -1039,7 +1039,7 @@ export default function MobileTradeView({
                 <div className="w-4 h-4 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
                 PLACING TRADE...
               </div>
-            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' && remainingSec > 0 ? (
+            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' ? (
               <div className="flex items-center justify-center gap-3 w-full">
                 <FlipClock seconds={remainingSec} isLight={isLight} />
                 <ProgressBeam progress={tradeProgress} isWinning={
