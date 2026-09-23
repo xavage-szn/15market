@@ -1798,29 +1798,115 @@ const performStealthChecks = useCallback(async (addr) => {
   };
 
 
-  // Fetch and Index Trade History
+  // Fetch and Index Trade History — AUTHORITATIVE reconciliation.
+  // Polls every 10s (fast). The backend is the single source of truth for every
+  // trade status; the UI never guesses a result. A PENDING/RESOLVING trade past
+  // its countdown that missed its socket settlement event is resolved here in
+  // exactly one of three honest ways:
+  //   1. Backend already settled it → /history has the verdict → reconcileTrades adopts it.
+  //   2. Backend still knows the bet (in cache.trades) → POST /trades/:id/settle
+  //      force-locks it NOW and returns the verdict → adopted immediately.
+  //   3. Backend has no record at all (e.g. it restarted mid-trade) → honest
+  //      TIMEOUT only after 60s overdue → releases the trade gate. Never a fake LOST.
   useEffect(() => {
-    if (!address || !isConnected) {
+    if (!address) {
       // DONT clear it here, because Wagmi takes a moment to reconnect on refresh!
+      // Runs for ANY connected account — including pure session-wallet (Privy)
+      // users who are not wallet-connected — so authoritative settlement is never
+      // gated behind a connected EOA.
       return;
     }
 
+    const addr = address.toLowerCase();
+    const settleCooldown = new Map(); // betId -> last force-settle attempt (ms)
+
     const fetchTradeHistory = async () => {
       try {
-        const addr = address.toLowerCase();
         const res = await fetch(`${KEEPER_URL_ARC}/history/${addr}`);
-        if (res.ok) {
-          const backendAllRaw = await res.json();
-          reconcileTrades(backendAllRaw);
+        if (!res.ok) return;
+        const backendAllRaw = await res.json();
+        reconcileTrades(backendAllRaw);
+
+        // Bets the backend already knows about need no force-settle.
+        const known = new Set(
+          backendAllRaw.map(t => String(t.id || t.tradeId || t.betId || t.nonce)).filter(Boolean)
+        );
+
+        const now = Date.now();
+        const current = activeTradesRef.current || [];
+        const overdue = current.filter(t => {
+          if (t.status !== 'PENDING' && t.status !== 'RESOLVING') return false;
+          const exp = t.expiryMs || ((t.startTime || t.timestamp || now) + ((t.duration || 15) * 1000));
+          return now > (exp + 5000); // past countdown end + small grace
+        });
+
+        for (const t of overdue) {
+          const id = String(t.id || t.nonce || t.tx);
+          if (!id || known.has(id)) continue;     // backend already has the answer
+          const last = settleCooldown.get(id) || 0;
+          if (now - last < 20000) continue;       // throttle per bet
+          settleCooldown.set(id, now);
+
+          try {
+            const sr = await fetch(`${KEEPER_URL_ARC}/trades/${id}/settle`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ address: addr }),
+            });
+            const sData = await sr.json().catch(() => null);
+
+            if (sr.ok && sData && (sData.status === 'WON' || sData.status === 'LOST')) {
+              // Adopt the backend verdict immediately — accurate, never client-guessed.
+              const settledRec = {
+                ...t,
+                status: sData.status,
+                won: sData.won,
+                entryPrice: sData.entryPrice ?? t.entryPrice,
+                exitPrice: sData.exitPrice,
+                settlementPrice: sData.exitPrice,
+                payout: sData.payout || '0.00',
+                amount: sData.amount ?? t.amount,
+                symbol: sData.symbol ?? t.symbol,
+                settledAt: sData.settledAt || now,
+                backendSettled: true,
+                balanceApplied: true,
+                isOptimistic: false,
+              };
+              const upd = (x) => (String(x.id || x.nonce || x.tx) === id) ? { ...x, ...settledRec } : x;
+              setActiveTrades(prev => prev.map(upd));
+              setTradeHistory(prev => prev.some(x => String(x.id || x.nonce || x.tx) === id)
+                ? prev.map(upd)
+                : [settledRec, ...prev]);
+              if (t.status === 'RESOLVING' || sData.status === 'WON') {
+                notify(
+                  sData.status === 'WON' ? `✅ Trade Won +${sData.payout}` : '❌ Trade Lost',
+                  sData.status === 'WON' ? 'success' : 'error'
+                );
+              }
+            } else if (!sr.ok && sr.status === 404 && now - (t.startTime || t.timestamp || now) > 60000) {
+              // Backend genuinely has no record of this bet (e.g. it restarted
+              // mid-trade). Honest TIMEOUT — never a fabricated LOST — and TIMEOUT
+              // is in finalStatuses, so the card leaves active view and the
+              // TradingWidget gate releases so the next trade can be taken.
+              setActiveTrades(prev => prev.map(x =>
+                (String(x.id || x.nonce || x.tx) === id)
+                  ? { ...x, status: 'TIMEOUT', won: undefined, payout: '0.00', backendSettled: false }
+                  : x
+              ));
+            }
+          } catch { /* backend unreachable — the 10s poll will retry */ }
         }
-      } catch (e) {
-      }
+      } catch (e) { /* network error; retry on next poll tick */ }
     };
 
     fetchTradeHistory();
-    // 30s fallback poll — socket events handle instant updates now
-    const interval = setInterval(fetchTradeHistory, 30000);
-    return () => clearInterval(interval);
+    // 10s fallback poll — socket events handle instant updates; this guarantees
+    // no trade ever strands in RESOLVING beyond a single poll cycle.
+    const interval = setInterval(fetchTradeHistory, 10000);
+    return () => {
+      clearInterval(interval);
+      settleCooldown.clear();
+    };
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
 
   useEffect(() => {
@@ -2486,44 +2572,6 @@ const performStealthChecks = useCallback(async (addr) => {
     }, 1000);
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
-
-  // Emergency Garbage Collection for Stuck Trades.
-  // Runs on mount AND every 30s: a trade stuck in PENDING/RESOLVING (e.g. its
-  // trade_settled event was missed during a socket disconnect/reconnect) is
-  // flagged LOST instead of spinning forever. If the backend later settles it,
-  // the trade_settled handler overwrites this with the authoritative result.
-  const sweepStuckTrades = useCallback(() => {
-    setActiveTrades(prev => {
-      const now = Date.now();
-      let changed = false;
-      const cleaned = prev.map(t => {
-        const start = t.startTime || (t.id > 1000000000000 ? t.id : Math.floor(t.id / 100) * 1000);
-        // If a trade has been stuck in PENDING/RESOLVING for > 2 minutes past its theoretical lifespan, mark it as LOST.
-        if ((t.status === "PENDING" || t.status === "RESOLVING") && (now - start > 120000)) {
-          changed = true;
-          return { ...t, status: "LOST", payout: "0.00" };
-        }
-        return t;
-      });
-
-      if (changed) {
-        setTradeHistory(h => {
-          const hMap = new Map();
-          h.forEach(x => hMap.set(x.id, x));
-          cleaned.forEach(c => hMap.set(c.id, c));
-          return Array.from(hMap.values()).sort((a, b) => b.id - a.id);
-        });
-      }
-      return changed ? cleaned : prev;
-    });
-  }, []);
-
-  useEffect(() => { sweepStuckTrades(); }, [sweepStuckTrades]);
-
-  useEffect(() => {
-    const id = setInterval(sweepStuckTrades, 30000);
-    return () => clearInterval(id);
-  }, [sweepStuckTrades]);
 
   // Cleanup resolution lock if trade is cleared manually
   useEffect(() => {

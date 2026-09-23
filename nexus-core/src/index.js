@@ -1223,6 +1223,61 @@ app.get('/history/:address', (req, res) => {
   res.json([...activeUserTrades, ...historyTrades]);
 });
 
+// ─── ON-DEMAND SETTLEMENT ─────────────────────────────────────────────────────
+// Client-triggered authoritative settle. Lets the UI resolve a trade that is
+// past its countdown but whose settlement events were missed (e.g. a socket
+// reconnect) — FAST and ACCURATE, returning the verdict in the HTTP response.
+// Idempotent: reuses the already-locked exit price if one was captured, so the
+// result can never change after countdown zero. Never fabricates a LOST.
+app.post('/trades/:id/settle', (req, res) => {
+  const betId = String(req.params.id || '');
+  if (!betId) return res.status(400).json({ error: 'Missing bet id' });
+  const addrNorm = req.body?.address ? String(req.body.address).toLowerCase() : null;
+
+  let trade = cache.trades.get(betId) || null;
+  if (!trade) {
+    for (const t of cache.trades.values()) {
+      if (String(t.id) === betId) { trade = t; break; }
+    }
+  }
+
+  if (!trade) {
+    const hist = (addrNorm ? (profiles.getHistory(addrNorm) || []) : [])
+      .find(h => String(h.id) === betId || String(h.tradeId) === betId || String(h.betId) === betId);
+    if (hist) return res.json({ ...hist, fromHistory: true, betId });
+    return res.status(404).json({ error: 'Trade not found', betId });
+  }
+
+  if (addrNorm && String(trade.userAddr).toLowerCase() !== addrNorm) {
+    return res.status(403).json({ error: 'Not your trade', betId });
+  }
+
+  // Never force-settle a trade whose countdown is still running.
+  const msLeft = (trade.settleAt || 0) - Date.now();
+  if (msLeft > 0) {
+    return res.json({ betId, status: 'PENDING', timeLeftMs: msLeft });
+  }
+
+  try {
+    classicEngine.lockResult(trade); // idempotent — reuses locked result if any
+    res.json({
+      betId,
+      status: trade.status,
+      won: trade.lockedWon,
+      entryPrice: trade.entryPrice,
+      exitPrice: trade.lockedExitPrice,
+      payout: trade.payoutAmount || 0,
+      amount: trade.amount,
+      symbol: trade.symbol,
+      direction: trade.direction,
+      settledAt: trade.settledAt
+    });
+  } catch (err) {
+    console.error(`[Settle] POST /trades/${betId}/settle failed:`, err?.message || err);
+    res.status(500).json({ error: err.message, betId });
+  }
+});
+
 // ─── ROUNDS ACCESS (WAITLIST) ─────────────────────────────────────────────────
 
 app.get('/rounds/access/check/:address', (req, res) => {

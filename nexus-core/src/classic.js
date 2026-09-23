@@ -74,15 +74,16 @@ class ClassicEngine {
     }, 50);
 
     // Recovery sweep — guarantees no trade is ever left un-resolved:
-    //  - overdue PENDING trades that never hit the 50ms lock path get locked here;
+    //  - overdue PENDING trades that never hit the 50ms lock path get completed here;
     //  - "zombie" trades (lock attempted but final state never reached, still
-    //    PENDING) are force-completed as LOST so the client can never sit in
-    //    RESOLVING forever.
-    setInterval(() => this._recoverStuckTrades(), 5000);
+    //    PENDING) are completed using their ALREADY-LOCKED verdict — never a
+    //    fabricated LOST — so the result is accurate and the client isn't stranded
+    //    in RESOLVING.
+    setInterval(() => this._recoverStuckTrades(), 3000);
   }
 
   /**
-   * Sweeps for overdue / zombie trades once per 5s (defense in depth).
+   * Sweeps for overdue / zombie trades once per 3s (defense in depth).
    * Independent of the 50ms monitor so a partially-locked trade is still caught.
    */
   _recoverStuckTrades() {
@@ -91,19 +92,11 @@ class ClassicEngine {
       for (const trade of cache.trades.values()) {
         try {
           if (trade.status !== 'PENDING') continue;
-          const msLeft = (trade.settleAt || 0) - now;
-          if (msLeft > 0) continue;
-
-          if (trade.isSettled || trade.expiryEmitted) {
-            // Lock attempted but never finalised (e.g. process survived a throw).
-            // Force a deterministic LOST so the client gets a final trade_settled.
-            console.error(`[Engine] Recovery: forcing zombie #${trade.id} to LOST (${trade.isSettled ? 'isSettled' : 'expiryEmitted'} but still PENDING)`);
-            trade.status = 'LOST';
-            this.settleTradeLocally(trade);
-            cache.trades.delete(String(trade.id));
-          } else {
-            this.lockResult(trade);
-          }
+          if (((trade.settleAt || 0) - now) > 0) continue;
+          // lockResult is idempotent and completes accurately (reuses the locked
+          // exit price if one was captured), so this safely finishes both plain
+          // overdue trades and zombies.
+          this.lockResult(trade);
         } catch (err) {
           console.error(`[Engine] Recovery error for #${trade && trade.id}:`, err?.message || err);
         }
@@ -149,19 +142,28 @@ class ClassicEngine {
   // CANNOT change once the timer hits zero even while the feed streams through
   // the settlement window.
   lockResult(trade) {
-    if (trade.expiryEmitted || trade.isSettled) return;
+    // Fully resolved already — never re-evaluate a locked trade.
+    if (trade.status !== 'PENDING') return;
+
+    const alreadyLocked = trade.expiryEmitted || trade.isSettled;
     // Set BOTH flags first: prevents re-entry even if anything below throws,
     // and lets the recovery sweep identify zombies (locked but still PENDING).
     trade.isSettled = true;
     trade.expiryEmitted = true;
 
     try {
-      const exitPrice = this.captureExitPrice(trade);
+      // If the result was already captured (e.g. a zombie being completed by the
+      // recovery sweep or a force-settle), REUSE the original locked exit price —
+      // a settlement verdict must never change after countdown zero.
+      const exitPrice = (alreadyLocked && trade.lockedExitPrice !== undefined && trade.lockedExitPrice !== null)
+        ? trade.lockedExitPrice
+        : this.captureExitPrice(trade);
 
       // A nonsense / feed-down exit price must NOT decide an outcome — treat as LOST.
       const validExit = Number.isFinite(exitPrice) && exitPrice > 0;
       const isUp = this.resolveDirection(trade.direction) === 1;
-      const won = validExit ? (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice)) : false;
+      const recomputed = validExit ? (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice)) : false;
+      const won = trade.lockedWon !== undefined ? trade.lockedWon : recomputed;
 
       trade.lockedExitPrice = exitPrice;
       trade.lockedWon = won;
