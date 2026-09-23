@@ -107,8 +107,6 @@ class CircleService {
 
         console.log(`[Circle] Creating wallet for user: ${userId}`);
 
-        const masterSecret = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
-        
         try {
             // 0. Ensure Wallet Set ID exists
             if (!this.walletSetId) {

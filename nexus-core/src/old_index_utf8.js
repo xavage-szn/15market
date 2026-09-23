@@ -28,7 +28,11 @@ app.use(express.json());
 const provider = rpc.mainProvider;
 
 // --- Session Wallet Derivation (EOA, server-side) ---
-const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+const MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
+if (!MASTER_SECRET) {
+  console.error('[Config] SESSION_MASTER_SECRET is required (no hardcoded default is used). Set it in the environment.');
+  process.exit(1);
+}
 function deriveSessionWallet(userAddr) {
   const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr.toLowerCase());
   const privateKey = ethers.keccak256(entropy);

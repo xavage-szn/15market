@@ -22,6 +22,10 @@ module.exports = {
   PRIVATE_KEY: process.env.PRIVATE_KEY,
   CONTRACT_ADDRESS: process.env.ARC_CONTRACT_ADDRESS,
   ROUNDS_CONTRACT_ADDRESS: process.env.ROUNDS_CONTRACT_ADDRESS,
+
+  // Session-wallet derivation secret — REQUIRED, no default. If missing,
+  // deriveSessionWallet() throws so we never silently derive from a known string.
+  SESSION_MASTER_SECRET: process.env.SESSION_MASTER_SECRET || '',
   
   // Classic Trades
   BATCH_WINDOW_MS: Number(process.env.SETTLEMENT_BATCH_WINDOW_MS || 25),

@@ -1,7 +1,11 @@
 const { ethers } = require('ethers');
 require('dotenv').config();
 
-const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+const SESSION_MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
+if (!SESSION_MASTER_SECRET) {
+  console.error('SESSION_MASTER_SECRET env var is required (no hardcoded default). Set it before running this script.');
+  process.exit(1);
+}
 const ARC_RPC = "https://5042002.rpc.thirdweb.com";
 
 async function checkSession(userAddress) {

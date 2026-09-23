@@ -2,7 +2,11 @@ const { ethers } = require('ethers');
 
 const ARC_RPC = "https://5042002.rpc.thirdweb.com";
 const CONTRACT_ADDRESS = "0x4AD92eAFb8867f4d5c95dcB7eDc922E30B3bc1C8";
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x49c0ad169baa96838b88441b562997e0dcf93b9df952bdf0a3176a71f2edd66a"; // Using the keeper's key for testing
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+if (!PRIVATE_KEY) {
+  console.error('PRIVATE_KEY env var is required (no hardcoded key in the repo). Set it before running this script.');
+  process.exit(1);
+}
 
 async function testPlaceBet() {
     console.log("Starting test bet placement...");

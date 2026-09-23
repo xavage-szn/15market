@@ -131,7 +131,10 @@ class RPCManager {
 
   deriveSessionWallet(userAddr) {
     if (!userAddr) return null;
-    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
+    const MASTER_SECRET = process.env.SESSION_MASTER_SECRET;
+    if (!MASTER_SECRET) {
+      throw new Error('[SessionWallet] SESSION_MASTER_SECRET is not set. This variable is REQUIRED — no hardcoded default. Set it in the deployment environment (Render) or a local .env.');
+    }
     const entropy = ethers.toUtf8Bytes(MASTER_SECRET + userAddr.toLowerCase());
     const privateKey = ethers.keccak256(entropy);
     // Wallet without connected provider — tx params are built and broadcast manually

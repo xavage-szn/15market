@@ -75,7 +75,6 @@ app.use(cors());
 app.use(express.json());
 
 // --- Deterministic Session Wallet Derivation ---
-const MASTER_SECRET = process.env.SESSION_MASTER_SECRET || "15market_super_secure_master_secret_key_v1";
 
 /**
  * DETERMINISTIC SESSION WALLET DERIVATION

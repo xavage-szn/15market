@@ -13,9 +13,8 @@ out/
 
 #solidity
 .sol
-# Environments
+# Environments — NEVER commit .env files or even templates
 .env*
-!.env.example
 
 # Logs
 *.log
