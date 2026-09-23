@@ -2329,7 +2329,20 @@ const performStealthChecks = useCallback(async (addr) => {
 
       setActiveTrades(prev => prev.map(t =>
         String(t.id) === bid || String(t.nonce) === bid
-          ? { ...t, won: data.won, livePrice: data.exitPrice, timeLeft: 0, status: 'RESOLVING' }
+          ? {
+              ...t,
+              won: data.won,
+              livePrice: data.exitPrice,
+              exitPrice: data.exitPrice || t.exitPrice,
+              settlementPrice: data.exitPrice || t.settlementPrice,
+              timeLeft: 0,
+              // trade_expired carries the AUTHORITATIVE locked verdict (won +
+              // exitPrice from lockResult). Reveal it right now — WON or LOST —
+              // exactly as fast as the loser path today, instead of hanging in
+              // RESOLVING waiting for trade_settled (which a dropped socket can
+              // swallow). trade_settled/payout_completed then confirm + credit.
+              status: data.won ? 'WON' : 'LOST'
+            }
           : t
       ));
     });

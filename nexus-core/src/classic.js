@@ -169,7 +169,12 @@ class ClassicEngine {
       trade.lockedWon = won;
       trade.settledAt = Date.now();
 
-      console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} @ settleAt ${trade.settleAt}`);
+      console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} @ settleAt ${trade.settleAt} | Dir: ${isUp === 1 ? 'UP' : isUp === 0 ? 'DOWN' : 'INVALID'} | validExit: ${validExit}`);
+      if (!validExit) {
+        console.error(`[Engine] #${trade.id} LOCKED LOST due to INVALID exit price (${exitPrice}) — if this trade was expected to win, this is a PRICE-FEED issue at settleAt; check priceService + snapshot stream.`);
+      } else if (isUp === null) {
+        console.error(`[Engine] #${trade.id} direction INVALID (${JSON.stringify(trade.direction)}) — verdict may be wrong; check execute tradeParams.direction.`);
+      }
 
       // Cache the result in Redis — pure cache, best-effort, never throws upward.
       cache.cacheTradeResult(trade.id, {
