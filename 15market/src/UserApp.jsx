@@ -887,6 +887,10 @@ const performStealthChecks = useCallback(async (addr) => {
   }, []);
 
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
+  // Authoritative lock echo: backend verdict (status + settlementPrice) per betId.
+  // Written by trade_settled / trade_expired socket handlers so any downstream
+  // logic (reconcile, UI reveal) can trust the backend's lock without re-guessing.
+  const lockedResults = useRef(new Map());
   const activeTradesRef = useRef([]);
   const notifiedBackendDown = useRef(false); // Toast once per session per outage
   const tradeHistoryRef = useRef([]);
@@ -2193,7 +2197,7 @@ const performStealthChecks = useCallback(async (addr) => {
       const payout = data.payout ? parseFloat(data.payout).toFixed(4) : '0.00';
 
       console.log(`[Settlement] Backend settled #${betId}: ${finalStatus} @ $${exitPrice}`);
-      lockedResults.current.set(betId, { status: finalStatus, settlementPrice: exitPrice });
+      try { lockedResults.current.set(betId, { status: finalStatus, settlementPrice: exitPrice }); } catch (e) {}
       removedTradeIds.current.add(betId);
 
       // Build the fully-settled trade record
@@ -2325,7 +2329,7 @@ const performStealthChecks = useCallback(async (addr) => {
     const unbindExpired = socketService.on('trade_expired', (data) => {
       const bid = String(data.betId);
       console.log(`[Trade] Authority Locked: #${bid} -> ${data.won ? 'WON' : 'LOST'} @ $${data.exitPrice}`);
-      lockedResults.current.set(bid, { status: data.won ? 'WON' : 'LOST', settlementPrice: data.exitPrice });
+      try { lockedResults.current.set(bid, { status: data.won ? 'WON' : 'LOST', settlementPrice: data.exitPrice }); } catch (e) {}
 
       setActiveTrades(prev => prev.map(t =>
         String(t.id) === bid || String(t.nonce) === bid
