@@ -769,12 +769,14 @@ export default function MobileTradeView({
   const [settledTrade, setSettledTrade] = useState(null);
   const [showOutcome, setShowOutcome] = useState(false);
   const settledTradeIdRef = useRef(null);
+  const [countdownEnded, setCountdownEnded] = useState(false);
 
   // Display each authoritative settlement once. The feed may retain the
   // settled trade, so do not restart the outcome timer on every render/update.
   useEffect(() => {
     const settled = activeTrades?.find(t => ['WON', 'LOST', 'PAID'].includes(t.status));
-    if (!settled || currentActiveTrade || isExecuting) return;
+    if (!settled) return;
+    if (currentActiveTrade && (remainingSec > 0 || !countdownEnded)) return;
 
     const settlementId = String(settled.id ?? `${settled.timestamp ?? settled.settledAt ?? ''}-${settled.status}`);
     if (settledTradeIdRef.current === settlementId) return;
@@ -788,7 +790,21 @@ export default function MobileTradeView({
       settledTradeIdRef.current = null;
     }, 3000);
     return () => clearTimeout(timer);
-  }, [activeTrades, currentActiveTrade, isExecuting]);
+  }, [activeTrades, currentActiveTrade, isExecuting, remainingSec, countdownEnded]);
+
+  // Auto-detect countdown end: if remainingSec hits 0 and trade is still PENDING,
+  // wait a moment then mark countdown as ended so the trade can resolve
+  useEffect(() => {
+    if (remainingSec === 0 && currentActiveTrade && currentActiveTrade.status === 'PENDING') {
+      const timer = setTimeout(() => {
+        setCountdownEnded(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+    if (currentActiveTrade && currentActiveTrade.status !== 'PENDING') {
+      setCountdownEnded(false);
+    }
+  }, [remainingSec, currentActiveTrade]);
 
   const isTradeActive = !!currentActiveTrade || isExecuting || showOutcome;
 
@@ -800,8 +816,10 @@ useEffect(() => {
     if (!currentActiveTrade) {
         setRemainingSec(0);
         setTradeProgress(0);
+        setCountdownEnded(false);
         return;
     }
+    setCountdownEnded(false);
     const duration = currentActiveTrade.duration || 15;
     const totalMs = duration * 1000;
     let rafId;
@@ -1032,14 +1050,14 @@ useEffect(() => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.25 }}
-            className="shrink-0 relative flex flex-col items-center justify-center gap-2 px-4 py-3 min-h-[56px]"
+            className="shrink-0 relative flex flex-col items-center justify-center gap-2 px-4 py-3 min-h-[56px] w-full"
           >
             {isExecuting && !currentActiveTrade ? (
               <div className="flex items-center gap-2 text-[#17A364] animate-pulse text-[14px] font-black tracking-widest">
                 <div className="w-4 h-4 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
                 PLACING TRADE...
               </div>
-            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' ? (
+            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' && remainingSec > 0 ? (
               <div className="flex items-center justify-center gap-3 w-full">
                 <FlipClock seconds={remainingSec} isLight={isLight} />
                 <ProgressBeam progress={tradeProgress} isWinning={
@@ -1050,6 +1068,8 @@ useEffect(() => {
                         : livePriceNum <= (parseFloat(currentActiveTrade.entryPrice) || 0))
                 } />
               </div>
+            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' ? (
+              <ResolvingOutcome isLight={isLight} />
             ) : currentActiveTrade && currentActiveTrade.status === 'RESOLVING' ? (
               // Countdown over, verdict pending — neutral spinner, never price-colored
               <ResolvingOutcome isLight={isLight} />
@@ -1057,6 +1077,7 @@ useEffect(() => {
               <TradeOutcome
                 won={settledTrade.status === 'WON' || settledTrade.status === 'PAID'}
                 isLight={isLight}
+                isPending={currentActiveTrade && currentActiveTrade.status === 'PENDING'}
               />
             ) : null}
           </motion.div>

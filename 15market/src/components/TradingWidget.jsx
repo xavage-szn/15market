@@ -177,7 +177,30 @@ function ResolvingOutcome({ isLight }) {
 // Replaces the "million dollar" cinematic with the ROUNDS compact live status card:
 // tinted rounded card + italic tracking-widest WIN/LOSS lettering, kept at the
 // current animation container size (not stretched to the chart widget size).
-function TradeOutcome({ won, isLight }) {
+function TradeOutcome({ won, isLight, isPending }) {
+  if (isPending) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8, filter: 'blur(4px)' }}
+        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+        exit={{ opacity: 0, scale: 0.8, filter: 'blur(4px)' }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+        className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl px-2"
+      >
+        <motion.div
+          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          className="w-full max-w-full min-w-0 mx-auto px-3 py-3 sm:px-5 sm:py-3 rounded-[24px] border border-[#FF914D]/40 bg-[#FF914D]/15 flex items-center justify-center gap-2 sm:gap-3 select-none shadow-lg"
+        >
+          <span className="text-[#FF914D] text-[13px] sm:text-[15px] font-black italic tracking-[0.18em] sm:tracking-widest">
+            ⏳ Trade Still Processing — Check Back Later
+          </span>
+        </motion.div>
+      </motion.div>
+    );
+  }
   // Entrance on mount, then exit after 3 seconds so it "animates in and out".
   const [gone, setGone] = useState(false);
   useEffect(() => {
