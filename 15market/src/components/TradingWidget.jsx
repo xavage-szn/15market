@@ -51,7 +51,9 @@ function PriceMeterTicker({ value }) {
 // Brand green face with high-contrast numbers: black in dark mode, white in light mode.
 function FlipDigit({ digit, isLight }) {
   return (
-    <div className={`relative w-[26px] h-[40px] bg-[#17A364] rounded-[7px] shadow-[0_2px_10px_rgba(23,163,100,0.55)] overflow-hidden flex flex-col items-center justify-center select-none ${isLight ? 'border border-[#0F7A4A]/20' : ''}`}>
+    <div className={`relative w-[26px] h-[40px] bg-[#17A364] rounded-[7px] shadow-[0_2px_10px_rgba(23,163,100,0.55)] overflow-hidden flex flex-col items-center justify-center select-none ${isLight ? 'text-white' : 'text-black'}`}>
+      <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/10 pointer-events-none" />
+
       {/* Horizontal split crease seam */}
       <div className="absolute inset-x-0 top-1/2 h-[1px] bg-black/25 z-20" />
 
@@ -70,7 +72,7 @@ function FlipDigit({ digit, isLight }) {
       </AnimatePresence>
 
       {/* Glossy lighting overlay */}
-      <div className={`absolute inset-0 ${isLight ? 'bg-gradient-to-b from-white/25 via-transparent to-black/10' : 'bg-gradient-to-b from-white/15 via-transparent to-black/25'} pointer-events-none z-10`} />
+      <div className={`absolute inset-0 ${isLight ? 'bg-gradient-to-b from-white/25 via-transparent to-black/10' : 'bg-gradient-to-b from-white/15 via-transparent to-black/25'} pointer-events-none`} />
     </div>
   );
 }
@@ -197,7 +199,7 @@ function TradeOutcome({ won, isLight }) {
       initial={enter}
       animate={gone ? exit : enter}
       transition={{ duration: gone ? 0.6 : 0.5, ease: "easeInOut" }}
-      className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl"
+      className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-2xl px-2"
     >
       {/* Rounds-style compact live status card */}
       <motion.div
@@ -205,7 +207,7 @@ function TradeOutcome({ won, isLight }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 260, damping: 18 }}
-        className={`px-5 py-2.5 rounded-[24px] border flex items-center justify-center gap-2.5 select-none shadow-lg ${cardClass}`}
+        className={`w-[min(100%,calc(100vw-2rem))] max-w-full min-w-0 mx-auto px-3 py-2 sm:px-5 sm:py-2.5 rounded-[24px] border flex items-center justify-center gap-2 sm:gap-2.5 select-none shadow-lg ${cardClass}`}
       >
         {/* Result chip */}
         <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isWin ? 'bg-[#17A364] text-white' : 'bg-[#FF7F50] text-white'}`}>
@@ -229,7 +231,7 @@ function TradeOutcome({ won, isLight }) {
         <motion.span
           animate={{ opacity: [1, 0.7, 1] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-          className={`text-[15px] font-black italic tracking-widest ${textClass}`}
+          className={`block min-w-0 text-center text-[13px] sm:text-[15px] font-black italic tracking-[0.18em] sm:tracking-widest ${textClass}`}
           style={{ filter: `drop-shadow(0 0 10px ${isWin ? 'rgba(23,163,100,0.5)' : 'rgba(255,127,80,0.5)'})` }}
         >
           {isWin ? 'WIN' : 'LOSS'}
@@ -360,7 +362,7 @@ export default function TradingWidget({
   const isLight = theme === 'light';
 
   return (
-    <div className={`w-full h-full rounded-2xl p-5 flex flex-col justify-between ${isLight ? 'bg-white' : 'bg-[#0a0a0a]'}`} style={{ fontFamily: '"Comfortaa", cursive', boxShadow: isLight ? '0 1px 8px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.08)' : 'none' }}>
+    <div className={`w-full h-full rounded-2xl p-5 flex flex-col justify-between ${isLight ? 'bg-white' : 'bg-[#0a0a0a]'}`} style={{ fontFamily: '"Comfortaa", cursive', boxShadow: isLight ? '0 1px 0 rgba(255,255,255,0.05), 0 12px 32px rgba(0,0,0,0.10)' : '0 1px 0 rgba(255,255,255,0.03), 0 12px 32px rgba(0,0,0,0.35)' }}>
       
       {/* Duration Section */}
       <div className="flex items-center justify-between mb-2">
@@ -403,7 +405,7 @@ export default function TradingWidget({
           placeholder="STAKE"
           min="0"
           step="0.01"
-          className={`w-full rounded-full py-2 px-8 text-center text-[14px] font-bold text-[#17A364] placeholder-[#17A364] outline-none focus:border-[#17A364] transition-all ${isLight ? 'bg-[#F8F9FA]' : 'bg-white/5 border border-white/10'}`}
+          className={`w-full rounded-full py-2 px-8 text-center text-[14px] font-bold text-[#17A364] placeholder-[#17A364] outline-none focus:border-[#17A364] transition-all ${isLight ? 'bg-[#F8F9FA]' : 'bg-white/5'}`}
         />
       </div>
 
@@ -490,14 +492,14 @@ export default function TradingWidget({
               <button
                 onClick={() => handleTrade('YES')}
                 disabled={stake <= 0 || stake > (sessionBalance || 0)}
-                className={`flex-1 h-full rounded-full flex items-center justify-center gap-2 transition-all text-[20px] font-black tracking-wide text-white bg-[#17A364] ${!address ? 'opacity-40' : 'opacity-100 hover:scale-[1.02] active:scale-[0.98]'}`}
+                className={`flex-1 h-full rounded-full flex items-center justify-center gap-2 transition-all text-[20px] font-black tracking-wide text-white bg-[#17A364] ${!address ? 'opacity-40' : ''}`}
               >
                 YES <span className="text-[18px] inline-flex items-center"><PriceMeterTicker value={Math.round(yesShare * 100)} />¢</span>
               </button>
               <button
                 onClick={() => handleTrade('NO')}
                 disabled={stake <= 0 || stake > (sessionBalance || 0)}
-                className={`flex-1 h-full rounded-full flex items-center justify-center gap-2 transition-all text-[20px] font-black tracking-wide text-white bg-[#EF5350] ${!address ? 'opacity-40' : 'opacity-100 hover:scale-[1.02] active:scale-[0.98]'}`}
+                className={`flex-1 h-full rounded-full flex items-center justify-center gap-2 transition-all text-[20px] font-black tracking-wide text-white bg-[#EF5350] ${!address ? 'opacity-40' : ''}`}
               >
                 NO <span className="text-[18px] inline-flex items-center"><PriceMeterTicker value={Math.round(noShare * 100)} />¢</span>
               </button>
