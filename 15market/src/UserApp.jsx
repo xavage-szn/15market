@@ -700,13 +700,11 @@ const performStealthChecks = useCallback(async (addr) => {
             if (profileRes && profileRes.ok) {
                 const pData = await profileRes.json();
                 setUserProfile(pData);
-                if (!pData.username && !localOnboarded) {
-                    setShowOnboarding(true);
-                    localStorage.removeItem(`15market_onboarded_${addr.toLowerCase()}`);
-                } else {
-                    setShowOnboarding(false);
-                    localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
-                }
+                // If profile exists on backend (200), never force re-onboarding.
+                // User can set their username later from within the app.
+                setShowOnboarding(false);
+                localStorage.setItem(`15market_onboarded_${addr.toLowerCase()}`, 'true');
+                localStorage.setItem(`15market_profile_exists_${addr.toLowerCase()}`, 'true');
             } else {
                 // Do NOT force onboarding if they are already onboarded locally!
                 if (localOnboarded) {
@@ -1194,15 +1192,11 @@ const performStealthChecks = useCallback(async (addr) => {
         if (data && !data.error) {
           setUserProfile(data);
 
-          if (!data.username && !canonicalOnboarded) {
-            setShowOnboarding(true);
-            localStorage.removeItem(`15market_profile_exists_${address.toLowerCase()}`);
-            localStorage.removeItem(`15market_onboarded_${address.toLowerCase()}`);
-          } else {
-            setShowOnboarding(false);
-            localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
-            localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, "true");
-          }
+          // If profile exists on backend (200), never force re-onboarding.
+          // User can set their username later from within the app.
+          setShowOnboarding(false);
+          localStorage.setItem(`15market_profile_exists_${address.toLowerCase()}`, "true");
+          localStorage.setItem(`15market_onboarded_${address.toLowerCase()}`, "true");
 
           // Persistent History Sync: Merge backend profile trades into UI history
           if (Array.isArray(data.trades)) {
@@ -1214,7 +1208,7 @@ const performStealthChecks = useCallback(async (addr) => {
           }
         }
       } else if (res.status === 404) {
-        // Profile wiped or never existed
+        // Profile wiped or never existed — only force onboarding if user was never onboarded
         if (canonicalOnboarded || hint === "true") {
           setShowOnboarding(false);
         } else {
