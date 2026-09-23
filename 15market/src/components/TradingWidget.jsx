@@ -145,19 +145,23 @@ function ProgressBeam({ progress, isWinning }) {
   );
 }
 
-// 3.5 RESOLVING OUTCOME (brief handoff shown when the beam finishes but the backend hasn't settled yet).
-function ResolvingOutcome({ isLight, isWinning }) {
-  const color = isWinning ? '#17A364' : '#FF914D';
+// 3.5 RESOLVING OUTCOME (brief handoff shown when the countdown ends but the
+// backend hasn't delivered its verdict yet).
+// NEUTRAL BY DESIGN: the outcome is still unknown, so this must NOT react to the
+// live price or win/lose direction — no green/orange, no price-tracking color.
+// Just a steady pending spinner + "RESOLVING" in white (dark) / near-black (light).
+function ResolvingOutcome({ isLight }) {
+  const color = isLight ? '#111827' : '#ffffff';
   return (
     <div className="w-full flex items-center justify-center gap-2.5 select-none">
       <motion.div
-        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5], rotate: [0, 360] }}
-        transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-        className="w-3.5 h-3.5 rounded-full border-2"
-        style={{ borderColor: color, borderTopColor: 'transparent', boxShadow: `0 0 12px ${color}` }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
+        className="w-3.5 h-3.5 rounded-full border-2 shrink-0"
+        style={{ borderColor: color, borderTopColor: 'transparent', opacity: 0.75 }}
       />
       <motion.span
-        animate={{ opacity: [0.5, 1, 0.5], letterSpacing: ['0.22em', '0.3em', '0.22em'] }}
+        animate={{ opacity: [0.4, 1, 0.4], letterSpacing: ['0.22em', '0.3em', '0.22em'] }}
         transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
         className={`text-[12px] font-black tracking-[0.22em] uppercase ${isLight ? 'text-[#111827]/70' : 'text-white/60'}`}
       >
@@ -463,7 +467,7 @@ export default function TradingWidget({
                   </div>
                 ) : !settledOutcome ? (
                   // Countdown ended but the authoritative result hasn't landed yet -> brief resolving state
-                  <ResolvingOutcome isLight={isLight} isWinning={isWinning} />
+                  <ResolvingOutcome isLight={isLight} />
                 ) : (
                   <TradeOutcome won={didWin} isLight={isLight} />
                 )}

@@ -231,8 +231,8 @@ function TradeRow({ trade, price, isDark, setSelectedPnLTrade, setIsPnLOpen }) {
                     {trade.status === 'LOST' && <div className="flex flex-col items-center text-[#FF7F50] opacity-80 scale-90"><AlertCircle size={20} /><span className="text-[9px] font-black uppercase tracking-[0.2em] mt-1">Lost</span></div>}
                     {trade.status === 'RESOLVING' && (
                         <div className="flex flex-col items-center gap-2">
-                            <div className="w-4 h-4 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
-                            <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#17A364] animate-pulse">Syncing</span>
+                            <div className={`w-4 h-4 rounded-full border-2 border-t-transparent animate-spin ${isDark ? 'border-white/60' : 'border-[#111827]/70'}`} />
+                            <span className={`text-[8px] font-black uppercase tracking-[0.3em] animate-pulse ${isDark ? 'text-white/60' : 'text-[#111827]/70'}`}>Resolving</span>
                         </div>
                     )}
                 </div>
