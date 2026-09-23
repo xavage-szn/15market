@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Check, Search, History, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { priceSocketService } from '../utils/priceSocket';
@@ -667,9 +667,9 @@ function MobileSteppedChart({
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-visible select-none">
       {/* Centered faint 15market watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
         <img
-          src="/logo.SVG"
+          src="/logo.png"
           alt="15market"
           className="w-[220px] object-contain select-none"
           style={{
@@ -679,7 +679,7 @@ function MobileSteppedChart({
         />
       </div>
 
-      <canvas ref={canvasRef} className="w-full h-full block relative z-10" />
+      <canvas ref={canvasRef} className="w-full h-full block relative z-20" />
     </div>
   );
 }
@@ -768,20 +768,26 @@ export default function MobileTradeView({
   // Track settled trade for outcome display
   const [settledTrade, setSettledTrade] = useState(null);
   const [showOutcome, setShowOutcome] = useState(false);
+  const settledTradeIdRef = useRef(null);
 
-  // Detect when a trade settles
+  // Display each authoritative settlement once. The feed may retain the
+  // settled trade, so do not restart the outcome timer on every render/update.
   useEffect(() => {
-    if (!activeTrades || activeTrades.length === 0) return;
-    const settled = activeTrades.find(t => ['WON', 'LOST', 'PAID'].includes(t.status));
-    if (settled && !currentActiveTrade && !isExecuting) {
-      setSettledTrade(settled);
-      setShowOutcome(true);
-      const timer = setTimeout(() => {
-        setShowOutcome(false);
-        setSettledTrade(null);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
+    const settled = activeTrades?.find(t => ['WON', 'LOST', 'PAID'].includes(t.status));
+    if (!settled || currentActiveTrade || isExecuting) return;
+
+    const settlementId = String(settled.id ?? `${settled.timestamp ?? settled.settledAt ?? ''}-${settled.status}`);
+    if (settledTradeIdRef.current === settlementId) return;
+    settledTradeIdRef.current = settlementId;
+
+    setSettledTrade(settled);
+    setShowOutcome(true);
+    const timer = setTimeout(() => {
+      setShowOutcome(false);
+      setSettledTrade(null);
+      settledTradeIdRef.current = null;
+    }, 3000);
+    return () => clearTimeout(timer);
   }, [activeTrades, currentActiveTrade, isExecuting]);
 
   const isTradeActive = !!currentActiveTrade || isExecuting || showOutcome;
@@ -802,7 +808,8 @@ export default function MobileTradeView({
 
     const tick = () => {
       const now = Date.now();
-      const expiry = currentActiveTrade.expiryMs || (currentActiveTrade.startTime + totalMs);
+      const startTime = currentActiveTrade.startTime || currentActiveTrade.createdAt || currentActiveTrade.timestamp || Date.now();
+      const expiry = currentActiveTrade.expiryMs || (startTime + totalMs);
       const remaining = Math.max(0, expiry - now);
       const secs = Math.ceil(remaining / 1000);
       const prog = Math.min(100, ((totalMs - remaining) / totalMs) * 100);
@@ -931,7 +938,7 @@ export default function MobileTradeView({
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-black/5 dark:bg-white/10">
                         {logo ? (
-                          <img src={logo} alt={t.symbol} className="w-6 h-6 object-contain" style={{ filter: getLogoFilter(isLight) }} />
+                          <img src={logo} alt={t.symbol} className="w-6 h-6 object-contain" style={{ filter: getLogoFilter(isLight) }} crossOrigin="anonymous" />
                         ) : (
                           <span className="text-[12px] font-black">{t.symbol[0]}</span>
                         )}
@@ -985,6 +992,7 @@ export default function MobileTradeView({
                 alt={currentSymbol}
                 className={`${(activeMarket?.id || 'eth').toLowerCase() === 'eth' ? 'w-14 h-14' : (activeMarket?.id || 'eth').toLowerCase() === 'sol' ? 'w-[36.4px] h-[36.4px]' : 'w-7 h-7'} object-contain shrink-0`}
                 style={{ filter: getLogoFilter(isLight) }}
+                crossOrigin="anonymous"
               />
             )}
             <span
@@ -1031,7 +1039,7 @@ export default function MobileTradeView({
                 <div className="w-4 h-4 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
                 PLACING TRADE...
               </div>
-            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' ? (
+            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' && remainingSec > 0 ? (
               <div className="flex items-center justify-center gap-3 w-full">
                 <FlipClock seconds={remainingSec} isLight={isLight} />
                 <ProgressBeam progress={tradeProgress} isWinning={
