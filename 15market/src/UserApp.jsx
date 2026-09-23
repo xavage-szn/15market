@@ -888,6 +888,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
   const resolvingInProgress = useRef(new Set()); // Tracks IDs of trades currently being resolved
   const activeTradesRef = useRef([]);
+  const notifiedBackendDown = useRef(false); // Toast once per session per outage
   const tradeHistoryRef = useRef([]);
   const priceRef = useRef("0.00");
   const lastPriceUpdateRef = useRef(Date.now());
@@ -1802,12 +1803,16 @@ const performStealthChecks = useCallback(async (addr) => {
   // Polls every 10s (fast). The backend is the single source of truth for every
   // trade status; the UI never guesses a result. A PENDING/RESOLVING trade past
   // its countdown that missed its socket settlement event is resolved here in
-  // exactly one of three honest ways:
+  // exactly one of four honest ways:
   //   1. Backend already settled it → /history has the verdict → reconcileTrades adopts it.
   //   2. Backend still knows the bet (in cache.trades) → POST /trades/:id/settle
   //      force-locks it NOW and returns the verdict → adopted immediately.
   //   3. Backend has no record at all (e.g. it restarted mid-trade) → honest
   //      TIMEOUT only after 60s overdue → releases the trade gate. Never a fake LOST.
+  //   4. Backend is DOWN/unreachable → once a trade is >25s past its countdown
+  //      (far beyond any legitimate settlement time) it is released honestly as
+  //      TIMEOUT so the UI never sits in RESOLVING with no error. The record is
+  //      kept and auto-corrects to the real WON/LOST verdict when the backend returns.
   useEffect(() => {
     if (!address) {
       // DONT clear it here, because Wagmi takes a moment to reconnect on refresh!
@@ -1820,10 +1825,23 @@ const performStealthChecks = useCallback(async (addr) => {
     const addr = address.toLowerCase();
     const settleCooldown = new Map(); // betId -> last force-settle attempt (ms)
 
+    // A fetch that can't hang the reconcile loop forever when the backend goes
+    // half-alive: aborts after 6s so the next 10s tick still runs.
+    const fetchWithTimeout = (url, opts = {}, ms = 6000) => {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), ms);
+      return fetch(url, { ...opts, signal: controller.signal })
+        .finally(() => clearTimeout(tid));
+    };
+
     const fetchTradeHistory = async () => {
+      const now = Date.now();
+      let backendReachable = false;
+
       try {
-        const res = await fetch(`${KEEPER_URL_ARC}/history/${addr}`);
-        if (!res.ok) return;
+        const res = await fetchWithTimeout(`${KEEPER_URL_ARC}/history/${addr}`);
+        if (!res.ok) throw new Error(`history ${res.status}`);
+        backendReachable = true;
         const backendAllRaw = await res.json();
         reconcileTrades(backendAllRaw);
 
@@ -1832,7 +1850,6 @@ const performStealthChecks = useCallback(async (addr) => {
           backendAllRaw.map(t => String(t.id || t.tradeId || t.betId || t.nonce)).filter(Boolean)
         );
 
-        const now = Date.now();
         const current = activeTradesRef.current || [];
         const overdue = current.filter(t => {
           if (t.status !== 'PENDING' && t.status !== 'RESOLVING') return false;
@@ -1848,7 +1865,7 @@ const performStealthChecks = useCallback(async (addr) => {
           settleCooldown.set(id, now);
 
           try {
-            const sr = await fetch(`${KEEPER_URL_ARC}/trades/${id}/settle`, {
+            const sr = await fetchWithTimeout(`${KEEPER_URL_ARC}/trades/${id}/settle`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ address: addr }),
@@ -1896,7 +1913,31 @@ const performStealthChecks = useCallback(async (addr) => {
             }
           } catch { /* backend unreachable — the 10s poll will retry */ }
         }
-      } catch (e) { /* network error; retry on next poll tick */ }
+      } catch (e) {
+        // /history itself failed: the backend is DOWN or unreachable. A trade
+        // already well past its countdown can't get an authoritative answer until
+        // the backend returns, so release it honestly instead of spinning in
+        // RESOLVING forever with no error. It stays in tradeHistory as TIMEOUT
+        // and auto-corrects to the real WON/LOST verdict from /history later.
+        if (!backendReachable) {
+          const current = activeTradesRef.current || [];
+          const toRelease = current.filter(t => {
+            if (t.status !== 'PENDING' && t.status !== 'RESOLVING') return false;
+            const exp = t.expiryMs || ((t.startTime || t.timestamp || now) + ((t.duration || 15) * 1000));
+            return now > (exp + 25000); // >> any legitimate backend settle time
+          });
+          if (toRelease.length > 0 && !notifiedBackendDown.current) {
+            const released = new Set(toRelease.map(t => String(t.id || t.nonce || t.tx)));
+            setActiveTrades(prev => prev.map(x =>
+              released.has(String(x.id || x.nonce || x.tx))
+                ? { ...x, status: 'TIMEOUT', won: undefined, payout: '0.00', backendSettled: false, backendUnreachable: true }
+                : x
+            ));
+            notifiedBackendDown.current = true;
+            notify('Backend unreachable — unresolved trades released; they re-sync automatically when it returns.', 'error');
+          }
+        }
+      }
     };
 
     fetchTradeHistory();
@@ -1906,6 +1947,7 @@ const performStealthChecks = useCallback(async (addr) => {
     return () => {
       clearInterval(interval);
       settleCooldown.clear();
+      notifiedBackendDown.current = false;
     };
   }, [address, isConnected, network, evmSessionWallet, userProfile?.sessionWalletAddress]);
 

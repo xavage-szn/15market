@@ -337,7 +337,11 @@ export default function TradingWidget({
   // instead of leaving the beam stuck at 100%.
   const isPendingLive = ['PENDING', 'RESOLVING'].includes(activeTrade?.status);
   const tradeExpired = progress >= 99.7;
-  const settledOutcome = activeTrade && !isPendingLive;
+  // Only a REAL backend verdict is a "settled outcome". A TIMEOUT (backend
+  // unreachable / no record) or a still-unknown trade must NOT render as
+  // WIN/LOSS — it stays on the neutral resolving spinner until it's removed.
+  const settledOutcome = activeTrade && !isPendingLive &&
+    (['WON', 'LOST', 'PAID'].includes(activeTrade.status) || typeof activeTrade.won === 'boolean');
 
   const handleTrade = useCallback(async (direction) => {
     if (stake <= 0) return;

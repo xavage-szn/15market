@@ -1030,7 +1030,7 @@ export default function MobileTradeView({
                 <div className="w-4 h-4 rounded-full border-2 border-[#17A364] border-t-transparent animate-spin" />
                 PLACING TRADE...
               </div>
-            ) : currentActiveTrade && ['PENDING', 'RESOLVING'].includes(currentActiveTrade.status) ? (
+            ) : currentActiveTrade && currentActiveTrade.status === 'PENDING' ? (
               <div className="flex items-center justify-center gap-3 w-full">
                 <FlipClock seconds={remainingSec} isLight={isLight} />
                 <ProgressBeam progress={tradeProgress} isWinning={
@@ -1041,6 +1041,9 @@ export default function MobileTradeView({
                         : livePriceNum <= (parseFloat(currentActiveTrade.entryPrice) || 0))
                 } />
               </div>
+            ) : currentActiveTrade && currentActiveTrade.status === 'RESOLVING' ? (
+              // Countdown over, verdict pending — neutral spinner, never price-colored
+              <ResolvingOutcome isLight={isLight} />
             ) : showOutcome && settledTrade ? (
               <TradeOutcome
                 won={settledTrade.status === 'WON' || settledTrade.status === 'PAID'}
