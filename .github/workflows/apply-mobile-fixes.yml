@@ -1,0 +1,86 @@
+name: Apply mobile trade UI fixes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch mobile outcome and settlement state
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          widget = Path('15market/src/components/TradingWidget.jsx')
+          text = widget.read_text()
+          old = "className={`px-5 py-2.5 rounded-[24px] border flex items-center justify-center gap-2.5 select-none shadow-lg ${cardClass}`}"
+          new = "className={`w-[min(100%,calc(100vw-2rem))] max-w-full mx-2 px-3 py-2 sm:px-5 sm:py-2.5 rounded-[24px] border flex items-center justify-center gap-2.5 select-none shadow-lg ${cardClass}`}"
+          if old not in text:
+              raise SystemExit('TradingWidget outcome card pattern not found')
+          widget.write_text(text.replace(old, new, 1))
+
+          mobile = Path('15market/src/components/MobileTradeView.jsx')
+          text = mobile.read_text()
+          old = """  const [settledTrade, setSettledTrade] = useState(null);
+  const [showOutcome, setShowOutcome] = useState(false);
+
+  // Detect when a trade settles
+  useEffect(() => {
+    if (!activeTrades || activeTrades.length === 0) return;
+    const settled = activeTrades.find(t => ['WON', 'LOST', 'PAID'].includes(t.status));
+    if (settled && !currentActiveTrade && !isExecuting) {
+      setSettledTrade(settled);
+      setShowOutcome(true);
+      const timer = setTimeout(() => {
+        setShowOutcome(false);
+        setSettledTrade(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTrades, currentActiveTrade, isExecuting]);"""
+          new = """  const [settledTrade, setSettledTrade] = useState(null);
+  const [showOutcome, setShowOutcome] = useState(false);
+  const settledTradeIdRef = useRef(null);
+
+  // Detect each settlement once. The active-trade feed can retain a settled
+  // record or update it several times; replaying the outcome on every update
+  // used to keep the trading controls from returning on mobile.
+  useEffect(() => {
+    const settled = activeTrades?.find(t => ['WON', 'LOST', 'PAID'].includes(t.status));
+    if (!settled || currentActiveTrade || isExecuting) return;
+
+    const settlementId = String(settled.id ?? `${settled.timestamp ?? ''}-${settled.status}`);
+    if (settledTradeIdRef.current === settlementId) return;
+    settledTradeIdRef.current = settlementId;
+
+    setSettledTrade(settled);
+    setShowOutcome(true);
+    const timer = setTimeout(() => {
+      setShowOutcome(false);
+      setSettledTrade(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [activeTrades, currentActiveTrade, isExecuting]);"""
+          if old not in text:
+              raise SystemExit('Mobile settlement effect pattern not found')
+          mobile.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Commit source changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 15market/src/components/MobileTradeView.jsx 15market/src/components/TradingWidget.jsx
+          git diff --cached --quiet || git commit -m "Fix mobile trade outcome layout and reset"
+          git rm .github/workflows/apply-mobile-fixes.yml
+          git commit -m "Remove temporary mobile fix workflow"
+          git push
