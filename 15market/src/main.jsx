@@ -1,8 +1,12 @@
 import { Buffer } from 'buffer';
 
-if (typeof window !== 'undefined') {
-    window.Buffer = Buffer;
-    window.global = window;
+// Install browser globals before loading wallet and blockchain SDKs. Some of
+// these packages inspect the globals during module initialization; assigning
+// them only after React has mounted can surface Safari's "Cannot access
+// uninitialized variable" error instead of a useful application error.
+if (typeof globalThis !== 'undefined') {
+  if (!globalThis.Buffer) globalThis.Buffer = Buffer;
+  if (typeof window !== 'undefined' && !window.global) window.global = window;
 }
 
 import React, { Component } from 'react';
@@ -20,16 +24,28 @@ import { arcTestnet, monadTestnet, avalancheFuji, sepolia } from './constants';
 const queryClient = new QueryClient();
 
 class ErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
-  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+
   componentDidCatch(error, info) {
     console.error('ErrorBoundary caught:', error, info);
   }
+
   render() {
-    if (this.state.hasError) return <div className="p-6 text-white min-h-screen flex flex-col items-center justify-center text-sm font-bold"><p className="text-[#249C6C] text-lg mb-2">Load Error</p><pre className="max-w-full overflow-auto text-[10px] opacity-70">{this.state.error?.message || 'Unknown error'}</pre></div>;
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 text-white min-h-screen flex flex-col items-center justify-center text-sm font-bold">
+          <p className="text-[#249C6C] text-lg mb-2">Load Error</p>
+          <p className="text-white/60 text-center max-w-md">{this.state.error?.message || 'Unable to load the application.'}</p>
+          <button className="mt-6 rounded-lg bg-[#249C6C] px-4 py-2" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </div>
+      );
+    }
     return this.props.children;
   }
 }
@@ -46,11 +62,7 @@ function Root() {
             createOnLogin: 'all-users',
             requireUserPasswordOnCreate: false,
           },
-          // Smart wallets — paymaster URL is configured on Privy dashboard (Pimlico)
-          // This enables ERC-4337 smart accounts so users pay gas in USDC on source chains
-          smartWallets: {
-            enabled: true,
-          },
+          smartWallets: { enabled: true },
           appearance: {
             theme: 'dark',
             accentColor: '#249C6C',
