@@ -1785,6 +1785,11 @@ const performStealthChecks = useCallback(async (addr) => {
 
           notify('Trade Active ✓', 'success');
           setIsExecuting(false);
+
+          // Re-pull both balances from source of truth so every device
+          // (desktop/mobile) converges on the same numbers after this trade.
+          refetchEvmBalance(true);
+          updateEvmSessionBal(true);
         } catch (err) {
           clearTimeout(timeoutId);
           console.error('[Trade] Execution error:', err.message);
@@ -2836,7 +2841,14 @@ const performStealthChecks = useCallback(async (addr) => {
         });
         lastOptimisticActionTime.current = Date.now();
 
-        // STEP 5: Show success immediately — socket balance_update handles real balance
+        // STEP 5: Re-pull on-chain + session balances from source of truth after
+        // the deposit tx confirms so every device shows the same updated state.
+        setTimeout(() => {
+          refetchEvmBalance(true);
+          updateEvmSessionBal(true);
+        }, 2500);
+
+        // STEP 6: Show success immediately — socket balance_update handles real balance
         setSuccessOverlay({ title: 'DEPOSIT SUCCESSFUL' });
 
         const newTx = {
@@ -3029,8 +3041,12 @@ const performStealthChecks = useCallback(async (addr) => {
         body: JSON.stringify({ address, transaction: newTx })
       }).catch(() => { });
 
-      // Single delayed refresh — socket balance_update handles trading balance
-      setTimeout(() => refetchEvmBalance(true), 3000);
+      // Re-pull BOTH balances from source of truth after the transfer settles so
+      // desktop and mobile always converge on the same numbers.
+      setTimeout(() => {
+        refetchEvmBalance(true);
+        updateEvmSessionBal(true);
+      }, 3000);
     } catch (e) {
       notify("Transfer failed: " + (e.shortMessage || e.message), "error");
     } finally {

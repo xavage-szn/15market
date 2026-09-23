@@ -969,9 +969,10 @@ export default function MobileTradeView({
       </AnimatePresence>
 
       {/* ─── 2. CHART AREA WITH SELECTED ASSET TICKER ON TOP LEFT ─── */}
-      {/* Height capped (~52% of the mobile column ≈ 15% shorter on iPhone 15) so the
-          chart widget no longer eats the whole remaining viewport. */}
-      <div className="flex-1 min-h-[187px] max-h-[52%] w-full relative pt-1 pb-1" style={{ overflow: 'visible' }}>
+      {/* Height: flexible both ways. On tall screens the chart grows (no 52% cap)
+          so the trading controls + history stay anchored to the bottom with no
+          dead gap; on short screens it shrinks to fit the UI. */}
+      <div className="flex-1 min-h-[140px] w-full relative pt-1 pb-1" style={{ overflow: 'visible' }}>
         {/* Selected Asset Ticker on Top Left of Chart Widget (No pill behind it, big like desktop) */}
         <div className="absolute top-3.5 left-5 z-20">
           <button
@@ -1023,7 +1024,7 @@ export default function MobileTradeView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.25 }}
-            className="shrink-0 flex flex-col items-center justify-center gap-2 px-4 py-3"
+            className="shrink-0 relative flex flex-col items-center justify-center gap-2 px-4 py-3 min-h-[56px]"
           >
             {isExecuting && !currentActiveTrade ? (
               <div className="flex items-center gap-2 text-[#17A364] animate-pulse text-[14px] font-black tracking-widest">
