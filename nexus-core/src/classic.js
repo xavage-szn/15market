@@ -38,34 +38,79 @@ class ClassicEngine {
     setInterval(() => this._reclaimIdleSessionArc(), 300000); // Every 5 min
 
     // Trade Monitor & Result Locking
+    // Per-trade try/catch: ONE bad trade must never take down the tick loop —
+    // an earlier throw here killed all active-trade processing with no log.
     setInterval(() => {
       const now = Date.now();
       for (const trade of cache.trades.values()) {
-        if (trade.status === 'PENDING') {
-          const msLeft = (trade.settleAt || 0) - now;
-          const timeLeft = Math.max(0, msLeft / 1000);
+        try {
+          if (trade.status === 'PENDING') {
+            const msLeft = (trade.settleAt || 0) - now;
+            const timeLeft = Math.max(0, msLeft / 1000);
 
-          if (trade.expiryEmitted) continue;
+            if (trade.expiryEmitted) continue;
 
-          const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
-          if (msLeft < 10000 && currentPrice > 0) cache.snapshotPrice(trade.symbol);
+            const currentPrice = cache.prices[trade.symbol] || trade.entryPrice;
+            if (msLeft < 10000 && currentPrice > 0) cache.snapshotPrice(trade.symbol);
 
-          if (msLeft <= 0) {
-            this.lockResult(trade);
-          } else {
-            const isUp = this.resolveDirection(trade.direction) === 1;
-            const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
-            this.io.to(trade.userAddr).emit('trade_tick', {
-              betId: trade.id,
-              timeLeft,
-              currentPrice,
-              isWinning,
-              direction: trade.direction
-            });
+            if (msLeft <= 0) {
+              this.lockResult(trade);
+            } else {
+              const isUp = this.resolveDirection(trade.direction) === 1;
+              const isWinning = isUp ? currentPrice > trade.entryPrice : currentPrice < trade.entryPrice;
+              this.io.to(trade.userAddr).emit('trade_tick', {
+                betId: trade.id,
+                timeLeft,
+                currentPrice,
+                isWinning,
+                direction: trade.direction
+              });
+            }
           }
+        } catch (err) {
+          console.error(`[Engine] monitor tick ERROR for #${trade && trade.id}:`, err?.message || err);
         }
       }
     }, 50);
+
+    // Recovery sweep — guarantees no trade is ever left un-resolved:
+    //  - overdue PENDING trades that never hit the 50ms lock path get locked here;
+    //  - "zombie" trades (lock attempted but final state never reached, still
+    //    PENDING) are force-completed as LOST so the client can never sit in
+    //    RESOLVING forever.
+    setInterval(() => this._recoverStuckTrades(), 5000);
+  }
+
+  /**
+   * Sweeps for overdue / zombie trades once per 5s (defense in depth).
+   * Independent of the 50ms monitor so a partially-locked trade is still caught.
+   */
+  _recoverStuckTrades() {
+    try {
+      const now = Date.now();
+      for (const trade of cache.trades.values()) {
+        try {
+          if (trade.status !== 'PENDING') continue;
+          const msLeft = (trade.settleAt || 0) - now;
+          if (msLeft > 0) continue;
+
+          if (trade.isSettled || trade.expiryEmitted) {
+            // Lock attempted but never finalised (e.g. process survived a throw).
+            // Force a deterministic LOST so the client gets a final trade_settled.
+            console.error(`[Engine] Recovery: forcing zombie #${trade.id} to LOST (${trade.isSettled ? 'isSettled' : 'expiryEmitted'} but still PENDING)`);
+            trade.status = 'LOST';
+            this.settleTradeLocally(trade);
+            cache.trades.delete(String(trade.id));
+          } else {
+            this.lockResult(trade);
+          }
+        } catch (err) {
+          console.error(`[Engine] Recovery error for #${trade && trade.id}:`, err?.message || err);
+        }
+      }
+    } catch (err) {
+      console.error('[Engine] Recovery sweep failed:', err?.message || err);
+    }
   }
 
   normalizeAddr(addr) { return String(addr || '').toLowerCase(); }
@@ -98,57 +143,106 @@ class ClassicEngine {
   }
 
   // ── RESULT LOCKING ─────────────────────────────────────────────────────
-  // Captures the LIVE price at the instant countdown hits 0.
-  // That price is the single source of truth — cached in Redis for the settler.
+  // Locks the result at the EXACT instant the countdown ends (trade.settleAt).
+  // The exit price is taken STRICTLY from timestamped snapshots at-or-before
+  // that instant — never a live poll captured after expiry — so the result
+  // CANNOT change once the timer hits zero even while the feed streams through
+  // the settlement window.
   lockResult(trade) {
     if (trade.expiryEmitted || trade.isSettled) return;
+    // Set BOTH flags first: prevents re-entry even if anything below throws,
+    // and lets the recovery sweep identify zombies (locked but still PENDING).
     trade.isSettled = true;
-
-    // Capture the price at the EXACT instant the timer expires (trade.settleAt),
-    // NOT the latest live poll. The 250ms snapshot buffer records precise
-    // timestamped prices, so getHistoricalPrice returns the capture closest to
-    // the moment countdown hits zero instead of a stale 1s REST poll.
-    const liveBackup = cache.prices[trade.symbol] || trade.entryPrice;
-    const exitPrice = cache.getHistoricalPrice(trade.symbol, trade.settleAt || Date.now()) || liveBackup;
-
-    const isUp = this.resolveDirection(trade.direction) === 1;
-    const won = isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice);
-
     trade.expiryEmitted = true;
-    trade.lockedExitPrice = exitPrice;
-    trade.lockedWon = won;
-    trade.settledAt = Date.now();
 
-    console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} (live)`);
+    try {
+      const exitPrice = this.captureExitPrice(trade);
 
-    // Cache the result in Redis — backend settler reads from here
-    cache.cacheTradeResult(trade.id, {
-      tradeId: trade.id,
-      exitPrice,
-      won,
-      entryPrice: trade.entryPrice,
-      amount: trade.amount,
-      symbol: trade.symbol,
-      direction: trade.direction,
-      userAddr: trade.userAddr,
-      settledAt: trade.settledAt
-    });
+      // A nonsense / feed-down exit price must NOT decide an outcome — treat as LOST.
+      const validExit = Number.isFinite(exitPrice) && exitPrice > 0;
+      const isUp = this.resolveDirection(trade.direction) === 1;
+      const won = validExit ? (isUp ? (exitPrice > trade.entryPrice) : (exitPrice < trade.entryPrice)) : false;
 
-    this.io.to(trade.userAddr).emit('trade_expired', {
-      betId: trade.id,
-      exitPrice,
-      won,
-      stakeTxHash: trade.stakeTxHash || null,
-      status: 'RESOLVING'
-    });
+      trade.lockedExitPrice = exitPrice;
+      trade.lockedWon = won;
+      trade.settledAt = Date.now();
 
-    if (won) {
-      this.creditWinner(trade, exitPrice);
-      this.settleOnChainBackground(trade);
-    } else {
-      trade.status = 'LOST';
-      this.settleTradeLocally(trade);
+      console.log(`[Engine] Locked #${trade.id} | Won: ${won} | Entry: ${trade.entryPrice} | Exit: ${exitPrice} @ settleAt ${trade.settleAt}`);
+
+      // Cache the result in Redis — pure cache, best-effort, never throws upward.
+      cache.cacheTradeResult(trade.id, {
+        tradeId: trade.id,
+        exitPrice,
+        won,
+        entryPrice: trade.entryPrice,
+        amount: trade.amount,
+        symbol: trade.symbol,
+        direction: trade.direction,
+        userAddr: trade.userAddr,
+        settledAt: trade.settledAt
+      }).catch(err => console.error(`[Engine] cacheTradeResult failed for #${trade.id}:`, err?.message || err));
+
+      this.io.to(trade.userAddr).emit('trade_expired', {
+        betId: trade.id,
+        exitPrice,
+        won,
+        stakeTxHash: trade.stakeTxHash || null,
+        status: 'RESOLVING'
+      });
+
+      if (won) {
+        this.creditWinner(trade, exitPrice);
+        this.settleOnChainBackground(trade);
+      } else {
+        trade.status = 'LOST';
+        this.settleTradeLocally(trade);
+      }
+    } catch (err) {
+      // NEVER leave the client hanging in RESOLVING with no backend error.
+      console.error(`[Engine] lockResult ERROR for #${trade.id}:`, err?.message || err);
+      try {
+        if (trade.status === 'PENDING') {
+          trade.status = 'LOST';
+          this.settleTradeLocally(trade);
+        }
+      } catch (err2) {
+        console.error(`[Engine] lockResult fallback ALSO failed for #${trade.id}:`, err2?.message || err2);
+      }
     }
+  }
+
+  /**
+   * Captures the settlement exit price strictly at-or-before trade.settleAt.
+   * Priority:
+   *   1. last timestamped snapshot with time <= settleAt (exact countdown end);
+   *   2. earliest known snapshot (still pre-expiry when any row predates it);
+   *   3. live price, ONLY when the history buffer is completely cold — loud warn.
+   * Never picks a snapshot captured after expiry while pre-expiry rows exist.
+   */
+  captureExitPrice(trade) {
+    const target = trade.settleAt || Date.now();
+    const history = cache.priceHistory[trade.symbol];
+
+    let atOrBefore = null;
+    if (history) {
+      for (const entry of history) {
+        if (entry.time <= target && (!atOrBefore || entry.time >= atOrBefore.time)) atOrBefore = entry;
+      }
+    }
+    if (atOrBefore) {
+      const gap = target - atOrBefore.time;
+      if (gap > 1000) console.warn(`[Engine] #${trade.id} exit-price gap ${gap}ms — locking to last pre-expiry snapshot ${atOrBefore.price}.`);
+      return atOrBefore.price;
+    }
+
+    if (history && history.length) {
+      console.warn(`[Engine] #${trade.id} no pre-expiry snapshot — locking to earliest known ${history[0].price}.`);
+      return history[0].price;
+    }
+
+    const live = cache.prices[trade.symbol] || trade.entryPrice;
+    console.error(`[Engine] #${trade.id} NO price history for ${trade.symbol} — fallback live price ${live} (may be post-expiry).`);
+    return live;
   }
 
   // ── INSTANT WINNER CREDIT ──────────────────────────────────────────────
@@ -159,7 +253,9 @@ class ClassicEngine {
     const payoutAmount = Math.max(0.000001, netPayout);
     const payoutStr = payoutAmount.toFixed(6);
 
-    const exitPriceBigInt = ethers.parseUnits(Number(exitPrice).toFixed(8), 8);
+    let exitPriceBigInt;
+    try { exitPriceBigInt = ethers.parseUnits(Number(exitPrice).toFixed(8), 8); }
+    catch (e) { console.warn(`[Engine] #${trade.id} invalid exit price for on-chain settle (${exitPrice}):`, e?.message || e); exitPriceBigInt = ethers.parseUnits("0", 8); }
     let payoutBigInt;
     try { payoutBigInt = ethers.parseEther(payoutStr); } catch { payoutBigInt = ethers.parseEther("0.000001"); }
 

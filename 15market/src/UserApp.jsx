@@ -1278,8 +1278,9 @@ const performStealthChecks = useCallback(async (addr) => {
   // Real-time Balance Sync
   useEffect(() => {
     if (!address) return;
-    // JOIN room once per address change
-    socketService.emit('join_user', address.toLowerCase());
+    // JOIN room once per address change (socketService re-joins automatically
+    // after every reconnect so settlement events are never emitted into the void).
+    socketService.joinUser(address.toLowerCase());
   }, [address]);
 
   useEffect(() => {
@@ -2486,8 +2487,12 @@ const performStealthChecks = useCallback(async (addr) => {
     return () => clearInterval(interval);
   }, [timerActive, timeLeft]);
 
-  // Emergency Garbage Collection for Stuck Trades
-  useEffect(() => {
+  // Emergency Garbage Collection for Stuck Trades.
+  // Runs on mount AND every 30s: a trade stuck in PENDING/RESOLVING (e.g. its
+  // trade_settled event was missed during a socket disconnect/reconnect) is
+  // flagged LOST instead of spinning forever. If the backend later settles it,
+  // the trade_settled handler overwrites this with the authoritative result.
+  const sweepStuckTrades = useCallback(() => {
     setActiveTrades(prev => {
       const now = Date.now();
       let changed = false;
@@ -2512,6 +2517,13 @@ const performStealthChecks = useCallback(async (addr) => {
       return changed ? cleaned : prev;
     });
   }, []);
+
+  useEffect(() => { sweepStuckTrades(); }, [sweepStuckTrades]);
+
+  useEffect(() => {
+    const id = setInterval(sweepStuckTrades, 30000);
+    return () => clearInterval(id);
+  }, [sweepStuckTrades]);
 
   // Cleanup resolution lock if trade is cleared manually
   useEffect(() => {

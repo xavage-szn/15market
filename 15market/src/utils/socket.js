@@ -7,6 +7,7 @@ class SocketService {
         this.listeners = new Map(); // event -> Set of callbacks
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 15;
+        this.userRoom = null; // last joined user room — re-joined on every connect
     }
 
     connect() {
@@ -34,9 +35,21 @@ class SocketService {
             randomizationFactor: 0.5
         });
 
+        // "connect" fires on the INITIAL connection AND on every successful
+        // reconnect (socket.io keeps the same Socket object, so registered
+        // listeners survive — no re-attachment needed).
+        // The backend only delivers per-user events (trade_expired, trade_settled,
+        // balance_update, trade_tick...) when the socket has joined the user's room,
+        // and a reconnect spawns a NEW server-side socket with NO rooms. Re-emit
+        // join_user here so settlement events are never emitted into the void —
+        // that was causing trades to sit in "Resolving…" forever after a reconnect
+        // or a backend restart.
         this.socket.on("connect", () => {
             console.log("[Socket] Platform Link Active");
             this.reconnectAttempts = 0;
+            if (this.userRoom) {
+                this.socket.emit('join_user', this.userRoom);
+            }
         });
 
         this.socket.on("disconnect", (reason) => {
@@ -61,19 +74,19 @@ class SocketService {
             console.error("[Socket] Reconnection failed after max attempts");
         });
 
-        // Re-attach ALL active listeners on reconnect
-        this.socket.on("reconnect", () => {
-            console.log("[Socket] Reconnected successfully");
-            this.listeners.forEach((callbacks, event) => {
-                callbacks.forEach(callback => {
-                    this.socket.on(event, callback);
-                });
-            });
-        });
-
         this.socket.on("connect_error", (error) => {
             console.error("[Socket] Connection error:", error);
         });
+    }
+
+    /**
+     * Join the user's personal room. Remembers the address so it is re-sent
+     * automatically after every reconnect (see "connect" handler above).
+     */
+    joinUser(address) {
+        this.userRoom = String(address || '').toLowerCase();
+        if (!this.userRoom) return;
+        this.emit('join_user', this.userRoom);
     }
 
     on(event, callback) {
