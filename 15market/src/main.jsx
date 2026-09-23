@@ -1,14 +1,3 @@
-import { Buffer } from 'buffer';
-
-// Install browser globals before loading wallet and blockchain SDKs. Some of
-// these packages inspect the globals during module initialization; assigning
-// them only after React has mounted can surface Safari's "Cannot access
-// uninitialized variable" error instead of a useful application error.
-if (typeof globalThis !== 'undefined') {
-  if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-  if (typeof window !== 'undefined' && !window.global) window.global = window;
-}
-
 import React, { Component } from 'react';
 import ReactDOM from 'react-dom/client';
 import { PrivyProvider } from '@privy-io/react-auth';
