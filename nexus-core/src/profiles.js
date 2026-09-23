@@ -1,4 +1,3 @@
-const Redis = require('ioredis');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,32 +9,14 @@ try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 } catch (e) { }
 
-// Ensure we don't block startup but sync as soon as possible
-// Configured to retry connecting every 30 seconds if offline, with offline queue disabled to prevent clog
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: 1,
-    enableOfflineQueue: false,
-    retryStrategy: (times) => {
-        if (times === 1) console.warn(`[Redis] Connection failed. Retrying in 30 seconds...`);
-        return 30000; // 30 seconds
-    }
-});
-
-let redisReady = false;
-redis.on('ready', () => { redisReady = true; });
-redis.on('error', (err) => { 
-    redisReady = false;
-    // Suppress noisy/recoverable connection errors
-    if (!err.message.includes('Stream isn\'t writeable') && !err.message.includes('ENOTFOUND') && !err.message.includes('ETIMEDOUT') && !err.message.includes('ECONNRESET')) {
-        console.error('[Redis-Error]', err.message);
-    }
-});
-redis.on('close', () => { redisReady = false; });
-
-// ─── Supabase (durable user profile store) ────────────────────
-// Profiles are written through to Supabase so they survive backend
-// restarts (Redis/file can be wiped). In-memory cache stays the hot
-// path; file + Redis remain as local backups.
+// ─── Persistence model ─────────────────────────────────────────
+// Memory  = hot cache (authoritative at runtime).
+// Supabase = durable store of record (survives restarts / disk wipes).
+// File    = local fallback snapshot only (loaded when Supabase is
+//           unreachable or empty; written as a safety net).
+// Redis is NOT used for profiles anymore — it was duplicating the
+// whole user DB (incl. wallet private keys). It stays reserved for
+// genuine cache/pub-sub needs elsewhere (trade results, charts, prices).
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_KEY);
@@ -148,34 +129,13 @@ class ProfileService {
         this.sbInitPromise = null;
         this.sbLoggedDisabled = false;
 
-        // Load from file first (survives Redis wipes)
+        // Load from file first (local fallback snapshot)
         this.loadFromFile();
-
-        // Then try Redis
-        this.load();
 
         // Then Supabase (durable store): load + one-time local→Supabase migration.
         this.initSupabase();
 
-        // When Redis is fully authenticated and ready to execute commands
-        redis.on('ready', async () => {
-            redisReady = true;
-            console.log('[Redis] Connected and ready.');
-            if (Object.keys(this.profiles).length === 0) {
-                console.log('[Redis] Local cache is empty. Fetching profiles from Redis...');
-                await this.load();
-                // If Redis also empty, file was already loaded
-                if (Object.keys(this.profiles).length > 0) {
-                    console.log(`[Profiles] Restored ${Object.keys(this.profiles).length} profiles.`);
-                }
-            } else {
-                console.log('[Redis] Syncing local profiles to Redis...');
-                await this.save();
-            }
-            await this.initSupabase(); // idempotent — also covers late Redis merges
-        });
-
-        // Sync to Redis periodically in background
+        // Periodic local fallback snapshot (file only — Redis is not used for profiles).
         setInterval(() => this.save(), 10000);
     }
 
@@ -233,7 +193,7 @@ class ProfileService {
             if (merged > 0) console.log(`[Supabase] Loaded ${merged} profile(s) into cache.`);
             return merged;
         } catch (e) {
-            console.warn('[Supabase] Load failed — continuing with file/Redis backups:', e.message);
+            console.warn('[Supabase] Load failed — continuing with file fallback:', e.message);
             return 0;
         }
     }
@@ -311,38 +271,9 @@ class ProfileService {
         }
     }
 
-    async load() {
-        if (!redisReady) return;
-        try {
-            const data = await redis.get('15market_profiles_db');
-            if (data) {
-                const redisProfiles = JSON.parse(data);
-                // Merge: Redis data takes precedence, but keep any file-only entries
-                const redisCount = Object.keys(redisProfiles).length;
-                const fileCount = Object.keys(this.profiles).length;
-                this.profiles = { ...this.profiles, ...redisProfiles };
-                const mergedCount = Object.keys(this.profiles).length;
-                console.log(`[Profiles] Loaded ${redisCount} from Redis, merged with ${fileCount} from file = ${mergedCount} total.`);
-            } else {
-                console.log(`[Profiles] No profiles in Redis. Using file backup (${Object.keys(this.profiles).length} profiles).`);
-            }
-        } catch (e) {
-            // Silently skip when Redis is unavailable
-        }
-    }
-
     async save() {
-        // Always save to file (survives Redis wipes)
+        // Local fallback snapshot only — Supabase is the durable store of record.
         this.saveToFile();
-
-        if (!redisReady) return;
-        try {
-            if (Object.keys(this.profiles).length > 0) {
-                await redis.set('15market_profiles_db', JSON.stringify(this.profiles));
-            }
-        } catch (e) {
-            // Silently skip when Redis is unavailable
-        }
     }
 
     get(address) {
