@@ -3384,6 +3384,14 @@ const performStealthChecks = useCallback(async (addr) => {
                     setShowFullHistory={setShowFullHistory}
                     onViewReceipt={(tx) => { setShareTrade(tx); setIsShareCardOpen(true); }}
                     gameMode={gameMode}
+                    onCountdownEnd={(livePrice) => {
+                      setActiveTrades(prev => prev.map(t => {
+                        if (['PENDING', 'RESOLVING'].includes(t.status)) {
+                          return { ...t, exitPrice: livePrice ? String(livePrice) : t.exitPrice };
+                        }
+                        return t;
+                      }));
+                    }}
                   />
                 </div>
               ) : (

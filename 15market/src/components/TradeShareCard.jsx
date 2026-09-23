@@ -67,33 +67,55 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
     }
   }, [isOpen, trade, tradeId]);
 
-  const handleDownload = async () => {
+const handleDownload = async () => {
     if (!cardRef.current) return;
+    const copyBtn = cardRef.current.querySelector('.copy-id-btn');
+    if (copyBtn) copyBtn.style.display = 'none';
     try {
-      const dataUrl = await toPng(cardRef.current, { pixelRatio: 3, backgroundColor: '#0a0a0a' });
-      const link = document.createElement('a');
-      link.download = `15market-${isWin ? 'win' : 'loss'}-${tradeId}.png`;
-      link.href = dataUrl;
-      link.click();
+        const dataUrl = await toPng(cardRef.current, {
+            pixelRatio: 3,
+            backgroundColor: '#0a0a0a',
+            cacheBust: true,
+            skipFonts: false,
+            includeInlineStyles: true,
+            filter: (node) => !node.classList?.contains('copy-id-btn'),
+        });
+        const link = document.createElement('a');
+        link.download = `15market-${isWin ? 'win' : 'loss'}-${tradeId}.png`;
+        link.href = dataUrl;
+        link.click();
     } catch (err) {
-      console.error('Download failed:', err);
+        console.error('Download failed:', err);
+    } finally {
+        if (copyBtn) copyBtn.style.display = '';
     }
-  };
+};
 
-  const handleNativeShare = async () => {
+const handleNativeShare = async () => {
     if (!cardRef.current) return;
+    const copyBtn = cardRef.current.querySelector('.copy-id-btn');
+    if (copyBtn) copyBtn.style.display = 'none';
     try {
-      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: '#0a0a0a' });
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], `15market-${isWin ? 'win' : 'loss'}.png`, { type: 'image/png' });
-      if (navigator.share) {
-        await navigator.share({ files: [file], title: `15market ${isWin ? 'Win' : 'Loss'}` });
-      }
+        const dataUrl = await toPng(cardRef.current, {
+            pixelRatio: 2,
+            backgroundColor: '#0a0a0a',
+            cacheBust: true,
+            skipFonts: false,
+            includeInlineStyles: true,
+            filter: (node) => !node.classList?.contains('copy-id-btn'),
+        });
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], `15market-${isWin ? 'win' : 'loss'}.png`, { type: 'image/png' });
+        if (navigator.share) {
+            await navigator.share({ files: [file], title: `15market ${isWin ? 'Win' : 'Loss'}` });
+        }
     } catch (err) {
-      handleDownload();
+        handleDownload();
+    } finally {
+        if (copyBtn) copyBtn.style.display = '';
     }
-  };
+};
 
   if (!trade) return null;
 
@@ -293,7 +315,7 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
               <div className="relative z-10 flex items-center justify-between px-4 pt-5">
                 <div className="w-0 h-0">
                   {/* left-[5px] counteracts the ~11px transparent left padding baked into gowlogo.png so its visible mark sits on the same 16px guide as the asset logo and won amount */}
-                  <img src="/gowlogo.png" alt="15market" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none' }} />
+                  <img src="/gowlogo.png" alt="15market" className="h-[80px] w-auto brightness-0 invert absolute left-[5px] -top-1" style={{ pointerEvents: 'none' }} crossOrigin="anonymous" />
                 </div>
               </div>
 
@@ -305,7 +327,7 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
                   <div className="flex items-center gap-3 mb-1 ml-[-23%]">
                     <div className="flex items-center justify-center mt-[1%] ml-[20%]">
                       {logoSrc ? (
-                        <img src={logoSrc} alt={sym} className="h-[109.35px] w-auto object-contain brightness-0 invert" />
+                        <img src={logoSrc} alt={sym} className="h-[109.35px] w-auto object-contain brightness-0 invert" crossOrigin="anonymous" />
                       ) : (
                         <span className="text-white font-black text-2xl">{sym}</span>
                       )}
@@ -446,10 +468,10 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
 
                   {/* Copy Trade ID Icon under timestamp */}
                   <button
-                    onClick={handleCopyTradeId}
-                    className="mt-1.5 inline-flex items-center justify-center gap-1 text-white/80 hover:text-white transition-all active:scale-95 bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full"
-                    title="Copy Trade ID"
-                  >
+                      onClick={handleCopyTradeId}
+                      className="copy-id-btn mt-1.5 inline-flex items-center justify-center gap-1 text-white/80 hover:text-white transition-all active:scale-95 bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full"
+                      title="Copy Trade ID"
+                    >
                     {copied ? (
                       <>
                         <Check size={8} className="text-white" />

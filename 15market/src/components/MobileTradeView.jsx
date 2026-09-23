@@ -705,6 +705,7 @@ export default function MobileTradeView({
   setShowFullHistory,
   onViewReceipt,
   activeTrades = [],
+  onCountdownEnd,
 }) {
   const isLight = theme === 'light';
   const [assetOpen, setAssetOpen] = useState(false);
@@ -792,19 +793,23 @@ export default function MobileTradeView({
     return () => clearTimeout(timer);
   }, [activeTrades, currentActiveTrade, isExecuting, remainingSec, countdownEnded]);
 
-  // Auto-detect countdown end: if remainingSec hits 0 and trade is still PENDING,
-  // wait a moment then mark countdown as ended so the trade can resolve
+  // Auto-detect countdown end: when remainingSec hits 0 and trade is still PENDING,
+  // wait a moment then mark countdown as ended so the trade can resolve.
+  // Also capture the live price as the exit price immediately.
   useEffect(() => {
     if (remainingSec === 0 && currentActiveTrade && currentActiveTrade.status === 'PENDING') {
       const timer = setTimeout(() => {
         setCountdownEnded(true);
+        if (onCountdownEnd) {
+          onCountdownEnd(livePriceNum);
+        }
       }, 2000);
       return () => clearTimeout(timer);
     }
     if (currentActiveTrade && currentActiveTrade.status !== 'PENDING') {
       setCountdownEnded(false);
     }
-  }, [remainingSec, currentActiveTrade]);
+  }, [remainingSec, currentActiveTrade, livePriceNum, onCountdownEnd]);
 
   const isTradeActive = !!currentActiveTrade || isExecuting || showOutcome;
 
