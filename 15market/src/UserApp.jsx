@@ -466,7 +466,14 @@ export default function UserApp() {
 
   const [loadingProgress, setLoadingProgress] = useState(0);
 
-  const activeTrade = activeTrades[0] || null;
+  // Latch to the first LIVE trade (PENDING/RESOLVING) so a lingering settled or
+  // PAYOUT_FAILED card at index 0 can never hide the next trade's countdown.
+  // Fall back to the newest trade so a just-settled outcome flash still renders
+  // during its ~1s cleanup window.
+  const activeTrade =
+    activeTrades.find(t => ['PENDING', 'RESOLVING'].includes(t.status)) ||
+    activeTrades[0] ||
+    null;
 
   // Backend Health Gate: Poll /health until backend responds, progress drives the three dots
   useEffect(() => {
@@ -2654,7 +2661,7 @@ const performStealthChecks = useCallback(async (addr) => {
 
   // Safety Cleanup: Remove finalized trades after showing result
   useEffect(() => {
-    const finalStatuses = ["WON", "LOST", "PAID", "RESOLVING", "TIMEOUT", "PAYOUT_DELAYED"];
+    const finalStatuses = ["WON", "LOST", "PAID", "RESOLVING", "TIMEOUT", "PAYOUT_DELAYED", "PAYOUT_FAILED"];
     const finished = activeTrades.filter(t => finalStatuses.includes(t.status));
 
     finished.forEach(trade => {
@@ -3443,7 +3450,7 @@ const performStealthChecks = useCallback(async (addr) => {
                         minStake={platformSettings.minBet}
                         maintenanceMode={platformSettings.maintenanceMode || platformSettings.tradingHalted}
                         liveOdds={liveOdds}
-                        activeTrade={activeTrades[0] || null}
+                        activeTrade={activeTrade}
                       />
                       </div>
                     </div>

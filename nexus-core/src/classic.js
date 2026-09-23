@@ -409,13 +409,16 @@ class ClassicEngine {
         });
       }
 
-      trade.status = 'LOST';
-      trade.lockedWon = false;
+      // Do NOT flip the authoritative verdict here. The trade genuinely won — only
+      // the on-chain payout delivery failed. Keep status/lockedWon as WON so the
+      // backend's source of truth is never corrupted after the verdict was locked.
       cache.pushHistory(trade.userAddr, {
         ...trade,
-        won: false,
+        status: 'PAYOUT_FAILED',
+        won: true,
         exitPrice: trade.lockedExitPrice,
-        settledAt: Date.now()
+        settledAt: Date.now(),
+        payoutFailed: true
       });
 
       this.io.to(trade.userAddr).emit('payout_failed', {
