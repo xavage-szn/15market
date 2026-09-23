@@ -117,10 +117,13 @@ class PriceSocketService {
     }
 
     async _mexcPoll() {
+        // Browser fetch to exchange REST APIs is ALWAYS CORS-blocked (MEXC/Binance/
+        // Kraken send no Access-Control-Allow-Origin), so the "REST fallback" goes
+        // through the backend relay which performs the exchange call server-side.
         try {
             const results = await Promise.allSettled(
                 Object.entries(MEXC_SYMBOLS).map(async ([key, symbol]) => {
-                    const res = await fetch(`https://api.mexc.com/api/v3/ticker/price?symbol=${symbol}`);
+                    const res = await fetch(`${KEEPER_URL_ARC}/price/${key}`, { signal: AbortSignal.timeout(4000) });
                     if (res.ok) {
                         const data = await res.json();
                         return { key, price: parseFloat(data.price) };
@@ -133,7 +136,7 @@ class PriceSocketService {
                 if (r.status === 'fulfilled' && r.value) {
                     const { key, price } = r.value;
                     if (price > 0) {
-                        this._emitPrice(key, price, Date.now(), 'mexc_rest');
+                        this._emitPrice(key, price, Date.now(), 'relay_rest');
                     }
                 }
             });

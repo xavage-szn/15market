@@ -324,4 +324,4 @@ function stop() {
     binanceWs = null;
 }
 
-module.exports = { start, stop, pollPrices, ASSETS, getLivePrice };
+module.exports = { start, stop, pollPrices, ASSETS, getLivePrice, fetchPriceForAsset };

@@ -1805,11 +1805,11 @@ const performStealthChecks = useCallback(async (addr) => {
   // its countdown that missed its socket settlement event is resolved here in
   // exactly one of four honest ways:
   //   1. Backend already settled it → /history has the verdict → reconcileTrades adopts it.
-  //   2. Backend still knows the bet (in cache.trades) → POST /trades/:id/settle
-  //      force-locks it NOW and returns the verdict → adopted immediately.
-  //   3. Backend has no record at all (e.g. it restarted mid-trade) → honest
-  //      TIMEOUT only after 60s overdue → releases the trade gate. Never a fake LOST.
-  //   4. Backend is DOWN/unreachable → once a trade is >25s past its countdown
+  //   2. Every other overdue bet → POST /trades/:id/settle is attempted whether
+  //      the backend knows it or not: if it has the bet it force-locks NOW and
+  //      returns the verdict (adopted instantly); if it has no record, that's an
+  //      honest 'trade never happened' → TIMEOUT after 30s to release the gate.
+  //   3. Backend is DOWN/unreachable → once a trade is >25s past its countdown
   //      (far beyond any legitimate settlement time) it is released honestly as
   //      TIMEOUT so the UI never sits in RESOLVING with no error. The record is
   //      kept and auto-corrects to the real WON/LOST verdict when the backend returns.
@@ -1845,11 +1845,6 @@ const performStealthChecks = useCallback(async (addr) => {
         const backendAllRaw = await res.json();
         reconcileTrades(backendAllRaw);
 
-        // Bets the backend already knows about need no force-settle.
-        const known = new Set(
-          backendAllRaw.map(t => String(t.id || t.tradeId || t.betId || t.nonce)).filter(Boolean)
-        );
-
         const current = activeTradesRef.current || [];
         const overdue = current.filter(t => {
           if (t.status !== 'PENDING' && t.status !== 'RESOLVING') return false;
@@ -1859,9 +1854,9 @@ const performStealthChecks = useCallback(async (addr) => {
 
         for (const t of overdue) {
           const id = String(t.id || t.nonce || t.tx);
-          if (!id || known.has(id)) continue;     // backend already has the answer
+          if (!id) continue;
           const last = settleCooldown.get(id) || 0;
-          if (now - last < 20000) continue;       // throttle per bet
+          if (now - last < 10000) continue;       // re-check at most every 10s per bet
           settleCooldown.set(id, now);
 
           try {
@@ -1900,11 +1895,12 @@ const performStealthChecks = useCallback(async (addr) => {
                   sData.status === 'WON' ? 'success' : 'error'
                 );
               }
-            } else if (!sr.ok && sr.status === 404 && now - (t.startTime || t.timestamp || now) > 60000) {
-              // Backend genuinely has no record of this bet (e.g. it restarted
-              // mid-trade). Honest TIMEOUT — never a fabricated LOST — and TIMEOUT
-              // is in finalStatuses, so the card leaves active view and the
-              // TradingWidget gate releases so the next trade can be taken.
+            } else if (!sr.ok && sr.status === 404 && now - (t.startTime || t.timestamp || now) > 30000) {
+              // Backend genuinely has no record of this bet (e.g. the placement
+              // never completed or it restarted mid-trade). Honest TIMEOUT — never
+              // a fabricated LOST — and TIMEOUT is in finalStatuses, so the card
+              // leaves active view and the TradingWidget gate releases fast so the
+              // next trade can be taken.
               setActiveTrades(prev => prev.map(x =>
                 (String(x.id || x.nonce || x.tx) === id)
                   ? { ...x, status: 'TIMEOUT', won: undefined, payout: '0.00', backendSettled: false }

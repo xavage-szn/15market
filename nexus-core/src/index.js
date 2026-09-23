@@ -1278,6 +1278,27 @@ app.post('/trades/:id/settle', (req, res) => {
   }
 });
 
+// ─── PRICE PROXY ───────────────────────────────────────────────────────────────
+// The browser can NEVER call exchange REST APIs directly (CORS blocks every one
+// of them: MEXC, Binance, Kraken — none send an Access-Control-Allow-Origin
+// header). Any frontend "REST fallback" must come through THIS relay so the
+// exchange call happens server-side where CORS doesn't exist.
+app.get('/price/:key', async (req, res) => {
+  const key = String(req.params.key || '').toLowerCase();
+  try {
+    const live = await priceService.fetchPriceForAsset(key);
+    if (live && live.price > 0) {
+      return res.json({ key, price: live.price, source: live.source });
+    }
+  } catch (err) {
+    console.error(`[Price] /price/${key} fetch failed:`, err?.message || err);
+  }
+  // Fall back to the last cached price so the UI never sees a 0.
+  const cached = cache.prices[key];
+  if (cached > 0) return res.json({ key, price: cached, source: 'cache' });
+  res.status(404).json({ error: 'No price for asset', key });
+});
+
 // ─── ROUNDS ACCESS (WAITLIST) ─────────────────────────────────────────────────
 
 app.get('/rounds/access/check/:address', (req, res) => {
