@@ -867,7 +867,7 @@ useEffect(() => {
     return list.filter(t => (t.symbol || t.id || '').toLowerCase().includes(searchQuery.toLowerCase()));
   }, [defaultTokens, searchQuery]);
 
-  const wheelRepeat = 5;
+  const wheelRepeat = 7;
   const singleLen = tokens.length;
   const wheelMid = Math.floor(wheelRepeat / 2) * singleLen;
   const wheelTokens = useMemo(() => {
@@ -887,15 +887,7 @@ useEffect(() => {
     const scrollY = el.scrollTop;
     const center = scrollY + el.clientHeight / 2;
     const idx = Math.round((center - 130) / 60);
-    const clamped = Math.max(0, Math.min(wheelTokens.length - 1, idx));
-    setAssetWheelIdx(clamped);
-
-    const realIdx = clamped % singleLen;
-    const threshold = singleLen * 2;
-    if (clamped < threshold || clamped >= wheelTokens.length - threshold) {
-      const midIdx = wheelMid + realIdx;
-      el.scrollTop = (midIdx - (clamped - idx)) * 60 + (center - 130 - (clamped - idx) * 60);
-    }
+    setAssetWheelIdx(Math.max(0, Math.min(wheelTokens.length - 1, idx)));
   };
 
   useEffect(() => {
@@ -904,14 +896,8 @@ useEffect(() => {
       const idx = activeIdx >= 0 ? activeIdx : 0;
       const midIdx = wheelMid + idx;
       setAssetWheelIdx(midIdx);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (assetWheelRef.current) {
-            assetWheelRef.current.scrollTop = midIdx * 60;
-            handleAssetWheelScroll();
-          }
-        });
-      });
+      const el = assetWheelRef.current;
+      el.scrollTop = midIdx * 60;
     }
   }, [assetOpen]);
 
