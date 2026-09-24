@@ -1069,39 +1069,37 @@ useEffect(() => {
           so the trading controls + history stay anchored to the bottom with no
           dead gap; on short screens it shrinks to fit the UI. */}
       <div className="flex-1 min-h-[140px] w-full relative pt-1 pb-1" style={{ overflow: 'visible' }}>
-        {/* Selected Asset Ticker on Top Left of Chart Widget (No pill behind it, big like desktop) */}
-        <div className="absolute top-3.5 left-5 z-20">
-          <button
-            onClick={() => setAssetOpen(o => !o)}
-            className="flex items-center gap-2 bg-transparent border-none p-0 outline-none cursor-pointer active:scale-95 transition-transform"
-          >
-            {LOGO_MAP[(activeMarket?.id || 'eth').toLowerCase()] && (
-              <img
-                src={LOGO_MAP[(activeMarket?.id || 'eth').toLowerCase()]}
-                alt={currentSymbol}
-                className={`${(activeMarket?.id || 'eth').toLowerCase() === 'eth' ? 'w-14 h-14' : (activeMarket?.id || 'eth').toLowerCase() === 'sol' ? 'w-[36.4px] h-[36.4px]' : 'w-7 h-7'} object-contain shrink-0`}
-                style={{ filter: getLogoFilter(isLight) }}
-                crossOrigin="anonymous"
-              />
-            )}
-            <span
-              className={`text-[16px] font-bold tracking-wider leading-none ${
-                isLight ? 'text-[#0a261a]' : 'text-white'
-              }`}
-              style={{ fontFamily: '"Comfortaa", cursive' }}
-            >
-              {currentSymbol}
-            </span>
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-200 ${
-                isLight ? 'text-[#0a261a]/60' : 'text-white/60'
-              } ${assetOpen ? 'rotate-180' : ''}`}
+        {/* Selected Asset Ticker on Top Left of Chart Widget */}
+        <button
+          onClick={() => setAssetOpen(o => !o)}
+          className="absolute top-3.5 left-5 z-30 flex items-center gap-2 bg-transparent border-none p-1 outline-none cursor-pointer active:scale-95 transition-transform"
+        >
+          {LOGO_MAP[(activeMarket?.id || 'eth').toLowerCase()] && (
+            <img
+              src={LOGO_MAP[(activeMarket?.id || 'eth').toLowerCase()]}
+              alt={currentSymbol}
+              className={`${(activeMarket?.id || 'eth').toLowerCase() === 'eth' ? 'w-14 h-14' : (activeMarket?.id || 'eth').toLowerCase() === 'sol' ? 'w-[36.4px] h-[36.4px]' : 'w-7 h-7'} object-contain shrink-0`}
+              style={{ filter: getLogoFilter(isLight) }}
+              crossOrigin="anonymous"
             />
-          </button>
-        </div>
+          )}
+          <span
+            className={`text-[16px] font-bold tracking-wider leading-none ${
+              isLight ? 'text-[#0a261a]' : 'text-white'
+            }`}
+            style={{ fontFamily: '"Comfortaa", cursive' }}
+          >
+            {currentSymbol}
+          </span>
+          <ChevronDown
+            size={14}
+            className={`transition-transform duration-200 ${
+              isLight ? 'text-[#0a261a]/60' : 'text-white/60'
+            } ${assetOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
 
-        <div className="h-full" style={{ width: 'calc(100% + 80px)', marginLeft: '-40px', overflow: 'visible' }}>
+        <div className="h-full pointer-events-none" style={{ width: 'calc(100% + 80px)', marginLeft: '-40px', overflow: 'visible' }}>
           <MobileSteppedChart
             symbol={binanceSymbol}
             theme={theme}
