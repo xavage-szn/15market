@@ -67,27 +67,27 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
     }
   }, [isOpen, trade, tradeId]);
 
-const handleDownload = async () => {
-    if (!cardRef.current) return;
+const captureCard = async () => {
     const el = cardRef.current;
-    const copyBtn = el.querySelector('.copy-id-btn');
+    if (!el) return null;
+
+    const clone = el.cloneNode(true);
+    clone.style.position = 'fixed';
+    clone.style.left = '-9999px';
+    clone.style.top = '0';
+    clone.style.width = '960px';
+    clone.style.height = '540px';
+    clone.style.borderRadius = '0';
+    clone.style.transform = 'none';
+    clone.style.zIndex = '-1';
+    clone.style.opacity = '1';
+    document.body.appendChild(clone);
+
+    const copyBtn = clone.querySelector('.copy-id-btn');
     if (copyBtn) copyBtn.style.display = 'none';
 
-    const savedStyles = {
-      borderRadius: el.style.borderRadius,
-      width: el.style.width,
-      aspectRatio: el.style.aspectRatio,
-      transform: el.style.transform,
-      transformOrigin: el.style.transformOrigin,
-    };
-    el.style.borderRadius = '0';
-    el.style.width = '1080px';
-    el.style.aspectRatio = '16 / 9';
-    el.style.transform = 'none';
-    el.style.transformOrigin = 'top left';
-
     try {
-        const dataUrl = await toPng(el, {
+        return await toPng(clone, {
             pixelRatio: 1,
             backgroundColor: '#0a0a0a',
             cacheBust: true,
@@ -95,46 +95,24 @@ const handleDownload = async () => {
             includeInlineStyles: true,
             filter: (node) => !node.classList?.contains('copy-id-btn'),
         });
-        const link = document.createElement('a');
-        link.download = `15market-${isWin ? 'win' : 'loss'}-${tradeId}.png`;
-        link.href = dataUrl;
-        link.click();
-    } catch (err) {
-        console.error('Download failed:', err);
     } finally {
-        Object.assign(el.style, savedStyles);
-        if (copyBtn) copyBtn.style.display = '';
+        document.body.removeChild(clone);
     }
 };
 
+const handleDownload = async () => {
+    const dataUrl = await captureCard();
+    if (!dataUrl) return;
+    const link = document.createElement('a');
+    link.download = `15market-${isWin ? 'win' : 'loss'}-${tradeId}.png`;
+    link.href = dataUrl;
+    link.click();
+};
+
 const handleNativeShare = async () => {
-    if (!cardRef.current) return;
-    const el = cardRef.current;
-    const copyBtn = el.querySelector('.copy-id-btn');
-    if (copyBtn) copyBtn.style.display = 'none';
-
-    const savedStyles = {
-      borderRadius: el.style.borderRadius,
-      width: el.style.width,
-      aspectRatio: el.style.aspectRatio,
-      transform: el.style.transform,
-      transformOrigin: el.style.transformOrigin,
-    };
-    el.style.borderRadius = '0';
-    el.style.width = '1080px';
-    el.style.aspectRatio = '16 / 9';
-    el.style.transform = 'none';
-    el.style.transformOrigin = 'top left';
-
+    const dataUrl = await captureCard();
+    if (!dataUrl) { handleDownload(); return; }
     try {
-        const dataUrl = await toPng(el, {
-            pixelRatio: 1,
-            backgroundColor: '#0a0a0a',
-            cacheBust: true,
-            skipFonts: false,
-            includeInlineStyles: true,
-            filter: (node) => !node.classList?.contains('copy-id-btn'),
-        });
         const res = await fetch(dataUrl);
         const blob = await res.blob();
         const file = new File([blob], `15market-${isWin ? 'win' : 'loss'}.png`, { type: 'image/png' });
@@ -143,9 +121,6 @@ const handleNativeShare = async () => {
         }
     } catch (err) {
         handleDownload();
-    } finally {
-        Object.assign(el.style, savedStyles);
-        if (copyBtn) copyBtn.style.display = '';
     }
 };
 
