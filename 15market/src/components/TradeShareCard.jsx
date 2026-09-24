@@ -71,27 +71,30 @@ const captureCard = async () => {
     const el = cardRef.current;
     if (!el) return null;
 
-    const clone = el.cloneNode(true);
-    const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:0;top:0;width:960px;height:540px;overflow:hidden;background:#0a0a0a;';
-    clone.style.cssText = 'width:960px;height:540px;border-radius:0;transform:none;overflow:hidden;';
-    container.appendChild(clone);
-    document.body.appendChild(container);
+    const s = el.style;
+    const saved = {
+      width: s.width, height: s.height, aspectRatio: s.aspectRatio,
+      borderRadius: s.borderRadius, transform: s.transform,
+    };
+    s.width = '520px';
+    s.height = '300px';
+    s.aspectRatio = 'auto';
+    s.borderRadius = '0';
+    s.transform = 'none';
 
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 100));
 
     try {
-        const dataUrl = await toPng(container, {
-            width: 960,
-            height: 540,
-            pixelRatio: 1,
+        return await toPng(el, {
+            width: 520,
+            height: 300,
+            pixelRatio: 2,
             backgroundColor: '#0a0a0a',
             cacheBust: true,
             filter: (node) => !node.classList?.contains('copy-id-btn'),
         });
-        return dataUrl;
     } finally {
-        document.body.removeChild(container);
+        Object.assign(s, saved);
     }
 };
 
