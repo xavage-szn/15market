@@ -22,6 +22,8 @@ services:
         key: ROUNDS_CONTRACT_ADDRESS
       - fromContext: env
         key: ADMIN_TOKEN
+      - key: ALLOWED_ORIGINS
+        value: "https://15market.online,https://api.15market.online"
 
   # Frontend Service (Static Site)
   - type: static

@@ -32,8 +32,10 @@ function getLogo(sym) {
 
 export default function TradeShareCard({ isOpen, onClose, trade, userProfile, theme }) {
   const cardRef = useRef(null);
+  const wrapperRef = useRef(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [scale, setScale] = useState(1);
 
   const handleCopyTradeId = (e) => {
     e?.stopPropagation?.();
@@ -66,6 +68,19 @@ export default function TradeShareCard({ isOpen, onClose, trade, userProfile, th
       }).then(setQrDataUrl).catch(() => setQrDataUrl(''));
     }
   }, [isOpen, trade, tradeId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const updateScale = () => {
+      if (wrapperRef.current) {
+        const containerWidth = wrapperRef.current.offsetWidth;
+        setScale(Math.min(1, containerWidth / 520));
+      }
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [isOpen]);
 
 const handleDownload = async () => {
     if (!cardRef.current) return;
@@ -141,9 +156,10 @@ const handleNativeShare = async () => {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            ref={wrapperRef}
             className="relative w-full max-w-[520px]"
             onClick={(e) => e.stopPropagation()}
-            style={{ fontFamily: '"Comfortaa", cursive' }}
+            style={{ fontFamily: '"Comfortaa", cursive', height: scale < 1 ? 300 * scale : undefined }}
           >
             <button
               onClick={onClose}
@@ -155,10 +171,12 @@ const handleNativeShare = async () => {
             {/* Landscape Card */}
             <div
               ref={cardRef}
-              className="relative rounded-3xl"
+              className="relative rounded-3xl overflow-hidden"
               style={{
                 width: 520,
                 height: 300,
+                transform: scale < 1 ? `scale(${scale})` : undefined,
+                transformOrigin: 'top left',
                 background: 'linear-gradient(145deg, #0a0a0a 0%, #111118 40%, #0a0a0a 100%)',
                 fontFamily: '"Comfortaa", cursive'
               }}

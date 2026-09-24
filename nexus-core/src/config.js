@@ -52,4 +52,7 @@ module.exports = {
   SOL_GAS_TANK_KEY: process.env.SOL_GAS_TANK_KEY || null,  // bs58 private key — set when available
   SOL_DEVNET_RPC: process.env.SOL_DEVNET_RPC || 'https://api.devnet.solana.com',
   SOL_DEVNET_USDC_MINT: process.env.SOL_DEVNET_USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+
+  // CORS
+  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || 'https://15market.online').split(',').map(s => s.trim()),
 };

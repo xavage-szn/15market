@@ -15,6 +15,7 @@ out/
 .sol
 # Environments — NEVER commit .env files or even templates
 .env*
+!.env.example
 
 # Logs
 *.log

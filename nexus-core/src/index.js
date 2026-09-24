@@ -67,11 +67,11 @@ redis.on('error', (err) => {});
 // --- Setup Server ---
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, { cors: { origin: config.ALLOWED_ORIGINS } });
 notificationService.init(io);
 
 
-app.use(cors());
+app.use(cors({ origin: config.ALLOWED_ORIGINS }));
 app.use(express.json());
 
 // --- Deterministic Session Wallet Derivation ---
